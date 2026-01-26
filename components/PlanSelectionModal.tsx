@@ -19,32 +19,69 @@ export default function PlanSelectionModal({
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<"free" | "pro" | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
   const handleSelectPlan = async (plan: "free" | "pro") => {
     setSelectedPlan(plan);
     setLoading(true);
+    setError(null);
 
     try {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
 
       if (!user) {
-        console.error("User not authenticated");
+        setError("You must be logged in to select a plan. Please refresh the page.");
         setLoading(false);
         return;
       }
 
       // Mark plan as selected
+      console.log("Sending plan selection request:", { plan, userId: user.id });
       const response = await fetch("/api/user/plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ plan }),
       });
 
+      console.log("Plan selection response:", {
+        ok: response.ok,
+        status: response.status,
+        statusText: response.statusText,
+      });
+
       if (!response.ok) {
-        throw new Error("Failed to save plan selection");
+        let errorData: any = {};
+        try {
+          const text = await response.text();
+          console.error("Error response text:", text);
+          errorData = JSON.parse(text);
+        } catch (e) {
+          console.error("Failed to parse error response:", e);
+        }
+        
+        console.error("Plan selection API error:", {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorData,
+        });
+        
+        const errorMessage = errorData.error || errorData.details || `Failed to save plan selection (${response.status} ${response.statusText})`;
+        setError(errorMessage);
+        setLoading(false);
+        return;
+      }
+
+      const responseData = await response.json();
+      console.log("Plan selection success:", responseData);
+
+      // Check if there's a warning about missing column
+      if (responseData.warning) {
+        console.warn("Database column missing:", responseData.warning);
+        // Still proceed - the user record was created/updated, just without plan_selected
+        // The modal will close and user can continue, but plan_selected won't persist until column is added
       }
 
       if (plan === "pro") {
@@ -58,6 +95,10 @@ export default function PlanSelectionModal({
         if (checkoutData.url) {
           window.location.href = checkoutData.url;
           return;
+        } else {
+          setError(checkoutData.error || "Failed to start checkout. Please try again.");
+          setLoading(false);
+          return;
         }
       }
 
@@ -66,6 +107,7 @@ export default function PlanSelectionModal({
       onClose();
     } catch (error) {
       console.error("Plan selection error:", error);
+      setError(error instanceof Error ? error.message : "An unexpected error occurred. Please try again.");
       setLoading(false);
     }
   };
@@ -85,6 +127,11 @@ export default function PlanSelectionModal({
 
         {/* Plans */}
         <div className="p-6">
+          {error && (
+            <div className="mb-4 bg-red-900/20 border border-red-800 text-red-400 px-4 py-3 rounded-lg text-sm">
+              {error}
+            </div>
+          )}
           <div className="grid md:grid-cols-2 gap-6">
             {/* Free Plan */}
             <div
@@ -140,6 +187,38 @@ export default function PlanSelectionModal({
                   </svg>
                   {LIMITS.FREE_COLLECTION} cards in collection
                 </li>
+                <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                  <svg
+                    className="w-5 h-5 text-green-500 flex-shrink-0"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M5 13l4 4L19 7"
+                    />
+                  </svg>
+                  {LIMITS.FREE_AI_MESSAGES} AI messages
+                </li>
+                <li className="flex items-center gap-2 text-gray-500 dark:text-gray-500">
+                  <svg
+                    className="w-5 h-5 text-gray-400 flex-shrink-0"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                  No watchlist
+                </li>
               </ul>
 
               <button
@@ -174,11 +253,12 @@ export default function PlanSelectionModal({
                 <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
                   Pro
                 </h3>
-                <p className="text-4xl font-bold text-gray-900 dark:text-white mt-2">
-                  $20
-                </p>
+                <div className="mt-2">
+                  <span className="text-4xl font-bold text-gray-900 dark:text-white">$20</span>
+                  <span className="text-lg text-gray-500 dark:text-gray-400"> activation</span>
+                </div>
                 <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
-                  one-time payment
+                  + $5/month
                 </p>
               </div>
 
@@ -229,7 +309,23 @@ export default function PlanSelectionModal({
                       d="M5 13l4 4L19 7"
                     />
                   </svg>
-                  Portfolio tracking
+                  Watchlist tracking
+                </li>
+                <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                  <svg
+                    className="w-5 h-5 text-green-500 flex-shrink-0"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M5 13l4 4L19 7"
+                    />
+                  </svg>
+                  AI Assistant
                 </li>
               </ul>
 

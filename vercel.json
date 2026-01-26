@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/watchlist/update-prices",
+      "schedule": "0 6 * * *"
+    }
+  ]
+}

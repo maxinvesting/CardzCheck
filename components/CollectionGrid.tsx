@@ -170,13 +170,6 @@ function CardItem({ item, cmv, onDelete }: CardItemProps) {
 }
 
 export default function CollectionGrid({ items, onDelete, onRefresh }: CollectionGridProps) {
-  // Calculate totals
-  const totalPaid = items.reduce((sum, item) => sum + (item.purchase_price || 0), 0);
-
-  // For now, we don't have CMV for individual items
-  // In a full implementation, you'd fetch CMV for each card
-  const totalCMV = null;
-
   if (items.length === 0) {
     return (
       <div className="text-center py-12">
@@ -205,30 +198,6 @@ export default function CollectionGrid({ items, onDelete, onRefresh }: Collectio
 
   return (
     <div>
-      {/* Summary */}
-      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6 mb-6">
-        <div className="grid grid-cols-3 gap-4 text-center">
-          <div>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Cards</p>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white">
-              {items.length}
-            </p>
-          </div>
-          <div>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Total Invested</p>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white">
-              {formatPrice(totalPaid)}
-            </p>
-          </div>
-          <div>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Portfolio Value</p>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white">
-              {totalCMV !== null ? formatPrice(totalCMV) : "—"}
-            </p>
-          </div>
-        </div>
-      </div>
-
       {/* Grid */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {items.map((item) => (

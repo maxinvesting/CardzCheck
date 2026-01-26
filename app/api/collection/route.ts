@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { LIMITS } from "@/types";
+import { isTestMode } from "@/lib/test-mode";
 
 // GET - List collection items
 export async function GET() {
   try {
+    // Bypass auth in test mode
+    if (isTestMode()) {
+      console.log("🧪 TEST MODE: Bypassing collection auth");
+      return NextResponse.json({ items: [] });
+    }
+
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
@@ -35,6 +42,20 @@ export async function GET() {
 // POST - Add item to collection
 export async function POST(request: NextRequest) {
   try {
+    // Bypass auth and limits in test mode
+    if (isTestMode()) {
+      console.log("🧪 TEST MODE: Bypassing collection limits");
+      const body = await request.json();
+      return NextResponse.json({ 
+        item: {
+          ...body,
+          id: `test-${Date.now()}`,
+          user_id: "test-user-id",
+          created_at: new Date().toISOString(),
+        }
+      });
+    }
+
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
@@ -113,6 +134,12 @@ export async function POST(request: NextRequest) {
 // DELETE - Remove item from collection
 export async function DELETE(request: NextRequest) {
   try {
+    // Bypass auth in test mode
+    if (isTestMode()) {
+      console.log("🧪 TEST MODE: Bypassing collection delete auth");
+      return NextResponse.json({ success: true });
+    }
+
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
@@ -150,6 +177,13 @@ export async function DELETE(request: NextRequest) {
 // PATCH - Update item
 export async function PATCH(request: NextRequest) {
   try {
+    // Bypass auth in test mode
+    if (isTestMode()) {
+      console.log("🧪 TEST MODE: Bypassing collection update auth");
+      const body = await request.json();
+      return NextResponse.json({ item: body });
+    }
+
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
