@@ -7,6 +7,7 @@ import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import { createClient } from "@/lib/supabase/client";
 import type { User } from "@/types";
 import { LIMITS } from "@/types";
+import { isTestMode, getTestUser } from "@/lib/test-mode";
 
 function AccountContent() {
   const router = useRouter();
@@ -25,6 +26,16 @@ function AccountContent() {
 
   useEffect(() => {
     async function loadUser() {
+      // In test mode, use mock user
+      if (isTestMode()) {
+        const testUser = getTestUser();
+        setUser(testUser);
+        setEmail(testUser.email);
+        setLoading(false);
+        console.log("🧪 TEST MODE: Using mock user in Account");
+        return;
+      }
+
       const supabase = createClient();
       const { data: { user: authUser } } = await supabase.auth.getUser();
 

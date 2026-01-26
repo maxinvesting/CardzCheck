@@ -53,7 +53,9 @@ export default function WelcomeToast({ user, onDismiss }: WelcomeToastProps) {
           </div>
           <div className="flex-1">
             <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-1">
-              {user.is_paid
+              {user.name
+                ? `Welcome, ${user.name}!`
+                : user.is_paid
                 ? "Welcome to CardzCheck Pro!"
                 : "Welcome to CardzCheck!"}
             </h3>

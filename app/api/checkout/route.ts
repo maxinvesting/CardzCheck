@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createCheckoutSession } from "@/lib/stripe";
+import { createProSubscriptionCheckout } from "@/lib/stripe";
 
 export async function POST() {
   try {
@@ -13,7 +13,8 @@ export async function POST() {
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
-    const session = await createCheckoutSession(
+    // Use new subscription-based checkout ($20 activation + $5/month)
+    const session = await createProSubscriptionCheckout(
       user.id,
       user.email!,
       `${appUrl}/account?success=true`,

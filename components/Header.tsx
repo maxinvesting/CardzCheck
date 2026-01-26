@@ -3,10 +3,10 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import type { User } from "@/types";
 import { LIMITS } from "@/types";
+import { isTestMode, getTestUser } from "@/lib/test-mode";
 
 export default function Header() {
   const router = useRouter();
@@ -18,6 +18,14 @@ export default function Header() {
 
   useEffect(() => {
     async function loadUser() {
+      // In test mode, use mock user
+      if (isTestMode()) {
+        setUser(getTestUser());
+        setAuthLoading(false);
+        console.log("🧪 TEST MODE: Using mock user in Header");
+        return;
+      }
+
       const supabase = createClient();
       const { data: { user: authUser } } = await supabase.auth.getUser();
 
@@ -96,16 +104,9 @@ export default function Header() {
         
         {/* Logo - Centered */}
         <Link href="/" className="flex-shrink-0">
-          <div className="bg-[#0f1419] rounded-lg px-2">
-            <Image
-              src="/cardzcheck-logo.png"
-              alt="CardzCheck"
-              width={400}
-              height={100}
-              className="h-24 md:h-32 w-auto mix-blend-lighten"
-              priority
-            />
-          </div>
+          <span className="text-3xl md:text-4xl font-bold text-white tracking-tight">
+            CardzCheck
+          </span>
         </Link>
         
         {/* Right nav */}

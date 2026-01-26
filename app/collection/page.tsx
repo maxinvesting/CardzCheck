@@ -1,14 +1,25 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import Link from "next/link";
+import { useRef, useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import CollectionGrid from "@/components/CollectionGrid";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import PaywallModal from "@/components/PaywallModal";
+import AddCardModalNew from "@/components/AddCardModalNew";
 import { createClient } from "@/lib/supabase/client";
 import type { CollectionItem, User } from "@/types";
 import { LIMITS } from "@/types";
+import { isTestMode, getTestUser } from "@/lib/test-mode";
+
+function formatPrice(price: number | null): string {
+  if (price === null) return "$0.00";
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(price);
+}
 
 export default function CollectionPage() {
   const router = useRouter();
@@ -16,9 +27,37 @@ export default function CollectionPage() {
   const [items, setItems] = useState<CollectionItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showPaywall, setShowPaywall] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [toast, setToast] = useState<{type: 'success' | 'error', message: string} | null>(null);
+  const [filterQuery, setFilterQuery] = useState("");
+  const [sortBy, setSortBy] = useState<"newest" | "oldest" | "player_az" | "player_za" | "paid_high" | "paid_low">("newest");
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Auto-dismiss toast after 3 seconds
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
 
   useEffect(() => {
     async function loadData() {
+      // In test mode, use mock user
+      if (isTestMode()) {
+        setUser(getTestUser());
+        // Load collection (will return empty array in test mode)
+        const response = await fetch("/api/collection");
+        const data = await response.json();
+        if (data.items) {
+          setItems(data.items);
+        }
+        setLoading(false);
+        console.log("🧪 TEST MODE: Using mock user in Collection");
+        return;
+      }
+
       const supabase = createClient();
       const { data: { user: authUser } } = await supabase.auth.getUser();
 
@@ -70,11 +109,275 @@ export default function CollectionPage() {
     }
   };
 
+  const csvEscape = (value: unknown): string => {
+    if (value === null || value === undefined) return "";
+    const str = String(value);
+    if (/[",\n\r]/.test(str)) {
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+  };
+
+  const exportCsv = () => {
+    const headers = [
+      "player_name",
+      "year",
+      "set_name",
+      "grade",
+      "purchase_price",
+      "purchase_date",
+      "image_url",
+      "notes",
+    ];
+
+    const rows = items.map((it) => [
+      it.player_name,
+      it.year,
+      it.set_name,
+      it.grade,
+      it.purchase_price,
+      it.purchase_date,
+      it.image_url,
+      it.notes,
+    ]);
+
+    const csv = [
+      headers.join(","),
+      ...rows.map((r) => r.map(csvEscape).join(",")),
+    ].join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `cardzcheck-collection-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const parseCsvLine = (line: string): string[] => {
+    const out: string[] = [];
+    let cur = "";
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (inQuotes) {
+        if (ch === '"') {
+          const next = line[i + 1];
+          if (next === '"') {
+            cur += '"';
+            i++;
+          } else {
+            inQuotes = false;
+          }
+        } else {
+          cur += ch;
+        }
+      } else {
+        if (ch === '"') {
+          inQuotes = true;
+        } else if (ch === ",") {
+          out.push(cur);
+          cur = "";
+        } else {
+          cur += ch;
+        }
+      }
+    }
+    out.push(cur);
+    return out.map((s) => s.trim());
+  };
+
+  const importCsvText = async (text: string) => {
+    const lines = text
+      .replace(/\r\n/g, "\n")
+      .replace(/\r/g, "\n")
+      .split("\n")
+      .filter((l) => l.trim().length > 0);
+
+    if (lines.length < 2) {
+      throw new Error("CSV must include a header row and at least one data row.");
+    }
+
+    const header = parseCsvLine(lines[0]).map((h) => h.toLowerCase());
+    const idx = (name: string) => header.indexOf(name);
+
+    const iPlayer = idx("player_name");
+    if (iPlayer === -1) {
+      throw new Error('CSV header must include "player_name".');
+    }
+
+    const iYear = idx("year");
+    const iSet = idx("set_name");
+    const iGrade = idx("grade");
+    const iPrice = idx("purchase_price");
+    const iDate = idx("purchase_date");
+    const iImage = idx("image_url");
+    const iNotes = idx("notes");
+
+    const toNull = (v: string | undefined) => (v && v.trim() ? v.trim() : null);
+    const toNumberOrNull = (v: string | undefined) => {
+      const raw = v?.trim();
+      if (!raw) return null;
+      const num = parseFloat(raw);
+      if (Number.isNaN(num)) throw new Error(`Invalid purchase_price: "${raw}"`);
+      return num;
+    };
+
+    const payload = lines.slice(1).map((line, rowIdx) => {
+      const cols = parseCsvLine(line);
+      const player_name = cols[iPlayer]?.trim();
+      if (!player_name) {
+        throw new Error(`Row ${rowIdx + 2}: player_name is required`);
+      }
+      return {
+        player_name,
+        year: iYear === -1 ? null : toNull(cols[iYear]),
+        set_name: iSet === -1 ? null : toNull(cols[iSet]),
+        grade: iGrade === -1 ? null : toNull(cols[iGrade]),
+        purchase_price: iPrice === -1 ? null : toNumberOrNull(cols[iPrice]),
+        purchase_date: iDate === -1 ? null : toNull(cols[iDate]),
+        image_url: iImage === -1 ? null : toNull(cols[iImage]),
+        notes: iNotes === -1 ? null : toNull(cols[iNotes]),
+      };
+    });
+
+    setImporting(true);
+    try {
+      const response = await fetch("/api/collection/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: payload }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (data?.error === "limit_reached") {
+          setShowPaywall(true);
+          return;
+        }
+        throw new Error(data?.error || "Import failed");
+      }
+
+      setToast({ type: "success", message: `Imported ${data.imported || payload.length} cards!` });
+      await refreshCollection();
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const handleImportFile = async (file: File | null) => {
+    if (!file) return;
+    try {
+      const text = await file.text();
+      await importCsvText(text);
+    } catch (err) {
+      setToast({ type: "error", message: err instanceof Error ? err.message : "Import failed" });
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  // Portfolio calculations
+  const portfolioStats = useMemo(() => {
+    const totalInvested = items.reduce(
+      (sum, item) => sum + (item.purchase_price || 0),
+      0
+    );
+    // For now, using purchase price as current value (would integrate with real-time pricing)
+    const totalCurrentValue = totalInvested;
+    const totalGain = totalCurrentValue - totalInvested;
+    const gainPercentage =
+      totalInvested > 0 ? (totalGain / totalInvested) * 100 : 0;
+
+    return { totalInvested, totalCurrentValue, totalGain, gainPercentage };
+  }, [items]);
+
+  // Top performers (cards with highest value)
+  const topPerformers = useMemo(() => {
+    return items
+      .filter((item) => item.purchase_price && item.purchase_price > 0)
+      .sort((a, b) => (b.purchase_price || 0) - (a.purchase_price || 0))
+      .slice(0, 5);
+  }, [items]);
+
+  // Recently added cards (last 5)
+  const recentlyAdded = useMemo(() => {
+    return [...items]
+      .sort((a, b) => {
+        const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return dateB - dateA;
+      })
+      .slice(0, 5);
+  }, [items]);
+
   const collectionCount = items.length;
   const collectionLimit = user?.is_paid
     ? null
     : LIMITS.FREE_COLLECTION;
   const isNearLimit = !user?.is_paid && collectionLimit !== null && collectionCount >= collectionLimit - 1;
+
+  const visibleItems = useMemo(() => {
+    const q = filterQuery.trim().toLowerCase();
+    let filtered = items;
+
+    if (q) {
+      filtered = items.filter((it) => {
+        const hay = [
+          it.player_name,
+          it.year,
+          it.set_name,
+          it.grade,
+          it.notes,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return hay.includes(q);
+      });
+    }
+
+    const byDateDesc = (a: CollectionItem, b: CollectionItem) =>
+      (b.created_at || "").localeCompare(a.created_at || "");
+    const byDateAsc = (a: CollectionItem, b: CollectionItem) =>
+      (a.created_at || "").localeCompare(b.created_at || "");
+    const byPlayerAsc = (a: CollectionItem, b: CollectionItem) =>
+      (a.player_name || "").localeCompare(b.player_name || "");
+    const byPlayerDesc = (a: CollectionItem, b: CollectionItem) =>
+      (b.player_name || "").localeCompare(a.player_name || "");
+    const byPaidDesc = (a: CollectionItem, b: CollectionItem) =>
+      (b.purchase_price || 0) - (a.purchase_price || 0);
+    const byPaidAsc = (a: CollectionItem, b: CollectionItem) =>
+      (a.purchase_price || 0) - (b.purchase_price || 0);
+
+    const sorted = [...filtered];
+    switch (sortBy) {
+      case "oldest":
+        sorted.sort(byDateAsc);
+        break;
+      case "player_az":
+        sorted.sort(byPlayerAsc);
+        break;
+      case "player_za":
+        sorted.sort(byPlayerDesc);
+        break;
+      case "paid_high":
+        sorted.sort(byPaidDesc);
+        break;
+      case "paid_low":
+        sorted.sort(byPaidAsc);
+        break;
+      case "newest":
+      default:
+        sorted.sort(byDateDesc);
+        break;
+    }
+    return sorted;
+  }, [items, filterQuery, sortBy]);
 
   return (
     <AuthenticatedLayout>
@@ -82,21 +385,71 @@ export default function CollectionPage() {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-              My Collection
+              {user?.name ? `${user.name}'s Collection` : "My Collection"}
             </h1>
             <p className="text-gray-500 dark:text-gray-400 mt-1">
               Track your cards and portfolio value
             </p>
           </div>
-          <Link
-            href="/search"
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Add Card
-          </Link>
+          <div className="flex items-center gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              onChange={(e) => handleImportFile(e.target.files?.[0] || null)}
+            />
+            <button
+              onClick={exportCsv}
+              disabled={items.length === 0}
+              className="px-4 py-2 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Export CSV
+            </button>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={importing}
+              className="px-4 py-2 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {importing ? "Importing..." : "Import CSV"}
+            </button>
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Add Card
+            </button>
+          </div>
+        </div>
+
+        {/* Hero Portfolio Stats */}
+        <div className="bg-gradient-to-br from-blue-600 to-blue-700 dark:from-blue-700 dark:to-blue-800 rounded-2xl p-6 mb-6 text-white">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            {/* Total Value - Hero */}
+            <div className="md:col-span-2">
+              <p className="text-blue-100 text-sm font-medium mb-1">Total Collection Value</p>
+              <p className="text-4xl font-bold">{formatPrice(portfolioStats.totalInvested)}</p>
+              <p className="text-blue-100 text-sm mt-2">{collectionCount} cards</p>
+            </div>
+            {/* Total Invested */}
+            <div>
+              <p className="text-blue-100 text-sm font-medium mb-1">Total Invested</p>
+              <p className="text-2xl font-bold">{formatPrice(portfolioStats.totalInvested)}</p>
+            </div>
+            {/* Performance */}
+            <div>
+              <p className="text-blue-100 text-sm font-medium mb-1">Performance</p>
+              <p className={`text-2xl font-bold ${portfolioStats.totalGain >= 0 ? "text-green-300" : "text-red-300"}`}>
+                {portfolioStats.totalGain >= 0 ? "+" : ""}{formatPrice(portfolioStats.totalGain)}
+              </p>
+              <p className={`text-sm ${portfolioStats.gainPercentage >= 0 ? "text-green-300" : "text-red-300"}`}>
+                {portfolioStats.gainPercentage >= 0 ? "+" : ""}{portfolioStats.gainPercentage.toFixed(1)}%
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* Collection Limit Indicator for Free Users */}
@@ -132,6 +485,143 @@ export default function CollectionPage() {
           </div>
         )}
 
+        {/* Top Performers & Recently Added */}
+        {!loading && items.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            {/* Top Performers */}
+            <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                </svg>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Top Value Cards</h2>
+              </div>
+              {topPerformers.length > 0 ? (
+                <div className="space-y-3">
+                  {topPerformers.map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg"
+                    >
+                      <div className="flex items-center gap-3">
+                        {item.image_url && (
+                          <img
+                            src={item.image_url}
+                            alt={item.player_name}
+                            className="w-10 h-14 object-cover rounded"
+                          />
+                        )}
+                        <div>
+                          <p className="font-medium text-gray-900 dark:text-white text-sm">
+                            {item.player_name}
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            {item.year} {item.set_name}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="font-semibold text-gray-900 dark:text-white">
+                        {formatPrice(item.purchase_price)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Add cards with purchase prices to see your top value cards.
+                </p>
+              )}
+            </div>
+
+            {/* Recently Added */}
+            <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <svg className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Recently Added</h2>
+              </div>
+              {recentlyAdded.length > 0 ? (
+                <div className="space-y-3">
+                  {recentlyAdded.map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg"
+                    >
+                      <div className="flex items-center gap-3">
+                        {item.image_url && (
+                          <img
+                            src={item.image_url}
+                            alt={item.player_name}
+                            className="w-10 h-14 object-cover rounded"
+                          />
+                        )}
+                        <div>
+                          <p className="font-medium text-gray-900 dark:text-white text-sm">
+                            {item.player_name}
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            {item.year} {item.set_name}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {item.created_at
+                          ? new Date(item.created_at).toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                            })
+                          : "-"}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  No cards added yet.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* All Cards Section Header */}
+        {!loading && items.length > 0 && (
+          <div className="mb-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+              </svg>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">All Cards</h2>
+              <span className="text-sm text-gray-500 dark:text-gray-400">
+                Showing {visibleItems.length} of {items.length}
+              </span>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3">
+              <input
+                type="text"
+                value={filterQuery}
+                onChange={(e) => setFilterQuery(e.target.value)}
+                placeholder="Filter your collection..."
+                className="flex-1 px-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                className="sm:w-56 px-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="newest">Sort: Newest</option>
+                <option value="oldest">Sort: Oldest</option>
+                <option value="player_az">Sort: Player A–Z</option>
+                <option value="player_za">Sort: Player Z–A</option>
+                <option value="paid_high">Sort: Paid High→Low</option>
+                <option value="paid_low">Sort: Paid Low→High</option>
+              </select>
+            </div>
+          </div>
+        )}
+
         {loading ? (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {[...Array(4)].map((_, i) => (
@@ -149,7 +639,7 @@ export default function CollectionPage() {
           </div>
         ) : (
           <CollectionGrid
-            items={items}
+            items={visibleItems}
             onDelete={handleDelete}
             onRefresh={refreshCollection}
           />
@@ -161,6 +651,47 @@ export default function CollectionPage() {
           onClose={() => setShowPaywall(false)}
           type="collection"
         />
+
+        {/* Add Card Modal */}
+        <AddCardModalNew
+          isOpen={showAddModal}
+          onClose={() => setShowAddModal(false)}
+          onSuccess={(playerName) => {
+            setToast({ type: 'success', message: `Added ${playerName} to collection!` });
+            refreshCollection();
+          }}
+          onLimitReached={() => setShowPaywall(true)}
+        />
+
+        {/* Toast Notification */}
+        {toast && (
+          <div
+            className={`fixed bottom-4 right-4 p-4 rounded-lg shadow-lg z-50 flex items-center gap-3 ${
+              toast.type === 'success'
+                ? 'bg-green-600 text-white'
+                : 'bg-red-600 text-white'
+            }`}
+          >
+            {toast.type === 'success' ? (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            )}
+            <span>{toast.message}</span>
+            <button
+              onClick={() => setToast(null)}
+              className="ml-2 hover:opacity-75"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        )}
       </main>
     </AuthenticatedLayout>
   );

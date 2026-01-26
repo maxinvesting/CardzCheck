@@ -1,9 +1,33 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { isTestMode } from "@/lib/test-mode";
 
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 
 export async function createClient() {
+  // In test mode, return a mock client that always returns test user
+  if (isTestMode()) {
+    return {
+      auth: {
+        getUser: async () => ({
+          data: { user: null },
+          error: null,
+        }),
+        getSession: async () => ({
+          data: { session: null },
+          error: null,
+        }),
+      },
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            single: async () => ({ data: null, error: null }),
+          }),
+        }),
+      }),
+    } as any;
+  }
+
   const cookieStore = await cookies();
 
   return createServerClient(

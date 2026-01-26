@@ -4,6 +4,7 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import SportsCardBackground from "@/components/SportsCardBackground";
 
 function LoginForm() {
   const [email, setEmail] = useState("");
@@ -20,7 +21,7 @@ function LoginForm() {
     setLoading(true);
 
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({
+    const { error, data } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
@@ -31,32 +32,47 @@ function LoginForm() {
       return;
     }
 
-    router.push(redirect);
-    router.refresh();
+    console.log("Login response:", { hasSession: !!data.session, hasUser: !!data.user });
+
+    // Ensure we have a session before redirecting
+    if (data.session) {
+      // Small delay to ensure cookies are written
+      setTimeout(() => {
+        console.log("Redirecting to:", redirect);
+        // Force a hard navigation to ensure cookies are set
+        window.location.href = redirect;
+      }, 100);
+    } else {
+      setError("Login successful but session not created. Please try again.");
+      setLoading(false);
+    }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 px-4">
-      <div className="max-w-md w-full space-y-8">
+    <div className="min-h-screen flex items-center justify-center bg-[#0f1419] px-4 relative overflow-hidden">
+      <SportsCardBackground variant="default" />
+      <div className="max-w-md w-full space-y-8 relative z-10">
         <div className="text-center">
-          <Link href="/" className="text-3xl font-bold text-gray-900 dark:text-white">
-            CardzCheck
+          <Link href="/" className="flex justify-center">
+            <span className="text-3xl font-bold text-white tracking-tight">
+              CardzCheck
+            </span>
           </Link>
-          <h2 className="mt-6 text-2xl font-semibold text-gray-900 dark:text-white">
+          <h2 className="mt-6 text-2xl font-semibold text-white">
             Sign in to your account
           </h2>
         </div>
 
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {error && (
-            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg text-sm">
+            <div className="bg-red-900/20 border border-red-800 text-red-400 px-4 py-3 rounded-lg text-sm">
               {error}
             </div>
           )}
 
           <div className="space-y-4">
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              <label htmlFor="email" className="block text-sm font-medium text-gray-300">
                 Email address
               </label>
               <input
@@ -67,13 +83,13 @@ function LoginForm() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 block w-full px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-white"
+                className="mt-1 block w-full px-4 py-3 border border-gray-700 rounded-lg shadow-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-800 text-white"
                 placeholder="you@example.com"
               />
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              <label htmlFor="password" className="block text-sm font-medium text-gray-300">
                 Password
               </label>
               <input
@@ -84,7 +100,7 @@ function LoginForm() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 block w-full px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-white"
+                className="mt-1 block w-full px-4 py-3 border border-gray-700 rounded-lg shadow-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-800 text-white"
                 placeholder="Your password"
               />
             </div>
@@ -98,9 +114,9 @@ function LoginForm() {
             {loading ? "Signing in..." : "Sign in"}
           </button>
 
-          <p className="text-center text-sm text-gray-600 dark:text-gray-400">
+          <p className="text-center text-sm text-gray-400">
             Don&apos;t have an account?{" "}
-            <Link href="/signup" className="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400">
+            <Link href="/signup" className="font-medium text-blue-400 hover:text-blue-300">
               Sign up
             </Link>
           </p>
@@ -113,7 +129,7 @@ function LoginForm() {
 export default function LoginPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
+      <div className="min-h-screen flex items-center justify-center bg-[#0f1419]">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
       </div>
     }>

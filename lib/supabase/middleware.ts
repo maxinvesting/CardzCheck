@@ -1,7 +1,14 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { isTestMode } from "@/lib/test-mode";
 
 export async function updateSession(request: NextRequest) {
+  // Bypass auth checks in test mode
+  if (isTestMode()) {
+    console.log("🧪 TEST MODE: Bypassing authentication checks");
+    return NextResponse.next({ request });
+  }
+
   let supabaseResponse = NextResponse.next({
     request,
   });
@@ -15,12 +22,6 @@ export async function updateSession(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          );
-          supabaseResponse = NextResponse.next({
-            request,
-          });
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
           );
@@ -29,18 +30,35 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  // Refresh session if expired
+  // Refresh session if expired - this is critical for maintaining the session
+  const { data: { session } } = await supabase.auth.getSession();
+
+  // Get user after session refresh
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
+  // Debug logging
+  if (request.nextUrl.pathname.startsWith("/dashboard") ||
+      request.nextUrl.pathname.startsWith("/collection") ||
+      request.nextUrl.pathname.startsWith("/settings") ||
+      request.nextUrl.pathname.startsWith("/analyst")) {
+    console.log("Middleware check:", {
+      path: request.nextUrl.pathname,
+      hasSession: !!session,
+      hasUser: !!user,
+      cookies: request.cookies.getAll().map(c => c.name),
+    });
+  }
+
   // Protected routes
-  const protectedPaths = ["/collection", "/account", "/portfolio", "/settings"];
+  const protectedPaths = ["/dashboard", "/collection", "/account", "/settings", "/analyst"];
   const isProtectedPath = protectedPaths.some((path) =>
     request.nextUrl.pathname.startsWith(path)
   );
 
   if (isProtectedPath && !user) {
+    console.log("Redirecting to login - no user found");
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("redirect", request.nextUrl.pathname);

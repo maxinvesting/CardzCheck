@@ -1,15 +1,48 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Header from "@/components/Header";
+import SportsCardBackground from "@/components/SportsCardBackground";
+import { createClient } from "@/lib/supabase/client";
 
 export default function Home() {
-  return (
-    <div className="min-h-screen bg-[#0f1419]">
-      <Header />
+  const router = useRouter();
+  const [checkingAuth, setCheckingAuth] = useState(true);
 
-      {/* Hero */}
-      <section className="max-w-6xl mx-auto px-4 py-20 text-center bg-[#0f1419]">
+  useEffect(() => {
+    async function checkAuth() {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (user) {
+        // Authenticated user - redirect to dashboard
+        router.replace("/dashboard");
+      } else {
+        setCheckingAuth(false);
+      }
+    }
+    checkAuth();
+  }, [router]);
+
+  // Show loading while checking auth
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen bg-[#0f1419] flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-[#0f1419] relative overflow-hidden">
+      <SportsCardBackground variant="hero" />
+      <div className="relative z-10">
+        <Header />
+
+        {/* Hero */}
+        <section className="max-w-6xl mx-auto px-4 py-20 text-center">
         <h1 className="text-4xl md:text-6xl font-bold text-white leading-tight">
           Card Ladder charges{" "}
           <span className="line-through text-gray-400">$200/year</span>
@@ -18,7 +51,7 @@ export default function Home() {
           <span className="text-[#3a7fff]">$20 once</span>
         </h1>
         <p className="mt-6 text-xl text-gray-300 max-w-2xl mx-auto">
-          Real-time eBay sold prices, AI card identification, and collection tracking.
+          Real-time eBay sold prices, card identification, and collection tracking.
           Everything you need to know what your cards are worth.
         </p>
         <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
@@ -74,7 +107,7 @@ export default function Home() {
                 Photo ID
               </h3>
               <p className="text-gray-600 dark:text-gray-400">
-                Upload a photo of your card. Our AI identifies the player, year, set, and grade automatically.
+                Upload a photo of your card. We identify the player, year, set, and grade for you.
               </p>
             </div>
 
@@ -220,15 +253,21 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 py-8">
-        <div className="max-w-6xl mx-auto px-4 text-center text-gray-500 dark:text-gray-400 text-sm">
-          <p>CardzCheck - Sports Card Price Comps + Collection Tracker</p>
-          <p className="mt-2">
-            Data sourced from eBay sold listings.
-          </p>
-        </div>
-      </footer>
+        {/* Footer */}
+        <footer className="bg-[#0f1419]/80 border-t border-gray-800 py-8">
+          <div className="max-w-6xl mx-auto px-4 text-center text-gray-400 text-sm">
+            <div className="flex justify-center mb-4">
+              <span className="text-2xl font-bold text-white opacity-80">
+                CardzCheck
+              </span>
+            </div>
+            <p className="text-gray-400">Sports Card Price Comps + Collection Tracker</p>
+            <p className="mt-2 text-gray-500">
+              Data sourced from eBay sold listings.
+            </p>
+          </div>
+        </footer>
+      </div>
     </div>
   );
 }

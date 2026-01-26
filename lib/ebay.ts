@@ -1,4 +1,5 @@
 import * as cheerio from "cheerio";
+import { mkdir, writeFile } from "fs/promises";
 import type { Comp, CompsStats } from "@/types";
 
 interface EbaySearchParams {
@@ -6,14 +7,68 @@ interface EbaySearchParams {
   year?: string;
   set?: string;
   grade?: string;
+  cardNumber?: string;
+  parallelType?: string;
+  serialNumber?: string;
+  variation?: string;
+  autograph?: string;
+  relic?: string;
+  keywords?: string[];
 }
 
-function buildSearchUrl(params: EbaySearchParams): string {
+// Normalize parallel type names to eBay-friendly alternatives
+function getParallelAlternatives(parallelType: string): string[] {
+  const lower = parallelType.toLowerCase();
+  const alternatives: string[] = [parallelType]; // Always include original
+  
+  // Common eBay parallel name variations
+  const mappings: Record<string, string[]> = {
+    "holo": ["Holographic", "Holo Prizm", "Holo", "Holographic Prizm"],
+    "holographic": ["Holo", "Holo Prizm", "Holographic Prizm"],
+    "refractor": ["Refractor", "Chrome Refractor"],
+    "silver prizm": ["Silver", "Silver Prizm", "Prizm Silver"],
+    "gold prizm": ["Gold", "Gold Prizm", "Prizm Gold"],
+    "red prizm": ["Red", "Red Prizm", "Prizm Red"],
+    "blue prizm": ["Blue", "Blue Prizm", "Prizm Blue"],
+    "green prizm": ["Green", "Green Prizm", "Prizm Green"],
+    "orange prizm": ["Orange", "Orange Prizm", "Prizm Orange"],
+    "purple prizm": ["Purple", "Purple Prizm", "Prizm Purple"],
+    "black prizm": ["Black", "Black Prizm", "Prizm Black"],
+    "shimmer": ["Shimmer", "Shimmer Prizm"],
+    "cracked ice": ["Cracked Ice", "Ice"],
+    "mojo": ["Mojo", "Mojo Prizm"],
+    "wave": ["Wave", "Wave Prizm"],
+  };
+  
+  // Check for exact match
+  if (mappings[lower]) {
+    alternatives.push(...mappings[lower]);
+  } else {
+    // Check for partial matches (e.g., "Silver Prizm" contains "silver")
+    for (const [key, values] of Object.entries(mappings)) {
+      if (lower.includes(key) || key.includes(lower)) {
+        alternatives.push(...values);
+      }
+    }
+  }
+  
+  // Remove duplicates and return
+  return [...new Set(alternatives)];
+}
+
+export function buildSearchUrl(params: EbaySearchParams): string {
   // Build search query
   const queryParts: string[] = [params.player];
   if (params.year) queryParts.push(params.year);
   if (params.set) queryParts.push(params.set);
   if (params.grade) queryParts.push(params.grade);
+  if (params.cardNumber) queryParts.push(params.cardNumber);
+  if (params.parallelType) queryParts.push(params.parallelType);
+  if (params.serialNumber) queryParts.push(params.serialNumber);
+  if (params.variation) queryParts.push(params.variation);
+  if (params.autograph) queryParts.push(params.autograph);
+  if (params.relic) queryParts.push(params.relic);
+  if (params.keywords?.length) queryParts.push(...params.keywords);
 
   const query = queryParts.join(" ");
   const encodedQuery = encodeURIComponent(query);
@@ -23,6 +78,51 @@ function buildSearchUrl(params: EbaySearchParams): string {
   // _sop=13 = Sort by ending date (newest first)
   // _sacat=212 = Sports Trading Cards category
   return `https://www.ebay.com/sch/i.html?_nkw=${encodedQuery}&_sacat=212&LH_Sold=1&LH_Complete=1&_sop=13&_ipg=60`;
+}
+
+function normalizeSetForEbay(setName: string): string {
+  let normalized = setName.trim();
+  // Remove common sport suffixes used in internal data that sellers rarely include
+  normalized = normalized.replace(
+    /\s+(Football|Basketball|Baseball|Hockey|Soccer)\b/gi,
+    ""
+  );
+  // Remove leading brand that sellers may omit
+  normalized = normalized.replace(/^Panini\s+/i, "");
+  return normalized.trim();
+}
+
+function detectEbayBlocked(html: string): boolean {
+  const lower = html.toLowerCase();
+  return (
+    lower.includes("robot check") ||
+    lower.includes("captcha") ||
+    lower.includes("verify your identity") ||
+    lower.includes("pardon the interruption") ||
+    lower.includes("security measure") ||
+    lower.includes("request blocked") ||
+    lower.includes("access denied") ||
+    lower.includes("enable javascript") ||
+    lower.includes("checking your browser")
+  );
+}
+
+async function maybeDumpHtml(
+  html: string,
+  meta: { url: string; status: number; contentType: string | null }
+): Promise<void> {
+  if (process.env.EBAY_DEBUG !== "1") return;
+  try {
+    const dir = "/tmp/cardzcheck-ebay";
+    await mkdir(dir, { recursive: true });
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const file = `${dir}/ebay-${timestamp}.html`;
+    const header = `<!-- url: ${meta.url} | status: ${meta.status} | content-type: ${meta.contentType ?? "unknown"} -->\n`;
+    await writeFile(file, header + html, "utf8");
+    console.log(`🧾 EBAY_DEBUG saved HTML to ${file}`);
+  } catch (error) {
+    console.warn("⚠️ EBAY_DEBUG failed to save HTML:", error);
+  }
 }
 
 function parsePrice(priceText: string): number | null {
@@ -80,10 +180,9 @@ function parseDate(dateText: string): string {
   return now.toISOString().split("T")[0];
 }
 
-export async function scrapeEbaySoldListings(
-  params: EbaySearchParams
-): Promise<Comp[]> {
+async function scrapeSingleSearch(params: EbaySearchParams): Promise<Comp[]> {
   const url = buildSearchUrl(params);
+  console.log("🌐 Fetching eBay URL:", url);
 
   const response = await fetch(url, {
     headers: {
@@ -97,55 +196,214 @@ export async function scrapeEbaySoldListings(
   });
 
   if (!response.ok) {
+    console.error(`❌ eBay request failed: ${response.status} ${response.statusText}`);
     throw new Error(`eBay request failed: ${response.status}`);
   }
 
   const html = await response.text();
+  await maybeDumpHtml(html, {
+    url: response.url,
+    status: response.status,
+    contentType: response.headers.get("content-type"),
+  });
+  if (detectEbayBlocked(html)) {
+    console.error("❌ eBay blocked the request (bot check/captcha detected)");
+    throw new Error("eBay blocked the request (bot check/captcha detected)");
+  }
   const $ = cheerio.load(html);
 
   const comps: Comp[] = [];
 
-  // eBay listing items
-  $(".s-item").each((_, element) => {
-    const $item = $(element);
+  // Try NEW eBay structure first (s-card based - 2024+)
+  const sCardItems = $("li[data-listingid]");
+  console.log(`📄 Found ${sCardItems.length} s-card items (new structure)`);
 
-    // Skip "Shop on eBay" placeholder items
-    const title = $item.find(".s-item__title").text().trim();
-    if (!title || title.toLowerCase().includes("shop on ebay")) {
-      return;
-    }
+  if (sCardItems.length > 0) {
+    sCardItems.each((_, element) => {
+      const $item = $(element);
 
-    // Get price (may have multiple prices for auction items)
-    const priceText = $item.find(".s-item__price").first().text();
-    const price = parsePrice(priceText);
-    if (!price) return;
+      // Get title from s-card__title
+      const title =
+        $item.find(".s-card__title .su-styled-text").first().text().trim() ||
+        $item.find(".s-card__title").first().text().trim();
+      if (!title || title.toLowerCase().includes("shop on ebay")) return;
 
-    // Get sold date
-    const dateText = $item.find(".s-item__title--tagblock .POSITIVE").text() ||
-      $item.find(".s-item__ended-date").text() ||
-      "";
-    const date = parseDate(dateText);
+      // Get price from s-card__price
+      const priceText = $item.find(".s-card__price").first().text();
+      const price = parsePrice(priceText);
+      if (!price) return;
 
-    // Get link
-    const link = $item.find(".s-item__link").attr("href") || "";
+      // Get sold date from s-card__caption
+      const dateText =
+        $item.find(".s-card__caption .su-styled-text").first().text() ||
+        $item.find(".s-card__caption").first().text() ||
+        "";
+      const date = parseDate(dateText);
 
-    // Get image
-    const image =
-      $item.find(".s-item__image-img").attr("src") ||
-      $item.find(".s-item__image-img").attr("data-src") ||
-      "";
+      // Get link from s-card__link
+      const link = $item.find("a.s-card__link").first().attr("href") || "";
 
-    comps.push({
-      title,
-      price,
-      date,
-      link: link.split("?")[0], // Remove tracking params
-      image: image || undefined,
-      source: "ebay",
+      // Get image from s-card__image
+      const image =
+        $item.find(".s-card__image img").attr("src") ||
+        $item.find(".s-card__image img").attr("data-defer-load") ||
+        $item.find(".s-card__image").attr("src") ||
+        $item.find(".s-card__image").attr("data-defer-load") ||
+        "";
+
+      comps.push({
+        title,
+        price,
+        date,
+        link: link.split("?")[0], // Remove tracking params
+        image: image || undefined,
+        source: "ebay",
+      });
     });
-  });
+  }
 
+  // Fallback to OLD eBay structure (s-item based - pre-2024)
+  if (comps.length === 0) {
+    console.log(`📄 Trying old s-item structure...`);
+    $(".s-item").each((_, element) => {
+      const $item = $(element);
+
+      // Skip "Shop on eBay" placeholder items
+      const title = $item.find(".s-item__title").text().trim();
+      if (!title || title.toLowerCase().includes("shop on ebay")) {
+        return;
+      }
+
+      // Get price (may have multiple prices for auction items)
+      const priceText = $item.find(".s-item__price").first().text();
+      const price = parsePrice(priceText);
+      if (!price) return;
+
+      // Get sold date
+      const dateText = $item.find(".s-item__title--tagblock .POSITIVE").text() ||
+        $item.find(".s-item__ended-date").text() ||
+        "";
+      const date = parseDate(dateText);
+
+      // Get link
+      const link = $item.find(".s-item__link").attr("href") || "";
+
+      // Get image
+      const image =
+        $item.find(".s-item__image-img").attr("src") ||
+        $item.find(".s-item__image-img").attr("data-src") ||
+        "";
+
+      comps.push({
+        title,
+        price,
+        date,
+        link: link.split("?")[0], // Remove tracking params
+        image: image || undefined,
+        source: "ebay",
+      });
+    });
+  }
+
+  console.log(`✅ Scraped ${comps.length} valid listings from eBay`);
   return comps;
+}
+
+export async function scrapeEbaySoldListings(
+  params: EbaySearchParams
+): Promise<Comp[]> {
+  // Try the original search first
+  let comps = await scrapeSingleSearch(params);
+  
+  // If we got results, return them
+  if (comps.length > 0) {
+    return comps;
+  }
+  
+  console.log(`⚠️ No results with original query, trying fallback strategies...`);
+  
+  // Fallback 1: Try alternative parallel type names
+  if (params.parallelType) {
+    const alternatives = getParallelAlternatives(params.parallelType);
+    console.log(`🔄 Trying ${alternatives.length} parallel type alternatives:`, alternatives);
+    
+    for (const alt of alternatives.slice(1)) { // Skip first (original)
+      const altParams = { ...params, parallelType: alt };
+      comps = await scrapeSingleSearch(altParams);
+      if (comps.length > 0) {
+        console.log(`✅ Found ${comps.length} results with alternative: "${alt}"`);
+        return comps;
+      }
+    }
+    
+    // Fallback 2: Try without parallel type
+    console.log(`🔄 Trying without parallel type...`);
+    const noParallelParams = { ...params };
+    delete noParallelParams.parallelType;
+    comps = await scrapeSingleSearch(noParallelParams);
+    if (comps.length > 0) {
+      console.log(`✅ Found ${comps.length} results without parallel type`);
+      return comps;
+    }
+  }
+
+  // Fallback 2.5: Try normalized set name (remove sport suffix / Panini)
+  if (params.set) {
+    const normalizedSet = normalizeSetForEbay(params.set);
+    if (normalizedSet && normalizedSet !== params.set) {
+      console.log(`🔄 Trying normalized set name: "${normalizedSet}"`);
+      const normalizedParams = { ...params, set: normalizedSet };
+      comps = await scrapeSingleSearch(normalizedParams);
+      if (comps.length > 0) {
+        console.log(`✅ Found ${comps.length} results with normalized set`);
+        return comps;
+      }
+    }
+  }
+  
+  // Fallback 3: Try without set name (many listings omit it)
+  if (params.set) {
+    console.log(`🔄 Trying without set name...`);
+    const noSetParams = { ...params };
+    delete noSetParams.set;
+    comps = await scrapeSingleSearch(noSetParams);
+    if (comps.length > 0) {
+      console.log(`✅ Found ${comps.length} results without set`);
+      return comps;
+    }
+  }
+
+  // Fallback 4: Try with just player + year + set (most basic search)
+  if (params.year || params.set) {
+    console.log(`🔄 Trying basic search (player + year + set only)...`);
+    const basicParams: EbaySearchParams = {
+      player: params.player,
+      year: params.year,
+      set: params.set,
+    };
+    comps = await scrapeSingleSearch(basicParams);
+    if (comps.length > 0) {
+      console.log(`✅ Found ${comps.length} results with basic search`);
+      return comps;
+    }
+  }
+  
+  // Fallback 5: Try with just player + year
+  if (params.year) {
+    console.log(`🔄 Trying minimal search (player + year only)...`);
+    const minimalParams: EbaySearchParams = {
+      player: params.player,
+      year: params.year,
+    };
+    comps = await scrapeSingleSearch(minimalParams);
+    if (comps.length > 0) {
+      console.log(`✅ Found ${comps.length} results with minimal search`);
+      return comps;
+    }
+  }
+  
+  console.log(`❌ No results found after all fallback attempts`);
+  return [];
 }
 
 export function calculateStats(comps: Comp[]): CompsStats {
@@ -183,5 +441,12 @@ export function buildSearchQuery(params: EbaySearchParams): string {
   if (params.year) parts.push(params.year);
   if (params.set) parts.push(params.set);
   if (params.grade) parts.push(params.grade);
+  if (params.cardNumber) parts.push(params.cardNumber);
+  if (params.parallelType) parts.push(params.parallelType);
+  if (params.serialNumber) parts.push(params.serialNumber);
+  if (params.variation) parts.push(params.variation);
+  if (params.autograph) parts.push(params.autograph);
+  if (params.relic) parts.push(params.relic);
+  if (params.keywords?.length) parts.push(...params.keywords);
   return parts.join(" ");
 }

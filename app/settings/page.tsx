@@ -7,12 +7,15 @@ import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import { createClient } from "@/lib/supabase/client";
 import type { User } from "@/types";
 import { LIMITS } from "@/types";
+import { isTestMode, getTestUser } from "@/lib/test-mode";
 
 function SettingsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [user, setUser] = useState<User | null>(null);
   const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
+  const [nameLoading, setNameLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [upgradeLoading, setUpgradeLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -28,6 +31,17 @@ function SettingsContent() {
 
   useEffect(() => {
     async function loadUser() {
+      // In test mode, use mock user
+      if (isTestMode()) {
+        const testUser = getTestUser();
+        setUser(testUser);
+        setEmail(testUser.email);
+        setName(testUser.name || "");
+        setLoading(false);
+        console.log("🧪 TEST MODE: Using mock user in Settings");
+        return;
+      }
+
       const supabase = createClient();
       const {
         data: { user: authUser },
@@ -48,6 +62,7 @@ function SettingsContent() {
 
       if (userData) {
         setUser(userData);
+        setName(userData.name || "");
       }
 
       setLoading(false);
@@ -55,6 +70,35 @@ function SettingsContent() {
 
     loadUser();
   }, [router]);
+
+  const handleNameUpdate = async () => {
+    setNameLoading(true);
+    try {
+      const response = await fetch("/api/user/name", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim() || null }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        alert(data.error || "Failed to update name");
+        return;
+      }
+
+      // Update local user state
+      if (user) {
+        setUser({ ...user, name: name.trim() || null });
+      }
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 5000);
+    } catch (error) {
+      console.error("Error updating name:", error);
+      alert("Failed to update name");
+    } finally {
+      setNameLoading(false);
+    }
+  };
 
   const handleLogout = async () => {
     const supabase = createClient();
@@ -142,6 +186,31 @@ function SettingsContent() {
               Account Information
             </h2>
             <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Name
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Your name"
+                    maxLength={100}
+                    className="flex-1 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  <button
+                    onClick={handleNameUpdate}
+                    disabled={nameLoading || name === (user?.name || "")}
+                    className="px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {nameLoading ? "Saving..." : "Save"}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  This name will be used for personalization throughout the app
+                </p>
+              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Email
