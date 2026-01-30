@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { LIMITS } from "@/types";
 import { isTestMode } from "@/lib/test-mode";
+import { calculateCardCmv, isCmvStale } from "@/lib/cmv";
 
 // GET - List collection items
 export async function GET() {
@@ -29,7 +30,29 @@ export async function GET() {
       throw error;
     }
 
-    return NextResponse.json({ items });
+    const updatedItems = await Promise.all(
+      (items || []).map(async (item) => {
+        if (!isCmvStale(item)) {
+          return item;
+        }
+        const cmvResult = await calculateCardCmv(item);
+        const { data: updated, error: updateError } = await supabase
+          .from("collection_items")
+          .update(cmvResult)
+          .eq("id", item.id)
+          .eq("user_id", user.id)
+          .select("*")
+          .single();
+
+        if (updateError) {
+          console.error("Failed to update CMV for item:", updateError);
+          return item;
+        }
+        return updated;
+      })
+    );
+
+    return NextResponse.json({ items: updatedItems });
   } catch (error) {
     console.error("Collection fetch error:", error);
     return NextResponse.json(
@@ -46,13 +69,16 @@ export async function POST(request: NextRequest) {
     if (isTestMode()) {
       console.log("🧪 TEST MODE: Bypassing collection limits");
       const body = await request.json();
-      return NextResponse.json({ 
+      return NextResponse.json({
         item: {
           ...body,
           id: `test-${Date.now()}`,
           user_id: "test-user-id",
+          estimated_cmv: null,
+          cmv_confidence: "unavailable",
+          cmv_last_updated: new Date().toISOString(),
           created_at: new Date().toISOString(),
-        }
+        },
       });
     }
 
@@ -241,7 +267,27 @@ export async function PATCH(request: NextRequest) {
       throw error;
     }
 
-    return NextResponse.json({ item });
+    const cmvRelevantFields = ["player_name", "year", "set_name", "grade", "notes"];
+    const shouldRecalculate = cmvRelevantFields.some((field) => field in updates);
+
+    if (!shouldRecalculate) {
+      return NextResponse.json({ item });
+    }
+
+    const cmvResult = await calculateCardCmv(item);
+    const { data: updatedItem, error: updateError } = await supabase
+      .from("collection_items")
+      .update(cmvResult)
+      .eq("id", item.id)
+      .eq("user_id", user.id)
+      .select()
+      .single();
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    return NextResponse.json({ item: updatedItem });
   } catch (error) {
     console.error("Collection update error:", error);
     return NextResponse.json(

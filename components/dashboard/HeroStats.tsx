@@ -163,7 +163,7 @@ export default function HeroStats({ items, loading, onSearch }: HeroStatsProps) 
               </span>
             </div>
             <p className="text-4xl sm:text-5xl font-bold text-white tracking-tight">
-              {formatCurrency(totalValue)}
+              {cmvAvailableCount > 0 ? formatCurrency(totalValue) : "CMV unavailable"}
             </p>
             {/* Trend indicator placeholder */}
             <div className="flex items-center gap-1.5 mt-2">

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { LIMITS } from "@/types";
 import { isTestMode } from "@/lib/test-mode";
+import { calculateCardCmv } from "@/lib/cmv";
 
 type BulkCollectionItemInput = {
   player_name: string;
@@ -56,6 +57,9 @@ export async function POST(request: NextRequest) {
           ...it,
           id: `test-${Date.now()}-${idx}`,
           user_id: "test-user-id",
+          estimated_cmv: null,
+          cmv_confidence: "unavailable",
+          cmv_last_updated: new Date().toISOString(),
           created_at: new Date().toISOString(),
         })),
       });
@@ -102,15 +106,27 @@ export async function POST(request: NextRequest) {
       notes: it.notes || null,
     }));
 
-    const { error } = await supabase
+    const { data: insertedItems, error } = await supabase
       .from("collection_items")
-      .insert(insertPayload);
+      .insert(insertPayload)
+      .select("*");
 
     if (error) {
       throw error;
     }
 
-    return NextResponse.json({ imported: items.length });
+    if (insertedItems && insertedItems.length > 0) {
+      for (const item of insertedItems) {
+        const cmvResult = await calculateCardCmv(item);
+        await supabase
+          .from("collection_items")
+          .update(cmvResult)
+          .eq("id", item.id)
+          .eq("user_id", user.id);
+      }
+    }
+
+    return NextResponse.json({ imported: insertedItems?.length || items.length });
   } catch (error) {
     console.error("Collection bulk import error:", error);
     return NextResponse.json(
@@ -119,4 +135,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

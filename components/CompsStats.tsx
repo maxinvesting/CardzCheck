@@ -135,7 +135,7 @@ export default function CompsStats({
             CMV
           </p>
           <p className="text-2xl font-bold text-blue-700 dark:text-blue-300 mt-1">
-            {formatPrice(stats.cmv)}
+            {stats.cmv !== null ? formatPrice(stats.cmv) : "CMV unavailable"}
           </p>
           <p className="text-xs text-blue-500 dark:text-blue-400 mt-0.5">
             Current Market Value

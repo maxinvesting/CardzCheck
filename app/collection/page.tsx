@@ -14,13 +14,22 @@ import { isTestMode, getTestUser } from "@/lib/test-mode";
 import { computeCollectionSummary } from "@/lib/values";
 
 function formatPrice(price: number | null): string {
-  if (price === null) return "$0.00";
+  if (price === null) return "CMV unavailable";
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(price);
+}
+
+function formatCurrency(value: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
 }
 
 export default function CollectionPage() {
@@ -131,6 +140,9 @@ export default function CollectionPage() {
       "est_cmv",
       "purchase_price",
       "purchase_date",
+      "estimated_cmv",
+      "cmv_confidence",
+      "cmv_last_updated",
       "image_url",
       "notes",
     ];
@@ -143,6 +155,9 @@ export default function CollectionPage() {
       it.est_cmv ?? "",
       it.purchase_price,
       it.purchase_date,
+      it.estimated_cmv,
+      it.cmv_confidence,
+      it.cmv_last_updated,
       it.image_url,
       it.notes,
     ]);
@@ -574,14 +589,14 @@ export default function CollectionPage() {
                         </div>
                       </div>
                       <p className="font-semibold text-gray-900 dark:text-white">
-                        {formatPrice(item.purchase_price)}
+                        {formatPrice(item.estimated_cmv)}
                       </p>
                     </div>
                   ))}
                 </div>
               ) : (
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Add cards with purchase prices to see your top value cards.
+                  CMV unavailable. Add comps to calculate top values.
                 </p>
               )}
             </div>

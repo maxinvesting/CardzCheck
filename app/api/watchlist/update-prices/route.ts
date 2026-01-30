@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
         const stats = calculateStats(comps);
 
         // Only update if we got results
-        if (stats.count > 0) {
+        if (stats.count > 0 && stats.cmv !== null) {
           const now = new Date().toISOString();
           const newPrice = stats.cmv;
 

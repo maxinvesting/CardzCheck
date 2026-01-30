@@ -183,7 +183,7 @@ export default function ActivityFeed({ recentCards = [] }: ActivityFeedProps) {
                         )}
                       </>
                     )}
-                    {search.cmv !== undefined && search.cmv > 0 && (
+                    {search.cmv !== undefined && search.cmv !== null && (
                       <>
                         <span className="text-gray-600">·</span>
                         <span className="text-blue-400">Est. value: ${search.cmv.toLocaleString()}</span>
