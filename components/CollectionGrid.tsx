@@ -30,16 +30,15 @@ function formatDate(dateStr: string | null): string {
 
 interface CardItemProps {
   item: CollectionItem;
-  cmv: number | null;
   onDelete: () => void;
 }
 
-function CardItem({ item, cmv, onDelete }: CardItemProps) {
+function CardItem({ item, onDelete }: CardItemProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const gainLoss =
-    cmv !== null && item.purchase_price !== null
-      ? cmv - item.purchase_price
+    item.estimated_cmv !== null && item.purchase_price !== null
+      ? item.estimated_cmv - item.purchase_price
       : null;
 
   const gainLossPercent =
@@ -106,9 +105,14 @@ function CardItem({ item, cmv, onDelete }: CardItemProps) {
           <div className="flex justify-between text-sm">
             <span className="text-gray-500 dark:text-gray-400">CMV</span>
             <span className="font-medium text-gray-900 dark:text-white">
-              {cmv !== null ? formatPrice(cmv) : "—"}
+              {item.estimated_cmv !== null ? formatPrice(item.estimated_cmv) : "CMV unavailable"}
             </span>
           </div>
+          {item.estimated_cmv === null && (
+            <p className="text-xs text-gray-400 dark:text-gray-500">
+              Add comps to calculate value
+            </p>
+          )}
           {gainLoss !== null && (
             <div className="flex justify-between text-sm">
               <span className="text-gray-500 dark:text-gray-400">Gain/Loss</span>
@@ -204,7 +208,6 @@ export default function CollectionGrid({ items, onDelete, onRefresh }: Collectio
           <CardItem
             key={item.id}
             item={item}
-            cmv={null} // Would need to fetch CMV for each card
             onDelete={() => onDelete(item.id)}
           />
         ))}

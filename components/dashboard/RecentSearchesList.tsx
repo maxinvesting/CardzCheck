@@ -132,7 +132,7 @@ export default function RecentSearchesList() {
                       <span>{search.resultCount} results</span>
                     </>
                   )}
-                  {search.cmv !== undefined && (
+                  {search.cmv !== undefined && search.cmv !== null && (
                     <>
                       <span>•</span>
                       <span>

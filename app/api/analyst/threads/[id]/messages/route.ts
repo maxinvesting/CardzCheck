@@ -10,6 +10,7 @@ const ANALYST_QUERY_LIMIT = 100;
 interface CollectionContext {
   totalCards: number;
   totalInvested: number;
+  totalCurrentValue: number;
   topCards: Array<{ name: string; price: number | null }>;
   watchlistCount: number;
   watchlistItems: Array<{ name: string; lastPrice: number | null; targetPrice: number | null }>;
@@ -25,7 +26,7 @@ async function getCollectionContext(
       .from("collection_items")
       .select("*")
       .eq("user_id", userId)
-      .order("purchase_price", { ascending: false, nullsFirst: false });
+      .order("estimated_cmv", { ascending: false, nullsFirst: false });
 
     // Fetch watchlist items
     const { data: watchlist } = await supabase
@@ -47,14 +48,18 @@ async function getCollectionContext(
       (sum, item) => sum + (item.purchase_price || 0),
       0
     );
+    const totalCurrentValue = collectionItems.reduce(
+      (sum, item) => sum + (item.estimated_cmv || 0),
+      0
+    );
 
     // Get top 5 cards by purchase price
     const topCards = collectionItems
-      .filter((item) => item.purchase_price !== null)
+      .filter((item) => item.estimated_cmv !== null)
       .slice(0, 5)
       .map((item) => ({
         name: `${item.year || ""} ${item.player_name} ${item.set_name || ""} ${item.grade || ""}`.trim(),
-        price: item.purchase_price,
+        price: item.estimated_cmv,
       }));
 
     // Get watchlist summary
@@ -67,6 +72,7 @@ async function getCollectionContext(
     return {
       totalCards,
       totalInvested,
+      totalCurrentValue,
       topCards,
       watchlistCount: watchlistItems.length,
       watchlistItems: watchlistSummary,
@@ -87,6 +93,7 @@ function formatCollectionForPrompt(context: CollectionContext | null): string {
   if (context.totalCards > 0) {
     prompt += `\n- Total cards in collection: ${context.totalCards}`;
     prompt += `\n- Total invested: $${context.totalInvested.toLocaleString()}`;
+    prompt += `\n- Total estimated CMV: $${context.totalCurrentValue.toLocaleString()}`;
 
     if (context.topCards.length > 0) {
       prompt += "\n- Top cards by value:";

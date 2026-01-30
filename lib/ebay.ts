@@ -408,7 +408,7 @@ export async function scrapeEbaySoldListings(
 
 export function calculateStats(comps: Comp[]): CompsStats {
   if (comps.length === 0) {
-    return { cmv: 0, avg: 0, low: 0, high: 0, count: 0 };
+    return { cmv: null, avg: 0, low: 0, high: 0, count: 0 };
   }
 
   const prices = comps.map((c) => c.price).sort((a, b) => a - b);

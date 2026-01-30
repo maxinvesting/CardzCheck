@@ -12,13 +12,22 @@ import { LIMITS } from "@/types";
 import { isTestMode, getTestUser } from "@/lib/test-mode";
 
 function formatPrice(price: number | null): string {
-  if (price === null) return "$0.00";
+  if (price === null) return "CMV unavailable";
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(price);
+}
+
+function formatCurrency(value: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
 }
 
 export default function CollectionPage() {
@@ -126,6 +135,9 @@ export default function CollectionPage() {
       "grade",
       "purchase_price",
       "purchase_date",
+      "estimated_cmv",
+      "cmv_confidence",
+      "cmv_last_updated",
       "image_url",
       "notes",
     ];
@@ -137,6 +149,9 @@ export default function CollectionPage() {
       it.grade,
       it.purchase_price,
       it.purchase_date,
+      it.estimated_cmv,
+      it.cmv_confidence,
+      it.cmv_last_updated,
       it.image_url,
       it.notes,
     ]);
@@ -287,20 +302,39 @@ export default function CollectionPage() {
       (sum, item) => sum + (item.purchase_price || 0),
       0
     );
-    // For now, using purchase price as current value (would integrate with real-time pricing)
-    const totalCurrentValue = totalInvested;
-    const totalGain = totalCurrentValue - totalInvested;
+    const totalCurrentValue = items.reduce(
+      (sum, item) => sum + (item.estimated_cmv || 0),
+      0
+    );
+    const gainEligibleItems = items.filter(
+      (item) => item.estimated_cmv !== null && item.purchase_price !== null
+    );
+    const totalInvestedForGain = gainEligibleItems.reduce(
+      (sum, item) => sum + (item.purchase_price || 0),
+      0
+    );
+    const totalGain = gainEligibleItems.reduce(
+      (sum, item) => sum + (item.estimated_cmv! - (item.purchase_price || 0)),
+      0
+    );
     const gainPercentage =
-      totalInvested > 0 ? (totalGain / totalInvested) * 100 : 0;
+      totalInvestedForGain > 0 ? (totalGain / totalInvestedForGain) * 100 : null;
+    const cmvAvailableCount = items.filter((item) => item.estimated_cmv !== null).length;
 
-    return { totalInvested, totalCurrentValue, totalGain, gainPercentage };
+    return {
+      totalInvested,
+      totalCurrentValue,
+      totalGain,
+      gainPercentage,
+      cmvAvailableCount,
+    };
   }, [items]);
 
-  // Top performers (cards with highest value)
+  // Top performers (cards with highest CMV)
   const topPerformers = useMemo(() => {
     return items
-      .filter((item) => item.purchase_price && item.purchase_price > 0)
-      .sort((a, b) => (b.purchase_price || 0) - (a.purchase_price || 0))
+      .filter((item) => item.estimated_cmv !== null)
+      .sort((a, b) => (b.estimated_cmv || 0) - (a.estimated_cmv || 0))
       .slice(0, 5);
   }, [items]);
 
@@ -431,23 +465,35 @@ export default function CollectionPage() {
             {/* Total Value - Hero */}
             <div className="md:col-span-2">
               <p className="text-blue-100 text-sm font-medium mb-1">Total Collection Value</p>
-              <p className="text-4xl font-bold">{formatPrice(portfolioStats.totalInvested)}</p>
+              <p className="text-4xl font-bold">
+                {portfolioStats.cmvAvailableCount > 0
+                  ? formatCurrency(portfolioStats.totalCurrentValue)
+                  : "CMV unavailable"}
+              </p>
               <p className="text-blue-100 text-sm mt-2">{collectionCount} cards</p>
             </div>
             {/* Total Invested */}
             <div>
               <p className="text-blue-100 text-sm font-medium mb-1">Total Invested</p>
-              <p className="text-2xl font-bold">{formatPrice(portfolioStats.totalInvested)}</p>
+              <p className="text-2xl font-bold">{formatCurrency(portfolioStats.totalInvested)}</p>
             </div>
             {/* Performance */}
             <div>
               <p className="text-blue-100 text-sm font-medium mb-1">Performance</p>
-              <p className={`text-2xl font-bold ${portfolioStats.totalGain >= 0 ? "text-green-300" : "text-red-300"}`}>
-                {portfolioStats.totalGain >= 0 ? "+" : ""}{formatPrice(portfolioStats.totalGain)}
-              </p>
-              <p className={`text-sm ${portfolioStats.gainPercentage >= 0 ? "text-green-300" : "text-red-300"}`}>
-                {portfolioStats.gainPercentage >= 0 ? "+" : ""}{portfolioStats.gainPercentage.toFixed(1)}%
-              </p>
+              {portfolioStats.gainPercentage !== null ? (
+                <>
+                  <p className={`text-2xl font-bold ${portfolioStats.totalGain >= 0 ? "text-green-300" : "text-red-300"}`}>
+                    {portfolioStats.totalGain >= 0 ? "+" : ""}
+                    {formatCurrency(portfolioStats.totalGain)}
+                  </p>
+                  <p className={`text-sm ${portfolioStats.gainPercentage >= 0 ? "text-green-300" : "text-red-300"}`}>
+                    {portfolioStats.gainPercentage >= 0 ? "+" : ""}
+                    {portfolioStats.gainPercentage.toFixed(1)}%
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm text-blue-100">CMV unavailable</p>
+              )}
             </div>
           </div>
         </div>
@@ -521,14 +567,14 @@ export default function CollectionPage() {
                         </div>
                       </div>
                       <p className="font-semibold text-gray-900 dark:text-white">
-                        {formatPrice(item.purchase_price)}
+                        {formatPrice(item.estimated_cmv)}
                       </p>
                     </div>
                   ))}
                 </div>
               ) : (
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Add cards with purchase prices to see your top value cards.
+                  CMV unavailable. Add comps to calculate top values.
                 </p>
               )}
             </div>

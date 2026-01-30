@@ -71,6 +71,9 @@ export interface CollectionItem {
   purchase_date: string | null;
   image_url: string | null;
   notes: string | null;
+  estimated_cmv: number | null;
+  cmv_confidence: CmvConfidence;
+  cmv_last_updated: string | null;
   created_at: string;
 }
 
@@ -84,7 +87,7 @@ export interface Comp {
 }
 
 export interface CompsStats {
-  cmv: number; // Current Market Value (median)
+  cmv: number | null; // Current Market Value (median)
   avg: number;
   low: number;
   high: number;
@@ -201,8 +204,10 @@ export interface RecentSearch {
   parsed: ParsedSearch;
   timestamp: number;
   resultCount?: number;
-  cmv?: number;
+  cmv?: number | null;
 }
+
+export type CmvConfidence = "high" | "medium" | "low" | "unavailable";
 
 // CardzCheck Analyst types
 export interface CardContext {

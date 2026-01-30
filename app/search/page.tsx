@@ -257,18 +257,22 @@ function SearchPageContent() {
       return;
     }
 
-    const { error } = await supabase.from("collection_items").insert({
-      user_id: user.id,
-      player_name: formData?.player_name || comp.title,
-      year: formData?.year || null,
-      set_name: formData?.set_name || null,
-      grade: formData?.grade || null,
-      purchase_price: comp.price,
-      purchase_date: comp.date,
-      image_url: comp.image || null,
+    const response = await fetch("/api/collection", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        player_name: formData?.player_name || comp.title,
+        year: formData?.year || null,
+        set_name: formData?.set_name || null,
+        grade: formData?.grade || null,
+        purchase_price: comp.price,
+        purchase_date: comp.date,
+        image_url: comp.image || null,
+      }),
     });
 
-    if (error) {
+    if (!response.ok) {
+      const error = await response.json();
       console.error("Error adding to collection:", error);
       setToast({ type: 'error', message: 'Failed to add card. Please try again.' });
       return;
@@ -301,18 +305,22 @@ function SearchPageContent() {
       return;
     }
 
-    const { error } = await supabase.from("collection_items").insert({
-      user_id: user.id,
-      player_name: formData.player_name,
-      year: formData.year || null,
-      set_name: formData.set_name || null,
-      grade: formData.grade || null,
-      purchase_price: null,
-      purchase_date: null,
-      image_url: null,
+    const response = await fetch("/api/collection", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        player_name: formData.player_name,
+        year: formData.year || null,
+        set_name: formData.set_name || null,
+        grade: formData.grade || null,
+        purchase_price: null,
+        purchase_date: null,
+        image_url: null,
+      }),
     });
 
-    if (error) {
+    if (!response.ok) {
+      const error = await response.json();
       console.error("Error adding to collection:", error);
       setToast({ type: 'error', message: 'Failed to add card. Please try again.' });
       return;

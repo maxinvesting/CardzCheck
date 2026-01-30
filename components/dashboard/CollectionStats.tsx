@@ -25,12 +25,16 @@ export default function CollectionStats({ items, loading }: CollectionStatsProps
   }
 
   const cardCount = items.length;
-  const totalValue = items.reduce((sum, item) => sum + (item.purchase_price || 0), 0);
+  const totalValue = items.reduce((sum, item) => sum + (item.estimated_cmv || 0), 0);
+  const cmvAvailableCount = items.filter((item) => item.estimated_cmv !== null).length;
 
-  // Calculate "since added" gain (would need current CMV data for real gain)
-  // For now, we'll show the total value as the investment
-  const totalInvested = totalValue;
-  const gain = 0; // Placeholder - would need to track current market values
+  const gainEligible = items.filter(
+    (item) => item.estimated_cmv !== null && item.purchase_price !== null
+  );
+  const gain = gainEligible.reduce(
+    (sum, item) => sum + (item.estimated_cmv! - (item.purchase_price || 0)),
+    0
+  );
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("en-US", {
@@ -86,7 +90,9 @@ export default function CollectionStats({ items, loading }: CollectionStatsProps
           </div>
           <span className="text-sm font-medium text-gray-400">Total Value</span>
         </div>
-        <p className="text-3xl font-bold text-white">{formatCurrency(totalValue)}</p>
+        <p className="text-3xl font-bold text-white">
+          {cmvAvailableCount > 0 ? formatCurrency(totalValue) : "CMV unavailable"}
+        </p>
       </div>
 
       {/* Gain/Loss */}
@@ -109,12 +115,12 @@ export default function CollectionStats({ items, loading }: CollectionStatsProps
           </div>
           <span className="text-sm font-medium text-gray-400">Since Added</span>
         </div>
-        {cardCount > 0 ? (
+        {gainEligible.length > 0 ? (
           <p className={`text-3xl font-bold ${gain >= 0 ? "text-blue-400" : "text-red-400"}`}>
             {gain >= 0 ? "+" : ""}{formatCurrency(gain)}
           </p>
         ) : (
-          <p className="text-3xl font-bold text-gray-500">--</p>
+          <p className="text-3xl font-bold text-gray-500">CMV unavailable</p>
         )}
       </div>
     </div>
