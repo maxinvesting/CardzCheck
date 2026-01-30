@@ -7,11 +7,21 @@ function getAnthropicClient() {
   });
 }
 
-const SYSTEM_PROMPT = `You are a sports trading card identification expert with deep knowledge of card sets, parallels, variants, and grading. Your job is to identify cards from images with high accuracy, paying special attention to parallel types and variants. You also have expertise in evaluating card condition for grading purposes.`;
+const SYSTEM_PROMPT = `You are a sports trading card identification expert with deep knowledge of card sets, parallels, variants, and insert types. Your job is to identify cards from images with high accuracy, paying special attention to insert types (especially Downtown inserts), multi-player cards, parallel types, and variants.`;
 
-const USER_PROMPT = `Identify this sports trading card from the image and estimate its condition/grade. Pay close attention to ALL details visible on the card.
+const USER_PROMPT = `Identify this sports trading card from the image. Pay close attention to ALL details visible on the card.
 
-PART 1 - CARD IDENTIFICATION
+CRITICAL - Downtown Insert Detection:
+- Look for the word "Downtown" printed anywhere on the card (often vertically along edges or prominently displayed)
+- Downtown inserts have distinctive cityscape/urban artwork backgrounds
+- If "Downtown" is detected, this is an INSERT, not a parallel variant
+- DO NOT assign parallel types like "Silver Holo" to Downtown inserts unless explicitly visible
+
+CRITICAL - Multi-Player Detection:
+- Look for multiple player names on the card
+- Examples: "Bo Nix + John Elway", "Dual Downtowns", "Triple", etc.
+- If multiple players are visible, extract ALL player names
+- Set confidence to "medium" or "low" if uncertain about player identification
 
 CRITICAL - Parallel/Variant Detection:
 Look carefully for visual indicators of parallels:
@@ -21,81 +31,43 @@ Look carefully for visual indicators of parallels:
 - SERIAL NUMBERS: Look for numbered cards like "/99", "/49", "/25", "/10", "/5", "/1", or "1/1" printed on the card
 - SPECIAL FEATURES: Autograph, Patch, Jersey, Rookie Card indicators
 - BASE CARDS: If none of the above are visible, it's likely "Base"
+- DO NOT assign parallel types to Downtown inserts unless explicitly visible
 
 Extract these fields:
-- player_name: Full name of the athlete (exact spelling from card)
-- year: Year printed on card (4 digits, not year of photo)
-- set_name: Card set/brand name (e.g., "Panini Prizm", "Topps Chrome", "Panini Select", "Fleer", "Bowman Chrome")
-- variant: Parallel/variant type if visible. Use exact names like:
+- player_name: Primary player name (if multiple players, use the first/main one, but also populate players array)
+- players: Array of ALL player names found on the card (e.g., ["Bo Nix", "John Elway"] for dual player cards). If single player, use array with one element.
+- year: Year printed on card (4 digits, not year of photo). Be careful - Downtown inserts may have different years than base sets.
+- set_name: Card set/brand name (e.g., "Panini Prizm", "Topps Chrome", "Panini Select", "Fleer", "Bowman Chrome", "Donruss Optic")
+- insert: Insert type if detected. Examples: "Downtown", "Kaboom", "Court Kings", "Immaculate", etc. If no insert, leave empty.
+- variant: Parallel/variant type if visible (ONLY if not an insert). Use exact names like:
   * Color parallels: "Silver Prizm", "Gold Prizm", "Red Prizm", "Blue Prizm", "Green Prizm", "Orange Prizm", "Purple Prizm", "Black Prizm", "Pink", "Neon Green"
   * Finish types: "Refractor", "Shimmer", "Cracked Ice", "Mojo", "Sepia", "Camo", "Tiger Stripe", "Hyper", "Wave", "Holo", "Stained Glass"
   * Numbered: "/99", "/49", "/25", "/10", "/5", "/1", "1/1" (include the slash and number)
   * Special: "Autograph", "Auto Patch", "Jersey", "Patch", "Rookie Card"
-  * If none detected: "Base"
+  * If none detected and not an insert: "Base"
 - grade: If slabbed/graded, include grader and grade (e.g., "PSA 10", "BGS 9.5", "SGC 9", "CGC 9.5"). If raw/ungraded, leave empty.
-- confidence: Your confidence level (high/medium/low)
+- confidence: Your confidence level (high/medium/low). Use "low" if:
+  * Multiple players detected but uncertain about all names
+  * Downtown insert detected but year/set uncertain
+  * Any ambiguity in identification
 
-PART 2 - GRADE ESTIMATION
-
-If the card is RAW (not already in a slab), analyze its physical condition:
-
-1. CENTERING: Estimate the border ratios
-   - Left/Right: Compare relative width of left vs right borders (e.g., "50/50", "55/45", "60/40")
-   - Top/Bottom: Compare relative height of top vs bottom borders
-   - Perfect centering is 50/50 on both axes. Anything worse than 60/40 significantly impacts grade.
-
-2. CORNERS: Examine all four corners for:
-   - Whitening or wear (white showing through color)
-   - Dings or damage
-   - Fraying or softness
-   - Describe what you see (e.g., "Sharp on all 4 corners" or "Minor whitening on bottom-left corner")
-
-3. SURFACE: Look for:
-   - Scratches or scuffs
-   - Print lines or factory defects
-   - Staining or discoloration
-   - Fingerprints or smudges
-   - Describe what you see (e.g., "Clean, no visible scratches" or "Light surface scratches visible")
-
-4. EDGES: Examine all four edges for:
-   - Chipping
-   - Rough cuts
-   - Wear or whitening
-   - Describe what you see (e.g., "Clean edges" or "Minor wear on top edge")
-
-Based on these factors, estimate a PSA grade range on a 1-10 scale:
-- 10 = Gem Mint (virtually perfect)
-- 9 = Mint (minor flaw, one corner or centering)
-- 8 = NM-MT (small flaw visible)
-- 7 = NM (minor flaws on corners or surface)
-- 6 = EX-MT (visible wear but still sharp)
-
-IMPORTANT for grade estimation:
-- Be conservative - it's better to underestimate than overestimate
-- Photo quality affects accuracy - note if image quality limits your assessment
-- If the card is already graded (in a slab), set gradeEstimate to null
-- Give a range (e.g., 7-9) to reflect uncertainty
+IMPORTANT:
+- If "Downtown" is detected, set insert: "Downtown" and DO NOT assign variant unless explicitly visible
+- If multiple players detected, populate players array with all names
+- Be conservative with confidence - use "low" or "medium" when uncertain
+- If you cannot clearly identify the card, set confidence to "low"
 
 Return ONLY valid JSON with this structure:
 {
   "player_name": "",
+  "players": [""],
   "year": "",
   "set_name": "",
+  "insert": "",
   "variant": "",
   "grade": "",
-  "confidence": "",
-  "gradeEstimate": {
-    "estimated_grade_low": 0,
-    "estimated_grade_high": 0,
-    "centering": "",
-    "corners": "",
-    "surface": "",
-    "edges": "",
-    "grade_notes": ""
-  }
+  "confidence": ""
 }
-
-If the card is already graded (in a slab), set gradeEstimate to null.
 
 If you cannot identify the card, return:
 {"error": "Could not identify card", "reason": "brief explanation"}`;
@@ -184,6 +156,12 @@ export async function POST(request: NextRequest) {
     // Parse JSON response
     try {
       const result = JSON.parse(textContent.text);
+      // Ensure players is always an array (backward compatibility)
+      if (result.player_name && !result.players) {
+        result.players = [result.player_name];
+      }
+      // Remove gradeEstimate - identification only, no grading
+      delete result.gradeEstimate;
       return NextResponse.json(result);
     } catch {
       // If parsing fails, try to extract JSON from the response
@@ -191,6 +169,12 @@ export async function POST(request: NextRequest) {
       if (jsonMatch) {
         try {
           const result = JSON.parse(jsonMatch[0]);
+          // Ensure players is always an array
+          if (result.player_name && !result.players) {
+            result.players = [result.player_name];
+          }
+          // Remove gradeEstimate
+          delete result.gradeEstimate;
           return NextResponse.json(result);
         } catch {
           // Fall through to error

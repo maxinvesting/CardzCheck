@@ -52,7 +52,7 @@ export default function SignupPage() {
     if (data.session) {
       // Session created immediately (email confirmation disabled in Supabase)
       // Use window.location for hard navigation to ensure cookies are set
-      window.location.href = "/search?welcome=true";
+      window.location.href = "/comps?welcome=true";
     } else if (data.user && !data.session) {
       // Email confirmation is required
       // Show message and redirect to login

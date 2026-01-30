@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { scrapeEbaySoldListings, calculateStats, buildSearchQuery, buildSearchUrl } from "@/lib/ebay";
+import { buildSearchQuery, buildSearchUrl } from "@/lib/ebay";
+import { searchEbayDualSignal, buildSoldListingsUrl } from "@/lib/ebay/index";
 import { LIMITS } from "@/types";
 import { isTestMode } from "@/lib/test-mode";
 
@@ -16,6 +17,10 @@ export async function GET(request: NextRequest) {
   const variation = searchParams.get("variation") || undefined;
   const autograph = searchParams.get("autograph") || undefined;
   const relic = searchParams.get("relic") || undefined;
+
+  // Check for response format
+  const format = searchParams.get("format");
+  const useNewFormat = format === "v2" || format === "dual";
 
   if (!player) {
     return NextResponse.json(
@@ -81,29 +86,71 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Scrape eBay sold listings
     console.log("🔍 Searching eBay with params:", searchParamsObj);
 
-    const comps = await scrapeEbaySoldListings(searchParamsObj);
-    const stats = calculateStats(comps);
+    // Get data from eBay
+    const result = await searchEbayDualSignal(searchParamsObj);
+
+    // New format: Return full pricing response
+    if (useNewFormat) {
+      console.log(`📊 forSale=${result.forSale.count}, estimate=${result.estimatedSaleRange.pricingAvailable ? 'available' : 'unavailable'}`);
+      return NextResponse.json(result);
+    }
+
+    // Legacy format: Convert to old response shape
+    const comps = result.forSale.items.map(item => ({
+      title: item.title,
+      price: item.price,
+      date: new Date().toISOString().split("T")[0],
+      link: item.url,
+      image: item.image,
+      source: "ebay" as const,
+    }));
+
+    // Calculate CMV from estimated sale range if available
+    let cmv = result.forSale.median;
+    let estimatedLow = 0;
+    let estimatedHigh = 0;
+
+    if (result.estimatedSaleRange.pricingAvailable) {
+      const { low, high } = result.estimatedSaleRange.estimatedSaleRange;
+      cmv = Math.round(((low + high) / 2) * 100) / 100;
+      estimatedLow = low;
+      estimatedHigh = high;
+    }
+
+    const avg = result.forSale.count > 0
+      ? Math.round((comps.reduce((sum, c) => sum + c.price, 0) / comps.length) * 100) / 100
+      : 0;
+
     const query = buildSearchQuery(searchParamsObj);
+    console.log(`📊 Found ${comps.length} listings for query: "${query}"`);
 
-    console.log(`📊 Found ${comps.length} comps for query: "${query}"`);
-
+    // Return legacy format with new fields for frontend migration
     return NextResponse.json({
       comps,
-      stats,
+      stats: {
+        cmv, // Estimated sale price (midpoint of range)
+        avg,
+        low: result.forSale.low,
+        high: result.forSale.high,
+        count: result.forSale.count,
+      },
       query,
+      // New fields for frontend migration
+      _forSale: result.forSale,
+      _estimatedSaleRange: result.estimatedSaleRange,
+      _disclaimers: result.disclaimers,
     });
   } catch (error) {
     console.error("Search error:", error);
     const message = error instanceof Error ? error.message : "Unknown error";
-    if (message.toLowerCase().includes("blocked")) {
+    if (message.toLowerCase().includes("blocked") || message.toLowerCase().includes("rate limit")) {
       return NextResponse.json(
         {
           error: "ebay_blocked",
           message,
-          fallback_url: buildSearchUrl(searchParamsObj),
+          fallback_url: buildSoldListingsUrl(searchParamsObj),
         },
         { status: 429 }
       );

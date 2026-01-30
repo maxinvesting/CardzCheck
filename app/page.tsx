@@ -56,7 +56,7 @@ export default function Home() {
         </p>
         <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
           <Link
-            href="/search"
+            href="/comps"
             className="px-8 py-4 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-colors text-lg"
           >
             Try It Free
@@ -157,7 +157,7 @@ export default function Home() {
                 Track Your Collection
               </h3>
               <p className="text-gray-600 dark:text-gray-400">
-                Save cards to your collection. Track what you paid vs. current value. Know your portfolio.
+                Save cards to your collection. Track what you paid vs. current value. Know your collection.
               </p>
             </div>
           </div>
@@ -239,7 +239,7 @@ export default function Home() {
                   <svg className="w-5 h-5 text-blue-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
-                  Portfolio tracking
+                  Collection tracking
                 </li>
               </ul>
               <Link

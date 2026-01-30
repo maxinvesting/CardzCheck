@@ -63,15 +63,23 @@ export interface WatchlistItem {
 export interface CollectionItem {
   id: string;
   user_id: string;
-  player_name: string;
+  player_name: string; // Primary player (for backward compatibility)
+  players?: string[] | null; // All players (for multi-player cards) - stored as JSON array in DB
   year: string | null;
   set_name: string | null;
+  insert?: string | null; // Insert type (e.g., "Downtown")
   grade: string | null;
   purchase_price: number | null;
   purchase_date: string | null;
   image_url: string | null;
   notes: string | null;
   created_at: string;
+  /**
+   * Estimated current market value (CMV) for this card.
+   * Backed by comps / pricing engine when available.
+   * Nullable because many cards may not have pricing yet.
+   */
+  est_cmv?: number | null;
 }
 
 export interface Comp {
@@ -91,10 +99,54 @@ export interface CompsStats {
   count: number;
 }
 
+// For Sale item from Browse API
+export interface ForSaleItem {
+  title: string;
+  price: number;
+  shipping?: number;
+  condition?: string;
+  url: string;
+  image?: string;
+}
+
+// For Sale data from Browse API
+export interface ForSaleData {
+  count: number;
+  low: number;
+  median: number;
+  high: number;
+  items: ForSaleItem[];
+  cachedAt?: string;
+}
+
+// Estimated Sale Range (Beta) - calculated from active listings
+export interface EstimatedSaleRange {
+  pricingAvailable: boolean;
+  marketAsk?: {
+    count: number;
+    medianAsk: number;
+    p20: number;
+    p80: number;
+  };
+  estimatedSaleRange?: {
+    low: number;
+    high: number;
+    discountApplied: number;
+    confidence: "high" | "medium" | "low";
+    spreadPct: number;
+  };
+  notes?: string[];
+  reason?: string;
+}
+
 export interface SearchResult {
   comps: Comp[];
   stats: CompsStats;
   query: string;
+  // New fields for dual-signal data
+  _forSale?: ForSaleData;
+  _estimatedSaleRange?: EstimatedSaleRange;
+  _disclaimers?: string[];
 }
 
 // Grade estimation from AI analysis
@@ -109,13 +161,14 @@ export interface GradeEstimate {
 }
 
 export interface CardIdentification {
-  player_name: string;
+  player_name: string; // Primary player (for backward compatibility)
+  players?: string[]; // All players (for multi-player cards)
   year: string;
   set_name: string;
-  variant: string;
+  insert?: string; // Insert type (e.g., "Downtown")
+  variant: string; // Parallel/variant (not used for inserts)
   grade: string;
   confidence: "high" | "medium" | "low";
-  gradeEstimate?: GradeEstimate;
 }
 
 export interface CardIdentificationError {
@@ -129,8 +182,10 @@ export type CardIdentificationResponse =
 
 export interface SearchFormData {
   player_name: string;
+  players?: string[]; // All players (for multi-player cards)
   year?: string;
   set_name?: string;
+  insert?: string; // Insert type (e.g., "Downtown")
   grade?: string;
   card_number?: string;
   parallel_type?: string;
@@ -144,7 +199,9 @@ export interface SearchFormData {
 export interface CardIdentificationResult extends SearchFormData {
   imageUrl: string;
   confidence: "high" | "medium" | "low";
-  gradeEstimate?: GradeEstimate;
+  players?: string[]; // All players (for multi-player cards)
+  insert?: string; // Insert type (e.g., "Downtown")
+  // gradeEstimate removed - only available via explicit grade-estimate API
 }
 
 // Condition options for the add to collection modal

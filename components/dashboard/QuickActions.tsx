@@ -8,7 +8,7 @@ export default function QuickActions() {
       <div className="flex items-center gap-1">
         {/* Upload Photo */}
         <Link
-          href="/search?upload=true"
+          href="/comps?upload=true"
           className="flex-1 flex flex-col items-center gap-1.5 px-3 py-3 rounded-lg hover:bg-gray-700/50 transition-all duration-200 group"
         >
           <div className="p-2.5 bg-blue-500/15 rounded-xl group-hover:bg-blue-500/25 group-hover:scale-105 transition-all duration-200">
@@ -36,7 +36,7 @@ export default function QuickActions() {
 
         {/* Search Cards */}
         <Link
-          href="/search"
+          href="/comps"
           className="flex-1 flex flex-col items-center gap-1.5 px-3 py-3 rounded-lg hover:bg-gray-700/50 transition-all duration-200 group"
         >
           <div className="p-2.5 bg-blue-500/15 rounded-xl group-hover:bg-blue-500/25 group-hover:scale-105 transition-all duration-200">

@@ -98,16 +98,17 @@ export default function CardUploader({ onIdentified, disabled }: CardUploaderPro
         );
       }
 
-      // Success - pass data to parent with image URL and grade estimate
+      // Success - pass data to parent with image URL (NO grade estimate - that's separate)
       onIdentified({
         player_name: result.player_name,
+        players: result.players || [result.player_name],
         year: result.year || undefined,
         set_name: result.set_name || undefined,
+        insert: result.insert || undefined,
         grade: result.grade || undefined,
         parallel_type: result.variant || undefined,
         imageUrl: imageUrl,
         confidence: result.confidence,
-        gradeEstimate: result.gradeEstimate || undefined,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to process image");

@@ -202,8 +202,7 @@ export type Feature =
   | "collection"
   | "watchlist"
   | "ai_chat"
-  | "grade_estimator"
-  | "portfolio";
+  | "grade_estimator";
 
 export interface FeatureAccessResult {
   allowed: boolean;
@@ -260,13 +259,6 @@ export async function canAccessFeature(
       return {
         allowed: false,
         reason: "Grade Estimator is a Pro feature. Upgrade to get AI-powered grade estimates.",
-        upgradeRequired: true,
-      };
-
-    case "portfolio":
-      return {
-        allowed: false,
-        reason: "Portfolio tracking is a Pro feature. Upgrade to track your collection value over time.",
         upgradeRequired: true,
       };
 

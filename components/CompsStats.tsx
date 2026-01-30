@@ -2,9 +2,19 @@
 
 import type { CompsStats as Stats } from "@/types";
 
+/** Robust stats from estimator (median, p20, p80); no min/max. */
+interface MarketAsk {
+  count: number;
+  medianAsk: number;
+  p20: number;
+  p80: number;
+}
+
 interface CompsStatsProps {
   stats: Stats;
   query: string;
+  /** When provided, use robust stats (Median, P20, P80) instead of Average/Low/High. */
+  marketAsk?: MarketAsk | null;
   onAddToCollection?: () => void;
   cardAdded?: boolean;
   canAddToCollection?: boolean;
@@ -25,6 +35,7 @@ function formatPrice(price: number): string {
 export default function CompsStats({
   stats,
   query,
+  marketAsk,
   onAddToCollection,
   cardAdded,
   canAddToCollection = true,
@@ -32,15 +43,16 @@ export default function CompsStats({
   isWatched,
   canWatch = true,
 }: CompsStatsProps) {
+  const useRobust = Boolean(marketAsk && marketAsk.count > 0);
   if (stats.count === 0) {
     return (
       <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-6">
         <div className="text-center">
           <p className="text-yellow-800 dark:text-yellow-200 font-medium">
-            No sold listings found for &quot;{query}&quot;
+            No matching listings found for &quot;{query}&quot;
           </p>
           <p className="text-yellow-600 dark:text-yellow-400 text-sm mt-1">
-            eBay doesn&apos;t have recent sales data for this card
+            No active listings match this search
           </p>
         </div>
 
@@ -116,7 +128,7 @@ export default function CompsStats({
         </h3>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 divide-x divide-y md:divide-y-0 divide-gray-200 dark:divide-gray-800">
+      <div className={`grid divide-x divide-y md:divide-y-0 divide-gray-200 dark:divide-gray-800 ${useRobust ? "grid-cols-2 md:grid-cols-5" : "grid-cols-2 md:grid-cols-3"}`}>
         {/* CMV - highlighted */}
         <div className="p-4 bg-blue-50 dark:bg-blue-900/20 col-span-2 md:col-span-1">
           <p className="text-xs font-medium text-blue-600 dark:text-blue-400 uppercase tracking-wider">
@@ -130,41 +142,61 @@ export default function CompsStats({
           </p>
         </div>
 
-        <div className="p-4">
-          <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-            Average
-          </p>
-          <p className="text-xl font-semibold text-gray-900 dark:text-white mt-1">
-            {formatPrice(stats.avg)}
-          </p>
-        </div>
-
-        <div className="p-4">
-          <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-            Low
-          </p>
-          <p className="text-xl font-semibold text-green-600 dark:text-green-400 mt-1">
-            {formatPrice(stats.low)}
-          </p>
-        </div>
-
-        <div className="p-4">
-          <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-            High
-          </p>
-          <p className="text-xl font-semibold text-red-600 dark:text-red-400 mt-1">
-            {formatPrice(stats.high)}
-          </p>
-        </div>
-
-        <div className="p-4">
-          <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-            Sales
-          </p>
-          <p className="text-xl font-semibold text-gray-900 dark:text-white mt-1">
-            {stats.count}
-          </p>
-        </div>
+        {useRobust ? (
+          <>
+            <div className="p-4">
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                Median
+              </p>
+              <p className="text-xl font-semibold text-gray-900 dark:text-white mt-1">
+                {formatPrice(marketAsk!.medianAsk)}
+              </p>
+            </div>
+            <div className="p-4">
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                P20
+              </p>
+              <p className="text-xl font-semibold text-gray-900 dark:text-white mt-1">
+                {formatPrice(marketAsk!.p20)}
+              </p>
+            </div>
+            <div className="p-4">
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                P80
+              </p>
+              <p className="text-xl font-semibold text-gray-900 dark:text-white mt-1">
+                {formatPrice(marketAsk!.p80)}
+              </p>
+            </div>
+            <div className="p-4">
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                Listings
+              </p>
+              <p className="text-xl font-semibold text-gray-900 dark:text-white mt-1">
+                {marketAsk!.count}
+              </p>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="p-4">
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                Average
+              </p>
+              <p className="text-xl font-semibold text-gray-900 dark:text-white mt-1">
+                {formatPrice(stats.avg)}
+              </p>
+            </div>
+            <div className="p-4">
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                Listings
+              </p>
+              <p className="text-xl font-semibold text-gray-900 dark:text-white mt-1">
+                {stats.count}
+              </p>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Actions row */}
