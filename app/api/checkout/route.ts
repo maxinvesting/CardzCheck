@@ -18,7 +18,7 @@ export async function POST() {
       user.id,
       user.email!,
       `${appUrl}/account?success=true`,
-      `${appUrl}/search?canceled=true`
+      `${appUrl}/comps?canceled=true`
     );
 
     return NextResponse.json({ url: session.url });

@@ -25,7 +25,7 @@ export default function PaywallModal({ isOpen, onClose, type }: PaywallModalProp
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
-      router.push("/login?redirect=/search");
+      router.push("/login?redirect=/comps");
       return;
     }
 
@@ -117,7 +117,7 @@ export default function PaywallModal({ isOpen, onClose, type }: PaywallModalProp
               <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
-              Portfolio value tracking
+              Collection value tracking
             </li>
           </ul>
 

@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import type { WatchlistItem } from "@/types";
 
 interface WatchCardModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (playerName: string) => void;
+  onSuccess: (playerName: string, item?: WatchlistItem) => void;
   cardData: {
     player_name: string;
     year?: string;
@@ -30,37 +31,48 @@ export default function WatchCardModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (!isOpen) return null;
+  if (!isOpen) {
+    console.log("🔍 WatchCardModal: Not open, returning null");
+    return null;
+  }
+
+  console.log("🔍 WatchCardModal: Rendering with cardData:", cardData, "isPro:", isPro);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
 
+    const requestBody = {
+      ...cardData,
+      target_price: targetPrice ? parseFloat(targetPrice) : null,
+    };
+    console.log("🔍 WatchCardModal: Submitting to watchlist API with:", requestBody);
+
     try {
       const response = await fetch("/api/watchlist", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...cardData,
-          target_price: targetPrice ? parseFloat(targetPrice) : null,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const data = await response.json();
+      console.log("🔍 WatchCardModal: API response:", { ok: response.ok, status: response.status, data });
 
       if (!response.ok) {
         if (data.error === "upgrade_required") {
           setError("Watchlist is a Pro feature. Upgrade to track card prices.");
           return;
         }
-        throw new Error(data.error || "Failed to add to watchlist");
+        throw new Error(data.error || data.message || "Failed to add to watchlist");
       }
 
-      onSuccess(cardData.player_name);
+      console.log("✅ WatchCardModal: Successfully added to watchlist");
+      onSuccess(cardData.player_name, data.item ?? undefined);
       onClose();
       setTargetPrice("");
     } catch (err) {
+      console.error("❌ WatchCardModal: Error adding to watchlist:", err);
       setError(err instanceof Error ? err.message : "Failed to add to watchlist");
     } finally {
       setLoading(false);
@@ -151,6 +163,13 @@ export default function WatchCardModal({
                   </button>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Error Message */}
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+              <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
             </div>
           )}
 

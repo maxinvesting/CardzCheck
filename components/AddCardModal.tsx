@@ -1,13 +1,24 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import type { Comp, ParsedSearch } from "@/types";
+import { useMemo, useState, useEffect } from "react";
+import type { Comp, ParsedSearch, CollectionItem } from "@/types";
+import type { SmartSearchResult, SmartSearchCandidate } from "@/lib/smartSearch";
 
 interface AddCardModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (playerName: string) => void;
+  onSuccess: (playerName: string, item?: CollectionItem) => void;
   onLimitReached: () => void;
+  initialQuery?: string;
+  mode?: "collection" | "watchlist";
+  onCardSelected?: (cardData: {
+    player_name: string;
+    year?: string;
+    set_name?: string;
+    card_number?: string;
+    parallel_type?: string;
+    grade?: string;
+  }) => void;
 }
 
 type CollectionSearchResponse =
@@ -16,6 +27,7 @@ type CollectionSearchResponse =
       stats: unknown;
       query: string;
       parsed: ParsedSearch;
+      smartSearch?: SmartSearchResult;
     }
   | {
       error: string;
@@ -28,87 +40,55 @@ export default function AddCardModal({
   onClose,
   onSuccess,
   onLimitReached,
+  initialQuery = "",
+  mode = "collection",
+  onCardSelected,
 }: AddCardModalProps) {
   // UI state
-  const [smartQuery, setSmartQuery] = useState("");
+  const [smartQuery, setSmartQuery] = useState(initialQuery);
   const [searchLoading, setSearchLoading] = useState(false);
   const [addLoadingLink, setAddLoadingLink] = useState<string | null>(null);
   const [searchResult, setSearchResult] = useState<{
     comps: Comp[];
     parsed: ParsedSearch;
     query: string;
+    smartSearch?: SmartSearchResult;
   } | null>(null);
   const [fallbackUrl, setFallbackUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const resetForm = () => {
-    setSmartQuery("");
+    setSmartQuery(initialQuery || "");
     setSearchResult(null);
     setFallbackUrl(null);
     setAddLoadingLink(null);
     setError(null);
   };
 
-  const scoreComp = useMemo(() => {
-    const normalize = (s: string) => s.toLowerCase();
-    const includesAllWords = (title: string, phrase: string) => {
-      const words = phrase
-        .toLowerCase()
-        .split(/\s+/)
-        .filter(Boolean);
-      return words.every((w) => title.includes(w));
-    };
-
-    return (comp: Comp, parsed: ParsedSearch): number => {
-      const title = normalize(comp.title);
-      let score = 0;
-
-      // Player match (highest weight)
-      const player = parsed.player_name?.trim();
-      if (player) {
-        const parts = player.toLowerCase().split(/\s+/).filter(Boolean);
-        for (const p of parts) {
-          if (title.includes(p)) score += 4;
-        }
-        if (parts.length >= 2 && title.includes(parts[parts.length - 1])) score += 4; // last name boost
-      }
-
-      // Field matches
-      if (parsed.year && title.includes(parsed.year.toLowerCase())) score += 6;
-      if (parsed.set_name && includesAllWords(title, parsed.set_name)) score += 5;
-      if (parsed.grade && includesAllWords(title, parsed.grade)) score += 5;
-      if (parsed.card_number) {
-        const cn = parsed.card_number.replace(/^#/, "").toLowerCase();
-        if (cn && title.includes(cn)) score += 4;
-      }
-      if (parsed.parallel_type && includesAllWords(title, parsed.parallel_type)) score += 3;
-      if (parsed.serial_number && title.includes(parsed.serial_number.toLowerCase())) score += 3;
-      if (parsed.variation && includesAllWords(title, parsed.variation)) score += 2;
-      if (parsed.autograph && includesAllWords(title, parsed.autograph)) score += 2;
-      if (parsed.relic && includesAllWords(title, parsed.relic)) score += 2;
-
-      // Extra keywords from the query that we couldn't parse (e.g., "rated")
-      if (parsed.unparsed_tokens?.length) {
-        for (const token of parsed.unparsed_tokens) {
-          if (token.length >= 3 && title.includes(token.toLowerCase())) score += 1;
-        }
-      }
-
-      return score;
-    };
-  }, []);
+  // Update smartQuery when initialQuery changes
+  useEffect(() => {
+    if (isOpen && initialQuery) {
+      setSmartQuery(initialQuery);
+    }
+  }, [isOpen, initialQuery]);
 
   const rankedComps = useMemo(() => {
-    if (!searchResult) return [];
-    const { comps, parsed } = searchResult;
-    return [...comps].sort((a, b) => {
-      const sa = scoreComp(a, parsed);
-      const sb = scoreComp(b, parsed);
-      if (sb !== sa) return sb - sa;
-      // Tie-breaker: prefer more recent (date is YYYY-MM-DD)
-      return (b.date || "").localeCompare(a.date || "");
-    });
-  }, [searchResult, scoreComp]);
+    if (!searchResult?.smartSearch) return searchResult?.comps ?? [];
+    const scoredIds = new Set<string>(
+      [...searchResult.smartSearch.exact, ...searchResult.smartSearch.close].map((c) => c.id)
+    );
+    // Preserve original comps order for those not scored, append after
+    const scoredFirst = searchResult.smartSearch.exact
+      .concat(searchResult.smartSearch.close)
+      .map((cand) => {
+        const raw = cand.raw as Comp | undefined;
+        return raw ?? null;
+      })
+      .filter((c): c is Comp => !!c);
+
+    const remaining = (searchResult.comps ?? []).filter((c) => !scoredIds.has(c.link));
+    return [...scoredFirst, ...remaining];
+  }, [searchResult]);
 
   const smartSummary = useMemo(() => {
     if (!searchResult) return null;
@@ -148,10 +128,6 @@ export default function AddCardModal({
 
       const data: CollectionSearchResponse = await response.json();
       if (!response.ok) {
-        if ("error" in data && data.error === "ebay_blocked") {
-          setFallbackUrl(data.fallback_url || null);
-          throw new Error(data.message || "eBay blocked the request. Try again later.");
-        }
         throw new Error(("message" in data && data.message) || ("error" in data && data.error) || "Search failed");
       }
 
@@ -163,6 +139,7 @@ export default function AddCardModal({
         comps: data.comps || [],
         parsed: data.parsed,
         query: data.query,
+        smartSearch: data.smartSearch,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Search failed");
@@ -194,6 +171,39 @@ export default function AddCardModal({
     return lines.length ? lines.join("\n") : null;
   };
 
+  const renderMismatchBadges = (candidate: SmartSearchCandidate) => {
+    if (!searchResult?.smartSearch) return null;
+    const locked = searchResult.smartSearch.parsed.locked;
+    const mismatches = candidate.mismatchedConstraints || {};
+
+    const badges: string[] = [];
+
+    if (locked.year && mismatches.year) {
+      badges.push("Year mismatch");
+    }
+    if (locked.brand && mismatches.brand) {
+      badges.push(`Not ${locked.brand}`);
+    }
+    if (locked.line && mismatches.line) {
+      badges.push(`Not ${locked.line}`);
+    }
+
+    if (!badges.length) return null;
+
+    return (
+      <div className="mt-1 flex flex-wrap gap-1">
+        {badges.map((badge) => (
+          <span
+            key={badge}
+            className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-800"
+          >
+            {badge}
+          </span>
+        ))}
+      </div>
+    );
+  };
+
   const addToCollectionFromComp = async (comp?: Comp | null) => {
     if (!searchResult?.parsed?.player_name?.trim()) {
       setError("Search first, then select a match.");
@@ -201,6 +211,24 @@ export default function AddCardModal({
     }
 
     const parsed = searchResult.parsed;
+
+    // If watchlist mode, call onCardSelected callback instead of adding to collection
+    if (mode === "watchlist" && onCardSelected) {
+      const cardData = {
+        player_name: parsed.player_name,
+        year: parsed.year || undefined,
+        set_name: parsed.set_name || undefined,
+        card_number: parsed.card_number || undefined,
+        parallel_type: parsed.parallel_type || undefined,
+        grade: parsed.grade || undefined,
+      };
+      console.log("🔍 AddCardModal: Watchlist mode - calling onCardSelected with:", cardData);
+      onCardSelected(cardData);
+      // Don't call onSuccess or close here - let WatchCardModal handle it
+      return;
+    }
+
+    // Collection mode - add to collection
     const body = {
       player_name: parsed.player_name,
       year: parsed.year || null,
@@ -215,6 +243,7 @@ export default function AddCardModal({
     setError(null);
     setAddLoadingLink(comp?.link || "__manual__");
     try {
+      console.log("🔍 AddCardModal: Collection mode - adding card with body:", body);
       const response = await fetch("/api/collection", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -222,6 +251,7 @@ export default function AddCardModal({
       });
 
       const data = await response.json();
+      console.log("🔍 AddCardModal: Collection API response:", { ok: response.ok, data });
       if (!response.ok) {
         if (data.error === "limit_reached") {
           onLimitReached();
@@ -231,10 +261,12 @@ export default function AddCardModal({
         throw new Error(data.error || "Failed to add card");
       }
 
-      onSuccess(parsed.player_name);
+      console.log("✅ AddCardModal: Successfully added to collection");
+      onSuccess(parsed.player_name, data.item ?? undefined);
       resetForm();
       onClose();
     } catch (err) {
+      console.error("❌ AddCardModal: Error adding to collection:", err);
       setError(err instanceof Error ? err.message : "Failed to add card");
     } finally {
       setAddLoadingLink(null);
@@ -336,18 +368,42 @@ export default function AddCardModal({
           {/* Results */}
           {searchResult && (
             <div className="border-t border-gray-200 dark:border-gray-800 pt-4 space-y-3">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Matches
                 </h3>
-                <button
-                  type="button"
-                  onClick={() => addToCollectionFromComp(rankedComps[0] || null)}
-                  disabled={!rankedComps.length || addLoadingLink !== null}
-                  className="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
-                >
-                  Add best match
-                </button>
+                {rankedComps.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => addToCollectionFromComp(rankedComps[0] || null)}
+                    disabled={addLoadingLink !== null}
+                    className="px-3 py-1.5 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                  >
+                    Add best match
+                  </button>
+                )}
+              </div>
+
+              {/* Primary Add Card Button - Add from search query, not a specific comp */}
+              <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">
+                      {mode === "watchlist" ? "Add to Watchlist" : "Add to Collection"}
+                    </p>
+                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                      {smartSummary || "Add this card based on your search"}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => addToCollectionFromComp(null)}
+                    disabled={addLoadingLink !== null}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                  >
+                    {addLoadingLink === "__manual__" ? "Adding..." : mode === "watchlist" ? "Add to Watchlist" : "Add Card"}
+                  </button>
+                </div>
               </div>
 
               {rankedComps.length === 0 ? (
@@ -365,58 +421,197 @@ export default function AddCardModal({
                   </button>
                 </div>
               ) : (
-                <div className="space-y-2">
-                  {rankedComps.slice(0, 12).map((comp, idx) => {
-                    const isAdding = addLoadingLink === comp.link;
-                    const isBest = idx === 0;
-                    return (
-                      <div
-                        key={comp.link}
-                        className={`flex items-center gap-3 p-3 rounded-xl border ${
-                          isBest
-                            ? "border-blue-300 dark:border-blue-700 bg-blue-50/60 dark:bg-blue-900/20"
-                            : "border-gray-200 dark:border-gray-800 bg-white/60 dark:bg-gray-900/40"
-                        }`}
-                      >
-                        {comp.image ? (
-                          <img
-                            src={comp.image}
-                            alt={comp.title}
-                            className="w-12 h-16 object-cover rounded-md bg-gray-200 dark:bg-gray-800"
-                          />
-                        ) : (
-                          <div className="w-12 h-16 rounded-md bg-gray-200 dark:bg-gray-800" />
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                            {comp.title}
-                          </p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">
-                            ${comp.price.toFixed(2)} • {comp.date}
-                            {isBest ? " • Best match" : ""}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <a
-                            href={comp.link}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-xs text-gray-500 dark:text-gray-400 underline"
-                          >
-                            View
-                          </a>
-                          <button
-                            type="button"
-                            onClick={() => addToCollectionFromComp(comp)}
-                            disabled={addLoadingLink !== null}
-                            className="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
-                          >
-                            {isAdding ? "Adding..." : "Add"}
-                          </button>
-                        </div>
+                <div className="space-y-4">
+                  {/* Exact matches bucket (if available from smartSearch) */}
+                  {searchResult.smartSearch && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                          Exact matches
+                        </h4>
+                        <span className="text-[11px] text-gray-500 dark:text-gray-400">
+                          {searchResult.smartSearch.exact.length} found
+                        </span>
                       </div>
-                    );
-                  })}
+                      <div className="space-y-2">
+                        {searchResult.smartSearch.exact.map((cand) => {
+                          const comp = cand.raw as Comp | undefined;
+                          if (!comp) return null;
+                          const isAdding = addLoadingLink === comp.link;
+                          const isBest = rankedComps[0]?.link === comp.link;
+                          return (
+                            <div
+                              key={comp.link}
+                              className={`flex items-center gap-3 p-3 rounded-xl border ${
+                                isBest
+                                  ? "border-blue-300 dark:border-blue-700 bg-blue-50/60 dark:bg-blue-900/20"
+                                  : "border-gray-200 dark:border-gray-800 bg-white/60 dark:bg-gray-900/40"
+                              }`}
+                            >
+                              {comp.image ? (
+                                <img
+                                  src={comp.image}
+                                  alt={comp.title}
+                                  className="w-12 h-16 object-cover rounded-md bg-gray-200 dark:bg-gray-800"
+                                />
+                              ) : (
+                                <div className="w-12 h-16 rounded-md bg-gray-200 dark:bg-gray-800" />
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                  {comp.title}
+                                </p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                  ${comp.price.toFixed(2)} • {comp.date}
+                                  {isBest ? " • Best match" : ""}
+                                </p>
+                                {renderMismatchBadges(cand)}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <a
+                                  href={comp.link}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-xs text-gray-500 dark:text-gray-400 underline"
+                                >
+                                  View
+                                </a>
+                                <button
+                                  type="button"
+                                  onClick={() => addToCollectionFromComp(comp)}
+                                  disabled={addLoadingLink !== null}
+                                  className="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                                >
+                                  {isAdding ? "Adding..." : "Add"}
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Close matches bucket */}
+                  {searchResult.smartSearch && searchResult.smartSearch.close.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                          Close matches
+                        </h4>
+                        <span className="text-[11px] text-gray-500 dark:text-gray-400">
+                          {searchResult.smartSearch.close.length} found
+                        </span>
+                      </div>
+                      <div className="space-y-2">
+                        {searchResult.smartSearch.close.map((cand) => {
+                          const comp = cand.raw as Comp | undefined;
+                          if (!comp) return null;
+                          const isAdding = addLoadingLink === comp.link;
+                          return (
+                            <div
+                              key={comp.link}
+                              className="flex items-center gap-3 p-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-white/60 dark:bg-gray-900/40"
+                            >
+                              {comp.image ? (
+                                <img
+                                  src={comp.image}
+                                  alt={comp.title}
+                                  className="w-12 h-16 object-cover rounded-md bg-gray-200 dark:bg-gray-800"
+                                />
+                              ) : (
+                                <div className="w-12 h-16 rounded-md bg-gray-200 dark:bg-gray-800" />
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                  {comp.title}
+                                </p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                  ${comp.price.toFixed(2)} • {comp.date}
+                                </p>
+                                {renderMismatchBadges(cand)}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <a
+                                  href={comp.link}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-xs text-gray-500 dark:text-gray-400 underline"
+                                >
+                                  View
+                                </a>
+                                <button
+                                  type="button"
+                                  onClick={() => addToCollectionFromComp(comp)}
+                                  disabled={addLoadingLink !== null}
+                                  className="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                                >
+                                  {isAdding ? "Adding..." : "Add"}
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Fallback list if smartSearch is unavailable */}
+                  {!searchResult.smartSearch && (
+                    <div className="space-y-2">
+                      {rankedComps.slice(0, 12).map((comp, idx) => {
+                        const isAdding = addLoadingLink === comp.link;
+                        const isBest = idx === 0;
+                        return (
+                          <div
+                            key={comp.link}
+                            className={`flex items-center gap-3 p-3 rounded-xl border ${
+                              isBest
+                                ? "border-blue-300 dark:border-blue-700 bg-blue-50/60 dark:bg-blue-900/20"
+                                : "border-gray-200 dark:border-gray-800 bg-white/60 dark:bg-gray-900/40"
+                            }`}
+                          >
+                            {comp.image ? (
+                              <img
+                                src={comp.image}
+                                alt={comp.title}
+                                className="w-12 h-16 object-cover rounded-md bg-gray-200 dark:bg-gray-800"
+                              />
+                            ) : (
+                              <div className="w-12 h-16 rounded-md bg-gray-200 dark:bg-gray-800" />
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                {comp.title}
+                              </p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">
+                                ${comp.price.toFixed(2)} • {comp.date}
+                                {isBest ? " • Best match" : ""}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <a
+                                href={comp.link}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-xs text-gray-500 dark:text-gray-400 underline"
+                              >
+                                View
+                              </a>
+                              <button
+                                type="button"
+                                onClick={() => addToCollectionFromComp(comp)}
+                                disabled={addLoadingLink !== null}
+                                className="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                              >
+                                {isAdding ? "Adding..." : "Add"}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
 
                   <button
                     type="button"

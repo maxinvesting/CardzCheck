@@ -1,13 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isTestMode } from "@/lib/test-mode";
-import { parseSmartSearch } from "@/lib/smart-search-parser";
-import {
-  scrapeEbaySoldListings,
-  calculateStats,
-  buildSearchQuery,
-  buildSearchUrl,
-} from "@/lib/ebay";
+import { buildSearchUrl, calculateStats, buildSearchQuery } from "@/lib/ebay";
+import { smartSearch } from "@/lib/smartSearch";
 
 export async function GET(request: NextRequest) {
   const q = request.nextUrl.searchParams.get("q")?.trim() || "";
@@ -29,64 +24,42 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const parsed = parseSmartSearch(q);
+    const smart = await smartSearch(q, "collection", {
+      limit: 30,
+      source: "ebayCollection",
+    });
 
-    // Always fall back to the raw query if parser couldn't find a player.
-    const player = parsed.player_name?.trim() ? parsed.player_name : q;
-
-    const searchParamsObj = {
-      player,
-      year: parsed.year,
-      set: parsed.set_name,
-      grade: parsed.grade,
-      cardNumber: parsed.card_number,
-      parallelType: parsed.parallel_type,
-      serialNumber: parsed.serial_number,
-      variation: parsed.variation,
-      autograph: parsed.autograph,
-      relic: parsed.relic,
-      keywords: parsed.unparsed_tokens,
-    };
-
-    const comps = await scrapeEbaySoldListings(searchParamsObj);
+    const comps = smart.rawComps ?? [];
     const stats = calculateStats(comps);
+
+    // Build legacy-style query string from the parsed/locked view for compatibility & display
+    const primary = smart.parsed.original;
+    const searchParamsObj = {
+      player: primary.player_name?.trim() ? primary.player_name : q,
+      year: primary.year,
+      set: primary.set_name,
+      grade: primary.grade,
+      cardNumber: primary.card_number,
+      parallelType: primary.parallel_type,
+      serialNumber: primary.serial_number,
+      variation: primary.variation,
+      autograph: primary.autograph,
+      relic: primary.relic,
+      keywords: primary.unparsed_tokens,
+    };
     const query = buildSearchQuery(searchParamsObj);
 
     return NextResponse.json({
       comps,
       stats,
       query,
-      parsed,
+      parsed: primary,
+      smartSearch: smart,
     });
   } catch (error) {
     console.error("Collection search error:", error);
     const message = error instanceof Error ? error.message : "Unknown error";
-    if (message.toLowerCase().includes("blocked")) {
-      const parsed = parseSmartSearch(q);
-      const player = parsed.player_name?.trim() ? parsed.player_name : q;
-      const searchParamsObj = {
-        player,
-        year: parsed.year,
-        set: parsed.set_name,
-        grade: parsed.grade,
-        cardNumber: parsed.card_number,
-        parallelType: parsed.parallel_type,
-        serialNumber: parsed.serial_number,
-        variation: parsed.variation,
-        autograph: parsed.autograph,
-        relic: parsed.relic,
-        keywords: parsed.unparsed_tokens,
-      };
-
-      return NextResponse.json(
-        {
-          error: "ebay_blocked",
-          message,
-          fallback_url: buildSearchUrl(searchParamsObj),
-        },
-        { status: 429 }
-      );
-    }
+    // We no longer have a specific blocked detection from smartSearch, but keep legacy shape
     return NextResponse.json(
       { error: "Failed to search", message },
       { status: 500 }
