@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { CollectionItem, SearchFormData } from "@/types";
+import { computeCollectionSummary } from "@/lib/values";
 
 interface HeroStatsProps {
   items: CollectionItem[];
@@ -22,8 +23,8 @@ export default function HeroStats({ items, loading, onSearch }: HeroStatsProps) 
   const [searchQuery, setSearchQuery] = useState("");
 
   const cardCount = items.length;
-  const totalValue = items.reduce((sum, item) => sum + (item.estimated_cmv || 0), 0);
-  const cmvAvailableCount = items.filter((item) => item.estimated_cmv !== null).length;
+  const summary = computeCollectionSummary(items);
+  const totalValue = summary.totalDisplayValue;
 
   // Get most recent activity timestamp
   const lastActivity = items.length > 0
@@ -55,7 +56,7 @@ export default function HeroStats({ items, loading, onSearch }: HeroStatsProps) 
     if (onSearch) {
       onSearch({ player_name: searchQuery.trim() });
     } else {
-      router.push(`/search?player=${encodeURIComponent(searchQuery.trim())}`);
+      router.push(`/comps?player=${encodeURIComponent(searchQuery.trim())}`);
     }
   };
 
@@ -64,7 +65,7 @@ export default function HeroStats({ items, loading, onSearch }: HeroStatsProps) 
     if (onSearch) {
       onSearch({ player_name: example });
     } else {
-      router.push(`/search?player=${encodeURIComponent(example)}`);
+      router.push(`/comps?player=${encodeURIComponent(example)}`);
     }
   };
 
@@ -139,7 +140,7 @@ export default function HeroStats({ items, loading, onSearch }: HeroStatsProps) 
 
           {/* Advanced filters link */}
           <Link
-            href="/search"
+            href="/comps"
             className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
           >
             Advanced filters →
@@ -166,7 +167,15 @@ export default function HeroStats({ items, loading, onSearch }: HeroStatsProps) 
             </p>
             {/* Trend indicator placeholder */}
             <div className="flex items-center gap-1.5 mt-2">
-              <span className="text-xs text-gray-500">Based on estimated CMV</span>
+              {summary.cardsWithCmv > 0 ? (
+                <span className="text-xs text-gray-500">
+                  Based on estimated CMV (comps)
+                </span>
+              ) : (
+                <span className="text-xs text-gray-500">
+                  Collection value is CMV only — add comps for estimates
+                </span>
+              )}
             </div>
           </div>
           <div className="p-2.5 bg-blue-500/10 rounded-xl">

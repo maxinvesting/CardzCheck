@@ -111,8 +111,10 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const {
       player_name,
+      players,
       year,
       set_name,
+      insert,
       grade,
       purchase_price,
       purchase_date,
@@ -127,6 +129,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Store players array and insert in notes if DB columns don't exist yet
+    // TODO: Add migration for players (JSONB) and insert (text) columns
+    const notesParts: string[] = [];
+    if (notes) notesParts.push(notes);
+    if (insert) notesParts.push(`[INSERT:${insert}]`);
+    if (players && players.length > 1) {
+      notesParts.push(`[PLAYERS:${JSON.stringify(players)}]`);
+    }
+    const combinedNotes = notesParts.length > 0 ? notesParts.join(" | ") : null;
+
+    console.log("📦 Inserting collection item:", {
+      user_id: user.id,
+      player_name,
+      players: players?.length,
+      year,
+      set_name,
+      insert,
+      grade,
+    });
+
+    // Insert only columns that exist in collection_items (est_cmv added via migration when needed)
     const { data: item, error } = await supabase
       .from("collection_items")
       .insert({
@@ -138,33 +161,28 @@ export async function POST(request: NextRequest) {
         purchase_price: purchase_price || null,
         purchase_date: purchase_date || null,
         image_url: image_url || null,
-        notes: notes || null,
+        notes: combinedNotes,
       })
       .select()
       .single();
 
     if (error) {
+      console.error("❌ Supabase insert error:", error);
       throw error;
     }
 
-    const cmvResult = await calculateCardCmv(item);
-    const { data: updatedItem, error: updateError } = await supabase
-      .from("collection_items")
-      .update(cmvResult)
-      .eq("id", item.id)
-      .eq("user_id", user.id)
-      .select("*")
-      .single();
-
-    if (updateError) {
-      throw updateError;
-    }
-
-    return NextResponse.json({ item: updatedItem });
+    console.log("✅ Successfully added to collection:", item);
+    return NextResponse.json({ item });
   } catch (error) {
-    console.error("Collection add error:", error);
+    console.error("❌ Collection add error:", error);
+    const errorMessage = error instanceof Error ? error.message : "Failed to add to collection";
+    const errorDetails = error instanceof Error && 'code' in error ? { code: (error as any).code } : {};
+    
     return NextResponse.json(
-      { error: "Failed to add to collection" },
+      { 
+        error: errorMessage,
+        ...errorDetails,
+      },
       { status: 500 }
     );
   }

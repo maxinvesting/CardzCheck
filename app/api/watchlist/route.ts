@@ -61,13 +61,16 @@ export async function POST(request: NextRequest) {
     if (isTestMode()) {
       console.log("Test mode: Bypassing watchlist add auth");
       const body = await request.json();
+      const now = new Date().toISOString();
       return NextResponse.json({
         item: {
           ...body,
           id: `test-${Date.now()}`,
           user_id: "test-user-id",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+          created_at: now,
+          updated_at: now,
+          last_price: null,
+          last_checked: null,
           price_history: [],
         },
       });

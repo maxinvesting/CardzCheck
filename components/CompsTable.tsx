@@ -7,6 +7,8 @@ interface CompsTableProps {
   comps: Comp[];
   onAddToCollection?: (comp: Comp) => void;
   canAddToCollection?: boolean;
+  isCurrentListings?: boolean; // If true, shows "Listed" instead of "Sold"
+  addingLink?: string | null; // Link of item currently being added
 }
 
 function formatPrice(price: number): string {
@@ -30,7 +32,7 @@ function formatDate(dateStr: string): string {
 type SortField = "price" | "date";
 type SortDirection = "asc" | "desc";
 
-export default function CompsTable({ comps, onAddToCollection, canAddToCollection = true }: CompsTableProps) {
+export default function CompsTable({ comps, onAddToCollection, canAddToCollection = true, isCurrentListings = false, addingLink = null }: CompsTableProps) {
   const [sortField, setSortField] = useState<SortField>("date");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
 
@@ -99,7 +101,7 @@ export default function CompsTable({ comps, onAddToCollection, canAddToCollectio
                 onClick={() => handleSort("date")}
               >
                 <span className="flex items-center">
-                  Sold
+                  {isCurrentListings ? "Listed" : "Sold"}
                   <SortIcon field="date" />
                 </span>
               </th>
@@ -150,10 +152,17 @@ export default function CompsTable({ comps, onAddToCollection, canAddToCollectio
                   <td className="px-4 py-3 text-right">
                     <button
                       onClick={() => onAddToCollection(comp)}
-                      disabled={!canAddToCollection}
-                      className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={!canAddToCollection || addingLink === comp.link}
+                      className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
                     >
-                      + Add
+                      {addingLink === comp.link ? (
+                        <>
+                          <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                          Adding...
+                        </>
+                      ) : (
+                        "+ Add"
+                      )}
                     </button>
                   </td>
                 )}

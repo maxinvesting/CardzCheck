@@ -2,19 +2,29 @@
 
 import { useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
-import GradeEstimateDisplay from "./GradeEstimateDisplay";
 import {
   CONDITION_OPTIONS,
   type CardIdentificationResult,
   type CardIdentificationResponse,
-  type GradeEstimate,
+  type CollectionItem,
 } from "@/types";
 
 interface AddCardModalNewProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (playerName: string) => void;
+  onSuccess: (playerName: string, item?: CollectionItem) => void;
   onLimitReached: () => void;
+  addMode?: "collection" | "watchlist";
+  /** Optional: for collection mode, open the smart search flow instead of manual entry */
+  onOpenSmartSearch?: () => void;
+  onCardSelected?: (cardData: {
+    player_name: string;
+    year?: string;
+    set_name?: string;
+    card_number?: string;
+    parallel_type?: string;
+    grade?: string;
+  }) => void;
 }
 
 type ModalMode = "select" | "upload" | "manual" | "confirm";
@@ -24,6 +34,9 @@ export default function AddCardModalNew({
   onClose,
   onSuccess,
   onLimitReached,
+  addMode = "collection",
+  onOpenSmartSearch,
+  onCardSelected,
 }: AddCardModalNewProps) {
   const [mode, setMode] = useState<ModalMode>("select");
   const [loading, setLoading] = useState(false);
@@ -42,6 +55,7 @@ export default function AddCardModalNew({
   });
 
   // Confirm mode state
+  const [costBasisType, setCostBasisType] = useState<"pulled" | "paid">("pulled");
   const [purchasePrice, setPurchasePrice] = useState<string>("");
   const [condition, setCondition] = useState<string>("Raw");
 
@@ -52,6 +66,7 @@ export default function AddCardModalNew({
     setPreview(null);
     setIdentifiedCard(null);
     setManualForm({ player_name: "", year: "", set_name: "", parallel_type: "" });
+    setCostBasisType("pulled");
     setPurchasePrice("");
     setCondition("Raw");
   };
@@ -130,16 +145,17 @@ export default function AddCardModalNew({
         return;
       }
 
-      // Success - set identified card
+      // Success - set identified card (NO gradeEstimate - that's separate)
       setIdentifiedCard({
         player_name: result.player_name,
+        players: result.players || [result.player_name],
         year: result.year || undefined,
         set_name: result.set_name || undefined,
+        insert: result.insert || undefined,
         grade: result.grade || undefined,
         parallel_type: result.variant || undefined,
         imageUrl: imageUrl,
         confidence: result.confidence,
-        gradeEstimate: result.gradeEstimate || undefined,
       });
       setMode("confirm");
     } catch (err) {
@@ -171,6 +187,23 @@ export default function AddCardModalNew({
       return;
     }
 
+    // For watchlist mode, pass card data to onCardSelected and close
+    if (addMode === "watchlist" && onCardSelected) {
+      const cardData = {
+        player_name: identifiedCard.player_name,
+        year: identifiedCard.year,
+        set_name: identifiedCard.set_name,
+        card_number: identifiedCard.card_number,
+        parallel_type: identifiedCard.parallel_type,
+        grade: condition,
+      };
+      onCardSelected(cardData);
+      resetForm();
+      onClose();
+      return;
+    }
+
+    // Collection mode - add directly to collection
     setLoading(true);
     setError(null);
 
@@ -185,7 +218,8 @@ export default function AddCardModalNew({
         year: identifiedCard.year || null,
         set_name: identifiedCard.set_name || null,
         grade: condition,
-        purchase_price: purchasePrice ? parseFloat(purchasePrice) : null,
+        purchase_price:
+          costBasisType === "paid" && purchasePrice ? parseFloat(purchasePrice) : null,
         purchase_date: null,
         image_url: identifiedCard.imageUrl || null,
         notes: notesParts.length > 0 ? notesParts.join(" | ") : null,
@@ -208,7 +242,7 @@ export default function AddCardModalNew({
         throw new Error(data.error || "Failed to add card");
       }
 
-      onSuccess(identifiedCard.player_name);
+      onSuccess(identifiedCard.player_name, data.item ?? undefined);
       resetForm();
       onClose();
     } catch (err) {
@@ -233,7 +267,7 @@ export default function AddCardModalNew({
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-800">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-            {mode === "select" && "Add Card to Collection"}
+            {mode === "select" && (addMode === "watchlist" ? "Add Card to Watchlist" : "Add Card to Collection")}
             {mode === "upload" && "Upload Card Photo"}
             {mode === "manual" && "Enter Card Details"}
             {mode === "confirm" && "Confirm Card"}
@@ -278,7 +312,15 @@ export default function AddCardModalNew({
               </button>
 
               <button
-                onClick={() => setMode("manual")}
+                onClick={() => {
+                  // In collection mode, let the parent swap to the smart search flow
+                  if (addMode === "collection" && onOpenSmartSearch) {
+                    onOpenSmartSearch();
+                    return;
+                  }
+                  // Fallback: keep legacy manual entry (used for watchlist or if smart search is unavailable)
+                  setMode("manual");
+                }}
                 className="w-full p-4 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl hover:border-blue-500 dark:hover:border-blue-500 transition-colors group"
               >
                 <div className="flex items-center gap-4">
@@ -446,48 +488,76 @@ export default function AddCardModalNew({
                 </div>
               </div>
 
-              {/* Grade Estimate */}
-              {identifiedCard.gradeEstimate && (
-                <GradeEstimateDisplay estimate={identifiedCard.gradeEstimate} />
-              )}
+              {/* Note about grade estimation */}
+              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                <p className="text-xs text-blue-700 dark:text-blue-300">
+                  💡 Grade estimation available after adding to collection. Visit the Grade Estimator page to get an AI-powered grade estimate.
+                </p>
+              </div>
 
-              {/* Form Fields */}
-              <div className="space-y-4 pt-2 border-t border-gray-200 dark:border-gray-800">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Purchase Price <span className="text-gray-400 font-normal">(optional)</span>
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
-                    <input
-                      type="number"
-                      value={purchasePrice}
-                      onChange={(e) => setPurchasePrice(e.target.value)}
-                      placeholder="0.00"
-                      min="0"
-                      step="0.01"
-                      className="w-full pl-7 pr-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
+              {/* Form Fields - Only show for collection mode */}
+              {addMode === "collection" && (
+                <div className="space-y-4 pt-2 border-t border-gray-200 dark:border-gray-800">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Cost basis
+                    </label>
+                    <div className="flex gap-3 mb-2">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="costBasis"
+                          checked={costBasisType === "pulled"}
+                          onChange={() => setCostBasisType("pulled")}
+                          className="rounded-full border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <span className="text-sm text-gray-700 dark:text-gray-300">Pulled (no cost)</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="costBasis"
+                          checked={costBasisType === "paid"}
+                          onChange={() => setCostBasisType("paid")}
+                          className="rounded-full border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <span className="text-sm text-gray-700 dark:text-gray-300">I paid</span>
+                      </label>
+                    </div>
+                    {costBasisType === "paid" && (
+                      <div className="relative mt-1">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                        <input
+                          type="number"
+                          value={purchasePrice}
+                          onChange={(e) => setPurchasePrice(e.target.value)}
+                          placeholder="0.00"
+                          min="0"
+                          step="0.01"
+                          className="w-full pl-7 pr-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Condition
+                    </label>
+                    <select
+                      value={condition}
+                      onChange={(e) => setCondition(e.target.value)}
+                      className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      {CONDITION_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Condition
-                  </label>
-                  <select
-                    value={condition}
-                    onChange={(e) => setCondition(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    {CONDITION_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+              )}
 
               {/* Actions */}
               <div className="flex gap-3 pt-2">
@@ -507,7 +577,7 @@ export default function AddCardModalNew({
                   disabled={loading}
                   className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
                 >
-                  {loading ? "Adding..." : "Add to Collection"}
+                  {loading ? "Adding..." : addMode === "watchlist" ? "Continue to Set Target Price" : "Add to Collection"}
                 </button>
               </div>
             </div>

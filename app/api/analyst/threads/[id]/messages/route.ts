@@ -2,126 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { isTestMode } from "@/lib/test-mode";
-import type { AnalystThreadMessage, CardContext, CollectionItem, WatchlistItem } from "@/types";
-import { SupabaseClient } from "@supabase/supabase-js";
+import type { AnalystThreadMessage, CardContext } from "@/types";
+import { getUserContextForAI } from "@/lib/ai/getUserContextForAI";
+import { buildAnalystPrompt } from "@/lib/ai/buildAnalystPrompt";
 
 const ANALYST_QUERY_LIMIT = 100;
-
-interface CollectionContext {
-  totalCards: number;
-  totalInvested: number;
-  totalCurrentValue: number;
-  topCards: Array<{ name: string; price: number | null }>;
-  watchlistCount: number;
-  watchlistItems: Array<{ name: string; lastPrice: number | null; targetPrice: number | null }>;
-}
-
-async function getCollectionContext(
-  supabase: SupabaseClient,
-  userId: string
-): Promise<CollectionContext | null> {
-  try {
-    // Fetch collection items
-    const { data: collection } = await supabase
-      .from("collection_items")
-      .select("*")
-      .eq("user_id", userId)
-      .order("estimated_cmv", { ascending: false, nullsFirst: false });
-
-    // Fetch watchlist items
-    const { data: watchlist } = await supabase
-      .from("watchlist")
-      .select("*")
-      .eq("user_id", userId)
-      .order("last_price", { ascending: false, nullsFirst: false });
-
-    if (!collection && !watchlist) {
-      return null;
-    }
-
-    const collectionItems = (collection || []) as CollectionItem[];
-    const watchlistItems = (watchlist || []) as WatchlistItem[];
-
-    // Calculate totals
-    const totalCards = collectionItems.length;
-    const totalInvested = collectionItems.reduce(
-      (sum, item) => sum + (item.purchase_price || 0),
-      0
-    );
-    const totalCurrentValue = collectionItems.reduce(
-      (sum, item) => sum + (item.estimated_cmv || 0),
-      0
-    );
-
-    // Get top 5 cards by purchase price
-    const topCards = collectionItems
-      .filter((item) => item.estimated_cmv !== null)
-      .slice(0, 5)
-      .map((item) => ({
-        name: `${item.year || ""} ${item.player_name} ${item.set_name || ""} ${item.grade || ""}`.trim(),
-        price: item.estimated_cmv,
-      }));
-
-    // Get watchlist summary
-    const watchlistSummary = watchlistItems.slice(0, 5).map((item) => ({
-      name: `${item.year || ""} ${item.player_name} ${item.set_brand || ""}`.trim(),
-      lastPrice: item.last_price,
-      targetPrice: item.target_price,
-    }));
-
-    return {
-      totalCards,
-      totalInvested,
-      totalCurrentValue,
-      topCards,
-      watchlistCount: watchlistItems.length,
-      watchlistItems: watchlistSummary,
-    };
-  } catch (error) {
-    console.error("Error fetching collection context:", error);
-    return null;
-  }
-}
-
-function formatCollectionForPrompt(context: CollectionContext | null): string {
-  if (!context || (context.totalCards === 0 && context.watchlistCount === 0)) {
-    return "\n\nThe user has not added any cards to their collection or watchlist yet.";
-  }
-
-  let prompt = "\n\nUSER'S COLLECTION DATA:";
-
-  if (context.totalCards > 0) {
-    prompt += `\n- Total cards in collection: ${context.totalCards}`;
-    prompt += `\n- Total invested: $${context.totalInvested.toLocaleString()}`;
-    prompt += `\n- Total estimated CMV: $${context.totalCurrentValue.toLocaleString()}`;
-
-    if (context.topCards.length > 0) {
-      prompt += "\n- Top cards by value:";
-      context.topCards.forEach((card, i) => {
-        prompt += `\n  ${i + 1}. ${card.name}${card.price ? ` ($${card.price.toLocaleString()})` : ""}`;
-      });
-    }
-  }
-
-  if (context.watchlistCount > 0) {
-    prompt += `\n\nUSER'S WATCHLIST:`;
-    prompt += `\n- ${context.watchlistCount} cards being tracked`;
-
-    if (context.watchlistItems.length > 0) {
-      prompt += "\n- Watching:";
-      context.watchlistItems.forEach((item) => {
-        let line = `\n  - ${item.name}`;
-        if (item.lastPrice) line += ` (last: $${item.lastPrice.toLocaleString()})`;
-        if (item.targetPrice) line += ` [target: $${item.targetPrice.toLocaleString()}]`;
-        prompt += line;
-      });
-    }
-  }
-
-  prompt += "\n\nUse this collection data to personalize your responses when the user asks about their cards, portfolio performance, or buying/selling recommendations.";
-
-  return prompt;
-}
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -263,69 +148,28 @@ export async function POST(request: NextRequest, context: RouteContext) {
       content: msg.content,
     }));
 
-    // Build system prompt
     const userName = userData?.name || null;
-    let systemPrompt = `You are a sports card market analyst for CardzCheck. You help users understand card values, investment potential, and market trends.
 
-${userName ? `The user's name is ${userName}. Address them by name when appropriate, but don't overuse it - keep it natural and conversational.` : ""}
+    // Build shared user AI context (collection + watchlist + recent searches)
+    const userContext = await getUserContextForAI(user.id);
 
-Guidelines:
-- Keep responses concise (3-5 sentences max) and scannable
-- Be direct, conversational, and actionable
-- If asked about authentication or counterfeits, recommend professional grading services (PSA, BGS, SGC)
-- Never guarantee investment returns - cards are speculative investments
-- Use web search to verify current player stats, team rosters, recent performance, and market trends before making recommendations
-- When discussing specific players, always search for their current status and recent performance first
+    const cardContextText = cardContext
+      ? [
+          cardContext.year,
+          cardContext.playerName,
+          cardContext.setName,
+          cardContext.grade,
+        ]
+          .filter(Boolean)
+          .join(" ")
+      : undefined;
 
-STYLE GUIDE FOR MARKET DATA (IMPORTANT):
-- Use ranges instead of exact figures: "mid-five figures" not "$35,100", "low four figures" not "$1,200"
-- Say "multiple recent sales" or "strong recent activity" instead of exact counts like "13 sales"
-- Use directional language: "trending up", "cooling off", "holding steady", "seeing increased demand"
-- Focus on liquidity and entry points: "good liquidity under $X", "entry-level options available"
-- Add risk context naturally: "volatile tied to on-field performance", "prices can swing weekly"
-- Avoid absolute claims like "most graded" unless citing a specific source
-- Keep it human - write like a knowledgeable friend, not a legal document
-- End with actionable takeaway when relevant: what to watch for, when to buy, risk to consider`;
-
-    if (cardContext) {
-      const cardDetails = [];
-      if (cardContext.year) cardDetails.push(cardContext.year);
-      if (cardContext.playerName) cardDetails.push(cardContext.playerName);
-      if (cardContext.setName) cardDetails.push(cardContext.setName);
-      if (cardContext.grade) cardDetails.push(cardContext.grade);
-
-      systemPrompt += `
-
-Current card context:
-- Card: ${cardDetails.join(" ") || "Unknown card"}`;
-
-      if (cardContext.avgPrice !== undefined) {
-        systemPrompt += `
-- Average sale price: $${cardContext.avgPrice.toLocaleString()}`;
-      }
-
-      if (cardContext.priceChange30d !== undefined) {
-        systemPrompt += `
-- 30-day price change: ${cardContext.priceChange30d > 0 ? "+" : ""}${cardContext.priceChange30d}%`;
-      }
-
-      if (cardContext.recentSales && cardContext.recentSales.length > 0) {
-        const salesStr = cardContext.recentSales
-          .slice(0, 5)
-          .map((s) => `$${s.price}`)
-          .join(", ");
-        systemPrompt += `
-- Recent sales: ${salesStr}`;
-      }
-    } else {
-      systemPrompt += `
-
-No specific card selected. Answer general sports card market questions.`;
-    }
-
-    // Fetch and inject user's collection context
-    const collectionContext = await getCollectionContext(supabase, user.id);
-    systemPrompt += formatCollectionForPrompt(collectionContext);
+    const { system: systemPrompt, messages: modelMessages } = buildAnalystPrompt({
+      userMessage,
+      userName,
+      cardContextText,
+      userContext,
+    });
 
     // Call Claude with conversation history
     const anthropic = new Anthropic({
@@ -344,7 +188,7 @@ No specific card selected. Answer general sports card market questions.`;
           max_uses: 3,
         } as any,
       ],
-      messages: conversationHistory,
+      messages: conversationHistory.length ? conversationHistory : modelMessages,
     });
 
     // Extract text from response

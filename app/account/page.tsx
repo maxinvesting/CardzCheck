@@ -192,7 +192,7 @@ function AccountContent() {
                   <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
                     <li>• Unlimited searches</li>
                     <li>• Unlimited collection tracking</li>
-                    <li>• Portfolio value tracking</li>
+                    <li>• Collection value tracking</li>
                   </ul>
                 </div>
               </div>

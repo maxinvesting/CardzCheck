@@ -1,6 +1,7 @@
 "use client";
 
 import type { CollectionItem } from "@/types";
+import { computeCollectionSummary } from "@/lib/values";
 
 interface CollectionStatsProps {
   items: CollectionItem[];
@@ -24,17 +25,11 @@ export default function CollectionStats({ items, loading }: CollectionStatsProps
     );
   }
 
-  const cardCount = items.length;
-  const totalValue = items.reduce((sum, item) => sum + (item.estimated_cmv || 0), 0);
-  const cmvAvailableCount = items.filter((item) => item.estimated_cmv !== null).length;
-
-  const gainEligible = items.filter(
-    (item) => item.estimated_cmv !== null && item.purchase_price !== null
-  );
-  const gain = gainEligible.reduce(
-    (sum, item) => sum + (item.estimated_cmv! - (item.purchase_price || 0)),
-    0
-  );
+  const summary = computeCollectionSummary(items);
+  const cardCount = summary.cardCount;
+  const totalValue = summary.totalDisplayValue;
+  const totalInvested = summary.totalCostBasis;
+  const gain = summary.totalUnrealizedPL ?? 0;
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("en-US", {

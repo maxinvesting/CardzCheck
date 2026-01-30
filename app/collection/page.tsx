@@ -6,10 +6,12 @@ import CollectionGrid from "@/components/CollectionGrid";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import PaywallModal from "@/components/PaywallModal";
 import AddCardModalNew from "@/components/AddCardModalNew";
+import CollectionSmartSearch from "@/components/CollectionSmartSearch";
 import { createClient } from "@/lib/supabase/client";
 import type { CollectionItem, User } from "@/types";
 import { LIMITS } from "@/types";
 import { isTestMode, getTestUser } from "@/lib/test-mode";
+import { computeCollectionSummary } from "@/lib/values";
 
 function formatPrice(price: number | null): string {
   if (price === null) return "CMV unavailable";
@@ -37,11 +39,13 @@ export default function CollectionPage() {
   const [loading, setLoading] = useState(true);
   const [showPaywall, setShowPaywall] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showSmartSearch, setShowSmartSearch] = useState(false);
   const [toast, setToast] = useState<{type: 'success' | 'error', message: string} | null>(null);
   const [filterQuery, setFilterQuery] = useState("");
   const [sortBy, setSortBy] = useState<"newest" | "oldest" | "player_az" | "player_za" | "paid_high" | "paid_low">("newest");
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Auto-dismiss toast after 3 seconds
   useEffect(() => {
@@ -133,6 +137,7 @@ export default function CollectionPage() {
       "year",
       "set_name",
       "grade",
+      "est_cmv",
       "purchase_price",
       "purchase_date",
       "estimated_cmv",
@@ -147,6 +152,7 @@ export default function CollectionPage() {
       it.year,
       it.set_name,
       it.grade,
+      it.est_cmv ?? "",
       it.purchase_price,
       it.purchase_date,
       it.estimated_cmv,
@@ -296,46 +302,33 @@ export default function CollectionPage() {
     }
   };
 
-  // Portfolio calculations
-  const portfolioStats = useMemo(() => {
-    const totalInvested = items.reduce(
-      (sum, item) => sum + (item.purchase_price || 0),
-      0
-    );
-    const totalCurrentValue = items.reduce(
-      (sum, item) => sum + (item.estimated_cmv || 0),
-      0
-    );
-    const gainEligibleItems = items.filter(
-      (item) => item.estimated_cmv !== null && item.purchase_price !== null
-    );
-    const totalInvestedForGain = gainEligibleItems.reduce(
-      (sum, item) => sum + (item.purchase_price || 0),
-      0
-    );
-    const totalGain = gainEligibleItems.reduce(
-      (sum, item) => sum + (item.estimated_cmv! - (item.purchase_price || 0)),
-      0
-    );
-    const gainPercentage =
-      totalInvestedForGain > 0 ? (totalGain / totalInvestedForGain) * 100 : null;
-    const cmvAvailableCount = items.filter((item) => item.estimated_cmv !== null).length;
+  // Collection calculations
+  const collectionSummary = useMemo(() => computeCollectionSummary(items), [items]);
 
-    return {
-      totalInvested,
-      totalCurrentValue,
-      totalGain,
-      gainPercentage,
-      cmvAvailableCount,
-    };
-  }, [items]);
-
-  // Top performers (cards with highest CMV)
+  // Top performers (cards with highest value)
+  // Top performers (by % change using CMV vs cost basis where both exist)
   const topPerformers = useMemo(() => {
     return items
-      .filter((item) => item.estimated_cmv !== null)
-      .sort((a, b) => (b.estimated_cmv || 0) - (a.estimated_cmv || 0))
-      .slice(0, 5);
+      .filter(
+        (item) =>
+          item.est_cmv !== null &&
+          item.est_cmv !== undefined &&
+          typeof item.purchase_price === "number" &&
+          (item.purchase_price ?? 0) > 0
+      )
+      .map((item) => {
+        const est = item.est_cmv as number;
+        const cost = item.purchase_price as number;
+        const dollarChange = est - cost;
+        const pctChange = cost > 0 ? (dollarChange / cost) * 100 : 0;
+        return { item, est, cost, dollarChange, pctChange };
+      })
+      .sort((a, b) => {
+        if (b.pctChange !== a.pctChange) return b.pctChange - a.pctChange;
+        return b.dollarChange - a.dollarChange;
+      })
+      .slice(0, 5)
+      .map(({ item }) => item);
   }, [items]);
 
   // Recently added cards (last 5)
@@ -355,8 +348,9 @@ export default function CollectionPage() {
     : LIMITS.FREE_COLLECTION;
   const isNearLimit = !user?.is_paid && collectionLimit !== null && collectionCount >= collectionLimit - 1;
 
+
   const visibleItems = useMemo(() => {
-    const q = filterQuery.trim().toLowerCase();
+    const q = (filterQuery || searchQuery).trim().toLowerCase();
     let filtered = items;
 
     if (q) {
@@ -411,88 +405,116 @@ export default function CollectionPage() {
         break;
     }
     return sorted;
-  }, [items, filterQuery, sortBy]);
+  }, [items, filterQuery, searchQuery, sortBy]);
 
   return (
     <AuthenticatedLayout>
       <main className="max-w-6xl mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-              {user?.name ? `${user.name}'s Collection` : "My Collection"}
-            </h1>
-            <p className="text-gray-500 dark:text-gray-400 mt-1">
-              Track your cards and portfolio value
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".csv,text/csv"
-              className="hidden"
-              onChange={(e) => handleImportFile(e.target.files?.[0] || null)}
-            />
-            <button
-              onClick={exportCsv}
-              disabled={items.length === 0}
-              className="px-4 py-2 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Export CSV
-            </button>
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={importing}
-              className="px-4 py-2 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {importing ? "Importing..." : "Import CSV"}
-            </button>
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              Add Card
-            </button>
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                Your Collection
+              </h1>
+              <p className="text-gray-500 dark:text-gray-400 mt-1">
+                Track performance and manage your investment
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv,text/csv"
+                className="hidden"
+                onChange={(e) => handleImportFile(e.target.files?.[0] || null)}
+              />
+              <button
+                onClick={exportCsv}
+                disabled={items.length === 0}
+                className="px-4 py-2 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Export CSV
+              </button>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={importing}
+                className="px-4 py-2 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {importing ? "Importing..." : "Import CSV"}
+              </button>
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Add Card
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Hero Portfolio Stats */}
+        {/* Hero Collection Stats */}
         <div className="bg-gradient-to-br from-blue-600 to-blue-700 dark:from-blue-700 dark:to-blue-800 rounded-2xl p-6 mb-6 text-white">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             {/* Total Value - Hero */}
             <div className="md:col-span-2">
-              <p className="text-blue-100 text-sm font-medium mb-1">Total Collection Value</p>
-              <p className="text-4xl font-bold">
-                {portfolioStats.cmvAvailableCount > 0
-                  ? formatCurrency(portfolioStats.totalCurrentValue)
-                  : "CMV unavailable"}
+              <div className="flex items-center gap-2 mb-1">
+                <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                <p className="text-blue-100 text-sm font-medium uppercase tracking-wider">Collection Value</p>
+              </div>
+              <p className="text-4xl font-bold tabular-nums">
+                {formatPrice(collectionSummary.totalDisplayValue)}
               </p>
-              <p className="text-blue-100 text-sm mt-2">{collectionCount} cards</p>
+              {collectionSummary.cardsWithCmv === 0 && collectionSummary.cardCount > 0 && (
+                <p className="text-xs text-blue-100/80 mt-1">
+                  Collection value is estimated CMV only. Add comps to get values.
+                </p>
+              )}
+              <p className="text-blue-100 text-sm mt-2">{collectionCount} cards in collection</p>
             </div>
-            {/* Total Invested */}
-            <div>
-              <p className="text-blue-100 text-sm font-medium mb-1">Total Invested</p>
-              <p className="text-2xl font-bold">{formatCurrency(portfolioStats.totalInvested)}</p>
+            {/* Cost Basis */}
+            <div className="bg-white/10 rounded-xl p-4">
+              <p className="text-blue-200 text-xs font-medium uppercase tracking-wider mb-1">Cost Basis</p>
+              <p className="text-2xl font-bold tabular-nums">
+                {formatPrice(collectionSummary.totalCostBasis)}
+              </p>
             </div>
-            {/* Performance */}
-            <div>
-              <p className="text-blue-100 text-sm font-medium mb-1">Performance</p>
-              {portfolioStats.gainPercentage !== null ? (
+            {/* Unrealized P/L */}
+            <div className="bg-white/10 rounded-xl p-4">
+              <p className="text-blue-200 text-xs font-medium uppercase tracking-wider mb-1">Unrealized P/L</p>
+              {collectionSummary.totalUnrealizedPL !== null &&
+              collectionSummary.totalUnrealizedPLPct !== null ? (
                 <>
-                  <p className={`text-2xl font-bold ${portfolioStats.totalGain >= 0 ? "text-green-300" : "text-red-300"}`}>
-                    {portfolioStats.totalGain >= 0 ? "+" : ""}
-                    {formatCurrency(portfolioStats.totalGain)}
+                  <p
+                    className={`text-2xl font-bold tabular-nums ${
+                      collectionSummary.totalUnrealizedPL >= 0
+                        ? "text-green-300"
+                        : "text-red-300"
+                    }`}
+                  >
+                    {collectionSummary.totalUnrealizedPL >= 0 ? "+" : ""}
+                    {formatPrice(collectionSummary.totalUnrealizedPL)}
                   </p>
-                  <p className={`text-sm ${portfolioStats.gainPercentage >= 0 ? "text-green-300" : "text-red-300"}`}>
-                    {portfolioStats.gainPercentage >= 0 ? "+" : ""}
-                    {portfolioStats.gainPercentage.toFixed(1)}%
+                  <p
+                    className={`text-xs ${
+                      collectionSummary.totalUnrealizedPLPct >= 0
+                        ? "text-green-300"
+                        : "text-red-300"
+                    }`}
+                  >
+                    {collectionSummary.totalUnrealizedPLPct >= 0 ? "+" : ""}
+                    {(collectionSummary.totalUnrealizedPLPct * 100).toFixed(1)}%
                   </p>
                 </>
               ) : (
-                <p className="text-sm text-blue-100">CMV unavailable</p>
+                <div className="space-y-1">
+                  <p className="text-2xl font-bold tabular-nums text-blue-100">—</p>
+                  <p className="text-xs text-blue-100/80">
+                    Market value unavailable for cost-basis comparison.
+                  </p>
+                </div>
               )}
             </div>
           </div>
@@ -540,7 +562,7 @@ export default function CollectionPage() {
                 <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
                 </svg>
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Top Value Cards</h2>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Top Performers</h2>
               </div>
               {topPerformers.length > 0 ? (
                 <div className="space-y-3">
@@ -609,6 +631,33 @@ export default function CollectionPage() {
                           <p className="text-xs text-gray-500 dark:text-gray-400">
                             {item.year} {item.set_name}
                           </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            {item.est_cmv != null && item.est_cmv > 0 ? (
+                              <>
+                                <span className="font-medium">
+                                  CMV: {formatPrice(item.est_cmv)}
+                                </span>
+                                {item.purchase_price != null && (
+                                  <span className="ml-1 text-[11px] text-gray-400">
+                                    (Paid {formatPrice(item.purchase_price)})
+                                  </span>
+                                )}
+                              </>
+                            ) : item.purchase_price != null ? (
+                              <>
+                                <span className="font-medium">
+                                  Value: {formatPrice(item.purchase_price)}
+                                </span>
+                                <span className="ml-1 text-[11px] text-gray-400">
+                                  Market value unavailable
+                                </span>
+                              </>
+                            ) : (
+                              <span className="text-[11px] text-gray-400">
+                                Market value unavailable
+                              </span>
+                            )}
+                          </p>
                         </div>
                       </div>
                       <p className="text-xs text-gray-500 dark:text-gray-400">
@@ -645,13 +694,33 @@ export default function CollectionPage() {
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3">
-              <input
-                type="text"
-                value={filterQuery}
-                onChange={(e) => setFilterQuery(e.target.value)}
-                placeholder="Filter your collection..."
-                className="flex-1 px-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
+              <div className="relative flex-1">
+                <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                  <svg
+                    className="w-5 h-5 text-gray-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
+                  </svg>
+                </div>
+                <input
+                  type="text"
+                  value={filterQuery}
+                  onChange={(e) => {
+                    setFilterQuery(e.target.value);
+                    setSearchQuery(e.target.value);
+                  }}
+                  placeholder="Search your collection... (e.g., Jordan 1986 PSA 10)"
+                  className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
@@ -698,15 +767,45 @@ export default function CollectionPage() {
           type="collection"
         />
 
-        {/* Add Card Modal */}
+        {/* Add Card Modal (New - Upload/Manual) */}
         <AddCardModalNew
           isOpen={showAddModal}
           onClose={() => setShowAddModal(false)}
-          onSuccess={(playerName) => {
+          onSuccess={(playerName, item) => {
             setToast({ type: 'success', message: `Added ${playerName} to collection!` });
-            refreshCollection();
+            if (isTestMode() && item) {
+              setItems((prev) => [item, ...prev]);
+            } else {
+              refreshCollection();
+            }
           }}
           onLimitReached={() => setShowPaywall(true)}
+          onOpenSmartSearch={() => {
+            // Close the current Add Card modal and open the smart search flow instead
+            setShowAddModal(false);
+            setShowSmartSearch(true);
+          }}
+        />
+
+        {/* Smart Search Add (same smart search UX as watchlist, but adds to collection) */}
+        <CollectionSmartSearch
+          isOpen={showSmartSearch}
+          onClose={() => {
+            setShowSmartSearch(false);
+          }}
+          onSuccess={(playerName, item) => {
+            setToast({ type: 'success', message: `Added ${playerName} to collection!` });
+            if (isTestMode() && item) {
+              setItems((prev) => [item, ...prev]);
+            } else {
+              refreshCollection();
+            }
+            setShowSmartSearch(false);
+          }}
+          onLimitReached={() => {
+            setShowSmartSearch(false);
+            setShowPaywall(true);
+          }}
         />
 
         {/* Toast Notification */}

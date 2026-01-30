@@ -31,7 +31,7 @@ export default function ActivityFeed({ recentCards = [] }: ActivityFeedProps) {
     if (search.parsed.grade) params.set("grade", search.parsed.grade);
     if (search.parsed.parallel_type) params.set("parallel_type", search.parsed.parallel_type);
 
-    router.push(`/search?${params.toString()}`);
+    router.push(`/comps?${params.toString()}`);
   };
 
   const handleRemove = (timestamp: number, e: React.MouseEvent) => {

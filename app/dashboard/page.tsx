@@ -3,12 +3,15 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
-import SearchBar from "@/components/SearchBar";
-import HeroStats from "@/components/dashboard/HeroStats";
+import CollectionMetricsCard from "@/components/dashboard/CollectionMetricsCard";
+import PerformanceChart from "@/components/dashboard/PerformanceChart";
+import TopPerformersSection from "@/components/dashboard/TopPerformersSection";
+import QuickActionsCollection from "@/components/dashboard/QuickActionsCollection";
 import ActivityFeed from "@/components/dashboard/ActivityFeed";
-import AnalystWidget from "@/components/dashboard/AnalystWidget";
+import AddCardModalNew from "@/components/AddCardModalNew";
+import PaywallModal from "@/components/PaywallModal";
 import { createClient } from "@/lib/supabase/client";
-import type { User, CollectionItem, SearchFormData } from "@/types";
+import type { User, CollectionItem } from "@/types";
 import { isTestMode, getTestUser } from "@/lib/test-mode";
 
 export default function DashboardPage() {
@@ -16,6 +19,20 @@ export default function DashboardPage() {
   const [user, setUser] = useState<User | null>(null);
   const [collectionItems, setCollectionItems] = useState<CollectionItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showPaywall, setShowPaywall] = useState(false);
+  const [toast, setToast] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
+
+  // Auto-dismiss toast
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
 
   useEffect(() => {
     async function loadData() {
@@ -67,51 +84,131 @@ export default function DashboardPage() {
     loadData();
   }, [router]);
 
-  const handleSearch = (data: SearchFormData) => {
-    const params = new URLSearchParams();
-    if (data.player_name) params.set("player", data.player_name);
-    if (data.year) params.set("year", data.year);
-    if (data.set_name) params.set("set", data.set_name);
-    if (data.grade) params.set("grade", data.grade);
-    if (data.parallel_type) params.set("parallel_type", data.parallel_type);
-    if (data.card_number) params.set("card_number", data.card_number);
-    if (data.serial_number) params.set("serial_number", data.serial_number);
-    if (data.variation) params.set("variation", data.variation);
-    if (data.autograph) params.set("autograph", data.autograph);
-    if (data.relic) params.set("relic", data.relic);
-
-    router.push(`/search?${params.toString()}`);
+  const refreshCollection = async () => {
+    const response = await fetch("/api/collection");
+    const data = await response.json();
+    if (data.items) {
+      setCollectionItems(data.items);
+    }
   };
 
   const userName = user?.name || (user?.email ? user.email.split("@")[0] : "");
 
   return (
     <AuthenticatedLayout>
-      <div className="p-4 sm:p-6 max-w-5xl mx-auto">
-        {/* Compact Header with Greeting + Search */}
-        <div className="mb-4">
-          <p className="text-sm text-gray-400 mb-2">
+      <div className="p-4 sm:p-6 max-w-6xl mx-auto">
+        {/* Greeting */}
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-white">
             Welcome back{userName ? `, ${userName}` : ""}
+          </h1>
+          <p className="text-sm text-gray-400 mt-1">
+            Here's how your collection is performing
           </p>
-          <div className="max-w-2xl">
-            <SearchBar onSearch={handleSearch} />
-          </div>
         </div>
 
-        {/* Hero Stats Section */}
-        <div className="mb-4">
-          <HeroStats items={collectionItems} loading={loading} onSearch={handleSearch} />
+        {/* Collection Metrics Hero */}
+        <div className="mb-6">
+          <CollectionMetricsCard items={collectionItems} loading={loading} />
         </div>
 
-        {/* Activity Feed + Analyst Widget */}
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-          <div className="lg:col-span-3">
-            <ActivityFeed recentCards={collectionItems.slice(0, 3)} />
-          </div>
-          <div className="lg:col-span-2">
-            <AnalystWidget isPaid={user?.is_paid} />
-          </div>
+        {/* Performance Chart */}
+        <div className="mb-6">
+          <PerformanceChart items={collectionItems} loading={loading} />
         </div>
+
+        {/* Two Column Section: Top Performers & Quick Actions */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <TopPerformersSection items={collectionItems} loading={loading} />
+          <QuickActionsCollection onAddCard={() => setShowAddModal(true)} />
+        </div>
+
+        {/* Recent Activity */}
+        <div className="mb-6">
+          <ActivityFeed recentCards={collectionItems.slice(0, 5)} />
+        </div>
+
+        {/* Add Card Modal */}
+        <AddCardModalNew
+          isOpen={showAddModal}
+          onClose={() => setShowAddModal(false)}
+          onSuccess={(playerName, item) => {
+            setToast({
+              type: "success",
+              message: `Added ${playerName} to collection!`,
+            });
+            if (isTestMode() && item) {
+              setCollectionItems((prev) => [item, ...prev]);
+            } else {
+              refreshCollection();
+            }
+          }}
+          onLimitReached={() => setShowPaywall(true)}
+        />
+
+        {/* Paywall Modal */}
+        <PaywallModal
+          isOpen={showPaywall}
+          onClose={() => setShowPaywall(false)}
+          type="collection"
+        />
+
+        {/* Toast Notification */}
+        {toast && (
+          <div
+            className={`fixed bottom-4 right-4 p-4 rounded-lg shadow-lg z-50 flex items-center gap-3 ${
+              toast.type === "success"
+                ? "bg-green-600 text-white"
+                : "bg-red-600 text-white"
+            }`}
+          >
+            {toast.type === "success" ? (
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+            ) : (
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            )}
+            <span>{toast.message}</span>
+            <button onClick={() => setToast(null)} className="ml-2 hover:opacity-75">
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            </button>
+          </div>
+        )}
       </div>
     </AuthenticatedLayout>
   );
