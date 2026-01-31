@@ -265,6 +265,14 @@ export default function Home() {
             <p className="mt-2 text-gray-500">
               Data sourced from eBay sold listings.
             </p>
+            <div className="mt-4 flex flex-wrap justify-center gap-4 text-gray-400">
+              <Link href="/terms" className="hover:text-white transition-colors">
+                Terms
+              </Link>
+              <Link href="/privacy" className="hover:text-white transition-colors">
+                Privacy
+              </Link>
+            </div>
           </div>
         </footer>
       </div>

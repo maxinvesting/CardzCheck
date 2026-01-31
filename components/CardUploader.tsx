@@ -40,7 +40,13 @@ export default function CardUploader({ onIdentified, disabled }: CardUploaderPro
       // Try to upload to Supabase Storage first
       try {
         const supabase = createClient();
-        const fileName = `${Date.now()}-${file.name}`;
+        const { data: { user } } = await supabase.auth.getUser();
+
+        if (!user) {
+          throw new Error("Authentication required for storage uploads");
+        }
+
+        const fileName = `${user.id}/${Date.now()}-${file.name}`;
 
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from("card-images")
