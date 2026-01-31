@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isTestMode } from "@/lib/test-mode";
+import { logDebug } from "@/lib/logging";
 
 export async function PATCH(request: NextRequest) {
   try {
     if (isTestMode()) {
-      console.log("🧪 TEST MODE: Bypassing name update auth check");
+      logDebug("🧪 TEST MODE: Bypassing name update auth check");
       return NextResponse.json({ success: true });
     }
 

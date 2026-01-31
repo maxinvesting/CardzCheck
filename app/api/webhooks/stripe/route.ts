@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { createServiceClient } from "@/lib/supabase/server";
 import Stripe from "stripe";
+import { logDebug, redactId } from "@/lib/logging";
 
 export async function POST(request: NextRequest) {
   const body = await request.text();
@@ -92,7 +93,7 @@ export async function POST(request: NextRequest) {
         { onConflict: "user_id" }
       );
 
-      console.log(`User ${userId} upgraded to Pro`);
+      logDebug("User upgraded to Pro", { userId: redactId(userId) });
       break;
     }
 
@@ -101,7 +102,7 @@ export async function POST(request: NextRequest) {
       const subscriptionId = invoice.subscription as string;
 
       if (!subscriptionId) {
-        console.log("Invoice paid but no subscription ID");
+        logDebug("Invoice paid but no subscription ID");
         break;
       }
 
@@ -137,11 +138,15 @@ export async function POST(request: NextRequest) {
             })
             .eq("user_id", existingSub.user_id);
 
-          console.log(`Usage reset for user ${existingSub.user_id} on subscription renewal`);
+          logDebug("Usage reset on subscription renewal", {
+            userId: redactId(existingSub.user_id),
+          });
         }
       }
 
-      console.log(`Invoice paid for subscription ${subscriptionId}`);
+      logDebug("Invoice paid for subscription", {
+        subscriptionId: redactId(subscriptionId),
+      });
       break;
     }
 
@@ -150,7 +155,7 @@ export async function POST(request: NextRequest) {
       const subscriptionId = invoice.subscription as string;
 
       if (!subscriptionId) {
-        console.log("Invoice payment failed but no subscription ID");
+        logDebug("Invoice payment failed but no subscription ID");
         break;
       }
 
@@ -164,7 +169,9 @@ export async function POST(request: NextRequest) {
         console.error("Error updating subscription status:", error);
       }
 
-      console.log(`Payment failed for subscription ${subscriptionId}`);
+      logDebug("Payment failed for subscription", {
+        subscriptionId: redactId(subscriptionId),
+      });
       break;
     }
 
@@ -194,7 +201,9 @@ export async function POST(request: NextRequest) {
           .update({ is_paid: false })
           .eq("id", sub.user_id);
 
-        console.log(`Subscription canceled for user ${sub.user_id}`);
+        logDebug("Subscription canceled for user", {
+          userId: redactId(sub.user_id),
+        });
       }
 
       break;
@@ -212,12 +221,14 @@ export async function POST(request: NextRequest) {
         })
         .eq("stripe_subscription_id", subscription.id);
 
-      console.log(`Subscription updated: ${subscription.id}`);
+      logDebug("Subscription updated", {
+        subscriptionId: redactId(subscription.id),
+      });
       break;
     }
 
     default:
-      console.log(`Unhandled event type: ${event.type}`);
+      logDebug("Unhandled event type", { eventType: event.type });
   }
 
   return NextResponse.json({ received: true });

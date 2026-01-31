@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { scrapeEbaySoldListings, calculateStats } from "@/lib/ebay";
+import { logDebug, redactId } from "@/lib/logging";
 import type { WatchlistItem, PriceHistoryEntry } from "@/types";
 
 // Maximum number of items to process per cron run
@@ -50,7 +51,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!items || items.length === 0) {
-      console.log("No watchlist items need updating");
+      logDebug("No watchlist items need updating");
       return NextResponse.json({
         success: true,
         processed: 0,
@@ -58,7 +59,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    console.log(`Processing ${items.length} watchlist items`);
+    logDebug(`Processing ${items.length} watchlist items`);
 
     const results = {
       processed: 0,
@@ -113,9 +114,10 @@ export async function POST(request: NextRequest) {
             results.errors.push(`${item.player_name}: ${updateError.message}`);
           } else {
             results.updated++;
-            console.log(
-              `Updated ${item.player_name}: $${newPrice} (${stats.count} comps)`
-            );
+            logDebug("Updated watchlist item pricing", {
+              itemId: redactId(item.id),
+              comps: stats.count,
+            });
           }
         } else {
           // No comps found - update last_checked but keep old price
@@ -124,7 +126,9 @@ export async function POST(request: NextRequest) {
             .update({ last_checked: new Date().toISOString() })
             .eq("id", item.id);
 
-          console.log(`No comps found for ${item.player_name}`);
+          logDebug("No comps found for watchlist item", {
+            itemId: redactId(item.id),
+          });
         }
 
         // Add a small delay between requests to be nice to eBay
@@ -147,7 +151,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    console.log(
+    logDebug(
       `Cron complete: ${results.processed} processed, ${results.updated} updated, ${results.failed} failed`
     );
 

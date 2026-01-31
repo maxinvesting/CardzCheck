@@ -208,7 +208,6 @@ export default function CollectionGrid({ items, onDelete, onRefresh }: Collectio
           <CardItem
             key={item.id}
             item={item}
-            cmv={item.est_cmv ?? null}
             onDelete={() => onDelete(item.id)}
           />
         ))}
