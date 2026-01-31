@@ -7,7 +7,7 @@ export async function updateSession(request: NextRequest) {
   // Bypass auth checks in test mode
   if (isTestMode()) {
     logDebug("🧪 TEST MODE: Bypassing authentication checks");
-    return NextResponse.next({ request });
+    return { response: NextResponse.next({ request }), userId: null };
   }
 
   let supabaseResponse = NextResponse.next({
@@ -63,8 +63,8 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("redirect", request.nextUrl.pathname);
-    return NextResponse.redirect(url);
+    return { response: NextResponse.redirect(url), userId: null };
   }
 
-  return supabaseResponse;
+  return { response: supabaseResponse, userId: user?.id ?? null };
 }
