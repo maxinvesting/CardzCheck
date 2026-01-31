@@ -1,10 +1,92 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 
+// Server-side upload validation constants
+const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
+const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+
 function getAnthropicClient() {
   return new Anthropic({
     apiKey: process.env.ANTHROPIC_API_KEY,
   });
+}
+
+/**
+ * Validate base64 image data
+ */
+function validateBase64Image(dataUrl: string): {
+  valid: boolean;
+  size?: number;
+  mimeType?: string;
+  base64Data?: string;
+  error?: string;
+} {
+  const matches = dataUrl.match(/^data:(image\/\w+);base64,(.+)$/);
+  if (!matches) {
+    return { valid: false, error: "Invalid base64 data URL format" };
+  }
+
+  const [, mimeType, base64Data] = matches;
+
+  if (!ALLOWED_MIME_TYPES.includes(mimeType)) {
+    return {
+      valid: false,
+      error: `Invalid image type: ${mimeType}. Allowed: ${ALLOWED_MIME_TYPES.join(", ")}`,
+    };
+  }
+
+  const decodedSize = Math.ceil((base64Data.length * 3) / 4);
+  if (decodedSize > MAX_IMAGE_SIZE_BYTES) {
+    return {
+      valid: false,
+      error: `Image too large: ${(decodedSize / 1024 / 1024).toFixed(1)}MB. Maximum: 10MB`,
+    };
+  }
+
+  return { valid: true, size: decodedSize, mimeType, base64Data };
+}
+
+/**
+ * Validate image URL (must be HTTPS)
+ */
+function validateImageUrl(url: string): { valid: boolean; error?: string } {
+  if (!url.startsWith("https://")) {
+    return { valid: false, error: "Image URL must use HTTPS" };
+  }
+  try {
+    new URL(url);
+    return { valid: true };
+  } catch {
+    return { valid: false, error: "Invalid URL format" };
+  }
+}
+
+/**
+ * Validate fetched image response
+ */
+function validateFetchedImage(
+  contentType: string | null,
+  contentLength: string | null
+): { valid: boolean; error?: string } {
+  const mimeType = contentType?.split(";")[0]?.trim();
+  if (!mimeType || !ALLOWED_MIME_TYPES.includes(mimeType)) {
+    return {
+      valid: false,
+      error: `Invalid image type: ${mimeType || "unknown"}. Allowed: ${ALLOWED_MIME_TYPES.join(", ")}`,
+    };
+  }
+
+  if (contentLength) {
+    const size = parseInt(contentLength, 10);
+    if (!isNaN(size) && size > MAX_IMAGE_SIZE_BYTES) {
+      return {
+        valid: false,
+        error: `Image too large: ${(size / 1024 / 1024).toFixed(1)}MB. Maximum: 10MB`,
+      };
+    }
+  }
+
+  return { valid: true };
 }
 
 const SYSTEM_PROMPT = `You are a sports trading card grading expert with deep knowledge of PSA, BGS, SGC, and CGC grading standards. Your job is to analyze card condition and estimate grades based on centering, corners, surface, and edges.`;
@@ -69,23 +151,38 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (typeof imageUrl !== "string") {
+      return NextResponse.json(
+        { error: "Invalid input", reason: "imageUrl must be a string" },
+        { status: 400 }
+      );
+    }
+
     let base64Image: string;
     let mediaType: "image/jpeg" | "image/png" | "image/gif" | "image/webp";
 
     // Check if imageUrl is a base64 data URL
     if (imageUrl.startsWith("data:image/")) {
-      const matches = imageUrl.match(/^data:image\/(\w+);base64,(.+)$/);
-      if (matches) {
-        const [, format, base64] = matches;
-        base64Image = base64;
-        mediaType = `image/${format}` as "image/jpeg" | "image/png" | "image/gif" | "image/webp";
-      } else {
+      const validation = validateBase64Image(imageUrl);
+      if (!validation.valid) {
         return NextResponse.json(
-          { error: "Invalid image format", reason: "Could not parse base64 image" },
+          { error: "Invalid image", reason: validation.error },
           { status: 400 }
         );
       }
+
+      base64Image = validation.base64Data!;
+      mediaType = validation.mimeType as "image/jpeg" | "image/png" | "image/gif" | "image/webp";
     } else {
+      // Validate URL before fetching
+      const urlValidation = validateImageUrl(imageUrl);
+      if (!urlValidation.valid) {
+        return NextResponse.json(
+          { error: "Invalid image URL", reason: urlValidation.error },
+          { status: 400 }
+        );
+      }
+
       // Fetch image from URL and convert to base64
       const imageResponse = await fetch(imageUrl);
       if (!imageResponse.ok) {
@@ -95,11 +192,32 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const imageBuffer = await imageResponse.arrayBuffer();
-      base64Image = Buffer.from(imageBuffer).toString("base64");
+      // Validate fetched image
+      const contentType = imageResponse.headers.get("content-type");
+      const contentLength = imageResponse.headers.get("content-length");
+      const fetchValidation = validateFetchedImage(contentType, contentLength);
+      if (!fetchValidation.valid) {
+        return NextResponse.json(
+          { error: "Invalid image", reason: fetchValidation.error },
+          { status: 400 }
+        );
+      }
 
-      const contentType = imageResponse.headers.get("content-type") || "image/jpeg";
-      mediaType = contentType.split(";")[0] as "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+      const imageBuffer = await imageResponse.arrayBuffer();
+
+      // Check size after download
+      if (imageBuffer.byteLength > MAX_IMAGE_SIZE_BYTES) {
+        return NextResponse.json(
+          {
+            error: "Image too large",
+            reason: `Image is ${(imageBuffer.byteLength / 1024 / 1024).toFixed(1)}MB. Maximum: 10MB`,
+          },
+          { status: 400 }
+        );
+      }
+
+      base64Image = Buffer.from(imageBuffer).toString("base64");
+      mediaType = (contentType?.split(";")[0] || "image/jpeg") as "image/jpeg" | "image/png" | "image/gif" | "image/webp";
     }
 
     // Process card image for grade estimation

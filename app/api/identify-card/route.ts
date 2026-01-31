@@ -1,10 +1,123 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 
+// Server-side upload validation constants
+const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
+const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+const ALLOWED_URL_HOSTS = [
+  // Supabase storage
+  "supabase.co",
+  "supabase.in",
+  // Add your specific Supabase project URL domain if needed
+];
+
 function getAnthropicClient() {
   return new Anthropic({
     apiKey: process.env.ANTHROPIC_API_KEY,
   });
+}
+
+/**
+ * Validate base64 image data
+ * Returns { valid: true, size, mimeType } or { valid: false, error }
+ */
+function validateBase64Image(dataUrl: string): {
+  valid: boolean;
+  size?: number;
+  mimeType?: string;
+  base64Data?: string;
+  error?: string;
+} {
+  // Parse data URL format: data:image/jpeg;base64,/9j/4AAQ...
+  const matches = dataUrl.match(/^data:(image\/\w+);base64,(.+)$/);
+  if (!matches) {
+    return { valid: false, error: "Invalid base64 data URL format" };
+  }
+
+  const [, mimeType, base64Data] = matches;
+
+  // Validate mime type
+  if (!ALLOWED_MIME_TYPES.includes(mimeType)) {
+    return {
+      valid: false,
+      error: `Invalid image type: ${mimeType}. Allowed: ${ALLOWED_MIME_TYPES.join(", ")}`,
+    };
+  }
+
+  // Calculate decoded size (base64 is ~4/3 of original size)
+  const decodedSize = Math.ceil((base64Data.length * 3) / 4);
+
+  if (decodedSize > MAX_IMAGE_SIZE_BYTES) {
+    return {
+      valid: false,
+      error: `Image too large: ${(decodedSize / 1024 / 1024).toFixed(1)}MB. Maximum: 10MB`,
+    };
+  }
+
+  return { valid: true, size: decodedSize, mimeType, base64Data };
+}
+
+/**
+ * Validate image URL
+ * Returns { valid: true } or { valid: false, error }
+ */
+function validateImageUrl(url: string): { valid: boolean; error?: string } {
+  // Must be HTTPS
+  if (!url.startsWith("https://")) {
+    return { valid: false, error: "Image URL must use HTTPS" };
+  }
+
+  try {
+    const parsedUrl = new URL(url);
+
+    // Check if host is allowed (Supabase storage or similar trusted sources)
+    const isAllowedHost = ALLOWED_URL_HOSTS.some(
+      (host) =>
+        parsedUrl.hostname === host || parsedUrl.hostname.endsWith(`.${host}`)
+    );
+
+    if (!isAllowedHost) {
+      // For now, allow any HTTPS URL but log a warning
+      // In production, you may want to restrict to known hosts only
+      console.warn(
+        `[identify-card] URL from untrusted host: ${parsedUrl.hostname}`
+      );
+    }
+
+    return { valid: true };
+  } catch {
+    return { valid: false, error: "Invalid URL format" };
+  }
+}
+
+/**
+ * Validate fetched image response
+ */
+function validateFetchedImage(
+  contentType: string | null,
+  contentLength: string | null
+): { valid: boolean; error?: string } {
+  // Validate content type
+  const mimeType = contentType?.split(";")[0]?.trim();
+  if (!mimeType || !ALLOWED_MIME_TYPES.includes(mimeType)) {
+    return {
+      valid: false,
+      error: `Invalid image type from URL: ${mimeType || "unknown"}. Allowed: ${ALLOWED_MIME_TYPES.join(", ")}`,
+    };
+  }
+
+  // Validate size if Content-Length header is present
+  if (contentLength) {
+    const size = parseInt(contentLength, 10);
+    if (!isNaN(size) && size > MAX_IMAGE_SIZE_BYTES) {
+      return {
+        valid: false,
+        error: `Image too large: ${(size / 1024 / 1024).toFixed(1)}MB. Maximum: 10MB`,
+      };
+    }
+  }
+
+  return { valid: true };
 }
 
 const SYSTEM_PROMPT = `You are a sports trading card identification expert with deep knowledge of card sets, parallels, variants, and insert types. Your job is to identify cards from images with high accuracy, paying special attention to insert types (especially Downtown inserts), multi-player cards, parallel types, and variants.`;
@@ -95,6 +208,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate input type
+    if (typeof imageUrl !== "string") {
+      return NextResponse.json(
+        { error: "Invalid input", reason: "imageUrl must be a string" },
+        { status: 400 }
+      );
+    }
+
     let base64Image: string;
     let mediaType: "image/jpeg" | "image/png" | "image/webp";
 
@@ -136,6 +257,9 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
+
+      base64Image = validation.base64Data!;
+      mediaType = validation.mimeType as "image/jpeg" | "image/png" | "image/gif" | "image/webp";
     } else {
       let parsedUrl: URL;
       try {
@@ -201,6 +325,17 @@ export async function POST(request: NextRequest) {
       if (!imageResponse.ok) {
         return NextResponse.json(
           { error: "Unsupported image format or size" },
+          { status: 400 }
+        );
+      }
+
+      // Validate fetched image headers
+      const contentType = imageResponse.headers.get("content-type");
+      const contentLength = imageResponse.headers.get("content-length");
+      const fetchValidation = validateFetchedImage(contentType, contentLength);
+      if (!fetchValidation.valid) {
+        return NextResponse.json(
+          { error: "Invalid image", reason: fetchValidation.error },
           { status: 400 }
         );
       }

@@ -1,5 +1,35 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
+import {
+  checkRateLimit,
+  rateLimitResponse,
+  rateLimitHeaders,
+  RATE_LIMITS,
+} from "@/lib/api-rate-limiter";
+
+// Endpoints that need rate limiting
+const RATE_LIMITED_ENDPOINTS = [
+  "/api/identify-card",
+  "/api/grade-estimate",
+  "/api/analyst",
+  "/api/search",
+];
+
+function getClientIP(request: NextRequest): string {
+  // Vercel/Cloudflare provide these headers
+  const forwarded = request.headers.get("x-forwarded-for");
+  if (forwarded) {
+    return forwarded.split(",")[0].trim();
+  }
+
+  const realIP = request.headers.get("x-real-ip");
+  if (realIP) {
+    return realIP;
+  }
+
+  // Fallback for local development
+  return "127.0.0.1";
+}
 
 type RateLimitConfig = {
   limit: number;
@@ -87,7 +117,6 @@ export const config = {
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      * - public files (public folder)
-     * - api routes that don't need auth
      */
     "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
