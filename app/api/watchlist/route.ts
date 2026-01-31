@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { checkLegacyProAccess } from "@/lib/access";
 import { isTestMode } from "@/lib/test-mode";
+import { logDebug } from "@/lib/logging";
 import type { WatchlistItem } from "@/types";
 
 // GET - List watchlist items
@@ -9,7 +10,7 @@ export async function GET() {
   try {
     // Bypass auth in test mode
     if (isTestMode()) {
-      console.log("Test mode: Bypassing watchlist auth");
+      logDebug("Test mode: Bypassing watchlist auth");
       return NextResponse.json({ items: [] });
     }
 
@@ -59,7 +60,7 @@ export async function POST(request: NextRequest) {
   try {
     // Bypass auth in test mode
     if (isTestMode()) {
-      console.log("Test mode: Bypassing watchlist add auth");
+      logDebug("Test mode: Bypassing watchlist add auth");
       const body = await request.json();
       const now = new Date().toISOString();
       return NextResponse.json({
@@ -150,7 +151,7 @@ export async function DELETE(request: NextRequest) {
   try {
     // Bypass auth in test mode
     if (isTestMode()) {
-      console.log("Test mode: Bypassing watchlist delete auth");
+      logDebug("Test mode: Bypassing watchlist delete auth");
       return NextResponse.json({ success: true });
     }
 
@@ -195,7 +196,7 @@ export async function PATCH(request: NextRequest) {
   try {
     // Bypass auth in test mode
     if (isTestMode()) {
-      console.log("Test mode: Bypassing watchlist update auth");
+      logDebug("Test mode: Bypassing watchlist update auth");
       const body = await request.json();
       return NextResponse.json({ item: body });
     }

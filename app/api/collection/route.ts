@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { LIMITS } from "@/types";
+import { LIMITS, type CollectionItem } from "@/types";
 import { isTestMode } from "@/lib/test-mode";
 import { calculateCardCmv, isCmvStale } from "@/lib/cmv";
+import { logDebug, redactId } from "@/lib/logging";
 
 // GET - List collection items
 export async function GET() {
   try {
     // Bypass auth in test mode
     if (isTestMode()) {
-      console.log("🧪 TEST MODE: Bypassing collection auth");
+      logDebug("🧪 TEST MODE: Bypassing collection auth");
       return NextResponse.json({ items: [] });
     }
 
@@ -31,7 +32,7 @@ export async function GET() {
     }
 
     const updatedItems = await Promise.all(
-      (items || []).map(async (item) => {
+      (items || []).map(async (item: CollectionItem) => {
         if (!isCmvStale(item)) {
           return item;
         }
@@ -67,7 +68,7 @@ export async function POST(request: NextRequest) {
   try {
     // Bypass auth and limits in test mode
     if (isTestMode()) {
-      console.log("🧪 TEST MODE: Bypassing collection limits");
+      logDebug("🧪 TEST MODE: Bypassing collection limits");
       const body = await request.json();
       return NextResponse.json({
         item: {
@@ -139,14 +140,11 @@ export async function POST(request: NextRequest) {
     }
     const combinedNotes = notesParts.length > 0 ? notesParts.join(" | ") : null;
 
-    console.log("📦 Inserting collection item:", {
-      user_id: user.id,
-      player_name,
-      players: players?.length,
-      year,
-      set_name,
-      insert,
-      grade,
+    logDebug("📦 Inserting collection item", {
+      userId: redactId(user.id),
+      hasPlayers: Array.isArray(players),
+      playersCount: players?.length ?? 0,
+      hasNotes: Boolean(notes),
     });
 
     // Insert only columns that exist in collection_items (est_cmv added via migration when needed)
@@ -171,7 +169,10 @@ export async function POST(request: NextRequest) {
       throw error;
     }
 
-    console.log("✅ Successfully added to collection:", item);
+    logDebug("✅ Successfully added to collection", {
+      userId: redactId(user.id),
+      itemId: redactId(item.id),
+    });
     return NextResponse.json({ item });
   } catch (error) {
     console.error("❌ Collection add error:", error);
@@ -193,7 +194,7 @@ export async function DELETE(request: NextRequest) {
   try {
     // Bypass auth in test mode
     if (isTestMode()) {
-      console.log("🧪 TEST MODE: Bypassing collection delete auth");
+      logDebug("🧪 TEST MODE: Bypassing collection delete auth");
       return NextResponse.json({ success: true });
     }
 
@@ -236,7 +237,7 @@ export async function PATCH(request: NextRequest) {
   try {
     // Bypass auth in test mode
     if (isTestMode()) {
-      console.log("🧪 TEST MODE: Bypassing collection update auth");
+      logDebug("🧪 TEST MODE: Bypassing collection update auth");
       const body = await request.json();
       return NextResponse.json({ item: body });
     }

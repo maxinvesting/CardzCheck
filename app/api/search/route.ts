@@ -4,6 +4,7 @@ import { buildSearchQuery, buildSearchUrl } from "@/lib/ebay";
 import { searchEbayDualSignal, buildSoldListingsUrl } from "@/lib/ebay/index";
 import { LIMITS } from "@/types";
 import { isTestMode } from "@/lib/test-mode";
+import { logDebug } from "@/lib/logging";
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -46,7 +47,7 @@ export async function GET(request: NextRequest) {
   try {
     // Bypass auth and limits in test mode
     if (isTestMode()) {
-      console.log("🧪 TEST MODE: Bypassing search limits");
+      logDebug("🧪 TEST MODE: Bypassing search limits");
     } else {
       // Check user auth and limits
       const supabase = await createClient();
@@ -86,14 +87,16 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    console.log("🔍 Searching eBay with params:", searchParamsObj);
+    logDebug("🔍 Searching eBay with params:", searchParamsObj);
 
     // Get data from eBay
     const result = await searchEbayDualSignal(searchParamsObj);
 
     // New format: Return full pricing response
     if (useNewFormat) {
-      console.log(`📊 forSale=${result.forSale.count}, estimate=${result.estimatedSaleRange.pricingAvailable ? 'available' : 'unavailable'}`);
+      logDebug(
+        `📊 forSale=${result.forSale.count}, estimate=${result.estimatedSaleRange.pricingAvailable ? "available" : "unavailable"}`
+      );
       return NextResponse.json(result);
     }
 
@@ -124,7 +127,7 @@ export async function GET(request: NextRequest) {
       : 0;
 
     const query = buildSearchQuery(searchParamsObj);
-    console.log(`📊 Found ${comps.length} listings for query: "${query}"`);
+    logDebug(`📊 Found ${comps.length} listings for query: "${query}"`);
 
     // Return legacy format with new fields for frontend migration
     return NextResponse.json({

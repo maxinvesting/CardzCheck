@@ -25,6 +25,7 @@ export default function HeroStats({ items, loading, onSearch }: HeroStatsProps) 
   const cardCount = items.length;
   const summary = computeCollectionSummary(items);
   const totalValue = summary.totalDisplayValue;
+  const cmvAvailableCount = summary.cardsWithCmv;
 
   // Get most recent activity timestamp
   const lastActivity = items.length > 0

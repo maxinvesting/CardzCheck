@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { logDebug, redactId } from "@/lib/logging";
 
 export async function POST(request: NextRequest) {
   try {
@@ -66,7 +67,11 @@ export async function POST(request: NextRequest) {
     try {
       if (existingUser) {
         // User exists - just update plan_selected
-        console.log("Updating existing user plan selection:", { userId: user.id, plan, existingUser });
+        logDebug("Updating existing user plan selection", {
+          userId: redactId(user.id),
+          plan,
+          hasExistingUser: Boolean(existingUser),
+        });
         result = await supabase
           .from("users")
           .update({ plan_selected: true })
@@ -76,7 +81,11 @@ export async function POST(request: NextRequest) {
         // User doesn't exist - create with all required fields
         // Get name from user_metadata if available
         const userName = (user.user_metadata?.name as string) || null;
-        console.log("Creating new user record:", { userId: user.id, plan, name: userName });
+        logDebug("Creating new user record", {
+          userId: redactId(user.id),
+          plan,
+          hasName: Boolean(userName),
+        });
         result = await supabase
           .from("users")
           .insert({
@@ -150,7 +159,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Return success but warn that plan_selected wasn't saved
-      console.log("User record saved without plan_selected (column missing)");
+      logDebug("User record saved without plan_selected (column missing)");
       return NextResponse.json({ 
         success: true, 
         warning: "Database column missing - plan_selected not saved. Please add the column to persist plan selection." 
@@ -180,7 +189,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log("Plan selection saved successfully:", { userId: user.id, plan, data });
+    logDebug("Plan selection saved successfully", {
+      userId: redactId(user.id),
+      plan,
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {
