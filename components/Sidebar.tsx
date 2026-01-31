@@ -350,6 +350,25 @@ export default function Sidebar() {
               Upgrade to Pro
             </button>
           )}
+
+          {/* Legal links */}
+          <div className="flex items-center justify-center gap-4 pt-2 text-xs text-gray-500">
+            <Link
+              href="/terms"
+              onClick={() => setIsOpen(false)}
+              className="hover:text-gray-300 transition-colors"
+            >
+              Terms
+            </Link>
+            <span>·</span>
+            <Link
+              href="/privacy"
+              onClick={() => setIsOpen(false)}
+              className="hover:text-gray-300 transition-colors"
+            >
+              Privacy
+            </Link>
+          </div>
         </div>
       </div>
     </>

@@ -1,3 +1,5 @@
+const { withSentryConfig } = require("@sentry/nextjs");
+
 const isProduction = process.env.NODE_ENV === "production";
 
 const cspDirectives = [
@@ -69,4 +71,26 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+module.exports = withSentryConfig(nextConfig, {
+  // Sentry webpack plugin options
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+
+  // Only upload source maps in production builds
+  silent: !process.env.CI,
+
+  // Automatically instrument and tree-shake Sentry
+  widenClientFileUpload: true,
+
+  // Route browser requests to Sentry through Next.js rewrite to avoid ad-blockers
+  tunnelRoute: "/monitoring",
+
+  // Hides source maps from generated client bundles
+  hideSourceMaps: true,
+
+  // Automatically tree-shake Sentry logger statements
+  disableLogger: true,
+
+  // Enable automatic instrumentation
+  automaticVercelMonitors: true,
+});
