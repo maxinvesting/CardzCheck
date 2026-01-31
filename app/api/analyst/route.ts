@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { isTestMode } from "@/lib/test-mode";
+import { logDebug } from "@/lib/logging";
 
 const ANALYST_QUERY_LIMIT = 100;
 
@@ -34,7 +35,7 @@ export async function POST(request: NextRequest) {
 
     // Check authorization and usage limits
     if (isTestMode()) {
-      console.log("🧪 TEST MODE: Bypassing analyst auth check");
+      logDebug("🧪 TEST MODE: Bypassing analyst auth check");
     } else {
       const supabase = await createClient();
       const {

@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { isTestMode } from "@/lib/test-mode";
 import type { Subscription, Usage } from "@/types";
 
@@ -142,7 +142,7 @@ export async function getUsage(userId: string): Promise<UsageCheck> {
 export async function incrementSearchUsage(userId: string): Promise<void> {
   if (isTestMode()) return;
 
-  const supabase = await createClient();
+  const supabase = await createServiceClient();
 
   // Upsert usage record with incremented search count
   const { data: existing } = await supabase
@@ -171,7 +171,7 @@ export async function incrementSearchUsage(userId: string): Promise<void> {
 export async function incrementAIUsage(userId: string): Promise<void> {
   if (isTestMode()) return;
 
-  const supabase = await createClient();
+  const supabase = await createServiceClient();
 
   // Upsert usage record with incremented AI message count
   const { data: existing } = await supabase

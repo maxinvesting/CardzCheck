@@ -185,6 +185,18 @@ Return ONLY valid JSON with this structure:
 If you cannot identify the card, return:
 {"error": "Could not identify card", "reason": "brief explanation"}`;
 
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/jpg"]);
+const DATA_URL_PATTERN = /^data:image\/([a-zA-Z0-9.+-]+);base64,(.+)$/;
+
+function normalizeMimeType(mimeType: string) {
+  return mimeType === "image/jpg" ? "image/jpeg" : mimeType;
+}
+
+function isAllowedMimeType(mimeType: string) {
+  return ALLOWED_MIME_TYPES.has(mimeType);
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { imageUrl } = await request.json();
@@ -205,15 +217,43 @@ export async function POST(request: NextRequest) {
     }
 
     let base64Image: string;
-    let mediaType: "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+    let mediaType: "image/jpeg" | "image/png" | "image/webp";
 
     // Check if imageUrl is a base64 data URL (fallback from storage failure)
     if (imageUrl.startsWith("data:image/")) {
-      // Validate base64 image
-      const validation = validateBase64Image(imageUrl);
-      if (!validation.valid) {
+      const matches = imageUrl.match(DATA_URL_PATTERN);
+      if (matches) {
+        const [, format, base64] = matches;
+        const inferredMimeType = normalizeMimeType(`image/${format}`);
+        if (!isAllowedMimeType(inferredMimeType)) {
+          return NextResponse.json(
+            { error: "Unsupported image format or size" },
+            { status: 400 }
+          );
+        }
+
+        let decodedLength = 0;
+        try {
+          decodedLength = Buffer.from(base64, "base64").byteLength;
+        } catch {
+          return NextResponse.json(
+            { error: "Unsupported image format or size" },
+            { status: 400 }
+          );
+        }
+
+        if (decodedLength > MAX_IMAGE_BYTES) {
+          return NextResponse.json(
+            { error: "Unsupported image format or size" },
+            { status: 400 }
+          );
+        }
+
+        base64Image = base64;
+        mediaType = inferredMimeType as "image/jpeg" | "image/png" | "image/webp";
+      } else {
         return NextResponse.json(
-          { error: "Invalid image", reason: validation.error },
+          { error: "Unsupported image format or size" },
           { status: 400 }
         );
       }
@@ -221,20 +261,70 @@ export async function POST(request: NextRequest) {
       base64Image = validation.base64Data!;
       mediaType = validation.mimeType as "image/jpeg" | "image/png" | "image/gif" | "image/webp";
     } else {
-      // Validate URL before fetching
-      const urlValidation = validateImageUrl(imageUrl);
-      if (!urlValidation.valid) {
+      let parsedUrl: URL;
+      try {
+        parsedUrl = new URL(imageUrl);
+      } catch {
         return NextResponse.json(
-          { error: "Invalid image URL", reason: urlValidation.error },
+          { error: "Unsupported image format or size" },
+          { status: 400 }
+        );
+      }
+
+      if (parsedUrl.protocol !== "https:") {
+        return NextResponse.json(
+          { error: "Unsupported image format or size" },
+          { status: 400 }
+        );
+      }
+
+      let headResponse: Response;
+      try {
+        headResponse = await fetch(parsedUrl.toString(), { method: "HEAD" });
+      } catch {
+        return NextResponse.json(
+          { error: "Unsupported image format or size" },
+          { status: 400 }
+        );
+      }
+
+      if (!headResponse.ok) {
+        return NextResponse.json(
+          { error: "Unsupported image format or size" },
+          { status: 400 }
+        );
+      }
+
+      const headContentType = normalizeMimeType(
+        (headResponse.headers.get("content-type") || "").split(";")[0]
+      );
+      if (!headContentType || !isAllowedMimeType(headContentType)) {
+        return NextResponse.json(
+          { error: "Unsupported image format or size" },
+          { status: 400 }
+        );
+      }
+
+      const contentLengthHeader = headResponse.headers.get("content-length");
+      if (!contentLengthHeader) {
+        return NextResponse.json(
+          { error: "Unsupported image format or size" },
+          { status: 400 }
+        );
+      }
+      const contentLength = Number(contentLengthHeader);
+      if (!Number.isFinite(contentLength) || contentLength > MAX_IMAGE_BYTES) {
+        return NextResponse.json(
+          { error: "Unsupported image format or size" },
           { status: 400 }
         );
       }
 
       // Fetch image from URL and convert to base64
-      const imageResponse = await fetch(imageUrl);
+      const imageResponse = await fetch(parsedUrl.toString());
       if (!imageResponse.ok) {
         return NextResponse.json(
-          { error: "Could not fetch image", reason: "Image URL is not accessible" },
+          { error: "Unsupported image format or size" },
           { status: 400 }
         );
       }
@@ -251,22 +341,25 @@ export async function POST(request: NextRequest) {
       }
 
       const imageBuffer = await imageResponse.arrayBuffer();
-
-      // Double-check size after download (in case Content-Length was missing)
-      if (imageBuffer.byteLength > MAX_IMAGE_SIZE_BYTES) {
+      if (imageBuffer.byteLength > MAX_IMAGE_BYTES) {
         return NextResponse.json(
-          {
-            error: "Image too large",
-            reason: `Image is ${(imageBuffer.byteLength / 1024 / 1024).toFixed(1)}MB. Maximum: 10MB`,
-          },
+          { error: "Unsupported image format or size" },
           { status: 400 }
         );
       }
-
       base64Image = Buffer.from(imageBuffer).toString("base64");
 
       // Determine media type
-      mediaType = (contentType?.split(";")[0] || "image/jpeg") as "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+      const contentType = normalizeMimeType(
+        (imageResponse.headers.get("content-type") || "").split(";")[0]
+      );
+      if (!contentType || !isAllowedMimeType(contentType)) {
+        return NextResponse.json(
+          { error: "Unsupported image format or size" },
+          { status: 400 }
+        );
+      }
+      mediaType = contentType as "image/jpeg" | "image/png" | "image/webp";
     }
 
     // Process card image

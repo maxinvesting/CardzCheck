@@ -30,6 +30,8 @@ export default function CollectionStats({ items, loading }: CollectionStatsProps
   const totalValue = summary.totalDisplayValue;
   const totalInvested = summary.totalCostBasis;
   const gain = summary.totalUnrealizedPL ?? 0;
+  const cmvAvailableCount = summary.cardsWithCmv;
+  const hasGainData = summary.cardsWithBoth > 0;
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("en-US", {
@@ -85,7 +87,9 @@ export default function CollectionStats({ items, loading }: CollectionStatsProps
           </div>
           <span className="text-sm font-medium text-gray-400">Total Value</span>
         </div>
-        <p className="text-3xl font-bold text-white">{formatCurrency(totalValue)}</p>
+        <p className="text-3xl font-bold text-white">
+          {cmvAvailableCount > 0 ? formatCurrency(totalValue) : "CMV unavailable"}
+        </p>
       </div>
 
       {/* Gain/Loss */}
@@ -108,12 +112,12 @@ export default function CollectionStats({ items, loading }: CollectionStatsProps
           </div>
           <span className="text-sm font-medium text-gray-400">Since Added</span>
         </div>
-        {cardCount > 0 ? (
+        {hasGainData ? (
           <p className={`text-3xl font-bold ${gain >= 0 ? "text-blue-400" : "text-red-400"}`}>
             {gain >= 0 ? "+" : ""}{formatCurrency(gain)}
           </p>
         ) : (
-          <p className="text-3xl font-bold text-gray-500">--</p>
+          <p className="text-3xl font-bold text-gray-500">CMV unavailable</p>
         )}
       </div>
     </div>

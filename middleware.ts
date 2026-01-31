@@ -1,4 +1,4 @@
-import { type NextRequest, NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 import {
   checkRateLimit,
@@ -31,55 +31,82 @@ function getClientIP(request: NextRequest): string {
   return "127.0.0.1";
 }
 
-export async function middleware(request: NextRequest) {
-  const pathname = request.nextUrl.pathname;
+type RateLimitConfig = {
+  limit: number;
+  windowMs: number;
+};
 
-  // Check if this is a rate-limited API endpoint
-  const rateLimitedEndpoint = RATE_LIMITED_ENDPOINTS.find((ep) =>
-    pathname.startsWith(ep)
-  );
+type RateLimitResult = {
+  limited: boolean;
+  retryAfterSeconds?: number;
+};
 
-  if (rateLimitedEndpoint) {
-    const ip = getClientIP(request);
+const RATE_LIMITS: Record<string, RateLimitConfig> = {
+  "/api/search": { limit: 60, windowMs: 60_000 },
+  "/api/identify-card": { limit: 10, windowMs: 60_000 },
+  "/api/grade-estimate": { limit: 10, windowMs: 60_000 },
+  "/api/analyst": { limit: 20, windowMs: 60_000 },
+};
 
-    // Try to get user ID from cookie (for logged-in users)
-    // This provides more granular rate limiting
-    let userId: string | undefined;
-    const supabaseAuthCookie = request.cookies.get("sb-access-token")?.value;
-    if (supabaseAuthCookie) {
-      try {
-        // Extract user ID from JWT payload (base64 decode middle part)
-        const parts = supabaseAuthCookie.split(".");
-        if (parts.length === 3) {
-          const payload = JSON.parse(atob(parts[1]));
-          userId = payload.sub;
-        }
-      } catch {
-        // Ignore parse errors - will use IP-only limiting
-      }
-    }
+const RATE_LIMIT_STORE = new Map<string, number[]>();
 
-    const result = checkRateLimit(rateLimitedEndpoint, ip, userId);
+function getClientIp(request: NextRequest) {
+  const forwardedFor = request.headers.get("x-forwarded-for");
+  if (forwardedFor) {
+    return forwardedFor.split(",")[0]?.trim();
+  }
+  return request.headers.get("x-real-ip") ?? request.ip ?? "unknown";
+}
 
-    if (!result.allowed) {
-      return rateLimitResponse(result, rateLimitedEndpoint);
-    }
-
-    // Add rate limit headers to successful responses
-    const response = await updateSession(request);
-    const config = RATE_LIMITS[rateLimitedEndpoint];
-    const headers = rateLimitHeaders(result, config);
-
-    // Add headers to response
-    Object.entries(headers).forEach(([key, value]) => {
-      response.headers.set(key, value);
-    });
-
-    return response;
+function checkRateLimit(request: NextRequest, userId: string | null): RateLimitResult {
+  const config = RATE_LIMITS[request.nextUrl.pathname];
+  if (!config) {
+    return { limited: false };
   }
 
-  // Non-rate-limited routes: just handle session
-  return await updateSession(request);
+  const now = Date.now();
+  const key = `${getClientIp(request)}:${userId ?? "anon"}`;
+  const windowStart = now - config.windowMs;
+  const timestamps = RATE_LIMIT_STORE.get(key) ?? [];
+  const recent = timestamps.filter((timestamp) => timestamp > windowStart);
+
+  if (recent.length >= config.limit) {
+    const oldest = recent[0] ?? now;
+    const retryAfterMs = Math.max(config.windowMs - (now - oldest), 0);
+    return { limited: true, retryAfterSeconds: Math.ceil(retryAfterMs / 1000) };
+  }
+
+  recent.push(now);
+  RATE_LIMIT_STORE.set(key, recent);
+  return { limited: false };
+}
+
+export async function middleware(request: NextRequest) {
+  const { response, userId } = await updateSession(request);
+  const rateLimit = checkRateLimit(request, userId);
+
+  if (rateLimit.limited) {
+    const limitedResponse = NextResponse.json(
+      {
+        error: "Rate limit exceeded",
+        message: "Too many requests. Please retry after a short wait.",
+      },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(rateLimit.retryAfterSeconds ?? 60),
+        },
+      }
+    );
+
+    response.cookies.getAll().forEach((cookie) => {
+      limitedResponse.cookies.set(cookie);
+    });
+
+    return limitedResponse;
+  }
+
+  return response;
 }
 
 export const config = {
