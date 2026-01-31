@@ -12,36 +12,39 @@ The "Bucket not found" error occurs because the Supabase storage bucket hasn't b
 4. Click the **New Bucket** button
 5. Configure the bucket:
    - **Name**: `card-images` (must be exactly this name)
-   - **Public**: ✅ Enable (required for public URLs)
+   - **Public**: ✅ Enable (public URLs used in the UI)
    - **File size limit**: 10 MB (optional but recommended)
    - **Allowed MIME types**: `image/*` (optional but recommended)
 6. Click **Create Bucket**
 
-### Step 2: Configure Bucket Policies (Recommended)
+### Step 2: Configure Bucket Policies (Required)
 
-To allow users to upload images while maintaining security:
+To allow users to upload images while maintaining security, scope access to per-user folders
+(`{auth.uid()}/filename`):
 
 1. Go to **Storage** → **Policies** for the `card-images` bucket
 2. Click **New Policy**
 3. Create an **INSERT** policy:
    ```sql
-   -- Policy name: Allow authenticated uploads
+   -- Policy name: Card images insert own
    -- Operation: INSERT
    -- Target roles: authenticated
 
    -- Policy definition:
-   (bucket_id = 'card-images'::text)
+   (bucket_id = 'card-images'::text AND name LIKE (auth.uid()::text || '/%'))
    ```
 
-4. Create a **SELECT** policy for public read access:
+4. Create a **SELECT** policy for authenticated read access:
    ```sql
-   -- Policy name: Allow public read
+   -- Policy name: Card images read own
    -- Operation: SELECT
-   -- Target roles: public
+   -- Target roles: authenticated
 
    -- Policy definition:
-   (bucket_id = 'card-images'::text)
+   (bucket_id = 'card-images'::text AND name LIKE (auth.uid()::text || '/%'))
    ```
+
+5. (Optional) Add UPDATE/DELETE policies with the same condition to allow users to manage their own files.
 
 ### Step 3: Verify the Setup
 
@@ -79,7 +82,7 @@ If you encounter CORS issues:
 
 ### Images not displaying?
 
-1. Confirm SELECT policy allows public access
+1. Confirm SELECT policy allows authenticated access to `{auth.uid()}/` paths
 2. Check browser console for CORS errors
 3. Verify the public URL is correctly generated
 
