@@ -11,7 +11,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { CollectionItem, User } from "@/types";
 import { LIMITS } from "@/types";
 import { isTestMode, getTestUser } from "@/lib/test-mode";
-import { computeCollectionSummary } from "@/lib/values";
+import { computeCollectionSummary, getEstCmv } from "@/lib/values";
 
 function formatPrice(price: number | null): string {
   if (price === null) return "CMV unavailable";
@@ -309,16 +309,19 @@ export default function CollectionPage() {
   // Top performers (by % change using CMV vs cost basis where both exist)
   const topPerformers = useMemo(() => {
     return items
-      .filter(
-        (item) =>
-          item.est_cmv !== null &&
-          item.est_cmv !== undefined &&
-          typeof item.purchase_price === "number" &&
-          (item.purchase_price ?? 0) > 0
-      )
       .map((item) => {
-        const est = item.est_cmv as number;
-        const cost = item.purchase_price as number;
+        const est = getEstCmv(item);
+        const cost = item.purchase_price ?? null;
+        return { item, est, cost };
+      })
+      .filter(
+        ({ est, cost }) =>
+          est !== null &&
+          cost !== null &&
+          typeof cost === "number" &&
+          cost > 0
+      )
+      .map(({ item, est, cost }) => {
         const dollarChange = est - cost;
         const pctChange = cost > 0 ? (dollarChange / cost) * 100 : 0;
         return { item, est, cost, dollarChange, pctChange };
@@ -611,65 +614,68 @@ export default function CollectionPage() {
               </div>
               {recentlyAdded.length > 0 ? (
                 <div className="space-y-3">
-                  {recentlyAdded.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg"
-                    >
-                      <div className="flex items-center gap-3">
-                        {item.image_url && (
-                          <img
-                            src={item.image_url}
-                            alt={item.player_name}
-                            className="w-10 h-14 object-cover rounded"
-                          />
-                        )}
-                        <div>
-                          <p className="font-medium text-gray-900 dark:text-white text-sm">
-                            {item.player_name}
-                          </p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">
-                            {item.year} {item.set_name}
-                          </p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                            {item.est_cmv != null && item.est_cmv > 0 ? (
-                              <>
-                                <span className="font-medium">
-                                  CMV: {formatPrice(item.est_cmv)}
-                                </span>
-                                {item.purchase_price != null && (
-                                  <span className="ml-1 text-[11px] text-gray-400">
-                                    (Paid {formatPrice(item.purchase_price)})
+                  {recentlyAdded.map((item) => {
+                    const estCmv = getEstCmv(item);
+                    return (
+                      <div
+                        key={item.id}
+                        className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg"
+                      >
+                        <div className="flex items-center gap-3">
+                          {item.image_url && (
+                            <img
+                              src={item.image_url}
+                              alt={item.player_name}
+                              className="w-10 h-14 object-cover rounded"
+                            />
+                          )}
+                          <div>
+                            <p className="font-medium text-gray-900 dark:text-white text-sm">
+                              {item.player_name}
+                            </p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              {item.year} {item.set_name}
+                            </p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                              {estCmv != null && estCmv > 0 ? (
+                                <>
+                                  <span className="font-medium">
+                                    CMV: {formatPrice(estCmv)}
                                   </span>
-                                )}
-                              </>
-                            ) : item.purchase_price != null ? (
-                              <>
-                                <span className="font-medium">
-                                  Value: {formatPrice(item.purchase_price)}
-                                </span>
-                                <span className="ml-1 text-[11px] text-gray-400">
+                                  {item.purchase_price != null && (
+                                    <span className="ml-1 text-[11px] text-gray-400">
+                                      (Paid {formatPrice(item.purchase_price)})
+                                    </span>
+                                  )}
+                                </>
+                              ) : item.purchase_price != null ? (
+                                <>
+                                  <span className="font-medium">
+                                    Value: {formatPrice(item.purchase_price)}
+                                  </span>
+                                  <span className="ml-1 text-[11px] text-gray-400">
+                                    Market value unavailable
+                                  </span>
+                                </>
+                              ) : (
+                                <span className="text-[11px] text-gray-400">
                                   Market value unavailable
                                 </span>
-                              </>
-                            ) : (
-                              <span className="text-[11px] text-gray-400">
-                                Market value unavailable
-                              </span>
-                            )}
-                          </p>
+                              )}
+                            </p>
+                          </div>
                         </div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {item.created_at
+                            ? new Date(item.created_at).toLocaleDateString("en-US", {
+                                month: "short",
+                                day: "numeric",
+                              })
+                            : "-"}
+                        </p>
                       </div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {item.created_at
-                          ? new Date(item.created_at).toLocaleDateString("en-US", {
-                              month: "short",
-                              day: "numeric",
-                            })
-                          : "-"}
-                      </p>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <p className="text-sm text-gray-500 dark:text-gray-400">

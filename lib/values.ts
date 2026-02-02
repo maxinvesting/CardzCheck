@@ -52,6 +52,7 @@ function getRawEstCmv(item: ValuedCollectionItem): number | null {
   if (typeof direct === "number") return direct;
   // Allow alternate field names for flexibility (e.g., est_value, cmv)
   const anyItem = item as any;
+  if (typeof anyItem.estimated_cmv === "number") return anyItem.estimated_cmv;
   if (typeof anyItem.est_value === "number") return anyItem.est_value;
   if (typeof anyItem.cmv === "number") return anyItem.cmv;
   return null;
@@ -215,4 +216,3 @@ export function computePerformers(
 
   return top;
 }
-
