@@ -26,9 +26,14 @@ export async function POST(request: NextRequest) {
     const body: AnalystRequest = await request.json();
     const { message, cardContext } = body;
 
+    logDebug("🧠 Analyst request received", {
+      hasMessage: Boolean(message),
+      hasCardContext: Boolean(cardContext),
+    });
+
     if (!message || typeof message !== "string" || message.trim().length === 0) {
       return NextResponse.json(
-        { error: "Message is required" },
+        { ok: false, error: "Message is required", code: "INVALID_MESSAGE" },
         { status: 400 }
       );
     }
@@ -43,7 +48,10 @@ export async function POST(request: NextRequest) {
       } = await supabase.auth.getUser();
 
       if (!user) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        return NextResponse.json(
+          { ok: false, error: "Unauthorized", code: "UNAUTHORIZED" },
+          { status: 401 }
+        );
       }
 
       // Get user record to check limits and get name for personalization
@@ -56,7 +64,7 @@ export async function POST(request: NextRequest) {
       if (userError && userError.code !== "PGRST116") {
         console.error("Error fetching user:", userError);
         return NextResponse.json(
-          { error: "Failed to verify user" },
+          { ok: false, error: "Failed to verify user", code: "USER_LOOKUP_FAILED" },
           { status: 500 }
         );
       }
@@ -68,8 +76,10 @@ export async function POST(request: NextRequest) {
       if (!userData?.is_paid) {
         return NextResponse.json(
           {
+            ok: false,
             error: "upgrade_required",
             message: "CardzCheck Analyst is a Pro feature. Upgrade to access card analysis.",
+            code: "UPGRADE_REQUIRED",
           },
           { status: 403 }
         );
@@ -78,10 +88,12 @@ export async function POST(request: NextRequest) {
       if (used >= limit) {
         return NextResponse.json(
           {
+            ok: false,
             error: "limit_reached",
             message: `You've used all ${ANALYST_QUERY_LIMIT} analyst queries. Contact support for more.`,
             used,
             limit,
+            code: "LIMIT_REACHED",
           },
           { status: 403 }
         );
@@ -160,13 +172,36 @@ Current card context:
 No specific card selected. Answer general sports card market questions.`;
     }
 
+    if (isTestMode()) {
+      logDebug("🧪 TEST MODE: Returning mock analyst response");
+      return NextResponse.json({
+        ok: true,
+        result: "Test mode analyst response.",
+        response: "Test mode analyst response.",
+      });
+    }
+
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      logDebug("❌ Analyst missing ANTHROPIC_API_KEY");
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Missing Anthropic API key",
+          code: "MISSING_LLM_KEY",
+        },
+        { status: 500 }
+      );
+    }
+
     // Call Claude Sonnet with web search for accurate, up-to-date analysis
     const anthropic = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY,
+      apiKey,
     });
 
     // Use web search tool for real-time information
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    logDebug("🧠 Analyst calling Anthropic", { hasCardContext: Boolean(cardContext) });
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-20250514",
       max_tokens: 1024,
@@ -186,6 +221,8 @@ No specific card selected. Answer general sports card market questions.`;
     const responseText = textBlocks.length > 0
       ? textBlocks.map((block) => block.type === "text" ? block.text : "").join("\n").trim()
       : "Unable to analyze at this time.";
+
+    logDebug("✅ Analyst response received", { length: responseText.length });
 
     // Increment usage count after successful response
     if (!isTestMode()) {
@@ -212,14 +249,21 @@ No specific card selected. Answer general sports card market questions.`;
     }
 
     return NextResponse.json({
+      ok: true,
+      result: responseText,
       response: responseText,
     });
   } catch (error) {
     console.error("Analyst error:", error);
+    logDebug("❌ Analyst error", {
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
     return NextResponse.json(
       {
+        ok: false,
         error: "Failed to analyze",
         message: error instanceof Error ? error.message : "Unknown error",
+        code: "ANALYST_ERROR",
       },
       { status: 500 }
     );

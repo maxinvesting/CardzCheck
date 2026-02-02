@@ -117,6 +117,8 @@ export async function POST(request: NextRequest) {
       set_name,
       insert,
       grade,
+      est_cmv,
+      estimated_cmv,
       purchase_price,
       purchase_date,
       image_url,
@@ -147,6 +149,22 @@ export async function POST(request: NextRequest) {
       hasNotes: Boolean(notes),
     });
 
+    const incomingCmv =
+      typeof estimated_cmv === "number"
+        ? estimated_cmv
+        : typeof est_cmv === "number"
+        ? est_cmv
+        : null;
+
+    const cmvPayload =
+      incomingCmv !== null
+        ? {
+            estimated_cmv: incomingCmv,
+            cmv_confidence: "medium" as const,
+            cmv_last_updated: new Date().toISOString(),
+          }
+        : {};
+
     // Insert only columns that exist in collection_items (est_cmv added via migration when needed)
     const { data: item, error } = await supabase
       .from("collection_items")
@@ -160,6 +178,7 @@ export async function POST(request: NextRequest) {
         purchase_date: purchase_date || null,
         image_url: image_url || null,
         notes: combinedNotes,
+        ...cmvPayload,
       })
       .select()
       .single();

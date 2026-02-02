@@ -5,6 +5,7 @@ import { isTestMode } from "@/lib/test-mode";
 import type { AnalystThreadMessage, CardContext } from "@/types";
 import { getUserContextForAI } from "@/lib/ai/getUserContextForAI";
 import { buildAnalystPrompt } from "@/lib/ai/buildAnalystPrompt";
+import { logDebug } from "@/lib/logging";
 
 const ANALYST_QUERY_LIMIT = 100;
 
@@ -24,9 +25,15 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const body: MessageRequest = await request.json();
     const { message, cardContext } = body;
 
+    logDebug("🧠 Analyst thread message received", {
+      threadId,
+      hasMessage: Boolean(message),
+      hasCardContext: Boolean(cardContext),
+    });
+
     if (!message || typeof message !== "string" || message.trim().length === 0) {
       return NextResponse.json(
-        { error: "Message is required" },
+        { ok: false, error: "Message is required", code: "INVALID_MESSAGE" },
         { status: 400 }
       );
     }
@@ -52,6 +59,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
         created_at: now,
       };
       return NextResponse.json({
+        ok: true,
+        result: mockAssistantMessage.content,
         userMessage: mockUserMessage,
         assistantMessage: mockAssistantMessage,
       });
@@ -63,7 +72,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
     } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { ok: false, error: "Unauthorized", code: "UNAUTHORIZED" },
+        { status: 401 }
+      );
     }
 
     // Verify user owns the thread and is a paid user
@@ -74,7 +86,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
       .single();
 
     if (threadError || !thread) {
-      return NextResponse.json({ error: "Thread not found" }, { status: 404 });
+      return NextResponse.json(
+        { ok: false, error: "Thread not found", code: "THREAD_NOT_FOUND" },
+        { status: 404 }
+      );
     }
 
     // Get user data for limit checking and personalization
@@ -87,7 +102,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     if (userError && userError.code !== "PGRST116") {
       console.error("Error fetching user:", userError);
       return NextResponse.json(
-        { error: "Failed to verify user" },
+        { ok: false, error: "Failed to verify user", code: "USER_LOOKUP_FAILED" },
         { status: 500 }
       );
     }
@@ -95,8 +110,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
     if (!userData?.is_paid) {
       return NextResponse.json(
         {
+          ok: false,
           error: "upgrade_required",
           message: "Analyst is a Pro feature. Upgrade to access AI analysis.",
+          code: "UPGRADE_REQUIRED",
         },
         { status: 403 }
       );
@@ -106,10 +123,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
     if (used >= ANALYST_QUERY_LIMIT) {
       return NextResponse.json(
         {
+          ok: false,
           error: "limit_reached",
           message: `You've used all ${ANALYST_QUERY_LIMIT} analyst queries. Contact support for more.`,
           used,
           limit: ANALYST_QUERY_LIMIT,
+          code: "LIMIT_REACHED",
         },
         { status: 403 }
       );
@@ -130,7 +149,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     if (userMsgError) {
       console.error("Error saving user message:", userMsgError);
       return NextResponse.json(
-        { error: "Failed to save message" },
+        { ok: false, error: "Failed to save message", code: "SAVE_MESSAGE_FAILED" },
         { status: 500 }
       );
     }
@@ -171,12 +190,26 @@ export async function POST(request: NextRequest, context: RouteContext) {
       userContext,
     });
 
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      logDebug("❌ Analyst thread missing ANTHROPIC_API_KEY");
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Missing Anthropic API key",
+          code: "MISSING_LLM_KEY",
+        },
+        { status: 500 }
+      );
+    }
+
     // Call Claude with conversation history
     const anthropic = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY,
+      apiKey,
     });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    logDebug("🧠 Analyst thread calling Anthropic", { threadId });
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-20250514",
       max_tokens: 1024,
@@ -196,6 +229,11 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const responseText = textBlocks.length > 0
       ? textBlocks.map((block) => block.type === "text" ? block.text : "").join("\n").trim()
       : "Unable to analyze at this time.";
+
+    logDebug("✅ Analyst thread response received", {
+      threadId,
+      length: responseText.length,
+    });
 
     // Insert assistant message
     const { data: savedAssistantMessage, error: assistantMsgError } = await supabase
@@ -239,15 +277,22 @@ export async function POST(request: NextRequest, context: RouteContext) {
       .eq("id", user.id);
 
     return NextResponse.json({
+      ok: true,
+      result: responseText,
       userMessage: savedUserMessage,
       assistantMessage: savedAssistantMessage,
     });
   } catch (error) {
     console.error("Messages POST error:", error);
+    logDebug("❌ Analyst thread error", {
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
     return NextResponse.json(
       {
+        ok: false,
         error: "Failed to process message",
         message: error instanceof Error ? error.message : "Unknown error",
+        code: "ANALYST_MESSAGE_ERROR",
       },
       { status: 500 }
     );
