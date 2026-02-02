@@ -161,6 +161,54 @@ export interface GradeEstimate {
   surface: string;
   edges: string;
   grade_notes: string;
+  grade_probabilities?: GradeProbabilities;
+}
+
+export interface GradeProbabilities {
+  psa: {
+    "10": number;
+    "9": number;
+    "8": number;
+    "7_or_lower": number;
+  };
+  bgs: {
+    "9.5": number;
+    "9": number;
+    "8.5": number;
+    "8_or_lower": number;
+  };
+  confidence?: "high" | "medium" | "low";
+}
+
+export interface GradeCmv {
+  price: number | null;
+  n: number;
+  lastSoldAt?: string;
+  method: "median" | "trimmedMean" | "none";
+}
+
+export interface WorthGradingResult {
+  raw: GradeCmv;
+  psa: {
+    "10": GradeCmv;
+    "9": GradeCmv;
+    "8": GradeCmv;
+    ev: number;
+    netGain: number;
+    roi: number;
+  };
+  bgs: {
+    "9.5": GradeCmv;
+    "9": GradeCmv;
+    "8.5": GradeCmv;
+    ev: number;
+    netGain: number;
+    roi: number;
+  };
+  bestOption: "psa" | "bgs" | "none";
+  rating: "strong_yes" | "yes" | "maybe" | "no";
+  confidence: "high" | "medium" | "low";
+  explanation: string;
 }
 
 export interface CardIdentification {

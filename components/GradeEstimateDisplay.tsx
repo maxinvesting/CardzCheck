@@ -165,6 +165,34 @@ export default function GradeEstimateDisplay({
         </div>
       )}
 
+      {estimate.grade_probabilities && (
+        <div className="mt-5">
+          <h4 className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">
+            Estimated Grade Outcomes
+          </h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+            <div className="bg-gray-900/50 rounded-lg p-3">
+              <p className="text-gray-400 font-medium mb-2">PSA</p>
+              <ul className="space-y-1 text-gray-300">
+                <li>PSA 10: {(estimate.grade_probabilities.psa["10"] * 100).toFixed(0)}%</li>
+                <li>PSA 9: {(estimate.grade_probabilities.psa["9"] * 100).toFixed(0)}%</li>
+                <li>PSA 8: {(estimate.grade_probabilities.psa["8"] * 100).toFixed(0)}%</li>
+                <li>PSA 7 or lower: {(estimate.grade_probabilities.psa["7_or_lower"] * 100).toFixed(0)}%</li>
+              </ul>
+            </div>
+            <div className="bg-gray-900/50 rounded-lg p-3">
+              <p className="text-gray-400 font-medium mb-2">BGS</p>
+              <ul className="space-y-1 text-gray-300">
+                <li>BGS 9.5: {(estimate.grade_probabilities.bgs["9.5"] * 100).toFixed(0)}%</li>
+                <li>BGS 9: {(estimate.grade_probabilities.bgs["9"] * 100).toFixed(0)}%</li>
+                <li>BGS 8.5: {(estimate.grade_probabilities.bgs["8.5"] * 100).toFixed(0)}%</li>
+                <li>BGS 8 or lower: {(estimate.grade_probabilities.bgs["8_or_lower"] * 100).toFixed(0)}%</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Disclaimer */}
       <p className="mt-4 text-xs text-gray-500 border-t border-gray-700 pt-3">
         Estimate based on photo quality. Actual grades may vary based on factors

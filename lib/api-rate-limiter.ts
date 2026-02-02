@@ -40,6 +40,7 @@ function cleanupStaleEntries() {
 export const RATE_LIMITS: Record<string, RateLimitConfig> = {
   "/api/identify-card": { maxRequests: 10, windowSecs: 60 },
   "/api/grade-estimate": { maxRequests: 10, windowSecs: 60 },
+  "/api/grade-estimator/value": { maxRequests: 10, windowSecs: 60 },
   "/api/analyst": { maxRequests: 20, windowSecs: 60 },
   "/api/search": { maxRequests: 60, windowSecs: 60 },
 };

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+import { buildGradeProbabilities } from "@/lib/grade-estimator/probabilities";
 
 // Server-side upload validation constants
 const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
@@ -259,14 +260,22 @@ export async function POST(request: NextRequest) {
     // Parse JSON response
     try {
       const result = JSON.parse(textContent.text);
-      return NextResponse.json(result);
+      const probabilities = buildGradeProbabilities(result);
+      return NextResponse.json({
+        ...result,
+        grade_probabilities: probabilities,
+      });
     } catch {
       // If parsing fails, try to extract JSON from the response
       const jsonMatch = textContent.text.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         try {
           const result = JSON.parse(jsonMatch[0]);
-          return NextResponse.json(result);
+          const probabilities = buildGradeProbabilities(result);
+          return NextResponse.json({
+            ...result,
+            grade_probabilities: probabilities,
+          });
         } catch {
           // Fall through to error
         }

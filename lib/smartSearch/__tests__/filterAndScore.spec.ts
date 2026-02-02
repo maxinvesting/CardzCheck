@@ -89,5 +89,4 @@ describe("filtering and scoring", () => {
     expect(exactIds.has("2024 Donruss Optic Drake Maye Silver Prizm")).toBe(true);
     expect(closeIds.has("2023 Donruss Optic Drake Maye Silver Prizm")).toBe(true);
   });
-}
-
+});
