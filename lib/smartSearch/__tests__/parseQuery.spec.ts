@@ -35,5 +35,4 @@ describe("parseQuery", () => {
     const ratedRookie = parseQuery("2024 Donruss Optic Drake Maye Rated Rookie");
     expect(ratedRookie.locked.parallel?.toLowerCase()).toContain("rated rookie");
   });
-}
-
+});

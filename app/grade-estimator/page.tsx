@@ -1,17 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import CardUploader from "@/components/CardUploader";
 import GradeEstimateDisplay from "@/components/GradeEstimateDisplay";
+import GradeEstimatorValuePanel from "@/components/GradeEstimatorValuePanel";
 import ConfirmAddCardModal from "@/components/ConfirmAddCardModal";
 import PaywallModal from "@/components/PaywallModal";
-import type { CardIdentificationResult, GradeEstimate } from "@/types";
+import type { CardIdentificationResult, GradeEstimate, WorthGradingResult } from "@/types";
 
 export default function GradeEstimatorPage() {
   const [identifiedCard, setIdentifiedCard] = useState<CardIdentificationResult | null>(null);
   const [gradeEstimate, setGradeEstimate] = useState<GradeEstimate | null>(null);
   const [estimatingGrade, setEstimatingGrade] = useState(false);
+  const [valueResult, setValueResult] = useState<WorthGradingResult | null>(null);
+  const [valueLoading, setValueLoading] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
@@ -20,6 +23,8 @@ export default function GradeEstimatorPage() {
     setIdentifiedCard(null);
     setGradeEstimate(null);
     setEstimatingGrade(false);
+    setValueResult(null);
+    setValueLoading(false);
   };
 
   const handleEstimateGrade = async () => {
@@ -48,6 +53,46 @@ export default function GradeEstimatorPage() {
       setEstimatingGrade(false);
     }
   };
+
+  useEffect(() => {
+    const fetchValue = async () => {
+      if (!gradeEstimate?.grade_probabilities || !identifiedCard) return;
+      setValueLoading(true);
+      try {
+        const response = await fetch("/api/grade-estimator/value", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            card: {
+              player_name: identifiedCard.player_name,
+              year: identifiedCard.year,
+              set_name: identifiedCard.set_name,
+              card_number: identifiedCard.card_number,
+              parallel_type: identifiedCard.parallel_type,
+              variation: identifiedCard.variation,
+              insert: identifiedCard.insert,
+            },
+            gradeProbabilities: gradeEstimate.grade_probabilities,
+            estimatorConfidence: gradeEstimate.grade_probabilities.confidence,
+          }),
+        });
+        if (!response.ok) {
+          throw new Error("Failed to load post-grading value");
+        }
+        const result: WorthGradingResult = await response.json();
+        setValueResult(result);
+      } catch (error) {
+        setToast({
+          type: "error",
+          message: error instanceof Error ? error.message : "Failed to load post-grading value",
+        });
+      } finally {
+        setValueLoading(false);
+      }
+    };
+
+    fetchValue();
+  }, [gradeEstimate, identifiedCard]);
 
   return (
     <AuthenticatedLayout>
@@ -185,7 +230,39 @@ export default function GradeEstimatorPage() {
 
             {/* Grade Estimate */}
             {gradeEstimate ? (
-              <GradeEstimateDisplay estimate={gradeEstimate} />
+              <div className="space-y-6">
+                <GradeEstimateDisplay estimate={gradeEstimate} />
+                {valueLoading || valueResult ? (
+                  <GradeEstimatorValuePanel
+                    result={
+                      valueResult ?? {
+                        raw: { price: null, n: 0, method: "none" },
+                        psa: {
+                          "10": { price: null, n: 0, method: "none" },
+                          "9": { price: null, n: 0, method: "none" },
+                          "8": { price: null, n: 0, method: "none" },
+                          ev: 0,
+                          netGain: 0,
+                          roi: 0,
+                        },
+                        bgs: {
+                          "9.5": { price: null, n: 0, method: "none" },
+                          "9": { price: null, n: 0, method: "none" },
+                          "8.5": { price: null, n: 0, method: "none" },
+                          ev: 0,
+                          netGain: 0,
+                          roi: 0,
+                        },
+                        bestOption: "none",
+                        rating: "no",
+                        confidence: "low",
+                        explanation: "Loading post-grading value...",
+                      }
+                    }
+                    loading={valueLoading}
+                  />
+                ) : null}
+              </div>
             ) : identifiedCard.grade ? (
               <div className="bg-gray-800/50 rounded-xl border border-gray-700 p-6">
                 <div className="flex items-center gap-3">
