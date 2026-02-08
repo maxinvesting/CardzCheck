@@ -25,8 +25,9 @@ export default function CollectionMetricsCard({
 
   // Mock 30-day change - in real app, this would come from historical data.
   // Use display value as the base so it's CMV-driven when available.
-  const change30Day = totalValue * 0.05; // Placeholder: +5%
-  const change30DayPercent = 5.0;
+  const hasCmvValue = totalValue !== null && totalValue > 0;
+  const change30Day = hasCmvValue ? totalValue * 0.05 : null; // Placeholder: +5%
+  const change30DayPercent = hasCmvValue ? 5.0 : null;
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("en-US", {
@@ -36,6 +37,9 @@ export default function CollectionMetricsCard({
       maximumFractionDigits: 0,
     }).format(value);
   };
+
+  const totalValueLabel =
+    totalValue === null ? "—" : formatCurrency(totalValue);
 
   if (loading) {
     return (
@@ -67,14 +71,14 @@ export default function CollectionMetricsCard({
           </span>
         </div>
         <p className="text-4xl md:text-5xl font-bold text-white tracking-tight tabular-nums">
-          {formatCurrency(totalValue)}
+          {totalValueLabel}
         </p>
         {summary.cardsWithCmv === 0 && cardCount > 0 && (
           <p className="mt-1 text-xs text-blue-200">
             Collection value is CMV only. Add comps to get estimated values.
           </p>
         )}
-        {totalValue > 0 && (
+        {change30Day !== null && change30DayPercent !== null && (
           <div className="flex items-center gap-2 mt-2">
             <span
               className={`text-sm font-medium ${
@@ -153,14 +157,18 @@ export default function CollectionMetricsCard({
           <p className="text-xs font-medium text-blue-200 uppercase tracking-wider mb-1">
             30-Day Change
           </p>
-          <p
-            className={`text-2xl font-bold tabular-nums ${
-              change30Day >= 0 ? "text-green-300" : "text-red-300"
-            }`}
-          >
-            {change30Day >= 0 ? "+" : ""}
-            {formatCurrency(change30Day)}
-          </p>
+          {change30Day !== null ? (
+            <p
+              className={`text-2xl font-bold tabular-nums ${
+                change30Day >= 0 ? "text-green-300" : "text-red-300"
+              }`}
+            >
+              {change30Day >= 0 ? "+" : ""}
+              {formatCurrency(change30Day)}
+            </p>
+          ) : (
+            <p className="text-2xl font-bold tabular-nums text-blue-100">—</p>
+          )}
         </div>
       </div>
     </div>

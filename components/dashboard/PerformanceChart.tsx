@@ -33,7 +33,7 @@ export default function PerformanceChart({
     const summary = computeCollectionSummary(items);
     const totalValue = summary.totalDisplayValue;
 
-    if (totalValue === 0) return [];
+    if (totalValue === null || totalValue === 0) return [];
 
     const days = timeRange === "30d" ? 30 : timeRange === "90d" ? 90 : 365;
     const data = [];

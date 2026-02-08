@@ -1,18 +1,18 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
-import CollectionMetricsCard from "@/components/dashboard/CollectionMetricsCard";
-import PerformanceChart from "@/components/dashboard/PerformanceChart";
-import TopPerformersSection from "@/components/dashboard/TopPerformersSection";
-import QuickActionsCollection from "@/components/dashboard/QuickActionsCollection";
+import CompactMetricsRow from "@/components/dashboard/CompactMetricsRow";
+import CompactTopPerformers from "@/components/dashboard/CompactTopPerformers";
+import CompactQuickActions from "@/components/dashboard/CompactQuickActions";
 import ActivityFeed from "@/components/dashboard/ActivityFeed";
 import AddCardModalNew from "@/components/AddCardModalNew";
 import PaywallModal from "@/components/PaywallModal";
 import { createClient } from "@/lib/supabase/client";
 import type { User, CollectionItem } from "@/types";
 import { isTestMode, getTestUser } from "@/lib/test-mode";
+import { getEstCmv } from "@/lib/values";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -38,7 +38,7 @@ export default function DashboardPage() {
     async function loadData() {
       if (isTestMode()) {
         setUser(getTestUser());
-        const response = await fetch("/api/collection");
+        const response = await fetch("/api/collection", { cache: "no-store" });
         const data = await response.json();
         if (data.items) {
           setCollectionItems(data.items);
@@ -84,13 +84,52 @@ export default function DashboardPage() {
     loadData();
   }, [router]);
 
-  const refreshCollection = async () => {
-    const response = await fetch("/api/collection");
+  const refreshCollection = useCallback(async () => {
+    const response = await fetch("/api/collection", { cache: "no-store" });
     const data = await response.json();
     if (data.items) {
       setCollectionItems(data.items);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        refreshCollection();
+      }
+    };
+    const handleFocus = () => {
+      refreshCollection();
+    };
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [refreshCollection]);
+
+  const needsCmvRefresh = useMemo(() => {
+    return collectionItems.some((item) => {
+      const compsCount = (item as { comps_count?: number | null }).comps_count;
+      return typeof compsCount === "number" && compsCount > 0 && getEstCmv(item) === null;
+    });
+  }, [collectionItems]);
+
+  useEffect(() => {
+    if (!needsCmvRefresh) return;
+    let attempts = 0;
+    const maxAttempts = 6;
+    const interval = setInterval(async () => {
+      attempts += 1;
+      await refreshCollection();
+      if (attempts >= maxAttempts) {
+        clearInterval(interval);
+      }
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [needsCmvRefresh, refreshCollection]);
 
   const userName = user?.name || (user?.email ? user.email.split("@")[0] : "");
 
@@ -98,34 +137,22 @@ export default function DashboardPage() {
     <AuthenticatedLayout>
       <div className="p-4 sm:p-6 max-w-6xl mx-auto">
         {/* Greeting */}
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-white">
+        <div className="mb-4">
+          <h1 className="text-xl font-bold text-white">
             Welcome back{userName ? `, ${userName}` : ""}
           </h1>
-          <p className="text-sm text-gray-400 mt-1">
-            Here's how your collection is performing
-          </p>
         </div>
 
-        {/* Collection Metrics Hero */}
-        <div className="mb-6">
-          <CollectionMetricsCard items={collectionItems} loading={loading} />
+        {/* Compact Metrics Row */}
+        <div className="mb-4">
+          <CompactMetricsRow items={collectionItems} loading={loading} />
         </div>
 
-        {/* Performance Chart */}
-        <div className="mb-6">
-          <PerformanceChart items={collectionItems} loading={loading} />
-        </div>
-
-        {/* Two Column Section: Top Performers & Quick Actions */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          <TopPerformersSection items={collectionItems} loading={loading} />
-          <QuickActionsCollection onAddCard={() => setShowAddModal(true)} />
-        </div>
-
-        {/* Recent Activity */}
-        <div className="mb-6">
+        {/* Compact Single Column Layout */}
+        <div className="space-y-4 mb-4">
+          <CompactTopPerformers items={collectionItems} loading={loading} />
           <ActivityFeed recentCards={collectionItems.slice(0, 5)} />
+          <CompactQuickActions onAddCard={() => setShowAddModal(true)} />
         </div>
 
         {/* Add Card Modal */}

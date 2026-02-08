@@ -76,8 +76,8 @@ export default function ActivityFeed({ recentCards = [] }: ActivityFeedProps) {
     return getTime(b) - getTime(a);
   });
 
-  // Limit to 5 items
-  const displayItems = activities.slice(0, 5);
+  // Limit to 3 items for compact dashboard
+  const displayItems = activities.slice(0, 3);
 
   // Loading state
   if (!mounted) {
@@ -126,10 +126,10 @@ export default function ActivityFeed({ recentCards = [] }: ActivityFeedProps) {
   }
 
   return (
-    <div className="bg-gray-800/60 rounded-xl border border-white/5 overflow-hidden">
+    <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-white/5 flex items-center justify-between">
-        <h3 className="text-sm font-medium text-white">Recent Activity</h3>
+      <div className="px-4 py-2.5 border-b border-gray-800 flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-white">Recent Activity</h3>
         {searches.length > 0 && (
           <button
             onClick={handleClearAll}
@@ -141,7 +141,7 @@ export default function ActivityFeed({ recentCards = [] }: ActivityFeedProps) {
       </div>
 
       {/* Activity List */}
-      <div className="p-1.5">
+      <div className="p-1">
         {displayItems.map((item, index) => {
           if (item.type === "search") {
             const search = item.data;
@@ -149,7 +149,7 @@ export default function ActivityFeed({ recentCards = [] }: ActivityFeedProps) {
               <button
                 key={`search-${search.timestamp}`}
                 onClick={() => handleSearchClick(search)}
-                className="w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-gray-700/50 transition-all duration-150 group"
+                className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-gray-700/50 transition-all duration-150 group"
               >
                 {/* Icon */}
                 <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
@@ -223,7 +223,7 @@ export default function ActivityFeed({ recentCards = [] }: ActivityFeedProps) {
           return (
             <div
               key={`card-${card.id}`}
-              className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-gray-700/50 transition-all duration-150"
+              className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-700/50 transition-all duration-150"
             >
               {/* Thumbnail or icon */}
               <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-blue-500/10 overflow-hidden">
@@ -269,18 +269,6 @@ export default function ActivityFeed({ recentCards = [] }: ActivityFeedProps) {
           );
         })}
       </div>
-
-      {/* View all link */}
-      {(searches.length > 5 || recentCards.length > 3) && (
-        <div className="px-4 py-2.5 border-t border-white/5">
-          <button
-            onClick={() => router.push("/collection")}
-            className="text-xs text-gray-400 hover:text-white transition-colors"
-          >
-            View all activity →
-          </button>
-        </div>
-      )}
     </div>
   );
 }

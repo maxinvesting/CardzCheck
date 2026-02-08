@@ -1,5 +1,6 @@
 "use client";
 
+import { gradingCopy } from "@/copy/grading";
 import type { GradeCmv, WorthGradingResult } from "@/types";
 
 interface GradeEstimatorValuePanelProps {
@@ -8,33 +9,32 @@ interface GradeEstimatorValuePanelProps {
 }
 
 function formatPrice(cmv: GradeCmv): string {
-  if (cmv.price === null) return "Insufficient comps";
+  if (cmv.price === null) return gradingCopy.valuePanel.insufficientComps;
   return `$${cmv.price.toFixed(0)}`;
 }
 
-function ratingBadge(rating: WorthGradingResult["rating"]): string {
+type RoiLevel = "High" | "Medium" | "Low";
+
+function roiLevel(rating: WorthGradingResult["rating"]): RoiLevel {
   switch (rating) {
     case "strong_yes":
-      return "bg-green-600/20 text-green-300 border-green-500/40";
+      return "High";
     case "yes":
-      return "bg-emerald-600/20 text-emerald-300 border-emerald-500/40";
+      return "Medium";
     case "maybe":
-      return "bg-amber-600/20 text-amber-300 border-amber-500/40";
     default:
-      return "bg-red-600/20 text-red-300 border-red-500/40";
+      return "Low";
   }
 }
 
-function formatRatingLabel(rating: WorthGradingResult["rating"]): string {
-  switch (rating) {
-    case "strong_yes":
-      return "Strong Yes";
-    case "yes":
-      return "Yes";
-    case "maybe":
-      return "Maybe";
+function roiBadge(level: RoiLevel): string {
+  switch (level) {
+    case "High":
+      return "bg-green-600/20 text-green-300 border-green-500/40";
+    case "Medium":
+      return "bg-amber-600/20 text-amber-300 border-amber-500/40";
     default:
-      return "No";
+      return "bg-slate-700/30 text-slate-300 border-slate-600/40";
   }
 }
 
@@ -46,6 +46,8 @@ export default function GradeEstimatorValuePanel({
   result,
   loading,
 }: GradeEstimatorValuePanelProps) {
+  const roi = roiLevel(result.rating);
+
   if (loading) {
     return (
       <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5 animate-pulse">
@@ -60,53 +62,51 @@ export default function GradeEstimatorValuePanel({
     <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wider">
-          Post-Grading Value
+          {gradingCopy.valuePanel.title}
         </h3>
         <div className="flex items-center gap-2">
           {result.bestOption !== "none" && (
             <span className="text-xs text-gray-400">
-              Best: {result.bestOption.toUpperCase()}
+              {gradingCopy.valuePanel.bestLabel}: {result.bestOption.toUpperCase()}
             </span>
           )}
           <span
-            className={`px-3 py-1 rounded-full text-xs font-semibold border ${ratingBadge(
-              result.rating
-            )}`}
+            className={`px-3 py-1 rounded-full text-xs font-semibold border ${roiBadge(roi)}`}
           >
-            Worth grading? {formatRatingLabel(result.rating)}
+            {gradingCopy.valuePanel.roiBadge(roi)}
           </span>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
         <div className="bg-gray-900/50 rounded-lg p-3">
-          <p className="text-gray-400 font-medium mb-2">Raw CMV</p>
+          <p className="text-gray-400 font-medium mb-2">{gradingCopy.valuePanel.rawTitle}</p>
           <p className="text-lg text-white font-semibold">{formatPrice(result.raw)}</p>
-          <p className="text-xs text-gray-500 mt-1">{result.raw.n} comps</p>
+          <p className="text-xs text-gray-500 mt-1">{result.raw.n} {gradingCopy.valuePanel.compsSuffix}</p>
         </div>
 
         <div className="bg-gray-900/50 rounded-lg p-3">
-          <p className="text-gray-400 font-medium mb-2">PSA CMV</p>
+          <p className="text-gray-400 font-medium mb-2">{gradingCopy.valuePanel.psaTitle}</p>
           <ul className="space-y-1 text-gray-300">
             <li>PSA 10: {formatPrice(result.psa["10"])}</li>
             <li>PSA 9: {formatPrice(result.psa["9"])}</li>
             <li>PSA 8: {formatPrice(result.psa["8"])}</li>
           </ul>
           <p className="text-xs text-gray-500 mt-2">
-            EV ${result.psa.ev.toFixed(0)} · Net ${result.psa.netGain.toFixed(0)} · ROI{" "}
+            {gradingCopy.valuePanel.evLabel} ${result.psa.ev.toFixed(0)} · {gradingCopy.valuePanel.netLabel} ${result.psa.netGain.toFixed(0)} · {gradingCopy.valuePanel.roiLabel}{" "}
             {formatRoi(result.psa.roi)}
           </p>
         </div>
 
         <div className="bg-gray-900/50 rounded-lg p-3">
-          <p className="text-gray-400 font-medium mb-2">BGS CMV</p>
+          <p className="text-gray-400 font-medium mb-2">{gradingCopy.valuePanel.bgsTitle}</p>
           <ul className="space-y-1 text-gray-300">
             <li>BGS 9.5: {formatPrice(result.bgs["9.5"])}</li>
             <li>BGS 9: {formatPrice(result.bgs["9"])}</li>
             <li>BGS 8.5: {formatPrice(result.bgs["8.5"])}</li>
           </ul>
           <p className="text-xs text-gray-500 mt-2">
-            EV ${result.bgs.ev.toFixed(0)} · Net ${result.bgs.netGain.toFixed(0)} · ROI{" "}
+            {gradingCopy.valuePanel.evLabel} ${result.bgs.ev.toFixed(0)} · {gradingCopy.valuePanel.netLabel} ${result.bgs.netGain.toFixed(0)} · {gradingCopy.valuePanel.roiLabel}{" "}
             {formatRoi(result.bgs.roi)}
           </p>
         </div>
@@ -117,7 +117,7 @@ export default function GradeEstimatorValuePanel({
       </div>
 
       <p className="mt-3 text-xs text-gray-500">
-        Based on recent sold comps; low comp volume reduces confidence.
+        {gradingCopy.valuePanel.confidenceNote}
       </p>
     </div>
   );

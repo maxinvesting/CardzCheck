@@ -1,12 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 import type { WatchlistItem, CollectionItem, RecentSearch } from "@/types";
-import { computeCollectionSummary, getDisplayValue, getEstCmv, getCostBasis } from "@/lib/values";
+import { computeCollectionSummary, getCollectionValuePerCard, getEstCmv, getCostBasis } from "@/lib/values";
 
 export interface UserAIContext {
   user: { id: string; name?: string | null; email?: string | null };
   collection_summary: {
     total_cards: number;
-    total_value: number;
+    total_value: number | null;
     cost_basis: number;
     unrealized_pl: number;
     change_30d?: number | null;
@@ -19,9 +19,11 @@ export interface UserAIContext {
     set_name: string | null;
     parallel?: string | null;
     grade?: string | null;
-    est_value: number;
+    est_value: number | null;
     cost_basis?: number | null;
-    image_url?: string | null;
+    has_cmv: boolean;
+    cmv_confidence?: string | null;
+    notes?: string | null;
     last_updated: string;
   }>;
   collection_recent: Array<{
@@ -32,9 +34,11 @@ export interface UserAIContext {
     set_name: string | null;
     parallel?: string | null;
     grade?: string | null;
-    est_value: number;
+    est_value: number | null;
     cost_basis?: number | null;
-    image_url?: string | null;
+    has_cmv: boolean;
+    cmv_confidence?: string | null;
+    notes?: string | null;
     last_updated: string;
   }>;
   watchlist_summary: {
@@ -48,7 +52,6 @@ export interface UserAIContext {
     target_price: number | null;
     est_value: number | null;
     delta: number | null;
-    image_url?: string | null;
   }>;
   recent_searches: Array<{
     query: string;
@@ -110,8 +113,9 @@ export async function getUserContextForAI(userId: string): Promise<UserAIContext
       .filter(Boolean)
       .join(" ");
 
-    const estValue = getEstCmv(item) ?? getDisplayValue(item);
+    const estValue = getEstCmv(item);
     const costBasis = getCostBasis(item);
+    const hasCmv = estValue !== null && estValue > 0;
 
     return {
       id: item.id,
@@ -123,13 +127,15 @@ export async function getUserContextForAI(userId: string): Promise<UserAIContext
       grade: item.grade ?? null,
       est_value: estValue,
       cost_basis: costBasis,
-      image_url: item.image_url ?? null,
+      has_cmv: hasCmv,
+      cmv_confidence: item.cmv_confidence ?? null,
+      notes: item.notes ?? null,
       last_updated: item.created_at,
     };
   };
 
   const collection_top = [...collection]
-    .sort((a, b) => getDisplayValue(b) - getDisplayValue(a))
+    .sort((a, b) => getCollectionValuePerCard(b) - getCollectionValuePerCard(a))
     .slice(0, MAX_TOP)
     .map(mapCollectionCard);
 
@@ -182,7 +188,6 @@ export async function getUserContextForAI(userId: string): Promise<UserAIContext
         target_price: target,
         est_value,
         delta,
-        image_url: null,
       };
     });
 
@@ -218,4 +223,3 @@ export async function getUserContextForAI(userId: string): Promise<UserAIContext
     app_time: nowIso,
   };
 }
-

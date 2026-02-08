@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { CollectionItem, SearchFormData } from "@/types";
 import { computeCollectionSummary } from "@/lib/values";
+import CardPicker, { type CardPickerSelection } from "@/components/CardPicker";
+import { formatGraderGrade } from "@/lib/cards/format";
 
 interface HeroStatsProps {
   items: CollectionItem[];
@@ -12,15 +13,8 @@ interface HeroStatsProps {
   onSearch?: (data: SearchFormData) => void;
 }
 
-const EXAMPLE_SEARCHES = [
-  "2024 Optic Jayden Daniels Rated Rookie",
-  "Prizm CJ Stroud Silver",
-  "Jordan Fleer 1986 PSA 10",
-];
-
 export default function HeroStats({ items, loading, onSearch }: HeroStatsProps) {
   const router = useRouter();
-  const [searchQuery, setSearchQuery] = useState("");
 
   const cardCount = items.length;
   const summary = computeCollectionSummary(items);
@@ -41,6 +35,9 @@ export default function HeroStats({ items, loading, onSearch }: HeroStatsProps) 
     }).format(value);
   };
 
+  const totalValueLabel =
+    totalValue === null ? "—" : formatCurrency(totalValue);
+
   const formatTimeAgo = (date: Date): string => {
     const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
     if (seconds < 60) return "just now";
@@ -50,24 +47,29 @@ export default function HeroStats({ items, loading, onSearch }: HeroStatsProps) 
     return date.toLocaleDateString();
   };
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!searchQuery.trim()) return;
+  const handleCardPickerSelect = (card: CardPickerSelection) => {
+    const data: SearchFormData = {
+      player_name: card.player_name,
+      year: card.year,
+      set_name: card.set_name || card.brand,
+      grade: formatGraderGrade(card.grader, card.grade),
+      card_number: card.card_number,
+      parallel_type: card.variant,
+    };
 
     if (onSearch) {
-      onSearch({ player_name: searchQuery.trim() });
-    } else {
-      router.push(`/comps?player=${encodeURIComponent(searchQuery.trim())}`);
+      onSearch(data);
+      return;
     }
-  };
 
-  const handleExampleClick = (example: string) => {
-    setSearchQuery(example);
-    if (onSearch) {
-      onSearch({ player_name: example });
-    } else {
-      router.push(`/comps?player=${encodeURIComponent(example)}`);
-    }
+    const params = new URLSearchParams();
+    params.set("player", data.player_name);
+    if (data.year) params.set("year", data.year);
+    if (data.set_name) params.set("set", data.set_name);
+    if (data.grade) params.set("grade", data.grade);
+    if (data.card_number) params.set("card_number", data.card_number);
+    if (data.parallel_type) params.set("parallel_type", data.parallel_type);
+    router.push(`/comps?${params.toString()}`);
   };
 
   if (loading) {
@@ -106,37 +108,8 @@ export default function HeroStats({ items, loading, onSearch }: HeroStatsProps) 
             Search comps, then add to your collection to track value over time.
           </p>
 
-          {/* Search form */}
-          <form onSubmit={handleSearchSubmit} className="mb-4">
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search any card... (e.g., Jordan Fleer 1986 PSA 10)"
-                className="flex-1 px-4 py-3 bg-gray-900/80 border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-              <button
-                type="submit"
-                disabled={!searchQuery.trim()}
-                className="px-6 py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-medium rounded-xl transition-colors"
-              >
-                Search
-              </button>
-            </div>
-          </form>
-
-          {/* Example chips */}
-          <div className="flex flex-wrap gap-2 mb-4">
-            {EXAMPLE_SEARCHES.map((example) => (
-              <button
-                key={example}
-                onClick={() => handleExampleClick(example)}
-                className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-sm text-gray-300 rounded-lg transition-colors border border-gray-700/50"
-              >
-                {example}
-              </button>
-            ))}
+          <div className="mb-4">
+            <CardPicker mode="dashboard" onSelect={handleCardPickerSelect} />
           </div>
 
           {/* Advanced filters link */}
@@ -164,7 +137,7 @@ export default function HeroStats({ items, loading, onSearch }: HeroStatsProps) 
               </span>
             </div>
             <p className="text-4xl sm:text-5xl font-bold text-white tracking-tight">
-              {cmvAvailableCount > 0 ? formatCurrency(totalValue) : "CMV unavailable"}
+              {cmvAvailableCount > 0 ? totalValueLabel : "—"}
             </p>
             {/* Trend indicator placeholder */}
             <div className="flex items-center gap-1.5 mt-2">

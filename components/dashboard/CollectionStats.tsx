@@ -42,6 +42,9 @@ export default function CollectionStats({ items, loading }: CollectionStatsProps
     }).format(value);
   };
 
+  const totalValueLabel =
+    totalValue === null ? "—" : formatCurrency(totalValue);
+
   return (
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
       {/* Card Count */}
@@ -88,7 +91,7 @@ export default function CollectionStats({ items, loading }: CollectionStatsProps
           <span className="text-sm font-medium text-gray-400">Total Value</span>
         </div>
         <p className="text-3xl font-bold text-white">
-          {cmvAvailableCount > 0 ? formatCurrency(totalValue) : "CMV unavailable"}
+          {cmvAvailableCount > 0 ? totalValueLabel : "—"}
         </p>
       </div>
 
