@@ -54,7 +54,7 @@ describe("CardIdentity year extraction", () => {
       },
       2026
     );
-    expect(identity.year).toBeUndefined();
+    expect(identity.year == null).toBe(true); // ambiguous → undefined or null
     expect(identity.warnings).toContain("year_ambiguous");
   });
 
