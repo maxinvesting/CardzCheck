@@ -219,7 +219,7 @@ export default function AddCardModalNew({
 
   const applyYearOverride = (nextYear: string) => {
     const trimmed = nextYear.trim();
-    if (trimmed && !/^\\d{4}$/.test(trimmed)) {
+    if (trimmed && !/^\d{4}$/.test(trimmed)) {
       setError("Year must be a 4-digit number");
       return;
     }

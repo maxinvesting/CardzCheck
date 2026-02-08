@@ -154,133 +154,153 @@ export async function POST(request: NextRequest, context: RouteContext) {
       );
     }
 
-    // Fetch conversation history for context
-    const { data: existingMessages } = await supabase
-      .from("analyst_messages")
-      .select("role, content")
-      .eq("thread_id", threadId)
-      .order("created_at", { ascending: true });
-
-    // Build conversation history for Claude
-    const conversationHistory = (existingMessages || []).map((msg: { role: string; content: string }) => ({
-      role: msg.role as "user" | "assistant",
-      content: msg.content,
-    }));
-
-    const userName = userData?.name || null;
-
-    // Build shared user AI context (collection + watchlist + recent searches)
-    const userContext = await getUserContextForAI(user.id);
-
-    const cardContextText = cardContext
-      ? [
-          cardContext.year,
-          cardContext.playerName,
-          cardContext.setName,
-          cardContext.grade,
-        ]
-          .filter(Boolean)
-          .join(" ")
-      : undefined;
-
-    const { system: systemPrompt, messages: modelMessages } = buildAnalystPrompt({
-      userMessage,
-      userName,
-      cardContextText,
-      userContext,
-    });
-
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) {
-      logDebug("❌ Analyst thread missing ANTHROPIC_API_KEY");
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Missing Anthropic API key",
-          code: "MISSING_LLM_KEY",
-        },
-        { status: 500 }
-      );
-    }
-
-    // Call Claude with conversation history
-    const anthropic = new Anthropic({
-      apiKey,
-    });
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    logDebug("🧠 Analyst thread calling Anthropic", { threadId });
-    const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 1024,
-      system: systemPrompt,
-      tools: [
-        {
-          type: "web_search_20250305",
-          name: "web_search",
-          max_uses: 3,
-        } as any,
-      ],
-      messages: conversationHistory.length ? conversationHistory : modelMessages,
-    });
-
-    // Extract text from response
-    const textBlocks = response.content.filter((block) => block.type === "text");
-    const responseText = textBlocks.length > 0
-      ? textBlocks.map((block) => block.type === "text" ? block.text : "").join("\n").trim()
-      : "Unable to analyze at this time.";
-
-    logDebug("✅ Analyst thread response received", {
-      threadId,
-      length: responseText.length,
-    });
-
-    // Insert assistant message
-    const { data: savedAssistantMessage, error: assistantMsgError } = await supabase
+    const ackContent = "Got it — analyzing now.";
+    const { data: ackMessage, error: ackError } = await supabase
       .from("analyst_messages")
       .insert({
         thread_id: threadId,
         user_id: user.id,
         role: "assistant",
-        content: responseText,
+        content: ackContent,
+        metadata: { status: "ack", replyTo: savedUserMessage.id },
       })
       .select()
       .single();
 
-    if (assistantMsgError) {
-      console.error("Error saving assistant message:", assistantMsgError);
-      // Continue even if save fails - user already saw the response
+    if (ackError) {
+      console.error("Error saving analyst ack message:", ackError);
     }
 
-    // Update thread's updated_at (trigger should handle this, but explicit update ensures it)
-    await supabase
-      .from("analyst_threads")
-      .update({ updated_at: new Date().toISOString() })
-      .eq("id", threadId);
+    const runAnalysis = async () => {
+      try {
+        const apiKey = process.env.ANTHROPIC_API_KEY;
+        if (!apiKey) {
+          logDebug("❌ Analyst thread missing ANTHROPIC_API_KEY");
+          return;
+        }
 
-    // Auto-generate title from first user message if title is still "New Chat"
-    if (thread.title === "New Chat") {
-      const newTitle = userMessage.length > 40
-        ? userMessage.substring(0, 40) + "..."
-        : userMessage;
+        const userName = userData?.name || null;
 
-      await supabase
-        .from("analyst_threads")
-        .update({ title: newTitle })
-        .eq("id", threadId);
-    }
+        const cardContextText = cardContext
+          ? [
+              cardContext.year,
+              cardContext.playerName,
+              cardContext.setName,
+              cardContext.grade,
+            ]
+              .filter(Boolean)
+              .join(" ")
+          : undefined;
 
-    // Increment analyst query usage
-    await supabase
-      .from("users")
-      .update({ analyst_queries_used: used + 1 })
-      .eq("id", user.id);
+        const userContext = await getUserContextForAI(user.id);
+        const { system: systemPrompt, messages: modelMessages } = buildAnalystPrompt({
+          userMessage,
+          userName,
+          cardContextText,
+          userContext,
+        });
+
+        const { data: existingMessages } = await supabase
+          .from("analyst_messages")
+          .select("role, content, metadata")
+          .eq("thread_id", threadId)
+          .order("created_at", { ascending: true });
+
+        const MAX_HISTORY = 12;
+        const historySlice = (existingMessages || [])
+          .filter((msg: { role: string; metadata?: { status?: string } }) => !(msg.role === "assistant" && msg.metadata?.status === "ack"))
+          .slice(-MAX_HISTORY);
+        const conversationHistory = historySlice.map((msg: { role: string; content: string }) => ({
+          role: msg.role as "user" | "assistant",
+          content: msg.content,
+        }));
+
+        const anthropic = new Anthropic({
+          apiKey,
+        });
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        logDebug("🧠 Analyst thread calling Anthropic", { threadId });
+        const response = await anthropic.messages.create({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 1024,
+          system: systemPrompt,
+          tools: [
+            {
+              type: "web_search_20250305",
+              name: "web_search",
+              max_uses: 3,
+            } as any,
+          ],
+          messages: conversationHistory.length ? conversationHistory : modelMessages,
+        });
+
+        const textBlocks = response.content.filter((block) => block.type === "text");
+        const responseText = textBlocks.length > 0
+          ? textBlocks.map((block) => block.type === "text" ? block.text : "").join("\n").trim()
+          : "Unable to analyze at this time.";
+
+        logDebug("✅ Analyst thread response received", {
+          threadId,
+          length: responseText.length,
+        });
+
+        const { error: assistantMsgError } = await supabase
+          .from("analyst_messages")
+          .insert({
+            thread_id: threadId,
+            user_id: user.id,
+            role: "assistant",
+            content: responseText,
+            metadata: { status: "final", replyTo: savedUserMessage.id },
+          })
+          .select()
+          .single();
+
+        if (assistantMsgError) {
+          console.error("Error saving assistant message:", assistantMsgError);
+        }
+
+        await supabase
+          .from("analyst_threads")
+          .update({ updated_at: new Date().toISOString() })
+          .eq("id", threadId);
+
+        if (thread.title === "New Chat") {
+          const newTitle = userMessage.length > 40
+            ? userMessage.substring(0, 40) + "..."
+            : userMessage;
+
+          await supabase
+            .from("analyst_threads")
+            .update({ title: newTitle })
+            .eq("id", threadId);
+        }
+
+        await supabase
+          .from("users")
+          .update({ analyst_queries_used: used + 1 })
+          .eq("id", user.id);
+      } catch (analysisError) {
+        console.error("Analyst background analysis failed:", analysisError);
+      }
+    };
+
+    void runAnalysis();
 
     return NextResponse.json({
       ok: true,
-      result: responseText,
+      pending: Boolean(ackMessage?.id),
+      result: ackContent,
       userMessage: savedUserMessage,
-      assistantMessage: savedAssistantMessage,
+      assistantMessage: ackMessage ?? {
+        id: null,
+        thread_id: threadId,
+        user_id: user.id,
+        role: "assistant",
+        content: ackContent,
+        created_at: new Date().toISOString(),
+      },
     });
   } catch (error) {
     console.error("Messages POST error:", error);

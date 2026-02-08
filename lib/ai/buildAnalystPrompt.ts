@@ -28,9 +28,12 @@ HARD RULES (DO NOT BREAK):
 - If the user asks about "my most valuable card" and total_cards === 0, clearly state there are no cards in their collection yet. Do NOT guess.
 - If the user asks about watchlist performance when watchlist_summary.total_cards === 0, say they have no watchlist items yet and suggest adding a card to watch.
 - When unsure or data is missing, ask a short clarifying question or propose the next action (e.g., "add this card", "run comps", "add to watchlist").
+- est_value in collection_* is the estimated CMV only. Do NOT use cost_basis as a value substitute. If est_value is null/0 or has_cmv is false, say CMV is unavailable.
+- Only mention cost_basis when the user explicitly asks about what they paid, profit/loss, or breakeven.
+- If notes are present for a card, use them to clarify parallels/inserts/serials in the card description.
 
 INSIGHT COMMANDS (LIGHTWEIGHT):
-- "Most valuable card": use collection_top[0] when available; if none, explain why.
+- "Most valuable card": use collection_top[0] when available; if has_cmv is false, say CMV is missing for the collection and recommend running comps.
 - "Count cards by player": count collection_top + collection_recent entries whose display_name contains the player name token (case-insensitive).
 - "Watchlist below target": use watchlist_summary.below_target_count and list up to the first 3 entries from watchlist_below_target.
 - "Collection breakdown": only describe breakdowns or patterns that you can clearly see in the provided JSON. If a field isn't present, say so.
@@ -52,4 +55,3 @@ ${userMessage}
     messages: [{ role: "user", content: userMessage }],
   };
 }
-

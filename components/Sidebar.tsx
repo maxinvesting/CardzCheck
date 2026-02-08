@@ -58,7 +58,7 @@ export default function Sidebar() {
   // 2. Collection (was "My Collection")
   // 3. Watchlist
   // 4. Comps (search)
-  // 5. Grade Estimator
+  // 5. Grade Probability Engine
   // 6. CardzCheck Analyst
   // 7. Settings
   const navItems = [
@@ -147,7 +147,7 @@ export default function Sidebar() {
       ),
     },
     {
-      name: "Grade Estimator",
+      name: "Grade Probability Engine",
       href: "/grade-estimator",
       icon: (
         <svg

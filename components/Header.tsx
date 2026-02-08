@@ -7,6 +7,9 @@ import { createClient } from "@/lib/supabase/client";
 import type { User } from "@/types";
 import { LIMITS } from "@/types";
 import { isTestMode, getTestUser } from "@/lib/test-mode";
+import CardPickerModal from "@/components/CardPickerModal";
+import type { CardPickerSelection } from "@/components/CardPicker";
+import { formatGraderGrade } from "@/lib/cards/format";
 
 export default function Header() {
   const router = useRouter();
@@ -14,10 +17,8 @@ export default function Header() {
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [showDropdown, setShowDropdown] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+  const [showCardPicker, setShowCardPicker] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const searchRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     async function loadUser() {
@@ -56,12 +57,6 @@ export default function Header() {
       ) {
         setShowDropdown(false);
       }
-      if (
-        searchRef.current &&
-        !searchRef.current.contains(event.target as Node)
-      ) {
-        setShowSearchDropdown(false);
-      }
     }
 
     document.addEventListener("mousedown", handleClickOutside);
@@ -91,12 +86,18 @@ export default function Header() {
     }
   };
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!searchQuery.trim()) return;
-    router.push(`/comps?player=${encodeURIComponent(searchQuery.trim())}`);
-    setSearchQuery("");
-    setShowSearchDropdown(false);
+  const handleCardPickerSelect = (card: CardPickerSelection) => {
+    const params = new URLSearchParams();
+    params.set("player", card.player_name);
+    if (card.year) params.set("year", card.year);
+    const setName = card.set_name || card.brand;
+    if (setName) params.set("set", setName);
+    const gradeLabel = formatGraderGrade(card.grader, card.grade);
+    if (gradeLabel) params.set("grade", gradeLabel);
+    if (card.card_number) params.set("card_number", card.card_number);
+    if (card.variant) params.set("parallel_type", card.variant);
+    router.push(`/comps?${params.toString()}`);
+    setShowCardPicker(false);
   };
 
   const remainingSearches = user
@@ -123,71 +124,29 @@ export default function Header() {
           </span>
         </Link>
 
-        {/* Search Bar - Always visible for authenticated users */}
+        {/* Search - Always visible for authenticated users */}
         {user && (
-          <div ref={searchRef} className="flex-1 max-w-md hidden sm:block">
-            <form onSubmit={handleSearch} className="relative">
-              <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                <svg
-                  className="w-4 h-4 text-gray-500"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                  />
-                </svg>
-              </div>
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onFocus={() => setShowSearchDropdown(true)}
-                placeholder="Search any card..."
-                autoComplete="off"
-                autoCorrect="off"
-                autoCapitalize="off"
-                spellCheck="false"
-                className="w-full pl-10 pr-4 py-2 text-sm border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 bg-gray-800 text-white placeholder-gray-500 transition-all"
-              />
-              {searchQuery && (
-                <button
-                  type="submit"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium rounded transition-colors"
-                >
-                  Search
-                </button>
-              )}
-            </form>
-            {/* Advanced search link */}
-            {showSearchDropdown && (
-              <div className="absolute mt-1 bg-gray-800/95 backdrop-blur-sm border border-gray-700 rounded-lg shadow-xl p-2 z-50">
-                <Link
-                  href="/comps"
-                  onClick={() => setShowSearchDropdown(false)}
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-gray-700 rounded transition-colors"
-                >
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
-                    />
-                  </svg>
-                  Advanced filters
-                </Link>
-              </div>
-            )}
+          <div className="flex-1 max-w-md hidden sm:flex">
+            <button
+              type="button"
+              onClick={() => setShowCardPicker(true)}
+              className="w-full flex items-center gap-3 px-4 py-2 text-sm border border-gray-700 rounded-lg bg-gray-800 text-gray-300 hover:text-white hover:border-gray-600 transition-colors"
+            >
+              <svg
+                className="w-4 h-4 text-gray-500"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
+              </svg>
+              <span>Search cards</span>
+            </button>
           </div>
         )}
 
@@ -313,6 +272,13 @@ export default function Header() {
           )}
         </nav>
       </div>
+      <CardPickerModal
+        isOpen={showCardPicker}
+        onClose={() => setShowCardPicker(false)}
+        title="Search Cards"
+        mode="comps"
+        onSelect={handleCardPickerSelect}
+      />
     </header>
   );
 }

@@ -26,10 +26,10 @@ const SUGGESTED_PROMPTS = [
 ];
 
 const GENERAL_PROMPTS = [
-  "What's my most valuable card?",
-  "How is my collection performing?",
-  "Any watchlist cards near target?",
-  "What should I buy or sell?",
+  "Analyze my collection for sell candidates",
+  "Which cards in my watchlist look undervalued?",
+  "Is anything I own overvalued right now?",
+  "Good <$200 football buy right now",
 ];
 
 export default function CardAnalyst({
@@ -49,8 +49,11 @@ export default function CardAnalyst({
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [analysisPending, setAnalysisPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const autoStartedRef = useRef(false);
+  const pollTokenRef = useRef(0);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -60,7 +63,7 @@ export default function CardAnalyst({
     scrollToBottom();
   }, [messages]);
 
-  // Load threads on mount
+  // Load threads on mount (do not auto-open any thread)
   useEffect(() => {
     async function loadThreads() {
       try {
@@ -69,10 +72,6 @@ export default function CardAnalyst({
 
         if (data.threads && data.threads.length > 0) {
           setThreads(data.threads);
-          // Load most recent thread
-          const mostRecentThread = data.threads[0];
-          setActiveThreadId(mostRecentThread.id);
-          await loadThreadMessages(mostRecentThread.id);
         }
       } catch (err) {
         console.error("Failed to load threads:", err);
@@ -109,12 +108,14 @@ export default function CardAnalyst({
     setActiveThreadId(threadId);
     setMessages([]);
     setError(null);
+    setAnalysisPending(false);
+    pollTokenRef.current += 1;
     setShowThreadList(false);
     await loadThreadMessages(threadId);
   }, [loadThreadMessages]);
 
   // Create a new chat thread
-  const handleNewChat = async () => {
+  const handleNewChat = useCallback(async () => {
     try {
       const res = await fetch("/api/analyst/threads", {
         method: "POST",
@@ -131,6 +132,8 @@ export default function CardAnalyst({
         setActiveThreadId(data.thread.id);
         setMessages([]);
         setError(null);
+        setAnalysisPending(false);
+        pollTokenRef.current += 1;
         setThreads((prev) => [data.thread, ...prev]);
         setShowThreadList(false);
       }
@@ -138,7 +141,14 @@ export default function CardAnalyst({
       console.error("Failed to create thread:", err);
       setError("Failed to create new chat.");
     }
-  };
+  }, []);
+
+  // Always start a fresh chat on entry to avoid auto-loading old threads
+  useEffect(() => {
+    if (threadsLoading || activeThreadId || autoStartedRef.current) return;
+    autoStartedRef.current = true;
+    void handleNewChat();
+  }, [threadsLoading, activeThreadId, handleNewChat]);
 
   // Delete a thread
   const handleDeleteThread = async (threadId: string, e: React.MouseEvent) => {
@@ -158,12 +168,56 @@ export default function CardAnalyst({
         } else {
           setActiveThreadId(null);
           setMessages([]);
+          setAnalysisPending(false);
+          pollTokenRef.current += 1;
         }
       }
     } catch (err) {
       console.error("Failed to delete thread:", err);
     }
   };
+
+  const pollForFollowUp = useCallback(async (threadId: string, ackId: string | null) => {
+    if (!threadId || !ackId) return;
+    const token = (pollTokenRef.current += 1);
+    const maxAttempts = 12;
+    const intervalMs = 1500;
+
+    const poll = async (attempt: number) => {
+      if (pollTokenRef.current !== token) return;
+      try {
+        const res = await fetch(`/api/analyst/threads/${threadId}`);
+        const data = await res.json();
+        if (data.messages) {
+          const mapped = data.messages.map((msg: AnalystThreadMessage) => ({
+            id: msg.id,
+            role: msg.role,
+            content: msg.content,
+          }));
+          const ackIndex = mapped.findIndex((msg: Message) => msg.id === ackId);
+          const followUpFound =
+            ackIndex >= 0
+              ? mapped.slice(ackIndex + 1).some((msg: Message) => msg.role === "assistant")
+              : mapped.some((msg: Message) => msg.role === "assistant" && msg.id !== ackId);
+          if (followUpFound) {
+            setMessages(mapped);
+            setAnalysisPending(false);
+            return;
+          }
+        }
+      } catch (err) {
+        console.error("Failed to poll analyst follow-up:", err);
+      }
+
+      if (attempt < maxAttempts) {
+        setTimeout(() => poll(attempt + 1), intervalMs);
+      } else {
+        setAnalysisPending(false);
+      }
+    };
+
+    setTimeout(() => poll(1), intervalMs);
+  }, []);
 
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -172,6 +226,8 @@ export default function CardAnalyst({
     const userMessage = input.trim();
     setInput("");
     setError(null);
+    setAnalysisPending(false);
+    pollTokenRef.current += 1;
 
     // Optimistically add user message
     setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
@@ -242,6 +298,11 @@ export default function CardAnalyst({
           },
         ];
       });
+
+      if (data.pending && data.assistantMessage && threadId) {
+        setAnalysisPending(true);
+        void pollForFollowUp(threadId, data.assistantMessage.id);
+      }
 
       // Update thread title in list if it changed from "New Chat"
       if (data.userMessage) {
@@ -486,7 +547,12 @@ export default function CardAnalyst({
               {prompts.map((prompt) => (
                 <button
                   key={prompt}
-                  onClick={() => handleSuggestedPrompt(prompt)}
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleSuggestedPrompt(prompt);
+                  }}
                   className="px-3 py-2 bg-gray-800 hover:bg-gray-700 text-sm text-gray-300 rounded-lg transition-colors"
                 >
                   {prompt}
@@ -514,7 +580,7 @@ export default function CardAnalyst({
                 </div>
               </div>
             ))}
-            {isLoading && (
+            {(isLoading || analysisPending) && (
               <div className="flex justify-start">
                 <div className="bg-gray-800 px-4 py-3 rounded-2xl">
                   <div className="flex items-center gap-1">

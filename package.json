@@ -3,11 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --webpack",
+    "dev:turbo": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "vitest"
+    "test": "vitest",
+    "test:smart-search": "SMART_SEARCH_HARNESS=1 vitest run lib/smartSearch/__tests__/smart-search-harness.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.1",
@@ -16,10 +18,12 @@
     "@supabase/supabase-js": "^2.47.10",
     "autoprefixer": "^10.4.23",
     "cheerio": "^1.0.0",
+    "html2canvas": "^1.4.1",
     "next": "^16.1.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "recharts": "^3.7.0",
+    "sharp": "^0.33.3",
     "stripe": "^17.5.0"
   },
   "devDependencies": {

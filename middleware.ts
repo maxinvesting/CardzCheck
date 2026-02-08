@@ -1,11 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
-import {
-  checkRateLimit,
-  rateLimitResponse,
-  rateLimitHeaders,
-  RATE_LIMITS,
-} from "@/lib/api-rate-limiter";
+// Rate limiting is implemented inline below (middleware uses its own config shape)
 
 // Endpoints that need rate limiting
 const RATE_LIMITED_ENDPOINTS = [
@@ -55,7 +50,7 @@ function getClientIp(request: NextRequest) {
   if (forwardedFor) {
     return forwardedFor.split(",")[0]?.trim();
   }
-  return request.headers.get("x-real-ip") ?? request.ip ?? "unknown";
+  return request.headers.get("x-real-ip") ?? "unknown";
 }
 
 function checkRateLimit(request: NextRequest, userId: string | null): RateLimitResult {

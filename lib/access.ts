@@ -258,7 +258,8 @@ export async function canAccessFeature(
     case "grade_estimator":
       return {
         allowed: false,
-        reason: "Grade Estimator is a Pro feature. Upgrade to get AI-powered grade estimates.",
+        reason:
+          "Grade Probability Engine is a Pro feature. Upgrade to get AI-based grade probabilities (not guaranteed).",
         upgradeRequired: true,
       };
 
