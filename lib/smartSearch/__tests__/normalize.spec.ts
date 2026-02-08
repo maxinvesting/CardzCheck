@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractBrandAndLine, extractParallel } from "../normalize";
+import { extractBrandAndLine, extractParallel, extractGraderAndGrade, normalizeText } from "../normalize";
 
 describe("normalize helpers", () => {
   it("extracts Donruss / Optic from Donruss Optic Football titles", () => {
@@ -35,5 +35,16 @@ describe("normalize helpers", () => {
     const downtown = extractParallel("Drake Maye Downtown Case Hit");
     expect(downtown?.toLowerCase()).toContain("downtown");
   });
-});
 
+  it("normalizes punctuation and CJ/RC/PSA10 synonyms", () => {
+    expect(normalizeText("C.J. Stroud")).toBe("cj stroud");
+    expect(normalizeText("CJ Stroud RC")).toContain("rookie");
+    expect(normalizeText("psa10")).toBe("psa 10");
+  });
+
+  it("extracts grader and grade from listing titles", () => {
+    const fromTitle = extractGraderAndGrade("2024 Panini Prizm CJ Stroud PSA 10");
+    expect(fromTitle.grader).toBe("PSA");
+    expect(fromTitle.grade).toBe("10");
+  });
+});

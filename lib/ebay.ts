@@ -5,10 +5,14 @@
 import type { Comp, CompsStats } from "@/types";
 import {
   searchEbayLegacy,
+  searchEbayDualSignal,
   buildSearchQuery as buildQuery,
   buildSoldListingsUrl,
   type EbaySearchParams,
 } from "./ebay/index";
+
+// Re-export for consumers that use @/lib/ebay (e.g. cmv, dev routes)
+export { searchEbayDualSignal };
 
 // Re-export types for backwards compatibility
 export type { EbaySearchParams } from "./ebay/types";
