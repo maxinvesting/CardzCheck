@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { formatSetLabel, needsYearConfirmation, shouldDisplayYear } from "@/lib/card-identity/ui";
+import { InlineNotice } from "@/components/ui";
 import {
   CONDITION_OPTIONS,
   type CardIdentificationResult,
@@ -13,6 +15,8 @@ interface ConfirmAddCardModalProps {
   onSuccess: (playerName: string, item?: CollectionItem) => void;
   onLimitReached: () => void;
   cardData: CardIdentificationResult | null;
+  /** Pre-computed CMV from the Comps search results. Forwarded to the collection insert. */
+  initialCmv?: number | null;
 }
 
 export default function ConfirmAddCardModal({
@@ -21,17 +25,23 @@ export default function ConfirmAddCardModal({
   onSuccess,
   onLimitReached,
   cardData,
+  initialCmv,
 }: ConfirmAddCardModalProps) {
   const [costBasisType, setCostBasisType] = useState<"pulled" | "paid">("pulled");
   const [purchasePrice, setPurchasePrice] = useState<string>("");
   const [condition, setCondition] = useState<string>("Raw");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Editable fields for low confidence or multi-player/insert cards
+  const yearFieldConfidence = cardData?.cardIdentity?.fieldConfidence?.year;
+  const yearNeedsConfirmation = cardData
+    ? needsYearConfirmation(cardData.year, cardData.confidence, yearFieldConfidence)
+    : false;
   const needsConfirmation = cardData?.confidence === "low" || 
     (cardData?.players && cardData.players.length > 1) || 
-    cardData?.insert === "Downtown";
+    cardData?.insert === "Downtown" ||
+    yearNeedsConfirmation;
   
   const [editablePlayerName, setEditablePlayerName] = useState(cardData?.player_name || "");
   const [editablePlayers, setEditablePlayers] = useState(
@@ -57,6 +67,14 @@ export default function ConfirmAddCardModal({
       setEditableInsert(cardData.insert || "");
     }
   }, [cardData]);
+
+  const applyYearOverride = (nextYear: string) => {
+    const trimmed = nextYear.trim();
+    if (trimmed && !/^\\d{4}$/.test(trimmed)) {
+      setError("Year must be a 4-digit number");
+      return;
+    }
+  };
 
   const resetForm = () => {
     setCostBasisType("pulled");
@@ -112,18 +130,30 @@ export default function ConfirmAddCardModal({
         notesParts.push(`Variation: ${cardData.variation}`);
       }
 
+      // Forward CMV from Comps search results when available
+      const cmvValue =
+        typeof initialCmv === "number" && Number.isFinite(initialCmv) && initialCmv > 0
+          ? initialCmv
+          : null;
+
       const body = {
         player_name: finalPlayerName,
         players: finalPlayers.length > 1 ? finalPlayers : null, // Store as JSON array in DB
         year: finalYear || null,
         set_name: finalSet || null,
         insert: finalInsert || null,
+        parallel_type: cardData.parallel_type || null,
+        card_number: cardData.card_number || null,
         grade: condition, // Use the selected condition
         purchase_price:
           costBasisType === "paid" && purchasePrice ? parseFloat(purchasePrice) : null,
         purchase_date: null,
         image_url: cardData.imageUrl || null,
+        image_urls: cardData.imageUrls || [cardData.imageUrl].filter(Boolean),
         notes: notesParts.length > 0 ? notesParts.join(" | ") : null,
+        ...(cmvValue !== null
+          ? { est_cmv: cmvValue, estimated_cmv: cmvValue }
+          : {}),
       };
 
       const response = await fetch("/api/collection", {
@@ -234,9 +264,12 @@ export default function ConfirmAddCardModal({
                     <input
                       type="text"
                       value={editableYear}
-                      onChange={(e) => setEditableYear(e.target.value)}
+                      onChange={(e) => {
+                        setEditableYear(e.target.value);
+                        applyYearOverride(e.target.value);
+                      }}
                       className="w-full px-2 py-1.5 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-gray-900 dark:text-white"
-                      placeholder="2024"
+                      placeholder="e.g., 2025"
                     />
                   </div>
                   <div>
@@ -275,29 +308,41 @@ export default function ConfirmAddCardModal({
                   </h3>
 
                   <div className="mt-2 space-y-1 text-sm text-gray-600 dark:text-gray-400">
-                    {cardData.year && (
+                    {shouldDisplayYear(cardData.year, cardData.confidence, yearFieldConfidence) ? (
                       <p>
                         <span className="text-gray-500">Year:</span> {cardData.year}
                       </p>
-                    )}
-                    {cardData.set_name && (
+                    ) : yearNeedsConfirmation ? (
                       <p>
-                        <span className="text-gray-500">Set:</span>{" "}
-                        {cardData.set_name}
+                        <span className="text-gray-500">Year:</span> Needs confirmation
                       </p>
-                    )}
+                    ) : null}
+                    {(() => {
+                      const { setLabel } = formatSetLabel(
+                        cardData.cardIdentity,
+                        cardData.set_name,
+                        cardData.parallel_type
+                      );
+                      return setLabel ? (
+                        <p>
+                          <span className="text-gray-500">Set:</span> {setLabel}
+                        </p>
+                      ) : null;
+                    })()}
                     {cardData.insert && (
                       <p>
                         <span className="text-gray-500">Insert:</span>{" "}
                         <span className="font-medium">{cardData.insert}</span>
                       </p>
                     )}
-                    {cardData.parallel_type && cardData.parallel_type !== "Base" && !cardData.insert && (
-                      <p>
-                        <span className="text-gray-500">Parallel:</span>{" "}
-                        {cardData.parallel_type}
-                      </p>
-                    )}
+                    {cardData.cardIdentity?.parallel &&
+                      cardData.cardIdentity.parallel !== "Base" &&
+                      !cardData.insert && (
+                        <p>
+                          <span className="text-gray-500">Parallel:</span>{" "}
+                          {cardData.cardIdentity.parallel}
+                        </p>
+                      )}
                     {cardData.card_number && (
                       <p>
                         <span className="text-gray-500">Card #:</span>{" "}
@@ -329,26 +374,21 @@ export default function ConfirmAddCardModal({
             </div>
           </div>
 
-          {/* Note about grade estimation */}
-          {cardData.confidence !== "low" && (
-            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-              <p className="text-xs text-blue-700 dark:text-blue-300">
-                💡 Grade estimation available after adding to collection. Visit the Grade Estimator page to get an AI-powered grade estimate.
-              </p>
-            </div>
-          )}
-
           {/* Low confidence warning */}
           {cardData.confidence === "low" && (
-            <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
-              <p className="text-xs text-amber-700 dark:text-amber-300 font-medium mb-1">
-                ⚠️ Low confidence identification
-              </p>
-              <p className="text-xs text-amber-600 dark:text-amber-400">
+            <InlineNotice type="warning">
+              <p className="font-medium mb-1">Low confidence identification</p>
+              <p className="text-xs opacity-90">
                 Please verify the card details below. You can edit them before adding to your collection.
               </p>
-            </div>
+            </InlineNotice>
           )}
+
+          {cardData.cardIdentity?.warnings?.includes("parse_error") ? (
+            <InlineNotice type="warning">
+              We couldn't read all card details. Please confirm the year and set.
+            </InlineNotice>
+          ) : null}
 
           {/* Form Fields */}
           <div className="space-y-4 pt-2 border-t border-gray-200 dark:border-gray-800">

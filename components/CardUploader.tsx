@@ -3,90 +3,112 @@
 import { useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { CardIdentificationResponse, CardIdentificationResult } from "@/types";
+import { normalizeIdentificationResult } from "@/lib/card-identity/result";
 
 interface CardUploaderProps {
   onIdentified: (data: CardIdentificationResult) => void;
   disabled?: boolean;
+  maxFiles?: number;
+  onStart?: () => void;
+  onReset?: () => void;
 }
 
-export default function CardUploader({ onIdentified, disabled }: CardUploaderProps) {
+const DEFAULT_MAX_FILES = 3; // Allow front, back, and one detail shot
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+export default function CardUploader({
+  onIdentified,
+  disabled,
+  maxFiles = DEFAULT_MAX_FILES,
+  onStart,
+  onReset,
+}: CardUploaderProps) {
   const [isDragging, setIsDragging] = useState(false);
-  const [preview, setPreview] = useState<string | null>(null);
+  const [previews, setPreviews] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleFile = useCallback(async (file: File) => {
-    if (!file.type.startsWith("image/")) {
-      setError("Please upload an image file");
-      return;
+  const uploadFile = useCallback(async (file: File, fallbackDataUrl: string): Promise<string> => {
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) {
+        throw new Error("Authentication required for storage uploads");
+      }
+
+      const fileName = `${user.id}/${Date.now()}-${file.name}`;
+
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from("card-images")
+        .upload(fileName, file);
+
+      if (uploadError) {
+        throw new Error(uploadError.message);
+      }
+
+      const { data: { publicUrl } } = supabase.storage
+        .from("card-images")
+        .getPublicUrl(uploadData.path);
+      return publicUrl;
+    } catch {
+      return fallbackDataUrl;
+    }
+  }, []);
+
+  const handleFiles = useCallback(async (files: FileList | File[]) => {
+    const incoming = Array.from(files);
+    if (incoming.length === 0) return;
+
+    const limit = Math.max(1, maxFiles);
+    const selectedFiles = incoming.slice(0, limit);
+    const limitExceeded = incoming.length > limit;
+
+    for (const file of selectedFiles) {
+      if (!file.type.startsWith("image/")) {
+        setError("Please upload image files only");
+        return;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        setError("Each image must be less than 10MB");
+        return;
+      }
     }
 
-    if (file.size > 10 * 1024 * 1024) {
-      setError("Image must be less than 10MB");
-      return;
-    }
-
-    setError(null);
+    setError(limitExceeded ? `You can upload up to ${limit} photos at a time.` : null);
+    onStart?.();
     setLoading(true);
 
-    // Show preview
-    const reader = new FileReader();
-    reader.onload = (e) => setPreview(e.target?.result as string);
-    reader.readAsDataURL(file);
-
     try {
-      let imageUrl: string;
+      const previewDataUrls = await Promise.all(selectedFiles.map(readFileAsDataUrl));
+      setPreviews(previewDataUrls);
 
-      // Try to upload to Supabase Storage first
-      try {
-        const supabase = createClient();
-        const { data: { user } } = await supabase.auth.getUser();
+      const imageUrls = await Promise.all(
+        selectedFiles.map((file, index) => uploadFile(file, previewDataUrls[index]))
+      );
 
-        if (!user) {
-          throw new Error("Authentication required for storage uploads");
-        }
-
-        const fileName = `${user.id}/${Date.now()}-${file.name}`;
-
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from("card-images")
-          .upload(fileName, file);
-
-        if (uploadError) {
-          // If bucket doesn't exist or other storage error, fall back to base64
-          if (uploadError.message.includes("Bucket not found") || uploadError.message.includes("bucket")) {
-            // Convert file to base64 data URL for direct API call
-            const base64Reader = new FileReader();
-            imageUrl = await new Promise<string>((resolve, reject) => {
-              base64Reader.onload = () => resolve(base64Reader.result as string);
-              base64Reader.onerror = reject;
-              base64Reader.readAsDataURL(file);
-            });
-          } else {
-            throw new Error(uploadError.message);
-          }
-        } else {
-          // Get public URL from storage
-          const { data: { publicUrl } } = supabase.storage
-            .from("card-images")
-            .getPublicUrl(uploadData.path);
-          imageUrl = publicUrl;
-        }
-      } catch (storageErr) {
-        // Fallback: convert file to base64 data URL
-        const base64Reader = new FileReader();
-        imageUrl = await new Promise<string>((resolve, reject) => {
-          base64Reader.onload = () => resolve(base64Reader.result as string);
-          base64Reader.onerror = reject;
-          base64Reader.readAsDataURL(file);
-        });
+      const primaryImageUrl = imageUrls[0];
+      if (!primaryImageUrl) {
+        throw new Error("Missing primary image");
       }
 
       // Process card image (accepts both URL and base64 data URL)
       const response = await fetch("/api/identify-card", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageUrl }),
+        body: JSON.stringify(
+          imageUrls.length > 1
+            ? { imageUrls }
+            : { imageUrl: primaryImageUrl }
+        ),
       });
 
       const result: CardIdentificationResponse = await response.json();
@@ -94,42 +116,50 @@ export default function CardUploader({ onIdentified, disabled }: CardUploaderPro
       if ("error" in result) {
         setError(result.reason || result.error);
         setLoading(false);
+        onReset?.();
         return;
       }
 
-      // Check confidence level
-      if (result.confidence === "low") {
+      // Check confidence level / parse errors
+      if (result.card_identity?.warnings?.includes("parse_error")) {
+        setError("We couldn't read the card details clearly. Please confirm the year and set.");
+      } else if (result.confidence === "low") {
         setError(
           `Card identified with low confidence. Player: ${result.player_name || "Unknown"}. Please verify the details manually.`
         );
       }
 
-      // Success - pass data to parent with image URL (NO grade estimate - that's separate)
-      onIdentified({
+      // Success - pass data to parent with image URLs (NO grade estimate - that's separate)
+      onIdentified(
+        normalizeIdentificationResult({
         player_name: result.player_name,
         players: result.players || [result.player_name],
         year: result.year || undefined,
         set_name: result.set_name || undefined,
         insert: result.insert || undefined,
         grade: result.grade || undefined,
-        parallel_type: result.variant || undefined,
-        imageUrl: imageUrl,
+        parallel_type: (result.card_identity?.parallel ?? result.variant) || undefined,
+        imageUrl: primaryImageUrl,
+        imageUrls,
         confidence: result.confidence,
-      });
+        cardIdentity: result.card_identity,
+        })
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to process image");
+      onReset?.();
     } finally {
       setLoading(false);
     }
-  }, [onIdentified]);
+  }, [maxFiles, onIdentified, onReset, onStart, uploadFile]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
 
-    const file = e.dataTransfer.files[0];
-    if (file) handleFile(file);
-  }, [handleFile]);
+    const files = e.dataTransfer.files;
+    if (files?.length) handleFiles(files);
+  }, [handleFiles]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -142,12 +172,12 @@ export default function CardUploader({ onIdentified, disabled }: CardUploaderPro
   }, []);
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) handleFile(file);
-  }, [handleFile]);
+    const files = e.target.files;
+    if (files?.length) handleFiles(files);
+  }, [handleFiles]);
 
   const reset = () => {
-    setPreview(null);
+    setPreviews([]);
     setError(null);
   };
 
@@ -171,18 +201,44 @@ export default function CardUploader({ onIdentified, disabled }: CardUploaderPro
             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mb-4"></div>
             <p className="text-gray-600 dark:text-gray-400">Processing card...</p>
           </div>
-        ) : preview ? (
-          <div className="flex flex-col items-center">
-            <img
-              src={preview}
-              alt="Card preview"
-              className="max-h-48 rounded-lg shadow-md mb-4"
-            />
+        ) : previews.length > 0 ? (
+          <div className="flex flex-col items-center gap-3">
+            {maxFiles === 1 ? (
+              <img
+                src={previews[0]}
+                alt="Card preview"
+                className="max-h-48 rounded-lg shadow-md"
+              />
+            ) : (
+              <>
+                <div className="grid grid-cols-4 gap-2">
+                  {previews.map((preview, index) => (
+                    <div key={`${preview}-${index}`} className="relative">
+                      <img
+                        src={preview}
+                        alt={`Card preview ${index + 1}`}
+                        className={`h-16 w-12 object-cover rounded-md shadow-sm ${
+                          index === 0 ? "ring-2 ring-blue-500" : ""
+                        }`}
+                      />
+                      {index === 0 ? (
+                        <span className="absolute -top-2 -left-2 rounded-full bg-blue-600 text-white text-[10px] px-1.5 py-0.5">
+                          Primary
+                        </span>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {previews.length}/{maxFiles} photos uploaded. Primary photo is used for identification.
+                </p>
+              </>
+            )}
             <button
               onClick={reset}
               className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
             >
-              Upload different image
+              Upload different {maxFiles === 1 ? "image" : "photos"}
             </button>
           </div>
         ) : (
@@ -201,7 +257,7 @@ export default function CardUploader({ onIdentified, disabled }: CardUploaderPro
               />
             </svg>
             <p className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Upload card photo
+              {maxFiles === 1 ? "Upload card photo" : `Upload card photos (up to ${maxFiles})`}
             </p>
             <p className="text-sm text-gray-500 dark:text-gray-400">
               Drag & drop or click to select
@@ -209,6 +265,7 @@ export default function CardUploader({ onIdentified, disabled }: CardUploaderPro
             <input
               type="file"
               accept="image/*"
+              multiple={maxFiles > 1}
               onChange={handleInputChange}
               disabled={disabled}
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"

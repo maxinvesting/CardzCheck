@@ -1,0 +1,51 @@
+{
+  "ocrLines": [
+    "Panini Prizm",
+    "© 2025 Panini America, Inc."
+  ],
+  "vision": {
+    "player": "Caleb Williams",
+    "players": ["Caleb Williams"],
+    "brand": "Panini",
+    "setName": "Panini Prizm",
+    "subset": "Base",
+    "sport": "Football",
+    "league": "NFL",
+    "year": 2025,
+    "cardNumber": "301",
+    "rookie": true,
+    "parallel": "Base",
+    "insert": null,
+    "grade": null,
+    "confidence": "high",
+    "fieldConfidence": {
+      "player": "high",
+      "brand": "high",
+      "setName": "high",
+      "subset": "high",
+      "sport": "high",
+      "league": "high",
+      "year": "high",
+      "cardNumber": "high",
+      "rookie": "high",
+      "parallel": "high",
+      "insert": "low",
+      "grade": "low"
+    },
+    "fieldsReasoning": {
+      "player": "Name clearly printed on front.",
+      "brand": "Panini logo visible.",
+      "setName": "Prizm branding present.",
+      "subset": "No parallel indicators found.",
+      "sport": "Football imagery and team.",
+      "league": "NFL shield visible.",
+      "year": "Copyright line shows 2025.",
+      "cardNumber": "Card number visible.",
+      "rookie": "Rookie indicator present.",
+      "parallel": "No parallel text found.",
+      "insert": "No insert text.",
+      "grade": "Raw card."
+    },
+    "warnings": []
+  }
+}

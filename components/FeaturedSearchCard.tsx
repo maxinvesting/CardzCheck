@@ -26,7 +26,8 @@ interface FeaturedSearchCardProps {
   userLoggedIn?: boolean;
 }
 
-function formatPrice(price: number): string {
+function formatPrice(price: number | null): string {
+  if (price === null) return "—";
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
@@ -66,7 +67,7 @@ export default function FeaturedSearchCard({
   const query = results.query;
   const est = results._estimatedSaleRange;
   const hasEstimate = est?.pricingAvailable && est.estimatedSaleRange;
-  const cmv = results.stats?.cmv ?? 0;
+  const cmv = results.stats?.cmv ?? null;
   const items = useMemo(() => toListings(results), [results]);
   const firstImage = items[0]?.image;
 

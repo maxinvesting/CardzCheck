@@ -20,9 +20,9 @@ export interface CollectionSummary {
   cardCount: number;
   /**
    * Collection Value = sum of estimated CMV only (no cost-basis fallback).
-   * Cards without est_cmv contribute 0. P/L is CMV minus cost basis.
+   * Only cards with CMV contribute. P/L is CMV minus cost basis.
    */
-  totalDisplayValue: number;
+  totalDisplayValue: number | null;
   /** Sum of purchase_price where present */
   totalCostBasis: number;
   /**
@@ -46,15 +46,44 @@ export interface CollectionSummary {
 
 export type ValueSource = "cmv" | "cost_basis" | "none";
 
+function coerceNumber(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function coercePositiveNumber(value: unknown): number | null {
+  const parsed = coerceNumber(value);
+  if (parsed === null) return null;
+  return parsed > 0 ? parsed : null;
+}
+
 function getRawEstCmv(item: ValuedCollectionItem): number | null {
-  // Primary field
-  const direct = item.est_cmv;
-  if (typeof direct === "number") return direct;
-  // Allow alternate field names for flexibility (e.g., est_value, cmv)
   const anyItem = item as any;
-  if (typeof anyItem.estimated_cmv === "number") return anyItem.estimated_cmv;
-  if (typeof anyItem.est_value === "number") return anyItem.est_value;
-  if (typeof anyItem.cmv === "number") return anyItem.cmv;
+
+  // Canonical field written by calculateCardCmv — check first
+  const estimated = coercePositiveNumber(anyItem.estimated_cmv);
+  if (estimated !== null) return estimated;
+
+  // Legacy / fallback field
+  const direct = coercePositiveNumber(item.est_cmv);
+  if (direct !== null) return direct;
+
+  // Other alternate field names for flexibility
+  const cmvMid = coercePositiveNumber(anyItem.cmv_mid);
+  if (cmvMid !== null) return cmvMid;
+  const estValue = coercePositiveNumber(anyItem.est_value);
+  if (estValue !== null) return estValue;
+  const cmv = coercePositiveNumber(anyItem.cmv);
+  if (cmv !== null) return cmv;
   return null;
 }
 
@@ -66,10 +95,7 @@ export function getEstCmv(item: ValuedCollectionItem): number | null {
 }
 
 export function getCostBasis(item: ValuedCollectionItem): number | null {
-  const cost = item.purchase_price;
-  if (cost === null || cost === undefined) return null;
-  if (Number.isNaN(cost)) return null;
-  return cost;
+  return coerceNumber(item.purchase_price);
 }
 
 /** Collection Value per card: CMV only. No cost-basis fallback. */
@@ -77,6 +103,23 @@ export function getCollectionValuePerCard(item: ValuedCollectionItem): number {
   const est = getEstCmv(item);
   if (est !== null && est > 0) return est;
   return 0;
+}
+
+export function aggregateCollectionValue(
+  items: ValuedCollectionItem[]
+): number | null {
+  let total = 0;
+  let cardsWithCmv = 0;
+
+  for (const item of items) {
+    const est = getEstCmv(item);
+    if (est !== null && est > 0) {
+      total += est;
+      cardsWithCmv += 1;
+    }
+  }
+
+  return cardsWithCmv > 0 ? total : null;
 }
 
 /** Fallback value for sorting/display when you need a number (e.g. CMV or cost). */
@@ -125,17 +168,16 @@ export function computeCollectionSummary(
   let cardsWithBoth = 0;
 
   for (const item of items) {
-    totalDisplayValue += getCollectionValuePerCard(item);
+    const est = getEstCmv(item);
+    if (est !== null && est > 0) {
+      totalDisplayValue += est;
+      cardsWithCmv += 1;
+    }
 
     const cost = getCostBasis(item);
     if (cost !== null && cost > 0) {
       totalCostBasis += cost;
       cardsWithCostBasis += 1;
-    }
-
-    const est = getEstCmv(item);
-    if (est !== null && est > 0) {
-      cardsWithCmv += 1;
     }
 
     if (est !== null && cost !== null) {
@@ -153,7 +195,7 @@ export function computeCollectionSummary(
 
   return {
     cardCount: items.length,
-    totalDisplayValue,
+    totalDisplayValue: cardsWithCmv > 0 ? totalDisplayValue : null,
     totalCostBasis,
     totalUnrealizedPL: cardsWithBoth > 0 ? totalUnrealizedPL : null,
     totalUnrealizedPLPct,

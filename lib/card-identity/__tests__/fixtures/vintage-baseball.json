@@ -1,0 +1,51 @@
+{
+  "ocrLines": [
+    "1986 Fleer",
+    "© 1986 Fleer Corporation"
+  ],
+  "vision": {
+    "player": "Wade Boggs",
+    "players": ["Wade Boggs"],
+    "brand": "Fleer",
+    "setName": "Fleer",
+    "subset": "Base",
+    "sport": "Baseball",
+    "league": "MLB",
+    "year": 1986,
+    "cardNumber": "179",
+    "rookie": false,
+    "parallel": "Base",
+    "insert": null,
+    "grade": null,
+    "confidence": "high",
+    "fieldConfidence": {
+      "player": "high",
+      "brand": "high",
+      "setName": "high",
+      "subset": "high",
+      "sport": "high",
+      "league": "high",
+      "year": "high",
+      "cardNumber": "medium",
+      "rookie": "medium",
+      "parallel": "high",
+      "insert": "low",
+      "grade": "low"
+    },
+    "fieldsReasoning": {
+      "player": "Player name printed.",
+      "brand": "Fleer logo visible.",
+      "setName": "Fleer branding visible.",
+      "subset": "Base card.",
+      "sport": "Baseball imagery.",
+      "league": "MLB logo present.",
+      "year": "Year printed on card.",
+      "cardNumber": "Card number visible.",
+      "rookie": "No RC indicator.",
+      "parallel": "No parallel text.",
+      "insert": "No insert text.",
+      "grade": "Raw card."
+    },
+    "warnings": []
+  }
+}

@@ -1,7 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import type { CollectionItem } from "@/types";
+import { formatCardSubtitle } from "@/lib/card-identity/display";
+import { formatCurrency, formatPct, computeGainLoss } from "@/lib/formatters";
+import { getEstCmv } from "@/lib/values";
 
 interface CollectionGridProps {
   items: CollectionItem[];
@@ -9,18 +13,8 @@ interface CollectionGridProps {
   onRefresh: () => void;
 }
 
-function formatPrice(price: number | null): string {
-  if (price === null) return "-";
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(price);
-}
-
 function formatDate(dateStr: string | null): string {
-  if (!dateStr) return "-";
+  if (!dateStr) return "—";
   return new Date(dateStr).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
@@ -34,28 +28,54 @@ interface CardItemProps {
 }
 
 function CardItem({ item, onDelete }: CardItemProps) {
+  const router = useRouter();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-  const gainLoss =
-    item.estimated_cmv !== null && item.purchase_price !== null
-      ? item.estimated_cmv - item.purchase_price
-      : null;
+  const cmv = getEstCmv(item);
+  const gainLoss = computeGainLoss(cmv, item.purchase_price);
+  const isRecentlyAdded = item.created_at
+    ? Date.now() - new Date(item.created_at).getTime() < 120_000
+    : false;
 
-  const gainLossPercent =
-    gainLoss !== null && item.purchase_price !== null && item.purchase_price > 0
-      ? (gainLoss / item.purchase_price) * 100
-      : null;
+  // Debug: log CMV pipeline for first few renders (remove after fix verified)
+  if (typeof window !== "undefined" && (window as any).__CARDZ_DEBUG) {
+    const a = item as any;
+    console.log("[CMV debug]", item.player_name, {
+      getEstCmv_result: cmv,
+      estimated_cmv: a.estimated_cmv ?? "MISSING",
+      est_cmv: a.est_cmv ?? "MISSING",
+      cmv_confidence: a.cmv_confidence ?? "MISSING",
+      cmv_last_updated: a.cmv_last_updated ?? "MISSING",
+    });
+  }
+
+  // Get primary image or fallback to image_url
+  const imageUrl = item.primary_image?.url || item.image_url;
+
+  const handleCardClick = () => {
+    router.push(`/cards/${item.id}`);
+  };
 
   return (
-    <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden">
-      {/* Image */}
-      <div className="aspect-[3/4] bg-gray-100 dark:bg-gray-800 relative">
-        {item.image_url ? (
-          <img
-            src={item.image_url}
-            alt={item.player_name}
-            className="w-full h-full object-cover"
-          />
+    <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden hover:border-blue-500 dark:hover:border-blue-500 transition-colors cursor-pointer">
+      {/* Image - clickable */}
+      <div
+        className="aspect-[3/4] bg-gray-100 dark:bg-gray-800 relative"
+        onClick={handleCardClick}
+      >
+        {imageUrl ? (
+          <>
+            <img
+              src={imageUrl}
+              alt={item.player_name}
+              className="w-full h-full object-cover"
+            />
+            {!item.primary_image && item.image_url && (
+              <span className="absolute bottom-2 left-2 px-1.5 py-0.5 bg-black/60 text-white text-[10px] font-medium rounded">
+                Stock
+              </span>
+            )}
+          </>
         ) : (
           <div className="w-full h-full flex items-center justify-center">
             <svg
@@ -76,7 +96,10 @@ function CardItem({ item, onDelete }: CardItemProps) {
 
         {/* Delete button */}
         <button
-          onClick={() => setShowDeleteConfirm(true)}
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowDeleteConfirm(true);
+          }}
           className="absolute top-2 right-2 p-1.5 bg-white/90 dark:bg-gray-900/90 rounded-full text-gray-400 hover:text-red-500 transition-colors"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -85,50 +108,65 @@ function CardItem({ item, onDelete }: CardItemProps) {
         </button>
       </div>
 
-      {/* Info */}
-      <div className="p-4">
+      {/* Info - clickable */}
+      <div className="p-4" onClick={handleCardClick}>
         <h3 className="font-semibold text-gray-900 dark:text-white truncate">
           {item.player_name}
         </h3>
         <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
-          {[item.year, item.set_name, item.grade].filter(Boolean).join(" • ") ||
-            "No details"}
+          {(() => {
+            const subtitle = formatCardSubtitle(
+              item.year ?? item.set_name
+                ? {
+                    year: item.year ? Number(item.year) : null,
+                    brand: null,
+                    setName: item.set_name ?? null,
+                    subset: null,
+                    parallel: null,
+                  }
+                : null
+            );
+            if (subtitle) return item.grade ? `${subtitle} · ${item.grade}` : subtitle;
+            return item.grade ?? "No details";
+          })()}
         </p>
 
         <div className="mt-3 space-y-1">
           <div className="flex justify-between text-sm">
             <span className="text-gray-500 dark:text-gray-400">Paid</span>
             <span className="font-medium text-gray-900 dark:text-white">
-              {formatPrice(item.purchase_price)}
+              {formatCurrency(item.purchase_price)}
             </span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-gray-500 dark:text-gray-400">CMV</span>
             <span className="font-medium text-gray-900 dark:text-white">
-              {item.estimated_cmv !== null ? formatPrice(item.estimated_cmv) : "CMV unavailable"}
+              {cmv !== null
+                ? formatCurrency(cmv)
+                : isRecentlyAdded && item.cmv_confidence !== "unavailable"
+                ? "Calculating..."
+                : "CMV unavailable"}
             </span>
           </div>
-          {item.estimated_cmv === null && (
+          {cmv === null && (
             <p className="text-xs text-gray-400 dark:text-gray-500">
-              Add comps to calculate value
+              {isRecentlyAdded && item.cmv_confidence !== "unavailable"
+                ? "Market value is being calculated"
+                : "Add comps to calculate value"}
             </p>
           )}
-          {gainLoss !== null && (
+          {gainLoss && (
             <div className="flex justify-between text-sm">
               <span className="text-gray-500 dark:text-gray-400">Gain/Loss</span>
               <span
                 className={`font-medium ${
-                  gainLoss >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
+                  gainLoss.amount >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
                 }`}
               >
-                {gainLoss >= 0 ? "+" : ""}
-                {formatPrice(gainLoss)}
-                {gainLossPercent !== null && (
-                  <span className="text-xs ml-1">
-                    ({gainLossPercent >= 0 ? "+" : ""}
-                    {gainLossPercent.toFixed(1)}%)
-                  </span>
-                )}
+                {formatCurrency(gainLoss.amount)}
+                <span className="text-xs ml-1">
+                  ({formatPct(gainLoss.pct)})
+                </span>
               </span>
             </div>
           )}

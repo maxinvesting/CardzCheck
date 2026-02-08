@@ -1,0 +1,51 @@
+{
+  "ocrLines": [
+    "Topps Chrome",
+    "© 2023 Topps Company, Inc."
+  ],
+  "vision": {
+    "player": "Shohei Ohtani",
+    "players": ["Shohei Ohtani"],
+    "brand": "Topps",
+    "setName": "Topps Chrome",
+    "subset": "Base",
+    "sport": "Baseball",
+    "league": "MLB",
+    "year": 2023,
+    "cardNumber": "150",
+    "rookie": false,
+    "parallel": "Base",
+    "insert": null,
+    "grade": null,
+    "confidence": "high",
+    "fieldConfidence": {
+      "player": "high",
+      "brand": "high",
+      "setName": "high",
+      "subset": "high",
+      "sport": "high",
+      "league": "high",
+      "year": "high",
+      "cardNumber": "medium",
+      "rookie": "medium",
+      "parallel": "high",
+      "insert": "low",
+      "grade": "low"
+    },
+    "fieldsReasoning": {
+      "player": "Player name printed.",
+      "brand": "Topps logo visible.",
+      "setName": "Chrome branding visible.",
+      "subset": "No parallel indicators.",
+      "sport": "Baseball image.",
+      "league": "MLB logo present.",
+      "year": "Copyright line shows 2023.",
+      "cardNumber": "Card number partially visible.",
+      "rookie": "No RC indicator.",
+      "parallel": "No parallel text.",
+      "insert": "No insert text.",
+      "grade": "Raw card."
+    },
+    "warnings": []
+  }
+}
