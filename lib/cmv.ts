@@ -1,12 +1,14 @@
 import { GRADING_OPTIONS } from "@/lib/card-data";
-import { scrapeEbaySoldListings } from "@/lib/ebay";
+import { scrapeEbaySoldListings, searchEbayDualSignal } from "@/lib/ebay";
 import type { CollectionItem, Comp, CmvConfidence } from "@/types";
 
 const CMV_LOOKBACK_DAYS = 90;
 const CMV_STALE_DAYS = 7;
+const CMV_RETRY_UNAVAILABLE = true;
 
 type CmvResult = {
   estimated_cmv: number | null;
+  est_cmv: number | null;
   cmv_confidence: CmvConfidence;
   cmv_last_updated: string;
 };
@@ -27,6 +29,9 @@ const nowIso = (): string => new Date().toISOString();
 
 export function isCmvStale(item: CollectionItem): boolean {
   if (!item.cmv_last_updated || !item.cmv_confidence) {
+    return true;
+  }
+  if (CMV_RETRY_UNAVAILABLE && item.cmv_confidence === CMV_CONFIDENCE.unavailable) {
     return true;
   }
   const lastUpdated = new Date(item.cmv_last_updated).getTime();
@@ -133,11 +138,38 @@ async function fetchCompsForCard(
   card: CollectionItem,
   overrides: Partial<{ grade: string | null }> = {}
 ): Promise<Comp[]> {
+  const hasGradeOverride = Object.prototype.hasOwnProperty.call(overrides, "grade");
+  const rawGrade = hasGradeOverride ? overrides.grade : card.grade;
+  const grade =
+    rawGrade && typeof rawGrade === "string" && /raw|ungraded/i.test(rawGrade)
+      ? undefined
+      : rawGrade || undefined;
+
+  const parallelFromNotes = (() => {
+    if (!card.notes) return undefined;
+    const match = card.notes.match(/Parallel:\s*([^|]+)/i);
+    if (!match) return undefined;
+    const cleaned = match[1].replace(/\/\d{1,4}/g, "").trim();
+    return cleaned || undefined;
+  })();
+
+  const insertFromNotes = (() => {
+    if (!card.notes) return undefined;
+    const match =
+      card.notes.match(/Insert:\s*([^|]+)/i) ||
+      card.notes.match(/\[INSERT:([^\]]+)\]/i);
+    if (!match) return undefined;
+    const cleaned = match[1].trim();
+    return cleaned || undefined;
+  })();
+
   return scrapeEbaySoldListings({
     player: card.player_name,
     year: card.year || undefined,
     set: card.set_name || undefined,
-    grade: overrides.grade ?? card.grade ?? undefined,
+    grade,
+    parallelType: parallelFromNotes,
+    keywords: insertFromNotes ? [insertFromNotes] : undefined,
   });
 }
 
@@ -145,16 +177,16 @@ export async function calculateCardCmv(card: CollectionItem): Promise<CmvResult>
   const lastUpdated = nowIso();
 
   const exactComps = filterRecentComps(await fetchCompsForCard(card));
-  if (exactComps.length >= 3) {
-    const prices = exactComps.map((comp) => comp.price);
-    const exactMedian = median(prices);
-    if (exactMedian !== null) {
-      return {
-        estimated_cmv: Math.round(exactMedian * 100) / 100,
-        cmv_confidence: CMV_CONFIDENCE.high,
-        cmv_last_updated: lastUpdated,
-      };
-    }
+  const exactPrices = exactComps.map((comp) => comp.price);
+  const exactMedian = median(exactPrices);
+  if (exactMedian !== null && exactComps.length >= 3) {
+    const val = Math.round(exactMedian * 100) / 100;
+    return {
+      estimated_cmv: val,
+      est_cmv: val,
+      cmv_confidence: CMV_CONFIDENCE.high,
+      cmv_last_updated: lastUpdated,
+    };
   }
 
   const targetGrade = parseGradeInfo(card.grade);
@@ -175,8 +207,10 @@ export async function calculateCardCmv(card: CollectionItem): Promise<CmvResult>
     if (adjustedPrices.length >= 3) {
       const weighted = weightedMedian(adjustedPrices, adjustedWeights);
       if (weighted !== null) {
+        const val = Math.round(weighted * 100) / 100;
         return {
-          estimated_cmv: Math.round(weighted * 100) / 100,
+          estimated_cmv: val,
+          est_cmv: val,
           cmv_confidence: CMV_CONFIDENCE.medium,
           cmv_last_updated: lastUpdated,
         };
@@ -191,16 +225,74 @@ export async function calculateCardCmv(card: CollectionItem): Promise<CmvResult>
     const proxyMedian = median(proxyComps.map((comp) => comp.price));
     if (proxyMedian !== null) {
       const adjusted = proxyMedian * rarityAdjustment(card.notes);
+      const val = Math.round(adjusted * 100) / 100;
       return {
-        estimated_cmv: Math.round(adjusted * 100) / 100,
+        estimated_cmv: val,
+        est_cmv: val,
         cmv_confidence: CMV_CONFIDENCE.low,
         cmv_last_updated: lastUpdated,
       };
     }
   }
 
+  if (exactMedian !== null && exactComps.length > 0) {
+    const val = Math.round(exactMedian * 100) / 100;
+    return {
+      estimated_cmv: val,
+      est_cmv: val,
+      cmv_confidence: CMV_CONFIDENCE.low,
+      cmv_last_updated: lastUpdated,
+    };
+  }
+
+  // ── Fallback: use Browse API (active listings) when sold comps unavailable ──
+  // This mirrors the Comps page engine (searchEbayDualSignal) so Collection
+  // shows the same CMV that the user sees when searching on the Comps tab.
+  try {
+    const rawGrade = card.grade;
+    const grade =
+      rawGrade && typeof rawGrade === "string" && /raw|ungraded/i.test(rawGrade)
+        ? undefined
+        : rawGrade || undefined;
+
+    const dualResult = await searchEbayDualSignal({
+      player: card.player_name,
+      year: card.year || undefined,
+      set: card.set_name || undefined,
+      grade,
+    });
+
+    // Mirror search API logic: estimated sale range midpoint → forSale median
+    let fallbackCmv: number | null = null;
+
+    if (dualResult.estimatedSaleRange.pricingAvailable) {
+      const { low, high } = dualResult.estimatedSaleRange.estimatedSaleRange;
+      const mid = Math.round(((low + high) / 2) * 100) / 100;
+      if (Number.isFinite(mid) && mid > 0) {
+        fallbackCmv = mid;
+      }
+    }
+
+    if (fallbackCmv === null && dualResult.forSale.median > 0) {
+      fallbackCmv = Math.round(dualResult.forSale.median * 100) / 100;
+    }
+
+    if (fallbackCmv !== null) {
+      console.log(`📊 CMV from active listings fallback: $${fallbackCmv} for ${card.player_name}`);
+      return {
+        estimated_cmv: fallbackCmv,
+        est_cmv: fallbackCmv,
+        cmv_confidence: CMV_CONFIDENCE.low,
+        cmv_last_updated: lastUpdated,
+      };
+    }
+  } catch (e) {
+    console.error("⚠️ Dual-signal CMV fallback failed:", e);
+  }
+
   return {
     estimated_cmv: null,
+    est_cmv: null,
     cmv_confidence: CMV_CONFIDENCE.unavailable,
     cmv_last_updated: lastUpdated,
   };

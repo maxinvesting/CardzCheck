@@ -1,5 +1,12 @@
 import { parseSmartSearch } from "@/lib/smart-search-parser";
-import { tokenize, extractBrandAndLine, extractParallel, extractCardNumber, extractYear } from "./normalize";
+import {
+  tokenize,
+  extractBrandAndLine,
+  extractParallel,
+  extractCardNumber,
+  extractYear,
+  extractGraderAndGrade,
+} from "./normalize";
 import type { ParsedQuery, LockedConstraints } from "./types";
 
 /**
@@ -56,10 +63,47 @@ export function parseQuery(rawQuery: string): ParsedQuery {
     locked.parallel = original.parallel_type;
   }
 
+  // Grader + grade lock (if explicitly present)
+  const graderGradeFromQuery = extractGraderAndGrade(rawQuery);
+  if (graderGradeFromQuery.grader) {
+    locked.grader = graderGradeFromQuery.grader;
+  }
+  if (graderGradeFromQuery.grade) {
+    locked.grade = graderGradeFromQuery.grade;
+  } else if (original.grade) {
+    const parsedGrade = extractGraderAndGrade(original.grade);
+    if (parsedGrade.grader) locked.grader = parsedGrade.grader;
+    if (parsedGrade.grade) locked.grade = parsedGrade.grade;
+  }
+
+  const variantTokens = [
+    original.parallel_type,
+    original.variation,
+    original.autograph,
+    original.relic,
+  ]
+    .filter(Boolean)
+    .flatMap((value) => tokenize(value ?? ""));
+
+  const setName = original.set_name?.trim() || undefined;
+  const brandLineFromSet = setName ? extractBrandAndLine(setName) : { brand: undefined, line: undefined };
+
   return {
     original,
     locked,
     tokens,
+    signals: {
+      player: original.player_name?.trim() || undefined,
+      year: original.year || locked.year,
+      brand: locked.brand || brandLineFromSet.brand,
+      line: locked.line || brandLineFromSet.line,
+      setName,
+      variantTokens,
+      grader: locked.grader,
+      grade: locked.grade,
+      cardNumber:
+        locked.cardNumber ||
+        (original.card_number ? (original.card_number.startsWith("#") ? original.card_number : `#${original.card_number}`) : undefined),
+    },
   };
 }
-

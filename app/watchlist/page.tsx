@@ -4,11 +4,13 @@ import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import WatchlistGrid from "@/components/WatchlistGrid";
-import WatchlistSmartSearch from "@/components/WatchlistSmartSearch";
+import CardPickerModal from "@/components/CardPickerModal";
+import type { CardPickerSelection } from "@/components/CardPicker";
 import WatchCardModal from "@/components/WatchCardModal";
 import { createClient } from "@/lib/supabase/client";
 import type { WatchlistItem, User } from "@/types";
 import { isTestMode, getTestUser } from "@/lib/test-mode";
+import { formatGraderGrade } from "@/lib/cards/format";
 
 function formatPrice(price: number | null): string {
   if (price === null) return "$0.00";
@@ -143,6 +145,20 @@ export default function WatchlistPage() {
       );
       setToast({ type: "success", message: "Target price updated" });
     }
+  };
+
+  const handleCardPickerSelect = (card: CardPickerSelection) => {
+    const gradeLabel = formatGraderGrade(card.grader, card.grade);
+    setSelectedCardData({
+      player_name: card.player_name,
+      year: card.year,
+      set_brand: card.set_name || card.brand,
+      card_number: card.card_number,
+      parallel_variant: card.variant,
+      condition: gradeLabel,
+    });
+    setShowAddModal(false);
+    setShowWatchModal(true);
   };
 
   // Calculate watchlist stats
@@ -516,16 +532,12 @@ export default function WatchlistPage() {
           </div>
         )}
 
-        {/* Watchlist Smart Search Modal */}
-        <WatchlistSmartSearch
+        <CardPickerModal
           isOpen={showAddModal}
-          onClose={() => {
-            setShowAddModal(false);
-          }}
-          onCardSelected={(cardData) => {
-            setSelectedCardData(cardData);
-            setShowWatchModal(true);
-          }}
+          onClose={() => setShowAddModal(false)}
+          title="Add Card to Watchlist"
+          mode="watchlist"
+          onSelect={handleCardPickerSelect}
         />
 
         {/* Watch Card Modal */}

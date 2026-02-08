@@ -1,3 +1,4 @@
+// Deprecated: use POST /api/cards/search with CardPicker.
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isTestMode } from "@/lib/test-mode";
@@ -6,6 +7,7 @@ import { smartSearch } from "@/lib/smartSearch";
 
 export async function GET(request: NextRequest) {
   const q = request.nextUrl.searchParams.get("q")?.trim() || "";
+  const debug = request.nextUrl.searchParams.get("debug") === "1" && process.env.NODE_ENV !== "production";
 
   if (!q) {
     return NextResponse.json({ error: "Query is required" }, { status: 400 });
@@ -13,8 +15,9 @@ export async function GET(request: NextRequest) {
 
   try {
     // Bypass auth in test mode
+    let supabase: Awaited<ReturnType<typeof createClient>> | undefined;
     if (!isTestMode()) {
-      const supabase = await createClient();
+      supabase = await createClient();
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -27,6 +30,8 @@ export async function GET(request: NextRequest) {
     const smart = await smartSearch(q, "collection", {
       limit: 30,
       source: "ebayCollection",
+      debug,
+      supabase,
     });
 
     const comps = smart.rawComps ?? [];
@@ -66,4 +71,3 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-

@@ -35,4 +35,11 @@ describe("parseQuery", () => {
     const ratedRookie = parseQuery("2024 Donruss Optic Drake Maye Rated Rookie");
     expect(ratedRookie.locked.parallel?.toLowerCase()).toContain("rated rookie");
   });
+
+  it("extracts grader/grade and rookie variation from mixed formats like PSA10 and RC", () => {
+    const parsed = parseQuery("2024 C.J. Stroud Panini Prizm RC PSA10");
+    expect(parsed.locked.grader).toBe("PSA");
+    expect(parsed.locked.grade).toBe("10");
+    expect(parsed.signals.variantTokens).toContain("rookie");
+  });
 });

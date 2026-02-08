@@ -1,20 +1,22 @@
 "use client";
 
-import { useRef, useState, useEffect, useMemo } from "react";
+import { useRef, useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import CollectionGrid from "@/components/CollectionGrid";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import PaywallModal from "@/components/PaywallModal";
 import AddCardModalNew from "@/components/AddCardModalNew";
-import CollectionSmartSearch from "@/components/CollectionSmartSearch";
+import CardPickerModal from "@/components/CardPickerModal";
+import type { CardPickerSelection } from "@/components/CardPicker";
 import { createClient } from "@/lib/supabase/client";
 import type { CollectionItem, User } from "@/types";
 import { LIMITS } from "@/types";
 import { isTestMode, getTestUser } from "@/lib/test-mode";
 import { computeCollectionSummary, getEstCmv } from "@/lib/values";
+import { formatCardNumber, formatGraderGrade } from "@/lib/cards/format";
 
 function formatPrice(price: number | null): string {
-  if (price === null) return "CMV unavailable";
+  if (price === null) return "—";
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
@@ -39,7 +41,9 @@ export default function CollectionPage() {
   const [loading, setLoading] = useState(true);
   const [showPaywall, setShowPaywall] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [showSmartSearch, setShowSmartSearch] = useState(false);
+  const [showCardPicker, setShowCardPicker] = useState(false);
+  const [cardPickerError, setCardPickerError] = useState<string | null>(null);
+  const [cardPickerLoading, setCardPickerLoading] = useState(false);
   const [toast, setToast] = useState<{type: 'success' | 'error', message: string} | null>(null);
   const [filterQuery, setFilterQuery] = useState("");
   const [sortBy, setSortBy] = useState<"newest" | "oldest" | "player_az" | "player_za" | "paid_high" | "paid_low">("newest");
@@ -61,7 +65,7 @@ export default function CollectionPage() {
       if (isTestMode()) {
         setUser(getTestUser());
         // Load collection (will return empty array in test mode)
-        const response = await fetch("/api/collection");
+        const response = await fetch("/api/collection", { cache: "no-store" });
         const data = await response.json();
         if (data.items) {
           setItems(data.items);
@@ -91,7 +95,7 @@ export default function CollectionPage() {
       }
 
       // Load collection
-      const response = await fetch("/api/collection");
+      const response = await fetch("/api/collection", { cache: "no-store" });
       const data = await response.json();
 
       if (data.items) {
@@ -114,13 +118,30 @@ export default function CollectionPage() {
     }
   };
 
-  const refreshCollection = async () => {
-    const response = await fetch("/api/collection");
+  const refreshCollection = useCallback(async () => {
+    const response = await fetch("/api/collection", { cache: "no-store" });
     const data = await response.json();
     if (data.items) {
       setItems(data.items);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        refreshCollection();
+      }
+    };
+    const handleFocus = () => {
+      refreshCollection();
+    };
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [refreshCollection]);
 
   const csvEscape = (value: unknown): string => {
     if (value === null || value === undefined) return "";
@@ -303,7 +324,26 @@ export default function CollectionPage() {
   };
 
   // Collection calculations
-  const collectionSummary = useMemo(() => computeCollectionSummary(items), [items]);
+  const collectionSummary = useMemo(() => {
+    const summary = computeCollectionSummary(items);
+    // Debug: log CMV pipeline summary (enabled via window.__CARDZ_DEBUG = true)
+    if (typeof window !== "undefined" && (window as any).__CARDZ_DEBUG && items.length > 0) {
+      const first = items[0] as any;
+      console.log("[CMV summary debug]", {
+        totalCards: items.length,
+        cardsWithCmv: summary.cardsWithCmv,
+        totalDisplayValue: summary.totalDisplayValue,
+        firstCard: {
+          player: first.player_name,
+          estimated_cmv: first.estimated_cmv ?? "MISSING",
+          est_cmv: first.est_cmv ?? "MISSING",
+          cmv_confidence: first.cmv_confidence ?? "MISSING",
+          getEstCmv: getEstCmv(first),
+        },
+      });
+    }
+    return summary;
+  }, [items]);
 
   // Top performers (cards with highest value)
   // Top performers (by % change using CMV vs cost basis where both exist)
@@ -322,8 +362,10 @@ export default function CollectionPage() {
           cost > 0
       )
       .map(({ item, est, cost }) => {
-        const dollarChange = est - cost;
-        const pctChange = cost > 0 ? (dollarChange / cost) * 100 : 0;
+        const c = cost ?? 0;
+        const e = est ?? 0;
+        const dollarChange = e - c;
+        const pctChange = c > 0 ? (dollarChange / c) * 100 : 0;
         return { item, est, cost, dollarChange, pctChange };
       })
       .sort((a, b) => {
@@ -410,6 +452,85 @@ export default function CollectionPage() {
     return sorted;
   }, [items, filterQuery, searchQuery, sortBy]);
 
+  const needsCmvRefresh = useMemo(() => {
+    return items.some((item) => {
+      const compsCount = (item as { comps_count?: number | null }).comps_count;
+      return typeof compsCount === "number" && compsCount > 0 && getEstCmv(item) === null;
+    });
+  }, [items]);
+
+  useEffect(() => {
+    if (!needsCmvRefresh) return;
+    let attempts = 0;
+    const maxAttempts = 6;
+    const interval = setInterval(async () => {
+      attempts += 1;
+      await refreshCollection();
+      if (attempts >= maxAttempts) {
+        clearInterval(interval);
+      }
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [needsCmvRefresh, refreshCollection]);
+
+  const handleAddFromPicker = async (card: CardPickerSelection) => {
+    setCardPickerError(null);
+    setCardPickerLoading(true);
+
+    const gradeLabel = formatGraderGrade(card.grader, card.grade);
+    const notesParts: string[] = [];
+    if (card.variant && card.variant.toLowerCase() !== "base") {
+      notesParts.push(`Parallel: ${card.variant}`);
+    }
+    const numberLabel = formatCardNumber(card.card_number);
+    if (numberLabel) {
+      notesParts.push(`Card ${numberLabel}`);
+    }
+
+    try {
+      const response = await fetch("/api/collection", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          player_name: card.player_name,
+          year: card.year || null,
+          set_name: card.set_name || card.brand || null,
+          grade: gradeLabel || null,
+          purchase_price: null,
+          purchase_date: null,
+          image_url: null,
+          notes: notesParts.length > 0 ? notesParts.join(" | ") : null,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        if (data.error === "limit_reached") {
+          setShowCardPicker(false);
+          setShowPaywall(true);
+          return;
+        }
+        throw new Error(data.error || "Failed to add card");
+      }
+
+      setToast({
+        type: "success",
+        message: `Added ${card.player_name} to collection!`,
+      });
+      if (isTestMode() && data.item) {
+        setItems((prev) => [data.item, ...prev]);
+      } else {
+        refreshCollection();
+      }
+      setShowCardPicker(false);
+    } catch (err) {
+      setCardPickerError(err instanceof Error ? err.message : "Failed to add card");
+    } finally {
+      setCardPickerLoading(false);
+    }
+  };
+
   return (
     <AuthenticatedLayout>
       <main className="max-w-6xl mx-auto px-4 py-8">
@@ -458,7 +579,7 @@ export default function CollectionPage() {
           </div>
         </div>
 
-        {/* Hero Collection Stats */}
+        {/* Hero Collection Stats - Large gradient hero distinguishes from compact Dashboard */}
         <div className="bg-gradient-to-br from-blue-600 to-blue-700 dark:from-blue-700 dark:to-blue-800 rounded-2xl p-6 mb-6 text-white">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             {/* Total Value - Hero */}
@@ -556,7 +677,7 @@ export default function CollectionPage() {
           </div>
         )}
 
-        {/* Top Performers & Recently Added */}
+        {/* Top Performers & Recently Added - Two-column layout distinguishes from Dashboard's single-column */}
         {!loading && items.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             {/* Top Performers */}
@@ -592,7 +713,7 @@ export default function CollectionPage() {
                         </div>
                       </div>
                       <p className="font-semibold text-gray-900 dark:text-white">
-                        {formatPrice(item.estimated_cmv)}
+                        {formatPrice(getEstCmv(item))}
                       </p>
                     </div>
                   ))}
@@ -779,39 +900,31 @@ export default function CollectionPage() {
           onClose={() => setShowAddModal(false)}
           onSuccess={(playerName, item) => {
             setToast({ type: 'success', message: `Added ${playerName} to collection!` });
-            if (isTestMode() && item) {
+            if (item) {
               setItems((prev) => [item, ...prev]);
-            } else {
-              refreshCollection();
             }
+            // Background refresh to get server-computed fields (primary_image, etc.)
+            refreshCollection();
           }}
           onLimitReached={() => setShowPaywall(true)}
           onOpenSmartSearch={() => {
-            // Close the current Add Card modal and open the smart search flow instead
             setShowAddModal(false);
-            setShowSmartSearch(true);
+            setCardPickerError(null);
+            setShowCardPicker(true);
           }}
         />
 
-        {/* Smart Search Add (same smart search UX as watchlist, but adds to collection) */}
-        <CollectionSmartSearch
-          isOpen={showSmartSearch}
+        <CardPickerModal
+          isOpen={showCardPicker}
           onClose={() => {
-            setShowSmartSearch(false);
+            setShowCardPicker(false);
+            setCardPickerError(null);
           }}
-          onSuccess={(playerName, item) => {
-            setToast({ type: 'success', message: `Added ${playerName} to collection!` });
-            if (isTestMode() && item) {
-              setItems((prev) => [item, ...prev]);
-            } else {
-              refreshCollection();
-            }
-            setShowSmartSearch(false);
-          }}
-          onLimitReached={() => {
-            setShowSmartSearch(false);
-            setShowPaywall(true);
-          }}
+          title="Add Card to Collection"
+          mode="collection"
+          onSelect={handleAddFromPicker}
+          error={cardPickerError}
+          busy={cardPickerLoading}
         />
 
         {/* Toast Notification */}

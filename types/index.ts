@@ -68,7 +68,11 @@ export interface CollectionItem {
   year: string | null;
   set_name: string | null;
   insert?: string | null; // Insert type (e.g., "Downtown")
+  parallel_type?: string | null; // e.g., "Silver Prizm", "Holo"
+  card_number?: string | null; // e.g., "349"
   grade: string | null;
+  grading_company?: string | null; // PSA, BGS, SGC, CGC, etc.
+  cert_number?: string | null; // Certification number from grading company
   purchase_price: number | null;
   purchase_date: string | null;
   image_url: string | null;
@@ -76,6 +80,7 @@ export interface CollectionItem {
   estimated_cmv: number | null;
   cmv_confidence: CmvConfidence;
   cmv_last_updated: string | null;
+  comps_count?: number | null;
   created_at: string;
   /**
    * Estimated current market value (CMV) for this card.
@@ -83,6 +88,23 @@ export interface CollectionItem {
    * Nullable because many cards may not have pricing yet.
    */
   est_cmv?: number | null;
+  // Related card images (joined from card_images table)
+  card_images?: CardImage[];
+  // Primary image (position 0) for display
+  primary_image?: CardImage;
+}
+
+// Card image record for multi-image support
+export interface CardImage {
+  id: string;
+  card_id: string;
+  user_id: string;
+  storage_path: string;
+  position: number;
+  label?: string | null;
+  created_at: string;
+  // URL computed on client/server
+  url?: string;
 }
 
 export interface Comp {
@@ -150,6 +172,9 @@ export interface SearchResult {
   _forSale?: ForSaleData;
   _estimatedSaleRange?: EstimatedSaleRange;
   _disclaimers?: string[];
+  // Multi-pass search metadata
+  _passUsed?: "strict" | "broad" | "minimal";
+  _totalPasses?: number;
 }
 
 // Grade estimation from AI analysis
@@ -162,6 +187,9 @@ export interface GradeEstimate {
   edges: string;
   grade_notes: string;
   grade_probabilities?: GradeProbabilities;
+  analysis_status?: "ok" | "low_confidence" | "unable";
+  analysis_reason?: string;
+  analysis_warning_code?: "parse_error" | "low_confidence" | "unable";
 }
 
 export interface GradeProbabilities {
@@ -211,6 +239,52 @@ export interface WorthGradingResult {
   explanation: string;
 }
 
+export interface GradeEstimatorHistoryCardSnapshot {
+  player_name: string;
+  year?: string;
+  set_name?: string;
+  card_number?: string;
+  parallel_type?: string;
+  variation?: string;
+  insert?: string;
+  grade?: string;
+  imageUrl?: string;
+  imageUrls?: string[];
+  confidence?: "high" | "medium" | "low";
+}
+
+export interface GradeEstimatorHistoryRun {
+  id: string;
+  user_id: string;
+  job_id: string;
+  card: GradeEstimatorHistoryCardSnapshot;
+  estimate: GradeEstimate;
+  post_grading_value?: WorthGradingResult | null;
+  created_at: string;
+}
+
+export type FieldConfidence = "high" | "medium" | "low";
+export type FieldSource = "ocr" | "vision" | "user" | "catalog" | "inferred";
+
+export type CardIdentity = {
+  player: string | null;
+  year: number | null;
+  brand: string | null; // e.g., Panini, Topps, Upper Deck
+  setName: string | null; // e.g., Mosaic, Prizm, Donruss Optic, Bowman Chrome
+  subset: string | null; // e.g., Base, Silver Prizm, Green Mosaic, Purple Prizm
+  sport: string | null; // e.g., Football, Basketball, Baseball, Hockey, Soccer
+  league: string | null; // e.g., NFL, NBA, MLB, NHL, NCAA, UEFA
+  cardNumber: string | null;
+  rookie: boolean | null;
+  parallel: string | null;
+  cardStock: "paper" | "chromium" | "unknown";
+  confidence: FieldConfidence;
+  fieldConfidence: Record<string, FieldConfidence>;
+  sources: Record<string, FieldSource>;
+  warnings: string[];
+  evidenceSummary: string | null;
+};
+
 export interface CardIdentification {
   player_name: string; // Primary player (for backward compatibility)
   players?: string[]; // All players (for multi-player cards)
@@ -220,6 +294,7 @@ export interface CardIdentification {
   variant: string; // Parallel/variant (not used for inserts)
   grade: string;
   confidence: "high" | "medium" | "low";
+  card_identity?: CardIdentity; // Canonical identity metadata (optional)
 }
 
 export interface CardIdentificationError {
@@ -249,9 +324,12 @@ export interface SearchFormData {
 // Extended result from card identification including image URL
 export interface CardIdentificationResult extends SearchFormData {
   imageUrl: string;
+  imageUrls?: string[];
   confidence: "high" | "medium" | "low";
   players?: string[]; // All players (for multi-player cards)
   insert?: string; // Insert type (e.g., "Downtown")
+  cardIdentity?: CardIdentity;
+  confirmedYear?: string;
   // gradeEstimate removed - only available via explicit grade-estimate API
 }
 
@@ -340,7 +418,7 @@ export interface AnalystThread {
 }
 
 export interface AnalystThreadMessage {
-  id: string;
+  id: string | null;
   thread_id: string;
   user_id: string;
   role: "user" | "assistant";

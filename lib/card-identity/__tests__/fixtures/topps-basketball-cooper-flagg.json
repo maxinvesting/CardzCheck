@@ -1,0 +1,52 @@
+{
+  "ocrLines": [
+    "COOPER FLAGG",
+    "Topps Chrome Basketball",
+    "© 2025 Topps Company, Inc."
+  ],
+  "vision": {
+    "player": "Cooper Flagg",
+    "players": ["Cooper Flagg"],
+    "brand": "Topps",
+    "setName": "Topps Chrome Basketball",
+    "subset": "Base",
+    "sport": "Basketball",
+    "league": "NCAA",
+    "year": 2025,
+    "cardNumber": "1",
+    "rookie": true,
+    "parallel": "Base",
+    "insert": null,
+    "grade": null,
+    "confidence": "high",
+    "fieldConfidence": {
+      "player": "high",
+      "brand": "high",
+      "setName": "high",
+      "subset": "high",
+      "sport": "high",
+      "league": "medium",
+      "year": "high",
+      "cardNumber": "medium",
+      "rookie": "high",
+      "parallel": "high",
+      "insert": "low",
+      "grade": "low"
+    },
+    "fieldsReasoning": {
+      "player": "Player name printed.",
+      "brand": "Topps logo visible.",
+      "setName": "Chrome Basketball branding visible.",
+      "subset": "No parallel indicators.",
+      "sport": "Basketball imagery.",
+      "league": "College markings visible.",
+      "year": "Copyright line shows 2025.",
+      "cardNumber": "Card number visible.",
+      "rookie": "Rookie indicator present.",
+      "parallel": "No parallel text.",
+      "insert": "No insert text.",
+      "grade": "Raw card."
+    },
+    "warnings": []
+  }
+}

@@ -3,7 +3,7 @@
 import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import CardUploader from "@/components/CardUploader";
-import SearchBar from "@/components/SearchBar";
+import CardPicker, { type CardPickerSelection } from "@/components/CardPicker";
 import CompsStats from "@/components/CompsStats";
 import CompsTable from "@/components/CompsTable";
 import FeaturedSearchCard from "@/components/FeaturedSearchCard";
@@ -12,12 +12,14 @@ import PlanSelectionModal from "@/components/PlanSelectionModal";
 import WelcomeToast from "@/components/WelcomeToast";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import ConfirmAddCardModal from "@/components/ConfirmAddCardModal";
-import GradeEstimateDisplay from "@/components/GradeEstimateDisplay";
+import GradeProbabilityPanel from "@/components/grading/GradeProbabilityPanel";
+import { CardIdentitySubtitle } from "@/components/ui";
+import { gradingCopy } from "@/copy/grading";
 import { createClient } from "@/lib/supabase/client";
 import { addRecentSearch } from "@/lib/recent-searches";
-import { parseSmartSearch } from "@/lib/smart-search-parser";
-import { extractBrandAndLine, extractParallel } from "@/lib/smartSearch/normalize";
-import type { SearchFormData, SearchResult, Comp, User, CardIdentificationResult, GradeEstimate } from "@/types";
+import { formatGraderGrade } from "@/lib/cards/format";
+import { needsYearConfirmation } from "@/lib/card-identity/ui";
+import type { SearchFormData, SearchResult, Comp, User, CardIdentificationResult, GradeEstimate, ParsedSearch } from "@/types";
 import { LIMITS } from "@/types";
 import { isTestMode, getTestUser } from "@/lib/test-mode";
 
@@ -42,9 +44,27 @@ function CompsPageContent() {
   const [identifiedCard, setIdentifiedCard] = useState<CardIdentificationResult | null>(null);
   const [gradeEstimate, setGradeEstimate] = useState<GradeEstimate | null>(null);
   const [estimatingGrade, setEstimatingGrade] = useState(false);
+  const [identityPending, setIdentityPending] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [cardWatched, setCardWatched] = useState(false);
   const [addingToCollection, setAddingToCollection] = useState<string | null>(null);
+
+  const resolveCmvForSave = (result: SearchResult | null): number | null => {
+    if (!result) return null;
+    const direct = result.stats?.cmv;
+    if (typeof direct === "number" && Number.isFinite(direct) && direct > 0) {
+      return direct;
+    }
+    const estimate = result._estimatedSaleRange;
+    if (estimate?.pricingAvailable && estimate.estimatedSaleRange) {
+      const { low, high } = estimate.estimatedSaleRange;
+      const mid = (low + high) / 2;
+      if (Number.isFinite(mid) && mid > 0) {
+        return Math.round(mid * 100) / 100;
+      }
+    }
+    return null;
+  };
 
   // Auto-dismiss toast after 3 seconds
   useEffect(() => {
@@ -163,6 +183,8 @@ function CompsPageContent() {
     if (data.variation) params.set("variation", data.variation);
     if (data.autograph) params.set("autograph", data.autograph);
     if (data.relic) params.set("relic", data.relic);
+    const cardId = searchParams.get("card_id");
+    if (cardId) params.set("card_id", cardId);
 
     try {
       const response = await fetch(`/api/search?${params}`);
@@ -201,9 +223,24 @@ function CompsPageContent() {
         .filter(Boolean)
         .join(" ");
 
+      const parsed: ParsedSearch = {
+        player_name: data.player_name,
+        year: data.year,
+        set_name: data.set_name,
+        grade: data.grade,
+        card_number: data.card_number,
+        parallel_type: data.parallel_type,
+        serial_number: data.serial_number,
+        variation: data.variation,
+        autograph: data.autograph,
+        relic: data.relic,
+        confidence: "high",
+        unparsed_tokens: [],
+      };
+
       addRecentSearch({
         query: queryString,
-        parsed: parseSmartSearch(queryString),
+        parsed,
         timestamp: Date.now(),
         resultCount: result.comps?.length || 0,
         cmv: result.stats?.cmv,
@@ -221,6 +258,20 @@ function CompsPageContent() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleCardPickerSelect = (card: CardPickerSelection) => {
+    const gradeLabel = formatGraderGrade(card.grader, card.grade);
+    const data: SearchFormData = {
+      player_name: card.player_name,
+      year: card.year,
+      set_name: card.set_name || card.brand,
+      grade: gradeLabel,
+      card_number: card.card_number,
+      parallel_type: card.variant,
+    };
+    setFormData(data);
+    handleSearch(data);
   };
 
   const handlePlanSelected = () => {
@@ -260,16 +311,25 @@ function CompsPageContent() {
     setAddingToCollection(comp.link);
 
     try {
+      const cmvForSave = resolveCmvForSave(results);
       const payload = {
         player_name: formData?.player_name || comp.title,
         year: formData?.year || null,
         set_name: formData?.set_name || null,
+        parallel_type: formData?.parallel_type || null,
+        card_number: formData?.card_number || null,
         grade: formData?.grade || null,
         purchase_price: comp.price,
         purchase_date: comp.date,
         image_url: comp.image || null,
+        notes: [
+          formData?.parallel_type && formData.parallel_type !== "Base"
+            ? `Parallel: ${formData.parallel_type}` : null,
+          formData?.card_number ? `Card #${formData.card_number}` : null,
+        ].filter(Boolean).join(" | ") || null,
         // Persist the same CMV shown in the comps tab
-        est_cmv: results?.stats?.cmv ?? null,
+        est_cmv: cmvForSave,
+        estimated_cmv: cmvForSave,
       };
 
       console.log("📦 Adding to collection:", payload);
@@ -326,6 +386,7 @@ function CompsPageContent() {
     }
 
     try {
+      const cmvForSave = resolveCmvForSave(results);
       const response = await fetch("/api/collection", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -333,12 +394,20 @@ function CompsPageContent() {
           player_name: formData.player_name,
           year: formData.year || null,
           set_name: formData.set_name || null,
+          parallel_type: formData.parallel_type || null,
+          card_number: formData.card_number || null,
           grade: formData.grade || null,
           purchase_price: null,
           purchase_date: null,
-          image_url: null,
+          image_url: results?._forSale?.items?.[0]?.image || null,
+          notes: [
+            formData.parallel_type && formData.parallel_type !== "Base"
+              ? `Parallel: ${formData.parallel_type}` : null,
+            formData.card_number ? `Card #${formData.card_number}` : null,
+          ].filter(Boolean).join(" | ") || null,
           // Use the same CMV that was estimated for this search, if available
-          est_cmv: results?.stats?.cmv ?? null,
+          est_cmv: cmvForSave,
+          estimated_cmv: cmvForSave,
         }),
       });
 
@@ -373,21 +442,14 @@ function CompsPageContent() {
       return;
     }
     try {
-      // Normalize brand/line/parallel using shared helpers for consistency
-      const brandLine = extractBrandAndLine(data.set_brand ?? formData?.set_name ?? "");
-      const parallel = extractParallel(data.parallel_variant ?? formData?.parallel_type ?? "");
-
       const res = await fetch("/api/watchlist", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...data,
           year: data.year ?? formData?.year ?? null,
-          set_brand:
-            brandLine.brand && brandLine.line
-              ? `${brandLine.brand} ${brandLine.line}`
-              : brandLine.brand || brandLine.line || data.set_brand || formData?.set_name || null,
-          parallel_variant: parallel ?? data.parallel_variant ?? formData?.parallel_type ?? null,
+          set_brand: data.set_brand ?? formData?.set_name ?? null,
+          parallel_variant: data.parallel_variant ?? formData?.parallel_type ?? null,
         }),
       });
       const json = await res.json().catch(() => ({}));
@@ -466,17 +528,21 @@ function CompsPageContent() {
           </div>
         )}
 
-        {/* Search Bar */}
+        {/* Card Picker */}
         <div className="mb-8">
-          <SearchBar
-            initialData={formData}
-            onSearch={(data: SearchFormData) => {
-              setFormData(data);
-              handleSearch(data);
+          <CardPicker
+            mode="comps"
+            onSelect={handleCardPickerSelect}
+            disabled={!canSearch || loading}
+            initialFilters={{
+              playerName: formData?.player_name,
+              setName: formData?.set_name,
+              year: formData?.year,
+              parallel: formData?.parallel_type,
+              cardNumber: formData?.card_number,
+              grader: formData?.grade?.split(" ")[0],
+              grade: formData?.grade?.split(" ")[1],
             }}
-            loading={loading}
-            disabled={!canSearch}
-            placeholder="Search any card... (e.g., Jordan Fleer 1986 PSA 10)"
           />
         </div>
 
@@ -534,6 +600,16 @@ function CompsPageContent() {
                   // Auto-search after identification
                   handleSearch(data);
                 }}
+                onStart={() => {
+                  setIdentifiedCard(null);
+                  setGradeEstimate(null);
+                  setEstimatingGrade(false);
+                  setFormData(undefined);
+                }}
+                onReset={() => {
+                  setIdentifiedCard(null);
+                  setFormData(undefined);
+                }}
                 disabled={loading}
               />
             </div>
@@ -554,19 +630,41 @@ function CompsPageContent() {
                   />
                 )}
                 <div>
-                  <p className="font-medium text-white">{identifiedCard.player_name}</p>
-                  <p className="text-sm text-gray-400">
-                    {[identifiedCard.year, identifiedCard.set_name, identifiedCard.parallel_type]
-                      .filter(Boolean)
-                      .join(" | ")}
+                  <p className="font-medium text-white">
+                    {identityPending ? "Identity pending" : identifiedCard.player_name}
                   </p>
+                  <CardIdentitySubtitle
+                    identity={
+                      identityPending
+                        ? null
+                        : identifiedCard.cardIdentity ?? (identifiedCard
+                            ? {
+                                year: identifiedCard.year ? Number(identifiedCard.year) : null,
+                                brand: null,
+                                setName: identifiedCard.set_name ?? null,
+                                subset: null,
+                                parallel: identifiedCard.parallel_type ?? null,
+                              }
+                            : null)
+                    }
+                    className="text-gray-400"
+                  />
+                  {!identityPending && needsYearConfirmation(
+                    identifiedCard.year,
+                    identifiedCard.confidence,
+                    identifiedCard.cardIdentity?.fieldConfidence?.year
+                  ) ? (
+                    <p className="text-xs text-amber-400 mt-1">Year: Needs confirmation</p>
+                  ) : null}
                 </div>
               </div>
               <div className="flex gap-2">
                 <button
                   onClick={async () => {
                     if (!identifiedCard?.imageUrl) return;
+                    setGradeEstimate(null);
                     setEstimatingGrade(true);
+                    setIdentityPending(true);
                     try {
                       const response = await fetch("/api/grade-estimate", {
                         method: "POST",
@@ -581,6 +679,7 @@ function CompsPageContent() {
                       console.error("Failed to estimate grade:", err);
                     } finally {
                       setEstimatingGrade(false);
+                      setIdentityPending(false);
                     }
                   }}
                   disabled={estimatingGrade || !!gradeEstimate || !!identifiedCard.grade}
@@ -592,14 +691,14 @@ function CompsPageContent() {
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                       </svg>
-                      Estimating...
+                      {gradingCopy.actions.analyzing}
                     </>
                   ) : (
                     <>
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
-                      Estimate Grade
+                      {gradingCopy.actions.analyze}
                     </>
                   )}
                 </button>
@@ -607,14 +706,19 @@ function CompsPageContent() {
                   onClick={() => setShowConfirmModal(true)}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors"
                 >
-                  Add to Collection
+                  {gradingCopy.actions.addToCollection}
                 </button>
               </div>
             </div>
 
             {/* Grade Estimate */}
             {gradeEstimate && (
-              <GradeEstimateDisplay estimate={gradeEstimate} />
+              <GradeProbabilityPanel
+                estimate={gradeEstimate}
+                primaryImageUrl={
+                  identifiedCard?.imageUrl || identifiedCard?.imageUrls?.[0] || null
+                }
+              />
             )}
           </div>
         )}
@@ -656,6 +760,23 @@ function CompsPageContent() {
               }
               return (
                 <>
+                  {/* Fallback banner — only shown when we have results but used a broader search pass */}
+                  {results._passUsed && results._passUsed !== "strict" && (
+                    <div className="p-4 bg-yellow-900/20 border border-yellow-800/50 rounded-lg">
+                      <div className="flex items-start gap-3">
+                        <svg className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <div>
+                          <p className="text-yellow-200 text-sm font-medium">No exact matches — showing closest comps</p>
+                          <p className="text-yellow-300/70 text-xs mt-1">
+                            We expanded your search to find similar listings. Results may include cards from different years or variations.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Most relevant result — click to expand for CMV, recent sales, Add to Watchlist */}
                   <FeaturedSearchCard
                     results={results}
@@ -800,6 +921,7 @@ function CompsPageContent() {
           setShowPaywall(true);
         }}
         cardData={identifiedCard}
+        initialCmv={resolveCmvForSave(results)}
       />
 
       {/* Toast Notification */}

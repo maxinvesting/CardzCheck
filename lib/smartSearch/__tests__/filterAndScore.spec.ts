@@ -31,15 +31,15 @@ describe("filtering and scoring", () => {
     ];
 
     const filtered = bucketByConstraints(parsed, candidates, "watchlist");
-    const { scored } = scoreCandidates(parsed, [...filtered.exact, ...filtered.close], "watchlist");
+    const { scored, config } = scoreCandidates(parsed, [...filtered.exact, ...filtered.close], "watchlist");
 
     const optic = scored.find((c) => c.title.includes("Optic"));
     const contenders = scored.find((c) => c.title.includes("Contenders"));
 
     expect(optic).toBeDefined();
     expect(contenders).toBeDefined();
-    expect(optic!.confidence).toBeGreaterThan(0.85);
-    expect(contenders!.confidence).toBeLessThanOrEqual(0.25);
+    expect(optic!.score).toBeGreaterThanOrEqual(config.exactScoreThreshold);
+    expect(contenders!.score).toBeLessThan(config.exactScoreThreshold);
   });
 
   it('allows multiple sets when only "drake maye" is searched, ranking by set/parallel match', () => {
@@ -60,9 +60,8 @@ describe("filtering and scoring", () => {
 
     // Should not drop either candidate, and scoring should still differentiate them (both allowed)
     expect(scored.length).toBe(2);
-    // Just ensure we have non-zero scores in collection mode
-    expect(scored[0].confidence).toBeGreaterThanOrEqual(0);
-    expect(scored[1].confidence).toBeGreaterThanOrEqual(0);
+    expect(scored[0].score).toBeGreaterThan(0);
+    expect(scored[1].score).toBeGreaterThan(0);
   });
 
   it("keeps mismatching year/brand only in close bucket for collection mode", () => {
@@ -88,5 +87,41 @@ describe("filtering and scoring", () => {
 
     expect(exactIds.has("2024 Donruss Optic Drake Maye Silver Prizm")).toBe(true);
     expect(closeIds.has("2023 Donruss Optic Drake Maye Silver Prizm")).toBe(true);
+  });
+
+  it("scores CJ Stroud Panini Prizm Silver Prizm PSA 10 as an exact match", () => {
+    const parsed = parseQuery("cj stroud panini prizm silver prizm psa 10");
+    const candidates: SmartSearchCandidate[] = [
+      makeCandidate("2023 Panini Prizm CJ Stroud Silver Prizm PSA 10", {
+        year: "2023",
+        brand: "Panini",
+        line: "Prizm",
+        parallel: "Silver Prizm",
+        grader: "PSA",
+        grade: "10",
+        playerName: "C.J. Stroud",
+      }),
+    ];
+
+    const { scored, config } = scoreCandidates(parsed, candidates, "watchlist");
+    expect(scored[0].score).toBeGreaterThanOrEqual(config.exactScoreThreshold);
+  });
+
+  it("returns Jayden Daniels Panini Prizm RC PSA 10 above close threshold", () => {
+    const parsed = parseQuery("2024 Jayden Daniels Panini Prizm RC PSA 10");
+    const candidates: SmartSearchCandidate[] = [
+      makeCandidate("2024 Panini Prizm Jayden Daniels Rookie Card PSA 10", {
+        year: "2024",
+        brand: "Panini",
+        line: "Prizm",
+        parallel: "Rookie Card",
+        grader: "PSA",
+        grade: "10",
+        playerName: "Jayden Daniels",
+      }),
+    ];
+
+    const { scored, config } = scoreCandidates(parsed, candidates, "collection");
+    expect(scored[0].score).toBeGreaterThanOrEqual(config.closeScoreMin);
   });
 });

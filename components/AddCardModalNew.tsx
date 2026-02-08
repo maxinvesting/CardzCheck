@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { formatSetLabel, needsYearConfirmation, shouldDisplayYear } from "@/lib/card-identity/ui";
 import {
   CONDITION_OPTIONS,
   type CardIdentificationResult,
   type CardIdentificationResponse,
   type CollectionItem,
+  type CardIdentity,
 } from "@/types";
 
 interface AddCardModalNewProps {
@@ -15,7 +17,7 @@ interface AddCardModalNewProps {
   onSuccess: (playerName: string, item?: CollectionItem) => void;
   onLimitReached: () => void;
   addMode?: "collection" | "watchlist";
-  /** Optional: for collection mode, open the smart search flow instead of manual entry */
+  /** Optional: for collection mode, open the CardPicker flow instead of manual entry */
   onOpenSmartSearch?: () => void;
   onCardSelected?: (cardData: {
     player_name: string;
@@ -41,9 +43,10 @@ export default function AddCardModalNew({
   const [mode, setMode] = useState<ModalMode>("select");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const hasCardPicker = addMode === "collection" && Boolean(onOpenSmartSearch);
 
   // Upload mode state
-  const [preview, setPreview] = useState<string | null>(null);
+  const [previews, setPreviews] = useState<string[]>([]);
   const [identifiedCard, setIdentifiedCard] = useState<CardIdentificationResult | null>(null);
 
   // Manual mode state
@@ -58,17 +61,21 @@ export default function AddCardModalNew({
   const [costBasisType, setCostBasisType] = useState<"pulled" | "paid">("pulled");
   const [purchasePrice, setPurchasePrice] = useState<string>("");
   const [condition, setCondition] = useState<string>("Raw");
+  const [editingYear, setEditingYear] = useState(false);
+  const [yearDraft, setYearDraft] = useState("");
 
   const resetForm = () => {
     setMode("select");
     setLoading(false);
     setError(null);
-    setPreview(null);
+    setPreviews([]);
     setIdentifiedCard(null);
     setManualForm({ player_name: "", year: "", set_name: "", parallel_type: "" });
     setCostBasisType("pulled");
     setPurchasePrice("");
     setCondition("Raw");
+    setEditingYear(false);
+    setYearDraft("");
   };
 
   const handleClose = () => {
@@ -76,71 +83,76 @@ export default function AddCardModalNew({
     onClose();
   };
 
-  const handleFile = useCallback(async (file: File) => {
-    if (!file.type.startsWith("image/")) {
-      setError("Please upload an image file");
+  const handleFiles = useCallback(async (files: FileList) => {
+    const incoming = Array.from(files);
+    if (incoming.length === 0) return;
+
+    if (incoming.length > 2) {
+      setError("Upload up to 2 images (front + back).");
       return;
     }
 
-    if (file.size > 10 * 1024 * 1024) {
-      setError("Image must be less than 10MB");
-      return;
+    for (const file of incoming) {
+      if (!file.type.startsWith("image/")) {
+        setError("Please upload image files only");
+        return;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        setError("Each image must be less than 10MB");
+        return;
+      }
     }
 
     setError(null);
     setLoading(true);
+    setIdentifiedCard(null);
+    setEditingYear(false);
+    setYearDraft("");
 
-    // Show preview
-    const reader = new FileReader();
-    reader.onload = (e) => setPreview(e.target?.result as string);
-    reader.readAsDataURL(file);
+    const previewUrls = await Promise.all(
+      incoming.map(
+        (file) =>
+          new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          })
+      )
+    );
+    setPreviews(previewUrls);
 
     try {
-      let imageUrl: string;
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
 
-      // Try to upload to Supabase Storage first
-      try {
-        const supabase = createClient();
-        const { data: { user } } = await supabase.auth.getUser();
+      const imageUrls = await Promise.all(
+        incoming.map(async (file, index) => {
+          if (!user) {
+            return previewUrls[index];
+          }
+          const fileName = `${user.id}/${Date.now()}-${file.name}`;
+          const { data: uploadData, error: uploadError } = await supabase.storage
+            .from("card-images")
+            .upload(fileName, file);
 
-        if (!user) {
-          throw new Error("Authentication required for storage uploads");
-        }
+          if (uploadError) {
+            return previewUrls[index];
+          }
 
-        const fileName = `${user.id}/${Date.now()}-${file.name}`;
-
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from("card-images")
-          .upload(fileName, file);
-
-        if (uploadError) {
-          // Fallback to base64
-          const base64Reader = new FileReader();
-          imageUrl = await new Promise<string>((resolve, reject) => {
-            base64Reader.onload = () => resolve(base64Reader.result as string);
-            base64Reader.onerror = reject;
-            base64Reader.readAsDataURL(file);
-          });
-        } else {
           const { data: { publicUrl } } = supabase.storage
             .from("card-images")
             .getPublicUrl(uploadData.path);
-          imageUrl = publicUrl;
-        }
-      } catch {
-        const base64Reader = new FileReader();
-        imageUrl = await new Promise<string>((resolve, reject) => {
-          base64Reader.onload = () => resolve(base64Reader.result as string);
-          base64Reader.onerror = reject;
-          base64Reader.readAsDataURL(file);
-        });
-      }
+          return publicUrl;
+        })
+      );
 
-      // Process card image
       const response = await fetch("/api/identify-card", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageUrl }),
+        body: JSON.stringify(
+          imageUrls.length > 1 ? { imageUrls } : { imageUrl: imageUrls[0] }
+        ),
       });
 
       const result: CardIdentificationResponse = await response.json();
@@ -148,6 +160,7 @@ export default function AddCardModalNew({
       if ("error" in result) {
         setError(result.reason || result.error);
         setLoading(false);
+        setIdentifiedCard(null);
         return;
       }
 
@@ -160,22 +173,115 @@ export default function AddCardModalNew({
         insert: result.insert || undefined,
         grade: result.grade || undefined,
         parallel_type: result.variant || undefined,
-        imageUrl: imageUrl,
+        imageUrl: imageUrls[0],
+        imageUrls,
         confidence: result.confidence,
+        cardIdentity: result.card_identity,
       });
+      setYearDraft(result.year || "");
       setMode("confirm");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to process image");
+      setIdentifiedCard(null);
     } finally {
       setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (identifiedCard) {
+      setYearDraft(identifiedCard.year || "");
+    }
+  }, [identifiedCard]);
+
+  const buildFallbackIdentity = (card: CardIdentificationResult): CardIdentity => ({
+    player: card.player_name || null,
+    setName: card.set_name || null,
+    year: card.year ? Number(card.year) : null,
+    brand: null,
+    subset: null,
+    sport: null,
+    league: null,
+    cardNumber: card.card_number || null,
+    rookie: null,
+    parallel: card.parallel_type || null,
+    cardStock: "unknown",
+    confidence: card.confidence,
+    fieldConfidence: {
+      player: card.player_name ? "medium" : "low",
+      setName: card.set_name ? "medium" : "low",
+      year: card.year ? "medium" : "low",
+    },
+    sources: {},
+    warnings: [],
+    evidenceSummary: null,
+  });
+
+  const applyYearOverride = (nextYear: string) => {
+    const trimmed = nextYear.trim();
+    if (trimmed && !/^\\d{4}$/.test(trimmed)) {
+      setError("Year must be a 4-digit number");
+      return;
+    }
+
+    setIdentifiedCard((prev) => {
+      if (!prev) return prev;
+      const identity = prev.cardIdentity ? { ...prev.cardIdentity } : buildFallbackIdentity(prev);
+      const yearNumber = trimmed ? Number(trimmed) : undefined;
+      const nextIdentity: CardIdentity = {
+        ...identity,
+        year: yearNumber ?? null,
+        fieldConfidence: {
+          ...identity.fieldConfidence,
+          year: trimmed ? "high" : "low",
+        },
+        sources: {
+          ...identity.sources,
+          year: trimmed ? "user" : identity.sources.year,
+        },
+      };
+      return {
+        ...prev,
+        year: trimmed || undefined,
+        confirmedYear: trimmed || undefined,
+        cardIdentity: nextIdentity,
+      };
+    });
+    setEditingYear(false);
+  };
 
   const handleManualSubmit = () => {
     if (!manualForm.player_name.trim()) {
       setError("Player name is required");
       return;
     }
+    const manualYear = manualForm.year.trim();
+    const manualIdentity: CardIdentity = {
+      player: manualForm.player_name.trim() || null,
+      year: manualYear && /^\d{4}$/.test(manualYear) ? Number(manualYear) : null,
+      brand: null,
+      setName: manualForm.set_name.trim() || null,
+      subset: null,
+      sport: null,
+      league: null,
+      cardNumber: null,
+      rookie: null,
+      parallel: manualForm.parallel_type.trim() || null,
+      cardStock: "unknown",
+      confidence: "high",
+      fieldConfidence: {
+        player: manualForm.player_name.trim() ? "high" : "low",
+        setName: manualForm.set_name.trim() ? "high" : "low",
+        year: manualYear && /^\d{4}$/.test(manualYear) ? "high" : "low",
+      },
+      sources: {
+        player: "user",
+        setName: "user",
+        year: manualYear && /^\d{4}$/.test(manualYear) ? "user" : "inferred",
+      },
+      warnings: [],
+      evidenceSummary: null,
+    };
     setIdentifiedCard({
       player_name: manualForm.player_name,
       year: manualForm.year || undefined,
@@ -183,6 +289,7 @@ export default function AddCardModalNew({
       parallel_type: manualForm.parallel_type || undefined,
       imageUrl: "",
       confidence: "high",
+      cardIdentity: manualIdentity,
     });
     setMode("confirm");
   };
@@ -228,6 +335,7 @@ export default function AddCardModalNew({
           costBasisType === "paid" && purchasePrice ? parseFloat(purchasePrice) : null,
         purchase_date: null,
         image_url: identifiedCard.imageUrl || null,
+        image_urls: identifiedCard.imageUrls || [identifiedCard.imageUrl].filter(Boolean),
         notes: notesParts.length > 0 ? notesParts.join(" | ") : null,
       };
 
@@ -257,6 +365,14 @@ export default function AddCardModalNew({
       setLoading(false);
     }
   };
+
+  const yearFieldConfidence = identifiedCard?.cardIdentity?.fieldConfidence?.year;
+  const showYear = identifiedCard
+    ? shouldDisplayYear(identifiedCard.year, identifiedCard.confidence, yearFieldConfidence)
+    : false;
+  const yearNeedsConfirmation = identifiedCard
+    ? needsYearConfirmation(identifiedCard.year, identifiedCard.confidence, yearFieldConfidence)
+    : false;
 
   if (!isOpen) return null;
 
@@ -319,12 +435,10 @@ export default function AddCardModalNew({
 
               <button
                 onClick={() => {
-                  // In collection mode, let the parent swap to the smart search flow
-                  if (addMode === "collection" && onOpenSmartSearch) {
+                  if (hasCardPicker && onOpenSmartSearch) {
                     onOpenSmartSearch();
                     return;
                   }
-                  // Fallback: keep legacy manual entry (used for watchlist or if smart search is unavailable)
                   setMode("manual");
                 }}
                 className="w-full p-4 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl hover:border-blue-500 dark:hover:border-blue-500 transition-colors group"
@@ -336,8 +450,14 @@ export default function AddCardModalNew({
                     </svg>
                   </div>
                   <div className="text-left">
-                    <p className="font-medium text-gray-900 dark:text-white">Enter Manually</p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Type the card details yourself</p>
+                    <p className="font-medium text-gray-900 dark:text-white">
+                      {hasCardPicker ? "Find in Card Database" : "Enter Manually"}
+                    </p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {hasCardPicker
+                        ? "Use structured filters to pick the exact card"
+                        : "Type the card details yourself"}
+                    </p>
                   </div>
                 </div>
               </button>
@@ -352,13 +472,21 @@ export default function AddCardModalNew({
                   <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mb-4"></div>
                   <p className="text-gray-400">Processing card...</p>
                 </div>
-              ) : preview ? (
-                <div className="flex flex-col items-center">
-                  <img
-                    src={preview}
-                    alt="Card preview"
-                    className="max-h-48 rounded-lg shadow-md mb-4"
-                  />
+              ) : previews.length > 0 ? (
+                <div className="flex flex-col items-center gap-3">
+                  <div className="flex gap-3 flex-wrap justify-center">
+                    {previews.map((preview, index) => (
+                      <img
+                        key={`${preview}-${index}`}
+                        src={preview}
+                        alt={`Card preview ${index + 1}`}
+                        className="h-32 w-24 object-cover rounded-lg shadow-md"
+                      />
+                    ))}
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {previews.length} photo{previews.length > 1 ? "s" : ""} selected
+                  </p>
                 </div>
               ) : (
                 <label className="block cursor-pointer">
@@ -367,18 +495,21 @@ export default function AddCardModalNew({
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
                     <p className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Drop your card photo here
+                      Drop your card photos here
                     </p>
                     <p className="text-sm text-gray-500 dark:text-gray-400">
-                      or click to select
+                      or click to select (front + back)
                     </p>
                   </div>
                   <input
                     type="file"
                     accept="image/*"
+                    multiple
                     onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) handleFile(file);
+                      const fileList = e.target.files;
+                      if (fileList && fileList.length > 0) {
+                        handleFiles(fileList);
+                      }
                     }}
                     className="hidden"
                   />
@@ -472,12 +603,24 @@ export default function AddCardModalNew({
               {/* Card Preview */}
               <div className="flex gap-4">
                 {identifiedCard.imageUrl && (
-                  <div className="flex-shrink-0">
+                  <div className="flex-shrink-0 space-y-2">
                     <img
                       src={identifiedCard.imageUrl}
                       alt={identifiedCard.player_name}
                       className="w-24 h-32 object-cover rounded-lg shadow-md bg-gray-200 dark:bg-gray-800"
                     />
+                    {identifiedCard.imageUrls && identifiedCard.imageUrls.length > 1 ? (
+                      <div className="flex gap-2">
+                        {identifiedCard.imageUrls.slice(1, 3).map((url, index) => (
+                          <img
+                            key={`${url}-${index}`}
+                            src={url}
+                            alt={`${identifiedCard.player_name} alt ${index + 1}`}
+                            className="w-10 h-14 object-cover rounded-md border border-gray-200 dark:border-gray-700"
+                          />
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
@@ -485,21 +628,71 @@ export default function AddCardModalNew({
                     {identifiedCard.player_name}
                   </h3>
                   <div className="mt-1 space-y-0.5 text-sm text-gray-600 dark:text-gray-400">
-                    {identifiedCard.year && <p>Year: {identifiedCard.year}</p>}
-                    {identifiedCard.set_name && <p>Set: {identifiedCard.set_name}</p>}
-                    {identifiedCard.parallel_type && identifiedCard.parallel_type !== "Base" && (
-                      <p>Parallel: {identifiedCard.parallel_type}</p>
-                    )}
+                    {showYear ? (
+                      <p>Year: {identifiedCard.year}</p>
+                    ) : yearNeedsConfirmation ? (
+                      <div className="flex items-center gap-2">
+                        <p>Year: Needs confirmation</p>
+                        <button
+                          type="button"
+                          onClick={() => setEditingYear(true)}
+                          className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                        >
+                          Edit
+                        </button>
+                      </div>
+                    ) : null}
+                    {editingYear ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={yearDraft}
+                          onChange={(e) => setYearDraft(e.target.value)}
+                          placeholder="e.g., 2025"
+                          className="w-24 px-2 py-1 text-xs bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-gray-900 dark:text-white"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => applyYearOverride(yearDraft)}
+                          className="text-xs text-green-600 hover:text-green-700 dark:text-green-400"
+                        >
+                          Save
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingYear(false);
+                            setYearDraft(identifiedCard.year || "");
+                          }}
+                          className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : null}
+                    {(() => {
+                      const { setLabel } = formatSetLabel(
+                        identifiedCard.cardIdentity,
+                        identifiedCard.set_name,
+                        identifiedCard.parallel_type
+                      );
+                      return setLabel ? <p>Set: {setLabel}</p> : null;
+                    })()}
+                    {identifiedCard.cardIdentity?.parallel &&
+                      identifiedCard.cardIdentity.parallel !== "Base" && (
+                        <p>Parallel: {identifiedCard.cardIdentity.parallel}</p>
+                      )}
                   </div>
                 </div>
               </div>
 
-              {/* Note about grade estimation */}
-              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                <p className="text-xs text-blue-700 dark:text-blue-300">
-                  💡 Grade estimation available after adding to collection. Visit the Grade Estimator page to get an AI-powered grade estimate.
-                </p>
-              </div>
+              {identifiedCard.cardIdentity?.warnings?.includes("parse_error") ? (
+                <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                  <p className="text-xs text-amber-700 dark:text-amber-300">
+                    We couldn’t read all card details. Please confirm the year and set below.
+                  </p>
+                </div>
+              ) : null}
 
               {/* Form Fields - Only show for collection mode */}
               {addMode === "collection" && (
@@ -571,7 +764,7 @@ export default function AddCardModalNew({
                   onClick={() => {
                     setIdentifiedCard(null);
                     setMode("select");
-                    setPreview(null);
+                    setPreviews([]);
                   }}
                   disabled={loading}
                   className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors font-medium disabled:opacity-50"
