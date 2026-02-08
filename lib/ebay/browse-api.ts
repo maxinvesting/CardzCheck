@@ -2,7 +2,18 @@
 // Uses OAuth 2.0 Client Credentials flow
 
 import type { EbaySearchParams, ForSaleItem, ForSaleData, EbayOAuthToken } from "./types";
-import { buildSearchQuery, calculatePriceStats, filterOutliers, isLotOrBundle, titleMatchesPlayer } from "./utils";
+import {
+  buildSearchQuery,
+  calculatePriceStats,
+  filterOutliers,
+  isLotOrBundle,
+  titleMatchesPlayer,
+  normalizeSetName,
+  INSERT_KEYWORDS,
+} from "./utils";
+import { classifyListingSet, matchesSelectedSet, resolveSetTaxonomy } from "./set-taxonomy";
+
+const LISTING_DEBUG = process.env.NODE_ENV === "development";
 
 const EBAY_OAUTH_URL = "https://api.ebay.com/identity/v1/oauth2/token";
 const EBAY_BROWSE_API_URL = "https://api.ebay.com/buy/browse/v1/item_summary/search";
@@ -67,14 +78,18 @@ export async function searchBrowseAPI(params: EbaySearchParams): Promise<ForSale
 
   const accessToken = await getAccessToken();
 
-  const limit = Math.min(50, Math.max(1, params.limit ?? 50));
+  // Fetch more items from the API for better filtering coverage.
+  // The caller's `params.limit` controls how many we RETURN, not how many we fetch.
+  const apiFetchLimit = 100;
 
   // Build search URL with filters
   const url = new URL(EBAY_BROWSE_API_URL);
   url.searchParams.set("q", query);
   url.searchParams.set("category_ids", "212"); // Sports Trading Cards
-  url.searchParams.set("limit", String(limit));
-  url.searchParams.set("sort", "price"); // Sort by price ascending
+  url.searchParams.set("limit", String(apiFetchLimit));
+  // NOTE: No explicit sort — eBay defaults to "bestMatch" (relevance ranking).
+  // This avoids the "sort by price ascending" bias that returns the cheapest
+  // (often wrong) items first — e.g. base Prizm at $16 instead of Silver Prizm at $110.
 
   // Filter for Buy It Now only (no auctions)
   url.searchParams.set("filter", "buyingOptions:{FIXED_PRICE}");
@@ -102,6 +117,7 @@ export async function searchBrowseAPI(params: EbaySearchParams): Promise<ForSale
 
   const data = await response.json();
   const items: ForSaleItem[] = [];
+  const selectedSet = params.set ? resolveSetTaxonomy(params.set) : null;
 
   if (data.itemSummaries && Array.isArray(data.itemSummaries)) {
     for (const item of data.itemSummaries) {
@@ -120,76 +136,43 @@ export async function searchBrowseAPI(params: EbaySearchParams): Promise<ForSale
         continue;
       }
 
-      // Set matching - strict matching to avoid wrong sets
-      // When user asks for Prizm, reject Phoenix/Optic/Mosaic/Select even if title has "prizm"
-      // (e.g. "Panini Phoenix ... Silver Hyper Prizm" — Prizm is the parallel, not the set)
+      // Set matching - enforce hard product-line separation via taxonomy
       if (params.set) {
-        const setLower = params.set.toLowerCase();
-        const titleSet = titleLower;
-
-        if (setLower.includes("prizm") || setLower.includes("prism")) {
-          // Must have Prizm/Prism in title (as set, not just parallel)
-          if (!titleSet.includes("prizm") && !titleSet.includes("prism")) {
+        if (selectedSet) {
+          const classified = classifyListingSet(titleLower);
+          if (classified && classified.slug !== selectedSet.slug) {
             continue;
           }
-          // Unconditionally reject other Panini SETS when searching for Prizm.
-          // Titles like "Panini Phoenix ... Silver Hyper Prizm" have "prizm" as parallel; set is Phoenix.
-          if (titleSet.includes("phoenix")) continue;
-          if (titleSet.includes("optic")) continue;
-          if (titleSet.includes("mosaic")) continue;
-          if (titleSet.includes("select")) continue;
-        }
-
-        if (setLower.includes("mosaic")) {
-          if (!titleSet.includes("mosaic")) continue;
-          if (titleSet.includes("phoenix")) continue;
-          if (titleSet.includes("optic")) continue;
-          if (titleSet.includes("select")) continue;
-          // Allow "Mosaic Prizm" (parallel); only reject other sets
-        }
-
-        if (setLower.includes("optic")) {
-          if (!titleSet.includes("optic")) continue;
-          if (titleSet.includes("phoenix")) continue;
-          if (titleSet.includes("mosaic")) continue;
-          if (titleSet.includes("select")) continue;
-        }
-
-        if (setLower.includes("select")) {
-          if (!titleSet.includes("select")) continue;
-          if (titleSet.includes("phoenix")) continue;
-          if (titleSet.includes("mosaic")) continue;
-          if (titleSet.includes("optic")) continue;
-        }
-
-        if (setLower.includes("phoenix")) {
-          if (!titleSet.includes("phoenix")) continue;
-          if (titleSet.includes("mosaic")) continue;
-          if (titleSet.includes("optic")) continue;
-          if (titleSet.includes("select")) continue;
-          // Allow "Phoenix ... Silver Hyper Prizm" (parallel)
+          if (!classified && !matchesSelectedSet(titleLower, selectedSet)) {
+            continue;
+          }
+        } else {
+          const normalizedSet = normalizeSetName(params.set);
+          const setTokens = normalizedSet.split(/\s+/).filter(Boolean);
+          if (setTokens.length > 0) {
+            const matchesAllTokens = setTokens.every((token) => titleLower.includes(token));
+            if (!matchesAllTokens) continue;
+          } else {
+            const setLower = params.set.toLowerCase();
+            if (!titleLower.includes(setLower)) continue;
+          }
         }
       }
 
-      // Parallel type matching - very lenient to allow variations
+      // Parallel type matching - strict when user selected a parallel
       if (params.parallelType) {
         const parallelLower = params.parallelType.toLowerCase();
-        // For "silver prizm/prism", allow any variation that has both "silver" and "prizm/prism"
-        if (parallelLower.includes("silver") && (parallelLower.includes("prism") || parallelLower.includes("prizm"))) {
-          // Must have "silver" and some form of "prizm/prism" - allow hyper, patch, wave, etc.
-          if (!titleLower.includes("silver") || (!titleLower.includes("prizm") && !titleLower.includes("prism"))) {
-            continue;
-          }
-        } else if (parallelLower.includes("silver")) {
-          // Just "silver" - must have silver
-          if (!titleLower.includes("silver")) {
-            continue;
-          }
-        } else if (!titleLower.includes(parallelLower)) {
-          // Other parallel types - require match
+        if (hasDisallowedInsert(titleLower, parallelLower)) {
+          continue;
+        }
+        if (!matchesParallelStrict(titleLower, parallelLower)) {
           continue;
         }
       }
+
+      // NOTE: Card number and grade constraints are applied in listingTitleFilterAndRank
+      // (post-processing) rather than here. Applying them here is too aggressive —
+      // it can eliminate all items from the API response, leaving 0 for post-processing.
 
       const price = parseFloat(item.price?.value || "0");
       if (price <= 0) continue;
@@ -212,7 +195,9 @@ export async function searchBrowseAPI(params: EbaySearchParams): Promise<ForSale
     }
   }
 
-  console.log(`✅ Browse API: Found ${items.length} valid active listings`);
+  if (LISTING_DEBUG) {
+    console.log(`✅ Browse API: ${items.length} valid after filtering (from ${data.itemSummaries?.length ?? 0} raw)`);
+  }
 
   const maxItems = params.limit ?? 20;
   const limited = items.slice(0, maxItems);
@@ -230,76 +215,131 @@ export async function searchBrowseAPI(params: EbaySearchParams): Promise<ForSale
 }
 
 /**
- * Search with fallback strategies if no results
- * Uses less restrictive filtering on fallback searches
+ * Multi-pass search strategy with metadata tracking
+ * Returns results with pass information for UI feedback
  */
-export async function searchBrowseAPIWithFallbacks(params: EbaySearchParams): Promise<ForSaleData> {
-  // Try original search first
-  let result = await searchBrowseAPI(params);
+export interface MultiPassResult extends ForSaleData {
+  passUsed?: "strict" | "broad" | "minimal";
+  totalPasses?: number;
+}
 
-  if (result.count > 0) {
-    return result;
+/**
+ * Search with multi-pass fallback strategies
+ * PASS 1 (STRICT CORE): Player + Set + Grader + Grade (optional: year)
+ * PASS 2 (BROAD RECALL): Remove year, add synonym expansion, no negative keywords
+ * PASS 3 (MINIMAL BACKSTOP): Player + Set + Grader + Grade only
+ */
+export async function searchBrowseAPIWithFallbacks(params: EbaySearchParams): Promise<MultiPassResult> {
+  const MIN_RESULTS = 3;
+  const isDevMode = process.env.NODE_ENV === "development";
+  let passCount = 0;
+
+  // PASS 1: STRICT CORE
+  // Required: player, set, grader+grade
+  // Optional: year
+  // NO negative keywords (handled in post-processing instead)
+  passCount++;
+  if (isDevMode) {
+    console.log("🔍 PASS 1 (STRICT CORE): Full search with all user-provided fields");
   }
 
-  console.log("⚠️ No Browse API results, trying fallback strategies...");
+  let result = await searchBrowseAPI(params);
 
-  // Fallback 1: Try with simplified parallel type (e.g., just "silver" instead of "silver prizm")
-  if (params.parallelType) {
-    const parallelLower = params.parallelType.toLowerCase();
-    if (parallelLower.includes("silver") && (parallelLower.includes("prism") || parallelLower.includes("prizm"))) {
-      console.log("🔄 Trying with simplified parallel type (silver only)...");
-      const simplified = { ...params, parallelType: "silver" };
-      result = await searchBrowseAPI(simplified);
-      if (result.count > 0) return result;
+  if (result.count >= MIN_RESULTS) {
+    if (isDevMode) {
+      console.log(`✅ PASS 1 succeeded with ${result.count} results`);
+    }
+    return { ...result, passUsed: "strict", totalPasses: passCount };
+  }
+
+  // PASS 2: BROAD RECALL (if results < MIN_RESULTS)
+  // Remove year constraint, keep other fields
+  passCount++;
+  if (isDevMode) {
+    console.log(`⚠️ PASS 1 returned ${result.count} results (< ${MIN_RESULTS}), trying PASS 2 (BROAD RECALL)...`);
+  }
+
+  const pass2Params = { ...params };
+  delete pass2Params.year; // Remove year for broader recall
+
+  const pass2Result = await searchBrowseAPI(pass2Params);
+
+  if (pass2Result.count >= MIN_RESULTS) {
+    if (isDevMode) {
+      console.log(`✅ PASS 2 succeeded with ${pass2Result.count} results`);
+    }
+    return { ...pass2Result, passUsed: "broad", totalPasses: passCount };
+  }
+
+  // PASS 3: MINIMAL BACKSTOP (if still low)
+  // Query: player + set + grade + parallelType (if any)
+  // Parallel type is preserved because it fundamentally changes card identity & price
+  // (e.g. Silver Prizm ~$110 vs Base Prizm ~$16)
+  passCount++;
+  if (isDevMode) {
+    console.log(`⚠️ PASS 2 returned ${pass2Result.count} results, trying PASS 3 (MINIMAL BACKSTOP)...`);
+  }
+
+  const pass3Params: EbaySearchParams = {
+    player: params.player,
+    set: params.set,
+    grade: params.grade,
+    parallelType: params.parallelType,
+    cardNumber: params.cardNumber,
+  };
+
+  const pass3Result = await searchBrowseAPI(pass3Params);
+
+  if (isDevMode) {
+    if (pass3Result.count > 0) {
+      console.log(`✅ PASS 3 succeeded with ${pass3Result.count} results`);
+    } else {
+      console.log(`❌ All ${passCount} passes returned zero results`);
     }
   }
 
-  // Fallback 2: Remove parallel type
-  if (params.parallelType) {
-    console.log("🔄 Trying without parallel type...");
-    const noParallel = { ...params };
-    delete noParallel.parallelType;
-    result = await searchBrowseAPI(noParallel);
-    if (result.count > 0) return result;
+  // Strict cascade: prefer tighter passes that meet threshold, fall back to broader
+  let bestResult = result;
+  let passLabel: "strict" | "broad" | "minimal" = "strict";
+
+  if (result.count >= MIN_RESULTS) {
+    bestResult = result; passLabel = "strict";
+  } else if (pass2Result.count >= MIN_RESULTS) {
+    bestResult = pass2Result; passLabel = "broad";
+  } else if (pass3Result.count > 0) {
+    bestResult = pass3Result; passLabel = "minimal";
+  } else if (pass2Result.count > 0) {
+    bestResult = pass2Result; passLabel = "broad";
+  } else {
+    bestResult = result; passLabel = "strict";
   }
 
-  // Fallback 3: Remove set but keep parallel type
-  if (params.set) {
-    console.log("🔄 Trying without set...");
-    const noSet = { ...params };
-    delete noSet.set;
-    result = await searchBrowseAPI(noSet);
-    if (result.count > 0) return result;
-  }
+  return { ...bestResult, passUsed: passLabel, totalPasses: passCount };
+}
 
-  // Fallback 4: Player + year + parallel type only
-  if (params.year && params.parallelType) {
-    console.log("🔄 Trying player + year + parallel only...");
-    result = await searchBrowseAPI({
-      player: params.player,
-      year: params.year,
-      parallelType: params.parallelType,
-    });
-    if (result.count > 0) return result;
-  }
+// INSERT_KEYWORDS imported from ./utils (single source of truth)
 
-  // Fallback 5: Player + year only
-  if (params.year) {
-    console.log("🔄 Trying player + year only...");
-    result = await searchBrowseAPI({
-      player: params.player,
-      year: params.year,
-    });
-    if (result.count > 0) return result;
-  }
+function hasDisallowedInsert(titleLower: string, parallelLower: string): boolean {
+  const parallelAllowsInsert = INSERT_KEYWORDS.some((keyword) =>
+    parallelLower.includes(keyword)
+  );
+  if (parallelAllowsInsert) return false;
+  return INSERT_KEYWORDS.some((keyword) => titleLower.includes(keyword));
+}
 
-  // Return empty result
-  return {
-    count: 0,
-    low: 0,
-    median: 0,
-    high: 0,
-    items: [],
-    cachedAt: new Date().toISOString(),
-  };
+function matchesParallelStrict(titleLower: string, parallelLower: string): boolean {
+  if (!parallelLower.trim()) return true;
+
+  const wantsNoHuddle = parallelLower.includes("no huddle");
+  const titleHasNoHuddle = titleLower.includes("no huddle");
+  if (wantsNoHuddle !== titleHasNoHuddle) return false;
+
+  const normalized = parallelLower.replace(/prism/g, "prizm");
+  const tokens = normalized.split(/\s+/).filter(Boolean);
+  return tokens.every((token) => {
+    if (token === "prizm") {
+      return titleLower.includes("prizm") || titleLower.includes("prism");
+    }
+    return titleLower.includes(token);
+  });
 }

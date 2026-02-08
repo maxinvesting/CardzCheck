@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
   const variation = searchParams.get("variation") || undefined;
   const autograph = searchParams.get("autograph") || undefined;
   const relic = searchParams.get("relic") || undefined;
+  const cardId = searchParams.get("card_id");
 
   // Check for response format
   const format = searchParams.get("format");
@@ -45,13 +46,17 @@ export async function GET(request: NextRequest) {
   };
 
   try {
+    let supabase: Awaited<ReturnType<typeof createClient>> | null = null;
+    let userId: string | null = null;
+
     // Bypass auth and limits in test mode
     if (isTestMode()) {
       logDebug("🧪 TEST MODE: Bypassing search limits");
     } else {
       // Check user auth and limits
-      const supabase = await createClient();
+      supabase = await createClient();
       const { data: { user } } = await supabase.auth.getUser();
+      userId = user?.id ?? null;
 
       if (user) {
         // Get user record
@@ -129,6 +134,35 @@ export async function GET(request: NextRequest) {
     const query = buildSearchQuery(searchParamsObj);
     logDebug(`📊 Found ${comps.length} listings for query: "${query}"`);
 
+    if (cardId && supabase && userId) {
+      const cmvValue =
+        typeof cmv === "number" && Number.isFinite(cmv) && cmv > 0
+          ? cmv
+          : null;
+
+      if (cmvValue !== null) {
+        const { error: updateError } = await supabase
+          .from("collection_items")
+          .update({
+            estimated_cmv: cmvValue,
+            est_cmv: cmvValue,
+            cmv_confidence: "medium",
+            cmv_last_updated: new Date().toISOString(),
+          })
+          .eq("id", cardId)
+          .eq("user_id", userId);
+
+        if (updateError) {
+          logDebug("⚠️ Failed to persist CMV for card", {
+            cardId,
+            message: updateError.message,
+          });
+        } else {
+          logDebug("✅ Persisted CMV for card", { cardId, cmv: cmvValue });
+        }
+      }
+    }
+
     // Return legacy format with new fields for frontend migration
     return NextResponse.json({
       comps,
@@ -144,6 +178,8 @@ export async function GET(request: NextRequest) {
       _forSale: result.forSale,
       _estimatedSaleRange: result.estimatedSaleRange,
       _disclaimers: result.disclaimers,
+      _passUsed: result.passUsed,
+      _totalPasses: result.totalPasses,
     });
   } catch (error) {
     console.error("Search error:", error);

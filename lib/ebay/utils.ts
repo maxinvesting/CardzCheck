@@ -1,6 +1,7 @@
 // eBay utility functions
 
 import type { EbaySearchParams } from "./types";
+import { getDerivedExcludeTerms, getSetProfile, resolveSetTaxonomy } from "./set-taxonomy";
 import crypto from "crypto";
 
 /**
@@ -11,6 +12,8 @@ export function buildSearchQuery(params: EbaySearchParams): string {
   const parts = [params.player];
   if (params.year) parts.push(params.year);
   // Set name is critical - include it early to ensure proper matching
+  const selectedSet = params.set ? resolveSetTaxonomy(params.set) : null;
+  const selectedProfile = params.set ? getSetProfile(params.set) : null;
   if (params.set) {
     // Normalize set name - convert "prism" to "prizm" for consistency
     let set = params.set.trim();
@@ -28,6 +31,23 @@ export function buildSearchQuery(params: EbaySearchParams): string {
       parts.push(set);
     } else {
       parts.push(set);
+    }
+    if (selectedSet) {
+      for (const term of selectedSet.requiredTerms) {
+        if (!parts.some((part) => part.toLowerCase().includes(term.toLowerCase()))) {
+          parts.push(term);
+        }
+      }
+    }
+    if (selectedProfile) {
+      for (const term of selectedProfile.requiredAll) {
+        if (!parts.some((part) => part.toLowerCase().includes(term.toLowerCase()))) {
+          parts.push(term);
+        }
+      }
+      if (selectedProfile.requiredAny.length > 0) {
+        parts.push(`(${selectedProfile.requiredAny.join(" OR ")})`);
+      }
     }
   }
   if (params.grade) parts.push(params.grade);
@@ -55,6 +75,41 @@ export function buildSearchQuery(params: EbaySearchParams): string {
   if (params.autograph) parts.push("Auto");
   if (params.relic) parts.push("Relic");
   if (params.keywords?.length) parts.push(...params.keywords);
+  if (selectedSet) {
+    const excludeTerms = getDerivedExcludeTerms(selectedSet.slug);
+    for (const term of excludeTerms) {
+      if (term.includes(" ")) {
+        parts.push(`-"${term}"`);
+      } else {
+        parts.push(`-${term}`);
+      }
+    }
+  }
+  if (selectedProfile) {
+    for (const term of selectedProfile.forbidden) {
+      if (term.includes(" ")) {
+        parts.push(`-"${term}"`);
+      } else {
+        parts.push(`-${term}`);
+      }
+    }
+  }
+  // Exclude high-volume insert sub-sets when user is NOT searching for an insert.
+  // This frees Browse API result slots (max 100) for relevant base/parallel listings.
+  const parallelLower = (params.parallelType ?? "").toLowerCase();
+  const userWantsInsert = INSERT_KEYWORDS.some((kw) => parallelLower.includes(kw));
+  if (!userWantsInsert) {
+    const insertExclusions = ["downtown", "kaboom", "color blast", "emergent", "stained glass"];
+    for (const term of insertExclusions) {
+      if (!parts.some((p) => p === `-"${term}"` || p === `-${term}`)) {
+        if (term.includes(" ")) {
+          parts.push(`-"${term}"`);
+        } else {
+          parts.push(`-${term}`);
+        }
+      }
+    }
+  }
   return parts.join(" ");
 }
 
@@ -345,6 +400,117 @@ export function titleMatchesPlayer(title: string, playerName: string, set?: stri
 
   return true;
 }
+
+// ============================================================================
+// LISTING FIELD EXTRACTION (used by browse-api + dual-signal for hard constraints)
+// ============================================================================
+
+/**
+ * Extract card numbers from a listing title.
+ * Matches #349, # 349, No. 349, No 349, Card 349
+ * but NOT /349 (serial) or bare 2024 (year).
+ */
+export function extractCardNumbers(title: string): string[] {
+  const results: string[] = [];
+  let m;
+
+  // Pattern 1: #349, # 349
+  const hashPattern = /#\s*(\d+)\b/g;
+  while ((m = hashPattern.exec(title)) !== null) {
+    results.push(m[1]);
+  }
+
+  // Pattern 2: "No. 349", "No 349", "no. 349"
+  const noPattern = /\bno\.?\s*(\d+)\b/gi;
+  while ((m = noPattern.exec(title)) !== null) {
+    results.push(m[1]);
+  }
+
+  // Pattern 3: "Card 349", "card 349" — exclude 4-digit years (19xx/20xx)
+  const cardPattern = /\bcard\s+(\d+)\b/gi;
+  while ((m = cardPattern.exec(title)) !== null) {
+    if (/^(19|20)\d{2}$/.test(m[1])) continue;
+    results.push(m[1]);
+  }
+
+  return [...new Set(results)];
+}
+
+/**
+ * Returns true if the listing title does NOT contradict the wanted grade.
+ *
+ * Rules:
+ * - If we can't parse the wanted grade → allow (true)
+ * - If the title has no grading info → allow (true)
+ * - If the title mentions the SAME grading company with a DIFFERENT numeric grade → reject (false)
+ * - Otherwise → allow (true)
+ */
+export function titleMatchesGrade(titleLower: string, wantedGrade: string): boolean {
+  if (!wantedGrade) return true;
+
+  // Parse wanted: "PSA 9" → grader = "psa", value = "9"
+  const wantedMatch = wantedGrade.toLowerCase().match(/\b(psa|bgs|sgc|cgc)\s*(\d+\.?\d*)\b/);
+  if (!wantedMatch) return true;
+  const wantedGrader = wantedMatch[1];
+  const wantedValue = wantedMatch[2];
+
+  // Find all grading references in the title
+  const gradePattern = new RegExp(`\\b(psa|bgs|sgc|cgc)\\s*(\\d+\\.?\\d*)\\b`, "gi");
+  let m;
+  while ((m = gradePattern.exec(titleLower)) !== null) {
+    if (m[1].toLowerCase() === wantedGrader && m[2] !== wantedValue) {
+      return false; // Same grading company, different numeric grade
+    }
+  }
+  return true;
+}
+
+/**
+ * Canonical list of insert / sub-set keywords for sports trading cards.
+ * Used to reject insert listings when the user searched for a non-insert parallel.
+ * Keep in sync: this is the single source of truth; browse-api and dual-signal both import it.
+ */
+/**
+ * Terms that identify ACTUAL insert sub-sets (not generic parallel descriptors).
+ *
+ * IMPORTANT: Do NOT add generic words like "variation", "refractor", "prizmatic"
+ * here — eBay sellers commonly include these in titles for SEO and they will
+ * cause false-positive rejections of legitimate parallel listings.
+ */
+export const INSERT_KEYWORDS: string[] = [
+  // Panini Prizm / Optic insert sub-sets
+  "emergent",
+  "instant impact",
+  "fireworks",
+  "stargazing",
+  "downtown",
+  "kaboom",
+  "color blast",
+  "colorblast",
+  "color-blast",
+  "color wheel",
+  "stained glass",
+  "color wave",
+  "illumination",
+  "intro",
+  "sophomore stars",
+  "all americans",
+  "all-americans",
+  "draft picks",
+  "no huddle",
+  // Common sub-set / insert lines (must be specific insert names)
+  "rookie gear",
+  "deca brilliance",
+  "next level",
+  "sensational",
+  "widescreen",
+  "instant classic",
+  "game breaker",
+  "rookie revolution",
+  "color pop",
+  "rookie patch",
+  "flashback rookie",
+];
 
 /**
  * Get parallel type alternatives for fallback searches

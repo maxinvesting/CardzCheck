@@ -1,4 +1,5 @@
 import type { ParsedQuery, SmartSearchCandidate, SmartSearchMode, LockedConstraints } from "./types";
+import { normalizeText } from "./normalize";
 
 export interface FilterDiagnostics {
   droppedByConstraint: Record<string, number>;
@@ -27,37 +28,63 @@ export function bucketByConstraints(
   const exact: SmartSearchCandidate[] = [];
   const close: SmartSearchCandidate[] = [];
 
-  const hasLockedFields = !!(locked.year || locked.brand || locked.line || locked.cardNumber || locked.parallel);
+  const hasLockedFields = !!(
+    locked.year ||
+    locked.brand ||
+    locked.line ||
+    locked.cardNumber ||
+    locked.parallel ||
+    locked.grader ||
+    locked.grade
+  );
 
   for (const cand of candidates) {
     const mismatches: LockedConstraints = {};
 
-    if (locked.year && cand.year && normalize(locked.year) !== normalize(cand.year)) {
+    if (locked.year && cand.year && normalizeText(locked.year) !== normalizeText(cand.year)) {
       mismatches.year = cand.year;
       droppedByConstraint.year = (droppedByConstraint.year ?? 0) + 1;
     }
 
-    if (locked.brand && cand.brand && normalize(locked.brand) !== normalize(cand.brand)) {
+    if (locked.brand && cand.brand && normalizeText(locked.brand) !== normalizeText(cand.brand)) {
       mismatches.brand = cand.brand;
       droppedByConstraint.brand = (droppedByConstraint.brand ?? 0) + 1;
     }
 
-    if (locked.line && cand.line && normalize(locked.line) !== normalize(cand.line)) {
+    if (locked.line && cand.line && normalizeText(locked.line) !== normalizeText(cand.line)) {
       mismatches.line = cand.line;
       droppedByConstraint.line = (droppedByConstraint.line ?? 0) + 1;
     }
 
-    if (locked.cardNumber && cand.cardNumber && normalize(locked.cardNumber) !== normalize(cand.cardNumber)) {
+    if (locked.cardNumber && cand.cardNumber && normalizeText(locked.cardNumber) !== normalizeText(cand.cardNumber)) {
       mismatches.cardNumber = cand.cardNumber;
       droppedByConstraint.cardNumber = (droppedByConstraint.cardNumber ?? 0) + 1;
     }
 
-    if (locked.parallel && cand.parallel && normalize(locked.parallel) !== normalize(cand.parallel)) {
+    if (locked.parallel && cand.parallel && normalizeText(locked.parallel) !== normalizeText(cand.parallel)) {
       mismatches.parallel = cand.parallel;
       droppedByConstraint.parallel = (droppedByConstraint.parallel ?? 0) + 1;
     }
 
-    const hasMismatch = !!(mismatches.year || mismatches.brand || mismatches.line || mismatches.cardNumber || mismatches.parallel);
+    if (locked.grader && cand.grader && normalizeText(locked.grader) !== normalizeText(cand.grader)) {
+      mismatches.grader = cand.grader;
+      droppedByConstraint.grader = (droppedByConstraint.grader ?? 0) + 1;
+    }
+
+    if (locked.grade && cand.grade && normalizeText(locked.grade) !== normalizeText(cand.grade)) {
+      mismatches.grade = cand.grade;
+      droppedByConstraint.grade = (droppedByConstraint.grade ?? 0) + 1;
+    }
+
+    const hasMismatch = !!(
+      mismatches.year ||
+      mismatches.brand ||
+      mismatches.line ||
+      mismatches.cardNumber ||
+      mismatches.parallel ||
+      mismatches.grader ||
+      mismatches.grade
+    );
 
     if (mode === "watchlist") {
       // In strict mode, anything with a locked-field mismatch is excluded from Exact.
@@ -104,8 +131,3 @@ export function bucketByConstraints(
     },
   };
 }
-
-function normalize(value: string): string {
-  return value.toLowerCase().trim();
-}
-

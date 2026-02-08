@@ -5,10 +5,11 @@ import {
   GRADING_OPTIONS,
   CARD_VARIANTS,
 } from "./card-data";
+import { normalizeText } from "@/lib/smartSearch/normalize";
 
 // Normalize a string for matching (lowercase, trim, remove extra spaces)
 function normalize(str: string): string {
-  return str.toLowerCase().trim().replace(/\s+/g, " ");
+  return normalizeText(str);
 }
 
 // Tokenize a query into individual words
