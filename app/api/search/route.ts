@@ -148,6 +148,10 @@ export async function GET(request: NextRequest) {
             est_cmv: cmvValue,
             cmv_confidence: "medium",
             cmv_last_updated: new Date().toISOString(),
+            cmv_status: "ready",
+            cmv_value: cmvValue,
+            cmv_error: null,
+            cmv_updated_at: new Date().toISOString(),
           })
           .eq("id", cardId)
           .eq("user_id", userId);

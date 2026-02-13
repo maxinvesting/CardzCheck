@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { CardImage } from "@/types";
+import {
+  pickFirstHttpsImageUrl,
+  resolveStoredCardImageUrl,
+} from "@/lib/collection/image-url";
 
 // GET /api/cards/[id] - Fetch a single card with all images
 export async function GET(
@@ -43,11 +47,8 @@ export async function GET(
       .eq("card_id", cardId)
       .order("position", { ascending: true });
 
-    const resolveImageUrl = (path: string | null | undefined): string | null => {
-      if (!path) return null;
-      if (path.startsWith("http")) return path;
-      return supabase.storage.from("card-images").getPublicUrl(path).data.publicUrl;
-    };
+    const resolveImageUrl = (path: string | null | undefined): string | null =>
+      resolveStoredCardImageUrl(supabase, path);
 
     // Generate public URLs
     let imagesWithUrls = (images || []).map((img: CardImage) => ({
@@ -80,9 +81,16 @@ export async function GET(
       }));
     }
 
+    const thumbnailUrl = pickFirstHttpsImageUrl([
+      (card as { thumbnail_url?: string | null }).thumbnail_url ?? null,
+      imagesWithUrls[0]?.url ?? null,
+      (card as { image_url?: string | null }).image_url ?? null,
+    ]);
+
     return NextResponse.json({
       card: {
         ...card,
+        thumbnail_url: thumbnailUrl,
         card_images: imagesWithUrls,
         primary_image: imagesWithUrls.find((img: CardImage) => img.position === 0) || imagesWithUrls[0],
       },

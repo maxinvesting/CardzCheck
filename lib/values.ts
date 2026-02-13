@@ -77,6 +77,10 @@ function getRawEstCmv(item: ValuedCollectionItem): number | null {
   const direct = coercePositiveNumber(item.est_cmv);
   if (direct !== null) return direct;
 
+  // Explicit CMV lifecycle value field
+  const cmvValue = coercePositiveNumber(anyItem.cmv_value);
+  if (cmvValue !== null) return cmvValue;
+
   // Other alternate field names for flexibility
   const cmvMid = coercePositiveNumber(anyItem.cmv_mid);
   if (cmvMid !== null) return cmvMid;

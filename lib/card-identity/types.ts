@@ -22,7 +22,7 @@ export type CardIdentity = {
 
 export type ImageInput = {
   data: string; // base64 (no data URL prefix)
-  mediaType: "image/jpeg" | "image/png" | "image/webp";
+  mediaType: "image/jpeg" | "image/png" | "image/webp" | "image/gif";
   source?: "url" | "base64";
   hint?: string;
 };

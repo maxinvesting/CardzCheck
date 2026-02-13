@@ -82,10 +82,12 @@ export default function PaywallModal({ isOpen, onClose, type }: PaywallModalProp
         {/* Body */}
         <div className="p-6">
           <div className="text-center mb-6">
-            <p className="text-4xl font-bold text-gray-900 dark:text-white">
-              $20
+            <p className="text-lg font-semibold text-gray-900 dark:text-white">
+              Upgrade to Pro
             </p>
-            <p className="text-gray-500 dark:text-gray-400">one-time payment</p>
+            <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
+              Unlimited searches and collection
+            </p>
           </div>
 
           <ul className="space-y-3 mb-6">
@@ -120,11 +122,6 @@ export default function PaywallModal({ isOpen, onClose, type }: PaywallModalProp
               Collection value tracking
             </li>
           </ul>
-
-          <div className="text-center text-sm text-gray-500 dark:text-gray-400 mb-6">
-            <p>Card Ladder charges $200/year.</p>
-            <p className="font-medium text-gray-700 dark:text-gray-300">We charge $20. Once.</p>
-          </div>
 
           <div className="space-y-3">
             <button

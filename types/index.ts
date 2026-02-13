@@ -69,17 +69,22 @@ export interface CollectionItem {
   set_name: string | null;
   insert?: string | null; // Insert type (e.g., "Downtown")
   parallel_type?: string | null; // e.g., "Silver Prizm", "Holo"
-  card_number?: string | null; // e.g., "349"
+  card_number?: number | null; // e.g., 349
   grade: string | null;
   grading_company?: string | null; // PSA, BGS, SGC, CGC, etc.
   cert_number?: string | null; // Certification number from grading company
   purchase_price: number | null;
   purchase_date: string | null;
   image_url: string | null;
+  thumbnail_url?: string | null;
   notes: string | null;
   estimated_cmv: number | null;
   cmv_confidence: CmvConfidence;
   cmv_last_updated: string | null;
+  cmv_status?: CmvStatus | null;
+  cmv_value?: number | null;
+  cmv_error?: string | null;
+  cmv_updated_at?: string | null;
   comps_count?: number | null;
   created_at: string;
   /**
@@ -391,6 +396,7 @@ export interface RecentSearch {
 }
 
 export type CmvConfidence = "high" | "medium" | "low" | "unavailable";
+export type CmvStatus = "pending" | "ready" | "failed";
 
 // CardzCheck Analyst types
 export interface CardContext {

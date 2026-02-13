@@ -17,47 +17,159 @@ import {
 } from "@/lib/grade-estimator/value";
 import { DEFAULT_COMPS_WINDOW_DAYS } from "@/lib/grade-estimator/constants";
 
-const SYSTEM_PROMPT = `You are a sports trading card grading expert with deep knowledge of PSA, BGS, SGC, and CGC grading standards. Your job is to analyze card condition and estimate grades based on centering, corners, surface, and edges.`;
+const SYSTEM_PROMPT = `You are a professional sports trading card grading expert who reasons exactly like a PSA, BGS, SGC, or CGC grader. You do not merely detect defects — you evaluate their type, severity, quantity, location, and cumulative impact on grade probability, on BOTH the front AND back of the card. You think like a grader, not a classifier.`;
 
 const USER_PROMPT = `Analyze these photos of the SAME sports trading card and estimate its condition/grade. The card is RAW (not already in a slab).
 
+CRITICAL — FRONT AND BACK EVALUATION:
+The images may include BOTH the front and back of the card. You MUST evaluate EVERY image provided. Defects found on ANY side (front OR back) MUST factor into the final grade estimate and probabilities. A card with a perfect front but a damaged back is NOT a high-grade card. Grading companies inspect both sides equally — you must do the same.
+
 You may receive multiple angles or lighting variations. Use all photos together and prioritize the clearest details.
 
-1. CENTERING: Estimate the border ratios
-   - Left/Right: Compare relative width of left vs right borders (e.g., "50/50", "55/45", "60/40")
-   - Top/Bottom: Compare relative height of top vs bottom borders
-   - Perfect centering is 50/50 on both axes. Anything worse than 60/40 significantly impacts grade.
+═══════════════════════════════════════════
+DEFECT SEVERITY CLASSIFICATION FRAMEWORK
+═══════════════════════════════════════════
 
-2. CORNERS: Examine all four corners for:
-   - Whitening or wear (white showing through color)
-   - Dings or damage
-   - Fraying or softness
-   - Describe what you see (e.g., "Sharp on all 4 corners" or "Minor whitening on bottom-left corner")
+For EVERY defect you identify, classify its severity:
 
-3. SURFACE: Look for:
-   - Scratches or scuffs
-   - Print lines or factory defects
+  MINOR    — Barely visible, requires close inspection. Unlikely to dominate grade outcome alone.
+  MODERATE — Clearly visible at normal viewing distance. Definitively grade-impacting.
+  MAJOR    — Immediately obvious. Grade-limiting — creates a ceiling on the achievable grade.
+
+Severity classification must consider:
+  • Type of defect (what it is)
+  • Severity (how bad it is)
+  • Quantity (how many instances)
+  • Location (where on the card — front vs back, corner vs center)
+
+Include severity labels in your evidence descriptions (e.g., "Minor whitening on back bottom-left corner", "Moderate scratch across front surface").
+
+═══════════════════════════════════════════
+INSPECTION AREAS
+═══════════════════════════════════════════
+
+1. CENTERING (use the front of the card)
+   Estimate border ratios on both axes:
+   - Left/Right and Top/Bottom (e.g., "50/50", "55/45", "60/40")
+
+   Centering severity bands — avoid binary logic, use smooth reasoning:
+   - Near-perfect (50/50 to 52/48): Minimal impact. PSA 10 still viable.
+   - Slight deviation (53/47 to 55/45): PSA 10 probability reduced, PSA 9 favored.
+   - Noticeable deviation (56/44 to 60/40): PSA 9 becomes ceiling, PSA 8 probability rises.
+   - Poor centering (worse than 60/40): PSA 8 ceiling behavior. Strongly favors PSA 7 or lower.
+
+2. CORNERS — Examine all four corners on BOTH FRONT AND BACK.
+   Look for: whitening, wear, dings, fraying, softness, chipping at corner tips.
+   Note which side (front/back) and which corner each defect appears on.
+
+   Corner severity reasoning:
+   - Minor whitening on 1 corner: Small PSA 10 reduction. PSA 9 still likely.
+   - Moderate whitening on 1 corner: PSA 10 unlikely. PSA 9 favored.
+   - Moderate whitening on 2+ corners: PSA 9 suppressed. PSA 8 favored.
+   - Major whitening or damage on any corner: PSA 8 ceiling or lower.
+
+   Quantity matters: a single minor corner defect is NOT equal to multiple moderate corners. Multiple minor corner defects compound toward a moderate-level impact.
+
+3. SURFACE — Inspect the surface on BOTH FRONT AND BACK.
+   Differentiate between these distinct defect types:
+   - Print lines (factory manufacturing lines)
+   - Scratches (linear surface damage)
+   - Scuffs (area surface abrasion)
+   - Indentations or dents (physical depressions)
    - Staining or discoloration
    - Fingerprints or smudges
-   - Describe what you see (e.g., "Clean, no visible scratches" or "Light surface scratches visible")
+   - Ink spots or ink transfer
 
-4. EDGES: Examine all four edges for:
-   - Chipping
-   - Rough cuts
-   - Wear or whitening
-   - Describe what you see (e.g., "Clean edges" or "Minor wear on top edge")
+   Surface severity reasoning:
+   - Minor print line: Moderate PSA 10 penalty (print lines are common but noticed by graders).
+   - Minor scratch or scuff: Moderate penalty. PSA 10 unlikely.
+   - Visible scratch: Major penalty. PSA 9 suppressed.
+   - Deep surface damage, indentation, or heavy staining: Grade ceiling behavior — PSA 8 or lower.
 
-Based on these factors, estimate a PSA grade range on a 1-10 scale:
-- 10 = Gem Mint (virtually perfect)
-- 9 = Mint (minor flaw, one corner or centering)
-- 8 = NM-MT (small flaw visible)
-- 7 = NM (minor flaws on corners or surface)
-- 6 = EX-MT (visible wear but still sharp)
+   Note which side (front/back) each defect appears on.
 
-IMPORTANT:
-- Be conservative - it's better to underestimate than overestimate
-- Photo quality affects accuracy - note if image quality limits your assessment
+4. EDGES — Examine all four edges on BOTH FRONT AND BACK.
+   Look for: chipping, rough cuts, uneven edges, whitening, wear.
+   Note which side (front/back) each defect appears on.
+
+   Edge severity reasoning:
+   - Minor edge touch or faint whitening: Mild high-grade penalty. PSA 10 slightly reduced.
+   - Moderate chipping or visible whitening: PSA 9 suppressed. PSA 8 favored.
+   - Major chipping or heavy wear: Strong PSA 8 or lower bias. Grade ceiling behavior.
+
+   Multiple edge defects compound impact — two minor edge issues approximate one moderate issue.
+
+5. BACK-SPECIFIC DEFECTS (if a back image is provided):
+   - Whitening along edges or corners on the back
+   - Chipping visible on the back surface or edges
+   - Scratches, scuffs, or surface wear on the back
+   - Print defects (misalignment, ink blots, print lines)
+   - Wax stains or adhesive residue
+   - Any damage not visible from the front
+   - If no back image is provided, state "No back image provided" and note this limits confidence.
+
+   Back defects carry EQUAL severity weight to front defects. Apply the same severity framework.
+
+═══════════════════════════════════════════
+CUMULATIVE / COMPOUNDING LOGIC
+═══════════════════════════════════════════
+
+Defects are NOT isolated. You must reason about their cumulative impact:
+
+  • Multiple MINOR defects across different areas (e.g., minor corner whitening + minor edge touch + faint print line) compound to approximate a MODERATE overall impact. PSA 10 becomes unlikely.
+  • MINOR + MODERATE defects together create a strong penalty. PSA 9 becomes ceiling.
+  • Multiple MODERATE defects across areas create MAJOR-grade suppression. PSA 8 or lower favored.
+  • Any single MAJOR defect creates a hard grade ceiling regardless of how clean the rest of the card is.
+
+Avoid treating each sub-grade area as a separate, independent evaluation. The FINAL probability distribution must reflect the combined weight of ALL defects found across ALL areas on BOTH sides.
+
+═══════════════════════════════════════════
+PROBABILITY DISTRIBUTION BEHAVIOR
+═══════════════════════════════════════════
+
+Your severity assessments must shape the probability distribution smoothly:
+
+  • PSA 10 suppression: Any confirmed defect (even minor) should begin reducing PSA 10 probability. Multiple minor defects should bring PSA 10 well below 0.10. A single moderate defect should bring PSA 10 near 0.0.
+  • PSA 9 vs PSA 8 shifts: Moderate defects shift weight from PSA 9 toward PSA 8. Major defects shift weight past PSA 8 into PSA 7 or lower.
+  • Grade ceiling behavior: When a major defect is identified, most probability mass should sit AT or BELOW the ceiling grade. Do not spread probability above the ceiling.
+  • Smooth transitions: Avoid abrupt probability jumps. A slightly-worse-than-minor defect should NOT cause PSA 10 to jump from 0.30 to 0.0. Use gradual curves.
+
+═══════════════════════════════════════════
+GRADE SCALE REFERENCE
+═══════════════════════════════════════════
+
+- 10 = Gem Mint (virtually perfect on BOTH sides — no defects at any severity)
+- 9 = Mint (one minor flaw allowed on corners, centering, or surface, on either side)
+- 8 = NM-MT (one or two moderate flaws, or several minor flaws, on either side)
+- 7 = NM (multiple moderate flaws or a major flaw, on either side)
+- 6 = EX-MT (visible wear across multiple areas)
+
+═══════════════════════════════════════════
+CONFIDENCE LOGIC
+═══════════════════════════════════════════
+
+Confidence must reflect your diagnostic certainty, not just whether you detected defects:
+
+  • Set "low_confidence" when:
+    - Image is blurry, low-resolution, or poorly lit
+    - Card is partially obscured or cropped
+    - Only front images are provided (no back)
+    - Surface texture or defects are ambiguous
+    - You cannot distinguish between a defect and a photo artifact
+
+  • When confidence is low, shift probabilities conservatively (more weight on lower grades) and note the specific limitation.
+
+═══════════════════════════════════════════
+IMPORTANT REMINDERS
+═══════════════════════════════════════════
+
+- Be conservative — it is better to underestimate than overestimate
+- Defects on the BACK are just as grade-limiting as defects on the FRONT
+- A single significant back defect (edge chipping, corner whitening, scratches) lowers the grade the same way a front defect would
+- Photo quality affects accuracy — note if image quality limits your assessment
+- If only front images are provided, note reduced confidence and lean conservative
 - Give a range (e.g., 7-9) to reflect uncertainty
+- Think like a professional grader: evaluate severity, not just presence
 
 Return ONLY valid JSON with this structure (no prose):
 {
@@ -88,6 +200,8 @@ Rules:
 - Always include status, reason, and both probability arrays.
 - Probabilities must sum to 1.0 in each array.
 - If low_confidence or unable, still return conservative probabilities with more weight on lower grades.
+- The "corners", "surface", and "edges" fields MUST include severity labels (minor/moderate/major) for each defect found and MUST mention back-side findings when a back image is present.
+- "grade_notes" MUST: (1) state whether both sides were evaluated, (2) list the single most grade-limiting defect with its severity, (3) note any compounding effects from multiple defects, and (4) explain the reasoning behind the probability distribution.
 `;
 
 function getAnthropicClient() {
