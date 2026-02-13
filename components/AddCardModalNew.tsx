@@ -3,6 +3,8 @@
 import { useState, useCallback, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { formatSetLabel, needsYearConfirmation, shouldDisplayYear } from "@/lib/card-identity/ui";
+import { getCollectionErrorMessage } from "@/lib/collection/client-errors";
+import { normalizeHttpsImageUrl } from "@/lib/collection/image-url";
 import {
   CONDITION_OPTIONS,
   type CardIdentificationResult,
@@ -63,6 +65,7 @@ export default function AddCardModalNew({
   const [condition, setCondition] = useState<string>("Raw");
   const [editingYear, setEditingYear] = useState(false);
   const [yearDraft, setYearDraft] = useState("");
+  const [editablePlayerName, setEditablePlayerName] = useState("");
 
   const resetForm = () => {
     setMode("select");
@@ -76,6 +79,7 @@ export default function AddCardModalNew({
     setCondition("Raw");
     setEditingYear(false);
     setYearDraft("");
+    setEditablePlayerName("");
   };
 
   const handleClose = () => {
@@ -179,6 +183,7 @@ export default function AddCardModalNew({
         cardIdentity: result.card_identity,
       });
       setYearDraft(result.year || "");
+      setEditablePlayerName(result.player_name || "");
       setMode("confirm");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to process image");
@@ -295,15 +300,21 @@ export default function AddCardModalNew({
   };
 
   const handleConfirm = async () => {
-    if (!identifiedCard?.player_name) {
-      setError("Card data is missing");
+    if (!identifiedCard) {
+      setError("No card is selected. Go back and choose a card.");
+      return;
+    }
+
+    const playerName = (editablePlayerName.trim() || identifiedCard.player_name || "").trim();
+    if (!playerName) {
+      setError("Player name is required");
       return;
     }
 
     // For watchlist mode, pass card data to onCardSelected and close
     if (addMode === "watchlist" && onCardSelected) {
       const cardData = {
-        player_name: identifiedCard.player_name,
+        player_name: playerName,
         year: identifiedCard.year,
         set_name: identifiedCard.set_name,
         card_number: identifiedCard.card_number,
@@ -326,16 +337,26 @@ export default function AddCardModalNew({
         notesParts.push(`Parallel: ${identifiedCard.parallel_type}`);
       }
 
+      const rawImageUrls =
+        identifiedCard.imageUrls && identifiedCard.imageUrls.length > 0
+          ? identifiedCard.imageUrls
+          : [identifiedCard.imageUrl].filter(Boolean);
+      const imageUrls = rawImageUrls
+        .map((url) => normalizeHttpsImageUrl(url))
+        .filter((url): url is string => Boolean(url));
+
       const body = {
-        player_name: identifiedCard.player_name,
+        player_name: playerName,
         year: identifiedCard.year || null,
         set_name: identifiedCard.set_name || null,
+        parallel_type: identifiedCard.parallel_type || null,
+        card_number: identifiedCard.card_number || null,
         grade: condition,
         purchase_price:
           costBasisType === "paid" && purchasePrice ? parseFloat(purchasePrice) : null,
         purchase_date: null,
-        image_url: identifiedCard.imageUrl || null,
-        image_urls: identifiedCard.imageUrls || [identifiedCard.imageUrl].filter(Boolean),
+        image_url: imageUrls[0] || null,
+        image_urls: imageUrls,
         notes: notesParts.length > 0 ? notesParts.join(" | ") : null,
       };
 
@@ -353,10 +374,10 @@ export default function AddCardModalNew({
           handleClose();
           return;
         }
-        throw new Error(data.error || "Failed to add card");
+        throw new Error(getCollectionErrorMessage(data, "Failed to add card"));
       }
 
-      onSuccess(identifiedCard.player_name, data.item ?? undefined);
+      onSuccess(playerName, data.item ?? undefined);
       resetForm();
       onClose();
     } catch (err) {
@@ -624,9 +645,25 @@ export default function AddCardModalNew({
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-white truncate">
-                    {identifiedCard.player_name}
-                  </h3>
+                  {identifiedCard.player_name ? (
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white truncate">
+                      {identifiedCard.player_name}
+                    </h3>
+                  ) : (
+                    <div className="mb-1">
+                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                        Player Name <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={editablePlayerName}
+                        onChange={(e) => setEditablePlayerName(e.target.value)}
+                        placeholder="e.g., CJ Stroud"
+                        autoFocus
+                        className="w-full px-2 py-1.5 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  )}
                   <div className="mt-1 space-y-0.5 text-sm text-gray-600 dark:text-gray-400">
                     {showYear ? (
                       <p>Year: {identifiedCard.year}</p>

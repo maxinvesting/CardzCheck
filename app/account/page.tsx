@@ -1,7 +1,6 @@
 "use client";
 
-import { Suspense } from "react";
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import { createClient } from "@/lib/supabase/client";
@@ -181,7 +180,7 @@ function AccountContent() {
                     disabled={upgradeLoading}
                     className="px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
                   >
-                    {upgradeLoading ? "Loading..." : "Upgrade to Pro - $20"}
+                    {upgradeLoading ? "Loading..." : "Upgrade to Pro"}
                   </button>
                 </div>
 

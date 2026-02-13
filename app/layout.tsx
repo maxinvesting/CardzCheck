@@ -4,7 +4,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 
 export const metadata: Metadata = {
   title: "CardzCheck - Sports Card Price Comps",
-  description: "Find sports card prices and track your collection. Card Ladder charges $200/year. We charge $20.",
+  description: "The all-in-one card tool. AI grade analysis, an analyst that knows your collection, estimated CMV, and tracking.",
 };
 
 export default function RootLayout({

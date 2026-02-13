@@ -9,7 +9,7 @@ import CardDetailsForm from "@/components/CardDetailsForm";
 export default function CardProfilePage() {
   const params = useParams();
   const router = useRouter();
-  const cardId = params.id as string;
+  const cardId = params?.id as string;
 
   const [card, setCard] = useState<CollectionItem | null>(null);
   const [images, setImages] = useState<CardImage[]>([]);

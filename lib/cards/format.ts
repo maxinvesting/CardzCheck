@@ -1,10 +1,14 @@
-export function normalizeCardNumber(value?: string | null): string | undefined {
-  if (!value) return undefined;
+export function normalizeCardNumber(
+  value?: string | number | null
+): string | undefined {
+  if (value === null || value === undefined) return undefined;
   const cleaned = String(value).trim().replace(/^#/, "").replace(/\s+/g, "");
   return cleaned.length > 0 ? cleaned : undefined;
 }
 
-export function formatCardNumber(value?: string | null): string | undefined {
+export function formatCardNumber(
+  value?: string | number | null
+): string | undefined {
   const normalized = normalizeCardNumber(value);
   return normalized ? `#${normalized}` : undefined;
 }
@@ -29,7 +33,7 @@ export function buildCardDisplayName(card: {
   variant?: string | null;
   grader?: string | null;
   grade?: string | null;
-  card_number?: string | null;
+  card_number?: string | number | null;
 }): string {
   const brand = card.brand?.trim() || undefined;
   const setName = card.set_name?.trim() || undefined;

@@ -6,11 +6,13 @@ import type { CollectionItem } from "@/types";
 import { formatCardSubtitle } from "@/lib/card-identity/display";
 import { formatCurrency, formatPct, computeGainLoss } from "@/lib/formatters";
 import { getEstCmv } from "@/lib/values";
+import { getCollectionCmvUiState } from "@/lib/collection/cmv-state";
 
 interface CollectionGridProps {
   items: CollectionItem[];
   onDelete: (id: string) => void;
   onRefresh: () => void;
+  onRetryCmv: (id: string) => Promise<void>;
 }
 
 function formatDate(dateStr: string | null): string {
@@ -25,17 +27,22 @@ function formatDate(dateStr: string | null): string {
 interface CardItemProps {
   item: CollectionItem;
   onDelete: () => void;
+  onRetryCmv: (id: string) => Promise<void>;
 }
 
-function CardItem({ item, onDelete }: CardItemProps) {
+const loggedMissingThumbnailIds = new Set<string>();
+
+function CardItem({ item, onDelete, onRetryCmv }: CardItemProps) {
   const router = useRouter();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [imageLoadFailed, setImageLoadFailed] = useState(false);
+  const [retryingCmv, setRetryingCmv] = useState(false);
 
   const cmv = getEstCmv(item);
   const gainLoss = computeGainLoss(cmv, item.purchase_price);
-  const isRecentlyAdded = item.created_at
-    ? Date.now() - new Date(item.created_at).getTime() < 120_000
-    : false;
+  const cmvUiState = getCollectionCmvUiState(item);
+  const showCalculatingCmv =
+    cmvUiState === "pending" || cmvUiState === "pending_stale";
 
   // Debug: log CMV pipeline for first few renders (remove after fix verified)
   if (typeof window !== "undefined" && (window as any).__CARDZ_DEBUG) {
@@ -49,12 +56,35 @@ function CardItem({ item, onDelete }: CardItemProps) {
     });
   }
 
-  // Get primary image or fallback to image_url
-  const imageUrl = item.primary_image?.url || item.image_url;
+  // Prefer persisted thumbnail_url, then primary image, then image_url fallback.
+  const imageUrl = item.thumbnail_url || item.primary_image?.url || item.image_url;
+
+  if (
+    process.env.NODE_ENV === "development" &&
+    !imageUrl &&
+    item.id &&
+    !loggedMissingThumbnailIds.has(item.id)
+  ) {
+    loggedMissingThumbnailIds.add(item.id);
+    console.warn("[collection] missing thumbnail for item", {
+      itemId: item.id,
+      player: item.player_name,
+    });
+  }
 
   const handleCardClick = () => {
     router.push(`/cards/${item.id}`);
   };
+
+  const showRetry = cmvUiState === "pending_stale" || cmvUiState === "failed";
+  const cmvDisplayText =
+    cmv !== null
+      ? formatCurrency(cmv)
+      : cmvUiState === "pending"
+      ? "Calculating..."
+      : cmvUiState === "pending_stale"
+      ? "Still calculating — refresh soon"
+      : "CMV unavailable";
 
   return (
     <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden hover:border-blue-500 dark:hover:border-blue-500 transition-colors cursor-pointer">
@@ -63,14 +93,17 @@ function CardItem({ item, onDelete }: CardItemProps) {
         className="aspect-[3/4] bg-gray-100 dark:bg-gray-800 relative"
         onClick={handleCardClick}
       >
-        {imageUrl ? (
+        {imageUrl && !imageLoadFailed ? (
           <>
             <img
               src={imageUrl}
               alt={item.player_name}
               className="w-full h-full object-cover"
+              onError={() => {
+                setImageLoadFailed(true);
+              }}
             />
-            {!item.primary_image && item.image_url && (
+            {!item.primary_image && (item.thumbnail_url || item.image_url) && (
               <span className="absolute bottom-2 left-2 px-1.5 py-0.5 bg-black/60 text-white text-[10px] font-medium rounded">
                 Stock
               </span>
@@ -141,19 +174,63 @@ function CardItem({ item, onDelete }: CardItemProps) {
           <div className="flex justify-between text-sm">
             <span className="text-gray-500 dark:text-gray-400">CMV</span>
             <span className="font-medium text-gray-900 dark:text-white">
-              {cmv !== null
-                ? formatCurrency(cmv)
-                : isRecentlyAdded && item.cmv_confidence !== "unavailable"
-                ? "Calculating..."
-                : "CMV unavailable"}
+              {showCalculatingCmv ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <svg
+                    className="h-3 w-3 animate-spin text-gray-500 dark:text-gray-400"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                    />
+                  </svg>
+                  {cmvDisplayText}
+                </span>
+              ) : (
+                cmvDisplayText
+              )}
             </span>
           </div>
           {cmv === null && (
-            <p className="text-xs text-gray-400 dark:text-gray-500">
-              {isRecentlyAdded && item.cmv_confidence !== "unavailable"
-                ? "Market value is being calculated"
-                : "Add comps to calculate value"}
-            </p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs text-gray-400 dark:text-gray-500">
+                {cmvUiState === "pending"
+                  ? "Market value is being calculated"
+                  : cmvUiState === "pending_stale"
+                  ? "Still calculating — refresh soon"
+                  : "CMV unavailable"}
+              </p>
+              {showRetry ? (
+                <button
+                  type="button"
+                  onClick={async (event) => {
+                    event.stopPropagation();
+                    if (retryingCmv) return;
+                    setRetryingCmv(true);
+                    try {
+                      await onRetryCmv(item.id);
+                    } finally {
+                      setRetryingCmv(false);
+                    }
+                  }}
+                  className="text-xs text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-60"
+                  disabled={retryingCmv}
+                >
+                  {retryingCmv ? "Retrying..." : "Retry"}
+                </button>
+              ) : null}
+            </div>
           )}
           {gainLoss && (
             <div className="flex justify-between text-sm">
@@ -211,7 +288,12 @@ function CardItem({ item, onDelete }: CardItemProps) {
   );
 }
 
-export default function CollectionGrid({ items, onDelete, onRefresh }: CollectionGridProps) {
+export default function CollectionGrid({
+  items,
+  onDelete,
+  onRefresh,
+  onRetryCmv,
+}: CollectionGridProps) {
   if (items.length === 0) {
     return (
       <div className="text-center py-12">
@@ -247,6 +329,7 @@ export default function CollectionGrid({ items, onDelete, onRefresh }: Collectio
             key={item.id}
             item={item}
             onDelete={() => onDelete(item.id)}
+            onRetryCmv={onRetryCmv}
           />
         ))}
       </div>

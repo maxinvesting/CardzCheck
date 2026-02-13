@@ -9,7 +9,10 @@
     "start": "next start",
     "lint": "next lint",
     "test": "vitest",
-    "test:smart-search": "SMART_SEARCH_HARNESS=1 vitest run lib/smartSearch/__tests__/smart-search-harness.test.ts"
+    "test:smart-search": "SMART_SEARCH_HARNESS=1 vitest run lib/smartSearch/__tests__/smart-search-harness.test.ts",
+    "bench:generate-cases": "tsx scripts/benchmarks/generate_cases.ts",
+    "bench:cmv:sold": "tsx scripts/benchmarks/ebay_sold_cmv_benchmark.ts",
+    "bench:cmv:summary": "tsx scripts/benchmarks/summarize_benchmark.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.1",

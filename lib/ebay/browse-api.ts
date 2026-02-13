@@ -21,6 +21,54 @@ const EBAY_BROWSE_API_URL = "https://api.ebay.com/buy/browse/v1/item_summary/sea
 // In-memory token cache (will be replaced with Supabase in production)
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
+const normalizeHttpsUrl = (value: unknown): string | null => {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return null;
+  }
+
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return null;
+  }
+  if (parsed.protocol === "http:") {
+    parsed.protocol = "https:";
+  }
+  return parsed.toString();
+};
+
+export const selectBrowseItemImageUrl = (item: any): string | undefined => {
+  const additionalImages = Array.isArray(item.additionalImages)
+    ? item.additionalImages
+    : Array.isArray(item.additionalImage)
+    ? item.additionalImage
+    : [];
+
+  const additionalCandidates = additionalImages
+    .map((img: any) => img?.imageUrl)
+    .filter((value: unknown) => typeof value === "string");
+
+  const candidates = [
+    item.primaryImage?.imageUrl,
+    item.image?.imageUrl,
+    ...additionalCandidates,
+    item.thumbnailImages?.[0]?.imageUrl,
+  ];
+
+  for (const candidate of candidates) {
+    const normalized = normalizeHttpsUrl(candidate);
+    if (normalized) {
+      return normalized;
+    }
+  }
+  return undefined;
+};
+
 /**
  * Get OAuth access token using Client Credentials flow
  */
@@ -189,7 +237,7 @@ export async function searchBrowseAPI(params: EbaySearchParams): Promise<ForSale
         shipping,
         condition: item.condition || undefined,
         url: item.itemWebUrl || "",
-        image: item.image?.imageUrl || item.thumbnailImages?.[0]?.imageUrl || undefined,
+        image: selectBrowseItemImageUrl(item),
         itemId: item.itemId,
       });
     }

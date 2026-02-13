@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { formatSetLabel, needsYearConfirmation, shouldDisplayYear } from "@/lib/card-identity/ui";
 import { InlineNotice } from "@/components/ui";
+import { getCollectionErrorMessage } from "@/lib/collection/client-errors";
+import { normalizeHttpsImageUrl } from "@/lib/collection/image-url";
 import {
   CONDITION_OPTIONS,
   type CardIdentificationResult,
@@ -38,10 +40,11 @@ export default function ConfirmAddCardModal({
   const yearNeedsConfirmation = cardData
     ? needsYearConfirmation(cardData.year, cardData.confidence, yearFieldConfidence)
     : false;
-  const needsConfirmation = cardData?.confidence === "low" || 
-    (cardData?.players && cardData.players.length > 1) || 
+  const needsConfirmation = cardData?.confidence === "low" ||
+    (cardData?.players && cardData.players.length > 1) ||
     cardData?.insert === "Downtown" ||
-    yearNeedsConfirmation;
+    yearNeedsConfirmation ||
+    !cardData?.player_name;
   
   const [editablePlayerName, setEditablePlayerName] = useState(cardData?.player_name || "");
   const [editablePlayers, setEditablePlayers] = useState(
@@ -89,8 +92,14 @@ export default function ConfirmAddCardModal({
   };
 
   const handleConfirm = async () => {
-    if (!cardData?.player_name) {
-      setError("Card data is missing");
+    const resolvedPlayerName = needsConfirmation
+      ? (editablePlayers.includes(",")
+          ? editablePlayers.split(",").map(p => p.trim()).filter(Boolean)[0]
+          : editablePlayerName || editablePlayers)
+      : cardData?.player_name;
+
+    if (!resolvedPlayerName?.trim()) {
+      setError("Player name is required");
       return;
     }
 
@@ -98,13 +107,13 @@ export default function ConfirmAddCardModal({
     setError(null);
 
     try {
+      if (!cardData) return; // Safety: modal shouldn't render without cardData
+
       // Use editable fields if confirmation needed, otherwise use cardData
       const finalPlayers = needsConfirmation && editablePlayers.includes(",")
         ? editablePlayers.split(",").map(p => p.trim()).filter(Boolean)
-        : (cardData.players && cardData.players.length > 1 ? cardData.players : [cardData.player_name]);
-      const finalPlayerName = needsConfirmation 
-        ? (finalPlayers.length > 0 ? finalPlayers[0] : editablePlayerName)
-        : cardData.player_name;
+        : (cardData.players && cardData.players.length > 1 ? cardData.players : [resolvedPlayerName]);
+      const finalPlayerName = resolvedPlayerName;
       const finalYear = needsConfirmation ? editableYear : cardData.year;
       const finalSet = needsConfirmation ? editableSet : cardData.set_name;
       const finalInsert = needsConfirmation ? editableInsert : cardData.insert;
@@ -130,6 +139,14 @@ export default function ConfirmAddCardModal({
         notesParts.push(`Variation: ${cardData.variation}`);
       }
 
+      const rawImageUrls =
+        cardData.imageUrls && cardData.imageUrls.length > 0
+          ? cardData.imageUrls
+          : [cardData.imageUrl].filter(Boolean);
+      const imageUrls = rawImageUrls
+        .map((url) => normalizeHttpsImageUrl(url))
+        .filter((url): url is string => Boolean(url));
+
       // Forward CMV from Comps search results when available
       const cmvValue =
         typeof initialCmv === "number" && Number.isFinite(initialCmv) && initialCmv > 0
@@ -148,8 +165,8 @@ export default function ConfirmAddCardModal({
         purchase_price:
           costBasisType === "paid" && purchasePrice ? parseFloat(purchasePrice) : null,
         purchase_date: null,
-        image_url: cardData.imageUrl || null,
-        image_urls: cardData.imageUrls || [cardData.imageUrl].filter(Boolean),
+        image_url: imageUrls[0] || null,
+        image_urls: imageUrls,
         notes: notesParts.length > 0 ? notesParts.join(" | ") : null,
         ...(cmvValue !== null
           ? { est_cmv: cmvValue, estimated_cmv: cmvValue }
@@ -170,10 +187,10 @@ export default function ConfirmAddCardModal({
           handleClose();
           return;
         }
-        throw new Error(data.error || "Failed to add card");
+        throw new Error(getCollectionErrorMessage(data, "Failed to add card"));
       }
 
-      onSuccess(cardData.player_name, data.item ?? undefined);
+      onSuccess(finalPlayerName, data.item ?? undefined);
       resetForm();
       onClose();
     } catch (err) {

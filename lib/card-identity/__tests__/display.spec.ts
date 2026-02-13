@@ -94,10 +94,12 @@ describe("formatCardSubtitle", () => {
 });
 
 describe("getFieldStatus", () => {
+  const baseIdentity = { setName: null, parallel: null, brand: null, subset: null };
+
   it("returns ok when value present and confidence high", () => {
     expect(
       getFieldStatus(
-        { year: 2024, fieldConfidence: { year: "high" } },
+        { ...baseIdentity, year: 2024, fieldConfidence: { year: "high" } },
         "year"
       )
     ).toBe("ok");
@@ -106,7 +108,7 @@ describe("getFieldStatus", () => {
   it("returns ok when value present and confidence medium", () => {
     expect(
       getFieldStatus(
-        { year: 2024, fieldConfidence: { year: "medium" } },
+        { ...baseIdentity, year: 2024, fieldConfidence: { year: "medium" } },
         "year"
       )
     ).toBe("ok");
@@ -115,14 +117,14 @@ describe("getFieldStatus", () => {
   it("returns needs_confirmation when value present but confidence low", () => {
     expect(
       getFieldStatus(
-        { year: 2024, fieldConfidence: { year: "low" } },
+        { ...baseIdentity, year: 2024, fieldConfidence: { year: "low" } },
         "year"
       )
     ).toBe("needs_confirmation");
   });
 
   it("returns unknown when value null", () => {
-    expect(getFieldStatus({ year: null, fieldConfidence: {} }, "year")).toBe("unknown");
+    expect(getFieldStatus({ ...baseIdentity, year: null, fieldConfidence: {} }, "year")).toBe("unknown");
   });
 
   it("returns unknown when identity null", () => {

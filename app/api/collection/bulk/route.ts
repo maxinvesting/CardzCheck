@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import type { CollectionItem } from "@/types";
 import { LIMITS } from "@/types";
 import { isTestMode } from "@/lib/test-mode";
-import { calculateCardCmv } from "@/lib/cmv";
+import { calculateCardCmvWithStatus } from "@/lib/cmv";
+import { normalizeHttpsImageUrl } from "@/lib/collection/image-url";
 
 type BulkCollectionItemInput = {
   player_name: string;
@@ -12,6 +14,7 @@ type BulkCollectionItemInput = {
   purchase_price?: number | null;
   purchase_date?: string | null;
   image_url?: string | null;
+  thumbnail_url?: string | null;
   notes?: string | null;
 };
 
@@ -60,6 +63,10 @@ export async function POST(request: NextRequest) {
           estimated_cmv: null,
           cmv_confidence: "unavailable",
           cmv_last_updated: new Date().toISOString(),
+          cmv_status: "pending",
+          cmv_value: null,
+          cmv_error: null,
+          cmv_updated_at: new Date().toISOString(),
           created_at: new Date().toISOString(),
         })),
       });
@@ -103,7 +110,14 @@ export async function POST(request: NextRequest) {
       purchase_price: it.purchase_price ?? null,
       purchase_date: it.purchase_date || null,
       image_url: it.image_url || null,
+      thumbnail_url:
+        normalizeHttpsImageUrl(it.thumbnail_url ?? undefined) ??
+        normalizeHttpsImageUrl(it.image_url ?? undefined),
       notes: it.notes || null,
+      cmv_status: "pending",
+      cmv_value: null,
+      cmv_error: null,
+      cmv_updated_at: new Date().toISOString(),
     }));
 
     const { data: insertedItems, error } = await supabase
@@ -117,10 +131,10 @@ export async function POST(request: NextRequest) {
 
     if (insertedItems && insertedItems.length > 0) {
       for (const item of insertedItems) {
-        const cmvResult = await calculateCardCmv(item);
+        const cmvResult = await calculateCardCmvWithStatus(item as CollectionItem);
         await supabase
           .from("collection_items")
-          .update(cmvResult)
+          .update(cmvResult.payload)
           .eq("id", item.id)
           .eq("user_id", user.id);
       }

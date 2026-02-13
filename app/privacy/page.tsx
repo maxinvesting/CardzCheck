@@ -5,7 +5,7 @@ export const metadata = {
   description: "Privacy Policy for CardzCheck sports card price lookup",
 };
 
-export default function PrivacyPage() {
+export default async function PrivacyPage() {
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
       <div className="max-w-3xl mx-auto px-6 py-16">
@@ -41,7 +41,7 @@ export default function PrivacyPage() {
             <p className="text-gray-300">
               CardzCheck (&quot;we&quot;, &quot;our&quot;, or &quot;us&quot;) is
               committed to protecting your privacy. This Privacy Policy explains
-              how we collect, use, and safeguard your information when you use
+              how we collect,  and safeguard your information when you use
               our sports card price lookup and collection tracking service.
             </p>
           </section>

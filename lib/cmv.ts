@@ -1,16 +1,50 @@
 import { GRADING_OPTIONS } from "@/lib/card-data";
 import { scrapeEbaySoldListings, searchEbayDualSignal } from "@/lib/ebay";
-import type { CollectionItem, Comp, CmvConfidence } from "@/types";
+import { logDebug, redactId } from "@/lib/logging";
+import type { CollectionItem, Comp, CmvConfidence, CmvStatus } from "@/types";
 
 const CMV_LOOKBACK_DAYS = 90;
 const CMV_STALE_DAYS = 7;
-const CMV_RETRY_UNAVAILABLE = true;
+const CMV_FAILED_RETRY_MS = 5 * 60 * 1000;
+const CMV_COMPUTE_TIMEOUT_MS = 12_000;
 
-type CmvResult = {
+const CMV_ERROR = {
+  timeout: "timeout",
+  noComps: "no_comps",
+  compute: "compute_error",
+} as const;
+
+type CmvErrorCode = (typeof CMV_ERROR)[keyof typeof CMV_ERROR];
+
+export type CmvResult = {
   estimated_cmv: number | null;
   est_cmv: number | null;
   cmv_confidence: CmvConfidence;
   cmv_last_updated: string;
+};
+
+export type CmvPersistedResult = CmvResult & {
+  cmv_status: CmvStatus;
+  cmv_value: number | null;
+  cmv_error: string | null;
+  cmv_updated_at: string;
+};
+
+export type CmvComputeMeta = {
+  source: "exact" | "adjacent" | "proxy" | "fallback" | "none";
+  exactCompsCount: number;
+  adjacentCompsCount: number;
+  proxyCompsCount: number;
+  fallbackForSaleCount: number;
+  /** Best image URL from eBay listings (for backfilling cards with no image). */
+  bestImageUrl?: string | null;
+};
+
+export type CmvComputationWithStatus = {
+  payload: CmvPersistedResult;
+  meta: CmvComputeMeta;
+  durationMs: number;
+  errorCode: CmvErrorCode | null;
 };
 
 type GradeInfo = {
@@ -27,15 +61,164 @@ const CMV_CONFIDENCE: Record<string, CmvConfidence> = {
 
 const nowIso = (): string => new Date().toISOString();
 
-export function isCmvStale(item: CollectionItem): boolean {
-  if (!item.cmv_last_updated || !item.cmv_confidence) {
+class CmvTimeoutError extends Error {
+  constructor() {
+    super("CMV computation timed out");
+    this.name = "CmvTimeoutError";
+  }
+}
+
+const isTimeoutError = (error: unknown): boolean => error instanceof CmvTimeoutError;
+
+const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+
+  try {
+    return await new Promise<T>((resolve, reject) => {
+      timer = setTimeout(() => reject(new CmvTimeoutError()), timeoutMs);
+
+      promise
+        .then((value) => {
+          resolve(value);
+        })
+        .catch((error) => {
+          reject(error);
+        });
+    });
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
+};
+
+const coercePositiveNumber = (value: unknown): number | null => {
+  if (typeof value === "number") {
+    return Number.isFinite(value) && value > 0 ? value : null;
+  }
+  return null;
+};
+
+const toStoredError = (errorCode: CmvErrorCode): string | null => {
+  if (process.env.NODE_ENV === "development") {
+    return errorCode;
+  }
+  return null;
+};
+
+export const buildPendingCmvUpdate = (timestamp = nowIso()): CmvPersistedResult => ({
+  estimated_cmv: null,
+  est_cmv: null,
+  cmv_confidence: CMV_CONFIDENCE.unavailable,
+  cmv_last_updated: timestamp,
+  cmv_status: "pending",
+  cmv_value: null,
+  cmv_error: null,
+  cmv_updated_at: timestamp,
+});
+
+export const buildFailedCmvUpdate = (
+  errorCode: CmvErrorCode,
+  timestamp = nowIso()
+): CmvPersistedResult => ({
+  estimated_cmv: null,
+  est_cmv: null,
+  cmv_confidence: CMV_CONFIDENCE.unavailable,
+  cmv_last_updated: timestamp,
+  cmv_status: "failed",
+  cmv_value: null,
+  cmv_error: toStoredError(errorCode),
+  cmv_updated_at: timestamp,
+});
+
+const buildReadyCmvUpdate = (
+  result: CmvResult,
+  cmvValue: number,
+  timestamp = nowIso()
+): CmvPersistedResult => ({
+  estimated_cmv: cmvValue,
+  est_cmv: cmvValue,
+  cmv_confidence: result.cmv_confidence,
+  cmv_last_updated: result.cmv_last_updated || timestamp,
+  cmv_status: "ready",
+  cmv_value: cmvValue,
+  cmv_error: null,
+  cmv_updated_at: timestamp,
+});
+
+export const toCmvPayloadFromResult = (
+  result: CmvResult,
+  timestamp = nowIso()
+): { payload: CmvPersistedResult; errorCode: CmvErrorCode | null } => {
+  const cmvValue = coercePositiveNumber(result.estimated_cmv ?? result.est_cmv);
+  if (cmvValue !== null) {
+    return {
+      payload: buildReadyCmvUpdate(result, cmvValue, timestamp),
+      errorCode: null,
+    };
+  }
+  return {
+    payload: buildFailedCmvUpdate(CMV_ERROR.noComps, timestamp),
+    errorCode: CMV_ERROR.noComps,
+  };
+};
+
+export function isCmvStale(item: CollectionItem, nowMs = Date.now()): boolean {
+  const status = item.cmv_status ?? null;
+
+  // Check whether a CMV value actually exists in ANY of the value columns.
+  const hasCmvValue =
+    (typeof item.cmv_value === "number" && Number.isFinite(item.cmv_value) && item.cmv_value > 0) ||
+    (typeof item.estimated_cmv === "number" && Number.isFinite(item.estimated_cmv) && item.estimated_cmv > 0) ||
+    (typeof (item as any).est_cmv === "number" && Number.isFinite((item as any).est_cmv) && (item as any).est_cmv > 0);
+
+  // If status is explicitly "ready" AND a value exists, only refresh after stale window.
+  if (status === "ready" && hasCmvValue) {
+    const lastUpdatedRaw = item.cmv_updated_at ?? item.cmv_last_updated;
+    if (!lastUpdatedRaw) return true;
+    const lastUpdated = new Date(lastUpdatedRaw).getTime();
+    if (!Number.isFinite(lastUpdated)) return true;
+    const ageMs = nowMs - lastUpdated;
+    return ageMs > CMV_STALE_DAYS * 24 * 60 * 60 * 1000;
+  }
+
+  // If no value exists yet — regardless of status or timestamps — it's stale.
+  if (!hasCmvValue) {
     return true;
   }
-  if (CMV_RETRY_UNAVAILABLE && item.cmv_confidence === CMV_CONFIDENCE.unavailable) {
+
+  // Pending always needs computation.
+  if (status === "pending") {
     return true;
   }
-  const lastUpdated = new Date(item.cmv_last_updated).getTime();
-  const ageMs = Date.now() - lastUpdated;
+
+  // Failed: retry after a short cooldown (5 min).
+  if (status === "failed") {
+    const lastUpdatedRaw = item.cmv_updated_at ?? item.cmv_last_updated;
+    if (!lastUpdatedRaw) return true;
+    const lastUpdated = new Date(lastUpdatedRaw).getTime();
+    if (!Number.isFinite(lastUpdated)) return true;
+    const ageMs = nowMs - lastUpdated;
+    return ageMs > CMV_FAILED_RETRY_MS;
+  }
+
+  // Legacy rows without explicit status but with a value — use standard stale window.
+  const lastUpdatedRaw = item.cmv_updated_at ?? item.cmv_last_updated;
+  if (!lastUpdatedRaw) {
+    return true;
+  }
+
+  const lastUpdated = new Date(lastUpdatedRaw).getTime();
+  if (!Number.isFinite(lastUpdated)) {
+    return true;
+  }
+
+  const ageMs = nowMs - lastUpdated;
+
+  if (item.cmv_confidence === CMV_CONFIDENCE.unavailable) {
+    return ageMs > CMV_FAILED_RETRY_MS;
+  }
+
   return ageMs > CMV_STALE_DAYS * 24 * 60 * 60 * 1000;
 }
 
@@ -173,19 +356,40 @@ async function fetchCompsForCard(
   });
 }
 
-export async function calculateCardCmv(card: CollectionItem): Promise<CmvResult> {
+const emptyMeta = (): CmvComputeMeta => ({
+  source: "none",
+  exactCompsCount: 0,
+  adjacentCompsCount: 0,
+  proxyCompsCount: 0,
+  fallbackForSaleCount: 0,
+});
+
+async function calculateCardCmvDetailed(
+  card: CollectionItem
+): Promise<{ result: CmvResult; meta: CmvComputeMeta }> {
   const lastUpdated = nowIso();
+  const meta = emptyMeta();
 
   const exactComps = filterRecentComps(await fetchCompsForCard(card));
+  meta.exactCompsCount = exactComps.length;
+  // Capture best image URL from comps for image-less cards
+  const firstImageComp = exactComps.find((c) => c.image);
+  if (firstImageComp?.image) {
+    meta.bestImageUrl = firstImageComp.image;
+  }
   const exactPrices = exactComps.map((comp) => comp.price);
   const exactMedian = median(exactPrices);
   if (exactMedian !== null && exactComps.length >= 3) {
     const val = Math.round(exactMedian * 100) / 100;
+    meta.source = "exact";
     return {
-      estimated_cmv: val,
-      est_cmv: val,
-      cmv_confidence: CMV_CONFIDENCE.high,
-      cmv_last_updated: lastUpdated,
+      result: {
+        estimated_cmv: val,
+        est_cmv: val,
+        cmv_confidence: CMV_CONFIDENCE.high,
+        cmv_last_updated: lastUpdated,
+      },
+      meta,
     };
   }
 
@@ -198,6 +402,7 @@ export async function calculateCardCmv(card: CollectionItem): Promise<CmvResult>
       const adjInfo = parseGradeInfo(adj);
       if (!adjInfo) continue;
       const comps = filterRecentComps(await fetchCompsForCard(card, { grade: adj }));
+      meta.adjacentCompsCount += comps.length;
       for (const comp of comps) {
         const { adjusted, weight } = adjustPriceForGrade(comp.price, adjInfo, targetGrade);
         adjustedPrices.push(adjusted);
@@ -208,46 +413,55 @@ export async function calculateCardCmv(card: CollectionItem): Promise<CmvResult>
       const weighted = weightedMedian(adjustedPrices, adjustedWeights);
       if (weighted !== null) {
         const val = Math.round(weighted * 100) / 100;
+        meta.source = "adjacent";
         return {
-          estimated_cmv: val,
-          est_cmv: val,
-          cmv_confidence: CMV_CONFIDENCE.medium,
-          cmv_last_updated: lastUpdated,
+          result: {
+            estimated_cmv: val,
+            est_cmv: val,
+            cmv_confidence: CMV_CONFIDENCE.medium,
+            cmv_last_updated: lastUpdated,
+          },
+          meta,
         };
       }
     }
   }
 
-  const proxyComps = filterRecentComps(
-    await fetchCompsForCard({ ...card, grade: null })
-  );
+  const proxyComps = filterRecentComps(await fetchCompsForCard({ ...card, grade: null }));
+  meta.proxyCompsCount = proxyComps.length;
   if (proxyComps.length >= 3) {
     const proxyMedian = median(proxyComps.map((comp) => comp.price));
     if (proxyMedian !== null) {
       const adjusted = proxyMedian * rarityAdjustment(card.notes);
       const val = Math.round(adjusted * 100) / 100;
+      meta.source = "proxy";
       return {
-        estimated_cmv: val,
-        est_cmv: val,
-        cmv_confidence: CMV_CONFIDENCE.low,
-        cmv_last_updated: lastUpdated,
+        result: {
+          estimated_cmv: val,
+          est_cmv: val,
+          cmv_confidence: CMV_CONFIDENCE.low,
+          cmv_last_updated: lastUpdated,
+        },
+        meta,
       };
     }
   }
 
   if (exactMedian !== null && exactComps.length > 0) {
     const val = Math.round(exactMedian * 100) / 100;
+    meta.source = "exact";
     return {
-      estimated_cmv: val,
-      est_cmv: val,
-      cmv_confidence: CMV_CONFIDENCE.low,
-      cmv_last_updated: lastUpdated,
+      result: {
+        estimated_cmv: val,
+        est_cmv: val,
+        cmv_confidence: CMV_CONFIDENCE.low,
+        cmv_last_updated: lastUpdated,
+      },
+      meta,
     };
   }
 
-  // ── Fallback: use Browse API (active listings) when sold comps unavailable ──
-  // This mirrors the Comps page engine (searchEbayDualSignal) so Collection
-  // shows the same CMV that the user sees when searching on the Comps tab.
+  // Fallback: use Browse API (active listings) when sold comps unavailable.
   try {
     const rawGrade = card.grade;
     const grade =
@@ -262,7 +476,16 @@ export async function calculateCardCmv(card: CollectionItem): Promise<CmvResult>
       grade,
     });
 
-    // Mirror search API logic: estimated sale range midpoint → forSale median
+    meta.fallbackForSaleCount = dualResult.forSale.count;
+
+    // Capture image from fallback listings if not already set
+    if (!meta.bestImageUrl && dualResult.forSale.items.length > 0) {
+      const imgItem = dualResult.forSale.items.find((i) => i.image);
+      if (imgItem?.image) {
+        meta.bestImageUrl = imgItem.image;
+      }
+    }
+
     let fallbackCmv: number | null = null;
 
     if (dualResult.estimatedSaleRange.pricingAvailable) {
@@ -278,22 +501,91 @@ export async function calculateCardCmv(card: CollectionItem): Promise<CmvResult>
     }
 
     if (fallbackCmv !== null) {
-      console.log(`📊 CMV from active listings fallback: $${fallbackCmv} for ${card.player_name}`);
+      meta.source = "fallback";
       return {
-        estimated_cmv: fallbackCmv,
-        est_cmv: fallbackCmv,
-        cmv_confidence: CMV_CONFIDENCE.low,
-        cmv_last_updated: lastUpdated,
+        result: {
+          estimated_cmv: fallbackCmv,
+          est_cmv: fallbackCmv,
+          cmv_confidence: CMV_CONFIDENCE.low,
+          cmv_last_updated: lastUpdated,
+        },
+        meta,
       };
     }
-  } catch (e) {
-    console.error("⚠️ Dual-signal CMV fallback failed:", e);
+  } catch (error) {
+    logDebug("cmv_compute_fallback_error", {
+      cardId: redactId(card.id),
+      player: card.player_name,
+      message: error instanceof Error ? error.message : String(error),
+    });
   }
 
   return {
-    estimated_cmv: null,
-    est_cmv: null,
-    cmv_confidence: CMV_CONFIDENCE.unavailable,
-    cmv_last_updated: lastUpdated,
+    result: {
+      estimated_cmv: null,
+      est_cmv: null,
+      cmv_confidence: CMV_CONFIDENCE.unavailable,
+      cmv_last_updated: lastUpdated,
+    },
+    meta,
+  };
+}
+
+export async function calculateCardCmv(card: CollectionItem): Promise<CmvResult> {
+  const { result } = await calculateCardCmvDetailed(card);
+  return result;
+}
+
+export async function calculateCardCmvWithStatus(
+  card: CollectionItem,
+  options?: { timeoutMs?: number }
+): Promise<CmvComputationWithStatus> {
+  const startedAt = Date.now();
+  const timeoutMs = options?.timeoutMs ?? CMV_COMPUTE_TIMEOUT_MS;
+
+  logDebug("cmv_compute_start", {
+    cardId: redactId(card.id),
+    player: card.player_name,
+    timeoutMs,
+  });
+
+  let payload = buildPendingCmvUpdate();
+  let meta = emptyMeta();
+  let errorCode: CmvErrorCode | null = null;
+
+  try {
+    const computed = await withTimeout(calculateCardCmvDetailed(card), timeoutMs);
+    meta = computed.meta;
+    const resolved = toCmvPayloadFromResult(computed.result);
+    payload = resolved.payload;
+    errorCode = resolved.errorCode;
+  } catch (error) {
+    errorCode = isTimeoutError(error) ? CMV_ERROR.timeout : CMV_ERROR.compute;
+    payload = buildFailedCmvUpdate(errorCode);
+  }
+
+  const durationMs = Date.now() - startedAt;
+
+  logDebug("cmv_compute_end", {
+    cardId: redactId(card.id),
+    player: card.player_name,
+    durationMs,
+    cmvStatus: payload.cmv_status,
+    cmvValue: payload.cmv_value,
+    errorCode,
+    resultCounts: {
+      source: meta.source,
+      exactComps: meta.exactCompsCount,
+      adjacentComps: meta.adjacentCompsCount,
+      proxyComps: meta.proxyCompsCount,
+      fallbackForSale: meta.fallbackForSaleCount,
+    },
+  });
+
+  return {
+    payload,
+    meta,
+    durationMs,
+    errorCode,
   };
 }

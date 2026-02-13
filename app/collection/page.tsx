@@ -9,11 +9,13 @@ import AddCardModalNew from "@/components/AddCardModalNew";
 import CardPickerModal from "@/components/CardPickerModal";
 import type { CardPickerSelection } from "@/components/CardPicker";
 import { createClient } from "@/lib/supabase/client";
+import { getCollectionErrorMessage } from "@/lib/collection/client-errors";
 import type { CollectionItem, User } from "@/types";
 import { LIMITS } from "@/types";
 import { isTestMode, getTestUser } from "@/lib/test-mode";
 import { computeCollectionSummary, getEstCmv } from "@/lib/values";
 import { formatCardNumber, formatGraderGrade } from "@/lib/cards/format";
+import { getCollectionCmvUiState } from "@/lib/collection/cmv-state";
 
 function formatPrice(price: number | null): string {
   if (price === null) return "—";
@@ -124,6 +126,55 @@ export default function CollectionPage() {
     if (data.items) {
       setItems(data.items);
     }
+  }, []);
+
+  const handleRetryCmv = useCallback(async (id: string) => {
+    const pendingAt = new Date().toISOString();
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              cmv_status: "pending",
+              cmv_updated_at: pendingAt,
+              cmv_error: null,
+              cmv_value: null,
+              est_cmv: null,
+              estimated_cmv: null,
+            }
+          : item
+      )
+    );
+
+    try {
+      const response = await fetch(`/api/collection/${id}/recompute-cmv`, {
+        method: "POST",
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (response.ok && data.item) {
+        setItems((prev) =>
+          prev.map((item) =>
+            item.id === id ? { ...item, ...data.item } : item
+          )
+        );
+        return;
+      }
+    } catch {
+      // Inline CMV state handles expected network/comps failures.
+    }
+
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              cmv_status: "failed",
+              cmv_updated_at: new Date().toISOString(),
+            }
+          : item
+      )
+    );
   }, []);
 
   useEffect(() => {
@@ -496,6 +547,8 @@ export default function CollectionPage() {
           player_name: card.player_name,
           year: card.year || null,
           set_name: card.set_name || card.brand || null,
+          parallel_type: card.variant || null,
+          card_number: card.card_number || null,
           grade: gradeLabel || null,
           purchase_price: null,
           purchase_date: null,
@@ -511,18 +564,17 @@ export default function CollectionPage() {
           setShowPaywall(true);
           return;
         }
-        throw new Error(data.error || "Failed to add card");
+        throw new Error(getCollectionErrorMessage(data, "Failed to add card"));
       }
 
       setToast({
         type: "success",
         message: `Added ${card.player_name} to collection!`,
       });
-      if (isTestMode() && data.item) {
-        setItems((prev) => [data.item, ...prev]);
-      } else {
-        refreshCollection();
+      if (data.item) {
+        setItems((prev) => [data.item, ...prev.filter((it) => it.id !== data.item.id)]);
       }
+      refreshCollection();
       setShowCardPicker(false);
     } catch (err) {
       setCardPickerError(err instanceof Error ? err.message : "Failed to add card");
@@ -696,9 +748,9 @@ export default function CollectionPage() {
                       className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg"
                     >
                       <div className="flex items-center gap-3">
-                        {item.image_url && (
+                        {(item.thumbnail_url || item.image_url) && (
                           <img
-                            src={item.image_url}
+                            src={item.thumbnail_url || item.image_url || ""}
                             alt={item.player_name}
                             className="w-10 h-14 object-cover rounded"
                           />
@@ -737,15 +789,16 @@ export default function CollectionPage() {
                 <div className="space-y-3">
                   {recentlyAdded.map((item) => {
                     const estCmv = getEstCmv(item);
+                    const cmvUiState = getCollectionCmvUiState(item);
                     return (
                       <div
                         key={item.id}
                         className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg"
                       >
                         <div className="flex items-center gap-3">
-                          {item.image_url && (
+                          {(item.thumbnail_url || item.image_url) && (
                             <img
-                              src={item.image_url}
+                              src={item.thumbnail_url || item.image_url || ""}
                               alt={item.player_name}
                               className="w-10 h-14 object-cover rounded"
                             />
@@ -769,6 +822,14 @@ export default function CollectionPage() {
                                     </span>
                                   )}
                                 </>
+                              ) : cmvUiState === "pending" ? (
+                                <span className="text-[11px] text-gray-400">
+                                  Calculating...
+                                </span>
+                              ) : cmvUiState === "pending_stale" ? (
+                                <span className="text-[11px] text-gray-400">
+                                  Still calculating — refresh soon
+                                </span>
                               ) : item.purchase_price != null ? (
                                 <>
                                   <span className="font-medium">
@@ -884,6 +945,7 @@ export default function CollectionPage() {
             items={visibleItems}
             onDelete={handleDelete}
             onRefresh={refreshCollection}
+            onRetryCmv={handleRetryCmv}
           />
         )}
 
