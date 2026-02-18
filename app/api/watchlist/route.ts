@@ -5,6 +5,41 @@ import { isTestMode } from "@/lib/test-mode";
 import { logDebug } from "@/lib/logging";
 import type { WatchlistItem } from "@/types";
 
+type WatchlistRow = Record<string, unknown>;
+
+function normalizeText(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function normalizeTargetPrice(value: unknown): number | null {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+}
+
+function normalizeWatchlistItem(row: WatchlistRow): WatchlistItem {
+  return {
+    ...row,
+    set_brand: (row.set_brand ?? row.set_name ?? null) as string | null,
+    parallel_variant: (row.parallel_variant ?? row.parallel_type ?? null) as string | null,
+    condition: (row.condition ?? row.grade ?? null) as string | null,
+  } as WatchlistItem;
+}
+
+function isUndefinedColumnError(error: unknown): boolean {
+  const code = (error as { code?: string } | null)?.code;
+  return code === "42703";
+}
+
 // GET - List watchlist items
 export async function GET() {
   try {
@@ -45,7 +80,11 @@ export async function GET() {
       throw error;
     }
 
-    return NextResponse.json({ items: items as WatchlistItem[] });
+    return NextResponse.json({
+      items: ((items || []) as WatchlistRow[]).map((item: WatchlistRow) =>
+        normalizeWatchlistItem(item)
+      ),
+    });
   } catch (error) {
     console.error("Watchlist fetch error:", error);
     return NextResponse.json(
@@ -99,44 +138,82 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const {
-      player_name,
-      year,
-      set_brand,
-      card_number,
-      parallel_variant,
-      condition,
-      target_price,
-    } = body;
+    const playerName = normalizeText(body.player_name);
+    const year = normalizeText(body.year);
+    const setBrand = normalizeText(body.set_brand ?? body.set_name);
+    const cardNumber = normalizeText(body.card_number);
+    const parallelVariant = normalizeText(body.parallel_variant ?? body.parallel_type);
+    const condition = normalizeText(body.condition ?? body.grade);
+    const targetPrice = normalizeTargetPrice(body.target_price);
 
-    if (!player_name) {
+    if (!playerName) {
       return NextResponse.json(
         { error: "Player name is required" },
         { status: 400 }
       );
     }
 
-    const { data: item, error } = await supabase
-      .from("watchlist")
-      .insert({
+    const insertCandidates: WatchlistRow[] = [
+      {
         user_id: user.id,
-        player_name,
-        year: year || null,
-        set_brand: set_brand || null,
-        card_number: card_number || null,
-        parallel_variant: parallel_variant || null,
-        condition: condition || null,
-        target_price: target_price || null,
+        player_name: playerName,
+        year,
+        set_brand: setBrand,
+        card_number: cardNumber,
+        parallel_variant: parallelVariant,
+        condition,
+        target_price: targetPrice,
         price_history: [],
-      })
-      .select()
-      .single();
+      },
+      {
+        user_id: user.id,
+        player_name: playerName,
+        year,
+        set_name: setBrand,
+        card_number: cardNumber,
+        parallel_type: parallelVariant,
+        grade: condition,
+        target_price: targetPrice,
+        price_history: [],
+      },
+      {
+        user_id: user.id,
+        player_name: playerName,
+        target_price: targetPrice,
+        price_history: [],
+      },
+    ];
 
-    if (error) {
-      throw error;
+    let insertedItem: WatchlistRow | null = null;
+    let lastError: unknown = null;
+
+    for (let i = 0; i < insertCandidates.length; i += 1) {
+      const candidate = insertCandidates[i];
+      const { data: item, error } = await supabase
+        .from("watchlist")
+        .insert(candidate)
+        .select()
+        .single();
+
+      if (!error && item) {
+        insertedItem = item as WatchlistRow;
+        break;
+      }
+
+      lastError = error;
+      const shouldTryFallback =
+        i < insertCandidates.length - 1 &&
+        (isUndefinedColumnError(error) || Boolean((error as { message?: string } | null)?.message?.includes("column")));
+      if (!shouldTryFallback) {
+        break;
+      }
     }
 
-    return NextResponse.json({ item: item as WatchlistItem });
+    if (!insertedItem) {
+      throw lastError ?? new Error("Unknown watchlist insert error");
+    }
+
+    return NextResponse.json({ item: normalizeWatchlistItem(insertedItem) });
   } catch (error) {
     console.error("Watchlist add error:", error);
     return NextResponse.json(

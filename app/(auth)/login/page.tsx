@@ -4,6 +4,7 @@ import { Suspense, useState, useRef, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import SportsCardBackground from "@/components/SportsCardBackground";
+import { createClient } from "@/lib/supabase/client";
 
 const LOGIN_TIMEOUT_MS = 8000;
 const STUCK_SAFETY_MS = 14000;
@@ -25,6 +26,7 @@ function LoginForm() {
   const stuckSafetyRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchParams = useSearchParams();
   const redirect = sanitizeRedirectPath(searchParams.get("redirect"));
+  const supabase = createClient();
 
   useEffect(() => {
     return () => {
@@ -44,30 +46,16 @@ function LoginForm() {
     }, STUCK_SAFETY_MS);
 
     try {
-      const controller = new AbortController();
-      const requestPromise = fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-        signal: controller.signal,
-      });
+      const signInPromise = supabase.auth.signInWithPassword({ email, password });
       const timeoutPromise = new Promise<never>((_, reject) => {
         window.setTimeout(() => {
-          controller.abort();
           reject(new Error("Login timed out. Please try again."));
         }, LOGIN_TIMEOUT_MS);
       });
 
-      const response = await Promise.race([requestPromise, timeoutPromise]);
-
-      const payload = await response.json().catch(() => ({} as Record<string, unknown>));
-
-      if (!response.ok) {
-        const message =
-          typeof payload.error === "string"
-            ? payload.error
-            : "Unable to sign in right now. Please try again.";
-        setError(message);
+      const { error: signInError } = await Promise.race([signInPromise, timeoutPromise]);
+      if (signInError) {
+        setError(signInError.message || "Unable to sign in right now. Please try again.");
         return;
       }
 
