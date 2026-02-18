@@ -6,12 +6,6 @@ import Link from "next/link";
 import Header from "@/components/Header";
 import SportsCardBackground from "@/components/SportsCardBackground";
 import { createClient } from "@/lib/supabase/client";
-import {
-  PRO_MONTHLY_PRICE,
-  PRO_ANNUAL_PRICE,
-  ANNUAL_SAVINGS,
-  formatPrice,
-} from "@/lib/pricing";
 
 export default function Home() {
   const router = useRouter();
@@ -50,17 +44,22 @@ export default function Home() {
         {/* Hero */}
         <section className="max-w-6xl mx-auto px-4 py-20 text-center">
         <h1 className="text-4xl md:text-6xl font-bold text-white leading-tight">
-          The all-in-one card tool.
+          Card Ladder charges{" "}
+          <span className="line-through text-gray-400">$200/year</span>
+          <br />
+          We charge{" "}
+          <span className="text-[#3a7fff]">$20 once</span>
         </h1>
         <p className="mt-6 text-xl text-gray-300 max-w-2xl mx-auto">
-          AI grade analysis, an analyst that knows your collection, estimated CMV, and tracking—all in one place.
+          Real-time eBay sold prices, card identification, and collection tracking.
+          Everything you need to know what your cards are worth.
         </p>
         <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
           <Link
-            href="/signup"
+            href="/comps"
             className="px-8 py-4 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-colors text-lg"
           >
-            Get started
+            Try It Free
           </Link>
           <Link
             href="/signup"
@@ -70,7 +69,7 @@ export default function Home() {
           </Link>
         </div>
         <p className="mt-4 text-sm text-gray-400">
-          Free tier available, no credit card required
+          3 free searches, no credit card required
         </p>
       </section>
 
@@ -78,64 +77,14 @@ export default function Home() {
       <section className="bg-white dark:bg-gray-900 py-20">
         <div className="max-w-6xl mx-auto px-4">
           <h2 className="text-3xl font-bold text-center text-gray-900 dark:text-white mb-12">
-            Your all-in-one card toolkit
+            How It Works
           </h2>
           <div className="grid md:grid-cols-3 gap-8">
-            {/* Feature 1: AI Grade Analysis */}
+            {/* Feature 1 */}
             <div className="text-center">
               <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-2xl flex items-center justify-center mx-auto mb-4">
                 <svg
                   className="w-8 h-8 text-blue-600 dark:text-blue-400"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-              </div>
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                AI Grade Analysis
-              </h3>
-              <p className="text-gray-600 dark:text-gray-400">
-                Get AI-powered grade probabilities for raw cards. See likelihoods for PSA, BGS, SGC and estimated values by grade.
-              </p>
-            </div>
-
-            {/* Feature 2: AI Analyst that knows your collection */}
-            <div className="text-center">
-              <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <svg
-                  className="w-8 h-8 text-green-600 dark:text-green-400"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                  />
-                </svg>
-              </div>
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                AI Analyst That Knows Your Collection
-              </h3>
-              <p className="text-gray-600 dark:text-gray-400">
-                Ask questions in plain English. CardzCheck Analyst has context on your collection, watchlist, and the market—so you get answers that actually fit your cards.
-              </p>
-            </div>
-
-            {/* Feature 3: Comps, ID & Tracking */}
-            <div className="text-center">
-              <div className="w-16 h-16 bg-purple-100 dark:bg-purple-900/30 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <svg
-                  className="w-8 h-8 text-purple-600 dark:text-purple-400"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -155,10 +104,60 @@ export default function Home() {
                 </svg>
               </div>
               <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                Comps, ID &amp; Tracking
+                Photo ID
               </h3>
               <p className="text-gray-600 dark:text-gray-400">
-                Estimated CMV based off of real eBay listings, card identification from photos, and collection tracking—all in one place.
+                Upload a photo of your card. We identify the player, year, set, and grade for you.
+              </p>
+            </div>
+
+            {/* Feature 2 */}
+            <div className="text-center">
+              <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <svg
+                  className="w-8 h-8 text-green-600 dark:text-green-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                  />
+                </svg>
+              </div>
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                Real-Time Comps
+              </h3>
+              <p className="text-gray-600 dark:text-gray-400">
+                See actual eBay sold prices. Get the CMV (Current Market Value) based on recent sales.
+              </p>
+            </div>
+
+            {/* Feature 3 */}
+            <div className="text-center">
+              <div className="w-16 h-16 bg-purple-100 dark:bg-purple-900/30 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <svg
+                  className="w-8 h-8 text-purple-600 dark:text-purple-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+                  />
+                </svg>
+              </div>
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                Track Your Collection
+              </h3>
+              <p className="text-gray-600 dark:text-gray-400">
+                Save cards to your collection. Track what you paid vs. current value. Know your collection.
               </p>
             </div>
           </div>
@@ -171,10 +170,13 @@ export default function Home() {
           <h2 className="text-3xl font-bold text-center text-gray-900 dark:text-white mb-4">
             Simple Pricing
           </h2>
+          <p className="text-center text-gray-600 dark:text-gray-400 mb-12">
+            No subscriptions. No hidden fees. Pay once, use forever.
+          </p>
 
-          <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto mt-12">
+          <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
             {/* Free */}
-            <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-8 flex flex-col">
+            <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-8">
               <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
                 Free
               </h3>
@@ -182,138 +184,69 @@ export default function Home() {
                 $0
               </p>
               <p className="text-gray-500 dark:text-gray-400 mt-1">
-                Try CardzCheck
+                forever
               </p>
-              <ul className="mt-6 space-y-3 flex-1">
+              <ul className="mt-6 space-y-3">
                 <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                  <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
-                  Collection tracking
+                  3 card searches
                 </li>
                 <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                  <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
-                  Smart Search + basic comps
-                </li>
-                <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                  <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  Limited CMV + Grade Probability uses
-                </li>
-                <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                  <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  Limited Analyst questions
+                  5 cards in collection
                 </li>
               </ul>
               <Link
                 href="/signup"
                 className="block mt-8 w-full py-3 text-center border border-gray-300 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
               >
-                Get started
+                Get Started
               </Link>
             </div>
 
-            {/* Pro Monthly - Most popular */}
-            <div className="bg-blue-600 rounded-2xl p-8 relative flex flex-col">
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-amber-400 text-amber-900 text-sm font-semibold rounded-full">
-                Most popular
+            {/* Pro */}
+            <div className="bg-blue-600 rounded-2xl p-8 relative">
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-yellow-400 text-yellow-900 text-sm font-semibold rounded-full">
+                Best Value
               </div>
               <h3 className="text-xl font-semibold text-white">
-                Pro (Monthly)
+                Pro
               </h3>
               <p className="text-4xl font-bold text-white mt-4">
-                {formatPrice(PRO_MONTHLY_PRICE)}
+                $20
               </p>
               <p className="text-blue-200 mt-1">
-                / month
+                one-time payment
               </p>
-              <ul className="mt-6 space-y-3 flex-1">
+              <ul className="mt-6 space-y-3">
                 <li className="flex items-center gap-2 text-white">
-                  <svg className="w-5 h-5 text-blue-200 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5 text-blue-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
-                  Unlimited collection + watchlist
+                  Unlimited searches
                 </li>
                 <li className="flex items-center gap-2 text-white">
-                  <svg className="w-5 h-5 text-blue-200 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5 text-blue-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
-                  Full CMV + comps engine
+                  Unlimited collection
                 </li>
                 <li className="flex items-center gap-2 text-white">
-                  <svg className="w-5 h-5 text-blue-200 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5 text-blue-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
-                  Grade Probability Engine (more uses)
-                </li>
-                <li className="flex items-center gap-2 text-white">
-                  <svg className="w-5 h-5 text-blue-200 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  CardzCheck Analyst (more uses)
+                  Collection tracking
                 </li>
               </ul>
               <Link
                 href="/signup"
                 className="block mt-8 w-full py-3 text-center bg-white text-blue-600 rounded-lg font-semibold hover:bg-blue-50 transition-colors"
               >
-                Go Pro
-              </Link>
-            </div>
-
-            {/* Pro Annual - Best value */}
-            <div className="bg-white dark:bg-gray-900 border-2 border-blue-600 rounded-2xl p-8 flex flex-col relative">
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-yellow-400 text-yellow-900 text-sm font-semibold rounded-full">
-                Best value
-              </div>
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-                Pro (Annual)
-              </h3>
-              <p className="text-4xl font-bold text-gray-900 dark:text-white mt-4">
-                {formatPrice(PRO_ANNUAL_PRICE)}
-              </p>
-              <p className="text-gray-500 dark:text-gray-400 mt-1">
-                / year
-              </p>
-              <p className="text-green-600 dark:text-green-400 text-sm font-medium mt-2">
-                Save {formatPrice(ANNUAL_SAVINGS)}/year
-              </p>
-              <ul className="mt-6 space-y-3 flex-1">
-                <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                  <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  Unlimited collection + watchlist
-                </li>
-                <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                  <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  Full CMV + comps engine
-                </li>
-                <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                  <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  Grade Probability Engine (more uses)
-                </li>
-                <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                  <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  CardzCheck Analyst (more uses)
-                </li>
-              </ul>
-              <Link
-                href="/signup"
-                className="block mt-8 w-full py-3 text-center bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
-              >
-                Go Annual
+                Upgrade to Pro
               </Link>
             </div>
           </div>
@@ -328,7 +261,7 @@ export default function Home() {
                 CardzCheck
               </span>
             </div>
-            <p className="text-gray-400">The all-in-one card tool. AI grade analysis, collection-smart analyst, estimated CMV &amp; tracking.</p>
+            <p className="text-gray-400">Sports Card Price Comps + Collection Tracker</p>
             <p className="mt-2 text-gray-500">
               Data sourced from eBay sold listings.
             </p>

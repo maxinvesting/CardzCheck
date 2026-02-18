@@ -1,13 +1,12 @@
-# PR: Pre-Launch Updates — Instant Add, Comps, Card Profile, Analyst, and More
+# PR: Instant Add-to-Collection UX, Comps Matching Fixes, and Tests
 
 ## Summary
 
-This PR bundles pre-launch work from multiple agents (Cursor, Codex, Claude): **~19k lines added** across 147 files.
+This PR bundles three scoped areas of work into a single branch with clear commits:
 
 1. **Priority 0** — Instant add-to-collection UX, stock image rendering, CMV “Calculating…” state, and structured identity persistence (`parallel_type`, `card_number`) with related API and migration.
 2. **Priority 1** — Comps matching improvements: PASS cascade (strict → broad → minimal), query-time negative keywords, card number extraction, and scoring/penalty updates.
 3. **Priority 2** — New and updated tests for the above behaviors, plus a small test fix for card-identity year-extraction.
-4. **Pre-Launch** — Card profile (`/cards/[id]`), multi-image support, analyst setup & background ack, grade-estimate multi-image and fallbacks, dashboard/UI updates, docs (CARD_PROFILE_IMPLEMENTATION.md, COMPS_SEARCH_IMPROVEMENTS.md), and related changes.
 
 ---
 
@@ -72,6 +71,9 @@ supabase db push
 ## Not Changed
 
 - No CMV math/formula rewrite (only dual-signal fallback and retry when unavailable).
+- No dashboard layout/compact components in this PR.
+- No grade-estimator history UI or new grade-estimate API routes.
+- No analyst setup, cards profile, or other out-of-scope features.
 
 ---
 

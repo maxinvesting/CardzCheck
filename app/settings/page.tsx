@@ -1,6 +1,7 @@
 "use client";
 
-import { Suspense, useState, useEffect } from "react";
+import { Suspense } from "react";
+import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import PricingModal from "@/components/PricingModal";
@@ -338,12 +339,13 @@ function SettingsContent() {
 
                 <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4">
                   <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Upgrade to Pro and get:
+                    Upgrade to Pro for $20 and get:
                   </p>
                   <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
                     <li>• Unlimited searches</li>
                     <li>• Unlimited collection tracking</li>
                     <li>• Collection value tracking</li>
+                    <li>• One-time payment, lifetime access</li>
                   </ul>
                 </div>
               </div>
