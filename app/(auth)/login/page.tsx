@@ -130,6 +130,17 @@ function LoginForm() {
                   </ul>
                 </div>
               )}
+              {(error.toLowerCase().includes("env vars are missing") ||
+                error.toLowerCase().includes("supabase env vars are missing")) && (
+                <div className="bg-gray-800/80 border border-gray-700 text-gray-300 px-4 py-3 rounded-lg text-sm space-y-2">
+                  <p className="font-medium text-white">Missing local Supabase config:</p>
+                  <ul className="list-disc list-inside space-y-1 text-gray-400">
+                    <li>Add `NEXT_PUBLIC_SUPABASE_URL` (or `SUPABASE_URL`) in <code className="text-gray-300">.env</code> or <code className="text-gray-300">.env.local</code>.</li>
+                    <li>Add `NEXT_PUBLIC_SUPABASE_ANON_KEY` (or `SUPABASE_ANON_KEY`) in the same file.</li>
+                    <li>Restart the dev server after saving env changes.</li>
+                  </ul>
+                </div>
+              )}
             </div>
           )}
 
