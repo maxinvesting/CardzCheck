@@ -49,13 +49,21 @@ function sanitizeHistoryCard(
   card: GradeEstimatorHistoryCardSnapshot
 ): GradeEstimatorHistoryCardSnapshot {
   const imageUrl = selectHistoryImage(card);
+  const imageUrls = Array.isArray(card.imageUrls)
+    ? card.imageUrls.filter(
+        (url) =>
+          typeof url === "string" &&
+          url.trim() &&
+          (!isDataUrl(url) || isAllowedDataUrl(url))
+      )
+    : [];
   const sanitized: GradeEstimatorHistoryCardSnapshot = { ...card };
   if (imageUrl) {
     sanitized.imageUrl = imageUrl;
   } else {
     delete sanitized.imageUrl;
   }
-  delete sanitized.imageUrls;
+  sanitized.imageUrls = imageUrls.length > 0 ? imageUrls : undefined;
   return sanitized;
 }
 

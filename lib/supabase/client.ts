@@ -1,4 +1,8 @@
 import { createBrowserClient } from "@supabase/ssr";
+import {
+  getMissingSupabasePublicEnvMessage,
+  getSupabasePublicEnv,
+} from "@/lib/supabase/env";
 
 function getBrowserStorage() {
   if (typeof window === "undefined") return undefined;
@@ -10,13 +14,25 @@ function getBrowserStorage() {
 }
 
 type SupabaseLockFn = (name: string, acquireTimeout: number, fn: () => Promise<unknown>) => Promise<unknown>;
+let hasWarnedMissingEnv = false;
 
 export function createClient() {
+  const supabasePublicEnv = getSupabasePublicEnv();
+  const hasEnv = Boolean(supabasePublicEnv);
+
   const noOpLock: SupabaseLockFn = async (_name, _acquireTimeout, fn) => await fn();
+  const disabledFetch: typeof fetch = async () => {
+    throw new Error(getMissingSupabasePublicEnvMessage());
+  };
+
+  if (!hasEnv && typeof window !== "undefined" && !hasWarnedMissingEnv) {
+    hasWarnedMissingEnv = true;
+    console.warn(getMissingSupabasePublicEnvMessage());
+  }
 
   return createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabasePublicEnv?.url ?? "https://placeholder.supabase.co",
+    supabasePublicEnv?.anonKey ?? "missing-env-anon-key",
     {
       auth: {
         persistSession: true,
@@ -26,6 +42,12 @@ export function createClient() {
         // Avoid browser lock-manager deadlocks seen in some webviews/embedded browsers.
         lock: noOpLock,
       },
+      global: hasEnv
+        ? undefined
+        : {
+            // Fail fast with a clear message instead of hard-crashing during render.
+            fetch: disabledFetch,
+          },
     }
   );
 }

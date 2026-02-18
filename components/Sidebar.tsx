@@ -5,22 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { User } from "@/types";
-
-async function handleUpgrade() {
-  try {
-    const response = await fetch("/api/checkout", {
-      method: "POST",
-    });
-
-    const data = await response.json();
-
-    if (data.url) {
-      window.location.href = data.url;
-    }
-  } catch (error) {
-    console.error("Checkout error:", error);
-  }
-}
+import PricingModal from "@/components/PricingModal";
 
 export default function Sidebar() {
   const [user, setUser] = useState<User | null>(null);
@@ -28,6 +13,7 @@ export default function Sidebar() {
   const [remainingSearches, setRemainingSearches] = useState<number | null>(
     null
   );
+  const [pricingOpen, setPricingOpen] = useState(false);
   const pathname = usePathname();
   const supabase = createClient();
 
@@ -343,7 +329,7 @@ export default function Sidebar() {
             <button
               onClick={() => {
                 setIsOpen(false);
-                handleUpgrade();
+                setPricingOpen(true);
               }}
               className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg text-center transition-colors"
             >
@@ -371,6 +357,8 @@ export default function Sidebar() {
           </div>
         </div>
       </div>
+
+      <PricingModal isOpen={pricingOpen} onClose={() => setPricingOpen(false)} />
     </>
   );
 }

@@ -8,6 +8,7 @@ import type { User } from "@/types";
 import { LIMITS } from "@/types";
 import { isTestMode, getTestUser } from "@/lib/test-mode";
 import CardPickerModal from "@/components/CardPickerModal";
+import PricingModal from "@/components/PricingModal";
 import type { CardPickerSelection } from "@/components/CardPicker";
 import { formatGraderGrade } from "@/lib/cards/format";
 
@@ -18,6 +19,7 @@ export default function Header() {
   const [authLoading, setAuthLoading] = useState(true);
   const [showDropdown, setShowDropdown] = useState(false);
   const [showCardPicker, setShowCardPicker] = useState(false);
+  const [pricingOpen, setPricingOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -70,20 +72,9 @@ export default function Header() {
     router.refresh();
   };
 
-  const handleUpgrade = async () => {
-    try {
-      const response = await fetch("/api/checkout", {
-        method: "POST",
-      });
-
-      const data = await response.json();
-
-      if (data.url) {
-        window.location.href = data.url;
-      }
-    } catch (error) {
-      console.error("Checkout error:", error);
-    }
+  const handleUpgrade = () => {
+    setShowDropdown(false);
+    setPricingOpen(true);
   };
 
   const handleCardPickerSelect = (card: CardPickerSelection) => {
@@ -279,6 +270,7 @@ export default function Header() {
         mode="comps"
         onSelect={handleCardPickerSelect}
       />
+      <PricingModal isOpen={pricingOpen} onClose={() => setPricingOpen(false)} />
     </header>
   );
 }

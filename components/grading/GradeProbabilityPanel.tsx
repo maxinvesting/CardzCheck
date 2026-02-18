@@ -19,7 +19,10 @@ interface GradeProbabilityPanelProps {
     set_name?: string;
     parallel_type?: string;
   } | null;
+  /** Primary (front) image URL. Fallback when imageUrls has only one item. */
   primaryImageUrl?: string | null;
+  /** All uploaded images (typically [front, back]). When 2+, displayed stacked vertically. */
+  imageUrls?: string[] | null;
   showPreliminaryBadge?: boolean;
 }
 
@@ -276,6 +279,7 @@ export default function GradeProbabilityPanel({
   estimate,
   cardIdentity,
   primaryImageUrl,
+  imageUrls,
   showPreliminaryBadge,
 }: GradeProbabilityPanelProps) {
   const allowPsa10Override =
@@ -295,7 +299,12 @@ export default function GradeProbabilityPanel({
   const panelRef = useRef<HTMLDivElement>(null);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
-  const thumbnailUrl = primaryImageUrl?.trim();
+  const urls = (imageUrls?.filter(Boolean) ?? []).length >= 2
+    ? imageUrls!.filter(Boolean).slice(0, 2)
+    : primaryImageUrl?.trim()
+      ? [primaryImageUrl.trim()]
+      : [];
+  const showStacked = urls.length >= 2;
 
   const handleExportImage = async () => {
     if (!panelRef.current || exporting) return;
@@ -412,13 +421,29 @@ export default function GradeProbabilityPanel({
               <span className="ml-2 text-amber-300">Preliminary</span>
             ) : null}
           </h3>
-          {thumbnailUrl ? (
-            <div className="w-[170px] h-[260px] rounded-xl border border-gray-600/60 overflow-hidden shrink-0">
-              <img
-                src={thumbnailUrl}
-                alt="Uploaded card analyzed"
-                className="h-full w-full object-cover object-center"
-              />
+          {urls.length > 0 ? (
+            <div
+              className={`rounded-xl border border-gray-600/60 overflow-hidden shrink-0 flex ${
+                showStacked ? "flex-col gap-1.5 w-[170px]" : "w-[170px] h-[260px]"
+              }`}
+            >
+              {showStacked ? (
+                urls.map((url, i) => (
+                  <div key={url} className="w-full aspect-[3/4] flex-shrink-0">
+                    <img
+                      src={url}
+                      alt={i === 0 ? "Card front" : "Card back"}
+                      className="h-full w-full object-cover object-center"
+                    />
+                  </div>
+                ))
+              ) : (
+                <img
+                  src={urls[0]}
+                  alt="Uploaded card analyzed"
+                  className="h-full w-full object-cover object-center"
+                />
+              )}
             </div>
           ) : null}
           {cardLabel ? (
@@ -439,16 +464,30 @@ export default function GradeProbabilityPanel({
               <span className="ml-2 text-xs text-amber-300">Preliminary</span>
             ) : null}
           </h3>
-          {(cardLabel || thumbnailUrl) ? (
+          {(cardLabel || urls.length > 0) ? (
             <div className="flex items-center gap-3 mt-2">
-              {thumbnailUrl ? (
-                <div className={`${THUMBNAIL_HEIGHT_CLASS} ${THUMBNAIL_WIDTH_CLASS} rounded-lg border border-gray-600/60 overflow-hidden shrink-0`}>
-                  <img
-                    src={thumbnailUrl}
-                    alt="Uploaded card analyzed"
-                    className="h-full w-full object-cover object-center"
-                  />
-                </div>
+              {urls.length > 0 ? (
+                showStacked ? (
+                  <div className={`flex flex-col gap-1 ${THUMBNAIL_WIDTH_CLASS}`}>
+                    {urls.map((url, i) => (
+                      <div key={url} className={`${THUMBNAIL_HEIGHT_CLASS} ${THUMBNAIL_WIDTH_CLASS} rounded-lg border border-gray-600/60 overflow-hidden shrink-0`}>
+                        <img
+                          src={url}
+                          alt={i === 0 ? "Card front" : "Card back"}
+                          className="h-full w-full object-cover object-center"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className={`${THUMBNAIL_HEIGHT_CLASS} ${THUMBNAIL_WIDTH_CLASS} rounded-lg border border-gray-600/60 overflow-hidden shrink-0`}>
+                    <img
+                      src={urls[0]}
+                      alt="Uploaded card analyzed"
+                      className="h-full w-full object-cover object-center"
+                    />
+                  </div>
+                )
               ) : null}
               {cardLabel ? (
                 <div className="text-left">

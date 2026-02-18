@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import CardAnalyst from "@/components/CardAnalyst";
+import PricingModal from "@/components/PricingModal";
 import { createClient } from "@/lib/supabase/client";
 import type { User } from "@/types";
 import { isTestMode, getTestUser } from "@/lib/test-mode";
@@ -27,6 +28,7 @@ function AnalystPageContent() {
   const [loading, setLoading] = useState(true);
   const [cardContext, setCardContext] = useState<CardContext | undefined>();
   const [analystQueriesUsed, setAnalystQueriesUsed] = useState(0);
+  const [pricingOpen, setPricingOpen] = useState(false);
 
   useEffect(() => {
     async function loadUser() {
@@ -134,15 +136,7 @@ function AnalystPageContent() {
             </p>
             <div className="space-y-3">
               <button
-                onClick={async () => {
-                  const response = await fetch("/api/checkout", {
-                    method: "POST",
-                  });
-                  const data = await response.json();
-                  if (data.url) {
-                    window.location.href = data.url;
-                  }
-                }}
+                onClick={() => setPricingOpen(true)}
                 className="w-full px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-xl transition-colors"
               >
                 Upgrade to Pro
@@ -154,6 +148,7 @@ function AnalystPageContent() {
                 Back to Dashboard
               </button>
             </div>
+            <PricingModal isOpen={pricingOpen} onClose={() => setPricingOpen(false)} />
           </div>
         </div>
       </AuthenticatedLayout>

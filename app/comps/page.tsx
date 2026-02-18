@@ -721,6 +721,7 @@ function CompsPageContent() {
                 primaryImageUrl={
                   identifiedCard?.imageUrl || identifiedCard?.imageUrls?.[0] || null
                 }
+                imageUrls={identifiedCard?.imageUrls ?? null}
               />
             )}
           </div>
