@@ -14,6 +14,7 @@ interface CardUploaderProps {
 }
 
 const DEFAULT_MAX_FILES = 3; // Allow front, back, and one detail shot
+const MAX_FALLBACK_DATA_URL_BYTES = 350 * 1024;
 
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -21,6 +22,46 @@ function readFileAsDataUrl(file: File): Promise<string> {
     reader.onload = () => resolve(reader.result as string);
     reader.onerror = reject;
     reader.readAsDataURL(file);
+  });
+}
+
+function estimateDataUrlByteLength(dataUrl: string): number {
+  const commaIndex = dataUrl.indexOf(",");
+  if (commaIndex === -1) return 0;
+  const base64 = dataUrl.slice(commaIndex + 1);
+  const padding =
+    base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
+  return Math.max(0, Math.floor((base64.length * 3) / 4) - padding);
+}
+
+async function compressDataUrl(
+  dataUrl: string,
+  options: { maxWidth: number; maxHeight: number; quality: number }
+): Promise<string | null> {
+  if (typeof window === "undefined") return null;
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => {
+      const scale = Math.min(
+        1,
+        options.maxWidth / image.width,
+        options.maxHeight / image.height
+      );
+      const width = Math.max(1, Math.round(image.width * scale));
+      const height = Math.max(1, Math.round(image.height * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        resolve(null);
+        return;
+      }
+      ctx.drawImage(image, 0, 0, width, height);
+      resolve(canvas.toDataURL("image/jpeg", options.quality));
+    };
+    image.onerror = () => resolve(null);
+    image.src = dataUrl;
   });
 }
 
@@ -60,7 +101,16 @@ export default function CardUploader({
         .getPublicUrl(uploadData.path);
       return publicUrl;
     } catch {
-      return fallbackDataUrl;
+      const fallbackBytes = estimateDataUrlByteLength(fallbackDataUrl);
+      if (fallbackBytes <= MAX_FALLBACK_DATA_URL_BYTES) {
+        return fallbackDataUrl;
+      }
+      const compressed = await compressDataUrl(fallbackDataUrl, {
+        maxWidth: 1200,
+        maxHeight: 1200,
+        quality: 0.72,
+      });
+      return compressed || fallbackDataUrl;
     }
   }, []);
 
@@ -111,7 +161,35 @@ export default function CardUploader({
         ),
       });
 
-      const result: CardIdentificationResponse = await response.json();
+      const rawResponse = await response.text();
+      let result: CardIdentificationResponse | null = null;
+      if (rawResponse.trim()) {
+        try {
+          result = JSON.parse(rawResponse) as CardIdentificationResponse;
+        } catch {
+          if (!response.ok) {
+            const reason = rawResponse.trim() || "Failed to process image";
+            setError(reason);
+            setLoading(false);
+            onReset?.();
+            return;
+          }
+          throw new Error("Invalid response from card identification service");
+        }
+      }
+
+      if (!result) {
+        throw new Error("Failed to process image");
+      }
+
+      if (!response.ok) {
+        const reason =
+          "error" in result ? result.reason || result.error : rawResponse.trim();
+        setError(reason || "Failed to process image");
+        setLoading(false);
+        onReset?.();
+        return;
+      }
 
       if ("error" in result) {
         setError(result.reason || result.error);

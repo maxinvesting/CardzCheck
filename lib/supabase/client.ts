@@ -1,4 +1,8 @@
 import { createBrowserClient } from "@supabase/ssr";
+import {
+  getMissingSupabasePublicEnvMessage,
+  getSupabasePublicEnv,
+} from "@/lib/supabase/env";
 
 function getBrowserStorage() {
   if (typeof window === "undefined") return undefined;
@@ -12,28 +16,23 @@ function getBrowserStorage() {
 type SupabaseLockFn = (name: string, acquireTimeout: number, fn: () => Promise<unknown>) => Promise<unknown>;
 let hasWarnedMissingEnv = false;
 
-function getMissingEnvMessage() {
-  return "Supabase env vars are missing. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local (or .env) and restart the dev server.";
-}
-
 export function createClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  const hasEnv = Boolean(url && anonKey);
+  const supabasePublicEnv = getSupabasePublicEnv();
+  const hasEnv = Boolean(supabasePublicEnv);
 
   const noOpLock: SupabaseLockFn = async (_name, _acquireTimeout, fn) => await fn();
   const disabledFetch: typeof fetch = async () => {
-    throw new Error(getMissingEnvMessage());
+    throw new Error(getMissingSupabasePublicEnvMessage());
   };
 
   if (!hasEnv && typeof window !== "undefined" && !hasWarnedMissingEnv) {
     hasWarnedMissingEnv = true;
-    console.warn(getMissingEnvMessage());
+    console.warn(getMissingSupabasePublicEnvMessage());
   }
 
   return createBrowserClient(
-    url ?? "https://placeholder.supabase.co",
-    anonKey ?? "missing-env-anon-key",
+    supabasePublicEnv?.url ?? "https://placeholder.supabase.co",
+    supabasePublicEnv?.anonKey ?? "missing-env-anon-key",
     {
       auth: {
         persistSession: true,

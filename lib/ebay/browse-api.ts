@@ -375,6 +375,21 @@ function hasDisallowedInsert(titleLower: string, parallelLower: string): boolean
   return INSERT_KEYWORDS.some((keyword) => titleLower.includes(keyword));
 }
 
+/**
+ * Color / refractor modifiers that distinguish parallel variants.
+ * When a user searches for a "base compound" like "rookie auto" that does NOT
+ * include any of these modifiers, listings containing them are rejected so the
+ * results only show the base version (not every rainbow parallel).
+ */
+const PARALLEL_MODIFIERS_BROWSE = [
+  "refractor", "xfractor", "superfractor",
+  "gold", "silver", "purple", "orange", "red", "blue", "green", "pink",
+  "black", "camo", "shimmer", "mojo", "sepia", "wave", "hyper",
+  "cracked ice", "tiger stripe", "atomic", "sapphire", "speckle",
+  "disco", "lazer", "neon", "magenta", "aqua", "teal",
+  "printing plate", "1/1",
+];
+
 function matchesParallelStrict(titleLower: string, parallelLower: string): boolean {
   if (!parallelLower.trim()) return true;
 
@@ -384,10 +399,25 @@ function matchesParallelStrict(titleLower: string, parallelLower: string): boole
 
   const normalized = parallelLower.replace(/prism/g, "prizm");
   const tokens = normalized.split(/\s+/).filter(Boolean);
-  return tokens.every((token) => {
+  const allTokensMatch = tokens.every((token) => {
     if (token === "prizm") {
       return titleLower.includes("prizm") || titleLower.includes("prism");
     }
     return titleLower.includes(token);
   });
+  if (!allTokensMatch) return false;
+
+  // If the user's parallel already includes a specific modifier (e.g.
+  // "rookie auto refractor"), skip the exclusion — they want that variant.
+  const userHasModifier = PARALLEL_MODIFIERS_BROWSE.some((mod) => normalized.includes(mod));
+  if (!userHasModifier) {
+    // User asked for the base compound (e.g. "rookie auto").
+    // Reject listings that contain a color/refractor modifier so we don't
+    // mix in Gold Refractor /50, Purple /299, etc.
+    for (const mod of PARALLEL_MODIFIERS_BROWSE) {
+      if (titleLower.includes(mod)) return false;
+    }
+  }
+
+  return true;
 }

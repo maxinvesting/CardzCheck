@@ -31,7 +31,8 @@ function sanitizeHistoryCard(
   } else {
     delete sanitized.imageUrl;
   }
-  delete sanitized.imageUrls;
+  // Preserve imageUrls (front + back) for stacked display; omit data URLs to keep payload small
+  sanitized.imageUrls = imageUrls.length > 0 ? imageUrls : undefined;
   return sanitized;
 }
 

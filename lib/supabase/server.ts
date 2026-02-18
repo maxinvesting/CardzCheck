@@ -1,6 +1,10 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { isTestMode } from "@/lib/test-mode";
+import {
+  getSupabaseServiceRoleKey,
+  requireSupabasePublicEnv,
+} from "@/lib/supabase/env";
 
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 
@@ -29,10 +33,11 @@ export async function createClient() {
   }
 
   const cookieStore = await cookies();
+  const { url, anonKey } = requireSupabasePublicEnv();
 
   return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    url,
+    anonKey,
     {
       cookies: {
         getAll() {
@@ -55,10 +60,15 @@ export async function createClient() {
 
 export async function createServiceClient() {
   const cookieStore = await cookies();
+  const { url } = requireSupabasePublicEnv();
+  const serviceRoleKey = getSupabaseServiceRoleKey();
+  if (!serviceRoleKey) {
+    throw new Error("Supabase service role env var is missing. Set SUPABASE_SERVICE_ROLE_KEY and restart the dev server.");
+  }
 
   return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    url,
+    serviceRoleKey,
     {
       cookies: {
         getAll() {

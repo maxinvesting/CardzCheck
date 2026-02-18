@@ -890,6 +890,7 @@ export default function GradeEstimatorPage() {
                     primaryImageUrl={
                       identifiedCard?.imageUrl || identifiedCard?.imageUrls?.[0] || null
                     }
+                    imageUrls={identifiedCard?.imageUrls ?? null}
                     showPreliminaryBadge={showPreliminaryBadge}
                   />
                 ) : null}
