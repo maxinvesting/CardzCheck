@@ -37,7 +37,7 @@ function LoginForm() {
     setError(null);
     setLoading(true);
 
-    stuckSafetyRef.current = window.setTimeout(() => {
+    stuckSafetyRef.current = setTimeout(() => {
       stuckSafetyRef.current = null;
       setLoading(false);
       setError("Request took too long. Please check your connection and try again.");
