@@ -1,20 +1,24 @@
-const SUPABASE_URL_ENV_KEYS = ["NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_URL"] as const;
-const SUPABASE_ANON_KEY_ENV_KEYS = ["NEXT_PUBLIC_SUPABASE_ANON_KEY", "SUPABASE_ANON_KEY"] as const;
-const SUPABASE_SERVICE_ROLE_ENV_KEYS = ["SUPABASE_SERVICE_ROLE_KEY"] as const;
+// IMPORTANT: NEXT_PUBLIC_* vars must be referenced with literal dot-notation for
+// Next.js to bake them into the client bundle at build time. Dynamic string-key
+// lookups like process.env["NEXT_PUBLIC_SUPABASE_URL"] do NOT work in the browser.
 
-function readFirstNonEmptyEnv(envKeys: readonly string[]): string | null {
-  for (const envKey of envKeys) {
-    const rawValue = process.env[envKey];
-    if (typeof rawValue === "string" && rawValue.trim().length > 0) {
-      return rawValue.trim();
-    }
+function firstNonEmpty(...values: (string | undefined)[]): string | null {
+  for (const v of values) {
+    if (typeof v === "string" && v.trim().length > 0) return v.trim();
   }
   return null;
 }
 
 export function getSupabasePublicEnv() {
-  const url = readFirstNonEmptyEnv(SUPABASE_URL_ENV_KEYS);
-  const anonKey = readFirstNonEmptyEnv(SUPABASE_ANON_KEY_ENV_KEYS);
+  // Literal references — required for Next.js static replacement in client bundle
+  const url = firstNonEmpty(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_URL
+  );
+  const anonKey = firstNonEmpty(
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    process.env.SUPABASE_ANON_KEY
+  );
 
   if (!url || !anonKey) {
     return null;
@@ -31,10 +35,10 @@ export function requireSupabasePublicEnv() {
   return supabasePublicEnv;
 }
 
-export function getSupabaseServiceRoleKey() {
-  return readFirstNonEmptyEnv(SUPABASE_SERVICE_ROLE_ENV_KEYS);
+export function getSupabaseServiceRoleKey(): string | null {
+  return process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || null;
 }
 
 export function getMissingSupabasePublicEnvMessage() {
-  return "Supabase env vars are missing. Set one URL key (NEXT_PUBLIC_SUPABASE_URL or SUPABASE_URL) and one anon key (NEXT_PUBLIC_SUPABASE_ANON_KEY or SUPABASE_ANON_KEY), then restart the dev server.";
+  return "Supabase env vars are missing. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in your environment, then redeploy.";
 }
