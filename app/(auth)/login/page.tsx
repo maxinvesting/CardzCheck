@@ -44,24 +44,30 @@ function LoginForm() {
     }, STUCK_SAFETY_MS);
 
     try {
-      // Use the server-side login route so session cookies are set correctly
-      const fetchPromise = fetch("/api/auth/login", {
+      const controller = new AbortController();
+      const requestPromise = fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({ email, password }),
+        signal: controller.signal,
       });
       const timeoutPromise = new Promise<never>((_, reject) => {
         window.setTimeout(() => {
+          controller.abort();
           reject(new Error("Login timed out. Please try again."));
         }, LOGIN_TIMEOUT_MS);
       });
 
-      const response = await Promise.race([fetchPromise, timeoutPromise]);
-      const data = await response.json();
+      const response = await Promise.race([requestPromise, timeoutPromise]);
+
+      const payload = await response.json().catch(() => ({} as Record<string, unknown>));
 
       if (!response.ok) {
-        setError(data.error || "Unable to sign in right now. Please try again.");
+        const message =
+          typeof payload.error === "string"
+            ? payload.error
+            : "Unable to sign in right now. Please try again.";
+        setError(message);
         return;
       }
 

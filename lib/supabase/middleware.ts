@@ -1,54 +1,28 @@
-import { createServerClient } from "@supabase/ssr";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { isTestMode } from "@/lib/test-mode";
-import {
-  getMissingSupabasePublicEnvMessage,
-  getSupabasePublicEnv,
-} from "@/lib/supabase/env";
-
-const PROTECTED_PATHS = ["/dashboard", "/collection", "/account", "/settings", "/analyst"];
-
-function isProtected(pathname: string) {
-  return PROTECTED_PATHS.some((p) => pathname.startsWith(p));
-}
+import { logDebug } from "@/lib/logging";
 
 export async function updateSession(request: NextRequest) {
+  // Bypass auth checks in test mode
   if (isTestMode()) {
+    logDebug("🧪 TEST MODE: Bypassing authentication checks");
     return { response: NextResponse.next({ request }), userId: null };
   }
 
-  const supabasePublicEnv = getSupabasePublicEnv();
-  if (!supabasePublicEnv) {
-    console.error(getMissingSupabasePublicEnvMessage());
-    if (isProtected(request.nextUrl.pathname)) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/login";
-      url.searchParams.set("redirect", request.nextUrl.pathname);
-      return { response: NextResponse.redirect(url), userId: null };
-    }
-    return { response: NextResponse.next({ request }), userId: null };
-  }
-
-  // Per Supabase SSR docs: supabaseResponse must be the response returned,
-  // and cookies must be set on both request and response so session is forwarded.
-  let supabaseResponse = NextResponse.next({ request });
+  let supabaseResponse = NextResponse.next({
+    request,
+  });
 
   const supabase = createServerClient(
-    supabasePublicEnv.url,
-    supabasePublicEnv.anonKey,
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
         getAll() {
           return request.cookies.getAll();
         },
-        setAll(cookiesToSet) {
-          // Set on request so downstream server components see the refreshed session
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          );
-          // Rebuild response with updated request cookies
-          supabaseResponse = NextResponse.next({ request });
-          // Set on response so browser receives updated cookies
+        setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
           );
@@ -57,11 +31,35 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  // IMPORTANT: Do not add any logic between createServerClient and getUser().
-  // getUser() refreshes the session and sets updated cookies via setAll above.
-  const { data: { user } } = await supabase.auth.getUser();
+  // Refresh session if expired - this is critical for maintaining the session
+  const { data: { session } } = await supabase.auth.getSession();
 
-  if (isProtected(request.nextUrl.pathname) && !user) {
+  // Get user after session refresh
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // Debug logging
+  if (request.nextUrl.pathname.startsWith("/dashboard") ||
+      request.nextUrl.pathname.startsWith("/collection") ||
+      request.nextUrl.pathname.startsWith("/settings") ||
+      request.nextUrl.pathname.startsWith("/analyst")) {
+    logDebug("Middleware check:", {
+      path: request.nextUrl.pathname,
+      hasSession: !!session,
+      hasUser: !!user,
+      cookies: request.cookies.getAll().map(c => c.name),
+    });
+  }
+
+  // Protected routes
+  const protectedPaths = ["/dashboard", "/collection", "/account", "/settings", "/analyst"];
+  const isProtectedPath = protectedPaths.some((path) =>
+    request.nextUrl.pathname.startsWith(path)
+  );
+
+  if (isProtectedPath && !user) {
+    logDebug("Redirecting to login - no user found");
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("redirect", request.nextUrl.pathname);
