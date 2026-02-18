@@ -44,7 +44,7 @@ function mapAuthFailureToResponse(error: unknown) {
 }
 
 export async function POST(request: NextRequest) {
-  let response = NextResponse.json({ ok: true });
+  const cookiesToSet: CookieToSet[] = [];
 
   try {
     const body = await request.json().catch(() => null);
@@ -68,10 +68,8 @@ export async function POST(request: NextRequest) {
           getAll() {
             return request.cookies.getAll();
           },
-          setAll(cookiesToSet: CookieToSet[]) {
-            cookiesToSet.forEach(({ name, value, options }) => {
-              response.cookies.set(name, value, options);
-            });
+          setAll(incoming: CookieToSet[]) {
+            cookiesToSet.push(...incoming);
           },
         },
       }
@@ -87,11 +85,7 @@ export async function POST(request: NextRequest) {
     const { data, error } = await Promise.race([authPromise, timeoutPromise]);
 
     if (error) {
-      const errorResponse = createErrorResponse(error.message, 401);
-      response.cookies.getAll().forEach((cookie) => {
-        errorResponse.cookies.set(cookie);
-      });
-      return errorResponse;
+      return createErrorResponse(error.message, 401);
     }
 
     const successResponse = NextResponse.json({
@@ -99,8 +93,8 @@ export async function POST(request: NextRequest) {
       hasSession: !!data.session,
       hasUser: !!data.user,
     });
-    response.cookies.getAll().forEach((cookie) => {
-      successResponse.cookies.set(cookie);
+    cookiesToSet.forEach(({ name, value, options }) => {
+      successResponse.cookies.set(name, value, options);
     });
     return successResponse;
   } catch (error) {
