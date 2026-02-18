@@ -34,6 +34,10 @@ function estimateDataUrlByteLength(dataUrl: string): number {
   return Math.max(0, Math.floor((base64.length * 3) / 4) - padding);
 }
 
+function isDataUrl(value: string): boolean {
+  return value.trim().startsWith("data:");
+}
+
 async function compressDataUrl(
   dataUrl: string,
   options: { maxWidth: number; maxHeight: number; quality: number }
@@ -150,15 +154,17 @@ export default function CardUploader({
         throw new Error("Missing primary image");
       }
 
+      const hasFallbackDataUrls = imageUrls.some(isDataUrl);
+      const identifyPayload =
+        imageUrls.length > 1 && !hasFallbackDataUrls
+          ? { imageUrls }
+          : { imageUrl: primaryImageUrl };
+
       // Process card image (accepts both URL and base64 data URL)
       const response = await fetch("/api/identify-card", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          imageUrls.length > 1
-            ? { imageUrls }
-            : { imageUrl: primaryImageUrl }
-        ),
+        body: JSON.stringify(identifyPayload),
       });
 
       const rawResponse = await response.text();
