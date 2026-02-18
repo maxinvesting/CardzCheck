@@ -3,6 +3,7 @@
 import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
+import PricingModal from "@/components/PricingModal";
 import { createClient } from "@/lib/supabase/client";
 import type { User } from "@/types";
 import { LIMITS } from "@/types";
@@ -16,7 +17,7 @@ function SettingsContent() {
   const [name, setName] = useState("");
   const [nameLoading, setNameLoading] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [upgradeLoading, setUpgradeLoading] = useState(false);
+  const [pricingOpen, setPricingOpen] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -106,23 +107,8 @@ function SettingsContent() {
     router.refresh();
   };
 
-  const handleUpgrade = async () => {
-    setUpgradeLoading(true);
-
-    try {
-      const response = await fetch("/api/checkout", {
-        method: "POST",
-      });
-
-      const data = await response.json();
-
-      if (data.url) {
-        window.location.href = data.url;
-      }
-    } catch (error) {
-      console.error("Checkout error:", error);
-      setUpgradeLoading(false);
-    }
+  const handleUpgrade = () => {
+    setPricingOpen(true);
   };
 
   const handleDeleteAccount = async () => {
@@ -344,10 +330,9 @@ function SettingsContent() {
                   </div>
                   <button
                     onClick={handleUpgrade}
-                    disabled={upgradeLoading}
-                    className="px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                    className="px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
                   >
-                    {upgradeLoading ? "Loading..." : "Upgrade to Pro"}
+                    Upgrade to Pro
                   </button>
                 </div>
 
@@ -436,6 +421,7 @@ function SettingsContent() {
           </div>
         )}
       </main>
+      <PricingModal isOpen={pricingOpen} onClose={() => setPricingOpen(false)} />
     </AuthenticatedLayout>
   );
 }

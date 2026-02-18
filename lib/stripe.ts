@@ -39,13 +39,14 @@ export async function createCheckoutSession(
 }
 
 /**
- * Create Pro subscription checkout with $20 activation + $5/month recurring
+ * Create Pro subscription checkout. Supports monthly and annual billing.
  */
 export async function createProSubscriptionCheckout(
   userId: string,
   userEmail: string,
   successUrl: string,
-  cancelUrl: string
+  cancelUrl: string,
+  billing: "monthly" | "annual" = "monthly"
 ) {
   const stripe = getStripeClient();
 
@@ -69,22 +70,22 @@ export async function createProSubscriptionCheckout(
   // Build line items for activation fee + subscription
   const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
 
-  // $20 one-time activation fee (if price ID is set)
-  const activationPriceId = process.env.STRIPE_ACTIVATION_PRICE_ID;
-  if (activationPriceId) {
-    lineItems.push({
-      price: activationPriceId,
-      quantity: 1,
-    });
+  // $20 one-time activation fee (if price ID is set, monthly only)
+  if (billing === "monthly") {
+    const activationPriceId = process.env.STRIPE_ACTIVATION_PRICE_ID;
+    if (activationPriceId) {
+      lineItems.push({ price: activationPriceId, quantity: 1 });
+    }
   }
 
-  // $5/month recurring subscription
-  const subscriptionPriceId = process.env.STRIPE_SUBSCRIPTION_PRICE_ID;
+  // Pick recurring price based on billing interval
+  const subscriptionPriceId =
+    billing === "annual"
+      ? (process.env.STRIPE_ANNUAL_PRICE_ID || process.env.STRIPE_SUBSCRIPTION_PRICE_ID)
+      : process.env.STRIPE_SUBSCRIPTION_PRICE_ID;
+
   if (subscriptionPriceId) {
-    lineItems.push({
-      price: subscriptionPriceId,
-      quantity: 1,
-    });
+    lineItems.push({ price: subscriptionPriceId, quantity: 1 });
   }
 
   // Fallback to legacy one-time payment if subscription prices not configured
@@ -99,14 +100,8 @@ export async function createProSubscriptionCheckout(
     mode: "subscription",
     success_url: successUrl,
     cancel_url: cancelUrl,
-    metadata: {
-      userId,
-    },
-    subscription_data: {
-      metadata: {
-        userId,
-      },
-    },
+    metadata: { userId },
+    subscription_data: { metadata: { userId } },
   });
 
   return session;

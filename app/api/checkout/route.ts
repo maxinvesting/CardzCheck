@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createProSubscriptionCheckout } from "@/lib/stripe";
 
-export async function POST() {
+export async function POST(request: Request) {
   try {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -33,14 +33,23 @@ export async function POST() {
       );
     }
 
+    // Parse billing preference from request body
+    let billing: "monthly" | "annual" = "monthly";
+    try {
+      const body = await request.json();
+      if (body?.billing === "annual") billing = "annual";
+    } catch {
+      // Body may be empty for legacy callers — default to monthly
+    }
+
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
-    // Use new subscription-based checkout ($20 activation + $5/month)
     const session = await createProSubscriptionCheckout(
       user.id,
       user.email!,
       `${appUrl}/account?success=true`,
-      `${appUrl}/comps?canceled=true`
+      `${appUrl}/comps?canceled=true`,
+      billing
     );
 
     return NextResponse.json({ url: session.url });
