@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { checkLegacyProAccess } from "@/lib/access";
 import { isTestMode } from "@/lib/test-mode";
 import { logDebug } from "@/lib/logging";
 import type { WatchlistItem } from "@/types";
@@ -58,18 +57,6 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Check Pro access (watchlist is Pro-only)
-    const isPro = await checkLegacyProAccess(user.id);
-    if (!isPro) {
-      return NextResponse.json(
-        {
-          error: "upgrade_required",
-          message: "Watchlist is a Pro feature. Upgrade to track card prices.",
-        },
-        { status: 403 }
-      );
-    }
-
     const { data: items, error } = await supabase
       .from("watchlist")
       .select("*")
@@ -123,18 +110,6 @@ export async function POST(request: NextRequest) {
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Check Pro access (watchlist is Pro-only)
-    const isPro = await checkLegacyProAccess(user.id);
-    if (!isPro) {
-      return NextResponse.json(
-        {
-          error: "upgrade_required",
-          message: "Watchlist is a Pro feature. Upgrade to track card prices.",
-        },
-        { status: 403 }
-      );
     }
 
     const body = await request.json();
@@ -210,12 +185,21 @@ export async function POST(request: NextRequest) {
     }
 
     if (!insertedItem) {
+      const err = lastError as { code?: string; message?: string } | null;
+      console.error("Watchlist insert failed. code:", err?.code, "message:", err?.message);
+
+      // RLS / auth failures surface as code 42501 or "not authorized"
+      if (err?.code === "42501" || err?.message?.toLowerCase().includes("not authorized") || err?.message?.toLowerCase().includes("row-level")) {
+        return NextResponse.json({ error: "Permission denied. Please sign in and try again." }, { status: 403 });
+      }
+
       throw lastError ?? new Error("Unknown watchlist insert error");
     }
 
     return NextResponse.json({ item: normalizeWatchlistItem(insertedItem) });
   } catch (error) {
-    console.error("Watchlist add error:", error);
+    const err = error as { code?: string; message?: string } | null;
+    console.error("Watchlist add error. code:", err?.code, "message:", err?.message, error);
     return NextResponse.json(
       { error: "Failed to add to watchlist" },
       { status: 500 }
