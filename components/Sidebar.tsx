@@ -6,28 +6,41 @@ import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { User } from "@/types";
 
-async function handleUpgrade() {
-  try {
-    const response = await fetch("/api/checkout", {
-      method: "POST",
-    });
-
-    const data = await response.json();
-
-    if (data.url) {
-      window.location.href = data.url;
-    }
-  } catch (error) {
-    console.error("Checkout error:", error);
-  }
-}
-
 export default function Sidebar() {
   const [user, setUser] = useState<User | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [remainingSearches, setRemainingSearches] = useState<number | null>(
     null
   );
+  const [upgradeLoading, setUpgradeLoading] = useState(false);
+  const [upgradeError, setUpgradeError] = useState<string | null>(null);
+
+  async function handleUpgrade() {
+    setUpgradeError(null);
+    setUpgradeLoading(true);
+    try {
+      const response = await fetch("/api/checkout", {
+        method: "POST",
+        credentials: "include",
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        setUpgradeError(data.error || "Failed to start checkout. Please try again.");
+        return;
+      }
+      if (data.url) {
+        window.location.href = data.url;
+        return;
+      }
+      setUpgradeError(data.error || "No checkout URL returned. Please try again.");
+    } catch (error) {
+      console.error("Checkout error:", error);
+      setUpgradeError("Network error. Please try again.");
+    } finally {
+      setUpgradeLoading(false);
+    }
+  }
   const pathname = usePathname();
   const supabase = createClient();
 
@@ -340,15 +353,23 @@ export default function Sidebar() {
 
           {/* Upgrade button for free users */}
           {user && !user.is_paid && (
-            <button
-              onClick={() => {
-                setIsOpen(false);
-                handleUpgrade();
-              }}
-              className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg text-center transition-colors"
-            >
-              Upgrade to Pro
-            </button>
+            <div className="space-y-2">
+              {upgradeError && (
+                <p className="text-xs text-red-400" role="alert">
+                  {upgradeError}
+                </p>
+              )}
+              <button
+                onClick={() => {
+                  setIsOpen(false);
+                  handleUpgrade();
+                }}
+                disabled={upgradeLoading}
+                className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-70 disabled:cursor-not-allowed text-white font-medium rounded-lg text-center transition-colors"
+              >
+                {upgradeLoading ? "Loading..." : "Upgrade to Pro"}
+              </button>
+            </div>
           )}
 
           {/* Legal links */}

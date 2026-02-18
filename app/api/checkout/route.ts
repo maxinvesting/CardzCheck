@@ -8,7 +8,29 @@ export async function POST() {
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { error: "Please sign in to upgrade." },
+        { status: 401 }
+      );
+    }
+
+    if (!process.env.STRIPE_SECRET_KEY?.trim()) {
+      console.error("Checkout: STRIPE_SECRET_KEY is not set");
+      return NextResponse.json(
+        { error: "Checkout is not configured. Please try again later." },
+        { status: 503 }
+      );
+    }
+
+    const hasSubscriptionPrices =
+      process.env.STRIPE_ACTIVATION_PRICE_ID?.trim() ||
+      process.env.STRIPE_SUBSCRIPTION_PRICE_ID?.trim();
+    if (!hasSubscriptionPrices && !process.env.NEXT_PUBLIC_STRIPE_PRICE_ID?.trim()) {
+      console.error("Checkout: No Stripe price IDs configured");
+      return NextResponse.json(
+        { error: "Checkout is not configured. Please try again later." },
+        { status: 503 }
+      );
     }
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
