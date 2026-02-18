@@ -19,7 +19,6 @@ import { createClient } from "@/lib/supabase/client";
 import { addRecentSearch } from "@/lib/recent-searches";
 import { formatGraderGrade } from "@/lib/cards/format";
 import { needsYearConfirmation } from "@/lib/card-identity/ui";
-import { getCollectionErrorMessage } from "@/lib/collection/client-errors";
 import type { SearchFormData, SearchResult, Comp, User, CardIdentificationResult, GradeEstimate, ParsedSearch } from "@/types";
 import { LIMITS } from "@/types";
 import { isTestMode, getTestUser } from "@/lib/test-mode";
@@ -361,7 +360,7 @@ function CompsPageContent() {
           setShowPaywall(true);
           return;
         }
-        throw new Error(getCollectionErrorMessage(data, "Failed to add to collection"));
+        throw new Error(data.error || data.message || "Failed to add to collection");
       }
 
       setAddedToCollection((prev) => new Set([...prev, comp.link]));
@@ -411,10 +410,8 @@ function CompsPageContent() {
           estimated_cmv: cmvForSave,
         }),
       });
-      const contentType = response.headers.get("content-type");
-      const data = contentType?.includes("application/json")
-        ? await response.json()
-        : {};
+
+      const data = await response.json();
 
       if (!response.ok) {
         if (data.error === "limit_reached") {
@@ -422,7 +419,7 @@ function CompsPageContent() {
           setShowPaywall(true);
           return;
         }
-        throw new Error(getCollectionErrorMessage(data, "Failed to add to collection"));
+        throw new Error(data.error || "Failed to add to collection");
       }
 
       setCardAddedFromSearch(true);
@@ -889,7 +886,7 @@ function CompsPageContent() {
                 }}
                 className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
               >
-                Upgrade to Pro
+                Upgrade to Pro - $20
               </button>
             </div>
           </div>

@@ -1,13 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import {
-  PRO_MONTHLY_PRICE,
-  PRO_ANNUAL_PRICE,
-  ANNUAL_SAVINGS,
-  formatPrice,
-} from "@/lib/pricing";
+import { LIMITS } from "@/types";
 
 interface PlanSelectionModalProps {
   isOpen: boolean;
@@ -20,13 +16,14 @@ export default function PlanSelectionModal({
   onClose,
   onPlanSelected,
 }: PlanSelectionModalProps) {
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState<"free" | "pro_monthly" | "pro_annual" | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<"free" | "pro" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  const handleSelectPlan = async (plan: "free" | "pro_monthly" | "pro_annual") => {
+  const handleSelectPlan = async (plan: "free" | "pro") => {
     setSelectedPlan(plan);
     setLoading(true);
     setError(null);
@@ -41,13 +38,12 @@ export default function PlanSelectionModal({
         return;
       }
 
-      // API still expects "free" | "pro"
-      const apiPlan = plan === "free" ? "free" : "pro";
-      console.log("Sending plan selection request:", { plan, apiPlan, userId: user.id });
+      // Mark plan as selected
+      console.log("Sending plan selection request:", { plan, userId: user.id });
       const response = await fetch("/api/user/plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan: apiPlan }),
+        body: JSON.stringify({ plan }),
       });
 
       console.log("Plan selection response:", {
@@ -88,8 +84,8 @@ export default function PlanSelectionModal({
         // The modal will close and user can continue, but plan_selected won't persist until column is added
       }
 
-      if (plan === "pro_monthly" || plan === "pro_annual") {
-        // Route to checkout flow (plan type can be passed when API supports it)
+      if (plan === "pro") {
+        // Route to checkout flow
         const checkoutResponse = await fetch("/api/checkout", {
           method: "POST",
         });
@@ -136,10 +132,10 @@ export default function PlanSelectionModal({
               {error}
             </div>
           )}
-          <div className="grid md:grid-cols-3 gap-6">
+          <div className="grid md:grid-cols-2 gap-6">
             {/* Free Plan */}
             <div
-              className={`border-2 rounded-xl p-6 cursor-pointer transition-all flex flex-col ${
+              className={`border-2 rounded-xl p-6 cursor-pointer transition-all ${
                 selectedPlan === "free"
                   ? "border-blue-600 bg-blue-50 dark:bg-blue-900/20"
                   : "border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700"
@@ -154,168 +150,197 @@ export default function PlanSelectionModal({
                   $0
                 </p>
                 <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
-                  Try CardzCheck
+                  forever
                 </p>
               </div>
 
-              <ul className="space-y-3 mb-6 flex-1">
-                <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300 text-sm">
-                  <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              <ul className="space-y-3 mb-6">
+                <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                  <svg
+                    className="w-5 h-5 text-green-500 flex-shrink-0"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M5 13l4 4L19 7"
+                    />
                   </svg>
-                  Collection tracking
+                  {LIMITS.FREE_SEARCHES} card searches
                 </li>
-                <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300 text-sm">
-                  <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                  <svg
+                    className="w-5 h-5 text-green-500 flex-shrink-0"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M5 13l4 4L19 7"
+                    />
                   </svg>
-                  Smart Search + basic comps
+                  {LIMITS.FREE_COLLECTION} cards in collection
                 </li>
-                <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300 text-sm">
-                  <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                  <svg
+                    className="w-5 h-5 text-green-500 flex-shrink-0"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M5 13l4 4L19 7"
+                    />
                   </svg>
-                  Limited CMV + Grade Probability uses
+                  {LIMITS.FREE_AI_MESSAGES} AI messages
                 </li>
-                <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300 text-sm">
-                  <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                <li className="flex items-center gap-2 text-gray-500 dark:text-gray-500">
+                  <svg
+                    className="w-5 h-5 text-gray-400 flex-shrink-0"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
                   </svg>
-                  Limited Analyst questions
+                  No watchlist
                 </li>
               </ul>
 
               <button
-                onClick={(e) => { e.stopPropagation(); handleSelectPlan("free"); }}
+                onClick={() => handleSelectPlan("free")}
                 disabled={loading}
-                className="w-full py-3 px-4 rounded-lg font-medium border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                className={`w-full py-3 px-4 rounded-lg font-medium transition-colors ${
+                  selectedPlan === "free"
+                    ? "bg-blue-600 text-white hover:bg-blue-700"
+                    : "border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
               >
-                {loading && selectedPlan === "free" ? "Starting..." : "Get started"}
+                {loading && selectedPlan === "free"
+                  ? "Starting..."
+                  : "Start Free"}
               </button>
             </div>
 
-            {/* Pro Monthly - Most popular */}
+            {/* Pro Plan */}
             <div
-              className={`border-2 rounded-xl p-6 cursor-pointer transition-all relative flex flex-col ${
-                selectedPlan === "pro_monthly"
+              className={`border-2 rounded-xl p-6 cursor-pointer transition-all relative ${
+                selectedPlan === "pro"
                   ? "border-blue-600 bg-blue-50 dark:bg-blue-900/20"
                   : "border-blue-600 bg-blue-600/5 dark:bg-blue-600/10 hover:bg-blue-600/10 dark:hover:bg-blue-600/20"
               }`}
-              onClick={() => !loading && handleSelectPlan("pro_monthly")}
-            >
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-amber-400 text-amber-900 text-sm font-semibold rounded-full">
-                Most popular
-              </div>
-
-              <div className="text-center mb-4">
-                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-                  Pro (Monthly)
-                </h3>
-                <p className="text-4xl font-bold text-gray-900 dark:text-white mt-2">
-                  {formatPrice(PRO_MONTHLY_PRICE)}
-                </p>
-                <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
-                  / month
-                </p>
-              </div>
-
-              <ul className="space-y-3 mb-6 flex-1">
-                <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300 text-sm">
-                  <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  Unlimited collection + watchlist
-                </li>
-                <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300 text-sm">
-                  <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  Full CMV + comps engine
-                </li>
-                <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300 text-sm">
-                  <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  Grade Probability Engine (more uses)
-                </li>
-                <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300 text-sm">
-                  <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  CardzCheck Analyst (more uses)
-                </li>
-              </ul>
-
-              <button
-                onClick={(e) => { e.stopPropagation(); handleSelectPlan("pro_monthly"); }}
-                disabled={loading}
-                className="w-full py-3 px-4 rounded-lg font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading && selectedPlan === "pro_monthly" ? "Loading..." : "Go Pro"}
-              </button>
-            </div>
-
-            {/* Pro Annual - Best value */}
-            <div
-              className={`border-2 rounded-xl p-6 cursor-pointer transition-all relative flex flex-col ${
-                selectedPlan === "pro_annual"
-                  ? "border-blue-600 bg-blue-50 dark:bg-blue-900/20"
-                  : "border-blue-600 bg-blue-600/5 dark:bg-blue-600/10 hover:bg-blue-600/10 dark:hover:bg-blue-600/20"
-              }`}
-              onClick={() => !loading && handleSelectPlan("pro_annual")}
+              onClick={() => !loading && handleSelectPlan("pro")}
             >
               <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-yellow-400 text-yellow-900 text-sm font-semibold rounded-full">
-                Best value
+                Best Value
               </div>
 
               <div className="text-center mb-4">
                 <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-                  Pro (Annual)
+                  Pro
                 </h3>
-                <p className="text-4xl font-bold text-gray-900 dark:text-white mt-2">
-                  {formatPrice(PRO_ANNUAL_PRICE)}
-                </p>
+                <div className="mt-2">
+                  <span className="text-4xl font-bold text-gray-900 dark:text-white">$20</span>
+                  <span className="text-lg text-gray-500 dark:text-gray-400"> activation</span>
+                </div>
                 <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
-                  / year
-                </p>
-                <p className="text-green-600 dark:text-green-400 text-sm font-medium mt-2">
-                  Save {formatPrice(ANNUAL_SAVINGS)}/year
+                  + $5/month
                 </p>
               </div>
 
-              <ul className="space-y-3 mb-6 flex-1">
-                <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300 text-sm">
-                  <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              <ul className="space-y-3 mb-6">
+                <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                  <svg
+                    className="w-5 h-5 text-green-500 flex-shrink-0"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M5 13l4 4L19 7"
+                    />
                   </svg>
-                  Unlimited collection + watchlist
+                  Unlimited searches
                 </li>
-                <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300 text-sm">
-                  <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                  <svg
+                    className="w-5 h-5 text-green-500 flex-shrink-0"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M5 13l4 4L19 7"
+                    />
                   </svg>
-                  Full CMV + comps engine
+                  Unlimited collection
                 </li>
-                <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300 text-sm">
-                  <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                  <svg
+                    className="w-5 h-5 text-green-500 flex-shrink-0"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M5 13l4 4L19 7"
+                    />
                   </svg>
-                  Grade Probability Engine (more uses)
+                  Watchlist tracking
                 </li>
-                <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300 text-sm">
-                  <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                  <svg
+                    className="w-5 h-5 text-green-500 flex-shrink-0"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M5 13l4 4L19 7"
+                    />
                   </svg>
-                  CardzCheck Analyst (more uses)
+                  AI Assistant
                 </li>
               </ul>
 
               <button
-                onClick={(e) => { e.stopPropagation(); handleSelectPlan("pro_annual"); }}
+                onClick={() => handleSelectPlan("pro")}
                 disabled={loading}
-                className="w-full py-3 px-4 rounded-lg font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                className={`w-full py-3 px-4 rounded-lg font-medium transition-colors ${
+                  selectedPlan === "pro"
+                    ? "bg-blue-600 text-white hover:bg-blue-700"
+                    : "bg-blue-600 text-white hover:bg-blue-700"
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
               >
-                {loading && selectedPlan === "pro_annual" ? "Loading..." : "Go Annual"}
+                {loading && selectedPlan === "pro"
+                  ? "Loading..."
+                  : "Upgrade to Pro"}
               </button>
             </div>
           </div>

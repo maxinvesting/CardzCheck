@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { CardImage } from "@/types";
-import { resolveStoredCardImageUrl } from "@/lib/collection/image-url";
 
 // GET /api/cards/[id]/images - Fetch all images for a card
 export async function GET(
@@ -41,7 +40,8 @@ export async function GET(
     // Generate public URLs for each image
     const imagesWithUrls = (images || []).map((img: CardImage) => ({
       ...img,
-      url: resolveStoredCardImageUrl(supabase, img.storage_path) ?? undefined,
+      url: supabase.storage.from("card-images").getPublicUrl(img.storage_path)
+        .data.publicUrl,
     }));
 
     return NextResponse.json({ images: imagesWithUrls });
@@ -228,21 +228,14 @@ export async function DELETE(
       );
     }
 
-    const isExternalStoragePath =
-      typeof image.storage_path === "string" &&
-      (image.storage_path.startsWith("http://") ||
-        image.storage_path.startsWith("https://"));
+    // Delete from storage
+    const { error: storageError } = await supabase.storage
+      .from("card-images")
+      .remove([image.storage_path]);
 
-    // Delete from storage for Supabase-backed paths only.
-    if (!isExternalStoragePath) {
-      const { error: storageError } = await supabase.storage
-        .from("card-images")
-        .remove([image.storage_path]);
-
-      if (storageError) {
-        console.error("Error deleting from storage:", storageError);
-        // Continue with DB deletion even if storage fails
-      }
+    if (storageError) {
+      console.error("Error deleting from storage:", storageError);
+      // Continue with DB deletion even if storage fails
     }
 
     // Delete from database
@@ -319,7 +312,8 @@ export async function PATCH(
 
     const imagesWithUrls = (images || []).map((img: CardImage) => ({
       ...img,
-      url: resolveStoredCardImageUrl(supabase, img.storage_path) ?? undefined,
+      url: supabase.storage.from("card-images").getPublicUrl(img.storage_path)
+        .data.publicUrl,
     }));
 
     return NextResponse.json({ images: imagesWithUrls });

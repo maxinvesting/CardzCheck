@@ -5,7 +5,7 @@ export const metadata = {
   description: "Terms of Service for CardzCheck sports card price lookup",
 };
 
-export default async function TermsPage() {
+export default function TermsPage() {
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
       <div className="max-w-3xl mx-auto px-6 py-16">

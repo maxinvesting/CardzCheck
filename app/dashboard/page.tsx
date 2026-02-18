@@ -164,10 +164,11 @@ export default function DashboardPage() {
               type: "success",
               message: `Added ${playerName} to collection!`,
             });
-            if (item) {
-              setCollectionItems((prev) => [item, ...prev.filter((it) => it.id !== item.id)]);
+            if (isTestMode() && item) {
+              setCollectionItems((prev) => [item, ...prev]);
+            } else {
+              refreshCollection();
             }
-            refreshCollection();
           }}
           onLimitReached={() => setShowPaywall(true)}
         />

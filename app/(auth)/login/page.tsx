@@ -1,94 +1,49 @@
 "use client";
 
-import { Suspense, useState, useRef, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
 import SportsCardBackground from "@/components/SportsCardBackground";
-
-const LOGIN_TIMEOUT_MS = 8000;
-const STUCK_SAFETY_MS = 14000;
-
-function sanitizeRedirectPath(rawRedirect: string | null): string {
-  if (!rawRedirect || !rawRedirect.startsWith("/")) return "/dashboard";
-  if (rawRedirect.startsWith("//")) return "/dashboard";
-  if (rawRedirect.startsWith("/login") || rawRedirect.startsWith("/signup")) {
-    return "/dashboard";
-  }
-  return rawRedirect;
-}
 
 function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const stuckSafetyRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const redirect = sanitizeRedirectPath(searchParams.get("redirect"));
-
-  useEffect(() => {
-    return () => {
-      if (stuckSafetyRef.current) clearTimeout(stuckSafetyRef.current);
-    };
-  }, []);
+  const redirect = searchParams.get("redirect") || "/comps";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
 
-    stuckSafetyRef.current = setTimeout(() => {
-      stuckSafetyRef.current = null;
+    const supabase = createClient();
+    const { error, data } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      setError(error.message);
       setLoading(false);
-      setError("Request took too long. Please check your connection and try again.");
-    }, STUCK_SAFETY_MS);
+      return;
+    }
 
-    try {
-      const controller = new AbortController();
-      const requestPromise = fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-        signal: controller.signal,
-      });
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        window.setTimeout(() => {
-          controller.abort();
-          reject(new Error("Login timed out. Please try again."));
-        }, LOGIN_TIMEOUT_MS);
-      });
+    console.log("Login response:", { hasSession: !!data.session, hasUser: !!data.user });
 
-      const response = await Promise.race([requestPromise, timeoutPromise]);
-
-      const payload = await response.json().catch(() => ({} as Record<string, unknown>));
-
-      if (!response.ok) {
-        const message =
-          typeof payload.error === "string"
-            ? payload.error
-            : "Unable to sign in right now. Please try again.";
-        setError(message);
-        return;
-      }
-
-      if (stuckSafetyRef.current) {
-        clearTimeout(stuckSafetyRef.current);
-        stuckSafetyRef.current = null;
-      }
-      window.location.href = redirect;
-    } catch (err) {
-      const message =
-        err instanceof Error && err.name === "AbortError"
-          ? "Login timed out. Please try again."
-          : err instanceof Error
-            ? err.message
-            : "Unable to sign in right now. Please try again.";
-      setError(message);
-    } finally {
-      if (stuckSafetyRef.current) {
-        clearTimeout(stuckSafetyRef.current);
-        stuckSafetyRef.current = null;
-      }
+    // Ensure we have a session before redirecting
+    if (data.session) {
+      // Small delay to ensure cookies are written
+      setTimeout(() => {
+        console.log("Redirecting to:", redirect);
+        // Force a hard navigation to ensure cookies are set
+        window.location.href = redirect;
+      }, 100);
+    } else {
+      setError("Login successful but session not created. Please try again.");
       setLoading(false);
     }
   };
@@ -110,37 +65,8 @@ function LoginForm() {
 
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {error && (
-            <div className="space-y-3">
-              <div className="bg-red-900/20 border border-red-800 text-red-400 px-4 py-3 rounded-lg text-sm">
-                {error}
-              </div>
-              {(error.toLowerCase().includes("timeout") ||
-                error.toLowerCase().includes("unreachable") ||
-                error.toLowerCase().includes("network") ||
-                error.toLowerCase().includes("dns") ||
-                error.toLowerCase().includes("too long") ||
-                error.toLowerCase().includes("connection")) && (
-                <div className="bg-gray-800/80 border border-gray-700 text-gray-300 px-4 py-3 rounded-lg text-sm space-y-2">
-                  <p className="font-medium text-white">What to do next:</p>
-                  <ul className="list-disc list-inside space-y-1 text-gray-400">
-                    <li>Hard refresh <code className="text-gray-300">/login</code> and retry once (you should now get a clear error instead of endless spinner).</li>
-                    <li>Fix local network/DNS path to Supabase (VPN, proxy, firewall, or DNS).</li>
-                    <li>Try from a different network (e.g. phone hotspot) to confirm.</li>
-                    <li>On macOS, you can try flushing DNS: <code className="text-gray-300">sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder</code></li>
-                  </ul>
-                </div>
-              )}
-              {(error.toLowerCase().includes("env vars are missing") ||
-                error.toLowerCase().includes("supabase env vars are missing")) && (
-                <div className="bg-gray-800/80 border border-gray-700 text-gray-300 px-4 py-3 rounded-lg text-sm space-y-2">
-                  <p className="font-medium text-white">Missing local Supabase config:</p>
-                  <ul className="list-disc list-inside space-y-1 text-gray-400">
-                    <li>Add `NEXT_PUBLIC_SUPABASE_URL` (or `SUPABASE_URL`) in <code className="text-gray-300">.env</code> or <code className="text-gray-300">.env.local</code>.</li>
-                    <li>Add `NEXT_PUBLIC_SUPABASE_ANON_KEY` (or `SUPABASE_ANON_KEY`) in the same file.</li>
-                    <li>Restart the dev server after saving env changes.</li>
-                  </ul>
-                </div>
-              )}
+            <div className="bg-red-900/20 border border-red-800 text-red-400 px-4 py-3 rounded-lg text-sm">
+              {error}
             </div>
           )}
 
