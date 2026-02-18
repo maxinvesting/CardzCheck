@@ -1,18 +1,15 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { isTestMode } from "@/lib/test-mode";
-import { logDebug } from "@/lib/logging";
+
+const PROTECTED_PATHS = ["/dashboard", "/collection", "/account", "/settings", "/analyst"];
 
 export async function updateSession(request: NextRequest) {
-  // Bypass auth checks in test mode
   if (isTestMode()) {
-    logDebug("🧪 TEST MODE: Bypassing authentication checks");
     return { response: NextResponse.next({ request }), userId: null };
   }
 
-  let supabaseResponse = NextResponse.next({
-    request,
-  });
+  let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -23,6 +20,9 @@ export async function updateSession(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
+          // Must set on request AND rebuild response — required by Supabase SSR
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+          supabaseResponse = NextResponse.next({ request });
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
           );
@@ -31,35 +31,13 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  // Refresh session if expired - this is critical for maintaining the session
-  const { data: { session } } = await supabase.auth.getSession();
+  const { data: { user } } = await supabase.auth.getUser();
 
-  // Get user after session refresh
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  // Debug logging
-  if (request.nextUrl.pathname.startsWith("/dashboard") ||
-      request.nextUrl.pathname.startsWith("/collection") ||
-      request.nextUrl.pathname.startsWith("/settings") ||
-      request.nextUrl.pathname.startsWith("/analyst")) {
-    logDebug("Middleware check:", {
-      path: request.nextUrl.pathname,
-      hasSession: !!session,
-      hasUser: !!user,
-      cookies: request.cookies.getAll().map(c => c.name),
-    });
-  }
-
-  // Protected routes
-  const protectedPaths = ["/dashboard", "/collection", "/account", "/settings", "/analyst"];
-  const isProtectedPath = protectedPaths.some((path) =>
-    request.nextUrl.pathname.startsWith(path)
+  const isProtected = PROTECTED_PATHS.some((p) =>
+    request.nextUrl.pathname.startsWith(p)
   );
 
-  if (isProtectedPath && !user) {
-    logDebug("Redirecting to login - no user found");
+  if (isProtected && !user) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("redirect", request.nextUrl.pathname);

@@ -18,7 +18,7 @@ function mapAuthFailureToResponse(error: unknown) {
     normalized.includes("fetch failed")
   ) {
     return createErrorResponse(
-      "Auth service is currently unreachable. Please check your network/DNS and try again.",
+      "Auth service is currently unreachable. Please check your network and try again.",
       503
     );
   }
@@ -31,7 +31,8 @@ function mapAuthFailureToResponse(error: unknown) {
 }
 
 export async function POST(request: NextRequest) {
-  let response = NextResponse.json({ ok: true });
+  // Collect cookies Supabase wants to set
+  const pendingCookies: CookieToSet[] = [];
 
   try {
     const body = await request.json().catch(() => null);
@@ -51,9 +52,8 @@ export async function POST(request: NextRequest) {
             return request.cookies.getAll();
           },
           setAll(cookiesToSet: CookieToSet[]) {
-            cookiesToSet.forEach(({ name, value, options }) => {
-              response.cookies.set(name, value, options);
-            });
+            // Collect — apply to the response we actually return
+            pendingCookies.push(...cookiesToSet);
           },
         },
       }
@@ -61,19 +61,13 @@ export async function POST(request: NextRequest) {
 
     const authPromise = supabase.auth.signInWithPassword({ email, password });
     const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => {
-        reject(new Error("Auth request timed out."));
-      }, AUTH_TIMEOUT_MS);
+      setTimeout(() => reject(new Error("Auth request timed out.")), AUTH_TIMEOUT_MS);
     });
 
     const { data, error } = await Promise.race([authPromise, timeoutPromise]);
 
     if (error) {
-      const errorResponse = createErrorResponse(error.message, 401);
-      response.cookies.getAll().forEach((cookie) => {
-        errorResponse.cookies.set(cookie);
-      });
-      return errorResponse;
+      return createErrorResponse(error.message, 401);
     }
 
     const successResponse = NextResponse.json({
@@ -81,9 +75,12 @@ export async function POST(request: NextRequest) {
       hasSession: !!data.session,
       hasUser: !!data.user,
     });
-    response.cookies.getAll().forEach((cookie) => {
-      successResponse.cookies.set(cookie);
+
+    // Apply all session cookies to the response the browser actually receives
+    pendingCookies.forEach(({ name, value, options }) => {
+      successResponse.cookies.set(name, value, options);
     });
+
     return successResponse;
   } catch (error) {
     return mapAuthFailureToResponse(error);
