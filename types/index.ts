@@ -267,6 +267,69 @@ export interface GradeEstimatorHistoryRun {
   created_at: string;
 }
 
+export type GradingSubmissionMode = "mock" | "actual";
+export type GradingSubmissionGrader = "psa";
+export type GradingSubmissionStatus =
+  | "draft"
+  | "ready"
+  | "shipped"
+  | "arrived"
+  | "grading"
+  | "qa"
+  | "shipped_back"
+  | "received"
+  | "completed";
+export type GradingSubmissionSourceType = "collection" | "watchlist" | "manual";
+
+export interface GradingSubmission {
+  id: string;
+  user_id: string;
+  name: string;
+  mode: GradingSubmissionMode;
+  grader: GradingSubmissionGrader;
+  status: GradingSubmissionStatus;
+  psa_order_id: string | null;
+  service_level: string | null;
+  declared_value_cents: number;
+  shipping_cents: number;
+  insurance_cents: number;
+  fees_estimate_cents: number;
+  fees_actual_cents: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GradingSubmissionItem {
+  id: string;
+  submission_id: string;
+  user_id: string;
+  source_type: GradingSubmissionSourceType;
+  source_id: string | null;
+  title: string;
+  quantity: number;
+  cost_basis_cents: number | null;
+  predicted_distribution: {
+    "10": number;
+    "9": number;
+    "8": number;
+    "7_or_lower": number;
+  };
+  target_grade: string | null;
+  estimated_value_by_grade: {
+    "10": number | null;
+    "9": number | null;
+    "8": number | null;
+    "7_or_lower": number | null;
+  };
+  expected_value_cents: number;
+  break_even_grade: string | null;
+  risk_flags: string[];
+  actual_grade: string | null;
+  cert_number: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export type FieldConfidence = "high" | "medium" | "low";
 export type FieldSource = "ocr" | "vision" | "user" | "catalog" | "inferred";
 

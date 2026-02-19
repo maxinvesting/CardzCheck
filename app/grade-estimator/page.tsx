@@ -7,6 +7,7 @@ import GradeProbabilityPanel from "@/components/grading/GradeProbabilityPanel";
 import GradeEstimateProgressPanel from "@/components/grading/GradeEstimateProgressPanel";
 import GradeEstimatorValuePanel from "@/components/GradeEstimatorValuePanel";
 import GradeEstimatorHistoryPanel from "@/components/grading/GradeEstimatorHistoryPanel";
+import SubmissionBuilderPanel from "@/components/grading/SubmissionBuilderPanel";
 import ConfirmAddCardModal from "@/components/ConfirmAddCardModal";
 import PaywallModal from "@/components/PaywallModal";
 import { gradingCopy } from "@/copy/grading";
@@ -725,6 +726,13 @@ export default function GradeEstimatorPage() {
           refreshToken={historyRefreshToken}
           onSelect={handleHistorySelect}
         />
+
+        <div className="mb-6">
+          <SubmissionBuilderPanel
+            identifiedCard={identifiedCard}
+            gradeEstimate={gradeEstimate}
+          />
+        </div>
 
         {/* Card Uploader */}
         {!identifiedCard ? (
