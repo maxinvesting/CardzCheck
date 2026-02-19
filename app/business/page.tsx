@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { Suspense, useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
@@ -19,7 +19,7 @@ import type { CardPickerSelection } from "@/components/CardPicker";
 import { createClient } from "@/lib/supabase/client";
 import type { BusinessInventoryItem, BusinessMetrics as MetricsType } from "@/types";
 
-export default function BusinessPage() {
+function BusinessPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
@@ -532,5 +532,29 @@ export default function BusinessPage() {
         )}
       </main>
     </AuthenticatedLayout>
+  );
+}
+
+export default function BusinessPage() {
+  return (
+    <Suspense
+      fallback={
+        <AuthenticatedLayout>
+          <main className="max-w-7xl mx-auto px-4 py-8">
+            <div className="animate-pulse space-y-4">
+              <div className="h-8 w-48 bg-gray-800 rounded" />
+              <div className="grid grid-cols-5 gap-4">
+                {[...Array(5)].map((_, i) => (
+                  <div key={i} className="h-20 bg-gray-800 rounded-xl" />
+                ))}
+              </div>
+              <div className="h-64 bg-gray-800 rounded-xl" />
+            </div>
+          </main>
+        </AuthenticatedLayout>
+      }
+    >
+      <BusinessPageContent />
+    </Suspense>
   );
 }
