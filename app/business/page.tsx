@@ -10,11 +10,12 @@ import InventoryTable from "@/components/business/InventoryTable";
 import ItemDetailDrawer from "@/components/business/ItemDetailDrawer";
 import AddInventoryModal from "@/components/business/AddInventoryModal";
 import AddWaxModal from "@/components/business/AddWaxModal";
+import AddCardToInventoryModal from "@/components/business/AddCardToInventoryModal";
+import BusinessMigrationBanner from "@/components/business/BusinessMigrationBanner";
+import type { PendingInventoryCard } from "@/components/business/AddCardToInventoryModal";
 import AddCardModalNew from "@/components/AddCardModalNew";
 import CardPickerModal from "@/components/CardPickerModal";
-import ConfirmAddCardModal from "@/components/ConfirmAddCardModal";
 import type { CardPickerSelection } from "@/components/CardPicker";
-import type { CardIdentificationResult } from "@/types";
 import { createClient } from "@/lib/supabase/client";
 import type { BusinessInventoryItem, BusinessMetrics as MetricsType } from "@/types";
 
@@ -31,10 +32,11 @@ export default function BusinessPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showAddCardModal, setShowAddCardModal] = useState(false);
   const [showCardPicker, setShowCardPicker] = useState(false);
-  const [showConfirmCard, setShowConfirmCard] = useState(false);
-  const [pendingCard, setPendingCard] = useState<CardIdentificationResult | null>(null);
+  const [showAddCardToInventory, setShowAddCardToInventory] = useState(false);
+  const [pendingInventoryCard, setPendingInventoryCard] = useState<PendingInventoryCard | null>(null);
   const [showAddWaxModal, setShowAddWaxModal] = useState(false);
   const [showAddDropdown, setShowAddDropdown] = useState(false);
+  const [needsMigration, setNeedsMigration] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   useEffect(() => {
@@ -72,6 +74,13 @@ export default function BusinessPage() {
         return;
       }
       const data = await res.json();
+      if (res.status === 503 && data.needs_migration) {
+        setNeedsMigration(true);
+        setHasAccess(true);
+        setItems([]);
+        return;
+      }
+      setNeedsMigration(false);
       setHasAccess(true);
       setItems(data.items ?? []);
     } catch {
@@ -186,6 +195,9 @@ export default function BusinessPage() {
         setItems((prev) => [created, ...prev]);
         setToast({ type: "success", message: `Added "${item.title}"` });
         loadMetrics();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setToast({ type: "error", message: data.error || "Failed to add item" });
       }
     } catch {
       setToast({ type: "error", message: "Failed to add item" });
@@ -232,6 +244,7 @@ export default function BusinessPage() {
   };
 
   const handleCardAdded = (playerName: string) => {
+    setPendingInventoryCard(null);
     setToast({ type: "success", message: `Added "${playerName}" to inventory` });
     loadInventory();
     loadMetrics();
@@ -239,28 +252,29 @@ export default function BusinessPage() {
 
   const handleCardPickerSelect = (card: CardPickerSelection) => {
     setShowCardPicker(false);
-    setPendingCard({
+    setPendingInventoryCard({
       player_name: card.player_name,
       year: card.year,
       set_name: card.set_name,
       parallel_type: card.variant,
       card_number: card.card_number,
       grade: card.grade,
-      imageUrl: "",
-      confidence: "high",
     });
-    setShowConfirmCard(true);
+    setShowAddCardToInventory(true);
   };
 
-  const handleConfirmCardSuccess = (
-    playerName: string,
-    _item?: any,
-    _destination?: "collection" | "inventory"
-  ) => {
-    setPendingCard(null);
-    setToast({ type: "success", message: `Added "${playerName}" to inventory` });
-    loadInventory();
-    loadMetrics();
+  // Called when AddCardModalNew identifies a card via upload (watchlist mode)
+  const handleCardIdentified = (cardData: {
+    player_name: string;
+    year?: string;
+    set_name?: string;
+    card_number?: string;
+    parallel_type?: string;
+    grade?: string;
+  }) => {
+    setShowAddCardModal(false);
+    setPendingInventoryCard(cardData);
+    setShowAddCardToInventory(true);
   };
 
   const handleAddWax = async (item: any) => {
@@ -275,6 +289,9 @@ export default function BusinessPage() {
         setItems((prev) => [created, ...prev]);
         setToast({ type: "success", message: `Added "${item.title}"` });
         loadMetrics();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setToast({ type: "error", message: data.error || "Failed to add wax item" });
       }
     } catch {
       setToast({ type: "error", message: "Failed to add wax item" });
@@ -415,14 +432,28 @@ export default function BusinessPage() {
         {/* Metrics */}
         <BusinessMetrics metrics={metrics} loading={metricsLoading} />
 
+        {/* Migration banner (shown when database tables haven't been created) */}
+        {needsMigration && (
+          <div className="mt-6">
+            <BusinessMigrationBanner
+              onRetry={() => {
+                setLoading(true);
+                loadInventory();
+              }}
+            />
+          </div>
+        )}
+
         {/* Inventory Table */}
-        <InventoryTable
-          items={items}
-          onItemClick={setSelectedItem}
-          onInlineUpdate={handleInlineUpdate}
-          onBulkAction={handleBulkAction}
-          onDelete={handleDelete}
-        />
+        {!needsMigration && (
+          <InventoryTable
+            items={items}
+            onItemClick={setSelectedItem}
+            onInlineUpdate={handleInlineUpdate}
+            onBulkAction={handleBulkAction}
+            onDelete={handleDelete}
+          />
+        )}
 
         {/* Detail Drawer */}
         {selectedItem && (
@@ -441,19 +472,18 @@ export default function BusinessPage() {
           onAdd={handleAddItem}
         />
 
-        {/* Add Card Modal (Upload / Smart Search) */}
+        {/* Add Card Modal — identify via photo or open card database search */}
         <AddCardModalNew
           isOpen={showAddCardModal}
           onClose={() => setShowAddCardModal(false)}
-          onSuccess={handleCardAdded}
-          onLimitReached={() =>
-            setToast({ type: "error", message: "Card limit reached" })
-          }
-          addMode="collection"
+          onSuccess={() => {}}
+          onLimitReached={() => {}}
+          addMode="watchlist"
           onOpenSmartSearch={() => {
             setShowAddCardModal(false);
             setShowCardPicker(true);
           }}
+          onCardSelected={handleCardIdentified}
         />
 
         {/* Card Database Search Picker */}
@@ -465,18 +495,15 @@ export default function BusinessPage() {
           onSelect={handleCardPickerSelect}
         />
 
-        {/* Confirm Card Details before adding to inventory */}
-        <ConfirmAddCardModal
-          isOpen={showConfirmCard}
+        {/* Business-specific confirm: set cost/channel/status, saves to business_inventory_items */}
+        <AddCardToInventoryModal
+          isOpen={showAddCardToInventory}
+          card={pendingInventoryCard}
           onClose={() => {
-            setShowConfirmCard(false);
-            setPendingCard(null);
+            setShowAddCardToInventory(false);
+            setPendingInventoryCard(null);
           }}
-          onSuccess={handleConfirmCardSuccess}
-          onLimitReached={() =>
-            setToast({ type: "error", message: "Card limit reached" })
-          }
-          cardData={pendingCard}
+          onSuccess={handleCardAdded}
         />
 
         {/* Add Wax Modal */}

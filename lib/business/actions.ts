@@ -2,16 +2,14 @@ import { createClient } from "@/lib/supabase/server";
 import { hasBusinessAccess } from "@/lib/access";
 import type { BusinessInventoryItem, BusinessSale, BusinessMetrics } from "@/types";
 
-const INVENTORY_ITEM_KINDS = ["inventory", "prospect"] as const;
+// Uses business_inventory_items table (unified collection_items migration not yet applied)
+const BUSINESS_TABLE = "business_inventory_items" as const;
 
-type CollectionInventoryRow = {
+type BusinessInventoryRow = {
   id: string;
   user_id: string;
-  item_kind: string | null;
-  title: string | null;
-  player_name: string | null;
-  year: string | null;
-  set_name: string | null;
+  card_id: string | null;
+  title: string;
   quantity: number | null;
   acquisition_date: string | null;
   acquisition_type: string | null;
@@ -28,14 +26,9 @@ type CollectionInventoryRow = {
   status: string | null;
   list_price_cents: number | null;
   current_market_value_cents: number | null;
-  target_price: number | null;
   notes: string | null;
-  purchase_price: number | null;
-  purchase_date: string | null;
-  est_cmv: number | null;
-  estimated_cmv: number | null;
   created_at: string;
-  updated_at?: string | null;
+  updated_at: string | null;
 };
 
 /**
@@ -116,38 +109,20 @@ function normalizeConditionStatus(
   grade: string | null | undefined
 ): BusinessInventoryItem["condition_status"] {
   const normalized = (value || "").toLowerCase();
-  if (normalized === "raw" || normalized === "graded") {
-    return normalized;
-  }
+  if (normalized === "raw" || normalized === "graded") return normalized;
   return grade ? "graded" : "raw";
 }
 
-function deriveTitle(row: CollectionInventoryRow): string {
-  if (row.title && row.title.trim().length > 0) return row.title;
-  const display = [row.year, row.player_name, row.set_name, row.grade]
-    .filter(Boolean)
-    .join(" ")
-    .trim();
-  if (display.length > 0) return display;
-  return row.player_name || "Untitled card";
-}
-
-function toBusinessInventoryItem(row: CollectionInventoryRow): BusinessInventoryItem {
-  const inferredCostBasis = dollarsToCents(row.purchase_price) ?? 0;
-  const inferredCmv =
-    row.current_market_value_cents ??
-    dollarsToCents(row.est_cmv) ??
-    dollarsToCents(row.estimated_cmv);
-
+function toBusinessInventoryItem(row: BusinessInventoryRow): BusinessInventoryItem {
   return {
     id: row.id,
     user_id: row.user_id,
-    card_id: row.id,
-    title: deriveTitle(row),
+    card_id: row.card_id || row.id,
+    title: row.title || "Untitled item",
     quantity: row.quantity ?? 1,
-    acquisition_date: row.acquisition_date ?? row.purchase_date ?? null,
+    acquisition_date: row.acquisition_date ?? null,
     acquisition_type: normalizeAcquisitionType(row.acquisition_type),
-    cost_basis_total_cents: row.cost_basis_total_cents ?? inferredCostBasis,
+    cost_basis_total_cents: row.cost_basis_total_cents ?? 0,
     tax_cents: row.tax_cents ?? 0,
     shipping_cents: row.shipping_cents ?? 0,
     fees_paid_cents: row.fees_paid_cents ?? 0,
@@ -158,8 +133,8 @@ function toBusinessInventoryItem(row: CollectionInventoryRow): BusinessInventory
     location: row.location,
     channel: normalizeChannel(row.channel),
     status: normalizeStatus(row.status),
-    list_price_cents: row.list_price_cents ?? dollarsToCents(row.target_price),
-    current_market_value_cents: inferredCmv ?? null,
+    list_price_cents: row.list_price_cents ?? null,
+    current_market_value_cents: row.current_market_value_cents ?? null,
     notes: row.notes,
     created_at: row.created_at,
     updated_at: row.updated_at || row.created_at,
@@ -172,31 +147,25 @@ function buildInventoryInsertPayload(
 ): Record<string, unknown> {
   return {
     user_id: userId,
-    item_kind: "inventory",
-    title: item.title,
-    player_name: item.title || "Inventory Item",
+    card_id: (item as any).card_id || null,
+    title: item.title || "Untitled item",
     quantity: item.quantity ?? 1,
     acquisition_type: item.acquisition_type ?? "other",
-    acquisition_date: item.acquisition_date,
-    purchase_date: item.acquisition_date,
-    purchase_price: centsToDollars(item.cost_basis_total_cents),
+    acquisition_date: item.acquisition_date || null,
     cost_basis_total_cents: item.cost_basis_total_cents ?? 0,
     tax_cents: item.tax_cents ?? 0,
     shipping_cents: item.shipping_cents ?? 0,
     fees_paid_cents: item.fees_paid_cents ?? 0,
     condition_status: item.condition_status ?? "raw",
-    grading_company: item.grading_company,
-    grade: item.grade,
-    cert_number: item.cert_number,
-    location: item.location,
+    grading_company: item.grading_company || null,
+    grade: item.grade || null,
+    cert_number: item.cert_number || null,
+    location: item.location || null,
     channel: item.channel ?? "other",
     status: item.status ?? "unlisted",
-    list_price_cents: item.list_price_cents,
-    target_price: centsToDollars(item.list_price_cents),
-    current_market_value_cents: item.current_market_value_cents,
-    estimated_cmv: centsToDollars(item.current_market_value_cents),
-    est_cmv: centsToDollars(item.current_market_value_cents),
-    notes: item.notes,
+    list_price_cents: item.list_price_cents ?? null,
+    current_market_value_cents: item.current_market_value_cents ?? null,
+    notes: item.notes || null,
   };
 }
 
@@ -206,21 +175,14 @@ function buildInventoryUpdatePayload(
   >
 ): Record<string, unknown> {
   const payload: Record<string, unknown> = {};
-  if (updates.title !== undefined) {
-    payload.title = updates.title;
-    payload.player_name = updates.title || "Inventory Item";
-  }
+  if (updates.title !== undefined) payload.title = updates.title || "Untitled item";
   if (updates.quantity !== undefined) payload.quantity = updates.quantity;
   if (updates.acquisition_type !== undefined)
     payload.acquisition_type = updates.acquisition_type;
-  if (updates.acquisition_date !== undefined) {
+  if (updates.acquisition_date !== undefined)
     payload.acquisition_date = updates.acquisition_date;
-    payload.purchase_date = updates.acquisition_date;
-  }
-  if (updates.cost_basis_total_cents !== undefined) {
+  if (updates.cost_basis_total_cents !== undefined)
     payload.cost_basis_total_cents = updates.cost_basis_total_cents;
-    payload.purchase_price = centsToDollars(updates.cost_basis_total_cents);
-  }
   if (updates.tax_cents !== undefined) payload.tax_cents = updates.tax_cents;
   if (updates.shipping_cents !== undefined)
     payload.shipping_cents = updates.shipping_cents;
@@ -235,15 +197,10 @@ function buildInventoryUpdatePayload(
   if (updates.location !== undefined) payload.location = updates.location;
   if (updates.channel !== undefined) payload.channel = updates.channel;
   if (updates.status !== undefined) payload.status = updates.status;
-  if (updates.list_price_cents !== undefined) {
+  if (updates.list_price_cents !== undefined)
     payload.list_price_cents = updates.list_price_cents;
-    payload.target_price = centsToDollars(updates.list_price_cents);
-  }
-  if (updates.current_market_value_cents !== undefined) {
+  if (updates.current_market_value_cents !== undefined)
     payload.current_market_value_cents = updates.current_market_value_cents;
-    payload.estimated_cmv = centsToDollars(updates.current_market_value_cents);
-    payload.est_cmv = centsToDollars(updates.current_market_value_cents);
-  }
   if (updates.notes !== undefined) payload.notes = updates.notes;
   return payload;
 }
@@ -265,10 +222,9 @@ export async function listInventory(
   const supabase = await createClient();
 
   let query = supabase
-    .from("collection_items")
+    .from(BUSINESS_TABLE)
     .select("*")
     .eq("user_id", userId)
-    .in("item_kind", [...INVENTORY_ITEM_KINDS])
     .order("created_at", { ascending: false });
 
   if (filters?.status) query = query.eq("status", filters.status);
@@ -279,7 +235,7 @@ export async function listInventory(
     const search = filters.search.replace(/,/g, " ").trim();
     if (search.length > 0) {
       query = query.or(
-        `title.ilike.%${search}%,player_name.ilike.%${search}%,set_name.ilike.%${search}%`
+        `title.ilike.%${search}%,notes.ilike.%${search}%`
       );
     }
   }
@@ -287,7 +243,7 @@ export async function listInventory(
   const { data, error } = await query;
   if (error) throw error;
 
-  return ((data ?? []) as CollectionInventoryRow[]).map(toBusinessInventoryItem);
+  return ((data ?? []) as BusinessInventoryRow[]).map(toBusinessInventoryItem);
 }
 
 export async function getInventoryItem(
@@ -298,16 +254,15 @@ export async function getInventoryItem(
   const supabase = await createClient();
 
   const { data, error } = await supabase
-    .from("collection_items")
+    .from(BUSINESS_TABLE)
     .select("*")
     .eq("id", itemId)
     .eq("user_id", userId)
-    .in("item_kind", [...INVENTORY_ITEM_KINDS])
     .maybeSingle();
 
   if (error && error.code !== "PGRST116") throw error;
   if (!data) return null;
-  return toBusinessInventoryItem(data as CollectionInventoryRow);
+  return toBusinessInventoryItem(data as BusinessInventoryRow);
 }
 
 export async function createInventoryItem(
@@ -318,13 +273,13 @@ export async function createInventoryItem(
   const supabase = await createClient();
 
   const { data, error } = await supabase
-    .from("collection_items")
+    .from(BUSINESS_TABLE)
     .insert(buildInventoryInsertPayload(userId, item))
     .select("*")
     .single();
 
   if (error) throw error;
-  return toBusinessInventoryItem(data as CollectionInventoryRow);
+  return toBusinessInventoryItem(data as BusinessInventoryRow);
 }
 
 export async function updateInventoryItem(
@@ -336,16 +291,15 @@ export async function updateInventoryItem(
   const supabase = await createClient();
 
   const { data, error } = await supabase
-    .from("collection_items")
+    .from(BUSINESS_TABLE)
     .update(buildInventoryUpdatePayload(updates))
     .eq("id", itemId)
     .eq("user_id", userId)
-    .in("item_kind", [...INVENTORY_ITEM_KINDS])
     .select("*")
     .single();
 
   if (error) throw error;
-  return toBusinessInventoryItem(data as CollectionInventoryRow);
+  return toBusinessInventoryItem(data as BusinessInventoryRow);
 }
 
 export async function deleteInventoryItems(
@@ -356,11 +310,10 @@ export async function deleteInventoryItems(
   const supabase = await createClient();
 
   const { error } = await supabase
-    .from("collection_items")
+    .from(BUSINESS_TABLE)
     .delete()
     .in("id", itemIds)
-    .eq("user_id", userId)
-    .in("item_kind", [...INVENTORY_ITEM_KINDS]);
+    .eq("user_id", userId);
 
   if (error) throw error;
 }
@@ -378,11 +331,10 @@ export async function bulkUpdateInventory(
   if (updates.location !== undefined) payload.location = updates.location;
 
   const { error } = await supabase
-    .from("collection_items")
+    .from(BUSINESS_TABLE)
     .update(payload)
     .in("id", itemIds)
-    .eq("user_id", userId)
-    .in("item_kind", [...INVENTORY_ITEM_KINDS]);
+    .eq("user_id", userId);
 
   if (error) throw error;
 }
@@ -440,11 +392,10 @@ export async function createSale(
 
   // Mark the inventory item as sold
   await supabase
-    .from("collection_items")
+    .from(BUSINESS_TABLE)
     .update({ status: "sold" })
     .eq("id", sale.inventory_item_id)
-    .eq("user_id", userId)
-    .in("item_kind", [...INVENTORY_ITEM_KINDS]);
+    .eq("user_id", userId);
 
   return data as BusinessSale;
 }
@@ -512,10 +463,9 @@ export async function getBusinessMetrics(userId: string): Promise<BusinessMetric
 
   // Active inventory count
   const { count: activeCount } = await supabase
-    .from("collection_items")
+    .from(BUSINESS_TABLE)
     .select("id", { count: "exact", head: true })
     .eq("user_id", userId)
-    .in("item_kind", [...INVENTORY_ITEM_KINDS])
     .neq("status", "sold");
 
   const sum = (rows: any[] | null, field: string) =>
@@ -590,4 +540,3 @@ export function salesToCsv(sales: BusinessSale[]): string {
 
   return [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
 }
-

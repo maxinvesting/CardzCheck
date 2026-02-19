@@ -43,6 +43,12 @@ export async function GET(request: NextRequest) {
   } catch (err: any) {
     if (err?.status === 403)
       return NextResponse.json({ error: err.message }, { status: 403 });
+    if (err?.code === "PGRST205") {
+      return NextResponse.json(
+        { error: "Database migration required", needs_migration: true },
+        { status: 503 }
+      );
+    }
     console.error("Business inventory GET error:", err);
     return NextResponse.json(
       { error: "Failed to load inventory" },
@@ -63,6 +69,12 @@ export async function POST(request: NextRequest) {
   } catch (err: any) {
     if (err?.status === 403)
       return NextResponse.json({ error: err.message }, { status: 403 });
+    if (err?.code === "PGRST205") {
+      return NextResponse.json(
+        { error: "Database migration required", needs_migration: true },
+        { status: 503 }
+      );
+    }
     console.error("Business inventory POST error:", err);
     return NextResponse.json(
       { error: "Failed to create item" },

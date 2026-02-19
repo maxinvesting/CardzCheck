@@ -36,6 +36,7 @@ export default function InventoryTable({
   const [filterStatus, setFilterStatus] = useState("");
   const [filterChannel, setFilterChannel] = useState("");
   const [filterCondition, setFilterCondition] = useState("");
+  const [activeTab, setActiveTab] = useState<"all" | "cards" | "wax">("all");
   const [editingCell, setEditingCell] = useState<{
     id: string;
     field: string;
@@ -44,8 +45,19 @@ export default function InventoryTable({
   const [bulkAction, setBulkAction] = useState("");
   const [bulkPayload, setBulkPayload] = useState("");
 
+  const isWax = (item: BusinessInventoryItem) =>
+    Boolean(item.notes?.includes("[WAX]"));
+
+  const waxCount = useMemo(() => items.filter(isWax).length, [items]);
+  const cardCount = useMemo(() => items.filter((it) => !isWax(it)).length, [items]);
+
   const filtered = useMemo(() => {
     let result = items;
+
+    // Tab filter
+    if (activeTab === "wax") result = result.filter(isWax);
+    else if (activeTab === "cards") result = result.filter((it) => !isWax(it));
+
     if (search) {
       const q = search.toLowerCase();
       result = result.filter((it) => it.title.toLowerCase().includes(q));
@@ -55,7 +67,7 @@ export default function InventoryTable({
     if (filterCondition)
       result = result.filter((it) => it.condition_status === filterCondition);
     return result;
-  }, [items, search, filterStatus, filterChannel, filterCondition]);
+  }, [items, search, filterStatus, filterChannel, filterCondition, activeTab]);
 
   const toggleAll = () => {
     if (selected.size === filtered.length) {
@@ -199,6 +211,55 @@ export default function InventoryTable({
 
   return (
     <div>
+      {/* Tabs */}
+      <div className="flex items-center gap-1 mb-4 border-b border-gray-800">
+        {(
+          [
+            { id: "all", label: "All", count: items.length },
+            { id: "cards", label: "Cards", count: cardCount },
+            { id: "wax", label: "Wax", count: waxCount },
+          ] as const
+        ).map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => {
+              setActiveTab(tab.id);
+              setSelected(new Set());
+            }}
+            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              activeTab === tab.id
+                ? tab.id === "wax"
+                  ? "border-amber-500 text-amber-400"
+                  : "border-emerald-500 text-emerald-400"
+                : "border-transparent text-gray-500 hover:text-gray-300"
+            }`}
+          >
+            {tab.id === "wax" && (
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+              </svg>
+            )}
+            {tab.id === "cards" && (
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+              </svg>
+            )}
+            {tab.label}
+            <span
+              className={`text-xs px-1.5 py-0.5 rounded-full ${
+                activeTab === tab.id
+                  ? tab.id === "wax"
+                    ? "bg-amber-900/50 text-amber-300"
+                    : "bg-emerald-900/50 text-emerald-300"
+                  : "bg-gray-800 text-gray-500"
+              }`}
+            >
+              {tab.count}
+            </span>
+          </button>
+        ))}
+      </div>
+
       {/* Toolbar */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-4">
         {/* Search */}
@@ -335,7 +396,11 @@ export default function InventoryTable({
                   colSpan={columns.length + 1}
                   className="px-6 py-12 text-center text-gray-500"
                 >
-                  No inventory items found.
+                  {activeTab === "wax"
+                    ? "No wax / sealed products found. Use Add Wax to track boxes and cases."
+                    : activeTab === "cards"
+                    ? "No cards found. Use Add Card to add cards to your inventory."
+                    : "No inventory items found."}
                 </td>
               </tr>
             )}
