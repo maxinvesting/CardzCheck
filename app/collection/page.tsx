@@ -15,7 +15,7 @@ import { LIMITS } from "@/types";
 import { isTestMode, getTestUser } from "@/lib/test-mode";
 import { computeCollectionSummary, getEstCmv } from "@/lib/values";
 import { formatGraderGrade, normalizeCardNumber } from "@/lib/cards/format";
-import { pickCollectionImageUrl } from "@/lib/collection-images";
+import { normalizeHttpUrl, pickCollectionImageUrl, uniqueHttpUrls } from "@/lib/collection-images";
 
 function formatPrice(price: number | null): string {
   if (price === null) return "—";
@@ -529,6 +529,24 @@ export default function CollectionPage() {
           ? cmvData.stats.cmv
           : null;
 
+      const searchPayload =
+        cmvData && typeof cmvData === "object"
+          ? (cmvData as {
+              _forSale?: { items?: Array<{ image?: string | null }> };
+              comps?: Array<{ image?: string | null }>;
+            })
+          : null;
+      const forSaleItems = Array.isArray(searchPayload?._forSale?.items)
+        ? searchPayload?._forSale?.items || []
+        : [];
+      const compsItems = Array.isArray(searchPayload?.comps) ? searchPayload.comps || [] : [];
+
+      const listingImageUrls = uniqueHttpUrls([
+        ...forSaleItems.map((item) => normalizeHttpUrl(item?.image || null)),
+        ...compsItems.map((comp) => normalizeHttpUrl(comp?.image || null)),
+      ]);
+      const bestListingImageUrl = listingImageUrls[0] || null;
+
       const cardData: CardIdentificationResult = {
         player_name: card.player_name,
         year: card.year || undefined,
@@ -536,7 +554,10 @@ export default function CollectionPage() {
         parallel_type: card.variant || undefined,
         card_number: numberLabel || undefined,
         grade: gradeLabel || undefined,
-        imageUrl: "",
+        imageUrl: bestListingImageUrl || "",
+        imageUrls: listingImageUrls.length > 0 ? listingImageUrls : undefined,
+        stockImageUrl: bestListingImageUrl || undefined,
+        ebayImageUrl: bestListingImageUrl || undefined,
         confidence: "high",
       };
 
@@ -606,7 +627,7 @@ export default function CollectionPage() {
             <div className="md:col-span-2">
               <div className="flex items-center gap-2 mb-1">
                 <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                <p className="text-blue-100 text-sm font-medium uppercase tracking-wider">Collection Value (Beta)</p>
+                <p className="text-blue-100 text-sm font-medium uppercase tracking-wider">Estimated Collection Value (Beta)</p>
               </div>
               <p className="text-4xl font-bold tabular-nums">
                 {formatPrice(collectionSummary.totalDisplayValue)}
