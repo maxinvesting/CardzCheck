@@ -944,7 +944,14 @@ export default function CollectionPage() {
           isOpen={showAddModal}
           onClose={() => setShowAddModal(false)}
           onSuccess={(playerName, item) => {
-            setToast({ type: 'success', message: `Added ${playerName} to collection!` });
+            const addedToInventory =
+              item?.item_kind === "inventory" || item?.item_kind === "prospect";
+            setToast({
+              type: "success",
+              message: addedToInventory
+                ? `Added ${playerName} to inventory!`
+                : `Added ${playerName} to collection!`,
+            });
             if (item) {
               setItems((prev) => [item, ...prev]);
             }
@@ -979,8 +986,16 @@ export default function CollectionPage() {
             setPickerCardData(null);
             setPickerInitialCmv(null);
           }}
-          onSuccess={(playerName, item) => {
-            setToast({ type: "success", message: `Added ${playerName} to collection!` });
+          onSuccess={(playerName, item, destination) => {
+            const resolvedDestination =
+              destination ?? (item?.item_kind === "inventory" ? "inventory" : "collection");
+            setToast({
+              type: "success",
+              message:
+                resolvedDestination === "inventory"
+                  ? `Added ${playerName} to inventory!`
+                  : `Added ${playerName} to collection!`,
+            });
             if (item) {
               setItems((prev) => [item, ...prev]);
             }

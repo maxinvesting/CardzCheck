@@ -14,7 +14,11 @@ import {
 interface ConfirmAddCardModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (playerName: string, item?: CollectionItem) => void;
+  onSuccess: (
+    playerName: string,
+    item?: CollectionItem,
+    destination?: "collection" | "inventory"
+  ) => void;
   onLimitReached: () => void;
   cardData: CardIdentificationResult | null;
   /** Pre-computed CMV from the Comps search results. Forwarded to the collection insert. */
@@ -228,7 +232,12 @@ export default function ConfirmAddCardModal({
         throw new Error(data.error || "Failed to add card");
       }
 
-      onSuccess(cardData.player_name, data.item ?? undefined);
+      const destination =
+        data && typeof data === "object" && "destination" in data
+          ? (data.destination as "collection" | "inventory")
+          : "collection";
+
+      onSuccess(cardData.player_name, data.item ?? undefined, destination);
       resetForm();
       onClose();
     } catch (err) {

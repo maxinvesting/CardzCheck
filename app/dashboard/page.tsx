@@ -68,14 +68,10 @@ export default function DashboardPage() {
         setUser(userData as User);
       }
 
-      const { data: items } = await supabase
-        .from("collection_items")
-        .select("*")
-        .eq("user_id", authUser.id)
-        .order("created_at", { ascending: false });
-
-      if (items) {
-        setCollectionItems(items as CollectionItem[]);
+      const response = await fetch("/api/collection", { cache: "no-store" });
+      const data = await response.json();
+      if (data.items) {
+        setCollectionItems(data.items as CollectionItem[]);
       }
 
       setLoading(false);
@@ -173,9 +169,13 @@ export default function DashboardPage() {
           isOpen={showAddModal}
           onClose={() => setShowAddModal(false)}
           onSuccess={(playerName, item) => {
+            const addedToInventory =
+              item?.item_kind === "inventory" || item?.item_kind === "prospect";
             setToast({
               type: "success",
-              message: `Added ${playerName} to collection!`,
+              message: addedToInventory
+                ? `Added ${playerName} to inventory!`
+                : `Added ${playerName} to collection!`,
             });
             if (isTestMode() && item) {
               setCollectionItems((prev) => [item, ...prev]);

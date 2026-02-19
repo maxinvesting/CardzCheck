@@ -1,19 +1,19 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import SportsCardBackground from "@/components/SportsCardBackground";
+import { hasActiveBusinessTier } from "@/lib/subscription-tier";
 
 function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const redirect = searchParams.get("redirect") || "/comps";
+  const redirectParam = searchParams.get("redirect");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,11 +36,25 @@ function LoginForm() {
 
     // Ensure we have a session before redirecting
     if (data.session) {
+      let redirectTarget = redirectParam || "/comps";
+
+      if (!redirectParam && data.user) {
+        const { data: sub } = await supabase
+          .from("subscriptions")
+          .select("tier, status, current_period_end")
+          .eq("user_id", data.user.id)
+          .maybeSingle();
+
+        if (hasActiveBusinessTier(sub)) {
+          redirectTarget = "/business";
+        }
+      }
+
       // Small delay to ensure cookies are written
       setTimeout(() => {
-        console.log("Redirecting to:", redirect);
+        console.log("Redirecting to:", redirectTarget);
         // Force a hard navigation to ensure cookies are set
-        window.location.href = redirect;
+        window.location.href = redirectTarget;
       }, 100);
     } else {
       setError("Login successful but session not created. Please try again.");

@@ -5,6 +5,7 @@ import { isTestMode } from "@/lib/test-mode";
 import { calculateCardCmv, isCmvStale } from "@/lib/cmv";
 import { logDebug, redactId } from "@/lib/logging";
 import { normalizeHttpUrl, resolveStoredImagePath, uniqueHttpUrls } from "@/lib/collection-images";
+import { hasBusinessAccess } from "@/lib/access";
 
 const ACQUISITION_TYPES: readonly AcquisitionType[] = [
   "pulled",
@@ -62,6 +63,22 @@ function extractMissingColumn(error: unknown): string | null {
   return null;
 }
 
+const COLLECTION_VISIBLE_ITEM_KIND_FILTER =
+  "item_kind.is.null,item_kind.eq.owned,item_kind.eq.inventory";
+
+function deriveBusinessTitle(input: {
+  player_name?: string | null;
+  year?: string | null;
+  set_name?: string | null;
+  grade?: string | null;
+}): string {
+  const display = [input.year, input.player_name, input.set_name, input.grade]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+  return display || input.player_name || "Untitled card";
+}
+
 async function insertCollectionItemWithFallback(
   supabase: Awaited<ReturnType<typeof createClient>>,
   insertPayload: Record<string, unknown>
@@ -116,6 +133,7 @@ export async function GET() {
       .from("collection_items")
       .select("*")
       .eq("user_id", user.id)
+      .or(COLLECTION_VISIBLE_ITEM_KIND_FILTER)
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -252,10 +270,13 @@ export async function POST(request: NextRequest) {
       .eq("id", user.id)
       .single();
 
+    const isBusinessUser = await hasBusinessAccess(user.id);
+
     const { count } = await supabase
       .from("collection_items")
       .select("*", { count: "exact", head: true })
-      .eq("user_id", user.id);
+      .eq("user_id", user.id)
+      .or(COLLECTION_VISIBLE_ITEM_KIND_FILTER);
 
     if (!userData?.is_paid && (count || 0) >= LIMITS.FREE_COLLECTION) {
       return NextResponse.json(
@@ -381,7 +402,11 @@ export async function POST(request: NextRequest) {
 
     const insertPayload = {
       user_id: user.id,
+      item_kind: isBusinessUser ? "inventory" : "owned",
       player_name,
+      title: isBusinessUser
+        ? deriveBusinessTitle({ player_name, year: year || null, set_name: set_name || null, grade: grade || null })
+        : null,
       year: year || null,
       set_name: set_name || null,
       parallel_type: parallel_type || null,
@@ -395,6 +420,22 @@ export async function POST(request: NextRequest) {
       stock_image_url: normalizedStockImageUrl,
       ebay_image_url: normalizedEbayImageUrl,
       notes: combinedNotes,
+      quantity: isBusinessUser ? 1 : undefined,
+      acquisition_date: isBusinessUser ? normalizedPurchaseDate : undefined,
+      cost_basis_total_cents:
+        isBusinessUser && normalizedPurchasePrice !== null
+          ? Math.round(normalizedPurchasePrice * 100)
+          : undefined,
+      tax_cents: isBusinessUser ? 0 : undefined,
+      shipping_cents: isBusinessUser ? 0 : undefined,
+      fees_paid_cents: isBusinessUser ? 0 : undefined,
+      condition_status: isBusinessUser ? (grade ? "graded" : "raw") : undefined,
+      channel: isBusinessUser ? "other" : undefined,
+      status: isBusinessUser ? "unlisted" : undefined,
+      current_market_value_cents:
+        isBusinessUser && incomingCmv !== null
+          ? Math.round(incomingCmv * 100)
+          : undefined,
       ...cmvPayload,
     };
 
@@ -467,7 +508,10 @@ export async function POST(request: NextRequest) {
       userId: redactId(user.id),
       itemId: redactId(item.id),
     });
-    return NextResponse.json({ item });
+    return NextResponse.json({
+      item,
+      destination: isBusinessUser ? "inventory" : "collection",
+    });
   } catch (error) {
     console.error("❌ Collection add error:", error);
     const errorMessage = getErrorMessage(error, "Failed to add to collection");

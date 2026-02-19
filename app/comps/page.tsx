@@ -965,8 +965,16 @@ function CompsPageContent() {
       <ConfirmAddCardModal
         isOpen={showConfirmModal}
         onClose={() => setShowConfirmModal(false)}
-        onSuccess={(playerName) => {
-          setToast({ type: 'success', message: `Added ${playerName} to collection!` });
+        onSuccess={(playerName, item, destination) => {
+          const resolvedDestination =
+            destination ?? (item?.item_kind === "inventory" ? "inventory" : "collection");
+          setToast({
+            type: 'success',
+            message:
+              resolvedDestination === "inventory"
+                ? `Added ${playerName} to inventory!`
+                : `Added ${playerName} to collection!`,
+          });
           setShowConfirmModal(false);
           setIdentifiedCard(null); // Clear after adding
         }}

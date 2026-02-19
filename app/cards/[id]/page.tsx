@@ -5,6 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import { CollectionItem, CardImage } from "@/types";
 import CardImageGallery from "@/components/CardImageGallery";
 import CardDetailsForm from "@/components/CardDetailsForm";
+import { createClient } from "@/lib/supabase/client";
+import { hasActiveBusinessTier } from "@/lib/subscription-tier";
 
 export default function CardProfilePage() {
   const params = useParams();
@@ -16,10 +18,33 @@ export default function CardProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isBusinessUser, setIsBusinessUser] = useState(false);
+  const [promotingToInventory, setPromotingToInventory] = useState(false);
 
   useEffect(() => {
     fetchCard();
+    loadAccess();
   }, [cardId]);
+
+  const loadAccess = async () => {
+    try {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: subscription } = await supabase
+        .from("subscriptions")
+        .select("tier, status, current_period_end")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      setIsBusinessUser(hasActiveBusinessTier(subscription));
+    } catch {
+      setIsBusinessUser(false);
+    }
+  };
 
   const fetchCard = async () => {
     try {
@@ -95,6 +120,40 @@ export default function CardProfilePage() {
     }
   };
 
+  const handlePromoteToInventory = async () => {
+    if (!card || promotingToInventory) return;
+    setPromotingToInventory(true);
+    try {
+      const response = await fetch("/api/collection", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: card.id,
+          item_kind: "inventory",
+          title: card.title || [card.year, card.player_name, card.set_name, card.grade].filter(Boolean).join(" "),
+          quantity: card.quantity ?? 1,
+          status: card.status || "unlisted",
+          channel: card.channel || "other",
+          condition_status: card.condition_status || (card.grade ? "graded" : "raw"),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to add card to inventory");
+      }
+
+      const data = await response.json();
+      if (data?.item) {
+        setCard(data.item);
+      }
+    } catch (err) {
+      console.error("Error promoting card to inventory:", err);
+      alert("Failed to add to inventory. Please try again.");
+    } finally {
+      setPromotingToInventory(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
@@ -150,10 +209,10 @@ export default function CardProfilePage() {
               {error || "Card not found"}
             </h2>
             <button
-              onClick={() => router.push("/collection")}
+              onClick={() => router.push(isBusinessUser ? "/business" : "/collection")}
               className="mt-4 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
             >
-              Back to Collection
+              {isBusinessUser ? "Back to Business" : "Back to Collection"}
             </button>
           </div>
         </div>
@@ -167,7 +226,7 @@ export default function CardProfilePage() {
         {/* Header */}
         <div className="mb-6">
           <button
-            onClick={() => router.push("/collection")}
+            onClick={() => router.push(isBusinessUser ? "/business" : "/collection")}
             className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors mb-4"
           >
             <svg
@@ -183,8 +242,17 @@ export default function CardProfilePage() {
                 d="M15 19l-7-7 7-7"
               />
             </svg>
-            Back to Collection
+            {isBusinessUser ? "Back to Business" : "Back to Collection"}
           </button>
+          {isBusinessUser && card.item_kind !== "inventory" && (
+            <button
+              onClick={handlePromoteToInventory}
+              disabled={promotingToInventory}
+              className="mb-4 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white rounded-lg text-sm font-medium transition-colors"
+            >
+              {promotingToInventory ? "Adding to Inventory..." : "Add to Inventory"}
+            </button>
+          )}
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
             {card.player_name}
             {card.year && ` (${card.year})`}

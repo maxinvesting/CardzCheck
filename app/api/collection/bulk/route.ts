@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { LIMITS } from "@/types";
 import { isTestMode } from "@/lib/test-mode";
 import { calculateCardCmv } from "@/lib/cmv";
+import { hasBusinessAccess } from "@/lib/access";
 
 type BulkCollectionItemInput = {
   player_name: string;
@@ -18,6 +19,76 @@ type BulkCollectionItemInput = {
   ebay_image_url?: string | null;
   notes?: string | null;
 };
+
+const COLLECTION_VISIBLE_ITEM_KIND_FILTER =
+  "item_kind.is.null,item_kind.eq.owned,item_kind.eq.inventory";
+
+function deriveBusinessTitle(item: BulkCollectionItemInput): string {
+  const display = [item.year, item.player_name, item.set_name, item.grade]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+  return display || item.player_name.trim() || "Untitled card";
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) return error.message;
+  if (error && typeof error === "object") {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim().length > 0) return message;
+  }
+  return fallback;
+}
+
+function extractMissingColumn(error: unknown): string | null {
+  const message = getErrorMessage(error, "");
+  if (!message) return null;
+
+  const quoted = message.match(/Could not find the '([^']+)' column/i);
+  if (quoted?.[1]) return quoted[1];
+
+  const postgres = message.match(/column \"([^\"]+)\" of relation/i);
+  if (postgres?.[1]) return postgres[1];
+
+  return null;
+}
+
+async function insertBulkWithFallback(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  rows: Record<string, unknown>[]
+): Promise<{ items: any[] | null; error: unknown | null; removedColumns: string[] }> {
+  let payload = rows.map((row) => ({ ...row }));
+  const removedColumns: string[] = [];
+
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const { data, error } = await supabase
+      .from("collection_items")
+      .insert(payload)
+      .select("*");
+
+    if (!error) {
+      return { items: data ?? [], error: null, removedColumns };
+    }
+
+    const missingColumn = extractMissingColumn(error);
+    if (!missingColumn) {
+      return { items: null, error, removedColumns };
+    }
+
+    payload = payload.map((row) => {
+      const next = { ...row };
+      delete next[missingColumn];
+      return next;
+    });
+    removedColumns.push(missingColumn);
+  }
+
+  return {
+    items: null,
+    error: new Error("Bulk insert failed after retrying schema fallback"),
+    removedColumns,
+  };
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -88,7 +159,8 @@ export async function POST(request: NextRequest) {
     const { count } = await supabase
       .from("collection_items")
       .select("*", { count: "exact", head: true })
-      .eq("user_id", user.id);
+      .eq("user_id", user.id)
+      .or(COLLECTION_VISIBLE_ITEM_KIND_FILTER);
 
     const currentCount = count || 0;
     if (!userData?.is_paid && currentCount + items.length > LIMITS.FREE_COLLECTION) {
@@ -98,30 +170,52 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const insertPayload = items.map((it) => ({
-      user_id: user.id,
-      player_name: it.player_name.trim(),
-      year: it.year || null,
-      set_name: it.set_name || null,
-      grade: it.grade || null,
-      acquisition_type: it.acquisition_type || "unknown",
-      purchase_price: it.purchase_price ?? null,
-      purchase_date: it.purchase_date || null,
-      image_url: it.image_url || null,
-      user_image_url: it.user_image_url || null,
-      stock_image_url: it.stock_image_url || null,
-      ebay_image_url: it.ebay_image_url || null,
-      notes: it.notes || null,
-    }));
+    const isBusinessUser = await hasBusinessAccess(user.id);
 
-    const { data: insertedItems, error } = await supabase
-      .from("collection_items")
-      .insert(insertPayload)
-      .select("*");
+    const insertPayload = items.map((it) => {
+      const normalizedPrice =
+        typeof it.purchase_price === "number" && Number.isFinite(it.purchase_price)
+          ? it.purchase_price
+          : null;
+      return {
+        user_id: user.id,
+        item_kind: isBusinessUser ? "inventory" : "owned",
+        title: isBusinessUser ? deriveBusinessTitle(it) : null,
+        player_name: it.player_name.trim(),
+        year: it.year || null,
+        set_name: it.set_name || null,
+        grade: it.grade || null,
+        acquisition_type: it.acquisition_type || "unknown",
+        purchase_price: normalizedPrice,
+        purchase_date: it.purchase_date || null,
+        image_url: it.image_url || null,
+        user_image_url: it.user_image_url || null,
+        stock_image_url: it.stock_image_url || null,
+        ebay_image_url: it.ebay_image_url || null,
+        notes: it.notes || null,
+        quantity: isBusinessUser ? 1 : undefined,
+        acquisition_date: isBusinessUser ? it.purchase_date || null : undefined,
+        cost_basis_total_cents:
+          isBusinessUser && normalizedPrice !== null
+            ? Math.round(normalizedPrice * 100)
+            : undefined,
+        tax_cents: isBusinessUser ? 0 : undefined,
+        shipping_cents: isBusinessUser ? 0 : undefined,
+        fees_paid_cents: isBusinessUser ? 0 : undefined,
+        condition_status: isBusinessUser ? (it.grade ? "graded" : "raw") : undefined,
+        channel: isBusinessUser ? "other" : undefined,
+        status: isBusinessUser ? "unlisted" : undefined,
+      };
+    });
 
-    if (error) {
-      throw error;
-    }
+    const insertResult = await insertBulkWithFallback(
+      supabase,
+      insertPayload as Record<string, unknown>[]
+    );
+    const insertedItems = insertResult.items;
+    const error = insertResult.error;
+
+    if (error || !insertedItems) throw error;
 
     if (insertedItems && insertedItems.length > 0) {
       for (const item of insertedItems) {

@@ -118,6 +118,8 @@ export interface WatchlistItem {
 export interface CollectionItem {
   id: string;
   user_id: string;
+  item_kind?: "owned" | "watch" | "inventory" | "prospect" | null;
+  title?: string | null;
   player_name: string; // Primary player (for backward compatibility)
   players?: string[] | null; // All players (for multi-player cards) - stored as JSON array in DB
   year: string | null;
@@ -136,6 +138,18 @@ export interface CollectionItem {
   stock_image_url?: string | null;
   ebay_image_url?: string | null;
   notes: string | null;
+  quantity?: number | null;
+  acquisition_date?: string | null;
+  cost_basis_total_cents?: number | null;
+  tax_cents?: number | null;
+  shipping_cents?: number | null;
+  fees_paid_cents?: number | null;
+  condition_status?: "raw" | "graded" | null;
+  channel?: "ebay" | "whatnot" | "instagram" | "show" | "local" | "other" | null;
+  status?: "unlisted" | "listed" | "pending_sale" | "sold" | "returned" | null;
+  list_price_cents?: number | null;
+  current_market_value_cents?: number | null;
+  target_price?: number | null;
   estimated_cmv: number | null;
   cmv_confidence: CmvConfidence;
   cmv_last_updated: string | null;
@@ -478,7 +492,16 @@ export interface CardIdentificationResult extends SearchFormData {
   // gradeEstimate removed - only available via explicit grade-estimate API
 }
 
-export type AcquisitionType = "pulled" | "bought" | "trade" | "gift" | "unknown";
+export type AcquisitionType =
+  | "pulled"
+  | "bought"
+  | "trade"
+  | "gift"
+  | "unknown"
+  | "buy"
+  | "rip"
+  | "consignment"
+  | "other";
 
 // Condition options for the add to collection modal
 export const CONDITION_OPTIONS = [

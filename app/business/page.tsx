@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import BusinessPaywall from "@/components/business/BusinessPaywall";
@@ -14,6 +14,7 @@ import type { BusinessInventoryItem, BusinessMetrics as MetricsType } from "@/ty
 
 export default function BusinessPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [hasAccess, setHasAccess] = useState<boolean | null>(null);
   const [items, setItems] = useState<BusinessInventoryItem[]>([]);
@@ -29,6 +30,15 @@ export default function BusinessPage() {
       return () => clearTimeout(timer);
     }
   }, [toast]);
+
+  useEffect(() => {
+    if (searchParams.get("notice") === "business_mode") {
+      setToast({
+        type: "success",
+        message: "Business accounts use Inventory/Prospects.",
+      });
+    }
+  }, [searchParams]);
 
   const loadInventory = useCallback(async () => {
     try {

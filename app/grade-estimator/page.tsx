@@ -1057,8 +1057,16 @@ export default function GradeEstimatorPage() {
         <ConfirmAddCardModal
           isOpen={showConfirmModal}
           onClose={() => setShowConfirmModal(false)}
-          onSuccess={(playerName) => {
-            setToast({ type: "success", message: gradingCopy.toast.addedToCollection(playerName) });
+          onSuccess={(playerName, item, destination) => {
+            const resolvedDestination =
+              destination ?? (item?.item_kind === "inventory" ? "inventory" : "collection");
+            setToast({
+              type: "success",
+              message:
+                resolvedDestination === "inventory"
+                  ? `Added ${playerName} to inventory!`
+                  : gradingCopy.toast.addedToCollection(playerName),
+            });
             setShowConfirmModal(false);
             handleReset();
           }}
