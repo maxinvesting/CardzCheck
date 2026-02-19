@@ -7,7 +7,7 @@ import {
   calculatePriceStats,
   filterOutliers,
   isLotOrBundle,
-  titleMatchesPlayer,
+  isJunkListing,
   normalizeSetName,
   INSERT_KEYWORDS,
 } from "./utils";
@@ -70,7 +70,8 @@ async function getAccessToken(): Promise<string> {
 }
 
 /**
- * Search eBay Browse API for active listings
+ * Search eBay Browse API for active listings.
+ * Query is positive terms only; filtering (junk, set, parallel) is post-retrieval.
  */
 export async function searchBrowseAPI(params: EbaySearchParams): Promise<ForSaleData> {
   const query = buildSearchQuery(params);
@@ -117,90 +118,78 @@ export async function searchBrowseAPI(params: EbaySearchParams): Promise<ForSale
 
   const data = await response.json();
   const items: ForSaleItem[] = [];
+  const candidateItems: ForSaleItem[] = [];
   const selectedSet = params.set ? resolveSetTaxonomy(params.set) : null;
+
+  function parseItem(item: (typeof data.itemSummaries)[0]): ForSaleItem | null {
+    const price = parseFloat(item.price?.value || "0");
+    if (price <= 0) return null;
+    let shipping: number | undefined;
+    if (item.shippingOptions?.[0]?.shippingCost?.value) {
+      shipping = parseFloat(item.shippingOptions[0].shippingCost.value);
+    }
+    return {
+      title: item.title || "",
+      price,
+      shipping,
+      condition: item.condition || undefined,
+      url: item.itemWebUrl || "",
+      image: item.image?.imageUrl || item.thumbnailImages?.[0]?.imageUrl || undefined,
+      itemId: item.itemId,
+    };
+  }
 
   if (data.itemSummaries && Array.isArray(data.itemSummaries)) {
     for (const item of data.itemSummaries) {
-      // Skip lots/bundles
-      if (isLotOrBundle(item.title || "")) {
-        continue;
-      }
+      const parsed = parseItem(item);
+      if (!parsed) continue;
+      candidateItems.push(parsed);
 
-      // Verify title matches player (required)
-      // Set and parallel type matching is more lenient to allow variations
+      if (isLotOrBundle(item.title || "")) continue;
+      if (isJunkListing(item.title || "")) continue;
+
       const titleLower = (item.title || "").toLowerCase();
       const nameParts = params.player.toLowerCase().split(/\s+/);
-      const playerMatches = nameParts.every(part => titleLower.includes(part));
-      
-      if (!playerMatches) {
-        continue;
-      }
+      const playerMatches = nameParts.every((part) => titleLower.includes(part));
+      if (!playerMatches) continue;
 
-      // Set matching - enforce hard product-line separation via taxonomy
       if (params.set) {
         if (selectedSet) {
           const classified = classifyListingSet(titleLower);
-          if (classified && classified.slug !== selectedSet.slug) {
-            continue;
-          }
-          if (!classified && !matchesSelectedSet(titleLower, selectedSet)) {
-            continue;
-          }
+          if (classified && classified.slug !== selectedSet.slug) continue;
+          if (!classified && !matchesSelectedSet(titleLower, selectedSet)) continue;
         } else {
           const normalizedSet = normalizeSetName(params.set);
           const setTokens = normalizedSet.split(/\s+/).filter(Boolean);
           if (setTokens.length > 0) {
-            const matchesAllTokens = setTokens.every((token) => titleLower.includes(token));
-            if (!matchesAllTokens) continue;
-          } else {
-            const setLower = params.set.toLowerCase();
-            if (!titleLower.includes(setLower)) continue;
+            if (!setTokens.every((t) => titleLower.includes(t))) continue;
+          } else if (!titleLower.includes(params.set.toLowerCase())) {
+            continue;
           }
         }
       }
 
-      // Parallel type matching - strict when user selected a parallel
       if (params.parallelType) {
         const parallelLower = params.parallelType.toLowerCase();
-        if (hasDisallowedInsert(titleLower, parallelLower)) {
-          continue;
-        }
-        if (!matchesParallelStrict(titleLower, parallelLower)) {
-          continue;
-        }
+        if (hasDisallowedInsert(titleLower, parallelLower)) continue;
+        if (!matchesParallelStrict(titleLower, parallelLower)) continue;
       }
 
-      // NOTE: Card number and grade constraints are applied in listingTitleFilterAndRank
-      // (post-processing) rather than here. Applying them here is too aggressive —
-      // it can eliminate all items from the API response, leaving 0 for post-processing.
-
-      const price = parseFloat(item.price?.value || "0");
-      if (price <= 0) continue;
-
-      // Get shipping cost if available
-      let shipping: number | undefined;
-      if (item.shippingOptions?.[0]?.shippingCost?.value) {
-        shipping = parseFloat(item.shippingOptions[0].shippingCost.value);
-      }
-
-      items.push({
-        title: item.title || "",
-        price,
-        shipping,
-        condition: item.condition || undefined,
-        url: item.itemWebUrl || "",
-        image: item.image?.imageUrl || item.thumbnailImages?.[0]?.imageUrl || undefined,
-        itemId: item.itemId,
-      });
+      items.push(parsed);
     }
   }
 
   if (LISTING_DEBUG) {
-    console.log(`✅ Browse API: ${items.length} valid after filtering (from ${data.itemSummaries?.length ?? 0} raw)`);
+    console.log(`✅ Browse API: ${items.length} valid (from ${data.itemSummaries?.length ?? 0} raw)`);
+  }
+
+  const finalItems = items.length > 0 ? items : candidateItems;
+  if (LISTING_DEBUG && items.length === 0 && candidateItems.length > 0) {
+    console.log("⚠️ Browse API: strict filtering removed all matches; returning raw eBay candidates.");
   }
 
   const maxItems = params.limit ?? 20;
-  const limited = items.slice(0, maxItems);
+  const limited = finalItems.slice(0, maxItems);
   const prices = filterOutliers(limited.map(i => i.price));
   const stats = calculatePriceStats(prices);
 
@@ -225,67 +214,70 @@ export interface MultiPassResult extends ForSaleData {
 
 /**
  * Search with multi-pass fallback strategies
- * PASS 1 (STRICT CORE): Player + Set + Grader + Grade (optional: year)
- * PASS 2 (BROAD RECALL): Remove year, add synonym expansion, no negative keywords
- * PASS 3 (MINIMAL BACKSTOP): Player + Set + Grader + Grade only
+ * PASS 1 (STRICT CORE): Player + Year + Set + Parallel (+ optional grade/card#)
+ * PASS 2 (BROAD RECALL): Drop parallel + card#
+ * PASS 3 (MINIMAL BACKSTOP): Drop year
  */
 export async function searchBrowseAPIWithFallbacks(params: EbaySearchParams): Promise<MultiPassResult> {
-  const MIN_RESULTS = 3;
   const isDevMode = process.env.NODE_ENV === "development";
   let passCount = 0;
 
-  // PASS 1: STRICT CORE
-  // Required: player, set, grader+grade
-  // Optional: year
-  // NO negative keywords (handled in post-processing instead)
+  // PASS 1: player + year + set + simplified parallel + optional grade (+ card number if provided)
   passCount++;
   if (isDevMode) {
-    console.log("🔍 PASS 1 (STRICT CORE): Full search with all user-provided fields");
+    console.log("🔍 PASS 1 (STRICT CORE): player + year + set + parallel (+grade/card#)");
   }
+  const pass1Params: EbaySearchParams = {
+    player: params.player,
+    year: params.year,
+    set: params.set,
+    parallelType: simplifyParallelType(params.parallelType),
+    grade: params.grade,
+    cardNumber: params.cardNumber,
+    limit: params.limit,
+  };
+  let result = await searchBrowseAPI(pass1Params);
 
-  let result = await searchBrowseAPI(params);
-
-  if (result.count >= MIN_RESULTS) {
+  if (result.count > 0) {
     if (isDevMode) {
       console.log(`✅ PASS 1 succeeded with ${result.count} results`);
     }
     return { ...result, passUsed: "strict", totalPasses: passCount };
   }
 
-  // PASS 2: BROAD RECALL (if results < MIN_RESULTS)
-  // Remove year constraint, keep other fields
+  // PASS 2: drop parallel and card#
   passCount++;
   if (isDevMode) {
-    console.log(`⚠️ PASS 1 returned ${result.count} results (< ${MIN_RESULTS}), trying PASS 2 (BROAD RECALL)...`);
+    console.log("⚠️ PASS 1 returned 0 results, trying PASS 2 (drop parallel + card#)...");
   }
-
-  const pass2Params = { ...params };
-  delete pass2Params.year; // Remove year for broader recall
+  const pass2Params: EbaySearchParams = {
+    player: params.player,
+    year: params.year,
+    set: params.set,
+    grade: params.grade,
+    limit: params.limit,
+  };
 
   const pass2Result = await searchBrowseAPI(pass2Params);
 
-  if (pass2Result.count >= MIN_RESULTS) {
+  if (pass2Result.count > 0) {
     if (isDevMode) {
       console.log(`✅ PASS 2 succeeded with ${pass2Result.count} results`);
     }
     return { ...pass2Result, passUsed: "broad", totalPasses: passCount };
   }
 
-  // PASS 3: MINIMAL BACKSTOP (if still low)
-  // Query: player + set + grade + parallelType (if any)
-  // Parallel type is preserved because it fundamentally changes card identity & price
-  // (e.g. Silver Prizm ~$110 vs Base Prizm ~$16)
+  // PASS 3: drop year as final broadening step
   passCount++;
   if (isDevMode) {
-    console.log(`⚠️ PASS 2 returned ${pass2Result.count} results, trying PASS 3 (MINIMAL BACKSTOP)...`);
+    console.log("⚠️ PASS 2 returned 0 results, trying PASS 3 (drop year)...");
   }
 
   const pass3Params: EbaySearchParams = {
     player: params.player,
     set: params.set,
     grade: params.grade,
-    parallelType: params.parallelType,
-    cardNumber: params.cardNumber,
+    limit: params.limit,
   };
 
   const pass3Result = await searchBrowseAPI(pass3Params);
@@ -298,23 +290,10 @@ export async function searchBrowseAPIWithFallbacks(params: EbaySearchParams): Pr
     }
   }
 
-  // Strict cascade: prefer tighter passes that meet threshold, fall back to broader
-  let bestResult = result;
-  let passLabel: "strict" | "broad" | "minimal" = "strict";
-
-  if (result.count >= MIN_RESULTS) {
-    bestResult = result; passLabel = "strict";
-  } else if (pass2Result.count >= MIN_RESULTS) {
-    bestResult = pass2Result; passLabel = "broad";
-  } else if (pass3Result.count > 0) {
-    bestResult = pass3Result; passLabel = "minimal";
-  } else if (pass2Result.count > 0) {
-    bestResult = pass2Result; passLabel = "broad";
-  } else {
-    bestResult = result; passLabel = "strict";
+  if (pass3Result.count > 0) {
+    return { ...pass3Result, passUsed: "minimal", totalPasses: passCount };
   }
-
-  return { ...bestResult, passUsed: passLabel, totalPasses: passCount };
+  return { ...result, passUsed: "strict", totalPasses: passCount };
 }
 
 // INSERT_KEYWORDS imported from ./utils (single source of truth)
@@ -325,6 +304,14 @@ function hasDisallowedInsert(titleLower: string, parallelLower: string): boolean
   );
   if (parallelAllowsInsert) return false;
   return INSERT_KEYWORDS.some((keyword) => titleLower.includes(keyword));
+}
+
+function simplifyParallelType(parallelType?: string): string | undefined {
+  if (!parallelType) return undefined;
+  return parallelType
+    .replace(/[^\w\s/.-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 /**

@@ -203,8 +203,9 @@ function CompsPageContent() {
           setShowPaywall(true);
           return;
         }
-        if (result.error === "ebay_blocked") {
+        if (result.error === "ebay_connection_error") {
           setFallbackUrl(result.fallback_url || null);
+          throw new Error("eBay connection error");
         }
         throw new Error(result.message || result.error || "Search failed");
       }
@@ -254,7 +255,12 @@ function CompsPageContent() {
         });
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Search failed");
+      const message = err instanceof Error ? err.message : "Search failed";
+      if (message.toLowerCase().includes("ebay connection error")) {
+        setError("eBay connection error");
+      } else {
+        setError(message);
+      }
     } finally {
       setLoading(false);
     }
@@ -487,7 +493,12 @@ function CompsPageContent() {
       <main className="max-w-5xl mx-auto px-4 py-8">
         {/* Page Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">Comps</h1>
+          <div className="flex items-center gap-2 mb-2">
+            <h1 className="text-3xl font-bold text-white">Comps</h1>
+            <span className="px-2 py-0.5 bg-amber-500/20 text-amber-400 text-xs font-medium rounded">
+              Beta
+            </span>
+          </div>
           <p className="text-gray-400">
             Find comparable sales and market values for any sports card
           </p>
@@ -728,8 +739,17 @@ function CompsPageContent() {
         {error && (
           <div className="mb-8 p-4 bg-red-900/20 border border-red-800 rounded-xl">
             <p className="text-red-400">{error}</p>
-            {fallbackUrl && (
-              <div className="mt-3">
+            <div className="mt-3 flex flex-wrap gap-3">
+              {formData && (
+                <button
+                  type="button"
+                  onClick={() => handleSearch(formData)}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-red-600/20 border border-red-500 text-red-200 rounded-lg hover:bg-red-600/30"
+                >
+                  Retry
+                </button>
+              )}
+              {fallbackUrl && (
                 <a
                   href={fallbackUrl}
                   target="_blank"
@@ -738,8 +758,8 @@ function CompsPageContent() {
                 >
                   Open results on eBay
                 </a>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         )}
 

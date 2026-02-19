@@ -586,14 +586,14 @@ export default function CollectionPage() {
             <div className="md:col-span-2">
               <div className="flex items-center gap-2 mb-1">
                 <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                <p className="text-blue-100 text-sm font-medium uppercase tracking-wider">Collection Value</p>
+                <p className="text-blue-100 text-sm font-medium uppercase tracking-wider">Collection Value (Beta)</p>
               </div>
               <p className="text-4xl font-bold tabular-nums">
                 {formatPrice(collectionSummary.totalDisplayValue)}
               </p>
               {collectionSummary.cardsWithCmv === 0 && collectionSummary.cardCount > 0 && (
                 <p className="text-xs text-blue-100/80 mt-1">
-                  Collection value is estimated CMV only. Add comps to get values.
+                  Collection value is estimated CMV (Beta) only. Add comps (Beta) to get values.
                 </p>
               )}
               <p className="text-blue-100 text-sm mt-2">{collectionCount} cards in collection</p>
@@ -636,7 +636,7 @@ export default function CollectionPage() {
                 <div className="space-y-1">
                   <p className="text-2xl font-bold tabular-nums text-blue-100">—</p>
                   <p className="text-xs text-blue-100/80">
-                    Market value unavailable for cost-basis comparison.
+                    Market value (Beta) unavailable for cost-basis comparison.
                   </p>
                 </div>
               )}
@@ -720,7 +720,7 @@ export default function CollectionPage() {
                 </div>
               ) : (
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                  CMV unavailable. Add comps to calculate top values.
+                  CMV (Beta) unavailable. Add comps (Beta) to calculate top values.
                 </p>
               )}
             </div>
@@ -761,7 +761,7 @@ export default function CollectionPage() {
                               {estCmv != null && estCmv > 0 ? (
                                 <>
                                   <span className="font-medium">
-                                    CMV: {formatPrice(estCmv)}
+                                    CMV (Beta): {formatPrice(estCmv)}
                                   </span>
                                   {item.purchase_price != null && (
                                     <span className="ml-1 text-[11px] text-gray-400">
@@ -775,7 +775,7 @@ export default function CollectionPage() {
                                     Value: {formatPrice(item.purchase_price)}
                                   </span>
                                   <span className="ml-1 text-[11px] text-gray-400">
-                                    Market value unavailable
+                                    Market value (Beta) unavailable
                                   </span>
                                 </>
                               ) : (

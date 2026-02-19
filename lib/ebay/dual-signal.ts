@@ -35,8 +35,11 @@ export interface EbayPricingResponse {
   forSale: ForSaleData;
   estimatedSaleRange: PriceEstimateResult;
   disclaimers: string[];
-  passUsed?: "strict" | "broad" | "minimal"; // Which search pass succeeded
-  totalPasses?: number; // How many passes were attempted
+  passUsed?: "strict" | "broad" | "minimal";
+  totalPasses?: number;
+  /** Set when no listings are available after pass cascade or on API/env failures. */
+  status?: "failed";
+  reason?: string;
 }
 
 // ============================================================================
@@ -86,6 +89,7 @@ export async function searchEbayDualSignal(params: EbaySearchParams): Promise<Eb
   let forSale: MultiPassResult;
   let passUsed: "strict" | "broad" | "minimal" | undefined;
   let totalPasses: number | undefined;
+  let browseApiFailed = false;
 
   const cachedForSale = getCachedForSale(params);
   if (cachedForSale) {
@@ -102,6 +106,7 @@ export async function searchEbayDualSignal(params: EbaySearchParams): Promise<Eb
     } catch (error) {
       console.error("❌ Browse API failed:", error);
       recordError("browse_api", error instanceof Response ? error.status : undefined);
+      browseApiFailed = true;
 
       // Return minimal response if API fails
       forSale = {
@@ -116,7 +121,12 @@ export async function searchEbayDualSignal(params: EbaySearchParams): Promise<Eb
   }
 
   // --- STEP 2: Filter + rank listings before CMV ---
+  const rawForSale = forSale;
   forSale = listingTitleFilterAndRank(forSale, params);
+  if (!browseApiFailed && forSale.count === 0 && rawForSale.count > 0) {
+    // Never hide candidate eBay listings when Browse API returned items.
+    forSale = rawForSale;
+  }
 
   const estimateParams: EstimateParams = {
     playerName: params.player,
@@ -136,7 +146,7 @@ export async function searchEbayDualSignal(params: EbaySearchParams): Promise<Eb
   // --- STEP 3: Generate disclaimers ---
   const disclaimers = generateDisclaimers(forSale, estimatedSaleRange);
 
-  return {
+  const response: EbayPricingResponse = {
     query,
     normalizedQuery,
     forSale,
@@ -145,6 +155,16 @@ export async function searchEbayDualSignal(params: EbaySearchParams): Promise<Eb
     passUsed,
     totalPasses,
   };
+  if (browseApiFailed) {
+    response.status = "failed";
+    response.reason = "api_error";
+    return response;
+  }
+  if (forSale.count === 0) {
+    response.status = "failed";
+    response.reason = "no_valid_listings";
+  }
+  return response;
 }
 
 const LISTING_DEBUG = process.env.NODE_ENV === "development";

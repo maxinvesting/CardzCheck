@@ -116,6 +116,7 @@ export default function Sidebar() {
     {
       name: "Comps",
       href: "/comps",
+      badge: "Beta",
       icon: (
         <svg
           className="w-5 h-5"

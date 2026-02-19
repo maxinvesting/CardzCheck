@@ -139,20 +139,20 @@ function CardItem({ item, onDelete }: CardItemProps) {
             </span>
           </div>
           <div className="flex justify-between text-sm">
-            <span className="text-gray-500 dark:text-gray-400">CMV</span>
+            <span className="text-gray-500 dark:text-gray-400">CMV (Beta)</span>
             <span className="font-medium text-gray-900 dark:text-white">
               {cmv !== null
                 ? formatCurrency(cmv)
                 : isRecentlyAdded && item.cmv_confidence !== "unavailable"
                 ? "Calculating..."
-                : "CMV unavailable"}
+                : "CMV (Beta) unavailable"}
             </span>
           </div>
           {cmv === null && (
             <p className="text-xs text-gray-400 dark:text-gray-500">
               {isRecentlyAdded && item.cmv_confidence !== "unavailable"
                 ? "Market value is being calculated"
-                : "Add comps to calculate value"}
+                : "Add comps (Beta) to calculate value"}
             </p>
           )}
           {gainLoss && (

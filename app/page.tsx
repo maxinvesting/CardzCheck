@@ -128,11 +128,14 @@ export default function Home() {
                   />
                 </svg>
               </div>
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2 flex items-center justify-center gap-2">
                 Real-Time Comps
+                <span className="px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-xs font-medium rounded">
+                  Beta
+                </span>
               </h3>
               <p className="text-gray-600 dark:text-gray-400">
-                See actual eBay sold prices. Get the CMV (Current Market Value) based on recent sales.
+                See actual eBay sold prices. Get the CMV (Current Market Value) (Beta) based on recent sales.
               </p>
             </div>
 
@@ -261,7 +264,7 @@ export default function Home() {
                 CardzCheck
               </span>
             </div>
-            <p className="text-gray-400">Sports Card Price Comps + Collection Tracker</p>
+            <p className="text-gray-400">Sports Card Price Comps (Beta) + Collection Tracker</p>
             <p className="mt-2 text-gray-500">
               Data sourced from eBay sold listings.
             </p>

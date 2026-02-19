@@ -136,7 +136,7 @@ export default function RecentSearchesList() {
                     <>
                       <span>•</span>
                       <span>
-                        CMV: ${search.cmv.toLocaleString()}
+                        CMV (Beta): ${search.cmv.toLocaleString()}
                       </span>
                     </>
                   )}

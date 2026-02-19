@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { buildSearchQuery, buildSearchUrl } from "@/lib/ebay";
+import { buildSearchQuery } from "@/lib/ebay";
 import { searchEbayDualSignal, buildSoldListingsUrl } from "@/lib/ebay/index";
 import { LIMITS } from "@/types";
 import { isTestMode } from "@/lib/test-mode";
@@ -97,6 +97,37 @@ export async function GET(request: NextRequest) {
     // Get data from eBay
     const result = await searchEbayDualSignal(searchParamsObj);
 
+    if (result.status === "failed" && result.reason === "api_error") {
+      return NextResponse.json(
+        {
+          error: "ebay_connection_error",
+          message: "eBay connection error",
+          fallback_url: buildSoldListingsUrl(searchParamsObj),
+        },
+        { status: 503 }
+      );
+    }
+
+    if (result.status === "failed") {
+      if (useNewFormat) {
+        return NextResponse.json(result);
+      }
+      return NextResponse.json({
+        status: "failed",
+        reason: result.reason ?? "no_valid_listings",
+        query: result.query,
+        forSale: result.forSale,
+        comps: [],
+        stats: {
+          count: 0,
+          cmv: null,
+          avg: 0,
+          low: 0,
+          high: 0,
+        },
+      });
+    }
+
     // New format: Return full pricing response
     if (useNewFormat) {
       logDebug(
@@ -184,18 +215,24 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("Search error:", error);
     const message = error instanceof Error ? error.message : "Unknown error";
-    if (message.toLowerCase().includes("blocked") || message.toLowerCase().includes("rate limit")) {
+    const lowerMessage = message.toLowerCase();
+    if (
+      lowerMessage.includes("blocked") ||
+      lowerMessage.includes("rate limit") ||
+      lowerMessage.includes("ebay_client_id") ||
+      lowerMessage.includes("ebay_client_secret")
+    ) {
       return NextResponse.json(
         {
-          error: "ebay_blocked",
-          message,
+          error: "ebay_connection_error",
+          message: "eBay connection error",
           fallback_url: buildSoldListingsUrl(searchParamsObj),
         },
-        { status: 429 }
+        { status: 503 }
       );
     }
     return NextResponse.json(
-      { error: "Failed to search", message },
+      { error: "ebay_connection_error", message: "eBay connection error" },
       { status: 500 }
     );
   }

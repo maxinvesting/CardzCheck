@@ -198,7 +198,7 @@ export default function RecentSearchesPanel({
                           )}
                           {search.cmv !== null && (
                             <span className="text-xs text-green-400">
-                              CMV: {formatCurrency(search.cmv)}
+                              CMV (Beta): {formatCurrency(search.cmv)}
                             </span>
                           )}
                         </div>

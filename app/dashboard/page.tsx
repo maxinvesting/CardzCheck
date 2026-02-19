@@ -85,12 +85,25 @@ export default function DashboardPage() {
   }, [router]);
 
   const refreshCollection = useCallback(async () => {
-    const response = await fetch("/api/collection", { cache: "no-store" });
-    const data = await response.json();
-    if (data.items) {
-      setCollectionItems(data.items);
+    // Don't hit API when we're not logged in (avoids 401 / "Failed to fetch" on focus)
+    if (!user && !isTestMode()) return;
+    try {
+      const response = await fetch("/api/collection", {
+        cache: "no-store",
+        credentials: "include",
+      });
+      if (!response.ok) {
+        console.error("Failed to refresh collection, status:", response.status);
+        return;
+      }
+      const data = await response.json();
+      if (data.items) {
+        setCollectionItems(data.items);
+      }
+    } catch (error) {
+      console.error("Failed to refresh collection:", error);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     const handleVisibility = () => {

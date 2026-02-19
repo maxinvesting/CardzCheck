@@ -143,11 +143,11 @@ export default function HeroStats({ items, loading, onSearch }: HeroStatsProps) 
             <div className="flex items-center gap-1.5 mt-2">
               {summary.cardsWithCmv > 0 ? (
                 <span className="text-xs text-gray-500">
-                  Based on estimated CMV (comps)
+                  Based on estimated CMV (Beta) (comps)
                 </span>
               ) : (
                 <span className="text-xs text-gray-500">
-                  Collection value is CMV only — add comps for estimates
+                  Collection value is CMV (Beta) only — add comps for estimates
                 </span>
               )}
             </div>

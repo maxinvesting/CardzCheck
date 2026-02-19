@@ -1,116 +1,116 @@
 // eBay utility functions
 
 import type { EbaySearchParams } from "./types";
-import { getDerivedExcludeTerms, getSetProfile, resolveSetTaxonomy } from "./set-taxonomy";
+import { getSetProfile, resolveSetTaxonomy } from "./set-taxonomy";
 import crypto from "crypto";
 
+const EXCLUSION_OPERATOR_PATTERN = /(^|\s)-(?:"[^"]+"|\S+)/g;
+
+function stripExclusionOperators(value: string): string {
+  return value
+    .replace(EXCLUSION_OPERATOR_PATTERN, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function pushPositivePart(parts: string[], value?: string | null): void {
+  if (!value) return;
+  const cleaned = stripExclusionOperators(value);
+  if (cleaned) parts.push(cleaned);
+}
+
 /**
- * Build a normalized search query from params
- * Ensures set names are properly included to avoid mismatches (e.g., Prizm vs Mosaic)
+ * Build eBay search query from params. Positive identifiers only.
+ * No negative keywords or exclusion operators; filtering happens after retrieval.
  */
 export function buildSearchQuery(params: EbaySearchParams): string {
-  const parts = [params.player];
-  if (params.year) parts.push(params.year);
-  // Set name is critical - include it early to ensure proper matching
+  const parts: string[] = [];
+  pushPositivePart(parts, params.player);
+  pushPositivePart(parts, params.year);
   const selectedSet = params.set ? resolveSetTaxonomy(params.set) : null;
   const selectedProfile = params.set ? getSetProfile(params.set) : null;
   if (params.set) {
-    // Normalize set name - convert "prism" to "prizm" for consistency
-    let set = params.set.trim();
+    let set = stripExclusionOperators(params.set);
+    if (!set) {
+      set = params.set.trim();
+    }
     const setLower = set.toLowerCase();
-    
-    // Normalize "prism" to "prizm" for Panini Prizm
     if (setLower.includes("prism") && !setLower.includes("prizm")) {
       set = set.replace(/prism/gi, "Prizm");
     }
-    
-    // Ensure "Prizm" is clearly distinguished from "Mosaic"
-    if (setLower.includes("prizm") && !setLower.includes("mosaic")) {
-      parts.push(set);
-    } else if (setLower.includes("mosaic")) {
-      parts.push(set);
-    } else {
-      parts.push(set);
-    }
+    pushPositivePart(parts, set);
     if (selectedSet) {
       for (const term of selectedSet.requiredTerms) {
         if (!parts.some((part) => part.toLowerCase().includes(term.toLowerCase()))) {
-          parts.push(term);
+          pushPositivePart(parts, term);
         }
       }
     }
     if (selectedProfile) {
       for (const term of selectedProfile.requiredAll) {
         if (!parts.some((part) => part.toLowerCase().includes(term.toLowerCase()))) {
-          parts.push(term);
+          pushPositivePart(parts, term);
         }
       }
       if (selectedProfile.requiredAny.length > 0) {
-        parts.push(`(${selectedProfile.requiredAny.join(" OR ")})`);
+        pushPositivePart(parts, `(${selectedProfile.requiredAny.join(" OR ")})`);
       }
     }
   }
-  if (params.grade) parts.push(params.grade);
-  if (params.cardNumber) parts.push(`#${params.cardNumber}`);
-  // Parallel type - normalize "prism" to "prizm" and use proper search terms
+  pushPositivePart(parts, params.grade);
+  pushPositivePart(parts, params.cardNumber);
   if (params.parallelType) {
-    let parallel = params.parallelType;
+    let parallel = stripExclusionOperators(params.parallelType);
+    if (!parallel) {
+      parallel = params.parallelType;
+    }
     const parallelLower = parallel.toLowerCase();
-    
-    // Normalize "prism" to "prizm" in parallel type
     if (parallelLower.includes("prism") && !parallelLower.includes("prizm")) {
       parallel = parallel.replace(/prism/gi, "Prizm");
     }
-    
-    // For "silver prism" or "silver prizm", use "silver prizm" as the search
     if (parallelLower.includes("silver") && (parallelLower.includes("prism") || parallelLower.includes("prizm"))) {
-      // Use "silver prizm" as the search - eBay will match variations
-      parts.push("silver", "prizm");
+      pushPositivePart(parts, "silver");
+      pushPositivePart(parts, "prizm");
     } else {
-      parts.push(parallel);
+      pushPositivePart(parts, parallel);
     }
   }
-  if (params.serialNumber) parts.push(`/${params.serialNumber}`);
-  if (params.variation) parts.push(params.variation);
-  if (params.autograph) parts.push("Auto");
-  if (params.relic) parts.push("Relic");
-  if (params.keywords?.length) parts.push(...params.keywords);
-  if (selectedSet) {
-    const excludeTerms = getDerivedExcludeTerms(selectedSet.slug);
-    for (const term of excludeTerms) {
-      if (term.includes(" ")) {
-        parts.push(`-"${term}"`);
-      } else {
-        parts.push(`-${term}`);
-      }
+  if (params.serialNumber) pushPositivePart(parts, `/${params.serialNumber}`);
+  pushPositivePart(parts, params.variation);
+  if (params.autograph) pushPositivePart(parts, "Auto");
+  if (params.relic) pushPositivePart(parts, "Relic");
+  if (params.keywords?.length) {
+    for (const keyword of params.keywords) {
+      pushPositivePart(parts, keyword);
     }
   }
-  if (selectedProfile) {
-    for (const term of selectedProfile.forbidden) {
-      if (term.includes(" ")) {
-        parts.push(`-"${term}"`);
-      } else {
-        parts.push(`-${term}`);
-      }
-    }
-  }
-  // Exclude high-volume insert sub-sets when user is NOT searching for an insert.
-  // This frees Browse API result slots (max 100) for relevant base/parallel listings.
-  const parallelLower = (params.parallelType ?? "").toLowerCase();
-  const userWantsInsert = INSERT_KEYWORDS.some((kw) => parallelLower.includes(kw));
-  if (!userWantsInsert) {
-    const insertExclusions = ["downtown", "kaboom", "color blast", "emergent", "stained glass"];
-    for (const term of insertExclusions) {
-      if (!parts.some((p) => p === `-"${term}"` || p === `-${term}`)) {
-        if (term.includes(" ")) {
-          parts.push(`-"${term}"`);
-        } else {
-          parts.push(`-${term}`);
-        }
-      }
-    }
-  }
-  return parts.join(" ");
+  return parts.join(" ").replace(/\s+/g, " ").trim();
+}
+
+/** Terms that indicate a listing is junk; reject if title contains any (case-insensitive). */
+const JUNK_TITLE_TERMS = [
+  "lot",
+  "lots",
+  "break",
+  "case",
+  "box",
+  "pack",
+  "blaster",
+  "hobby box",
+  "digital",
+  "reprint",
+  "replica",
+  "proxy",
+  "custom",
+];
+
+/**
+ * Reject listing if title contains any junk term (case-insensitive).
+ * Applied after retrieval, before price extraction.
+ */
+export function isJunkListing(title: string): boolean {
+  const lower = title.toLowerCase();
+  return JUNK_TITLE_TERMS.some((term) => lower.includes(term));
 }
 
 /**

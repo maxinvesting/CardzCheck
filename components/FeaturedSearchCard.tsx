@@ -116,7 +116,7 @@ export default function FeaturedSearchCard({
         <div className="flex items-center gap-2 flex-shrink-0">
           {hasEstimate && (
             <span className="text-base font-bold text-blue-400">
-              {formatPrice(cmv)} CMV
+              {formatPrice(cmv)} CMV (Beta)
             </span>
           )}
           <svg
@@ -130,11 +130,11 @@ export default function FeaturedSearchCard({
         </div>
       </div>
 
-      {/* Expanded: estimated CMV, recent sales, Add to Watchlist */}
+      {/* Expanded: estimated CMV (Beta), recent sales, Add to Watchlist */}
       {expanded && (
         <div className="px-4 pb-4 pt-0 border-t border-gray-700/60">
           <div className="mt-4 space-y-4">
-            {/* Estimated CMV + range */}
+            {/* Estimated CMV (Beta) + range */}
             {hasEstimate && est!.estimatedSaleRange && (
               <div className="p-4 bg-gray-900/50 rounded-xl">
                 <h3 className="text-sm font-medium text-gray-400 mb-2">
@@ -145,7 +145,7 @@ export default function FeaturedSearchCard({
                     {formatPrice(est!.estimatedSaleRange.low)} – {formatPrice(est!.estimatedSaleRange.high)}
                   </span>
                   <span className="text-sm text-gray-500">
-                    CMV {formatPrice(cmv)} · {est!.marketAsk?.count ?? 0} listings
+                    CMV (Beta) {formatPrice(cmv)} · {est!.marketAsk?.count ?? 0} listings
                   </span>
                 </div>
                 <p className="text-xs text-gray-500 mt-1">

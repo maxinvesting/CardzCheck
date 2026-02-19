@@ -49,10 +49,7 @@ export default function CompsStats({
       <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-6">
         <div className="text-center">
           <p className="text-yellow-800 dark:text-yellow-200 font-medium">
-            No matching listings found for &quot;{query}&quot;
-          </p>
-          <p className="text-yellow-600 dark:text-yellow-400 text-sm mt-1">
-            No active listings match this search
+            No active listings found — try broadening search
           </p>
         </div>
 
@@ -132,13 +129,13 @@ export default function CompsStats({
         {/* CMV - highlighted */}
         <div className="p-4 bg-blue-50 dark:bg-blue-900/20 col-span-2 md:col-span-1">
           <p className="text-xs font-medium text-blue-600 dark:text-blue-400 uppercase tracking-wider">
-            CMV
+            CMV (Beta)
           </p>
           <p className="text-2xl font-bold text-blue-700 dark:text-blue-300 mt-1">
-            {stats.cmv !== null ? formatPrice(stats.cmv) : "CMV unavailable"}
+            {stats.cmv !== null ? formatPrice(stats.cmv) : "CMV (Beta) unavailable"}
           </p>
           <p className="text-xs text-blue-500 dark:text-blue-400 mt-0.5">
-            Current Market Value
+            Current Market Value (Beta)
           </p>
         </div>
 
