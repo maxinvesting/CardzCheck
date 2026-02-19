@@ -143,8 +143,8 @@ function CardItem({ item, onDelete }: CardItemProps) {
                     year: item.year ? Number(item.year) : null,
                     brand: null,
                     setName: item.set_name ?? null,
-                    subset: null,
-                    parallel: null,
+                    subset: item.insert ?? null,
+                    parallel: item.parallel_type ?? null,
                   }
                 : null
             );

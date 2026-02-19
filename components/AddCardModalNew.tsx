@@ -200,6 +200,12 @@ export default function AddCardModalNew({
   useEffect(() => {
     if (identifiedCard) {
       setYearDraft(identifiedCard.year || "");
+      setCondition(
+        identifiedCard.grade &&
+          CONDITION_OPTIONS.some((option) => option.value === identifiedCard.grade)
+          ? identifiedCard.grade
+          : "Raw"
+      );
     }
   }, [identifiedCard]);
 
@@ -365,6 +371,9 @@ export default function AddCardModalNew({
         player_name: identifiedCard.player_name,
         year: identifiedCard.year || null,
         set_name: identifiedCard.set_name || null,
+        insert: identifiedCard.insert || null,
+        parallel_type: identifiedCard.parallel_type || null,
+        card_number: identifiedCard.card_number || null,
         grade: condition,
         acquisition_type: acquisitionType,
         purchase_price: acquisitionType === "pulled" ? null : normalizedPurchasePrice,

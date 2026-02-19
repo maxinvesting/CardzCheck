@@ -327,15 +327,21 @@ export default function CardPicker({
 
   const handleSelect = (card: CardSearchResult) => {
     if (!card.player_name) return;
+    const selectedParallel = parallel.trim();
+    const selectedGrader = grader.trim();
+    const selectedGrade = grade.trim();
+    const resultParallel = card.variant?.trim() || selectedParallel;
+    const resultGrader = card.grader?.trim() || selectedGrader;
+    const resultGrade = card.grade?.trim() || selectedGrade;
     onSelect({
       id: card.id,
       player_name: card.player_name,
       year: card.year ?? undefined,
       brand: card.brand ?? undefined,
       set_name: card.set_name ?? undefined,
-      variant: card.variant ?? undefined,
-      grader: card.grader ?? undefined,
-      grade: card.grade ?? undefined,
+      variant: resultParallel || undefined,
+      grader: resultGrader || undefined,
+      grade: resultGrade || undefined,
       card_number: normalizeCardNumber(card.card_number ?? undefined),
     });
   };

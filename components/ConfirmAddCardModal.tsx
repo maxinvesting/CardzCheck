@@ -65,7 +65,9 @@ export default function ConfirmAddCardModal({
   const [editableYear, setEditableYear] = useState(cardData?.year || "");
   const [editableSet, setEditableSet] = useState(cardData?.set_name || "");
   const [editableInsert, setEditableInsert] = useState(cardData?.insert || "");
-  
+  const [editableParallel, setEditableParallel] = useState(
+    cardData?.parallel_type || cardData?.cardIdentity?.parallel || ""
+  );
   // Reset editable fields when cardData changes
   useEffect(() => {
     if (cardData) {
@@ -78,6 +80,12 @@ export default function ConfirmAddCardModal({
       setEditableYear(cardData.year || "");
       setEditableSet(cardData.set_name || "");
       setEditableInsert(cardData.insert || "");
+      setEditableParallel(cardData.parallel_type || cardData.cardIdentity?.parallel || "");
+      setCondition(
+        cardData.grade && CONDITION_OPTIONS.some((opt) => opt.value === cardData.grade)
+          ? cardData.grade
+          : "Raw"
+      );
     }
   }, [cardData]);
 
@@ -139,6 +147,10 @@ export default function ConfirmAddCardModal({
       const finalYear = needsConfirmation ? editableYear : cardData.year;
       const finalSet = needsConfirmation ? editableSet : cardData.set_name;
       const finalInsert = needsConfirmation ? editableInsert : cardData.insert;
+      const finalParallel = (needsConfirmation
+        ? editableParallel
+        : cardData.parallel_type || cardData.cardIdentity?.parallel || ""
+      ).trim();
 
       // Build notes from card details
       const notesParts: string[] = [];
@@ -148,8 +160,8 @@ export default function ConfirmAddCardModal({
       if (finalPlayers.length > 1) {
         notesParts.push(`Players: ${finalPlayers.join(", ")}`);
       }
-      if (cardData.parallel_type && cardData.parallel_type !== "Base" && !finalInsert) {
-        notesParts.push(`Parallel: ${cardData.parallel_type}`);
+      if (finalParallel && finalParallel !== "Base" && !finalInsert) {
+        notesParts.push(`Parallel: ${finalParallel}`);
       }
       if (cardData.card_number) {
         notesParts.push(`Card ${cardData.card_number}`);
@@ -182,7 +194,7 @@ export default function ConfirmAddCardModal({
         year: finalYear || null,
         set_name: finalSet || null,
         insert: finalInsert || null,
-        parallel_type: cardData.parallel_type || null,
+        parallel_type: finalParallel || null,
         card_number: cardData.card_number || null,
         grade: condition, // Use the selected condition
         acquisition_type: acquisitionType,
@@ -327,6 +339,18 @@ export default function ConfirmAddCardModal({
                       placeholder="Donruss Optic"
                     />
                   </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                      Parallel
+                    </label>
+                    <input
+                      type="text"
+                      value={editableParallel}
+                      onChange={(e) => setEditableParallel(e.target.value)}
+                      className="w-full px-2 py-1.5 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-gray-900 dark:text-white"
+                      placeholder="e.g., Silver Prizm"
+                    />
+                  </div>
                   {cardData.insert || editableInsert ? (
                     <div>
                       <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
@@ -378,12 +402,12 @@ export default function ConfirmAddCardModal({
                         <span className="font-medium">{cardData.insert}</span>
                       </p>
                     )}
-                    {cardData.cardIdentity?.parallel &&
-                      cardData.cardIdentity.parallel !== "Base" &&
+                    {(cardData.parallel_type || cardData.cardIdentity?.parallel) &&
+                      (cardData.parallel_type || cardData.cardIdentity?.parallel) !== "Base" &&
                       !cardData.insert && (
                         <p>
                           <span className="text-gray-500">Parallel:</span>{" "}
-                          {cardData.cardIdentity.parallel}
+                          {cardData.parallel_type || cardData.cardIdentity?.parallel}
                         </p>
                       )}
                     {cardData.card_number && (
