@@ -60,6 +60,15 @@ export async function GET(
       if (typeof (card as { image_url?: string }).image_url === "string") {
         legacyUrls.add((card as { image_url?: string }).image_url as string);
       }
+      if (typeof (card as { user_image_url?: string }).user_image_url === "string") {
+        legacyUrls.add((card as { user_image_url?: string }).user_image_url as string);
+      }
+      if (typeof (card as { stock_image_url?: string }).stock_image_url === "string") {
+        legacyUrls.add((card as { stock_image_url?: string }).stock_image_url as string);
+      }
+      if (typeof (card as { ebay_image_url?: string }).ebay_image_url === "string") {
+        legacyUrls.add((card as { ebay_image_url?: string }).ebay_image_url as string);
+      }
       const extraUrls = (card as { image_urls?: string[] }).image_urls;
       if (Array.isArray(extraUrls)) {
         extraUrls.forEach((url) => {
@@ -127,8 +136,13 @@ export async function PATCH(
       "grade",
       "grading_company",
       "cert_number",
+      "acquisition_type",
       "purchase_price",
       "purchase_date",
+      "image_url",
+      "user_image_url",
+      "stock_image_url",
+      "ebay_image_url",
       "notes",
     ];
 

@@ -3,8 +3,10 @@
 import { useState, useEffect } from "react";
 import { formatSetLabel, needsYearConfirmation, shouldDisplayYear } from "@/lib/card-identity/ui";
 import { InlineNotice } from "@/components/ui";
+import { normalizeHttpUrl, uniqueHttpUrls } from "@/lib/collection-images";
 import {
   CONDITION_OPTIONS,
+  type AcquisitionType,
   type CardIdentificationResult,
   type CollectionItem,
 } from "@/types";
@@ -27,8 +29,9 @@ export default function ConfirmAddCardModal({
   cardData,
   initialCmv,
 }: ConfirmAddCardModalProps) {
-  const [costBasisType, setCostBasisType] = useState<"pulled" | "paid">("pulled");
+  const [acquisitionType, setAcquisitionType] = useState<AcquisitionType>("pulled");
   const [purchasePrice, setPurchasePrice] = useState<string>("");
+  const [purchaseDate, setPurchaseDate] = useState<string>("");
   const [condition, setCondition] = useState<string>("Raw");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -77,8 +80,9 @@ export default function ConfirmAddCardModal({
   };
 
   const resetForm = () => {
-    setCostBasisType("pulled");
+    setAcquisitionType("pulled");
     setPurchasePrice("");
+    setPurchaseDate("");
     setCondition("Raw");
     setError(null);
   };
@@ -98,6 +102,23 @@ export default function ConfirmAddCardModal({
     setError(null);
 
     try {
+      const hasPurchasePriceInput =
+        acquisitionType !== "pulled" && purchasePrice.trim().length > 0;
+      const normalizedPurchasePrice = hasPurchasePriceInput
+        ? Number.parseFloat(purchasePrice)
+        : null;
+
+      if (
+        hasPurchasePriceInput &&
+        (normalizedPurchasePrice === null ||
+          !Number.isFinite(normalizedPurchasePrice) ||
+          normalizedPurchasePrice < 0)
+      ) {
+        setError("Purchase price must be a valid positive number");
+        setLoading(false);
+        return;
+      }
+
       // Use editable fields if confirmation needed, otherwise use cardData
       const finalPlayers = needsConfirmation && editablePlayers.includes(",")
         ? editablePlayers.split(",").map(p => p.trim()).filter(Boolean)
@@ -121,7 +142,7 @@ export default function ConfirmAddCardModal({
         notesParts.push(`Parallel: ${cardData.parallel_type}`);
       }
       if (cardData.card_number) {
-        notesParts.push(`Card #${cardData.card_number}`);
+        notesParts.push(`Card ${cardData.card_number}`);
       }
       if (cardData.serial_number) {
         notesParts.push(`Serial: ${cardData.serial_number}`);
@@ -135,6 +156,15 @@ export default function ConfirmAddCardModal({
         typeof initialCmv === "number" && Number.isFinite(initialCmv) && initialCmv > 0
           ? initialCmv
           : null;
+      const persistedImageUrls = uniqueHttpUrls([
+        cardData.userImageUrl,
+        ...(cardData.imageUrls || []),
+      ]);
+      const canonicalImageUrl =
+        normalizeHttpUrl(cardData.userImageUrl || null) ||
+        normalizeHttpUrl(cardData.stockImageUrl || null) ||
+        normalizeHttpUrl(cardData.ebayImageUrl || null) ||
+        normalizeHttpUrl(cardData.imageUrl || null);
 
       const body = {
         player_name: finalPlayerName,
@@ -145,11 +175,14 @@ export default function ConfirmAddCardModal({
         parallel_type: cardData.parallel_type || null,
         card_number: cardData.card_number || null,
         grade: condition, // Use the selected condition
-        purchase_price:
-          costBasisType === "paid" && purchasePrice ? parseFloat(purchasePrice) : null,
-        purchase_date: null,
-        image_url: cardData.imageUrl || null,
-        image_urls: cardData.imageUrls || [cardData.imageUrl].filter(Boolean),
+        acquisition_type: acquisitionType,
+        purchase_price: acquisitionType === "pulled" ? null : normalizedPurchasePrice,
+        purchase_date: purchaseDate || null,
+        user_image_url: normalizeHttpUrl(cardData.userImageUrl || null),
+        stock_image_url: normalizeHttpUrl(cardData.stockImageUrl || null),
+        ebay_image_url: normalizeHttpUrl(cardData.ebayImageUrl || null),
+        image_url: canonicalImageUrl,
+        image_urls: persistedImageUrls,
         notes: notesParts.length > 0 ? notesParts.join(" | ") : null,
         ...(cmvValue !== null
           ? { est_cmv: cmvValue, estimated_cmv: cmvValue }
@@ -392,34 +425,34 @@ export default function ConfirmAddCardModal({
 
           {/* Form Fields */}
           <div className="space-y-4 pt-2 border-t border-gray-200 dark:border-gray-800">
-            {/* Cost basis */}
+            {/* Acquisition */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Cost basis
+                Acquisition Type
               </label>
-              <div className="flex gap-3 mb-2">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="costBasis"
-                    checked={costBasisType === "pulled"}
-                    onChange={() => setCostBasisType("pulled")}
-                    className="rounded-full border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="text-sm text-gray-700 dark:text-gray-300">Pulled (no cost)</span>
+              <select
+                value={acquisitionType}
+                onChange={(e) => {
+                  const nextType = e.target.value as AcquisitionType;
+                  setAcquisitionType(nextType);
+                  if (nextType === "pulled") {
+                    setPurchasePrice("");
+                  }
+                }}
+                className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="pulled">Pulled</option>
+                <option value="bought">Bought</option>
+                <option value="trade">Trade</option>
+                <option value="gift">Gift</option>
+                <option value="unknown">Unknown</option>
+              </select>
+            </div>
+            {acquisitionType !== "pulled" && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Purchase Price
                 </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="costBasis"
-                    checked={costBasisType === "paid"}
-                    onChange={() => setCostBasisType("paid")}
-                    className="rounded-full border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="text-sm text-gray-700 dark:text-gray-300">I paid</span>
-                </label>
-              </div>
-              {costBasisType === "paid" && (
                 <div className="relative mt-1">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
                   <input
@@ -433,7 +466,22 @@ export default function ConfirmAddCardModal({
                     className="w-full pl-7 pr-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
-              )}
+              </div>
+            )}
+            <div>
+              <label
+                htmlFor="purchaseDate"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+              >
+                Purchase Date (Optional)
+              </label>
+              <input
+                id="purchaseDate"
+                type="date"
+                value={purchaseDate}
+                onChange={(e) => setPurchaseDate(e.target.value)}
+                className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
             </div>
 
             {/* Condition */}

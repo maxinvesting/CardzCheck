@@ -7,13 +7,15 @@ import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import PaywallModal from "@/components/PaywallModal";
 import AddCardModalNew from "@/components/AddCardModalNew";
 import CardPickerModal from "@/components/CardPickerModal";
+import ConfirmAddCardModal from "@/components/ConfirmAddCardModal";
 import type { CardPickerSelection } from "@/components/CardPicker";
 import { createClient } from "@/lib/supabase/client";
-import type { CollectionItem, User } from "@/types";
+import type { CardIdentificationResult, CollectionItem, User } from "@/types";
 import { LIMITS } from "@/types";
 import { isTestMode, getTestUser } from "@/lib/test-mode";
 import { computeCollectionSummary, getEstCmv } from "@/lib/values";
-import { formatCardNumber, formatGraderGrade } from "@/lib/cards/format";
+import { formatGraderGrade, normalizeCardNumber } from "@/lib/cards/format";
+import { pickCollectionImageUrl } from "@/lib/collection-images";
 
 function formatPrice(price: number | null): string {
   if (price === null) return "—";
@@ -42,8 +44,9 @@ export default function CollectionPage() {
   const [showPaywall, setShowPaywall] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showCardPicker, setShowCardPicker] = useState(false);
+  const [showPickerConfirmModal, setShowPickerConfirmModal] = useState(false);
+  const [pickerCardData, setPickerCardData] = useState<CardIdentificationResult | null>(null);
   const [cardPickerError, setCardPickerError] = useState<string | null>(null);
-  const [cardPickerLoading, setCardPickerLoading] = useState(false);
   const [toast, setToast] = useState<{type: 'success' | 'error', message: string} | null>(null);
   const [filterQuery, setFilterQuery] = useState("");
   const [sortBy, setSortBy] = useState<"newest" | "oldest" | "player_az" | "player_za" | "paid_high" | "paid_low">("newest");
@@ -159,12 +162,16 @@ export default function CollectionPage() {
       "set_name",
       "grade",
       "est_cmv",
+      "acquisition_type",
       "purchase_price",
       "purchase_date",
       "estimated_cmv",
       "cmv_confidence",
       "cmv_last_updated",
       "image_url",
+      "user_image_url",
+      "stock_image_url",
+      "ebay_image_url",
       "notes",
     ];
 
@@ -174,12 +181,16 @@ export default function CollectionPage() {
       it.set_name,
       it.grade,
       it.est_cmv ?? "",
+      it.acquisition_type ?? "unknown",
       it.purchase_price,
       it.purchase_date,
       it.estimated_cmv,
       it.cmv_confidence,
       it.cmv_last_updated,
       it.image_url,
+      it.user_image_url,
+      it.stock_image_url,
+      it.ebay_image_url,
       it.notes,
     ]);
 
@@ -255,9 +266,13 @@ export default function CollectionPage() {
     const iYear = idx("year");
     const iSet = idx("set_name");
     const iGrade = idx("grade");
+    const iAcquisition = idx("acquisition_type");
     const iPrice = idx("purchase_price");
     const iDate = idx("purchase_date");
     const iImage = idx("image_url");
+    const iUserImage = idx("user_image_url");
+    const iStockImage = idx("stock_image_url");
+    const iEbayImage = idx("ebay_image_url");
     const iNotes = idx("notes");
 
     const toNull = (v: string | undefined) => (v && v.trim() ? v.trim() : null);
@@ -280,9 +295,13 @@ export default function CollectionPage() {
         year: iYear === -1 ? null : toNull(cols[iYear]),
         set_name: iSet === -1 ? null : toNull(cols[iSet]),
         grade: iGrade === -1 ? null : toNull(cols[iGrade]),
+        acquisition_type: iAcquisition === -1 ? "unknown" : toNull(cols[iAcquisition]),
         purchase_price: iPrice === -1 ? null : toNumberOrNull(cols[iPrice]),
         purchase_date: iDate === -1 ? null : toNull(cols[iDate]),
         image_url: iImage === -1 ? null : toNull(cols[iImage]),
+        user_image_url: iUserImage === -1 ? null : toNull(cols[iUserImage]),
+        stock_image_url: iStockImage === -1 ? null : toNull(cols[iStockImage]),
+        ebay_image_url: iEbayImage === -1 ? null : toNull(cols[iEbayImage]),
         notes: iNotes === -1 ? null : toNull(cols[iNotes]),
       };
     });
@@ -474,61 +493,24 @@ export default function CollectionPage() {
     return () => clearInterval(interval);
   }, [needsCmvRefresh, refreshCollection]);
 
-  const handleAddFromPicker = async (card: CardPickerSelection) => {
+  const handleAddFromPicker = (card: CardPickerSelection) => {
     setCardPickerError(null);
-    setCardPickerLoading(true);
-
     const gradeLabel = formatGraderGrade(card.grader, card.grade);
-    const notesParts: string[] = [];
-    if (card.variant && card.variant.toLowerCase() !== "base") {
-      notesParts.push(`Parallel: ${card.variant}`);
-    }
-    const numberLabel = formatCardNumber(card.card_number);
-    if (numberLabel) {
-      notesParts.push(`Card ${numberLabel}`);
-    }
+    const numberLabel = normalizeCardNumber(card.card_number);
+    const cardData: CardIdentificationResult = {
+      player_name: card.player_name,
+      year: card.year || undefined,
+      set_name: card.set_name || card.brand || undefined,
+      parallel_type: card.variant || undefined,
+      card_number: numberLabel || undefined,
+      grade: gradeLabel || undefined,
+      imageUrl: "",
+      confidence: "high",
+    };
 
-    try {
-      const response = await fetch("/api/collection", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          player_name: card.player_name,
-          year: card.year || null,
-          set_name: card.set_name || card.brand || null,
-          grade: gradeLabel || null,
-          purchase_price: null,
-          purchase_date: null,
-          image_url: null,
-          notes: notesParts.length > 0 ? notesParts.join(" | ") : null,
-        }),
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        if (data.error === "limit_reached") {
-          setShowCardPicker(false);
-          setShowPaywall(true);
-          return;
-        }
-        throw new Error(data.error || "Failed to add card");
-      }
-
-      setToast({
-        type: "success",
-        message: `Added ${card.player_name} to collection!`,
-      });
-      if (isTestMode() && data.item) {
-        setItems((prev) => [data.item, ...prev]);
-      } else {
-        refreshCollection();
-      }
-      setShowCardPicker(false);
-    } catch (err) {
-      setCardPickerError(err instanceof Error ? err.message : "Failed to add card");
-    } finally {
-      setCardPickerLoading(false);
-    }
+    setPickerCardData(cardData);
+    setShowCardPicker(false);
+    setShowPickerConfirmModal(true);
   };
 
   return (
@@ -690,33 +672,36 @@ export default function CollectionPage() {
               </div>
               {topPerformers.length > 0 ? (
                 <div className="space-y-3">
-                  {topPerformers.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg"
-                    >
-                      <div className="flex items-center gap-3">
-                        {item.image_url && (
-                          <img
-                            src={item.image_url}
-                            alt={item.player_name}
-                            className="w-10 h-14 object-cover rounded"
-                          />
-                        )}
-                        <div>
-                          <p className="font-medium text-gray-900 dark:text-white text-sm">
-                            {item.player_name}
-                          </p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">
-                            {item.year} {item.set_name}
-                          </p>
+                  {topPerformers.map((item) => {
+                    const imageUrl = pickCollectionImageUrl(item);
+                    return (
+                      <div
+                        key={item.id}
+                        className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg"
+                      >
+                        <div className="flex items-center gap-3">
+                          {imageUrl && (
+                            <img
+                              src={imageUrl}
+                              alt={item.player_name}
+                              className="w-10 h-14 object-cover rounded"
+                            />
+                          )}
+                          <div>
+                            <p className="font-medium text-gray-900 dark:text-white text-sm">
+                              {item.player_name}
+                            </p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              {item.year} {item.set_name}
+                            </p>
+                          </div>
                         </div>
+                        <p className="font-semibold text-gray-900 dark:text-white">
+                          {formatPrice(getEstCmv(item))}
+                        </p>
                       </div>
-                      <p className="font-semibold text-gray-900 dark:text-white">
-                        {formatPrice(getEstCmv(item))}
-                      </p>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -737,15 +722,16 @@ export default function CollectionPage() {
                 <div className="space-y-3">
                   {recentlyAdded.map((item) => {
                     const estCmv = getEstCmv(item);
+                    const imageUrl = pickCollectionImageUrl(item);
                     return (
                       <div
                         key={item.id}
                         className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg"
                       >
                         <div className="flex items-center gap-3">
-                          {item.image_url && (
+                          {imageUrl && (
                             <img
-                              src={item.image_url}
+                              src={imageUrl}
                               alt={item.player_name}
                               className="w-10 h-14 object-cover rounded"
                             />
@@ -924,7 +910,29 @@ export default function CollectionPage() {
           mode="collection"
           onSelect={handleAddFromPicker}
           error={cardPickerError}
-          busy={cardPickerLoading}
+        />
+
+        <ConfirmAddCardModal
+          isOpen={showPickerConfirmModal}
+          onClose={() => {
+            setShowPickerConfirmModal(false);
+            setPickerCardData(null);
+          }}
+          onSuccess={(playerName, item) => {
+            setToast({ type: "success", message: `Added ${playerName} to collection!` });
+            if (item) {
+              setItems((prev) => [item, ...prev]);
+            }
+            refreshCollection();
+            setShowPickerConfirmModal(false);
+            setPickerCardData(null);
+          }}
+          onLimitReached={() => {
+            setShowPickerConfirmModal(false);
+            setPickerCardData(null);
+            setShowPaywall(true);
+          }}
+          cardData={pickerCardData}
         />
 
         {/* Toast Notification */}

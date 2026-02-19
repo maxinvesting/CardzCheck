@@ -2,8 +2,10 @@
 
 import { useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
-import type { CardIdentificationResponse, CardIdentificationResult } from "@/types";
+import type { CardIdentificationResult } from "@/types";
 import { normalizeIdentificationResult } from "@/lib/card-identity/result";
+import { identifyCardFromImages } from "@/lib/identify-card/client";
+import { normalizeHttpUrl, uniqueHttpUrls } from "@/lib/collection-images";
 
 interface CardUploaderProps {
   onIdentified: (data: CardIdentificationResult) => void;
@@ -15,6 +17,7 @@ interface CardUploaderProps {
 
 const DEFAULT_MAX_FILES = 3; // Allow front, back, and one detail shot
 const MAX_FALLBACK_DATA_URL_BYTES = 350 * 1024;
+const MAX_IDENTIFY_IMAGE_BYTES = 8 * 1024 * 1024;
 
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -131,8 +134,8 @@ export default function CardUploader({
         setError("Please upload image files only");
         return;
       }
-      if (file.size > 10 * 1024 * 1024) {
-        setError("Each image must be less than 10MB");
+      if (file.size > MAX_IDENTIFY_IMAGE_BYTES) {
+        setError("Each image must be less than 8MB");
         return;
       }
     }
@@ -155,54 +158,30 @@ export default function CardUploader({
       }
 
       const hasFallbackDataUrls = imageUrls.some(isDataUrl);
-      const identifyPayload =
+      const identifyInput =
         imageUrls.length > 1 && !hasFallbackDataUrls
           ? { imageUrls }
           : { imageUrl: primaryImageUrl };
 
-      // Process card image (accepts both URL and base64 data URL)
-      const response = await fetch("/api/identify-card", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(identifyPayload),
-      });
-
-      const rawResponse = await response.text();
-      let result: CardIdentificationResponse | null = null;
-      if (rawResponse.trim()) {
-        try {
-          result = JSON.parse(rawResponse) as CardIdentificationResponse;
-        } catch {
-          if (!response.ok) {
-            const reason = rawResponse.trim() || "Failed to process image";
-            setError(reason);
-            setLoading(false);
-            onReset?.();
-            return;
-          }
-          throw new Error("Invalid response from card identification service");
-        }
-      }
-
-      if (!result) {
-        throw new Error("Failed to process image");
-      }
-
-      if (!response.ok) {
-        const reason =
-          "error" in result ? result.reason || result.error : rawResponse.trim();
-        setError(reason || "Failed to process image");
+      const identify = await identifyCardFromImages(identifyInput);
+      if (!identify.ok || !identify.data || "error" in identify.data) {
+        setError(identify.errorMessage || "Failed to process image");
         setLoading(false);
         onReset?.();
         return;
       }
 
-      if ("error" in result) {
-        setError(result.reason || result.error);
-        setLoading(false);
-        onReset?.();
-        return;
-      }
+      const result = identify.data;
+      const sanitizedImageUrls = uniqueHttpUrls(imageUrls);
+      const userImageUrl = normalizeHttpUrl(sanitizedImageUrls[0] || null);
+      const stockImageUrl = normalizeHttpUrl(result.stock_image_url || null);
+      const ebayImageUrl = normalizeHttpUrl(result.ebay_image_url || null);
+      const displayImageUrl =
+        userImageUrl ||
+        stockImageUrl ||
+        ebayImageUrl ||
+        imageUrls.find((url) => typeof url === "string" && url.trim().length > 0) ||
+        "";
 
       // Check confidence level / parse errors
       if (result.card_identity?.warnings?.includes("parse_error")) {
@@ -216,17 +195,20 @@ export default function CardUploader({
       // Success - pass data to parent with image URLs (NO grade estimate - that's separate)
       onIdentified(
         normalizeIdentificationResult({
-        player_name: result.player_name,
-        players: result.players || [result.player_name],
-        year: result.year || undefined,
-        set_name: result.set_name || undefined,
-        insert: result.insert || undefined,
-        grade: result.grade || undefined,
-        parallel_type: (result.card_identity?.parallel ?? result.variant) || undefined,
-        imageUrl: primaryImageUrl,
-        imageUrls,
-        confidence: result.confidence,
-        cardIdentity: result.card_identity,
+          player_name: result.player_name,
+          players: result.players || [result.player_name],
+          year: result.year || undefined,
+          set_name: result.set_name || undefined,
+          insert: result.insert || undefined,
+          grade: result.grade || undefined,
+          parallel_type: (result.card_identity?.parallel ?? result.variant) || undefined,
+          imageUrl: displayImageUrl,
+          imageUrls: sanitizedImageUrls.length > 0 ? sanitizedImageUrls : undefined,
+          userImageUrl: userImageUrl || undefined,
+          stockImageUrl: stockImageUrl || undefined,
+          ebayImageUrl: ebayImageUrl || undefined,
+          confidence: result.confidence,
+          cardIdentity: result.card_identity,
         })
       );
     } catch (err) {
@@ -341,49 +323,29 @@ export default function CardUploader({
               />
             </svg>
             <p className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-1">
-              {maxFiles === 1 ? "Upload card photo" : `Upload card photos (up to ${maxFiles})`}
+              Drop your card photos here
             </p>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              Drag & drop or click to select
+              or click to select
+            </p>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
+              JPG, PNG, WebP or GIF up to 8MB each
             </p>
             <input
               type="file"
               accept="image/*"
               multiple={maxFiles > 1}
-              onChange={handleInputChange}
               disabled={disabled}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+              onChange={handleInputChange}
+              className="hidden"
             />
           </label>
         )}
       </div>
 
       {error && (
-        <div className="mt-4 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
-          <div className="flex items-start gap-3">
-            <svg
-              className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-              />
-            </svg>
-            <div className="flex-1">
-              <p className="text-sm font-medium text-amber-800 dark:text-amber-300 mb-1">
-                Card Processing Issue
-              </p>
-              <p className="text-sm text-amber-700 dark:text-amber-400">{error}</p>
-              <p className="text-xs text-amber-600 dark:text-amber-500 mt-2">
-                Tip: Try using the manual search form below, or upload a clearer image with better lighting.
-              </p>
-            </div>
-          </div>
+        <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
         </div>
       )}
     </div>

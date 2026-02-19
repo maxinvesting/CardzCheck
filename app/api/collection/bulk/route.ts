@@ -9,9 +9,13 @@ type BulkCollectionItemInput = {
   year?: string | null;
   set_name?: string | null;
   grade?: string | null;
+  acquisition_type?: string | null;
   purchase_price?: number | null;
   purchase_date?: string | null;
   image_url?: string | null;
+  user_image_url?: string | null;
+  stock_image_url?: string | null;
+  ebay_image_url?: string | null;
   notes?: string | null;
 };
 
@@ -100,9 +104,13 @@ export async function POST(request: NextRequest) {
       year: it.year || null,
       set_name: it.set_name || null,
       grade: it.grade || null,
+      acquisition_type: it.acquisition_type || "unknown",
       purchase_price: it.purchase_price ?? null,
       purchase_date: it.purchase_date || null,
       image_url: it.image_url || null,
+      user_image_url: it.user_image_url || null,
+      stock_image_url: it.stock_image_url || null,
+      ebay_image_url: it.ebay_image_url || null,
       notes: it.notes || null,
     }));
 

@@ -1,9 +1,37 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { LIMITS, type CollectionItem } from "@/types";
+import { LIMITS, type AcquisitionType, type CollectionItem } from "@/types";
 import { isTestMode } from "@/lib/test-mode";
 import { calculateCardCmv, isCmvStale } from "@/lib/cmv";
 import { logDebug, redactId } from "@/lib/logging";
+import { normalizeHttpUrl, resolveStoredImagePath, uniqueHttpUrls } from "@/lib/collection-images";
+
+const ACQUISITION_TYPES: readonly AcquisitionType[] = [
+  "pulled",
+  "bought",
+  "trade",
+  "gift",
+  "unknown",
+];
+
+function parseAcquisitionType(value: unknown): AcquisitionType {
+  const normalized =
+    typeof value === "string" ? (value.trim().toLowerCase() as AcquisitionType) : "unknown";
+  return ACQUISITION_TYPES.includes(normalized) ? normalized : "unknown";
+}
+
+function parsePurchasePrice(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+      ? Number(value.replace(/[$,]/g, "").trim())
+      : Number.NaN;
+
+  if (!Number.isFinite(parsed) || parsed < 0) return null;
+  return parsed;
+}
 
 // GET - List collection items
 export async function GET() {
@@ -42,9 +70,13 @@ export async function GET() {
     // Create a map of card_id -> primary_image
     const primaryImageMap = new Map();
     (primaryImages || []).forEach((img: any) => {
+      const resolvedUrl = resolveStoredImagePath(
+        img.storage_path,
+        (path) => supabase.storage.from("card-images").getPublicUrl(path).data.publicUrl
+      );
       primaryImageMap.set(img.card_id, {
         ...img,
-        url: supabase.storage.from("card-images").getPublicUrl(img.storage_path).data.publicUrl,
+        url: resolvedUrl,
       });
     });
 
@@ -132,6 +164,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         item: {
           ...body,
+          acquisition_type: parseAcquisitionType((body as { acquisition_type?: unknown }).acquisition_type),
           id: `test-${Date.now()}`,
           user_id: "test-user-id",
           estimated_cmv: null,
@@ -180,9 +213,13 @@ export async function POST(request: NextRequest) {
       grade,
       est_cmv,
       estimated_cmv,
+      acquisition_type,
       purchase_price,
       purchase_date,
       image_url,
+      user_image_url,
+      stock_image_url,
+      ebay_image_url,
       image_urls,
       notes,
     } = body;
@@ -193,6 +230,40 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    const acquisitionType = parseAcquisitionType(acquisition_type);
+    const normalizedPurchasePrice = parsePurchasePrice(purchase_price);
+    const hasPurchasePriceInput =
+      purchase_price !== null &&
+      purchase_price !== undefined &&
+      (typeof purchase_price !== "string" || purchase_price.trim().length > 0);
+
+    if (acquisitionType !== "pulled" && hasPurchasePriceInput && normalizedPurchasePrice === null) {
+      return NextResponse.json(
+        { error: "Purchase price must be a valid positive number" },
+        { status: 400 }
+      );
+    }
+
+    const normalizedPurchaseDate =
+      typeof purchase_date === "string" && purchase_date.trim().length > 0
+        ? purchase_date.trim()
+        : null;
+
+    const normalizedUserImageUrl = normalizeHttpUrl(user_image_url) || null;
+    const normalizedStockImageUrl = normalizeHttpUrl(stock_image_url) || null;
+    const normalizedEbayImageUrl = normalizeHttpUrl(ebay_image_url) || null;
+    const normalizedImageUrl = normalizeHttpUrl(image_url) || null;
+    const normalizedImageUrls = Array.isArray(image_urls)
+      ? uniqueHttpUrls(image_urls)
+      : [];
+    const canonicalImageUrl =
+      normalizedUserImageUrl ||
+      normalizedStockImageUrl ||
+      normalizedEbayImageUrl ||
+      normalizedImageUrl ||
+      normalizedImageUrls[0] ||
+      null;
 
     // Store players array and insert in notes if DB columns don't exist yet
     // TODO: Add migration for players (JSONB) and insert (text) columns
@@ -253,9 +324,13 @@ export async function POST(request: NextRequest) {
       parallel_type: parallel_type || null,
       card_number: card_number || null,
       grade: grade || null,
-      purchase_price: purchase_price || null,
-      purchase_date: purchase_date || null,
-      image_url: image_url || null,
+      acquisition_type: acquisitionType,
+      purchase_price: acquisitionType === "pulled" ? null : normalizedPurchasePrice,
+      purchase_date: normalizedPurchaseDate,
+      image_url: canonicalImageUrl,
+      user_image_url: normalizedUserImageUrl,
+      stock_image_url: normalizedStockImageUrl,
+      ebay_image_url: normalizedEbayImageUrl,
       notes: combinedNotes,
       ...cmvPayload,
     };
@@ -287,12 +362,21 @@ export async function POST(request: NextRequest) {
       cmv_last_updated: (item as any).cmv_last_updated ?? "MISSING",
     });
 
-    // If multiple images were uploaded, create card_images records
-    if (image_urls && Array.isArray(image_urls) && image_urls.length > 0) {
-      const imageRecords = image_urls.map((url: string, index: number) => ({
+    // Persist user + fallback image URLs for stable rendering across refreshes.
+    const persistedImageUrls = uniqueHttpUrls([
+      normalizedUserImageUrl,
+      ...normalizedImageUrls,
+      normalizedStockImageUrl,
+      normalizedEbayImageUrl,
+      canonicalImageUrl,
+    ]);
+
+    if (persistedImageUrls.length > 0) {
+      const imageRecords = persistedImageUrls.map((url: string, index: number) => ({
         card_id: item.id,
         user_id: user.id,
-        storage_path: url, // Store the full URL for now (legacy support)
+        // Accept both Supabase storage paths and full legacy URLs.
+        storage_path: url,
         position: index,
       }));
 
@@ -306,7 +390,7 @@ export async function POST(request: NextRequest) {
       } else {
         logDebug("📸 Created card_images records", {
           cardId: redactId(item.id),
-          imageCount: image_urls.length,
+          imageCount: persistedImageUrls.length,
         });
       }
     }

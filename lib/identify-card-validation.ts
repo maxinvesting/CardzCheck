@@ -3,7 +3,7 @@
  * Used by app/api/identify-card/route.ts only.
  */
 
-export const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
+export const MAX_IMAGE_SIZE_BYTES = 8 * 1024 * 1024; // 8MB
 
 export const ALLOWED_MIME_TYPES: readonly string[] = [
   "image/jpeg",

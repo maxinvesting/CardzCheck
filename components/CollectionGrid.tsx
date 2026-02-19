@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { CollectionItem } from "@/types";
 import { formatCardSubtitle } from "@/lib/card-identity/display";
 import { formatCurrency, formatPct, computeGainLoss } from "@/lib/formatters";
 import { getEstCmv } from "@/lib/values";
+import { normalizeHttpUrl, uniqueHttpUrls } from "@/lib/collection-images";
 
 interface CollectionGridProps {
   items: CollectionItem[];
@@ -30,6 +31,22 @@ interface CardItemProps {
 function CardItem({ item, onDelete }: CardItemProps) {
   const router = useRouter();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const imageCandidates = useMemo(
+    () =>
+      uniqueHttpUrls([
+        item.primary_image?.url,
+        item.user_image_url,
+        item.stock_image_url,
+        item.ebay_image_url,
+        item.image_url,
+      ]),
+    [item.primary_image?.url, item.user_image_url, item.stock_image_url, item.ebay_image_url, item.image_url]
+  );
+  const [imageIndex, setImageIndex] = useState(0);
+
+  useEffect(() => {
+    setImageIndex(0);
+  }, [item.id, imageCandidates.length]);
 
   const cmv = getEstCmv(item);
   const gainLoss = computeGainLoss(cmv, item.purchase_price);
@@ -49,8 +66,7 @@ function CardItem({ item, onDelete }: CardItemProps) {
     });
   }
 
-  // Get primary image or fallback to image_url
-  const imageUrl = item.primary_image?.url || item.image_url;
+  const imageUrl = imageCandidates[imageIndex] || null;
 
   const handleCardClick = () => {
     router.push(`/cards/${item.id}`);
@@ -69,8 +85,14 @@ function CardItem({ item, onDelete }: CardItemProps) {
               src={imageUrl}
               alt={item.player_name}
               className="w-full h-full object-cover"
+              onError={() => {
+                setImageIndex((prev) => {
+                  const next = prev + 1;
+                  return next < imageCandidates.length ? next : imageCandidates.length;
+                });
+              }}
             />
-            {!item.primary_image && item.image_url && (
+            {!item.primary_image && normalizeHttpUrl(item.stock_image_url || item.ebay_image_url || item.image_url) && (
               <span className="absolute bottom-2 left-2 px-1.5 py-0.5 bg-black/60 text-white text-[10px] font-medium rounded">
                 Stock
               </span>

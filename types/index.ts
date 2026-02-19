@@ -73,9 +73,13 @@ export interface CollectionItem {
   grade: string | null;
   grading_company?: string | null; // PSA, BGS, SGC, CGC, etc.
   cert_number?: string | null; // Certification number from grading company
+  acquisition_type?: AcquisitionType | null;
   purchase_price: number | null;
   purchase_date: string | null;
   image_url: string | null;
+  user_image_url?: string | null;
+  stock_image_url?: string | null;
+  ebay_image_url?: string | null;
   notes: string | null;
   estimated_cmv: number | null;
   cmv_confidence: CmvConfidence;
@@ -294,12 +298,15 @@ export interface CardIdentification {
   variant: string; // Parallel/variant (not used for inserts)
   grade: string;
   confidence: "high" | "medium" | "low";
+  stock_image_url?: string | null;
+  ebay_image_url?: string | null;
   card_identity?: CardIdentity; // Canonical identity metadata (optional)
 }
 
 export interface CardIdentificationError {
   error: string;
-  reason: string;
+  reason?: string;
+  details?: string;
 }
 
 export type CardIdentificationResponse =
@@ -325,6 +332,9 @@ export interface SearchFormData {
 export interface CardIdentificationResult extends SearchFormData {
   imageUrl: string;
   imageUrls?: string[];
+  userImageUrl?: string;
+  stockImageUrl?: string;
+  ebayImageUrl?: string;
   confidence: "high" | "medium" | "low";
   players?: string[]; // All players (for multi-player cards)
   insert?: string; // Insert type (e.g., "Downtown")
@@ -332,6 +342,8 @@ export interface CardIdentificationResult extends SearchFormData {
   confirmedYear?: string;
   // gradeEstimate removed - only available via explicit grade-estimate API
 }
+
+export type AcquisitionType = "pulled" | "bought" | "trade" | "gift" | "unknown";
 
 // Condition options for the add to collection modal
 export const CONDITION_OPTIONS = [

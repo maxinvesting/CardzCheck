@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { CollectionItem, CONDITION_OPTIONS } from "@/types";
+import { CollectionItem, CONDITION_OPTIONS, type AcquisitionType } from "@/types";
 import { formatCurrency, formatPct, computeGainLoss } from "@/lib/formatters";
 import { getEstCmv } from "@/lib/values";
 
@@ -24,6 +24,7 @@ export default function CardDetailsForm({
 
   const cmv = getEstCmv(card);
   const gainLoss = computeGainLoss(cmv, card.purchase_price);
+  const acquisitionType = card.acquisition_type || "unknown";
 
   const handleSave = async () => {
     await onSave();
@@ -74,6 +75,10 @@ export default function CardDetailsForm({
             value={card.grading_company || "—"}
           />
           <DetailRow label="Cert #" value={card.cert_number || "—"} />
+          <DetailRow
+            label="Acquisition"
+            value={acquisitionType.charAt(0).toUpperCase() + acquisitionType.slice(1)}
+          />
           <DetailRow
             label="Purchase Price"
             value={formatCurrency(card.purchase_price)}
@@ -188,6 +193,32 @@ export default function CardDetailsForm({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <FormSelect
+            label="Acquisition Type"
+            value={acquisitionType}
+            onChange={(value) =>
+              onUpdate({
+                acquisition_type: value as AcquisitionType,
+                purchase_price: value === "pulled" ? null : card.purchase_price,
+              })
+            }
+            options={[
+              { label: "Pulled", value: "pulled" },
+              { label: "Bought", value: "bought" },
+              { label: "Trade", value: "trade" },
+              { label: "Gift", value: "gift" },
+              { label: "Unknown", value: "unknown" },
+            ]}
+          />
+          <FormField
+            label="Purchase Date"
+            type="date"
+            value={card.purchase_date || ""}
+            onChange={(purchase_date) => onUpdate({ purchase_date })}
+          />
+        </div>
+
+        {acquisitionType !== "pulled" && (
           <FormField
             label="Purchase Price"
             type="number"
@@ -197,13 +228,7 @@ export default function CardDetailsForm({
             }
             placeholder="0.00"
           />
-          <FormField
-            label="Purchase Date"
-            type="date"
-            value={card.purchase_date || ""}
-            onChange={(purchase_date) => onUpdate({ purchase_date })}
-          />
-        </div>
+        )}
 
         <FormTextArea
           label="Notes"

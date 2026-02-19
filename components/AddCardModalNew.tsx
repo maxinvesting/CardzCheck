@@ -3,10 +3,13 @@
 import { useState, useCallback, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { formatSetLabel, needsYearConfirmation, shouldDisplayYear } from "@/lib/card-identity/ui";
+import { normalizeIdentificationResult } from "@/lib/card-identity/result";
+import { identifyCardFromImages } from "@/lib/identify-card/client";
+import { normalizeHttpUrl, uniqueHttpUrls } from "@/lib/collection-images";
 import {
   CONDITION_OPTIONS,
+  type AcquisitionType,
   type CardIdentificationResult,
-  type CardIdentificationResponse,
   type CollectionItem,
   type CardIdentity,
 } from "@/types";
@@ -30,6 +33,16 @@ interface AddCardModalNewProps {
 }
 
 type ModalMode = "select" | "upload" | "manual" | "confirm";
+const MAX_IDENTIFY_IMAGE_BYTES = 8 * 1024 * 1024;
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
 
 export default function AddCardModalNew({
   isOpen,
@@ -58,8 +71,9 @@ export default function AddCardModalNew({
   });
 
   // Confirm mode state
-  const [costBasisType, setCostBasisType] = useState<"pulled" | "paid">("pulled");
+  const [acquisitionType, setAcquisitionType] = useState<AcquisitionType>("pulled");
   const [purchasePrice, setPurchasePrice] = useState<string>("");
+  const [purchaseDate, setPurchaseDate] = useState<string>("");
   const [condition, setCondition] = useState<string>("Raw");
   const [editingYear, setEditingYear] = useState(false);
   const [yearDraft, setYearDraft] = useState("");
@@ -71,8 +85,9 @@ export default function AddCardModalNew({
     setPreviews([]);
     setIdentifiedCard(null);
     setManualForm({ player_name: "", year: "", set_name: "", parallel_type: "" });
-    setCostBasisType("pulled");
+    setAcquisitionType("pulled");
     setPurchasePrice("");
+    setPurchaseDate("");
     setCondition("Raw");
     setEditingYear(false);
     setYearDraft("");
@@ -97,8 +112,8 @@ export default function AddCardModalNew({
         setError("Please upload image files only");
         return;
       }
-      if (file.size > 10 * 1024 * 1024) {
-        setError("Each image must be less than 10MB");
+      if (file.size > MAX_IDENTIFY_IMAGE_BYTES) {
+        setError("Each image must be less than 8MB");
         return;
       }
     }
@@ -109,35 +124,35 @@ export default function AddCardModalNew({
     setEditingYear(false);
     setYearDraft("");
 
-    const previewUrls = await Promise.all(
-      incoming.map(
-        (file) =>
-          new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result as string);
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-          })
-      )
-    );
+    const previewUrls = await Promise.all(incoming.map((file) => readFileAsDataUrl(file)));
     setPreviews(previewUrls);
 
     try {
+      const identify = await identifyCardFromImages({
+        files: incoming,
+        includeStockImage: true,
+      });
+
+      if (!identify.ok || !identify.data || "error" in identify.data) {
+        setError(identify.errorMessage || "Failed to identify card");
+        setLoading(false);
+        setIdentifiedCard(null);
+        return;
+      }
+
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
 
-      const imageUrls = await Promise.all(
-        incoming.map(async (file, index) => {
-          if (!user) {
-            return previewUrls[index];
-          }
+      const userImageUrls = await Promise.all(
+        incoming.map(async (file) => {
+          if (!user) return null;
           const fileName = `${user.id}/${Date.now()}-${file.name}`;
           const { data: uploadData, error: uploadError } = await supabase.storage
             .from("card-images")
             .upload(fileName, file);
 
           if (uploadError) {
-            return previewUrls[index];
+            return null;
           }
 
           const { data: { publicUrl } } = supabase.storage
@@ -146,26 +161,17 @@ export default function AddCardModalNew({
           return publicUrl;
         })
       );
+      const sanitizedUserImageUrls = uniqueHttpUrls(userImageUrls);
+      const primaryUserImage = sanitizedUserImageUrls[0] || null;
 
-      const response = await fetch("/api/identify-card", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          imageUrls.length > 1 ? { imageUrls } : { imageUrl: imageUrls[0] }
-        ),
-      });
-
-      const result: CardIdentificationResponse = await response.json();
-
-      if ("error" in result) {
-        setError(result.reason || result.error);
-        setLoading(false);
-        setIdentifiedCard(null);
-        return;
-      }
+      const result = identify.data;
+      const stockImageUrl = normalizeHttpUrl(result.stock_image_url || null);
+      const ebayImageUrl = normalizeHttpUrl(result.ebay_image_url || null);
+      const displayImageUrl =
+        primaryUserImage || stockImageUrl || ebayImageUrl || previewUrls[0] || "";
 
       // Success - set identified card (NO gradeEstimate - that's separate)
-      setIdentifiedCard({
+      setIdentifiedCard(normalizeIdentificationResult({
         player_name: result.player_name,
         players: result.players || [result.player_name],
         year: result.year || undefined,
@@ -173,11 +179,14 @@ export default function AddCardModalNew({
         insert: result.insert || undefined,
         grade: result.grade || undefined,
         parallel_type: result.variant || undefined,
-        imageUrl: imageUrls[0],
-        imageUrls,
+        imageUrl: displayImageUrl,
+        imageUrls: sanitizedUserImageUrls.length > 0 ? sanitizedUserImageUrls : undefined,
+        userImageUrl: primaryUserImage || undefined,
+        stockImageUrl: stockImageUrl || undefined,
+        ebayImageUrl: ebayImageUrl || undefined,
         confidence: result.confidence,
         cardIdentity: result.card_identity,
-      });
+      }));
       setYearDraft(result.year || "");
       setMode("confirm");
     } catch (err) {
@@ -321,21 +330,50 @@ export default function AddCardModalNew({
     setError(null);
 
     try {
+      const hasPurchasePriceInput =
+        acquisitionType !== "pulled" && purchasePrice.trim().length > 0;
+      const normalizedPurchasePrice = hasPurchasePriceInput
+        ? Number.parseFloat(purchasePrice)
+        : null;
+
+      if (
+        hasPurchasePriceInput &&
+        (normalizedPurchasePrice === null ||
+          !Number.isFinite(normalizedPurchasePrice) ||
+          normalizedPurchasePrice < 0)
+      ) {
+        setError("Purchase price must be a valid positive number");
+        setLoading(false);
+        return;
+      }
+
       const notesParts: string[] = [];
       if (identifiedCard.parallel_type && identifiedCard.parallel_type !== "Base") {
         notesParts.push(`Parallel: ${identifiedCard.parallel_type}`);
       }
+      const persistedImageUrls = uniqueHttpUrls([
+        identifiedCard.userImageUrl,
+        ...(identifiedCard.imageUrls || []),
+      ]);
+      const canonicalImageUrl =
+        normalizeHttpUrl(identifiedCard.userImageUrl || null) ||
+        normalizeHttpUrl(identifiedCard.stockImageUrl || null) ||
+        normalizeHttpUrl(identifiedCard.ebayImageUrl || null) ||
+        normalizeHttpUrl(identifiedCard.imageUrl || null);
 
       const body = {
         player_name: identifiedCard.player_name,
         year: identifiedCard.year || null,
         set_name: identifiedCard.set_name || null,
         grade: condition,
-        purchase_price:
-          costBasisType === "paid" && purchasePrice ? parseFloat(purchasePrice) : null,
-        purchase_date: null,
-        image_url: identifiedCard.imageUrl || null,
-        image_urls: identifiedCard.imageUrls || [identifiedCard.imageUrl].filter(Boolean),
+        acquisition_type: acquisitionType,
+        purchase_price: acquisitionType === "pulled" ? null : normalizedPurchasePrice,
+        purchase_date: purchaseDate || null,
+        user_image_url: normalizeHttpUrl(identifiedCard.userImageUrl || null),
+        stock_image_url: normalizeHttpUrl(identifiedCard.stockImageUrl || null),
+        ebay_image_url: normalizeHttpUrl(identifiedCard.ebayImageUrl || null),
+        image_url: canonicalImageUrl,
+        image_urls: persistedImageUrls,
         notes: notesParts.length > 0 ? notesParts.join(" | ") : null,
       };
 
@@ -698,33 +736,34 @@ export default function AddCardModalNew({
               {addMode === "collection" && (
                 <div className="space-y-4 pt-2 border-t border-gray-200 dark:border-gray-800">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Cost basis
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Acquisition Type
                     </label>
-                    <div className="flex gap-3 mb-2">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="costBasis"
-                          checked={costBasisType === "pulled"}
-                          onChange={() => setCostBasisType("pulled")}
-                          className="rounded-full border-gray-300 text-blue-600 focus:ring-blue-500"
-                        />
-                        <span className="text-sm text-gray-700 dark:text-gray-300">Pulled (no cost)</span>
+                    <select
+                      value={acquisitionType}
+                      onChange={(e) => {
+                        const nextType = e.target.value as AcquisitionType;
+                        setAcquisitionType(nextType);
+                        if (nextType === "pulled") {
+                          setPurchasePrice("");
+                        }
+                      }}
+                      className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="pulled">Pulled</option>
+                      <option value="bought">Bought</option>
+                      <option value="trade">Trade</option>
+                      <option value="gift">Gift</option>
+                      <option value="unknown">Unknown</option>
+                    </select>
+                  </div>
+
+                  {acquisitionType !== "pulled" && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Purchase Price
                       </label>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="costBasis"
-                          checked={costBasisType === "paid"}
-                          onChange={() => setCostBasisType("paid")}
-                          className="rounded-full border-gray-300 text-blue-600 focus:ring-blue-500"
-                        />
-                        <span className="text-sm text-gray-700 dark:text-gray-300">I paid</span>
-                      </label>
-                    </div>
-                    {costBasisType === "paid" && (
-                      <div className="relative mt-1">
+                      <div className="relative">
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
                         <input
                           type="number"
@@ -736,7 +775,19 @@ export default function AddCardModalNew({
                           className="w-full pl-7 pr-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </div>
-                    )}
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Purchase Date (Optional)
+                    </label>
+                    <input
+                      type="date"
+                      value={purchaseDate}
+                      onChange={(e) => setPurchaseDate(e.target.value)}
+                      className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
                   </div>
 
                   <div>
