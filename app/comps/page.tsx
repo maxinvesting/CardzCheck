@@ -374,7 +374,17 @@ function CompsPageContent() {
       }
 
       setAddedToCollection((prev) => new Set([...prev, comp.link]));
-      setToast({ type: 'success', message: `Added ${formData?.player_name || 'card'} to collection!` });
+      const destination =
+        data && typeof data === "object" && "destination" in data
+          ? (data.destination as string)
+          : "collection";
+      setToast({
+        type: "success",
+        message:
+          destination === "inventory"
+            ? `Added ${formData?.player_name || "card"} to inventory!`
+            : `Added ${formData?.player_name || "card"} to collection!`,
+      });
     } catch (err) {
       console.error("❌ Error adding to collection:", err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to add card. Please try again.';
@@ -433,7 +443,17 @@ function CompsPageContent() {
       }
 
       setCardAddedFromSearch(true);
-      setToast({ type: 'success', message: `Added ${formData.player_name} to collection!` });
+      const destination =
+        data && typeof data === "object" && "destination" in data
+          ? (data.destination as string)
+          : "collection";
+      setToast({
+        type: "success",
+        message:
+          destination === "inventory"
+            ? `Added ${formData.player_name} to inventory!`
+            : `Added ${formData.player_name} to collection!`,
+      });
     } catch (err) {
       console.error("Error adding to collection:", err);
       setToast({ type: 'error', message: err instanceof Error ? err.message : 'Failed to add card. Please try again.' });
@@ -472,7 +492,17 @@ function CompsPageContent() {
         throw new Error(json.message ?? json.error ?? "Failed to add to watchlist");
       }
       setCardWatched(true);
-      setToast({ type: "success", message: `Added ${data.player_name} to watchlist` });
+      const destination =
+        json && typeof json === "object" && "destination" in json
+          ? (json.destination as string)
+          : "watchlist";
+      setToast({
+        type: "success",
+        message:
+          destination === "prospect"
+            ? `Added ${data.player_name} to prospects`
+            : `Added ${data.player_name} to watchlist`,
+      });
     } catch (e) {
       setToast({
         type: "error",
@@ -536,7 +566,7 @@ function CompsPageContent() {
                   }}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
                 >
-                  Upgrade to Pro
+                  Upgrade
                 </button>
               )}
             </div>
@@ -901,7 +931,7 @@ function CompsPageContent() {
                 You've used all your free searches
               </h3>
               <p className="text-gray-400 mb-4">
-                Upgrade to Pro for unlimited searches and collection tracking.
+                Upgrade for unlimited searches and collection tracking.
               </p>
               <button
                 onClick={() => {
@@ -910,7 +940,7 @@ function CompsPageContent() {
                 }}
                 className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
               >
-                Upgrade to Pro - $20
+                Upgrade
               </button>
             </div>
           </div>

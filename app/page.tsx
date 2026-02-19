@@ -249,7 +249,7 @@ export default function Home() {
                 href="/signup"
                 className="block mt-8 w-full py-3 text-center bg-white text-blue-600 rounded-lg font-semibold hover:bg-blue-50 transition-colors"
               >
-                Upgrade to Pro
+                Upgrade
               </Link>
             </div>
           </div>

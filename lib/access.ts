@@ -248,7 +248,7 @@ export async function canAccessFeature(
       if (!usage.canSearch) {
         return {
           allowed: false,
-          reason: "You've used all 3 free searches. Upgrade to Pro for unlimited.",
+          reason: "You've used all 3 free searches. Upgrade for unlimited.",
           upgradeRequired: true,
         };
       }
@@ -269,7 +269,7 @@ export async function canAccessFeature(
       if (!usage.canUseAI) {
         return {
           allowed: false,
-          reason: "You've used all 3 free AI messages. Upgrade to Pro for unlimited.",
+          reason: "You've used all 3 free AI messages. Upgrade for unlimited.",
           upgradeRequired: true,
         };
       }

@@ -761,7 +761,7 @@ export default function SubmissionBuilderPanel({
           onClick={() => setShowPricing(true)}
           className="mt-4 rounded-lg bg-amber-500 px-3 py-2 text-sm font-medium text-black hover:bg-amber-400"
         >
-          Upgrade to Pro
+          Upgrade
         </button>
         <PricingModal isOpen={showPricing} onClose={() => setShowPricing(false)} />
       </div>

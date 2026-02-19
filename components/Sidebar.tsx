@@ -50,14 +50,6 @@ export default function Sidebar() {
     loadUser();
   }, []);
 
-  // Updated navigation order per spec:
-  // 1. Dashboard (collection overview)
-  // 2. Collection (was "My Collection")
-  // 3. Watchlist
-  // 4. Comps (search)
-  // 5. Grade Probability Engine
-  // 6. CardzCheck Analyst
-  // 7. Settings
   const navItems = [
     {
       name: "Dashboard",
@@ -235,6 +227,18 @@ export default function Sidebar() {
     },
   ];
 
+  const visibleNavItems = isBusiness
+    ? [
+        ...navItems.filter((item) => item.href === "/business"),
+        ...navItems.filter(
+          (item) =>
+            item.href !== "/business" &&
+            item.href !== "/collection" &&
+            item.href !== "/watchlist"
+        ),
+      ]
+    : navItems;
+
   const isActive = (href: string) => pathname === href;
 
   return (
@@ -295,7 +299,7 @@ export default function Sidebar() {
 
         {/* Navigation */}
         <nav className="flex-1 p-4 space-y-2">
-          {navItems.map((item) => {
+          {visibleNavItems.map((item) => {
             const isProFeature = item.isPro && user && !user.is_paid;
             return (
               <Link
@@ -369,7 +373,7 @@ export default function Sidebar() {
               }}
               className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg text-center transition-colors"
             >
-              Upgrade to Pro
+              Upgrade
             </button>
           )}
 

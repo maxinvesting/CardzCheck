@@ -706,13 +706,13 @@ export default function CollectionPage() {
                   onClick={() => setShowPaywall(true)}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-sm"
                 >
-                  Upgrade to Pro
+                  Upgrade
                 </button>
               )}
             </div>
             {isNearLimit && (
               <p className="text-sm text-yellow-800 dark:text-yellow-200 mt-2">
-                You're near your collection limit. Upgrade to Pro for unlimited cards.
+                You're near your collection limit. Upgrade for unlimited cards.
               </p>
             )}
           </div>

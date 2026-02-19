@@ -133,14 +133,14 @@ function AnalystPageContent() {
               </h1>
               <p className="text-gray-400 mb-6">
                 Get insights on card values, investment potential, and
-                market trends. Upgrade to Pro to unlock CardzCheck Analyst.
+                market trends. Upgrade to unlock CardzCheck Analyst.
               </p>
               <div className="space-y-3">
                 <button
                   onClick={() => setPricingOpen(true)}
                   className="w-full px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-xl transition-colors"
                 >
-                  Upgrade to Pro
+                  Upgrade
                 </button>
                 <button
                   onClick={() => router.push("/dashboard")}

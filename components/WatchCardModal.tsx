@@ -153,13 +153,13 @@ export default function WatchCardModal({
                     Watchlist is a Pro Feature
                   </p>
                   <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
-                    Upgrade to Pro to track card prices and set target alerts.
+                    Upgrade to track card prices and set target alerts.
                   </p>
                   <button
                     onClick={onUpgradeClick}
                     className="mt-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
                   >
-                    Upgrade to Pro
+                    Upgrade
                   </button>
                 </div>
               </div>

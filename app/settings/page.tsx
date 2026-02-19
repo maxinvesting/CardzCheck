@@ -333,13 +333,13 @@ function SettingsContent() {
                     onClick={handleUpgrade}
                     className="px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
                   >
-                    Upgrade to Pro
+                    Upgrade
                   </button>
                 </div>
 
                 <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4">
                   <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Upgrade to Pro for $20 and get:
+                    Upgrade and get:
                   </p>
                   <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
                     <li>• Unlimited searches</li>

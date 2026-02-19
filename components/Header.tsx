@@ -218,7 +218,7 @@ export default function Header() {
                         }}
                         className="w-full px-4 py-2 text-left text-sm text-blue-400 hover:bg-gray-800"
                       >
-                        Upgrade to Pro
+                        Upgrade
                       </button>
                     )}
 

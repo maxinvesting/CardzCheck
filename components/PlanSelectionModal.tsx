@@ -340,7 +340,7 @@ export default function PlanSelectionModal({
               >
                 {loading && selectedPlan === "pro"
                   ? "Loading..."
-                  : "Upgrade to Pro"}
+                  : "Upgrade"}
               </button>
             </div>
           </div>

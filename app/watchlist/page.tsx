@@ -261,7 +261,7 @@ export default function WatchlistPage() {
             </h1>
             <p className="text-gray-400 mb-6">
               Track cards you want to buy, set target prices, and get notified
-              when prices drop. Upgrade to Pro to unlock the Watchlist.
+              when prices drop. Upgrade to unlock the Watchlist.
             </p>
             <div className="space-y-3">
               <button
@@ -276,7 +276,7 @@ export default function WatchlistPage() {
                 }}
                 className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl transition-colors"
               >
-                Upgrade to Pro
+                Upgrade
               </button>
               <button
                 onClick={() => router.push("/dashboard")}
