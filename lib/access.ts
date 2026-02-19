@@ -5,9 +5,11 @@ import type { Subscription, Usage } from "@/types";
 export interface AccessCheck {
   hasAccess: boolean;
   isPro: boolean;
+  isBusiness: boolean;
   isActivated: boolean;
   subscriptionStatus: string | null;
   periodEnd: string | null;
+  tier: "free" | "pro" | "business";
 }
 
 export interface UsageCheck {
@@ -18,17 +20,19 @@ export interface UsageCheck {
 }
 
 /**
- * Check if user has Pro access via the new subscription system
+ * Check if user has Pro access via the subscription system.
+ * Business tier includes all Pro features.
  */
 export async function checkProAccess(userId: string): Promise<AccessCheck> {
-  // In test mode, return Pro access
   if (isTestMode()) {
     return {
       hasAccess: true,
       isPro: true,
+      isBusiness: false,
       isActivated: true,
       subscriptionStatus: "active",
       periodEnd: null,
+      tier: "pro",
     };
   }
 
@@ -44,14 +48,17 @@ export async function checkProAccess(userId: string): Promise<AccessCheck> {
     return {
       hasAccess: false,
       isPro: false,
+      isBusiness: false,
       isActivated: false,
       subscriptionStatus: null,
       periodEnd: null,
+      tier: "free",
     };
   }
 
   const sub = subscription as Subscription;
-  const isPro = sub.tier === "pro";
+  const isPro = sub.tier === "pro" || sub.tier === "business";
+  const isBusiness = sub.tier === "business";
   const isActive = sub.status === "active";
   const notExpired =
     !sub.current_period_end ||
@@ -60,10 +67,22 @@ export async function checkProAccess(userId: string): Promise<AccessCheck> {
   return {
     hasAccess: isPro && isActive && notExpired,
     isPro,
+    isBusiness: isBusiness && isActive && notExpired,
     isActivated: sub.activation_paid,
     subscriptionStatus: sub.status,
     periodEnd: sub.current_period_end,
+    tier: sub.tier,
   };
+}
+
+/**
+ * Check if user has Business tier access.
+ */
+export async function hasBusinessAccess(userId: string): Promise<boolean> {
+  if (isTestMode()) return true;
+
+  const access = await checkProAccess(userId);
+  return access.isBusiness;
 }
 
 /**
@@ -202,7 +221,8 @@ export type Feature =
   | "collection"
   | "watchlist"
   | "ai_chat"
-  | "grade_estimator";
+  | "grade_estimator"
+  | "business";
 
 export interface FeatureAccessResult {
   allowed: boolean;
@@ -262,6 +282,19 @@ export async function canAccessFeature(
           "Grade Probability Engine is a Pro feature. Upgrade to get AI-based grade probabilities (not guaranteed).",
         upgradeRequired: true,
       };
+
+    case "business": {
+      const businessAccess = await hasBusinessAccess(userId);
+      if (!businessAccess) {
+        return {
+          allowed: false,
+          reason:
+            "Business tools require a Business subscription ($15/mo or $150/yr).",
+          upgradeRequired: true,
+        };
+      }
+      return { allowed: true };
+    }
 
     default:
       return { allowed: false, reason: "Unknown feature" };

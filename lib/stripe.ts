@@ -108,6 +108,57 @@ export async function createProSubscriptionCheckout(
 }
 
 /**
+ * Create Business subscription checkout. Supports monthly and annual billing.
+ */
+export async function createBusinessSubscriptionCheckout(
+  userId: string,
+  userEmail: string,
+  successUrl: string,
+  cancelUrl: string,
+  billing: "monthly" | "annual" = "monthly"
+) {
+  const stripe = getStripeClient();
+
+  let customerId: string;
+  const existingCustomers = await stripe.customers.list({
+    email: userEmail,
+    limit: 1,
+  });
+
+  if (existingCustomers.data.length > 0) {
+    customerId = existingCustomers.data[0].id;
+  } else {
+    const customer = await stripe.customers.create({
+      email: userEmail,
+      metadata: { userId },
+    });
+    customerId = customer.id;
+  }
+
+  const priceId =
+    billing === "annual"
+      ? process.env.STRIPE_BUSINESS_ANNUAL_PRICE_ID
+      : process.env.STRIPE_BUSINESS_MONTHLY_PRICE_ID;
+
+  if (!priceId) {
+    throw new Error("Business price ID not configured");
+  }
+
+  const session = await stripe.checkout.sessions.create({
+    customer: customerId,
+    payment_method_types: ["card"],
+    line_items: [{ price: priceId, quantity: 1 }],
+    mode: "subscription",
+    success_url: successUrl,
+    cancel_url: cancelUrl,
+    metadata: { userId, tier: "business" },
+    subscription_data: { metadata: { userId, tier: "business" } },
+  });
+
+  return session;
+}
+
+/**
  * Create a Stripe Customer Portal session for subscription management
  */
 export async function createCustomerPortalSession(

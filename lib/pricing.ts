@@ -1,16 +1,21 @@
 /**
  * Pricing constants for display and computed values.
- * Single source of truth for Pro monthly, annual, and savings.
+ * Single source of truth for Pro/Business monthly, annual, and savings.
  */
 
 export const PRO_MONTHLY_PRICE = 8.99;
 export const PRO_ANNUAL_PRICE = 79;
 
+export const BUSINESS_MONTHLY_PRICE = 15;
+export const BUSINESS_ANNUAL_PRICE = 150;
+
 /** What 12 months of monthly would cost (for savings copy). */
 export const PRO_MONTHLY_PRICE_YEARLY = PRO_MONTHLY_PRICE * 12;
+export const BUSINESS_MONTHLY_PRICE_YEARLY = BUSINESS_MONTHLY_PRICE * 12;
 
 /** Savings when choosing annual over 12x monthly. */
 export const ANNUAL_SAVINGS = Math.round((PRO_MONTHLY_PRICE_YEARLY - PRO_ANNUAL_PRICE) * 100) / 100;
+export const BUSINESS_ANNUAL_SAVINGS = Math.round((BUSINESS_MONTHLY_PRICE_YEARLY - BUSINESS_ANNUAL_PRICE) * 100) / 100;
 
 /**
  * Format a price for display. Uses 2 decimals for cents (e.g. $8.99), whole number for dollars (e.g. $79).

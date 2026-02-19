@@ -562,7 +562,15 @@ export async function PATCH(request: NextRequest) {
       throw error;
     }
 
-    const cmvRelevantFields = ["player_name", "year", "set_name", "grade", "notes"];
+    const cmvRelevantFields = [
+      "player_name",
+      "year",
+      "set_name",
+      "grade",
+      "card_number",
+      "parallel_type",
+      "notes",
+    ];
     const shouldRecalculate = cmvRelevantFields.some((field) => field in updates);
 
     if (!shouldRecalculate) {

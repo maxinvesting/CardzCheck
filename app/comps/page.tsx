@@ -51,6 +51,10 @@ function CompsPageContent() {
 
   const resolveCmvForSave = (result: SearchResult | null): number | null => {
     if (!result) return null;
+    const modeled = result._marketDiscount?.cmv;
+    if (typeof modeled === "number" && Number.isFinite(modeled) && modeled > 0) {
+      return modeled;
+    }
     const direct = result.stats?.cmv;
     if (typeof direct === "number" && Number.isFinite(direct) && direct > 0) {
       return direct;

@@ -12,11 +12,11 @@ export interface User {
   usage?: Usage; // New usage tracking record
 }
 
-// Subscription record for Pro tier management
+// Subscription record for tier management
 export interface Subscription {
   id: string;
   user_id: string;
-  tier: "free" | "pro";
+  tier: "free" | "pro" | "business";
   stripe_customer_id: string | null;
   stripe_subscription_id: string | null;
   activation_paid: boolean;
@@ -24,6 +24,61 @@ export interface Subscription {
   status: "active" | "past_due" | "canceled" | "unpaid";
   created_at: string;
   updated_at: string;
+}
+
+// Business inventory item
+export interface BusinessInventoryItem {
+  id: string;
+  user_id: string;
+  card_id: string | null;
+  title: string;
+  quantity: number;
+  acquisition_date: string | null;
+  acquisition_type: "buy" | "trade" | "rip" | "consignment" | "other";
+  cost_basis_total_cents: number;
+  tax_cents: number;
+  shipping_cents: number;
+  fees_paid_cents: number;
+  condition_status: "raw" | "graded";
+  grading_company: string | null;
+  grade: string | null;
+  cert_number: string | null;
+  location: string | null;
+  channel: "ebay" | "whatnot" | "instagram" | "show" | "local" | "other";
+  status: "unlisted" | "listed" | "pending_sale" | "sold" | "returned";
+  list_price_cents: number | null;
+  current_market_value_cents: number | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// Business sale record
+export interface BusinessSale {
+  id: string;
+  user_id: string;
+  inventory_item_id: string;
+  sale_date: string;
+  sale_price_cents: number;
+  platform_fees_cents: number;
+  shipping_charged_cents: number;
+  shipping_paid_cents: number;
+  other_costs_cents: number;
+  net_proceeds_cents: number;
+  profit_cents: number;
+  order_id: string | null;
+  buyer_handle: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BusinessMetrics {
+  revenueMtd: number;
+  revenueYtd: number;
+  profitMtd: number;
+  profitYtd: number;
+  activeInventoryCount: number;
 }
 
 // Usage tracking for free tier limits
@@ -179,6 +234,23 @@ export interface SearchResult {
   // Multi-pass search metadata
   _passUsed?: "strict" | "broad" | "minimal";
   _totalPasses?: number;
+  _marketDiscount?: {
+    method: "sold_median" | "listing_adjusted" | "insufficient_data";
+    cmv: number | null;
+    rangeLow: number | null;
+    rangeHigh: number | null;
+    confidence: "high" | "medium" | "low";
+    listingMedian: number | null;
+    soldMedian: number | null;
+    listingCount: number;
+    soldCount: number;
+    expectedDiscountRatio: number | null;
+    expectedDiscountP25: number | null;
+    expectedDiscountP75: number | null;
+    expectedDiscountConfidence: "high" | "medium" | "low" | null;
+    cardFingerprint: string;
+    queryText: string;
+  };
 }
 
 // Grade estimation from AI analysis

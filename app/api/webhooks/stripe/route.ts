@@ -48,11 +48,14 @@ export async function POST(request: NextRequest) {
       const customerId = session.customer as string;
       const subscriptionId = session.subscription as string | null;
 
+      // Determine tier from metadata (defaults to "pro" for backward compatibility)
+      const tier = session.metadata?.tier === "business" ? "business" : "pro";
+
       // Create or update subscription record
       const { error: subError } = await supabase.from("subscriptions").upsert(
         {
           user_id: userId,
-          tier: "pro",
+          tier,
           stripe_customer_id: customerId,
           stripe_subscription_id: subscriptionId,
           activation_paid: true,
@@ -212,10 +215,13 @@ export async function POST(request: NextRequest) {
     case "customer.subscription.updated": {
       const subscription = event.data.object as Stripe.Subscription;
 
-      // Update subscription period end
+      // Detect tier from subscription metadata or price IDs
+      const subTier = subscription.metadata?.tier === "business" ? "business" : "pro";
+
       await supabase
         .from("subscriptions")
         .update({
+          tier: subTier,
           current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
           status: subscription.status === "active" ? "active" : "past_due",
         })
@@ -223,6 +229,7 @@ export async function POST(request: NextRequest) {
 
       logDebug("Subscription updated", {
         subscriptionId: redactId(subscription.id),
+        tier: subTier,
       });
       break;
     }

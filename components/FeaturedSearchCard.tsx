@@ -67,7 +67,14 @@ export default function FeaturedSearchCard({
   const query = results.query;
   const est = results._estimatedSaleRange;
   const hasEstimate = est?.pricingAvailable && est.estimatedSaleRange;
-  const cmv = results.stats?.cmv ?? null;
+  const modeled = results._marketDiscount;
+  const cmv = modeled?.cmv ?? results.stats?.cmv ?? null;
+  const hasModeledRange =
+    modeled?.rangeLow !== null &&
+    modeled?.rangeLow !== undefined &&
+    modeled?.rangeHigh !== null &&
+    modeled?.rangeHigh !== undefined;
+  const hasAnyRange = hasModeledRange || hasEstimate;
   const items = useMemo(() => toListings(results), [results]);
   const firstImage = items[0]?.image;
 
@@ -109,12 +116,15 @@ export default function FeaturedSearchCard({
           <h2 className="text-lg font-semibold text-white truncate">{query}</h2>
           <p className="text-sm text-gray-400 mt-0.5">
             {items.length} active listings
-            {hasEstimate && ` · Est. ${formatPrice(est!.estimatedSaleRange!.low)}–${formatPrice(est!.estimatedSaleRange!.high)}`}
+            {hasModeledRange &&
+              ` · Est. ${formatPrice(modeled!.rangeLow)}–${formatPrice(modeled!.rangeHigh)}`}
+            {!hasModeledRange && hasEstimate &&
+              ` · Est. ${formatPrice(est!.estimatedSaleRange!.low)}–${formatPrice(est!.estimatedSaleRange!.high)}`}
             {!expanded && " · Click to expand"}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          {hasEstimate && (
+          {cmv !== null && (
             <span className="text-base font-bold text-blue-400">
               {formatPrice(cmv)} CMV (Beta)
             </span>
@@ -135,21 +145,27 @@ export default function FeaturedSearchCard({
         <div className="px-4 pb-4 pt-0 border-t border-gray-700/60">
           <div className="mt-4 space-y-4">
             {/* Estimated CMV (Beta) + range */}
-            {hasEstimate && est!.estimatedSaleRange && (
+            {cmv !== null && (
               <div className="p-4 bg-gray-900/50 rounded-xl">
                 <h3 className="text-sm font-medium text-gray-400 mb-2">
-                  Estimated from active listings (Beta)
+                  CMV model ({modeled?.method === "sold_median" ? "sold median" : "listing-adjusted"})
                 </h3>
                 <div className="flex flex-wrap items-baseline gap-3">
                   <span className="text-2xl font-bold text-white">
-                    {formatPrice(est!.estimatedSaleRange.low)} – {formatPrice(est!.estimatedSaleRange.high)}
+                    {hasAnyRange
+                      ? `${formatPrice(
+                          hasModeledRange ? modeled!.rangeLow : est!.estimatedSaleRange!.low
+                        )} – ${formatPrice(
+                          hasModeledRange ? modeled!.rangeHigh : est!.estimatedSaleRange!.high
+                        )}`
+                      : formatPrice(cmv)}
                   </span>
                   <span className="text-sm text-gray-500">
-                    CMV (Beta) {formatPrice(cmv)} · {est!.marketAsk?.count ?? 0} listings
+                    CMV (Beta) {formatPrice(cmv)} · {modeled?.listingCount ?? est?.marketAsk?.count ?? 0} listings
                   </span>
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  {est!.estimatedSaleRange.confidence} confidence
+                  {modeled?.confidence ?? est?.estimatedSaleRange?.confidence ?? "low"} confidence
                 </p>
               </div>
             )}

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { buildSearchQuery } from "@/lib/ebay";
 import { searchEbayDualSignal, buildSoldListingsUrl } from "@/lib/ebay/index";
+import { getMarketCmvForQuery } from "@/lib/market-discount";
 import { LIMITS } from "@/types";
 import { isTestMode } from "@/lib/test-mode";
 import { logDebug } from "@/lib/logging";
@@ -128,12 +129,23 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    const market = await getMarketCmvForQuery({
+      query: {
+        ...searchParamsObj,
+        limit: 25,
+      },
+      activeItemsOverride: result.forSale.items,
+    });
+
     // New format: Return full pricing response
     if (useNewFormat) {
       logDebug(
         `📊 forSale=${result.forSale.count}, estimate=${result.estimatedSaleRange.pricingAvailable ? "available" : "unavailable"}`
       );
-      return NextResponse.json(result);
+      return NextResponse.json({
+        ...result,
+        _marketDiscount: market.cmv,
+      });
     }
 
     // Legacy format: Convert to old response shape
@@ -146,14 +158,19 @@ export async function GET(request: NextRequest) {
       source: "ebay" as const,
     }));
 
-    // Calculate CMV from estimated sale range if available
-    let cmv = result.forSale.median;
+    // Calculate CMV from sold-first/listing-adjusted discount model.
+    let cmv = market.cmv.cmv ?? result.forSale.median;
     let estimatedLow = 0;
     let estimatedHigh = 0;
 
-    if (result.estimatedSaleRange.pricingAvailable) {
+    if (market.cmv.rangeLow !== null && market.cmv.rangeHigh !== null) {
+      estimatedLow = market.cmv.rangeLow;
+      estimatedHigh = market.cmv.rangeHigh;
+    } else if (result.estimatedSaleRange.pricingAvailable) {
       const { low, high } = result.estimatedSaleRange.estimatedSaleRange;
-      cmv = Math.round(((low + high) / 2) * 100) / 100;
+      if (market.cmv.cmv === null) {
+        cmv = Math.round(((low + high) / 2) * 100) / 100;
+      }
       estimatedLow = low;
       estimatedHigh = high;
     }
@@ -172,12 +189,16 @@ export async function GET(request: NextRequest) {
           : null;
 
       if (cmvValue !== null) {
+        const cmvConfidence =
+          market.cmv.method === "insufficient_data"
+            ? "unavailable"
+            : market.cmv.confidence;
         const { error: updateError } = await supabase
           .from("collection_items")
           .update({
             estimated_cmv: cmvValue,
             est_cmv: cmvValue,
-            cmv_confidence: "medium",
+            cmv_confidence: cmvConfidence,
             cmv_last_updated: new Date().toISOString(),
           })
           .eq("id", cardId)
@@ -211,6 +232,7 @@ export async function GET(request: NextRequest) {
       _disclaimers: result.disclaimers,
       _passUsed: result.passUsed,
       _totalPasses: result.totalPasses,
+      _marketDiscount: market.cmv,
     });
   } catch (error) {
     console.error("Search error:", error);

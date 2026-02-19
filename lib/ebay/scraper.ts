@@ -223,6 +223,10 @@ async function scrapeEbaySoldPage(params: EbaySearchParams): Promise<CompItem[]>
  */
 export async function scrapeEbaySoldListings(params: EbaySearchParams): Promise<RecentCompsData> {
   const query = buildSearchQuery(params);
+  const maxItems =
+    typeof params.limit === "number" && Number.isFinite(params.limit) && params.limit > 0
+      ? Math.min(Math.floor(params.limit), 50)
+      : 25;
 
   try {
     // Try original search
@@ -278,7 +282,7 @@ export async function scrapeEbaySoldListings(params: EbaySearchParams): Promise<
       low: stats.low,
       median: stats.median,
       high: stats.high,
-      items: items.slice(0, 20), // Limit to 20 items
+      items: items.slice(0, maxItems),
       cachedAt: new Date().toISOString(),
     };
   } catch (error) {
