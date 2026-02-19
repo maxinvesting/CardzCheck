@@ -12,7 +12,7 @@ const PROTECTED_PATHS = [
   "/settings",
   "/analyst",
 ];
-const BUSINESS_ONLY_REDIRECT_PATHS = ["/collection", "/watchlist"];
+const BUSINESS_ONLY_REDIRECT_PATHS = ["/dashboard", "/collection", "/watchlist"];
 const BUSINESS_REQUIRED_PATHS = ["/business"];
 
 export async function updateSession(request: NextRequest) {

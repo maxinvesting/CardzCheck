@@ -2,6 +2,7 @@ export interface User {
   id: string;
   email: string;
   name?: string | null; // User's display name
+  business_name?: string | null; // Optional business display name for business workspace
   is_paid: boolean;
   stripe_customer_id: string | null;
   free_searches_used: number;

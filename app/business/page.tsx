@@ -9,6 +9,12 @@ import BusinessMetrics from "@/components/business/BusinessMetrics";
 import InventoryTable from "@/components/business/InventoryTable";
 import ItemDetailDrawer from "@/components/business/ItemDetailDrawer";
 import AddInventoryModal from "@/components/business/AddInventoryModal";
+import AddWaxModal from "@/components/business/AddWaxModal";
+import AddCardModalNew from "@/components/AddCardModalNew";
+import CardPickerModal from "@/components/CardPickerModal";
+import ConfirmAddCardModal from "@/components/ConfirmAddCardModal";
+import type { CardPickerSelection } from "@/components/CardPicker";
+import type { CardIdentificationResult } from "@/types";
 import { createClient } from "@/lib/supabase/client";
 import type { BusinessInventoryItem, BusinessMetrics as MetricsType } from "@/types";
 
@@ -17,11 +23,18 @@ export default function BusinessPage() {
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [hasAccess, setHasAccess] = useState<boolean | null>(null);
+  const [businessName, setBusinessName] = useState<string | null>(null);
   const [items, setItems] = useState<BusinessInventoryItem[]>([]);
   const [metrics, setMetrics] = useState<MetricsType | null>(null);
   const [metricsLoading, setMetricsLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState<BusinessInventoryItem | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showAddCardModal, setShowAddCardModal] = useState(false);
+  const [showCardPicker, setShowCardPicker] = useState(false);
+  const [showConfirmCard, setShowConfirmCard] = useState(false);
+  const [pendingCard, setPendingCard] = useState<CardIdentificationResult | null>(null);
+  const [showAddWaxModal, setShowAddWaxModal] = useState(false);
+  const [showAddDropdown, setShowAddDropdown] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   useEffect(() => {
@@ -30,6 +43,16 @@ export default function BusinessPage() {
       return () => clearTimeout(timer);
     }
   }, [toast]);
+
+  useEffect(() => {
+    if (!showAddDropdown) return;
+    const handleClick = () => setShowAddDropdown(false);
+    const timer = setTimeout(() => document.addEventListener("click", handleClick), 0);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("click", handleClick);
+    };
+  }, [showAddDropdown]);
 
   useEffect(() => {
     if (searchParams.get("notice") === "business_mode") {
@@ -84,6 +107,13 @@ export default function BusinessPage() {
         router.push("/login?redirect=/business");
         return;
       }
+
+      const { data: userData } = await supabase
+        .from("users")
+        .select("business_name")
+        .eq("id", user.id)
+        .maybeSingle();
+      setBusinessName(userData?.business_name || null);
 
       await Promise.all([loadInventory(), loadMetrics()]);
     }
@@ -201,6 +231,56 @@ export default function BusinessPage() {
     }
   };
 
+  const handleCardAdded = (playerName: string) => {
+    setToast({ type: "success", message: `Added "${playerName}" to inventory` });
+    loadInventory();
+    loadMetrics();
+  };
+
+  const handleCardPickerSelect = (card: CardPickerSelection) => {
+    setShowCardPicker(false);
+    setPendingCard({
+      player_name: card.player_name,
+      year: card.year,
+      set_name: card.set_name,
+      parallel_type: card.variant,
+      card_number: card.card_number,
+      grade: card.grade,
+      imageUrl: "",
+      confidence: "high",
+    });
+    setShowConfirmCard(true);
+  };
+
+  const handleConfirmCardSuccess = (
+    playerName: string,
+    _item?: any,
+    _destination?: "collection" | "inventory"
+  ) => {
+    setPendingCard(null);
+    setToast({ type: "success", message: `Added "${playerName}" to inventory` });
+    loadInventory();
+    loadMetrics();
+  };
+
+  const handleAddWax = async (item: any) => {
+    try {
+      const res = await fetch("/api/business/inventory", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(item),
+      });
+      if (res.ok) {
+        const created = await res.json();
+        setItems((prev) => [created, ...prev]);
+        setToast({ type: "success", message: `Added "${item.title}"` });
+        loadMetrics();
+      }
+    } catch {
+      setToast({ type: "error", message: "Failed to add wax item" });
+    }
+  };
+
   if (loading) {
     return (
       <AuthenticatedLayout>
@@ -235,7 +315,9 @@ export default function BusinessPage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-white">Business</h1>
+            <h1 className="text-2xl font-bold text-white">
+              {businessName?.trim() || "Business"}
+            </h1>
             <p className="text-gray-400 text-sm mt-1">
               Inventory tracking & sales analytics
             </p>
@@ -266,15 +348,67 @@ export default function BusinessPage() {
                 </a>
               </div>
             </div>
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors text-sm font-medium flex items-center gap-2"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              Add Item
-            </button>
+            <div className="relative">
+              <div className="flex">
+                <button
+                  onClick={() => setShowAddCardModal(true)}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-l-lg transition-colors text-sm font-medium flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add Card
+                </button>
+                <button
+                  onClick={() => setShowAddDropdown((prev) => !prev)}
+                  className="px-2 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-r-lg transition-colors border-l border-emerald-500"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+              </div>
+              {showAddDropdown && (
+                <div className="absolute right-0 mt-1 w-48 bg-gray-900 border border-gray-700 rounded-lg shadow-lg z-20">
+                  <button
+                    onClick={() => {
+                      setShowAddDropdown(false);
+                      setShowAddCardModal(true);
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-800 rounded-t-lg"
+                  >
+                    <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                    </svg>
+                    Add Card
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowAddDropdown(false);
+                      setShowAddWaxModal(true);
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-800"
+                  >
+                    <svg className="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                    </svg>
+                    Add Wax
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowAddDropdown(false);
+                      setShowAddModal(true);
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-800 rounded-b-lg"
+                  >
+                    <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    Manual Entry
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -300,11 +434,56 @@ export default function BusinessPage() {
           />
         )}
 
-        {/* Add Modal */}
+        {/* Manual Add Modal */}
         <AddInventoryModal
           isOpen={showAddModal}
           onClose={() => setShowAddModal(false)}
           onAdd={handleAddItem}
+        />
+
+        {/* Add Card Modal (Upload / Smart Search) */}
+        <AddCardModalNew
+          isOpen={showAddCardModal}
+          onClose={() => setShowAddCardModal(false)}
+          onSuccess={handleCardAdded}
+          onLimitReached={() =>
+            setToast({ type: "error", message: "Card limit reached" })
+          }
+          addMode="collection"
+          onOpenSmartSearch={() => {
+            setShowAddCardModal(false);
+            setShowCardPicker(true);
+          }}
+        />
+
+        {/* Card Database Search Picker */}
+        <CardPickerModal
+          isOpen={showCardPicker}
+          title="Find Card in Database"
+          mode="collection"
+          onClose={() => setShowCardPicker(false)}
+          onSelect={handleCardPickerSelect}
+        />
+
+        {/* Confirm Card Details before adding to inventory */}
+        <ConfirmAddCardModal
+          isOpen={showConfirmCard}
+          onClose={() => {
+            setShowConfirmCard(false);
+            setPendingCard(null);
+          }}
+          onSuccess={handleConfirmCardSuccess}
+          onLimitReached={() =>
+            setToast({ type: "error", message: "Card limit reached" })
+          }
+          cardData={pendingCard}
+        />
+
+        {/* Add Wax Modal */}
+        <AddWaxModal
+          isOpen={showAddWaxModal}
+          onClose={() => setShowAddWaxModal(false)}
+          onAdd={handleAddWax}
         />
 
         {/* Toast */}

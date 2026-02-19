@@ -6,6 +6,7 @@ import Link from "next/link";
 import Header from "@/components/Header";
 import SportsCardBackground from "@/components/SportsCardBackground";
 import { createClient } from "@/lib/supabase/client";
+import { hasActiveBusinessTier } from "@/lib/subscription-tier";
 
 export default function Home() {
   const router = useRouter();
@@ -17,7 +18,18 @@ export default function Home() {
       const { data: { user } } = await supabase.auth.getUser();
 
       if (user) {
-        // Authenticated user - redirect to dashboard
+        // Authenticated user - redirect by tier
+        const { data: subscription } = await supabase
+          .from("subscriptions")
+          .select("tier, status, current_period_end")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (hasActiveBusinessTier(subscription)) {
+          router.replace("/business");
+          return;
+        }
+
         router.replace("/dashboard");
       } else {
         setCheckingAuth(false);

@@ -4,18 +4,46 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import type { User, Subscription } from "@/types";
+import type { User } from "@/types";
 import PricingModal from "@/components/PricingModal";
+import { hasActiveBusinessTier } from "@/lib/subscription-tier";
+
+// Keeps sidebar tier mode stable across page-level remounts in SPA navigation.
+let cachedBusinessMembership: boolean | null = null;
+const BUSINESS_MEMBERSHIP_STORAGE_KEY = "cardzcheck_business_membership";
+
+function readStoredBusinessMembership(): boolean | null {
+  if (typeof window === "undefined") return null;
+  const stored = window.sessionStorage.getItem(BUSINESS_MEMBERSHIP_STORAGE_KEY);
+  if (stored === "1") return true;
+  if (stored === "0") return false;
+  return null;
+}
+
+function persistBusinessMembership(value: boolean) {
+  cachedBusinessMembership = value;
+  if (typeof window !== "undefined") {
+    window.sessionStorage.setItem(
+      BUSINESS_MEMBERSHIP_STORAGE_KEY,
+      value ? "1" : "0"
+    );
+  }
+}
 
 export default function Sidebar() {
+  const pathname = usePathname();
+  const pathImpliesBusiness = pathname.startsWith("/business");
+  const initialBusinessMembership =
+    cachedBusinessMembership ?? readStoredBusinessMembership();
   const [user, setUser] = useState<User | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [remainingSearches, setRemainingSearches] = useState<number | null>(
     null
   );
   const [pricingOpen, setPricingOpen] = useState(false);
-  const [isBusiness, setIsBusiness] = useState(false);
-  const pathname = usePathname();
+  const [isBusiness, setIsBusiness] = useState(
+    initialBusinessMembership ?? pathImpliesBusiness
+  );
   const supabase = createClient();
 
   useEffect(() => {
@@ -23,30 +51,36 @@ export default function Sidebar() {
       const {
         data: { user: authUser },
       } = await supabase.auth.getUser();
-      if (authUser) {
-        const { data } = await supabase
-          .from("users")
-          .select("*")
-          .eq("id", authUser.id)
-          .single();
-        if (data) {
-          setUser(data);
-          if (!data.is_paid) {
-            setRemainingSearches(3 - (data.free_searches_used || 0));
-          }
-        }
+      if (!authUser) {
+        persistBusinessMembership(false);
+        setIsBusiness(false);
+        return;
+      }
 
-        // Check for Business subscription
-        const { data: sub } = await supabase
-          .from("subscriptions")
-          .select("tier, status")
-          .eq("user_id", authUser.id)
-          .single();
-        if (sub && (sub as any).tier === "business" && (sub as any).status === "active") {
-          setIsBusiness(true);
+      const { data } = await supabase
+        .from("users")
+        .select("*")
+        .eq("id", authUser.id)
+        .single();
+      if (data) {
+        setUser(data);
+        if (!data.is_paid) {
+          setRemainingSearches(3 - (data.free_searches_used || 0));
         }
       }
+
+      // Check for Business subscription
+      const { data: sub } = await supabase
+        .from("subscriptions")
+        .select("tier, status, current_period_end")
+        .eq("user_id", authUser.id)
+        .maybeSingle();
+
+      const hasBusinessMembership = hasActiveBusinessTier(sub);
+      persistBusinessMembership(hasBusinessMembership);
+      setIsBusiness(hasBusinessMembership);
     }
+
     loadUser();
   }, []);
 
@@ -233,6 +267,7 @@ export default function Sidebar() {
         ...navItems.filter(
           (item) =>
             item.href !== "/business" &&
+            item.href !== "/dashboard" &&
             item.href !== "/collection" &&
             item.href !== "/watchlist"
         ),
@@ -288,7 +323,7 @@ export default function Sidebar() {
       >
         {/* Logo */}
         <Link
-          href="/dashboard"
+          href={isBusiness ? "/business" : "/dashboard"}
           className="p-8 border-b border-gray-800 flex items-center justify-center hover:opacity-90 transition-opacity cursor-pointer"
           onClick={() => setIsOpen(false)}
         >

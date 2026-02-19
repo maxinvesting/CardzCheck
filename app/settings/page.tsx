@@ -17,6 +17,8 @@ function SettingsContent() {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [nameLoading, setNameLoading] = useState(false);
+  const [businessName, setBusinessName] = useState("");
+  const [businessNameLoading, setBusinessNameLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [pricingOpen, setPricingOpen] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -38,6 +40,7 @@ function SettingsContent() {
         setUser(testUser);
         setEmail(testUser.email);
         setName(testUser.name || "");
+        setBusinessName(testUser.business_name || "");
         setLoading(false);
         console.log("🧪 TEST MODE: Using mock user in Settings");
         return;
@@ -64,6 +67,7 @@ function SettingsContent() {
       if (userData) {
         setUser(userData);
         setName(userData.name || "");
+        setBusinessName(userData.business_name || "");
       }
 
       setLoading(false);
@@ -98,6 +102,34 @@ function SettingsContent() {
       alert("Failed to update name");
     } finally {
       setNameLoading(false);
+    }
+  };
+
+  const handleBusinessNameUpdate = async () => {
+    setBusinessNameLoading(true);
+    try {
+      const response = await fetch("/api/user/name", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ business_name: businessName.trim() || null }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        alert(data.error || "Failed to update business name");
+        return;
+      }
+
+      if (user) {
+        setUser({ ...user, business_name: businessName.trim() || null });
+      }
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 5000);
+    } catch (error) {
+      console.error("Error updating business name:", error);
+      alert("Failed to update business name");
+    } finally {
+      setBusinessNameLoading(false);
     }
   };
 
@@ -195,6 +227,34 @@ function SettingsContent() {
                 </div>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                   This name will be used for personalization throughout the app
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Business Name
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={businessName}
+                    onChange={(e) => setBusinessName(e.target.value)}
+                    placeholder="Your business name"
+                    maxLength={120}
+                    className="flex-1 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  <button
+                    onClick={handleBusinessNameUpdate}
+                    disabled={
+                      businessNameLoading ||
+                      businessName === (user?.business_name || "")
+                    }
+                    className="px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {businessNameLoading ? "Saving..." : "Save"}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Used as your Business workspace title
                 </p>
               </div>
               <div>

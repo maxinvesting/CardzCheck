@@ -157,6 +157,19 @@ export default function InventoryTable({
     }
 
     const val = (item as any)[field];
+    if (field === "title") {
+      const isWax = item.notes?.includes("[WAX]");
+      return (
+        <span className="flex items-center gap-1.5">
+          {isWax && (
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-900/40 text-amber-400 whitespace-nowrap">
+              WAX
+            </span>
+          )}
+          <span className="truncate">{val}</span>
+        </span>
+      );
+    }
     if (field.endsWith("_cents")) return fmtCents(val);
     if (field === "acquisition_date" && val) return val;
     return val?.toString() ?? "—";
