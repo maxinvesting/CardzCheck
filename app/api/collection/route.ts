@@ -33,6 +33,69 @@ function parsePurchasePrice(value: unknown): number | null {
   return parsed;
 }
 
+function getErrorCode(error: unknown): string | null {
+  if (!error || typeof error !== "object") return null;
+  return typeof (error as { code?: unknown }).code === "string"
+    ? (error as { code: string }).code
+    : null;
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) return error.message;
+  if (error && typeof error === "object") {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim().length > 0) return message;
+  }
+  return fallback;
+}
+
+function extractMissingColumn(error: unknown): string | null {
+  const message = getErrorMessage(error, "");
+  if (!message) return null;
+
+  const quoted = message.match(/Could not find the '([^']+)' column/i);
+  if (quoted?.[1]) return quoted[1];
+
+  const postgres = message.match(/column \"([^\"]+)\" of relation/i);
+  if (postgres?.[1]) return postgres[1];
+
+  return null;
+}
+
+async function insertCollectionItemWithFallback(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  insertPayload: Record<string, unknown>
+): Promise<{ item: any | null; error: unknown | null; removedColumns: string[] }> {
+  const payload = { ...insertPayload };
+  const removedColumns: string[] = [];
+
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const { data, error } = await supabase
+      .from("collection_items")
+      .insert(payload)
+      .select()
+      .single();
+
+    if (!error) {
+      return { item: data, error: null, removedColumns };
+    }
+
+    const missingColumn = extractMissingColumn(error);
+    if (!missingColumn || !(missingColumn in payload)) {
+      return { item: null, error, removedColumns };
+    }
+
+    delete payload[missingColumn];
+    removedColumns.push(missingColumn);
+  }
+
+  return {
+    item: null,
+    error: new Error("Insert failed after retrying schema fallback"),
+    removedColumns,
+  };
+}
+
 // GET - List collection items
 export async function GET() {
   try {
@@ -335,22 +398,27 @@ export async function POST(request: NextRequest) {
       ...cmvPayload,
     };
 
-    // Insert only columns that exist in collection_items (est_cmv added via migration when needed)
-    const { data: item, error } = await supabase
-      .from("collection_items")
-      .insert(insertPayload)
-      .select()
-      .single();
+    // Insert with schema fallback so older DBs without new columns still work.
+    const insertResult = await insertCollectionItemWithFallback(supabase, insertPayload);
+    const item = insertResult.item;
+    const error = insertResult.error;
 
-    if (error) {
+    if (error || !item) {
       console.error("❌ Supabase insert error:", error);
       logDebug("❌ Insert payload that failed", {
         columns: Object.keys(insertPayload),
+        droppedColumns: insertResult.removedColumns,
         hasCmv: "estimated_cmv" in insertPayload,
-        errorCode: (error as any).code,
-        errorMessage: (error as any).message,
+        errorCode: getErrorCode(error),
+        errorMessage: getErrorMessage(error, "Unknown insert error"),
       });
       throw error;
+    }
+
+    if (insertResult.removedColumns.length > 0) {
+      logDebug("⚠️ Collection insert fallback removed unsupported columns", {
+        droppedColumns: insertResult.removedColumns,
+      });
     }
 
     // Verify the row has CMV after insert
@@ -402,13 +470,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ item });
   } catch (error) {
     console.error("❌ Collection add error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Failed to add to collection";
-    const errorDetails = error instanceof Error && 'code' in error ? { code: (error as any).code } : {};
-    
+    const errorMessage = getErrorMessage(error, "Failed to add to collection");
+    const errorCode = getErrorCode(error);
+
     return NextResponse.json(
-      { 
+      {
         error: errorMessage,
-        ...errorDetails,
+        ...(errorCode ? { code: errorCode } : {}),
       },
       { status: 500 }
     );

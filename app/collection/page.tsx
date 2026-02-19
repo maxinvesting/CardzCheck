@@ -46,7 +46,9 @@ export default function CollectionPage() {
   const [showCardPicker, setShowCardPicker] = useState(false);
   const [showPickerConfirmModal, setShowPickerConfirmModal] = useState(false);
   const [pickerCardData, setPickerCardData] = useState<CardIdentificationResult | null>(null);
+  const [pickerInitialCmv, setPickerInitialCmv] = useState<number | null>(null);
   const [cardPickerError, setCardPickerError] = useState<string | null>(null);
+  const [cardPickerLoading, setCardPickerLoading] = useState(false);
   const [toast, setToast] = useState<{type: 'success' | 'error', message: string} | null>(null);
   const [filterQuery, setFilterQuery] = useState("");
   const [sortBy, setSortBy] = useState<"newest" | "oldest" | "player_az" | "player_za" | "paid_high" | "paid_low">("newest");
@@ -493,24 +495,60 @@ export default function CollectionPage() {
     return () => clearInterval(interval);
   }, [needsCmvRefresh, refreshCollection]);
 
-  const handleAddFromPicker = (card: CardPickerSelection) => {
+  const handleAddFromPicker = async (card: CardPickerSelection) => {
     setCardPickerError(null);
+    setCardPickerLoading(true);
     const gradeLabel = formatGraderGrade(card.grader, card.grade);
     const numberLabel = normalizeCardNumber(card.card_number);
-    const cardData: CardIdentificationResult = {
-      player_name: card.player_name,
-      year: card.year || undefined,
-      set_name: card.set_name || card.brand || undefined,
-      parallel_type: card.variant || undefined,
-      card_number: numberLabel || undefined,
-      grade: gradeLabel || undefined,
-      imageUrl: "",
-      confidence: "high",
-    };
+    try {
+      const query = new URLSearchParams({
+        player: card.player_name,
+      });
+      if (card.year) query.set("year", card.year);
+      if (card.set_name || card.brand) query.set("set", card.set_name || card.brand || "");
+      if (gradeLabel) query.set("grade", gradeLabel);
+      if (numberLabel) query.set("card_number", numberLabel);
+      if (card.variant) query.set("parallel_type", card.variant);
 
-    setPickerCardData(cardData);
-    setShowCardPicker(false);
-    setShowPickerConfirmModal(true);
+      const cmvRes = await fetch(`/api/search?${query.toString()}`);
+      const cmvData = await cmvRes.json().catch(() => null);
+      if (!cmvRes.ok) {
+        throw new Error(
+          (cmvData && typeof cmvData.error === "string" && cmvData.error) ||
+            "Failed to fetch estimated CMV"
+        );
+      }
+
+      const cmv =
+        cmvData &&
+        typeof cmvData === "object" &&
+        cmvData.stats &&
+        typeof cmvData.stats.cmv === "number" &&
+        Number.isFinite(cmvData.stats.cmv) &&
+        cmvData.stats.cmv > 0
+          ? cmvData.stats.cmv
+          : null;
+
+      const cardData: CardIdentificationResult = {
+        player_name: card.player_name,
+        year: card.year || undefined,
+        set_name: card.set_name || card.brand || undefined,
+        parallel_type: card.variant || undefined,
+        card_number: numberLabel || undefined,
+        grade: gradeLabel || undefined,
+        imageUrl: "",
+        confidence: "high",
+      };
+
+      setPickerInitialCmv(cmv);
+      setPickerCardData(cardData);
+      setShowCardPicker(false);
+      setShowPickerConfirmModal(true);
+    } catch (err) {
+      setCardPickerError(err instanceof Error ? err.message : "Failed to fetch estimated CMV");
+    } finally {
+      setCardPickerLoading(false);
+    }
   };
 
   return (
@@ -910,6 +948,7 @@ export default function CollectionPage() {
           mode="collection"
           onSelect={handleAddFromPicker}
           error={cardPickerError}
+          busy={cardPickerLoading}
         />
 
         <ConfirmAddCardModal
@@ -917,6 +956,7 @@ export default function CollectionPage() {
           onClose={() => {
             setShowPickerConfirmModal(false);
             setPickerCardData(null);
+            setPickerInitialCmv(null);
           }}
           onSuccess={(playerName, item) => {
             setToast({ type: "success", message: `Added ${playerName} to collection!` });
@@ -926,13 +966,16 @@ export default function CollectionPage() {
             refreshCollection();
             setShowPickerConfirmModal(false);
             setPickerCardData(null);
+            setPickerInitialCmv(null);
           }}
           onLimitReached={() => {
             setShowPickerConfirmModal(false);
             setPickerCardData(null);
+            setPickerInitialCmv(null);
             setShowPaywall(true);
           }}
           cardData={pickerCardData}
+          initialCmv={pickerInitialCmv}
         />
 
         {/* Toast Notification */}

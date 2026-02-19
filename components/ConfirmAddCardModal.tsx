@@ -21,6 +21,16 @@ interface ConfirmAddCardModalProps {
   initialCmv?: number | null;
 }
 
+function formatPrice(value: number | null | undefined): string {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return "—";
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
 export default function ConfirmAddCardModal({
   isOpen,
   onClose,
@@ -422,6 +432,11 @@ export default function ConfirmAddCardModal({
               We couldn't read all card details. Please confirm the year and set.
             </InlineNotice>
           ) : null}
+
+          <div className="rounded-lg border border-blue-500/40 bg-blue-500/10 px-3 py-2">
+            <p className="text-xs text-blue-200 uppercase tracking-wide">Estimated CMV (eBay)</p>
+            <p className="text-sm font-semibold text-blue-100">{formatPrice(initialCmv)}</p>
+          </div>
 
           {/* Form Fields */}
           <div className="space-y-4 pt-2 border-t border-gray-200 dark:border-gray-800">
