@@ -353,8 +353,8 @@ export default function Sidebar() {
                 {user.email}
               </div>
               {user.is_paid && (
-                <div className="mt-2 inline-flex items-center px-2 py-1 bg-blue-600 text-white text-xs font-medium rounded">
-                  Pro Member
+                <div className={`mt-2 inline-flex items-center px-2 py-1 ${isBusiness ? 'bg-emerald-600' : 'bg-blue-600'} text-white text-xs font-medium rounded`}>
+                  {isBusiness ? "Business Member" : "Pro Member"}
                 </div>
               )}
             </div>
