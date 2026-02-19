@@ -130,11 +130,39 @@ async function runGradeModel(
 }
 
 async function runOcrIdentity(images: ResolvedGradeEstimateImage[]) {
-  const inputs: ImageInput[] = images.map((image) => ({
-    data: image.base64Image,
-    mediaType: image.mediaType,
-    source: image.source,
-  }));
+  const inputs = (
+    await Promise.all(
+      images.map(async (image): Promise<ImageInput | null> => {
+        if (image.mediaType !== "image/gif") {
+          return {
+            data: image.base64Image,
+            mediaType: image.mediaType,
+            source: image.source,
+          };
+        }
+
+        // OCR path accepts jpeg/png/webp; normalize gif uploads to png.
+        try {
+          const sharpModule = await import("sharp");
+          const sharp = sharpModule.default;
+          const pngBuffer = await sharp(Buffer.from(image.base64Image, "base64"), {
+            failOnError: false,
+            animated: true,
+          })
+            .png()
+            .toBuffer();
+          return {
+            data: pngBuffer.toString("base64"),
+            mediaType: "image/png",
+            source: image.source,
+          };
+        } catch {
+          return null;
+        }
+      })
+    )
+  ).filter((input): input is ImageInput => input !== null);
+
   const { cardIdentity } = await extractCardIdentityDetailed(inputs);
   return cardIdentity;
 }
