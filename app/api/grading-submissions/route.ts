@@ -4,6 +4,10 @@ import { checkLegacyProAccess } from "@/lib/access";
 import { isTestMode } from "@/lib/test-mode";
 import { createSubmissionSchema } from "@/lib/grading/submissions/schemas";
 import { toSubmissionRecord } from "@/lib/grading/submissions/db";
+import {
+  buildFeatureUnavailableMessage,
+  isSubmissionSchemaMissing,
+} from "@/lib/grading/submissions/errors";
 
 function paidUpgradeResponse() {
   return NextResponse.json(
@@ -42,6 +46,13 @@ export async function GET() {
       .order("created_at", { ascending: false });
 
     if (error) {
+      if (isSubmissionSchemaMissing(error)) {
+        return NextResponse.json({
+          submissions: [],
+          feature_unavailable: true,
+          message: buildFeatureUnavailableMessage(),
+        });
+      }
       console.error("Failed to fetch grading submissions:", error);
       return NextResponse.json(
         { error: "Failed to fetch grading submissions" },
@@ -162,6 +173,15 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error || !data) {
+      if (isSubmissionSchemaMissing(error)) {
+        return NextResponse.json(
+          {
+            error: "feature_unavailable",
+            message: buildFeatureUnavailableMessage(),
+          },
+          { status: 503 }
+        );
+      }
       console.error("Failed to create grading submission:", error);
       return NextResponse.json(
         { error: "Failed to create grading submission" },

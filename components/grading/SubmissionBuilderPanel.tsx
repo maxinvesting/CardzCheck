@@ -189,6 +189,7 @@ export default function SubmissionBuilderPanel({
 }: SubmissionBuilderPanelProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [setupMessage, setSetupMessage] = useState<string | null>(null);
   const [isPaidUser, setIsPaidUser] = useState(true);
   const [showPricing, setShowPricing] = useState(false);
 
@@ -242,6 +243,7 @@ export default function SubmissionBuilderPanel({
   const loadSubmissions = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setSetupMessage(null);
 
     try {
       const response = await fetch("/api/grading-submissions", { cache: "no-store" });
@@ -255,11 +257,31 @@ export default function SubmissionBuilderPanel({
 
       if (!response.ok) {
         const payload = await response.json().catch(() => null);
+        if (payload?.error === "feature_unavailable") {
+          setSetupMessage(
+            payload?.message ??
+              "Submission Builder setup is incomplete. Apply the grading submissions migration and refresh."
+          );
+          setSubmissions([]);
+          setSelectedSubmissionId("");
+          setSelectedDetail(null);
+          return;
+        }
         throw new Error(payload?.error ?? "Failed to load submissions");
       }
 
       setIsPaidUser(true);
       const payload = await response.json();
+      if (payload?.feature_unavailable) {
+        setSetupMessage(
+          payload?.message ??
+            "Submission Builder setup is incomplete. Apply the grading submissions migration and refresh."
+        );
+        setSubmissions([]);
+        setSelectedSubmissionId("");
+        setSelectedDetail(null);
+        return;
+      }
       const nextSubmissions = (payload?.submissions ?? []) as SubmissionListRow[];
       setSubmissions(nextSubmissions);
 
@@ -292,6 +314,14 @@ export default function SubmissionBuilderPanel({
 
       if (!response.ok) {
         const payload = await response.json().catch(() => null);
+        if (payload?.error === "feature_unavailable") {
+          setSetupMessage(
+            payload?.message ??
+              "Submission Builder setup is incomplete. Apply the grading submissions migration and refresh."
+          );
+          setSelectedDetail(null);
+          return;
+        }
         throw new Error(payload?.error ?? "Failed to load submission");
       }
 
@@ -382,6 +412,13 @@ export default function SubmissionBuilderPanel({
 
       if (!response.ok) {
         const payload = await response.json().catch(() => null);
+        if (payload?.error === "feature_unavailable") {
+          setSetupMessage(
+            payload?.message ??
+              "Submission Builder setup is incomplete. Apply the grading submissions migration and refresh."
+          );
+          return;
+        }
         throw new Error(payload?.error ?? "Failed to create submission");
       }
 
@@ -424,6 +461,13 @@ export default function SubmissionBuilderPanel({
 
       if (!response.ok) {
         const payload = await response.json().catch(() => null);
+        if (payload?.error === "feature_unavailable") {
+          setSetupMessage(
+            payload?.message ??
+              "Submission Builder setup is incomplete. Apply the grading submissions migration and refresh."
+          );
+          return;
+        }
         throw new Error(payload?.error ?? "Failed to save submission");
       }
 
@@ -480,6 +524,13 @@ export default function SubmissionBuilderPanel({
 
         if (!response.ok) {
           const payload = await response.json().catch(() => null);
+          if (payload?.error === "feature_unavailable") {
+            setSetupMessage(
+              payload?.message ??
+                "Submission Builder setup is incomplete. Apply the grading submissions migration and refresh."
+            );
+            return;
+          }
           throw new Error(payload?.error ?? "Failed to add items");
         }
 
@@ -681,6 +732,13 @@ export default function SubmissionBuilderPanel({
 
       if (!response.ok) {
         const payload = await response.json().catch(() => null);
+        if (payload?.error === "feature_unavailable") {
+          setSetupMessage(
+            payload?.message ??
+              "Submission Builder setup is incomplete. Apply the grading submissions migration and refresh."
+          );
+          return;
+        }
         throw new Error(payload?.error ?? "Failed to save returned grades");
       }
 
@@ -730,6 +788,12 @@ export default function SubmissionBuilderPanel({
       {error ? (
         <div className="rounded border border-red-700/50 bg-red-900/30 px-3 py-2 text-sm text-red-200">
           {error}
+        </div>
+      ) : null}
+
+      {setupMessage ? (
+        <div className="rounded border border-amber-700/50 bg-amber-900/30 px-3 py-2 text-sm text-amber-200">
+          {setupMessage}
         </div>
       ) : null}
 

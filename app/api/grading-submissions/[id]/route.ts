@@ -13,6 +13,10 @@ import {
   toSubmissionRecord,
 } from "@/lib/grading/submissions/db";
 import { updateSubmissionSchema } from "@/lib/grading/submissions/schemas";
+import {
+  buildFeatureUnavailableMessage,
+  isSubmissionSchemaMissing,
+} from "@/lib/grading/submissions/errors";
 import type {
   GradingSubmissionItemRecord,
   GradingSubmissionRecord,
@@ -49,6 +53,9 @@ async function loadSubmissionDetail(
     .single();
 
   if (submissionError || !submissionRow) {
+    if (isSubmissionSchemaMissing(submissionError)) {
+      throw submissionError;
+    }
     return null;
   }
 
@@ -60,6 +67,9 @@ async function loadSubmissionDetail(
     .order("created_at", { ascending: true });
 
   if (itemError) {
+    if (isSubmissionSchemaMissing(itemError)) {
+      throw itemError;
+    }
     throw itemError;
   }
 
@@ -132,6 +142,15 @@ export async function GET(
 
     return NextResponse.json(detail);
   } catch (error) {
+    if (isSubmissionSchemaMissing(error)) {
+      return NextResponse.json(
+        {
+          error: "feature_unavailable",
+          message: buildFeatureUnavailableMessage(),
+        },
+        { status: 503 }
+      );
+    }
     console.error("Grading submission detail GET error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
@@ -193,6 +212,15 @@ export async function PATCH(
       .single();
 
     if (updateError || !updatedRow) {
+      if (isSubmissionSchemaMissing(updateError)) {
+        return NextResponse.json(
+          {
+            error: "feature_unavailable",
+            message: buildFeatureUnavailableMessage(),
+          },
+          { status: 503 }
+        );
+      }
       return NextResponse.json({ error: "Submission not found" }, { status: 404 });
     }
 
@@ -211,6 +239,15 @@ export async function PATCH(
         .not("actual_grade", "is", null);
 
       if (rowsError) {
+        if (isSubmissionSchemaMissing(rowsError)) {
+          return NextResponse.json(
+            {
+              error: "feature_unavailable",
+              message: buildFeatureUnavailableMessage(),
+            },
+            { status: 503 }
+          );
+        }
         console.error("Failed to fetch submission items for collection sync:", rowsError);
       } else {
         const items = (rows ?? []).map((row: Record<string, unknown>) =>
@@ -234,6 +271,15 @@ export async function PATCH(
       sync: syncResult,
     });
   } catch (error) {
+    if (isSubmissionSchemaMissing(error)) {
+      return NextResponse.json(
+        {
+          error: "feature_unavailable",
+          message: buildFeatureUnavailableMessage(),
+        },
+        { status: 503 }
+      );
+    }
     console.error("Grading submission detail PATCH error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

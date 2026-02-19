@@ -12,6 +12,10 @@ import {
   bulkUpdateReturnedGradesSchema,
   createSubmissionItemsSchema,
 } from "@/lib/grading/submissions/schemas";
+import {
+  buildFeatureUnavailableMessage,
+  isSubmissionSchemaMissing,
+} from "@/lib/grading/submissions/errors";
 import type {
   GradingSubmissionRecord,
   SubmissionCardIdentity,
@@ -339,6 +343,15 @@ export async function POST(
       .select("*");
 
     if (insertError) {
+      if (isSubmissionSchemaMissing(insertError)) {
+        return NextResponse.json(
+          {
+            error: "feature_unavailable",
+            message: buildFeatureUnavailableMessage(),
+          },
+          { status: 503 }
+        );
+      }
       console.error("Failed to insert submission items:", insertError);
       return NextResponse.json(
         { error: "Failed to add items" },
@@ -352,6 +365,15 @@ export async function POST(
       ),
     });
   } catch (error) {
+    if (isSubmissionSchemaMissing(error)) {
+      return NextResponse.json(
+        {
+          error: "feature_unavailable",
+          message: buildFeatureUnavailableMessage(),
+        },
+        { status: 503 }
+      );
+    }
     console.error("Submission items POST error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
@@ -449,6 +471,15 @@ export async function PATCH(
       sync,
     });
   } catch (error) {
+    if (isSubmissionSchemaMissing(error)) {
+      return NextResponse.json(
+        {
+          error: "feature_unavailable",
+          message: buildFeatureUnavailableMessage(),
+        },
+        { status: 503 }
+      );
+    }
     console.error("Submission items PATCH error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
