@@ -615,6 +615,17 @@ export interface AnalystError {
   limit?: number;
 }
 
+export interface BusinessConsultation {
+  id: string;
+  user_id: string;
+  title: string;
+  prompt: string;
+  response: string;
+  context_summary: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export const ANALYST_LIMITS = {
   QUERIES_PER_USER: 100,
 } as const;

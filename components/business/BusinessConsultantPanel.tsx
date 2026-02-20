@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import type { BusinessConsultation } from "@/types";
 
 const PROMPT_SUGGESTIONS = [
   "Build a 30-day plan to reduce unlisted inventory and improve cash flow.",
@@ -180,6 +181,9 @@ export default function BusinessConsultantPanel() {
   const [response, setResponse] = useState("");
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [consultations, setConsultations] = useState<BusinessConsultation[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [activeConsultationId, setActiveConsultationId] = useState<string | null>(null);
   const [stepIndex, setStepIndex] = useState(0);
   const [statusLineIndex, setStatusLineIndex] = useState(0);
   const stepIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -207,6 +211,39 @@ export default function BusinessConsultantPanel() {
       acknowledgeTimeoutRef.current = null;
     }
   }, []);
+
+  const loadConsultations = useCallback(async () => {
+    setHistoryLoading(true);
+    try {
+      const res = await fetch("/api/business/consultant", { cache: "no-store" });
+      const data = await res.json();
+      if (res.ok && data?.ok && Array.isArray(data.consultations)) {
+        setConsultations(data.consultations as BusinessConsultation[]);
+      }
+    } catch (err) {
+      console.error("Failed to load consultant history:", err);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, []);
+
+  const handleLoadConsultation = useCallback(
+    (consultation: BusinessConsultation) => {
+      if (!consultation) return;
+      clearTimers();
+      setError(null);
+      setActiveConsultationId(consultation.id);
+      setPrompt(consultation.prompt);
+      setResponse(consultation.response);
+      setStepIndex(CONSULTANT_STEPS.length);
+      setStatusLineIndex(0);
+      setPhase("deliverable");
+      if (textareaRef.current) {
+        textareaRef.current.value = consultation.prompt;
+      }
+    },
+    [clearTimers]
+  );
 
   const handleRunConsultation = async () => {
     const value = textareaRef.current?.value?.trim() ?? prompt.trim();
@@ -257,6 +294,18 @@ export default function BusinessConsultantPanel() {
       setStepIndex(CONSULTANT_STEPS.length);
       setResponse(data.response || "");
       setPhase("deliverable");
+      if (data?.saved === false) {
+        setError("Analysis generated, but it could not be saved to history.");
+      }
+
+      if (data?.consultation?.id) {
+        const savedConsultation = data.consultation as BusinessConsultation;
+        setActiveConsultationId(savedConsultation.id);
+        setConsultations((prev) => [
+          savedConsultation,
+          ...prev.filter((item) => item.id !== savedConsultation.id),
+        ]);
+      }
     } catch (err) {
       clearTimers();
       setError(err instanceof Error ? err.message : "Consultation request failed");
@@ -264,10 +313,22 @@ export default function BusinessConsultantPanel() {
     }
   };
 
+  useEffect(() => {
+    void loadConsultations();
+  }, [loadConsultations]);
+
   useEffect(() => () => clearTimers(), [clearTimers]);
 
   const isWorking = phase === "acknowledge" || phase === "working";
   const sections = response ? parseResponseIntoSections(response) : [];
+  const formatHistoryTime = (dateStr: string): string => {
+    const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+    if (seconds < 60) return "just now";
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+    if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
+    return new Date(dateStr).toLocaleDateString();
+  };
 
   return (
     <section className="relative z-20 mt-3 rounded-lg border border-gray-800 bg-gray-900/80">
@@ -293,6 +354,7 @@ export default function BusinessConsultantPanel() {
             <button
               key={suggestion}
               onClick={() => {
+                setActiveConsultationId(null);
                 setPrompt(suggestion);
                 if (textareaRef.current) textareaRef.current.value = suggestion;
               }}
@@ -304,10 +366,56 @@ export default function BusinessConsultantPanel() {
           ))}
         </div>
 
+        <div className="rounded-md border border-gray-800 bg-gray-950/40 px-2.5 py-2">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-[11px] font-medium text-gray-300">Saved Consultations</p>
+            <button
+              type="button"
+              onClick={() => void loadConsultations()}
+              disabled={historyLoading || isWorking}
+              className="rounded border border-gray-700 px-1.5 py-0.5 text-[10px] text-gray-300 hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {historyLoading ? "Loading..." : "Refresh"}
+            </button>
+          </div>
+
+          {historyLoading ? (
+            <p className="text-[11px] text-gray-500">Loading saved consultations...</p>
+          ) : consultations.length === 0 ? (
+            <p className="text-[11px] text-gray-500">
+              No saved consultations yet. Your completed analyses will appear here.
+            </p>
+          ) : (
+            <div className="max-h-36 space-y-1 overflow-y-auto pr-1">
+              {consultations.map((consultation) => (
+                <button
+                  key={consultation.id}
+                  type="button"
+                  onClick={() => handleLoadConsultation(consultation)}
+                  disabled={isWorking}
+                  className={`w-full rounded border px-2 py-1.5 text-left transition-colors ${
+                    consultation.id === activeConsultationId
+                      ? "border-emerald-700/60 bg-emerald-900/20"
+                      : "border-gray-800 bg-gray-950/40 hover:bg-gray-900"
+                  } disabled:cursor-not-allowed disabled:opacity-50`}
+                >
+                  <p className="truncate text-xs text-gray-200">{consultation.title}</p>
+                  <p className="mt-0.5 text-[10px] text-gray-500">
+                    {formatHistoryTime(consultation.updated_at)}
+                  </p>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         <textarea
           ref={textareaRef}
           defaultValue=""
-          onChange={(e) => setPrompt(e.target.value)}
+          onChange={(e) => {
+            setActiveConsultationId(null);
+            setPrompt(e.target.value);
+          }}
           placeholder="Describe the business decision you need help with (pricing strategy, liquidation plan, expense discipline, channel mix, etc.)"
           rows={4}
           disabled={isWorking}
