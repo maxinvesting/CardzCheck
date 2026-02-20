@@ -19,8 +19,10 @@ interface AddCardModalNewProps {
   onClose: () => void;
   onSuccess: (playerName: string, item?: CollectionItem) => void;
   onLimitReached: () => void;
-  addMode?: "collection" | "watchlist";
-  /** Optional: for collection mode, open the CardPicker flow instead of manual entry */
+  addMode?: "collection" | "watchlist" | "business";
+  /** Optional: override the modal title in select mode (e.g. "Add Card to Inventory") */
+  modalTitle?: string;
+  /** Optional: for collection/business, open the CardPicker flow instead of manual entry */
   onOpenSmartSearch?: () => void;
   onCardSelected?: (cardData: {
     player_name: string;
@@ -50,13 +52,14 @@ export default function AddCardModalNew({
   onSuccess,
   onLimitReached,
   addMode = "collection",
+  modalTitle,
   onOpenSmartSearch,
   onCardSelected,
 }: AddCardModalNewProps) {
   const [mode, setMode] = useState<ModalMode>("select");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const hasCardPicker = addMode === "collection" && Boolean(onOpenSmartSearch);
+  const hasCardPicker = Boolean(onOpenSmartSearch);
 
   // Upload mode state
   const [previews, setPreviews] = useState<string[]>([]);
@@ -315,8 +318,8 @@ export default function AddCardModalNew({
       return;
     }
 
-    // For watchlist mode, pass card data to onCardSelected and close
-    if (addMode === "watchlist" && onCardSelected) {
+    // For watchlist/business mode, pass card data to onCardSelected and close
+    if ((addMode === "watchlist" || addMode === "business") && onCardSelected) {
       const cardData = {
         player_name: identifiedCard.player_name,
         year: identifiedCard.year,
@@ -436,7 +439,7 @@ export default function AddCardModalNew({
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-800">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-            {mode === "select" && (addMode === "watchlist" ? "Add Card to Watchlist" : "Add Card to Collection")}
+            {mode === "select" && (modalTitle ?? (addMode === "watchlist" ? "Add Card to Watchlist" : addMode === "business" ? "Add Card to Inventory" : "Add Card to Collection"))}
             {mode === "upload" && "Upload Card Photo"}
             {mode === "manual" && "Enter Card Details"}
             {mode === "confirm" && "Confirm Card"}

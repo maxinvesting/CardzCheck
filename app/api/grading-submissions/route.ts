@@ -4,6 +4,7 @@ import { checkLegacyProAccess } from "@/lib/access";
 import { isTestMode } from "@/lib/test-mode";
 import { createSubmissionSchema } from "@/lib/grading/submissions/schemas";
 import { toSubmissionRecord } from "@/lib/grading/submissions/db";
+import { buildSubmissionListRows } from "@/lib/grading/submissions/list";
 import {
   buildFeatureUnavailableMessage,
   isSubmissionSchemaMissing,
@@ -31,7 +32,10 @@ export async function GET() {
     } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { error: "Unauthorized", code: "unauthorized" },
+        { status: 401 }
+      );
     }
 
     const isPaidUser = await checkLegacyProAccess(user.id);
@@ -39,7 +43,7 @@ export async function GET() {
       return paidUpgradeResponse();
     }
 
-    const { data, error } = await supabase
+    const { data: submissionRows, error } = await supabase
       .from("grading_submissions")
       .select("*")
       .eq("user_id", user.id)
@@ -53,16 +57,20 @@ export async function GET() {
           message: buildFeatureUnavailableMessage(),
         });
       }
-      console.error("Failed to fetch grading submissions:", error);
+      console.error("grading_submissions.get_failed", {
+        endpoint: "/api/grading-submissions",
+        userId: user.id,
+        code: error.code,
+        message: error.message,
+      });
       return NextResponse.json(
-        { error: "Failed to fetch grading submissions" },
+        {
+          error: "Failed to fetch grading submissions",
+          code: error.code ?? "grading_submissions_fetch_failed",
+        },
         { status: 500 }
       );
     }
-
-    const submissions = (data ?? []).map((row: Record<string, unknown>) =>
-      toSubmissionRecord(row)
-    );
 
     const { data: itemRows, error: itemError } = await supabase
       .from("grading_submission_items")
@@ -70,38 +78,29 @@ export async function GET() {
       .eq("user_id", user.id);
 
     if (itemError) {
-      console.error("Failed to fetch submission item counts:", itemError);
+      console.error("grading_submissions.item_counts_failed", {
+        endpoint: "/api/grading-submissions",
+        userId: user.id,
+        code: itemError.code,
+        message: itemError.message,
+      });
     }
 
-    const itemCounts = new Map<string, { items: number; cards: number }>();
-    (itemRows ?? []).forEach((row: Record<string, unknown>) => {
-      const submissionId = String((row as { submission_id?: unknown }).submission_id ?? "");
-      if (!submissionId) return;
-      const quantityRaw = (row as { quantity?: unknown }).quantity;
-      const quantity =
-        typeof quantityRaw === "number" && Number.isFinite(quantityRaw)
-          ? Math.max(1, Math.round(quantityRaw))
-          : 1;
-      const current = itemCounts.get(submissionId) ?? { items: 0, cards: 0 };
-      current.items += 1;
-      current.cards += quantity;
-      itemCounts.set(submissionId, current);
-    });
+    const submissions = buildSubmissionListRows(
+      (submissionRows ?? []) as Array<Record<string, unknown>>,
+      (itemRows ?? []) as Array<Record<string, unknown>>
+    );
 
     return NextResponse.json({
-      submissions: submissions.map((submission: ReturnType<typeof toSubmissionRecord>) => {
-        const count = itemCounts.get(submission.id) ?? { items: 0, cards: 0 };
-        return {
-          ...submission,
-          item_count: count.items,
-          card_count: count.cards,
-        };
-      }),
+      submissions,
     });
   } catch (error) {
-    console.error("Grading submissions GET error:", error);
+    console.error("grading_submissions.get_exception", {
+      endpoint: "/api/grading-submissions",
+      message: error instanceof Error ? error.message : "unknown",
+    });
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "Internal server error", code: "internal_server_error" },
       { status: 500 }
     );
   }

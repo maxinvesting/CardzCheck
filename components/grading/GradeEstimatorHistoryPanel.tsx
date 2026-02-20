@@ -11,15 +11,19 @@ import {
 interface GradeEstimatorHistoryPanelProps {
   onSelect: (run: GradeEstimatorHistoryRun) => void;
   refreshToken?: number;
+  compact?: boolean;
+  initialExpanded?: boolean;
 }
 
 export default function GradeEstimatorHistoryPanel({
   onSelect,
   refreshToken = 0,
+  compact = false,
+  initialExpanded,
 }: GradeEstimatorHistoryPanelProps) {
   const [runs, setRuns] = useState<GradeEstimatorHistoryRun[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(initialExpanded ?? compact);
   const [error, setError] = useState<string | null>(null);
   const didAutoExpand = useRef(false);
 
@@ -109,10 +113,10 @@ export default function GradeEstimatorHistoryPanel({
   const runCountLabel = useMemo(() => runs.length, [runs.length]);
 
   return (
-    <div className="mb-6">
+    <div className={compact ? "" : "mb-6"}>
       <button
         onClick={() => setIsExpanded((prev) => !prev)}
-        className="flex items-center gap-2 text-sm font-medium text-gray-400 hover:text-white transition-colors w-full"
+        className="flex w-full items-center gap-2 text-sm font-medium text-gray-400 transition-colors hover:text-white"
       >
         <svg
           className="w-4 h-4"
@@ -145,7 +149,7 @@ export default function GradeEstimatorHistoryPanel({
       </button>
 
       {isExpanded && (
-        <div className="mt-3 p-4 bg-gray-800/50 rounded-xl border border-gray-700/50">
+        <div className={`mt-2 rounded-xl border border-gray-700/50 bg-gray-800/50 ${compact ? "p-3" : "p-4"}`}>
           {loading ? (
             <div className="space-y-2">
               {[1, 2, 3].map((i) => (
@@ -165,7 +169,7 @@ export default function GradeEstimatorHistoryPanel({
               ) : null}
             </div>
           ) : (
-            <div className="space-y-2 max-h-80 overflow-y-auto">
+            <div className={`space-y-2 overflow-y-auto ${compact ? "max-h-56" : "max-h-80"}`}>
               {runs.map((run) => {
                 const imageUrl = run.card.imageUrl || run.card.imageUrls?.[0];
                 const title = run.card.player_name || "Unknown card";

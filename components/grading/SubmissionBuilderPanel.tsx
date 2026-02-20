@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import PricingModal from "@/components/PricingModal";
+import { useAuth } from "@/contexts/AuthContext";
 import type { CardIdentificationResult, GradeEstimate } from "@/types";
 
 type SubmissionMode = "mock" | "actual";
@@ -113,7 +114,16 @@ type ManualDistributionInput = {
 interface SubmissionBuilderPanelProps {
   identifiedCard: CardIdentificationResult | null;
   gradeEstimate: GradeEstimate | null;
+  uploadPanel?: ReactNode;
+  recentRunsPanel?: ReactNode;
 }
+
+type SubmissionFetchStatus = "idle" | "loading" | "success" | "error";
+
+type SubmissionFetchError = {
+  message: string;
+  code?: string;
+};
 
 const STATUS_OPTIONS: SubmissionStatus[] = [
   "draft",
@@ -186,14 +196,26 @@ function parsePercentInput(value: string): number {
 export default function SubmissionBuilderPanel({
   identifiedCard,
   gradeEstimate,
+  uploadPanel,
+  recentRunsPanel,
 }: SubmissionBuilderPanelProps) {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { authUser, loading: authLoading } = useAuth();
+  const authUserId = authUser?.id ?? null;
+  const [submissionsState, setSubmissionsState] = useState<{
+    status: SubmissionFetchStatus;
+    data: SubmissionListRow[];
+    error: SubmissionFetchError | null;
+  }>({
+    status: "idle",
+    data: [],
+    error: null,
+  });
+  const [actionError, setActionError] = useState<string | null>(null);
   const [setupMessage, setSetupMessage] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [isPaidUser, setIsPaidUser] = useState(true);
   const [showPricing, setShowPricing] = useState(false);
 
-  const [submissions, setSubmissions] = useState<SubmissionListRow[]>([]);
   const [selectedSubmissionId, setSelectedSubmissionId] = useState<string>("");
   const [selectedDetail, setSelectedDetail] = useState<SubmissionDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -240,116 +262,194 @@ export default function SubmissionBuilderPanel({
     [gradeEstimate]
   );
 
-  const loadSubmissions = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    setSetupMessage(null);
-
-    try {
-      const response = await fetch("/api/grading-submissions", { cache: "no-store" });
-      if (response.status === 403) {
-        setIsPaidUser(false);
-        setSubmissions([]);
+  const loadSubmissions = useCallback(
+    async (options?: { signal?: AbortSignal; reason?: "initial" | "refresh" | "retry" }) => {
+      if (!authUserId) {
+        setSubmissionsState({ status: "idle", data: [], error: null });
         setSelectedSubmissionId("");
         setSelectedDetail(null);
         return;
       }
 
-      if (!response.ok) {
-        const payload = await response.json().catch(() => null);
-        if (payload?.error === "feature_unavailable") {
-          setSetupMessage(
-            payload?.message ??
-              "Submission Builder setup is incomplete. Apply the grading submissions migration and refresh."
-          );
-          setSubmissions([]);
+      const reason = options?.reason ?? "initial";
+      if (reason === "initial") {
+        setSubmissionsState((prev) => ({ ...prev, status: "loading", error: null }));
+      } else {
+        setIsRefreshing(true);
+        setSubmissionsState((prev) => ({ ...prev, error: null }));
+      }
+      setSetupMessage(null);
+
+      try {
+        const response = await fetch("/api/grading-submissions", {
+          cache: "no-store",
+          signal: options?.signal,
+        });
+
+        if (response.status === 401) {
+          const payload = await response.json().catch(() => null);
+          const message = payload?.error ?? "Please sign in to view grading submissions.";
+          console.error("SubmissionBuilderPanel fetch unauthorized", {
+            endpoint: "/api/grading-submissions",
+            userId: authUserId,
+            code: payload?.code ?? "unauthorized",
+            message,
+          });
+          setSubmissionsState((prev) => ({
+            status: "error",
+            data: prev.data,
+            error: { message, code: payload?.code ?? "unauthorized" },
+          }));
+          return;
+        }
+
+        if (response.status === 403) {
+          setIsPaidUser(false);
+          setSubmissionsState({ status: "success", data: [], error: null });
           setSelectedSubmissionId("");
           setSelectedDetail(null);
           return;
         }
-        throw new Error(payload?.error ?? "Failed to load submissions");
-      }
 
-      setIsPaidUser(true);
-      const payload = await response.json();
-      if (payload?.feature_unavailable) {
-        setSetupMessage(
-          payload?.message ??
-            "Submission Builder setup is incomplete. Apply the grading submissions migration and refresh."
-        );
-        setSubmissions([]);
-        setSelectedSubmissionId("");
-        setSelectedDetail(null);
-        return;
-      }
-      const nextSubmissions = (payload?.submissions ?? []) as SubmissionListRow[];
-      setSubmissions(nextSubmissions);
-
-      setSelectedSubmissionId((prev) => {
-        if (prev && nextSubmissions.some((submission) => submission.id === prev)) {
-          return prev;
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null);
+          if (payload?.error === "feature_unavailable") {
+            setSetupMessage(
+              payload?.message ??
+                "Submission Builder setup is incomplete. Apply the grading submissions migration and refresh."
+            );
+            setSubmissionsState({ status: "success", data: [], error: null });
+            setSelectedSubmissionId("");
+            setSelectedDetail(null);
+            return;
+          }
+          const message = payload?.error ?? "Failed to fetch grading submissions";
+          const code = payload?.code;
+          console.error("SubmissionBuilderPanel fetch failed", {
+            endpoint: "/api/grading-submissions",
+            userId: authUserId,
+            status: response.status,
+            code: typeof code === "string" ? code : undefined,
+            message,
+          });
+          setSubmissionsState((prev) => ({
+            status: "error",
+            data: prev.data,
+            error: { message, code: typeof code === "string" ? code : undefined },
+          }));
+          return;
         }
-        return nextSubmissions[0]?.id ?? "";
-      });
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Failed to load submissions");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
 
-  const loadSubmissionDetail = useCallback(async (submissionId: string) => {
-    if (!submissionId) {
-      setSelectedDetail(null);
-      return;
-    }
-
-    setDetailLoading(true);
-    setError(null);
-
-    try {
-      const response = await fetch(`/api/grading-submissions/${submissionId}`, {
-        cache: "no-store",
-      });
-
-      if (!response.ok) {
-        const payload = await response.json().catch(() => null);
-        if (payload?.error === "feature_unavailable") {
+        setIsPaidUser(true);
+        const payload = await response.json();
+        if (payload?.feature_unavailable) {
           setSetupMessage(
             payload?.message ??
               "Submission Builder setup is incomplete. Apply the grading submissions migration and refresh."
           );
+          setSubmissionsState({ status: "success", data: [], error: null });
+          setSelectedSubmissionId("");
           setSelectedDetail(null);
           return;
         }
-        throw new Error(payload?.error ?? "Failed to load submission");
+
+        const nextSubmissions = (payload?.submissions ?? []) as SubmissionListRow[];
+        setSubmissionsState({
+          status: "success",
+          data: nextSubmissions,
+          error: null,
+        });
+
+        setSelectedSubmissionId((prev) => {
+          if (prev && nextSubmissions.some((submission) => submission.id === prev)) {
+            return prev;
+          }
+          return nextSubmissions[0]?.id ?? "";
+        });
+      } catch (loadError) {
+        if (options?.signal?.aborted) {
+          return;
+        }
+        const message =
+          loadError instanceof Error ? loadError.message : "Failed to fetch grading submissions";
+        console.error("SubmissionBuilderPanel fetch exception", {
+          endpoint: "/api/grading-submissions",
+          userId: authUserId,
+          message,
+        });
+        setSubmissionsState((prev) => ({
+          status: "error",
+          data: prev.data,
+          error: { message },
+        }));
+      } finally {
+        setIsRefreshing(false);
+      }
+    },
+    [authUserId]
+  );
+
+  const loadSubmissionDetail = useCallback(
+    async (submissionId: string, signal?: AbortSignal) => {
+      if (!submissionId) {
+        setSelectedDetail(null);
+        return;
       }
 
-      const payload = (await response.json()) as SubmissionDetail;
-      setSelectedDetail(payload);
-      setCostShipping(centsToUsdInput(payload.submission.shipping_cents));
-      setCostInsurance(centsToUsdInput(payload.submission.insurance_cents));
-      setCostFeesEstimate(centsToUsdInput(payload.submission.fees_estimate_cents));
-      setCostFeesActual(centsToUsdInput(payload.submission.fees_actual_cents));
-      setDeclaredValue(centsToUsdInput(payload.submission.declared_value_cents));
-      setServiceLevel(payload.submission.service_level ?? "");
-      setPsaOrderId(payload.submission.psa_order_id ?? "");
-      setStatusDraft(payload.submission.status);
+      setDetailLoading(true);
+      setActionError(null);
 
-      const drafts: Record<string, { actual_grade: string; cert_number: string }> = {};
-      payload.items.forEach((item) => {
-        drafts[item.id] = {
-          actual_grade: item.actual_grade ?? "",
-          cert_number: item.cert_number ?? "",
-        };
-      });
-      setActualDrafts(drafts);
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Failed to load submission detail");
-    } finally {
-      setDetailLoading(false);
-    }
-  }, []);
+      try {
+        const response = await fetch(`/api/grading-submissions/${submissionId}`, {
+          cache: "no-store",
+          signal,
+        });
+
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null);
+          if (payload?.error === "feature_unavailable") {
+            setSetupMessage(
+              payload?.message ??
+                "Submission Builder setup is incomplete. Apply the grading submissions migration and refresh."
+            );
+            setSelectedDetail(null);
+            return;
+          }
+          throw new Error(payload?.error ?? "Failed to load submission");
+        }
+
+        const payload = (await response.json()) as SubmissionDetail;
+        setSelectedDetail(payload);
+        setCostShipping(centsToUsdInput(payload.submission.shipping_cents));
+        setCostInsurance(centsToUsdInput(payload.submission.insurance_cents));
+        setCostFeesEstimate(centsToUsdInput(payload.submission.fees_estimate_cents));
+        setCostFeesActual(centsToUsdInput(payload.submission.fees_actual_cents));
+        setDeclaredValue(centsToUsdInput(payload.submission.declared_value_cents));
+        setServiceLevel(payload.submission.service_level ?? "");
+        setPsaOrderId(payload.submission.psa_order_id ?? "");
+        setStatusDraft(payload.submission.status);
+
+        const drafts: Record<string, { actual_grade: string; cert_number: string }> = {};
+        payload.items.forEach((item) => {
+          drafts[item.id] = {
+            actual_grade: item.actual_grade ?? "",
+            cert_number: item.cert_number ?? "",
+          };
+        });
+        setActualDrafts(drafts);
+      } catch (loadError) {
+        if (signal?.aborted) {
+          return;
+        }
+        setActionError(loadError instanceof Error ? loadError.message : "Failed to load submission detail");
+      } finally {
+        if (!signal?.aborted) {
+          setDetailLoading(false);
+        }
+      }
+    },
+    []
+  );
 
   const loadSources = useCallback(async () => {
     setLoadingSources(true);
@@ -365,24 +465,41 @@ export default function SubmissionBuilderPanel({
       setCollectionCards((collectionPayload?.items ?? []) as CollectionCard[]);
       setWatchlistCards((watchlistPayload?.items ?? []) as WatchlistCard[]);
     } catch (sourceError) {
-      console.error("Failed to load sources for submission builder:", sourceError);
+      console.error("Failed to load submission sources", {
+        endpoint: ["/api/collection", "/api/watchlist"],
+        userId: authUserId,
+        message: sourceError instanceof Error ? sourceError.message : "unknown",
+      });
     } finally {
       setLoadingSources(false);
     }
-  }, []);
+  }, [authUserId]);
 
   useEffect(() => {
-    void loadSubmissions();
-  }, [loadSubmissions]);
+    if (authLoading) return;
+    if (!authUserId) {
+      setSubmissionsState({ status: "idle", data: [], error: null });
+      setSelectedSubmissionId("");
+      setSelectedDetail(null);
+      setIsPaidUser(true);
+      return;
+    }
+
+    const controller = new AbortController();
+    void loadSubmissions({ signal: controller.signal, reason: "initial" });
+    return () => controller.abort();
+  }, [authLoading, authUserId, loadSubmissions]);
 
   useEffect(() => {
-    void loadSubmissionDetail(selectedSubmissionId);
+    const controller = new AbortController();
+    void loadSubmissionDetail(selectedSubmissionId, controller.signal);
+    return () => controller.abort();
   }, [selectedSubmissionId, loadSubmissionDetail]);
 
   useEffect(() => {
-    if (!isPaidUser) return;
+    if (!authUserId || !isPaidUser) return;
     void loadSources();
-  }, [isPaidUser, loadSources]);
+  }, [authUserId, isPaidUser, loadSources]);
 
   const filteredItems = useMemo(() => {
     if (!selectedDetail) return [];
@@ -398,10 +515,15 @@ export default function SubmissionBuilderPanel({
     });
   }, [selectedDetail, minPsa10Pct, minExpectedProfit]);
 
+  const submissions = submissionsState.data;
+  const submissionsError = submissionsState.error;
+  const showSubmissionSkeleton =
+    submissionsState.status === "loading" && submissions.length === 0;
+
   const createSubmission = useCallback(async () => {
     if (!createName.trim()) return;
     setCreating(true);
-    setError(null);
+    setActionError(null);
 
     try {
       const response = await fetch("/api/grading-submissions", {
@@ -426,12 +548,12 @@ export default function SubmissionBuilderPanel({
       const created = payload?.submission as SubmissionListRow | undefined;
 
       setCreateName("");
-      await loadSubmissions();
+      await loadSubmissions({ reason: "refresh" });
       if (created?.id) {
         setSelectedSubmissionId(created.id);
       }
     } catch (createError) {
-      setError(createError instanceof Error ? createError.message : "Failed to create submission");
+      setActionError(createError instanceof Error ? createError.message : "Failed to create submission");
     } finally {
       setCreating(false);
     }
@@ -441,7 +563,7 @@ export default function SubmissionBuilderPanel({
     if (!selectedSubmissionId) return;
 
     setSavingSubmission(true);
-    setError(null);
+    setActionError(null);
 
     try {
       const response = await fetch(`/api/grading-submissions/${selectedSubmissionId}`, {
@@ -471,10 +593,10 @@ export default function SubmissionBuilderPanel({
         throw new Error(payload?.error ?? "Failed to save submission");
       }
 
-      await loadSubmissions();
+      await loadSubmissions({ reason: "refresh" });
       await loadSubmissionDetail(selectedSubmissionId);
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Failed to save submission");
+      setActionError(saveError instanceof Error ? saveError.message : "Failed to save submission");
     } finally {
       setSavingSubmission(false);
     }
@@ -514,7 +636,7 @@ export default function SubmissionBuilderPanel({
     ) => {
       if (!selectedSubmissionId || items.length === 0) return;
       setAddingItems(true);
-      setError(null);
+      setActionError(null);
       try {
         const response = await fetch(`/api/grading-submissions/${selectedSubmissionId}/items`, {
           method: "POST",
@@ -534,10 +656,10 @@ export default function SubmissionBuilderPanel({
           throw new Error(payload?.error ?? "Failed to add items");
         }
 
-        await loadSubmissions();
+        await loadSubmissions({ reason: "refresh" });
         await loadSubmissionDetail(selectedSubmissionId);
       } catch (itemError) {
-        setError(itemError instanceof Error ? itemError.message : "Failed to add items");
+        setActionError(itemError instanceof Error ? itemError.message : "Failed to add items");
       } finally {
         setAddingItems(false);
       }
@@ -649,7 +771,7 @@ export default function SubmissionBuilderPanel({
 
   const addManualEntry = useCallback(async () => {
     if (!manualPlayer.trim()) {
-      setError("Manual entry requires player name");
+      setActionError("Manual entry requires player name");
       return;
     }
 
@@ -716,12 +838,12 @@ export default function SubmissionBuilderPanel({
       }));
 
     if (updates.length === 0) {
-      setError("Enter at least one actual grade before saving");
+      setActionError("Enter at least one actual grade before saving");
       return;
     }
 
     setSavingActuals(true);
-    setError(null);
+    setActionError(null);
 
     try {
       const response = await fetch(`/api/grading-submissions/${selectedSubmissionId}/items`, {
@@ -744,11 +866,34 @@ export default function SubmissionBuilderPanel({
 
       await loadSubmissionDetail(selectedSubmissionId);
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Failed to save returned grades");
+      setActionError(saveError instanceof Error ? saveError.message : "Failed to save returned grades");
     } finally {
       setSavingActuals(false);
     }
   }, [selectedSubmissionId, selectedDetail, actualDrafts, loadSubmissionDetail]);
+
+  if (authLoading) {
+    return (
+      <div className="rounded-xl border border-gray-700 bg-gray-800/50 p-4">
+        <div className="h-20 animate-pulse rounded-lg bg-gray-700/40" />
+      </div>
+    );
+  }
+
+  if (!authUserId) {
+    return (
+      <div className="rounded-xl border border-gray-700 bg-gray-800/50 p-5">
+        <h3 className="text-lg font-semibold text-white">Build Submission</h3>
+        <p className="mt-2 text-sm text-gray-300">Please sign in to view or manage grading submissions.</p>
+        <a
+          href="/login?redirect=/grade-estimator"
+          className="mt-4 inline-flex rounded-lg border border-gray-600 px-3 py-2 text-sm text-gray-200 hover:bg-gray-700"
+        >
+          Sign in
+        </a>
+      </div>
+    );
+  }
 
   if (!isPaidUser) {
     return (
@@ -769,63 +914,97 @@ export default function SubmissionBuilderPanel({
   }
 
   return (
-    <div className="rounded-xl border border-gray-700 bg-gray-800/50 p-5 space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h3 className="text-lg font-semibold text-white">Build Submission</h3>
-          <p className="text-sm text-gray-400">
-            Create mock submissions for planning or actual submissions for PSA tracking.
-          </p>
-        </div>
-        <button
-          onClick={() => void loadSubmissions()}
-          className="rounded border border-gray-600 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700"
-        >
-          Refresh
-        </button>
-      </div>
+    <div className="rounded-xl border border-gray-700 bg-gray-800/50 p-4 lg:h-full">
+      <div className="grid gap-4 lg:h-full lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+        <div className="flex min-h-0 flex-col gap-4">
+          <div className="rounded-lg border border-gray-700 bg-gray-900/40 p-4">
+            <h3 className="text-lg font-semibold text-white">Build Submission</h3>
+            <p className="mt-1 text-sm text-gray-400">
+              Create mock submissions for planning or actual submissions for PSA tracking.
+            </p>
 
-      {error ? (
-        <div className="rounded border border-red-700/50 bg-red-900/30 px-3 py-2 text-sm text-red-200">
-          {error}
-        </div>
-      ) : null}
+            {actionError ? (
+              <div className="mt-3 rounded border border-red-700/50 bg-red-900/30 px-3 py-2 text-xs text-red-200">
+                {actionError}
+              </div>
+            ) : null}
 
-      {setupMessage ? (
-        <div className="rounded border border-amber-700/50 bg-amber-900/30 px-3 py-2 text-sm text-amber-200">
-          {setupMessage}
-        </div>
-      ) : null}
+            <div className="mt-3 grid gap-2 lg:grid-cols-[minmax(0,1fr)_180px_180px]">
+              <input
+                value={createName}
+                onChange={(event) => setCreateName(event.target.value)}
+                placeholder="Submission name (e.g. March PSA 20-card)"
+                className="rounded border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white"
+              />
+              <select
+                value={createMode}
+                onChange={(event) => setCreateMode(event.target.value as SubmissionMode)}
+                className="rounded border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white"
+              >
+                <option value="mock">Mock</option>
+                <option value="actual">Actual</option>
+              </select>
+              <button
+                disabled={creating || !createName.trim()}
+                onClick={() => void createSubmission()}
+                className="rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+              >
+                {creating ? "Creating..." : "Create Submission"}
+              </button>
+            </div>
+          </div>
 
-      <div className="rounded-lg border border-gray-700 p-4">
-        <div className="grid gap-3 md:grid-cols-4">
-          <input
-            value={createName}
-            onChange={(event) => setCreateName(event.target.value)}
-            placeholder="Submission name (e.g. March PSA 20-card)"
-            className="md:col-span-2 rounded border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white"
-          />
-          <select
-            value={createMode}
-            onChange={(event) => setCreateMode(event.target.value as SubmissionMode)}
-            className="rounded border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white"
-          >
-            <option value="mock">Mock</option>
-            <option value="actual">Actual</option>
-          </select>
-          <button
-            disabled={creating || !createName.trim()}
-            onClick={() => void createSubmission()}
-            className="rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
-          >
-            {creating ? "Creating..." : "Create Submission"}
-          </button>
+          {uploadPanel ? (
+            <div className="rounded-lg border border-gray-700 bg-gray-900/30 p-3">
+              {uploadPanel}
+            </div>
+          ) : null}
         </div>
-      </div>
 
-      {loading ? (
-        <div className="text-sm text-gray-400">Loading submissions...</div>
-      ) : submissions.length === 0 ? (
+        <div className="flex min-h-0 flex-col rounded-lg border border-gray-700 bg-gray-900/35">
+          <div className="border-b border-gray-700 px-3 py-2">
+            <div className="flex items-center justify-between gap-2">
+              <h4 className="text-sm font-semibold text-white">Submissions / Recent Runs</h4>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => void loadSubmissions({ reason: "refresh" })}
+                  disabled={isRefreshing || submissionsState.status === "loading"}
+                  className="rounded border border-gray-600 px-2.5 py-1 text-xs text-gray-300 hover:bg-gray-700 disabled:opacity-60"
+                >
+                  {isRefreshing ? "Refreshing..." : "Refresh"}
+                </button>
+                {submissionsError ? (
+                  <button
+                    onClick={() => void loadSubmissions({ reason: "retry" })}
+                    disabled={isRefreshing}
+                    className="rounded border border-red-600/60 px-2.5 py-1 text-xs text-red-200 hover:bg-red-900/20 disabled:opacity-60"
+                  >
+                    Retry
+                  </button>
+                ) : null}
+              </div>
+            </div>
+            {submissionsError ? (
+              <div className="mt-2 rounded border border-red-700/50 bg-red-900/30 px-2.5 py-1.5 text-xs text-red-200">
+                {submissionsError.message}
+              </div>
+            ) : null}
+            {setupMessage ? (
+              <div className="mt-2 rounded border border-amber-700/50 bg-amber-900/30 px-2.5 py-1.5 text-xs text-amber-200">
+                {setupMessage}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-auto px-3 py-3">
+            {recentRunsPanel ? <div className="mb-3">{recentRunsPanel}</div> : null}
+            {showSubmissionSkeleton ? (
+              <div className="space-y-2">
+                <div className="h-11 animate-pulse rounded bg-gray-700/40" />
+                <div className="h-11 animate-pulse rounded bg-gray-700/40" />
+                <div className="h-11 animate-pulse rounded bg-gray-700/40" />
+              </div>
+            ) : submissions.length === 0 ? (
         <div className="text-sm text-gray-400">No submissions yet. Create one to begin.</div>
       ) : (
         <div className="space-y-4">
@@ -1316,6 +1495,9 @@ export default function SubmissionBuilderPanel({
           )}
         </div>
       )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

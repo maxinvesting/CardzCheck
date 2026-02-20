@@ -478,7 +478,8 @@ function BusinessPageContent() {
           onClose={() => setShowAddCardModal(false)}
           onSuccess={() => {}}
           onLimitReached={() => {}}
-          addMode="watchlist"
+          addMode="business"
+          modalTitle="Add Card to Inventory"
           onOpenSmartSearch={() => {
             setShowAddCardModal(false);
             setShowCardPicker(true);
@@ -489,7 +490,7 @@ function BusinessPageContent() {
         {/* Card Database Search Picker */}
         <CardPickerModal
           isOpen={showCardPicker}
-          title="Find Card in Database"
+          title="Add Card to Inventory"
           mode="collection"
           onClose={() => setShowCardPicker(false)}
           onSelect={handleCardPickerSelect}
