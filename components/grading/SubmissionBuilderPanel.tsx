@@ -281,17 +281,51 @@ export default function SubmissionBuilderPanel({
       setSetupMessage(null);
 
       try {
-        const response = await fetch("/api/grading-submissions", {
-          cache: "no-store",
-          signal: options?.signal,
-        });
+        if (process.env.NODE_ENV !== "production") {
+          console.info("SubmissionBuilderPanel.loadSubmissions.start", {
+            endpoint: "/api/grading-submissions",
+            reason,
+            hasAuthUser: Boolean(authUserId),
+          });
+        }
 
-        if (response.status === 401) {
+        const fetchSubmissions = async () => {
+          const response = await fetch("/api/grading-submissions", {
+            cache: "no-store",
+            credentials: "include",
+            signal: options?.signal,
+          });
           const payload = await response.json().catch(() => null);
-          const message = payload?.error ?? "Please sign in to view grading submissions.";
+          return { response, payload };
+        };
+
+        let { response, payload } = await fetchSubmissions();
+        const isAuthOrPermissionResponse =
+          response.status === 401 ||
+          (response.status === 403 &&
+            (payload?.code === "auth_or_permission_denied" ||
+              payload?.code === "unauthorized"));
+
+        // If auth cookies are still syncing on first render, retry once before surfacing an error.
+        if (reason === "initial" && isAuthOrPermissionResponse) {
+          await new Promise((resolve) => setTimeout(resolve, 200));
+          const retryResult = await fetchSubmissions();
+          response = retryResult.response;
+          payload = retryResult.payload;
+        }
+
+        if (
+          response.status === 401 ||
+          (response.status === 403 &&
+            (payload?.code === "auth_or_permission_denied" ||
+              payload?.code === "unauthorized"))
+        ) {
+          const message =
+            payload?.error ?? "You're signed out or don't have permission. Please sign in again.";
           console.error("SubmissionBuilderPanel fetch unauthorized", {
             endpoint: "/api/grading-submissions",
             userId: authUserId,
+            status: response.status,
             code: payload?.code ?? "unauthorized",
             message,
           });
@@ -303,7 +337,7 @@ export default function SubmissionBuilderPanel({
           return;
         }
 
-        if (response.status === 403) {
+        if (response.status === 403 && payload?.error === "upgrade_required") {
           setIsPaidUser(false);
           setSubmissionsState({ status: "success", data: [], error: null });
           setSelectedSubmissionId("");
@@ -312,7 +346,6 @@ export default function SubmissionBuilderPanel({
         }
 
         if (!response.ok) {
-          const payload = await response.json().catch(() => null);
           if (payload?.error === "feature_unavailable") {
             setSetupMessage(
               payload?.message ??
@@ -341,7 +374,6 @@ export default function SubmissionBuilderPanel({
         }
 
         setIsPaidUser(true);
-        const payload = await response.json();
         if (payload?.feature_unavailable) {
           setSetupMessage(
             payload?.message ??
@@ -519,6 +551,11 @@ export default function SubmissionBuilderPanel({
   const submissionsError = submissionsState.error;
   const showSubmissionSkeleton =
     submissionsState.status === "loading" && submissions.length === 0;
+  const isSubmissionBusy = isRefreshing || submissionsState.status === "loading";
+  const showSubmissionErrorState = Boolean(submissionsError) && submissions.length === 0;
+  const showSubmissionInlineError = Boolean(submissionsError) && submissions.length > 0;
+  const isAuthOrPermissionError =
+    submissionsError?.code === "unauthorized" || submissionsError?.code === "auth_or_permission_denied";
 
   const createSubmission = useCallback(async () => {
     if (!createName.trim()) return;
@@ -968,7 +1005,7 @@ export default function SubmissionBuilderPanel({
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => void loadSubmissions({ reason: "refresh" })}
-                  disabled={isRefreshing || submissionsState.status === "loading"}
+                  disabled={isSubmissionBusy}
                   className="rounded border border-gray-600 px-2.5 py-1 text-xs text-gray-300 hover:bg-gray-700 disabled:opacity-60"
                 >
                   {isRefreshing ? "Refreshing..." : "Refresh"}
@@ -976,7 +1013,7 @@ export default function SubmissionBuilderPanel({
                 {submissionsError ? (
                   <button
                     onClick={() => void loadSubmissions({ reason: "retry" })}
-                    disabled={isRefreshing}
+                    disabled={isSubmissionBusy}
                     className="rounded border border-red-600/60 px-2.5 py-1 text-xs text-red-200 hover:bg-red-900/20 disabled:opacity-60"
                   >
                     Retry
@@ -984,9 +1021,9 @@ export default function SubmissionBuilderPanel({
                 ) : null}
               </div>
             </div>
-            {submissionsError ? (
+            {showSubmissionInlineError ? (
               <div className="mt-2 rounded border border-red-700/50 bg-red-900/30 px-2.5 py-1.5 text-xs text-red-200">
-                {submissionsError.message}
+                {submissionsError?.message}
               </div>
             ) : null}
             {setupMessage ? (
@@ -1004,28 +1041,49 @@ export default function SubmissionBuilderPanel({
                 <div className="h-11 animate-pulse rounded bg-gray-700/40" />
                 <div className="h-11 animate-pulse rounded bg-gray-700/40" />
               </div>
+            ) : showSubmissionErrorState ? (
+              <div className="rounded border border-red-700/50 bg-red-900/25 p-3 text-sm text-red-100">
+                <p>{submissionsError?.message ?? "Failed to fetch grading submissions."}</p>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => void loadSubmissions({ reason: "retry" })}
+                    disabled={isSubmissionBusy}
+                    className="rounded border border-red-500/70 px-2.5 py-1 text-xs text-red-100 hover:bg-red-900/30 disabled:opacity-60"
+                  >
+                    {isRefreshing ? "Retrying..." : "Retry"}
+                  </button>
+                  {isAuthOrPermissionError ? (
+                    <a
+                      href="/login?redirect=/grade-estimator"
+                      className="rounded border border-gray-600 px-2.5 py-1 text-xs text-gray-200 hover:bg-gray-700"
+                    >
+                      Sign in
+                    </a>
+                  ) : null}
+                </div>
+              </div>
             ) : submissions.length === 0 ? (
-        <div className="text-sm text-gray-400">No submissions yet. Create one to begin.</div>
-      ) : (
-        <div className="space-y-4">
-          <div className="grid gap-2 md:grid-cols-3">
-            {submissions.map((submission) => (
-              <button
-                key={submission.id}
-                onClick={() => setSelectedSubmissionId(submission.id)}
-                className={`rounded-lg border px-3 py-3 text-left ${
-                  selectedSubmissionId === submission.id
-                    ? "border-blue-500 bg-blue-900/30"
-                    : "border-gray-700 bg-gray-900/40 hover:bg-gray-900/70"
-                }`}
-              >
-                <p className="text-sm font-semibold text-white">{submission.name}</p>
-                <p className="text-xs text-gray-400 mt-1">
-                  {submission.mode.toUpperCase()} · {submission.status} · {submission.card_count} cards
-                </p>
-              </button>
-            ))}
-          </div>
+              <div className="text-sm text-gray-400">No submissions yet. Create one to begin.</div>
+            ) : (
+              <div className="space-y-4">
+                <div className="grid gap-2 md:grid-cols-3">
+                  {submissions.map((submission) => (
+                    <button
+                      key={submission.id}
+                      onClick={() => setSelectedSubmissionId(submission.id)}
+                      className={`rounded-lg border px-3 py-3 text-left ${
+                        selectedSubmissionId === submission.id
+                          ? "border-blue-500 bg-blue-900/30"
+                          : "border-gray-700 bg-gray-900/40 hover:bg-gray-900/70"
+                      }`}
+                    >
+                      <p className="text-sm font-semibold text-white">{submission.name}</p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        {submission.mode.toUpperCase()} · {submission.status} · {submission.card_count} cards
+                      </p>
+                    </button>
+                  ))}
+                </div>
 
           {detailLoading || !selectedDetail ? (
             <div className="text-sm text-gray-400">Loading submission details...</div>
