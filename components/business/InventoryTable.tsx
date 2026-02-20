@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import type { BusinessInventoryItem } from "@/types";
 
 function fmtCents(cents: number | null): string {
-  if (cents === null) return "—";
+  if (cents === null) return "";
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
@@ -12,12 +12,26 @@ function fmtCents(cents: number | null): string {
   }).format(cents / 100);
 }
 
+/** Placeholder text for empty/null values in ledger table */
+function emptyPlaceholder(field: string): string {
+  switch (field) {
+    case "list_price_cents": return "Not listed";
+    case "current_market_value_cents": return "No comps";
+    case "location": return "Add location";
+    default: return "—";
+  }
+}
+
 interface Props {
   items: BusinessInventoryItem[];
+  /** Id of item currently open in detail drawer (for selected row highlight) */
+  selectedItemId?: string | null;
   onItemClick: (item: BusinessInventoryItem) => void;
   onInlineUpdate: (id: string, field: string, value: any) => void;
   onBulkAction: (action: string, ids: string[], payload?: any) => void;
   onDelete: (ids: string[]) => void;
+  /** Called when filtered items change so parent can display filter-aware inventory value */
+  onFilteredChange?: (filtered: BusinessInventoryItem[]) => void;
 }
 
 const STATUS_OPTIONS = ["unlisted", "listed", "pending_sale", "sold", "returned"] as const;
@@ -26,10 +40,12 @@ const CONDITION_OPTIONS = ["raw", "graded"] as const;
 
 export default function InventoryTable({
   items,
+  selectedItemId = null,
   onItemClick,
   onInlineUpdate,
   onBulkAction,
   onDelete,
+  onFilteredChange,
 }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
@@ -68,6 +84,10 @@ export default function InventoryTable({
       result = result.filter((it) => it.condition_status === filterCondition);
     return result;
   }, [items, search, filterStatus, filterChannel, filterCondition, activeTab]);
+
+  useEffect(() => {
+    onFilteredChange?.(filtered);
+  }, [filtered, onFilteredChange]);
 
   const toggleAll = () => {
     if (selected.size === filtered.length) {
@@ -171,18 +191,42 @@ export default function InventoryTable({
     const val = (item as any)[field];
     if (field === "title") {
       const isWax = item.notes?.includes("[WAX]");
+      const titleStr = val ?? "";
       return (
-        <span className="flex items-center gap-1.5">
+        <span className="flex items-center gap-1.5 min-w-0">
           {isWax && (
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-900/40 text-amber-400 whitespace-nowrap">
+            <span className="inline-flex items-center px-1 py-0.5 rounded text-[10px] font-semibold bg-amber-900/40 text-amber-400 whitespace-nowrap shrink-0">
               WAX
             </span>
           )}
-          <span className="truncate">{val}</span>
+          <span className="truncate" title={titleStr}>{titleStr}</span>
         </span>
       );
     }
-    if (field.endsWith("_cents")) return fmtCents(val);
+    if (field === "list_price_cents") {
+      const formatted = fmtCents(val);
+      if (!formatted) {
+        return <span className="italic text-gray-500 text-xs">{emptyPlaceholder(field)}</span>;
+      }
+      return <span className="tabular-nums">{formatted}</span>;
+    }
+    if (field === "current_market_value_cents") {
+      const formatted = fmtCents(val);
+      if (!formatted) {
+        return <span className="italic text-gray-500 text-xs">{emptyPlaceholder(field)}</span>;
+      }
+      return <span className="tabular-nums">{formatted}</span>;
+    }
+    if (field === "location") {
+      const str = val?.toString()?.trim() || "";
+      if (!str) {
+        return <span className="italic text-gray-500 text-xs">{emptyPlaceholder(field)}</span>;
+      }
+      return str;
+    }
+    if (field.endsWith("_cents")) {
+      return <span className="tabular-nums">{fmtCents(val)}</span>;
+    }
     if (field === "acquisition_date" && val) return val;
     return val?.toString() ?? "—";
   };
@@ -197,22 +241,22 @@ export default function InventoryTable({
     }
   };
 
-  const columns: { key: string; label: string; editable: boolean; width: string }[] = [
-    { key: "title", label: "Title", editable: true, width: "min-w-[200px]" },
-    { key: "quantity", label: "Qty", editable: true, width: "w-16" },
-    { key: "cost_basis_total_cents", label: "Cost", editable: true, width: "w-24" },
-    { key: "status", label: "Status", editable: true, width: "w-28" },
-    { key: "channel", label: "Channel", editable: true, width: "w-24" },
-    { key: "list_price_cents", label: "List $", editable: true, width: "w-24" },
-    { key: "current_market_value_cents", label: "CMV", editable: true, width: "w-24" },
-    { key: "location", label: "Location", editable: true, width: "w-28" },
-    { key: "acquisition_date", label: "Acq. Date", editable: true, width: "w-28" },
+  const columns: { key: string; label: string; editable: boolean; width: string; alignRight?: boolean }[] = [
+    { key: "title", label: "Title", editable: true, width: "min-w-[180px]" },
+    { key: "quantity", label: "Qty", editable: true, width: "w-12 shrink-0" },
+    { key: "cost_basis_total_cents", label: "Cost", editable: true, width: "w-20 shrink-0", alignRight: true },
+    { key: "status", label: "Status", editable: true, width: "w-24 shrink-0" },
+    { key: "channel", label: "Channel", editable: true, width: "w-20 shrink-0" },
+    { key: "list_price_cents", label: "List $", editable: true, width: "w-20 shrink-0", alignRight: true },
+    { key: "current_market_value_cents", label: "CMV", editable: true, width: "w-20 shrink-0", alignRight: true },
+    { key: "location", label: "Location", editable: true, width: "w-24 shrink-0" },
+    { key: "acquisition_date", label: "Acq. Date", editable: true, width: "w-24 shrink-0" },
   ];
 
   return (
     <div>
       {/* Tabs */}
-      <div className="flex items-center gap-1 mb-4 border-b border-gray-800">
+      <div className="flex items-center gap-1 mb-2 border-b border-gray-800">
         {(
           [
             { id: "all", label: "All", count: items.length },
@@ -226,7 +270,7 @@ export default function InventoryTable({
               setActiveTab(tab.id);
               setSelected(new Set());
             }}
-            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border-b-2 -mb-px transition-colors ${
               activeTab === tab.id
                 ? tab.id === "wax"
                   ? "border-amber-500 text-amber-400"
@@ -261,11 +305,11 @@ export default function InventoryTable({
       </div>
 
       {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 mb-3">
         {/* Search */}
-        <div className="relative flex-1 w-full">
-          <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="relative flex-1 w-full min-w-0">
+          <div className="absolute inset-y-0 left-0 flex items-center pl-2.5 pointer-events-none">
+            <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
           </div>
@@ -274,7 +318,7 @@ export default function InventoryTable({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search inventory..."
-            className="w-full pl-9 pr-3 py-2 bg-gray-900 border border-gray-800 rounded-lg text-sm text-white placeholder-gray-500 focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+            className="w-full pl-8 pr-2.5 py-1.5 bg-gray-900 border border-gray-800 rounded-md text-xs text-white placeholder-gray-500 focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
           />
         </div>
 
@@ -282,7 +326,7 @@ export default function InventoryTable({
         <select
           value={filterStatus}
           onChange={(e) => setFilterStatus(e.target.value)}
-          className="px-3 py-2 bg-gray-900 border border-gray-800 rounded-lg text-sm text-white"
+          className="px-2.5 py-1.5 bg-gray-900 border border-gray-800 rounded-md text-xs text-white shrink-0"
         >
           <option value="">All Status</option>
           {STATUS_OPTIONS.map((s) => (
@@ -293,7 +337,7 @@ export default function InventoryTable({
         <select
           value={filterChannel}
           onChange={(e) => setFilterChannel(e.target.value)}
-          className="px-3 py-2 bg-gray-900 border border-gray-800 rounded-lg text-sm text-white"
+          className="px-2.5 py-1.5 bg-gray-900 border border-gray-800 rounded-md text-xs text-white shrink-0"
         >
           <option value="">All Channels</option>
           {CHANNEL_OPTIONS.map((c) => (
@@ -304,7 +348,7 @@ export default function InventoryTable({
         <select
           value={filterCondition}
           onChange={(e) => setFilterCondition(e.target.value)}
-          className="px-3 py-2 bg-gray-900 border border-gray-800 rounded-lg text-sm text-white"
+          className="px-2.5 py-1.5 bg-gray-900 border border-gray-800 rounded-md text-xs text-white shrink-0"
         >
           <option value="">Raw & Graded</option>
           {CONDITION_OPTIONS.map((c) => (
@@ -315,7 +359,7 @@ export default function InventoryTable({
 
       {/* Bulk actions bar */}
       {selected.size > 0 && (
-        <div className="flex items-center gap-3 mb-4 p-3 bg-emerald-900/20 border border-emerald-800 rounded-lg">
+        <div className="flex items-center gap-2 mb-3 p-2 bg-emerald-900/20 border border-emerald-800 rounded-md">
           <span className="text-sm text-emerald-300 font-medium">
             {selected.size} selected
           </span>
@@ -366,12 +410,12 @@ export default function InventoryTable({
         </div>
       )}
 
-      {/* Table */}
-      <div className="overflow-x-auto border border-gray-800 rounded-xl">
-        <table className="w-full text-sm text-left">
+      {/* Table — ledger style: tight rows, right-align money */}
+      <div className="overflow-x-auto border border-gray-800 rounded-lg">
+        <table className="w-full text-xs text-left">
           <thead className="bg-gray-900 border-b border-gray-800">
             <tr>
-              <th className="px-3 py-3 w-10">
+              <th className="px-2 py-1.5 w-8 shrink-0">
                 <input
                   type="checkbox"
                   checked={filtered.length > 0 && selected.size === filtered.length}
@@ -382,19 +426,19 @@ export default function InventoryTable({
               {columns.map((col) => (
                 <th
                   key={col.key}
-                  className={`px-3 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider ${col.width}`}
+                  className={`px-2 py-1.5 text-[10px] font-medium text-gray-500 uppercase tracking-wider ${col.width} ${col.alignRight ? "text-right" : ""}`}
                 >
                   {col.label}
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-800">
+          <tbody className="divide-y divide-gray-800/80">
             {filtered.length === 0 && (
               <tr>
                 <td
                   colSpan={columns.length + 1}
-                  className="px-6 py-12 text-center text-gray-500"
+                  className="px-4 py-8 text-center text-xs text-gray-500"
                 >
                   {activeTab === "wax"
                     ? "No wax / sealed products found. Use Add Wax to track boxes and cases."
@@ -404,12 +448,18 @@ export default function InventoryTable({
                 </td>
               </tr>
             )}
-            {filtered.map((item) => (
+            {filtered.map((item, idx) => (
               <tr
                 key={item.id}
-                className="hover:bg-gray-900/50 transition-colors cursor-pointer"
+                className={`transition-colors cursor-pointer ${
+                  selectedItemId === item.id
+                    ? "bg-emerald-900/30 ring-inset"
+                    : idx % 2 === 1
+                    ? "bg-gray-900/30 hover:bg-gray-800/60"
+                    : "hover:bg-gray-800/60"
+                }`}
               >
-                <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                <td className="px-2 py-1" onClick={(e) => e.stopPropagation()}>
                   <input
                     type="checkbox"
                     checked={selected.has(item.id)}
@@ -420,7 +470,7 @@ export default function InventoryTable({
                 {columns.map((col) => (
                   <td
                     key={col.key}
-                    className={`px-3 py-2 text-gray-300 ${col.width}`}
+                    className={`px-2 py-1 text-gray-300 ${col.width} ${col.alignRight ? "text-right tabular-nums" : ""}`}
                     onClick={() => {
                       if (col.editable) {
                         const val = (item as any)[col.key];
@@ -437,7 +487,7 @@ export default function InventoryTable({
                         renderCell(item, col.key)
                       ) : (
                         <span
-                          className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColor(item.status)}`}
+                          className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${statusColor(item.status)}`}
                         >
                           {item.status}
                         </span>
@@ -453,7 +503,7 @@ export default function InventoryTable({
         </table>
       </div>
 
-      <div className="mt-2 text-xs text-gray-500">
+      <div className="mt-1.5 text-[10px] text-gray-500">
         {filtered.length} item{filtered.length !== 1 ? "s" : ""}
         {filtered.length !== items.length && ` (of ${items.length} total)`}
         {" · Click cell to edit · Double-click row to open detail"}

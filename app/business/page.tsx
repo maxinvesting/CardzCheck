@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, useEffect, useCallback } from "react";
+import { Suspense, useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
@@ -18,6 +18,10 @@ import CardPickerModal from "@/components/CardPickerModal";
 import type { CardPickerSelection } from "@/components/CardPicker";
 import { createClient } from "@/lib/supabase/client";
 import type { BusinessInventoryItem, BusinessMetrics as MetricsType } from "@/types";
+import {
+  computeInventoryValueSummary,
+  type InventoryValueSummary,
+} from "@/lib/business/inventory-value";
 
 function BusinessPageContent() {
   const router = useRouter();
@@ -38,6 +42,16 @@ function BusinessPageContent() {
   const [showAddDropdown, setShowAddDropdown] = useState(false);
   const [needsMigration, setNeedsMigration] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [filteredItems, setFilteredItems] = useState<BusinessInventoryItem[]>([]);
+
+  const inventorySummary = useMemo((): InventoryValueSummary | null => {
+    const list = filteredItems.length > 0 ? filteredItems : items;
+    return computeInventoryValueSummary(list);
+  }, [filteredItems, items]);
+
+  const handleFilteredChange = useCallback((filtered: BusinessInventoryItem[]) => {
+    setFilteredItems(filtered);
+  }, []);
 
   useEffect(() => {
     if (toast) {
@@ -301,7 +315,7 @@ function BusinessPageContent() {
   if (loading) {
     return (
       <AuthenticatedLayout>
-        <main className="max-w-7xl mx-auto px-4 py-8">
+        <main className="max-w-7xl mx-auto px-4 py-4">
           <div className="animate-pulse space-y-4">
             <div className="h-8 w-48 bg-gray-800 rounded" />
             <div className="grid grid-cols-5 gap-4">
@@ -319,7 +333,7 @@ function BusinessPageContent() {
   if (hasAccess === false) {
     return (
       <AuthenticatedLayout>
-        <main className="max-w-7xl mx-auto px-4 py-8">
+        <main className="max-w-7xl mx-auto px-4 py-4">
           <BusinessPaywall />
         </main>
       </AuthenticatedLayout>
@@ -328,26 +342,26 @@ function BusinessPageContent() {
 
   return (
     <AuthenticatedLayout>
-      <main className="max-w-7xl mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+      <main className="max-w-7xl mx-auto px-4 py-4">
+        {/* Header — compact for dense ledger dashboard */}
+        <div className="flex items-center justify-between mb-3">
           <div>
-            <h1 className="text-2xl font-bold text-white">
+            <h1 className="text-xl font-bold text-white">
               {businessName?.trim() || "Business"}
             </h1>
-            <p className="text-gray-400 text-sm mt-1">
+            <p className="text-gray-400 text-xs mt-0.5">
               Inventory tracking & sales analytics
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <Link
               href="/business/sales"
-              className="px-4 py-2 border border-gray-700 text-gray-300 rounded-lg hover:bg-gray-800 transition-colors text-sm font-medium"
+              className="px-3 py-1.5 border border-gray-700 text-gray-300 rounded-md hover:bg-gray-800 transition-colors text-xs font-medium"
             >
               Sales Ledger
             </Link>
             <div className="relative group">
-              <button className="px-4 py-2 border border-gray-700 text-gray-300 rounded-lg hover:bg-gray-800 transition-colors text-sm font-medium">
+              <button className="px-3 py-1.5 border border-gray-700 text-gray-300 rounded-md hover:bg-gray-800 transition-colors text-xs font-medium">
                 Export CSV
               </button>
               <div className="absolute right-0 mt-1 w-40 bg-gray-900 border border-gray-700 rounded-lg shadow-lg hidden group-hover:block z-10">
@@ -369,7 +383,7 @@ function BusinessPageContent() {
               <div className="flex">
                 <button
                   onClick={() => setShowAddCardModal(true)}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-l-lg transition-colors text-sm font-medium flex items-center gap-2"
+                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-l-md transition-colors text-xs font-medium flex items-center gap-1.5"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -378,7 +392,7 @@ function BusinessPageContent() {
                 </button>
                 <button
                   onClick={() => setShowAddDropdown((prev) => !prev)}
-                  className="px-2 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-r-lg transition-colors border-l border-emerald-500"
+                  className="px-1.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-r-md transition-colors border-l border-emerald-500"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -430,11 +444,16 @@ function BusinessPageContent() {
         </div>
 
         {/* Metrics */}
-        <BusinessMetrics metrics={metrics} loading={metricsLoading} />
+        <BusinessMetrics
+          metrics={metrics}
+          loading={metricsLoading}
+          inventorySummary={inventorySummary}
+          totalItemCount={items.length}
+        />
 
         {/* Migration banner (shown when database tables haven't been created) */}
         {needsMigration && (
-          <div className="mt-6">
+          <div className="mt-3">
             <BusinessMigrationBanner
               onRetry={() => {
                 setLoading(true);
@@ -448,10 +467,12 @@ function BusinessPageContent() {
         {!needsMigration && (
           <InventoryTable
             items={items}
+            selectedItemId={selectedItem?.id ?? null}
             onItemClick={setSelectedItem}
             onInlineUpdate={handleInlineUpdate}
             onBulkAction={handleBulkAction}
             onDelete={handleDelete}
+            onFilteredChange={handleFilteredChange}
           />
         )}
 
@@ -541,7 +562,7 @@ export default function BusinessPage() {
     <Suspense
       fallback={
         <AuthenticatedLayout>
-          <main className="max-w-7xl mx-auto px-4 py-8">
+          <main className="max-w-7xl mx-auto px-4 py-4">
             <div className="animate-pulse space-y-4">
               <div className="h-8 w-48 bg-gray-800 rounded" />
               <div className="grid grid-cols-5 gap-4">

@@ -1,6 +1,7 @@
 "use client";
 
 import type { BusinessMetrics as Metrics } from "@/types";
+import type { InventoryValueSummary } from "@/lib/business/inventory-value";
 
 function fmt(cents: number): string {
   return new Intl.NumberFormat("en-US", {
@@ -13,9 +14,18 @@ function fmt(cents: number): string {
 interface Props {
   metrics: Metrics | null;
   loading: boolean;
+  /** Filter-aware inventory value; when provided, shows Inventory Value card */
+  inventorySummary?: InventoryValueSummary | null;
+  /** Total item count (all items) for "X of Y" when filtered */
+  totalItemCount?: number;
 }
 
-export default function BusinessMetrics({ metrics, loading }: Props) {
+export default function BusinessMetrics({
+  metrics,
+  loading,
+  inventorySummary,
+  totalItemCount,
+}: Props) {
   const cards = [
     {
       label: "Revenue MTD",
@@ -46,25 +56,65 @@ export default function BusinessMetrics({ metrics, loading }: Props) {
     },
   ];
 
+  // Inventory Value card: show when we have summary (filter-aware)
+  const inventoryValueDisplay = inventorySummary ? (
+      <div className="bg-gray-900 border border-gray-800 rounded-lg p-2.5">
+        <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">
+          Inventory Value
+          {totalItemCount != null &&
+            inventorySummary.itemCount !== totalItemCount && (
+              <span className="ml-1 font-normal normal-case text-gray-500">
+                (filtered)
+              </span>
+            )}
+        </p>
+        {loading ? (
+          <div className="h-5 w-20 bg-gray-800 rounded animate-pulse" />
+        ) : (
+          <>
+            <p className="text-base font-bold tabular-nums text-emerald-400">
+              {inventorySummary.itemCount === 0
+                ? fmt(0)
+                : inventorySummary.itemsWithCmv > 0
+                ? fmt(inventorySummary.totalCmvCents)
+                : fmt(inventorySummary.totalCostCents)}
+            </p>
+            <p className="text-[10px] text-gray-500 mt-0.5">
+              {inventorySummary.itemsWithCmv > 0
+                ? `Est. CMV · ${inventorySummary.itemCount} item${inventorySummary.itemCount !== 1 ? "s" : ""}`
+                : `Cost basis · ${inventorySummary.itemCount} item${inventorySummary.itemCount !== 1 ? "s" : ""}`}
+            </p>
+            {inventorySummary.itemsWithCmv > 0 &&
+              inventorySummary.itemsWithCmv < inventorySummary.itemCount && (
+                <p className="text-[10px] text-gray-500">
+                  Cost: {fmt(inventorySummary.totalCostCents)}
+                </p>
+              )}
+          </>
+        )}
+      </div>
+    ) : null;
+
   return (
-    <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 mb-3">
       {cards.map((c) => (
         <div
           key={c.label}
-          className="bg-gray-900 border border-gray-800 rounded-xl p-4"
+          className="bg-gray-900 border border-gray-800 rounded-lg p-2.5"
         >
-          <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">
+          <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">
             {c.label}
           </p>
           {loading ? (
-            <div className="h-7 w-24 bg-gray-800 rounded animate-pulse" />
+            <div className="h-5 w-20 bg-gray-800 rounded animate-pulse" />
           ) : (
-            <p className={`text-xl font-bold tabular-nums ${c.color}`}>
+            <p className={`text-base font-bold tabular-nums ${c.color}`}>
               {c.value}
             </p>
           )}
         </div>
       ))}
+      {inventoryValueDisplay}
     </div>
   );
 }
