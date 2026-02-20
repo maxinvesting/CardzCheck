@@ -160,7 +160,7 @@ export default function AddInventoryModal({ isOpen, onClose, onAdd }: Props) {
           </div>
           <div className="grid grid-cols-2 gap-4">
             {inp("Status", "status", "select", STATUS_OPTIONS)}
-            {inp("Location", "location")}
+            {inp("Storage", "location")}
           </div>
           {form.condition_status === "graded" && (
             <div className="grid grid-cols-3 gap-4">

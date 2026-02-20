@@ -17,7 +17,7 @@ function emptyPlaceholder(field: string): string {
   switch (field) {
     case "list_price_cents": return "Not listed";
     case "current_market_value_cents": return "No comps";
-    case "location": return "Add location";
+    case "location": return "Add storage";
     default: return "—";
   }
 }
@@ -32,6 +32,8 @@ interface Props {
   onDelete: (ids: string[]) => void;
   /** Called when filtered items change so parent can display filter-aware inventory value */
   onFilteredChange?: (filtered: BusinessInventoryItem[]) => void;
+  /** Tighter row padding (Business mode) */
+  dense?: boolean;
 }
 
 const STATUS_OPTIONS = ["unlisted", "listed", "pending_sale", "sold", "returned"] as const;
@@ -46,6 +48,7 @@ export default function InventoryTable({
   onBulkAction,
   onDelete,
   onFilteredChange,
+  dense = false,
 }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
@@ -249,8 +252,8 @@ export default function InventoryTable({
     { key: "channel", label: "Channel", editable: true, width: "w-20 shrink-0" },
     { key: "list_price_cents", label: "List $", editable: true, width: "w-20 shrink-0", alignRight: true },
     { key: "current_market_value_cents", label: "CMV", editable: true, width: "w-20 shrink-0", alignRight: true },
-    { key: "location", label: "Location", editable: true, width: "w-24 shrink-0" },
-    { key: "acquisition_date", label: "Acq. Date", editable: true, width: "w-24 shrink-0" },
+    { key: "location", label: "Storage", editable: true, width: "w-24 shrink-0" },
+    { key: "acquisition_date", label: "Acquired", editable: true, width: "w-24 shrink-0" },
   ];
 
   return (
@@ -370,7 +373,7 @@ export default function InventoryTable({
           >
             <option value="">Bulk action...</option>
             <option value="set_status">Set status</option>
-            <option value="set_location">Set location</option>
+            <option value="set_location">Set storage</option>
             <option value="delete">Delete</option>
           </select>
           {bulkAction === "set_status" && (
@@ -390,7 +393,7 @@ export default function InventoryTable({
               type="text"
               value={bulkPayload}
               onChange={(e) => setBulkPayload(e.target.value)}
-              placeholder="Location"
+              placeholder="Storage"
               className="px-2 py-1 bg-gray-900 border border-gray-700 rounded text-sm text-white"
             />
           )}
@@ -415,7 +418,7 @@ export default function InventoryTable({
         <table className="w-full text-xs text-left">
           <thead className="bg-gray-900 border-b border-gray-800">
             <tr>
-              <th className="px-2 py-1.5 w-8 shrink-0">
+              <th className={`w-8 shrink-0 ${dense ? "px-2 py-1" : "px-2 py-1.5"}`}>
                 <input
                   type="checkbox"
                   checked={filtered.length > 0 && selected.size === filtered.length}
@@ -426,7 +429,7 @@ export default function InventoryTable({
               {columns.map((col) => (
                 <th
                   key={col.key}
-                  className={`px-2 py-1.5 text-[10px] font-medium text-gray-500 uppercase tracking-wider ${col.width} ${col.alignRight ? "text-right" : ""}`}
+                  className={`px-2 ${dense ? "py-1" : "py-1.5"} text-[10px] font-medium text-gray-500 uppercase tracking-wider ${col.width} ${col.alignRight ? "text-right" : ""}`}
                 >
                   {col.label}
                 </th>
@@ -443,7 +446,7 @@ export default function InventoryTable({
                   {activeTab === "wax"
                     ? "No wax / sealed products found. Use Add Wax to track boxes and cases."
                     : activeTab === "cards"
-                    ? "No cards found. Use Add Card to add cards to your inventory."
+                    ? "No cards found. Use Add Inventory to add cards to your inventory."
                     : "No inventory items found."}
                 </td>
               </tr>
@@ -459,7 +462,7 @@ export default function InventoryTable({
                     : "hover:bg-gray-800/60"
                 }`}
               >
-                <td className="px-2 py-1" onClick={(e) => e.stopPropagation()}>
+                <td className={`px-2 ${dense ? "py-0.5" : "py-1"}`} onClick={(e) => e.stopPropagation()}>
                   <input
                     type="checkbox"
                     checked={selected.has(item.id)}
@@ -470,7 +473,7 @@ export default function InventoryTable({
                 {columns.map((col) => (
                   <td
                     key={col.key}
-                    className={`px-2 py-1 text-gray-300 ${col.width} ${col.alignRight ? "text-right tabular-nums" : ""}`}
+                    className={`px-2 ${dense ? "py-0.5" : "py-1"} text-gray-300 ${col.width} ${col.alignRight ? "text-right tabular-nums" : ""}`}
                     onClick={() => {
                       if (col.editable) {
                         const val = (item as any)[col.key];

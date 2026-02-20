@@ -222,7 +222,7 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
             {inp("List Price ($)", "list_price", "number")}
             {inp("Market Value ($)", "current_market_value", "number")}
           </div>
-          {inp("Location", "location", "text", undefined, "Storage unit, binder, etc.")}
+          {inp("Storage", "location", "text", undefined, "Storage unit, binder, etc.")}
           <div>
             <label className="block text-xs text-gray-400 mb-1">Notes</label>
             <textarea

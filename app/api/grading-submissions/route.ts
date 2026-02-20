@@ -89,7 +89,7 @@ export async function GET() {
         });
       }
 
-      if (isSubmissionPermissionDenied(error) || isSubmissionAuthError(error)) {
+      if (isSubmissionPermissionDenied(error)) {
         console.error("grading_submissions.permission_failed", {
           endpoint: "/api/grading-submissions",
           supabaseClient: "server_cookie_anon",
@@ -101,6 +101,15 @@ export async function GET() {
           },
           ...safeError,
         });
+        return NextResponse.json({
+          submissions: [],
+          feature_unavailable: true,
+          message: buildFeatureUnavailableMessage(),
+          code: "permission_denied",
+        });
+      }
+
+      if (isSubmissionAuthError(error)) {
         return NextResponse.json(
           {
             error: "You're signed out or don't have permission. Please sign in again.",

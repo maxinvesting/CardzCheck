@@ -41,9 +41,15 @@ describe("grading submissions error helpers", () => {
 
   it("identifies missing schema errors", () => {
     expect(isSubmissionSchemaMissing({ code: "42P01" })).toBe(true);
+    expect(isSubmissionSchemaMissing({ code: "42703" })).toBe(true);
     expect(
       isSubmissionSchemaMissing({
         message: 'relation "grading_submissions" does not exist',
+      })
+    ).toBe(true);
+    expect(
+      isSubmissionSchemaMissing({
+        message: 'column "fees_actual_cents" of relation "grading_submissions" does not exist',
       })
     ).toBe(true);
     expect(isSubmissionSchemaMissing({ code: "42501" })).toBe(false);

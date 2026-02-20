@@ -238,7 +238,7 @@ export default function ItemDetailDrawer({
               {field("Grade", "grade")}
               {field("Cert #", "cert_number")}
             </div>
-            {field("Location", "location")}
+            {field("Storage", "location")}
             <div className="grid grid-cols-2 gap-4">
               {field("List Price ($)", "list_price", "number")}
               {field("Current Market Value ($)", "current_market_value", "number")}

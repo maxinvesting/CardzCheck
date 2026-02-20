@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { User } from "@/types";
 import PricingModal from "@/components/PricingModal";
@@ -11,6 +11,7 @@ import { hasActiveBusinessTier } from "@/lib/subscription-tier";
 // Keeps sidebar tier mode stable across page-level remounts in SPA navigation.
 let cachedBusinessMembership: boolean | null = null;
 const BUSINESS_MEMBERSHIP_STORAGE_KEY = "cardzcheck_business_membership";
+const VIEW_MODE_STORAGE_KEY = "cardzcheck_view_mode";
 
 function readStoredBusinessMembership(): boolean | null {
   if (typeof window === "undefined") return null;
@@ -30,8 +31,23 @@ function persistBusinessMembership(value: boolean) {
   }
 }
 
+function readViewMode(pathname: string): "personal" | "business" {
+  if (typeof window === "undefined") return pathname.startsWith("/business") ? "business" : "personal";
+  if (pathname.startsWith("/business")) return "business";
+  const stored = window.sessionStorage.getItem(VIEW_MODE_STORAGE_KEY);
+  if (stored === "personal" || stored === "business") return stored;
+  return "personal";
+}
+
+function persistViewMode(value: "personal" | "business") {
+  if (typeof window !== "undefined") {
+    window.sessionStorage.setItem(VIEW_MODE_STORAGE_KEY, value);
+  }
+}
+
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const pathImpliesBusiness = pathname.startsWith("/business");
   const initialBusinessMembership =
     cachedBusinessMembership ?? readStoredBusinessMembership();
@@ -43,6 +59,9 @@ export default function Sidebar() {
   const [pricingOpen, setPricingOpen] = useState(false);
   const [isBusiness, setIsBusiness] = useState(
     initialBusinessMembership ?? pathImpliesBusiness
+  );
+  const [viewMode, setViewMode] = useState<"personal" | "business">(() =>
+    readViewMode(pathname)
   );
   const supabase = createClient();
 
@@ -83,6 +102,33 @@ export default function Sidebar() {
 
     loadUser();
   }, []);
+
+  // Sync view mode with pathname (for Business users only)
+  useEffect(() => {
+    if (!isBusiness) return;
+    if (pathname.startsWith("/business")) {
+      setViewMode("business");
+      persistViewMode("business");
+    } else if (
+      ["/dashboard", "/collection", "/watchlist", "/comps", "/grade-estimator", "/analyst", "/settings"].some(
+        (p) => pathname === p || pathname.startsWith(p + "/")
+      )
+    ) {
+      setViewMode("personal");
+      persistViewMode("personal");
+    }
+  }, [pathname, isBusiness]);
+
+  const handleModeSwitch = (mode: "personal" | "business") => {
+    if (!isBusiness) return;
+    setViewMode(mode);
+    persistViewMode(mode);
+    if (mode === "business") {
+      router.push("/business");
+    } else {
+      router.push("/dashboard");
+    }
+  };
 
   const navItems = [
     {
@@ -261,18 +307,52 @@ export default function Sidebar() {
     },
   ];
 
-  const visibleNavItems = isBusiness
-    ? [
-        ...navItems.filter((item) => item.href === "/business"),
-        ...navItems.filter(
-          (item) =>
-            item.href !== "/business" &&
-            item.href !== "/dashboard" &&
-            item.href !== "/collection" &&
-            item.href !== "/watchlist"
-        ),
-      ]
-    : navItems;
+  const personalNavItems = navItems.filter(
+    (item) =>
+      item.href === "/dashboard" ||
+      item.href === "/collection" ||
+      item.href === "/watchlist" ||
+      item.href === "/comps" ||
+      item.href === "/grade-estimator" ||
+      item.href === "/analyst"
+  );
+  const businessNavItems = [
+    ...navItems.filter((item) => item.href === "/business"),
+    {
+      name: "CardzCheck Business Consultant",
+      href: "/business/analyst",
+      isPro: false,
+      badge: "AI",
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h6l5 5v11a2 2 0 01-2 2z"
+          />
+        </svg>
+      ),
+    },
+    {
+      name: "Sales Ledger",
+      href: "/business/sales",
+      isPro: false,
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+        </svg>
+      ),
+    },
+  ];
+  const settingsItem = navItems.find((item) => item.href === "/settings")!;
+
+  const visibleNavItems =
+    isBusiness && viewMode === "business"
+      ? [...businessNavItems, settingsItem]
+      : isBusiness && viewMode === "personal"
+      ? [...personalNavItems, settingsItem]
+      : navItems;
 
   const isActive = (href: string) => pathname === href;
 
@@ -321,19 +401,57 @@ export default function Sidebar() {
           isOpen ? "translate-x-0" : "-translate-x-full"
         } lg:translate-x-0 w-64`}
       >
-        {/* Logo */}
+        {/* Logo — Business users see context badge */}
         <Link
-          href={isBusiness ? "/business" : "/dashboard"}
-          className="p-8 border-b border-gray-800 flex items-center justify-center hover:opacity-90 transition-opacity cursor-pointer"
+          href={isBusiness && viewMode === "business" ? "/business" : "/dashboard"}
+          className="p-6 border-b border-gray-800 flex flex-col items-center justify-center hover:opacity-90 transition-opacity cursor-pointer"
           onClick={() => setIsOpen(false)}
         >
           <span className="text-2xl font-bold text-white tracking-tight">
             CardzCheck
           </span>
+          {isBusiness && viewMode === "business" && (
+            <span className="mt-1 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-emerald-600/30 text-emerald-400 rounded">
+              Business
+            </span>
+          )}
         </Link>
+
+        {/* Mode toggle — Business users only */}
+        {isBusiness && (
+          <div className="px-4 pt-4 pb-2">
+            <div className="flex rounded-lg bg-gray-900 p-0.5 border border-gray-800">
+              <button
+                onClick={() => handleModeSwitch("personal")}
+                className={`flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                  viewMode === "personal"
+                    ? "bg-gray-800 text-white"
+                    : "text-gray-400 hover:text-gray-300"
+                }`}
+              >
+                Personal
+              </button>
+              <button
+                onClick={() => handleModeSwitch("business")}
+                className={`flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                  viewMode === "business"
+                    ? "bg-emerald-600 text-white"
+                    : "text-gray-400 hover:text-gray-300"
+                }`}
+              >
+                Business
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Navigation */}
         <nav className="flex-1 p-4 space-y-2">
+          {isBusiness && (
+            <div className="px-4 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+              {viewMode === "business" ? "BUSINESS SUITE" : "PERSONAL"}
+            </div>
+          )}
           {visibleNavItems.map((item) => {
             const isProFeature = item.isPro && user && !user.is_paid;
             return (
@@ -349,7 +467,7 @@ export default function Sidebar() {
               >
                 {item.icon}
                 <span className="font-medium">{item.name}</span>
-                {item.badge && !isProFeature && (
+                {"badge" in item && item.badge && !isProFeature && (
                   <span className="ml-auto px-1.5 py-0.5 bg-blue-500/20 text-blue-400 text-xs font-medium rounded">
                     {item.badge}
                   </span>

@@ -66,7 +66,7 @@ export function isSubmissionAuthError(error: unknown): boolean {
 
 export function isSubmissionSchemaMissing(error: unknown): boolean {
   const code = getErrorCode(error);
-  if (code === "42P01" || code === "42704") {
+  if (code === "42P01" || code === "42704" || code === "42703") {
     return true;
   }
 
@@ -84,8 +84,10 @@ export function isSubmissionSchemaMissing(error: unknown): boolean {
   const missingLanguage =
     lower.includes("does not exist") ||
     lower.includes("undefined table") ||
+    lower.includes("undefined column") ||
     lower.includes("undefined object") ||
     lower.includes("relation") ||
+    lower.includes("column") ||
     lower.includes("type");
 
   return referencesSubmissionSchema && missingLanguage;

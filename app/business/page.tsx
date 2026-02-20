@@ -6,6 +6,7 @@ import Link from "next/link";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import BusinessPaywall from "@/components/business/BusinessPaywall";
 import BusinessMetrics from "@/components/business/BusinessMetrics";
+import BusinessAnalystPreviewCard from "@/components/business/BusinessAnalystPreviewCard";
 import InventoryTable from "@/components/business/InventoryTable";
 import ItemDetailDrawer from "@/components/business/ItemDetailDrawer";
 import AddInventoryModal from "@/components/business/AddInventoryModal";
@@ -29,6 +30,7 @@ function BusinessPageContent() {
   const [loading, setLoading] = useState(true);
   const [hasAccess, setHasAccess] = useState<boolean | null>(null);
   const [businessName, setBusinessName] = useState<string | null>(null);
+  const [ebayStoreUrl, setEbayStoreUrl] = useState<string | null>(null);
   const [items, setItems] = useState<BusinessInventoryItem[]>([]);
   const [metrics, setMetrics] = useState<MetricsType | null>(null);
   const [metricsLoading, setMetricsLoading] = useState(true);
@@ -133,10 +135,11 @@ function BusinessPageContent() {
 
       const { data: userData } = await supabase
         .from("users")
-        .select("business_name")
+        .select("business_name, ebay_store_url")
         .eq("id", user.id)
         .maybeSingle();
       setBusinessName(userData?.business_name || null);
+      setEbayStoreUrl(userData?.ebay_store_url || null);
 
       await Promise.all([loadInventory(), loadMetrics()]);
     }
@@ -342,18 +345,35 @@ function BusinessPageContent() {
 
   return (
     <AuthenticatedLayout>
-      <main className="max-w-7xl mx-auto px-4 py-4">
+      <main className="max-w-7xl mx-auto px-4 py-3 business-density">
         {/* Header — compact for dense ledger dashboard */}
         <div className="flex items-center justify-between mb-3">
           <div>
             <h1 className="text-xl font-bold text-white">
-              {businessName?.trim() || "Business"}
+              CardzCheck Business
             </h1>
             <p className="text-gray-400 text-xs mt-0.5">
               Inventory tracking & sales analytics
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {ebayStoreUrl ? (
+              <a
+                href={ebayStoreUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 py-1.5 border border-gray-700 text-gray-300 rounded-md hover:bg-gray-800 transition-colors text-xs font-medium whitespace-nowrap"
+              >
+                Open Store
+              </a>
+            ) : (
+              <Link
+                href="/settings"
+                className="px-3 py-1.5 border border-gray-600 text-gray-400 rounded-md hover:bg-gray-800 transition-colors text-xs font-medium whitespace-nowrap"
+              >
+                Add Store Link
+              </Link>
+            )}
             <Link
               href="/business/sales"
               className="px-3 py-1.5 border border-gray-700 text-gray-300 rounded-md hover:bg-gray-800 transition-colors text-xs font-medium"
@@ -362,7 +382,7 @@ function BusinessPageContent() {
             </Link>
             <div className="relative group">
               <button className="px-3 py-1.5 border border-gray-700 text-gray-300 rounded-md hover:bg-gray-800 transition-colors text-xs font-medium">
-                Export CSV
+                Export for Accounting
               </button>
               <div className="absolute right-0 mt-1 w-40 bg-gray-900 border border-gray-700 rounded-lg shadow-lg hidden group-hover:block z-10">
                 <a
@@ -388,7 +408,7 @@ function BusinessPageContent() {
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                   </svg>
-                  Add Card
+                  Add Inventory
                 </button>
                 <button
                   onClick={() => setShowAddDropdown((prev) => !prev)}
@@ -411,7 +431,7 @@ function BusinessPageContent() {
                     <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                     </svg>
-                    Add Card
+                    Add Inventory
                   </button>
                   <button
                     onClick={() => {
@@ -443,13 +463,16 @@ function BusinessPageContent() {
           </div>
         </div>
 
-        {/* Metrics */}
+        {/* Metrics — compact in Business mode */}
         <BusinessMetrics
           metrics={metrics}
           loading={metricsLoading}
           inventorySummary={inventorySummary}
           totalItemCount={items.length}
+          compact
         />
+
+        {!needsMigration && <BusinessAnalystPreviewCard items={items} />}
 
         {/* Migration banner (shown when database tables haven't been created) */}
         {needsMigration && (
@@ -473,6 +496,7 @@ function BusinessPageContent() {
             onBulkAction={handleBulkAction}
             onDelete={handleDelete}
             onFilteredChange={handleFilteredChange}
+            dense
           />
         )}
 

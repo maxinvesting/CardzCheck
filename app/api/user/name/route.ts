@@ -26,15 +26,23 @@ export async function PATCH(request: NextRequest) {
       body,
       "business_name"
     );
+    const hasEbayStoreUrl = Object.prototype.hasOwnProperty.call(
+      body,
+      "ebay_store_url"
+    );
 
-    if (!hasName && !hasBusinessName) {
+    if (!hasName && !hasBusinessName && !hasEbayStoreUrl) {
       return NextResponse.json(
         { error: "No profile fields provided" },
         { status: 400 }
       );
     }
 
-    const updates: { name?: string | null; business_name?: string | null } = {};
+    const updates: {
+      name?: string | null;
+      business_name?: string | null;
+      ebay_store_url?: string | null;
+    } = {};
 
     if (hasName) {
       const name = body.name;
@@ -80,6 +88,46 @@ export async function PATCH(request: NextRequest) {
       }
 
       updates.business_name = trimmedBusinessName || null;
+    }
+
+    if (hasEbayStoreUrl) {
+      const ebayStoreUrl = body.ebay_store_url;
+      if (
+        ebayStoreUrl !== null &&
+        ebayStoreUrl !== undefined &&
+        typeof ebayStoreUrl !== "string"
+      ) {
+        return NextResponse.json(
+          { error: "eBay Store URL must be a string" },
+          { status: 400 }
+        );
+      }
+
+      const trimmedUrl =
+        typeof ebayStoreUrl === "string" ? ebayStoreUrl.trim() : "";
+      if (trimmedUrl) {
+        try {
+          const parsed = new URL(trimmedUrl);
+          if (!["http:", "https:"].includes(parsed.protocol)) {
+            return NextResponse.json(
+              { error: "eBay Store URL must use http or https" },
+              { status: 400 }
+            );
+          }
+          if (trimmedUrl.length > 2048) {
+            return NextResponse.json(
+              { error: "eBay Store URL must be 2048 characters or less" },
+              { status: 400 }
+            );
+          }
+        } catch {
+          return NextResponse.json(
+            { error: "eBay Store URL must be a valid URL" },
+            { status: 400 }
+          );
+        }
+      }
+      updates.ebay_store_url = trimmedUrl || null;
     }
 
     const { error: updateError } = await supabase

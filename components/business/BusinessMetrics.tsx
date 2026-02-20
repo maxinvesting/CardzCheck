@@ -18,6 +18,8 @@ interface Props {
   inventorySummary?: InventoryValueSummary | null;
   /** Total item count (all items) for "X of Y" when filtered */
   totalItemCount?: number;
+  /** Compact/dense layout (Business mode) */
+  compact?: boolean;
 }
 
 export default function BusinessMetrics({
@@ -25,6 +27,7 @@ export default function BusinessMetrics({
   loading,
   inventorySummary,
   totalItemCount,
+  compact = false,
 }: Props) {
   const cards = [
     {
@@ -56,9 +59,13 @@ export default function BusinessMetrics({
     },
   ];
 
+  const cardClass = compact
+    ? "bg-gray-900 border border-gray-800 rounded-lg p-2"
+    : "bg-gray-900 border border-gray-800 rounded-lg p-2.5";
+
   // Inventory Value card: show when we have summary (filter-aware)
   const inventoryValueDisplay = inventorySummary ? (
-      <div className="bg-gray-900 border border-gray-800 rounded-lg p-2.5">
+      <div className={cardClass}>
         <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">
           Inventory Value
           {totalItemCount != null &&
@@ -96,11 +103,11 @@ export default function BusinessMetrics({
     ) : null;
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 mb-3">
+    <div className={`grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 ${compact ? "gap-2 mb-2" : "gap-2.5 mb-3"}`}>
       {cards.map((c) => (
         <div
           key={c.label}
-          className="bg-gray-900 border border-gray-800 rounded-lg p-2.5"
+          className={cardClass}
         >
           <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">
             {c.label}

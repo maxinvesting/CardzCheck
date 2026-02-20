@@ -16,6 +16,7 @@ export function getTestUser() {
     email: "test@example.com",
     name: "Test User",
     business_name: null,
+    ebay_store_url: null,
     is_paid: true,
     stripe_customer_id: null,
     free_searches_used: 0,

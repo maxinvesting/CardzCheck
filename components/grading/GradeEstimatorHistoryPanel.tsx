@@ -52,7 +52,7 @@ export default function GradeEstimatorHistoryPanel({
     } catch (err) {
       console.error("Failed to load grade estimator history:", err);
       setRuns(cachedRuns);
-      setError("History is temporarily unavailable.");
+      setError(cachedRuns.length === 0 ? "History is temporarily unavailable." : null);
     } finally {
       setLoading(false);
     }
@@ -165,7 +165,15 @@ export default function GradeEstimatorHistoryPanel({
                 Run a Grade Probability analysis to see your history here.
               </p>
               {error ? (
-                <p className="text-xs text-amber-300 mt-2">{error}</p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <p className="text-xs text-amber-300">{error}</p>
+                  <button
+                    onClick={() => void loadRuns()}
+                    className="text-xs font-medium text-blue-300 hover:text-blue-200"
+                  >
+                    Retry
+                  </button>
+                </div>
               ) : null}
             </div>
           ) : (

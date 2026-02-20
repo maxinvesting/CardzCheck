@@ -177,6 +177,7 @@ export default function GradeEstimatorPage() {
   const [showMarketAnalysis, setShowMarketAnalysis] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
+  const [showSubmissionBuilder, setShowSubmissionBuilder] = useState(false);
   const [toast, setToast] = useState<{ type: "success"; message: string } | null>(null);
   const [historyRefreshToken, setHistoryRefreshToken] = useState(0);
   const [lastSavedJobId, setLastSavedJobId] = useState<string | null>(null);
@@ -688,19 +689,15 @@ export default function GradeEstimatorPage() {
 
   return (
     <AuthenticatedLayout>
-      <main
-        className={`mx-auto max-w-3xl px-4 lg:max-w-7xl ${
-          !identifiedCard ? "py-4 lg:h-[calc(100vh-1.5rem)] lg:overflow-hidden" : "py-8"
-        }`}
-      >
+      <main className="max-w-3xl lg:max-w-7xl mx-auto px-4 py-8">
         {/* Header */}
-        <div className={!identifiedCard ? "mb-4" : "mb-8"}>
+        <div className="mb-8">
           <h1 className="text-2xl font-bold text-white">{gradingCopy.page.title}</h1>
           <p className="text-gray-400 mt-1">{gradingCopy.page.subtitle}</p>
         </div>
 
         {/* Info Card */}
-        <div className={`${!identifiedCard ? "mb-4 p-3" : "mb-6 p-4"} bg-blue-900/20 border border-blue-800/50 rounded-xl`}>
+        <div className="mb-6 p-4 bg-blue-900/20 border border-blue-800/50 rounded-xl">
           <div className="flex items-start gap-3">
             <svg
               className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5"
@@ -727,47 +724,64 @@ export default function GradeEstimatorPage() {
         </div>
 
         {!identifiedCard ? (
-          <div className="mb-4 lg:h-[calc(100vh-15.5rem)]">
-            <SubmissionBuilderPanel
-              identifiedCard={identifiedCard}
-              gradeEstimate={gradeEstimate}
-              recentRunsPanel={
-                <GradeEstimatorHistoryPanel
-                  refreshToken={historyRefreshToken}
-                  onSelect={handleHistorySelect}
-                  compact
-                  initialExpanded
-                />
-              }
-              uploadPanel={
-                <CardUploader
-                  onIdentified={(data: CardIdentificationResult) => {
-                    setIdentifiedCard(data);
-                  }}
-                  onStart={() => {
-                    setIdentifiedCard(null);
-                    setGradeEstimate(null);
-                    setValueResult(null);
-                    setValueError(null);
-                    setEstimateError(null);
-                    setEstimateAttempted(false);
-                    setGradeJob(null);
-                    setGradeJobId(null);
-                  }}
-                  onReset={() => {
-                    setIdentifiedCard(null);
-                    setGradeEstimate(null);
-                    setValueResult(null);
-                    setValueError(null);
-                    setGradeJob(null);
-                    setGradeJobId(null);
-                  }}
-                  disabled={false}
-                  maxFiles={8}
-                  compact
-                />
-              }
+          <div className="space-y-6">
+            <div className="bg-gray-800/50 rounded-xl border border-gray-700 p-6">
+              <CardUploader
+                onIdentified={(data: CardIdentificationResult) => {
+                  setIdentifiedCard(data);
+                }}
+                onStart={() => {
+                  setIdentifiedCard(null);
+                  setGradeEstimate(null);
+                  setValueResult(null);
+                  setValueError(null);
+                  setEstimateError(null);
+                  setEstimateAttempted(false);
+                  setGradeJob(null);
+                  setGradeJobId(null);
+                }}
+                onReset={() => {
+                  setIdentifiedCard(null);
+                  setGradeEstimate(null);
+                  setValueResult(null);
+                  setValueError(null);
+                  setGradeJob(null);
+                  setGradeJobId(null);
+                }}
+                disabled={false}
+                maxFiles={8}
+              />
+            </div>
+
+            <GradeEstimatorHistoryPanel
+              refreshToken={historyRefreshToken}
+              onSelect={handleHistorySelect}
             />
+
+            <div className="rounded-xl border border-gray-700 bg-gray-800/50 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-white">Submission Builder (Optional)</h3>
+                  <p className="text-xs text-gray-400">
+                    Keep the grade analysis workflow primary, then build submissions when needed.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowSubmissionBuilder((prev) => !prev)}
+                  className="rounded border border-gray-600 px-3 py-1 text-xs text-gray-200 hover:bg-gray-700"
+                >
+                  {showSubmissionBuilder ? "Hide" : "Show"}
+                </button>
+              </div>
+              {showSubmissionBuilder ? (
+                <div className="mt-3">
+                  <SubmissionBuilderPanel
+                    identifiedCard={identifiedCard}
+                    gradeEstimate={gradeEstimate}
+                  />
+                </div>
+              ) : null}
+            </div>
           </div>
         ) : (
           <>
@@ -776,12 +790,6 @@ export default function GradeEstimatorPage() {
               onSelect={handleHistorySelect}
             />
 
-            <div className="mb-6">
-              <SubmissionBuilderPanel
-                identifiedCard={identifiedCard}
-                gradeEstimate={gradeEstimate}
-              />
-            </div>
             <div className="space-y-6">
             {/* Identified Card Preview */}
             <div className="bg-gray-800/50 rounded-xl border border-gray-700 p-6">
@@ -1068,6 +1076,31 @@ export default function GradeEstimatorPage() {
                 </div>
               </div>
             ) : null}
+            </div>
+
+            <div className="rounded-xl border border-gray-700 bg-gray-800/50 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-white">Submission Builder (Optional)</h3>
+                  <p className="text-xs text-gray-400">
+                    Use this after analysis when you want to plan or track a PSA submission.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowSubmissionBuilder((prev) => !prev)}
+                  className="rounded border border-gray-600 px-3 py-1 text-xs text-gray-200 hover:bg-gray-700"
+                >
+                  {showSubmissionBuilder ? "Hide" : "Show"}
+                </button>
+              </div>
+              {showSubmissionBuilder ? (
+                <div className="mt-3">
+                  <SubmissionBuilderPanel
+                    identifiedCard={identifiedCard}
+                    gradeEstimate={gradeEstimate}
+                  />
+                </div>
+              ) : null}
             </div>
           </>
         )}
