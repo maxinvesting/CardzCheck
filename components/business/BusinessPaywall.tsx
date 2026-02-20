@@ -43,10 +43,9 @@ export default function BusinessPaywall() {
 
   const features = [
     "Spreadsheet-style inventory tracking",
-    "Sales ledger with auto-computed P&L",
     "Revenue & profit dashboards (MTD / YTD)",
     "Bulk status & location updates",
-    "CSV export for inventory & sales",
+    "CSV export for inventory",
     "All Pro features included",
   ];
 

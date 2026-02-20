@@ -175,7 +175,8 @@ function DeliverableOutput({
 }
 
 export default function BusinessConsultantPanel() {
-  const [prompt, setPrompt] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [prompt, setPrompt] = useState(""); // synced from DOM for button state; suggestion clicks also set this
   const [response, setResponse] = useState("");
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -208,10 +209,12 @@ export default function BusinessConsultantPanel() {
   }, []);
 
   const handleRunConsultation = async () => {
-    if (!prompt.trim() || phase !== "idle" && phase !== "deliverable") return;
+    const value = textareaRef.current?.value?.trim() ?? prompt.trim();
+    if (!value || (phase !== "idle" && phase !== "deliverable")) return;
 
     setError(null);
     setResponse("");
+    setPrompt(value);
     setStepIndex(0);
     setStatusLineIndex(0);
     setPhase("acknowledge");
@@ -242,7 +245,7 @@ export default function BusinessConsultantPanel() {
       const res = await fetch("/api/business/consultant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: prompt.trim() }),
+        body: JSON.stringify({ prompt: value }),
       });
       const data = await res.json();
 
@@ -267,7 +270,7 @@ export default function BusinessConsultantPanel() {
   const sections = response ? parseResponseIntoSections(response) : [];
 
   return (
-    <section className="mt-3 rounded-lg border border-gray-800 bg-gray-900/80">
+    <section className="relative z-20 mt-3 rounded-lg border border-gray-800 bg-gray-900/80">
       <div className="flex flex-col gap-2 border-b border-gray-800 px-3 py-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="text-sm font-semibold text-white">CardzCheck Business Consultant</h2>
@@ -289,7 +292,10 @@ export default function BusinessConsultantPanel() {
           {PROMPT_SUGGESTIONS.map((suggestion) => (
             <button
               key={suggestion}
-              onClick={() => setPrompt(suggestion)}
+              onClick={() => {
+                setPrompt(suggestion);
+                if (textareaRef.current) textareaRef.current.value = suggestion;
+              }}
               disabled={isWorking}
               className="rounded border border-gray-800 bg-gray-950/50 px-2 py-1 text-[11px] text-gray-300 transition-colors hover:bg-gray-800 disabled:opacity-60 disabled:cursor-not-allowed"
             >
@@ -299,12 +305,16 @@ export default function BusinessConsultantPanel() {
         </div>
 
         <textarea
-          value={prompt}
+          ref={textareaRef}
+          defaultValue=""
           onChange={(e) => setPrompt(e.target.value)}
           placeholder="Describe the business decision you need help with (pricing strategy, liquidation plan, expense discipline, channel mix, etc.)"
           rows={4}
           disabled={isWorking}
-          className="w-full rounded-md border border-gray-800 bg-gray-950 px-2.5 py-2 text-sm text-gray-100 placeholder:text-gray-500 focus:border-emerald-500 focus:outline-none disabled:opacity-70 disabled:cursor-not-allowed"
+          id="consultant-prompt-input"
+          aria-label="Business decision prompt"
+          autoComplete="off"
+          className="relative z-20 w-full rounded-md border border-gray-800 bg-gray-950 px-2.5 py-2 text-sm text-gray-100 placeholder:text-gray-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:opacity-70 disabled:cursor-not-allowed"
         />
 
         <div className="flex items-center justify-between gap-2">

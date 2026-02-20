@@ -3,6 +3,23 @@ import { createClient } from "@/lib/supabase/server";
 import { isTestMode } from "@/lib/test-mode";
 import { logDebug } from "@/lib/logging";
 
+function isMissingColumnError(
+  error: { code?: string | null; message?: string | null } | null,
+  columnName: string
+) {
+  if (!error) return false;
+  const code = String(error.code || "");
+  const message = String(error.message || "").toLowerCase();
+  const column = columnName.toLowerCase();
+  return (
+    code === "42703" ||
+    code === "PGRST204" ||
+    message.includes(`column "${column}"`) ||
+    message.includes(`'${column}'`) ||
+    message.includes(column)
+  );
+}
+
 export async function PATCH(request: NextRequest) {
   try {
     if (isTestMode()) {
@@ -136,11 +153,53 @@ export async function PATCH(request: NextRequest) {
       .eq("id", user.id);
 
     if (updateError) {
+      if (hasEbayStoreUrl && isMissingColumnError(updateError, "ebay_store_url")) {
+        const { ebay_store_url, ...nonEbayUpdates } = updates;
+
+        if (Object.keys(nonEbayUpdates).length > 0) {
+          const { error: nonEbayUpdateError } = await supabase
+            .from("users")
+            .update(nonEbayUpdates)
+            .eq("id", user.id);
+
+          if (nonEbayUpdateError) {
+            console.error("Error updating non-eBay user profile fields:", nonEbayUpdateError);
+            return NextResponse.json(
+              { error: "Failed to update profile" },
+              { status: 500 }
+            );
+          }
+        }
+
+        const { error: metadataError } = await supabase.auth.updateUser({
+          data: { ebay_store_url: ebay_store_url ?? null },
+        });
+
+        if (metadataError) {
+          console.error("Error updating eBay store URL metadata fallback:", metadataError);
+          return NextResponse.json(
+            { error: "Failed to update eBay Store URL" },
+            { status: 500 }
+          );
+        }
+
+        return NextResponse.json({ success: true, usedMetadataFallback: true });
+      }
+
       console.error("Error updating user profile:", updateError);
       return NextResponse.json(
         { error: "Failed to update profile" },
         { status: 500 }
       );
+    }
+
+    if (hasEbayStoreUrl) {
+      const { error: metadataSyncError } = await supabase.auth.updateUser({
+        data: { ebay_store_url: updates.ebay_store_url ?? null },
+      });
+      if (metadataSyncError) {
+        console.warn("Failed to sync ebay_store_url to auth metadata:", metadataSyncError);
+      }
     }
 
     return NextResponse.json({ success: true });

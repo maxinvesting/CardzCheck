@@ -121,30 +121,64 @@ function BusinessPageContent() {
     }
   }, []);
 
+  const loadUserProfile = useCallback(async () => {
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    const metadataEbayStoreUrl =
+      typeof user.user_metadata?.ebay_store_url === "string"
+        ? user.user_metadata.ebay_store_url
+        : null;
+
+    const { data: userData, error: userDataError } = await supabase
+      .from("users")
+      .select("business_name, ebay_store_url")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (
+      userDataError &&
+      String(userDataError.message || "").toLowerCase().includes("ebay_store_url")
+    ) {
+      const { data: fallbackUserData } = await supabase
+        .from("users")
+        .select("business_name")
+        .eq("id", user.id)
+        .maybeSingle();
+      setBusinessName(fallbackUserData?.business_name || null);
+      setEbayStoreUrl(metadataEbayStoreUrl);
+    } else {
+      setBusinessName(userData?.business_name || null);
+      setEbayStoreUrl(userData?.ebay_store_url || metadataEbayStoreUrl);
+    }
+    return user;
+  }, []);
+
   useEffect(() => {
     async function init() {
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
+      const user = await loadUserProfile();
       if (!user) {
         router.push("/login?redirect=/business");
         return;
       }
-
-      const { data: userData } = await supabase
-        .from("users")
-        .select("business_name, ebay_store_url")
-        .eq("id", user.id)
-        .maybeSingle();
-      setBusinessName(userData?.business_name || null);
-      setEbayStoreUrl(userData?.ebay_store_url || null);
-
       await Promise.all([loadInventory(), loadMetrics()]);
     }
     init();
-  }, [router, loadInventory, loadMetrics]);
+  }, [router, loadUserProfile, loadInventory, loadMetrics]);
+
+  // Refetch user profile when returning to the tab (e.g. after adding store link in Settings)
+  useEffect(() => {
+    const handler = () => {
+      if (document.visibilityState === "visible") {
+        loadUserProfile();
+      }
+    };
+    document.addEventListener("visibilitychange", handler);
+    return () => document.removeEventListener("visibilitychange", handler);
+  }, [loadUserProfile]);
 
   const handleInlineUpdate = async (id: string, field: string, value: any) => {
     try {
@@ -364,7 +398,7 @@ function BusinessPageContent() {
                 rel="noopener noreferrer"
                 className="px-3 py-1.5 border border-gray-700 text-gray-300 rounded-md hover:bg-gray-800 transition-colors text-xs font-medium whitespace-nowrap"
               >
-                Open Store
+                Ebay Store
               </a>
             ) : (
               <Link
@@ -374,31 +408,12 @@ function BusinessPageContent() {
                 Add Store Link
               </Link>
             )}
-            <Link
-              href="/business/sales"
-              className="px-3 py-1.5 border border-gray-700 text-gray-300 rounded-md hover:bg-gray-800 transition-colors text-xs font-medium"
+            <a
+              href="/api/business/export?type=inventory"
+              className="px-3 py-1.5 border border-gray-700 text-gray-300 rounded-md hover:bg-gray-800 transition-colors text-xs font-medium whitespace-nowrap"
             >
-              Sales Ledger
-            </Link>
-            <div className="relative group">
-              <button className="px-3 py-1.5 border border-gray-700 text-gray-300 rounded-md hover:bg-gray-800 transition-colors text-xs font-medium">
-                Export for Accounting
-              </button>
-              <div className="absolute right-0 mt-1 w-40 bg-gray-900 border border-gray-700 rounded-lg shadow-lg hidden group-hover:block z-10">
-                <a
-                  href="/api/business/export?type=inventory"
-                  className="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-800 rounded-t-lg"
-                >
-                  Inventory
-                </a>
-                <a
-                  href="/api/business/export?type=sales"
-                  className="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-800 rounded-b-lg"
-                >
-                  Sales
-                </a>
-              </div>
-            </div>
+              Export for Accounting
+            </a>
             <div className="relative">
               <div className="flex">
                 <button

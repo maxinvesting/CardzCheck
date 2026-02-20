@@ -2,7 +2,7 @@
 
 import { Suspense } from "react";
 import { useState, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import PricingModal from "@/components/PricingModal";
 import { createClient } from "@/lib/supabase/client";
@@ -10,7 +10,10 @@ import type { User } from "@/types";
 import { LIMITS } from "@/types";
 import { isTestMode, getTestUser } from "@/lib/test-mode";
 
+const VIEW_MODE_STORAGE_KEY = "cardzcheck_view_mode";
+
 function SettingsContent() {
+  const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [user, setUser] = useState<User | null>(null);
@@ -25,6 +28,26 @@ function SettingsContent() {
   const [pricingOpen, setPricingOpen] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [settingsMode, setSettingsMode] = useState<"personal" | "business">(
+    pathname.startsWith("/business") ? "business" : "personal"
+  );
+  const isBusinessSettings = settingsMode === "business";
+
+  useEffect(() => {
+    if (pathname.startsWith("/business")) {
+      setSettingsMode("business");
+      return;
+    }
+
+    if (typeof window === "undefined") return;
+    const stored = window.sessionStorage.getItem(VIEW_MODE_STORAGE_KEY);
+    if (stored === "personal" || stored === "business") {
+      setSettingsMode(stored);
+      return;
+    }
+
+    setSettingsMode("personal");
+  }, [pathname]);
 
   useEffect(() => {
     if (searchParams.get("success") === "true") {
@@ -60,6 +83,10 @@ function SettingsContent() {
       }
 
       setEmail(authUser.email || "");
+      const metadataEbayStoreUrl =
+        typeof authUser.user_metadata?.ebay_store_url === "string"
+          ? authUser.user_metadata.ebay_store_url
+          : "";
 
       const { data: userData } = await supabase
         .from("users")
@@ -67,11 +94,23 @@ function SettingsContent() {
         .eq("id", authUser.id)
         .single();
 
+      const hasTableEbayStoreUrl =
+        !!userData &&
+        Object.prototype.hasOwnProperty.call(userData, "ebay_store_url");
+      const resolvedEbayStoreUrl = hasTableEbayStoreUrl
+        ? userData.ebay_store_url || ""
+        : metadataEbayStoreUrl;
+
       if (userData) {
-        setUser(userData);
+        setUser({
+          ...userData,
+          ebay_store_url: resolvedEbayStoreUrl || null,
+        });
         setName(userData.name || "");
         setBusinessName(userData.business_name || "");
-        setEbayStoreUrl(userData.ebay_store_url || "");
+        setEbayStoreUrl(resolvedEbayStoreUrl);
+      } else {
+        setEbayStoreUrl(metadataEbayStoreUrl);
       }
 
       setLoading(false);
@@ -263,34 +302,36 @@ function SettingsContent() {
                   This name will be used for personalization throughout the app
                 </p>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Business Name
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={businessName}
-                    onChange={(e) => setBusinessName(e.target.value)}
-                    placeholder="Your business name"
-                    maxLength={120}
-                    className="flex-1 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                  <button
-                    onClick={handleBusinessNameUpdate}
-                    disabled={
-                      businessNameLoading ||
-                      businessName === (user?.business_name || "")
-                    }
-                    className="px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {businessNameLoading ? "Saving..." : "Save"}
-                  </button>
+              {isBusinessSettings && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Business Name
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={businessName}
+                      onChange={(e) => setBusinessName(e.target.value)}
+                      placeholder="Your business name"
+                      maxLength={120}
+                      className="flex-1 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <button
+                      onClick={handleBusinessNameUpdate}
+                      disabled={
+                        businessNameLoading ||
+                        businessName === (user?.business_name || "")
+                      }
+                      className="px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {businessNameLoading ? "Saving..." : "Save"}
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Used as your Business workspace title
+                  </p>
                 </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Used as your Business workspace title
-                </p>
-              </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Email
@@ -322,42 +363,43 @@ function SettingsContent() {
             </div>
           </div>
 
-          {/* Sales Channels */}
-          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-              Sales Channels
-            </h2>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  eBay Store URL
-                </label>
-                <div className="flex gap-2 flex-wrap sm:flex-nowrap">
-                  <input
-                    type="url"
-                    value={ebayStoreUrl}
-                    onChange={(e) => setEbayStoreUrl(e.target.value)}
-                    placeholder="https://www.ebay.com/str/yourstore"
-                    maxLength={2048}
-                    className="flex-1 min-w-0 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                  <button
-                    onClick={handleEbayStoreUrlUpdate}
-                    disabled={
-                      ebayStoreUrlLoading ||
-                      ebayStoreUrl === (user?.ebay_store_url || "")
-                    }
-                    className="px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
-                  >
-                    {ebayStoreUrlLoading ? "Saving..." : "Save"}
-                  </button>
+          {isBusinessSettings && (
+            <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                Sales Channels
+              </h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    eBay Store URL
+                  </label>
+                  <div className="flex gap-2 flex-wrap sm:flex-nowrap">
+                    <input
+                      type="url"
+                      value={ebayStoreUrl}
+                      onChange={(e) => setEbayStoreUrl(e.target.value)}
+                      placeholder="https://www.ebay.com/str/yourstore"
+                      maxLength={2048}
+                      className="flex-1 min-w-0 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <button
+                      onClick={handleEbayStoreUrlUpdate}
+                      disabled={
+                        ebayStoreUrlLoading ||
+                        ebayStoreUrl === (user?.ebay_store_url || "")
+                      }
+                      className="px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                    >
+                      {ebayStoreUrlLoading ? "Saving..." : "Save"}
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Opens from Business mode via the Open Store shortcut
+                  </p>
                 </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Opens from Business mode via the Open Store shortcut
-                </p>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Current Plan */}
           <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6">

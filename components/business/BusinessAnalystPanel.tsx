@@ -24,8 +24,10 @@ export default function BusinessAnalystPanel({ items }: Props) {
     <section className="mb-3 rounded-lg border border-gray-800 bg-gray-900/80">
       <div className="flex flex-col gap-2 border-b border-gray-800 px-3 py-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className="text-sm font-semibold text-white">AI Business Analyst</h2>
-          <p className="text-xs text-gray-400">Inventory &amp; Profit Intelligence</p>
+          <h2 className="text-sm font-semibold text-white">AI Insights</h2>
+          <p className="text-xs text-gray-400">
+            Signals and recommendations from your inventory data
+          </p>
         </div>
         <div className="flex items-center gap-2 text-[10px]">
           <span className="rounded border border-emerald-700/60 bg-emerald-900/30 px-1.5 py-0.5 font-medium uppercase tracking-wider text-emerald-300">

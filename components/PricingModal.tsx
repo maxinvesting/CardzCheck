@@ -63,7 +63,6 @@ export default function PricingModal({ isOpen, onClose }: PricingModalProps) {
   const businessFeatures = [
     "Everything in Pro",
     "Inventory tracking spreadsheet",
-    "Sales ledger with auto P&L",
     "Revenue & profit dashboards",
     "Bulk actions & CSV export",
   ];

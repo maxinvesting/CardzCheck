@@ -110,7 +110,7 @@ export default function Sidebar() {
       setViewMode("business");
       persistViewMode("business");
     } else if (
-      ["/dashboard", "/collection", "/watchlist", "/comps", "/grade-estimator", "/analyst", "/settings"].some(
+      ["/dashboard", "/collection", "/watchlist", "/comps", "/grade-estimator", "/analyst"].some(
         (p) => pathname === p || pathname.startsWith(p + "/")
       )
     ) {
@@ -276,7 +276,6 @@ export default function Sidebar() {
                 />
               </svg>
             ),
-            badge: "Biz",
           },
         ]
       : []),
@@ -322,7 +321,6 @@ export default function Sidebar() {
       name: "CardzCheck Business Consultant",
       href: "/business/analyst",
       isPro: false,
-      badge: "AI",
       icon: (
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path
@@ -331,16 +329,6 @@ export default function Sidebar() {
             strokeWidth={2}
             d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h6l5 5v11a2 2 0 01-2 2z"
           />
-        </svg>
-      ),
-    },
-    {
-      name: "Sales Ledger",
-      href: "/business/sales",
-      isPro: false,
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
         </svg>
       ),
     },
@@ -395,11 +383,11 @@ export default function Sidebar() {
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar — when closed on mobile, pointer-events-none so it doesn't block content */}
       <div
-        className={`fixed top-0 left-0 h-full bg-[#0f1419] border-r border-gray-800 flex flex-col z-40 transition-transform duration-300 ${
-          isOpen ? "translate-x-0" : "-translate-x-full"
-        } lg:translate-x-0 w-64`}
+        className={`fixed top-0 left-0 h-full bg-[#0f1419] border-r border-gray-800 flex flex-col z-40 transition-transform duration-300 w-64 ${
+          isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        } ${!isOpen ? "pointer-events-none lg:pointer-events-auto" : ""}`}
       >
         {/* Logo — Business users see context badge */}
         <Link
