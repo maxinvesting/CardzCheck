@@ -28,6 +28,7 @@ export default function ItemDetailDrawer({
   const [form, setForm] = useState<Record<string, any>>({});
   const [sales, setSales] = useState<BusinessSale[]>([]);
   const [salesLoading, setSalesLoading] = useState(false);
+  const [cmvLoading, setCmvLoading] = useState(false);
   const [showSaleForm, setShowSaleForm] = useState(false);
   const [saleForm, setSaleForm] = useState({
     sale_date: new Date().toISOString().slice(0, 10),
@@ -115,6 +116,30 @@ export default function ItemDetailDrawer({
         : null,
       notes: form.notes || null,
     });
+  };
+
+  const handleFetchCmv = async () => {
+    if (!item?.title?.trim()) return;
+    setCmvLoading(true);
+    try {
+      const res = await fetch(
+        `/api/business/inventory/fetch-cmv?item_id=${encodeURIComponent(item.id)}`
+      );
+      const data = await res.json().catch(() => null);
+      const cmv = data?.cmv;
+      if (typeof cmv === "number" && Number.isFinite(cmv) && cmv > 0) {
+        const cents = Math.round(cmv * 100);
+        setForm((prev) => ({
+          ...prev,
+          current_market_value: cmv.toFixed(2),
+        }));
+        onSave(item.id, {
+          current_market_value_cents: cents,
+        });
+      }
+    } finally {
+      setCmvLoading(false);
+    }
   };
 
   const handleAddSale = () => {
@@ -241,7 +266,35 @@ export default function ItemDetailDrawer({
             {field("Storage", "location")}
             <div className="grid grid-cols-2 gap-4">
               {field("List Price ($)", "list_price", "number")}
-              {field("Current Market Value ($)", "current_market_value", "number")}
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">
+                  Current Market Value ($)
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={form.current_market_value ?? ""}
+                    onChange={(e) =>
+                      setForm({ ...form, current_market_value: e.target.value })
+                    }
+                    className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"
+                  />
+                  {(!form.current_market_value || form.current_market_value === "0" || form.current_market_value === "0.00") && (
+                    <button
+                      type="button"
+                      onClick={handleFetchCmv}
+                      disabled={cmvLoading || !item.title?.trim()}
+                      className="shrink-0 px-3 py-2 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white text-sm rounded-lg font-medium"
+                    >
+                      {cmvLoading ? "…" : "Get estimate"}
+                    </button>
+                  )}
+                </div>
+                <p className="text-[10px] text-gray-500 mt-1">
+                  Override with your own value if needed.
+                </p>
+              </div>
             </div>
             {field("Notes", "notes", "textarea")}
 

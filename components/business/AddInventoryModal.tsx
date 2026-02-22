@@ -13,6 +13,7 @@ const CHANNEL_OPTIONS = ["ebay", "whatnot", "instagram", "show", "local", "other
 const ACQ_OPTIONS = ["buy", "trade", "rip", "consignment", "other"] as const;
 
 export default function AddInventoryModal({ isOpen, onClose, onAdd }: Props) {
+  const [cmvLoading, setCmvLoading] = useState(false);
   const [form, setForm] = useState({
     title: "",
     quantity: "1",
@@ -39,6 +40,27 @@ export default function AddInventoryModal({ isOpen, onClose, onAdd }: Props) {
   const toCents = (val: string) => {
     const n = parseFloat(val);
     return Number.isNaN(n) ? 0 : Math.round(n * 100);
+  };
+
+  const handleFetchCmv = async () => {
+    const title = form.title.trim();
+    if (!title) return;
+    setCmvLoading(true);
+    try {
+      const res = await fetch(
+        `/api/business/inventory/fetch-cmv?title=${encodeURIComponent(title)}`
+      );
+      const data = await res.json().catch(() => null);
+      const cmv = data?.cmv;
+      if (typeof cmv === "number" && Number.isFinite(cmv) && cmv > 0) {
+        setForm((prev) => ({
+          ...prev,
+          current_market_value: String(cmv),
+        }));
+      }
+    } finally {
+      setCmvLoading(false);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -171,7 +193,31 @@ export default function AddInventoryModal({ isOpen, onClose, onAdd }: Props) {
           )}
           <div className="grid grid-cols-2 gap-4">
             {inp("List Price ($)", "list_price", "number")}
-            {inp("Market Value ($)", "current_market_value", "number")}
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">
+                Market Value ($)
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  step="0.01"
+                  value={form.current_market_value}
+                  onChange={(e) =>
+                    setForm({ ...form, current_market_value: e.target.value })
+                  }
+                  placeholder="Override with your own value"
+                  className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500"
+                />
+                <button
+                  type="button"
+                  onClick={handleFetchCmv}
+                  disabled={!form.title.trim() || cmvLoading}
+                  className="shrink-0 px-3 py-2 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded-lg font-medium"
+                >
+                  {cmvLoading ? "…" : "Get estimate"}
+                </button>
+              </div>
+            </div>
           </div>
           <div>
             <label className="block text-xs text-gray-400 mb-1">Notes</label>

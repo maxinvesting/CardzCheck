@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export interface PendingInventoryCard {
   player_name: string;
@@ -49,6 +49,37 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cmvLoading, setCmvLoading] = useState(false);
+
+  // Fetch estimated CMV when modal opens with a card
+  useEffect(() => {
+    if (!isOpen || !card?.player_name) return;
+    setCmvLoading(true);
+    const q = new URLSearchParams({ player: card.player_name });
+    if (card.year) q.set("year", card.year);
+    if (card.set_name) q.set("set", card.set_name);
+    if (card.grade) q.set("grade", card.grade);
+    if (card.card_number) q.set("card_number", card.card_number);
+    if (card.parallel_type) q.set("parallel_type", card.parallel_type);
+    fetch(`/api/search?${q.toString()}`)
+      .then((res) => res.json().catch(() => null))
+      .then((data) => {
+        const cmv =
+          data?.stats?.cmv != null &&
+          typeof data.stats.cmv === "number" &&
+          Number.isFinite(data.stats.cmv) &&
+          data.stats.cmv > 0
+            ? data.stats.cmv
+            : null;
+        if (cmv != null) {
+          setForm((prev) => ({
+            ...prev,
+            current_market_value: String(cmv),
+          }));
+        }
+      })
+      .finally(() => setCmvLoading(false));
+  }, [isOpen, card?.player_name, card?.year, card?.set_name, card?.grade, card?.card_number, card?.parallel_type]);
 
   if (!isOpen || !card) return null;
 
@@ -220,7 +251,24 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
           </div>
           <div className="grid grid-cols-2 gap-4">
             {inp("List Price ($)", "list_price", "number")}
-            {inp("Market Value ($)", "current_market_value", "number")}
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">
+                Market Value ($)
+                {cmvLoading && (
+                  <span className="ml-2 text-amber-400">Fetching estimate…</span>
+                )}
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={form.current_market_value}
+                onChange={(e) =>
+                  setForm({ ...form, current_market_value: e.target.value })
+                }
+                placeholder="Override with your own value"
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500"
+              />
+            </div>
           </div>
           {inp("Storage", "location", "text", undefined, "Storage unit, binder, etc.")}
           <div>

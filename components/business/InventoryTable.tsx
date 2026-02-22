@@ -16,7 +16,7 @@ function fmtCents(cents: number | null): string {
 function emptyPlaceholder(field: string): string {
   switch (field) {
     case "list_price_cents": return "Not listed";
-    case "current_market_value_cents": return "No comps";
+    case "current_market_value_cents": return "No comps — click to set";
     case "location": return "Add storage";
     default: return "—";
   }
@@ -63,6 +63,26 @@ export default function InventoryTable({
   const [editValue, setEditValue] = useState("");
   const [bulkAction, setBulkAction] = useState("");
   const [bulkPayload, setBulkPayload] = useState("");
+  const [fetchingCmvId, setFetchingCmvId] = useState<string | null>(null);
+
+  const handleFetchCmv = async (item: BusinessInventoryItem) => {
+    if (item.current_market_value_cents != null && item.current_market_value_cents > 0) return;
+    if (!item.title?.trim()) return;
+    setFetchingCmvId(item.id);
+    try {
+      const res = await fetch(
+        `/api/business/inventory/fetch-cmv?item_id=${encodeURIComponent(item.id)}`
+      );
+      const data = await res.json().catch(() => null);
+      const cmv = data?.cmv;
+      if (typeof cmv === "number" && Number.isFinite(cmv) && cmv > 0) {
+        const cents = Math.round(cmv * 100);
+        onInlineUpdate(item.id, "current_market_value_cents", cents);
+      }
+    } finally {
+      setFetchingCmvId(null);
+    }
+  };
 
   const isWax = (item: BusinessInventoryItem) =>
     Boolean(item.notes?.includes("[WAX]"));
@@ -215,8 +235,30 @@ export default function InventoryTable({
     }
     if (field === "current_market_value_cents") {
       const formatted = fmtCents(val);
-      if (!formatted) {
-        return <span className="italic text-gray-500 text-xs">{emptyPlaceholder(field)}</span>;
+      const isEmpty = !formatted || val == null || val <= 0;
+      if (isEmpty) {
+        const isFetching = fetchingCmvId === item.id;
+        return (
+          <span
+            className="flex items-center gap-1.5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span className="italic text-gray-500 text-xs">
+              {emptyPlaceholder(field)}
+            </span>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleFetchCmv(item);
+              }}
+              disabled={isFetching || !item.title?.trim()}
+              className="shrink-0 px-1.5 py-0.5 text-[10px] font-medium bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded text-gray-300"
+            >
+              {isFetching ? "…" : "Get"}
+            </button>
+          </span>
+        );
       }
       return <span className="tabular-nums">{formatted}</span>;
     }

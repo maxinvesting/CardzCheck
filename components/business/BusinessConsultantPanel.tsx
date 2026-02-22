@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import type { BusinessConsultation } from "@/types";
 
 const CONSULTANT_COPY = {
@@ -60,43 +60,88 @@ function useReducedMotion(): boolean {
   return reduced;
 }
 
-function parseResponseIntoSections(text: string): { title: string; body: string }[] {
-  const separator = /-{5,}\s*\n/g;
-  const parts = text.split(separator).map((p) => p.trim()).filter(Boolean);
-
-  if (parts.length === 0 && text.trim()) {
-    return [{ title: "Consulting Output", body: text.trim() }];
-  }
-
-  const sections: { title: string; body: string }[] = [];
-  for (let i = 0; i < parts.length; i++) {
-    const part = parts[i];
-    const lines = part.split("\n");
-    const firstLine = lines[0]?.trim() ?? "";
-    const looksLikeHeader =
-      firstLine === firstLine.toUpperCase() &&
-      firstLine.length > 2 &&
-      !firstLine.includes(":") &&
-      lines.length >= 1;
-
-    if (looksLikeHeader && lines.length === 1) {
-      const next = parts[i + 1];
-      sections.push({ title: firstLine, body: next ?? "" });
-      if (next) i++;
-    } else if (looksLikeHeader) {
-      sections.push({ title: firstLine, body: lines.slice(1).join("\n").trim() });
-    } else if (sections.length === 0) {
-      sections.push({ title: "Executive Summary", body: part });
-    } else {
-      const last = sections[sections.length - 1];
-      last.body = last.body ? `${last.body}\n\n${part}` : part;
+function renderInline(text: string, keyBase: string): ReactNode[] {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g).filter(Boolean);
+  return parts.map((part, i) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return (
+        <strong key={`${keyBase}-b-${i}`} className="font-semibold text-gray-100">
+          {part.slice(2, -2)}
+        </strong>
+      );
     }
+    return <span key={`${keyBase}-t-${i}`}>{part}</span>;
+  });
+}
+
+function formatHeading(line: string): string {
+  return line.replace(/^#{1,6}\s*/, "").replace(/AI Insights/gi, "Market Ideas").trim();
+}
+
+function ConsultantResponse({ text }: { text: string }) {
+  const lines = text
+    .replace(/\r\n/g, "\n")
+    .replace(/AI Insights/gi, "Market Ideas")
+    .split("\n");
+  const content: ReactNode[] = [];
+  const bulletBuffer: string[] = [];
+  let key = 0;
+
+  const flushBullets = () => {
+    if (bulletBuffer.length === 0) return;
+    content.push(
+      <ul key={`ul-${key++}`} className="my-2 list-disc space-y-1 pl-5 text-gray-200">
+        {bulletBuffer.map((item, i) => (
+          <li key={`li-${key}-${i}`}>{renderInline(item, `li-${key}-${i}`)}</li>
+        ))}
+      </ul>
+    );
+    bulletBuffer.length = 0;
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line || /^-{3,}$/.test(line)) {
+      flushBullets();
+      continue;
+    }
+
+    const headingMatch = line.match(/^#{1,3}\s+/);
+    if (headingMatch) {
+      flushBullets();
+      const heading = formatHeading(line);
+      content.push(
+        <h3 key={`h-${key++}`} className="mt-4 text-base font-semibold text-white">
+          {heading}
+        </h3>
+      );
+      continue;
+    }
+
+    if (/^[-*]\s+/.test(line)) {
+      bulletBuffer.push(line.replace(/^[-*]\s+/, ""));
+      continue;
+    }
+
+    flushBullets();
+    content.push(
+      <p key={`p-${key++}`} className="my-2 text-gray-200">
+        {renderInline(line, `p-${key}`)}
+      </p>
+    );
   }
 
-  if (sections.length === 0 && text.trim()) {
-    return [{ title: "Consulting Output", body: text.trim() }];
-  }
-  return sections;
+  flushBullets();
+
+  return (
+    <article className="rounded-lg border border-gray-800/80 bg-gray-950/55 px-4 py-3 text-[15px] leading-7">
+      {content.length > 0 ? (
+        content
+      ) : (
+        <p className="text-sm text-gray-300">No analysis text returned.</p>
+      )}
+    </article>
+  );
 }
 
 function ConsultantWorkingPanel({
@@ -156,46 +201,13 @@ function ConsultantWorkingPanel({
   );
 }
 
-function DeliverableOutput({
-  sections,
-  reducedMotion,
-}: {
-  sections: { title: string; body: string }[];
-  reducedMotion: boolean;
-}) {
-  return (
-    <div className="space-y-3">
-      {sections.map((section, i) => (
-        <div
-          key={section.title + i}
-          className={`rounded-md border border-gray-800 bg-gray-950/40 px-2.5 py-2 ${
-            reducedMotion ? "" : "animate-fade-slide-in motion-reduce:animate-none"
-          }`}
-          style={
-            reducedMotion
-              ? {}
-              : {
-                  animationDelay: `${i * 80}ms`,
-                  animationFillMode: "both",
-                }
-          }
-        >
-          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-500">
-            {section.title}
-          </p>
-          <pre className="whitespace-pre-wrap text-xs text-gray-200">{section.body}</pre>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 export default function BusinessConsultantPanel() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [prompt, setPrompt] = useState(""); // synced from DOM for button state; suggestion clicks also set this
   const [response, setResponse] = useState("");
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [historyNotice, setHistoryNotice] = useState<string | null>(null);
   const [consultations, setConsultations] = useState<BusinessConsultation[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [activeConsultationId, setActiveConsultationId] = useState<string | null>(null);
@@ -247,6 +259,7 @@ export default function BusinessConsultantPanel() {
       if (!consultation) return;
       clearTimers();
       setError(null);
+      setHistoryNotice(null);
       setActiveConsultationId(consultation.id);
       setPrompt(consultation.prompt);
       setResponse(consultation.response);
@@ -265,6 +278,7 @@ export default function BusinessConsultantPanel() {
     if (!value || (phase !== "idle" && phase !== "deliverable")) return;
 
     setError(null);
+    setHistoryNotice(null);
     setResponse("");
     setPrompt(value);
     setStepIndex(0);
@@ -310,7 +324,11 @@ export default function BusinessConsultantPanel() {
       setResponse(data.response || "");
       setPhase("deliverable");
       if (data?.saved === false) {
-        setError("Analysis generated, but it could not be saved to history.");
+        setHistoryNotice(
+          data?.saveWarning || "Analysis generated. History is temporarily unavailable for this run."
+        );
+      } else {
+        setHistoryNotice(null);
       }
 
       if (data?.consultation?.id) {
@@ -335,7 +353,6 @@ export default function BusinessConsultantPanel() {
   useEffect(() => () => clearTimers(), [clearTimers]);
 
   const isWorking = phase === "acknowledge" || phase === "working";
-  const sections = response ? parseResponseIntoSections(response) : [];
   const formatHistoryTime = (dateStr: string): string => {
     const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
     if (seconds < 60) return "just now";
@@ -417,6 +434,12 @@ export default function BusinessConsultantPanel() {
           )}
         </div>
 
+        {historyNotice && (
+          <div className="rounded-md border border-amber-700/40 bg-amber-950/20 px-2.5 py-2 text-xs text-amber-200">
+            {historyNotice}
+          </div>
+        )}
+
         <textarea
           ref={textareaRef}
           defaultValue=""
@@ -470,9 +493,7 @@ export default function BusinessConsultantPanel() {
           </div>
         )}
 
-        {phase === "deliverable" && sections.length > 0 && (
-          <DeliverableOutput sections={sections} reducedMotion={reducedMotion} />
-        )}
+        {phase === "deliverable" && response.trim().length > 0 && <ConsultantResponse text={response} />}
       </div>
     </section>
   );
