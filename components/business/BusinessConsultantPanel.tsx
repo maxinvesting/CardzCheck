@@ -3,11 +3,26 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { BusinessConsultation } from "@/types";
 
-const PROMPT_SUGGESTIONS = [
-  "Build a 30-day plan to reduce unlisted inventory and improve cash flow.",
-  "Identify margin compression risks and recommend pricing/fee actions.",
-  "Provide channel optimization recommendations based on my current distribution.",
-];
+const CONSULTANT_COPY = {
+  title: "CardzCheck Business Consultant",
+  subtitle: "Inventory Strategy • Pricing Decisions • Grading Analysis • Liquidity Planning",
+  helper:
+    "Uses your inventory, sales history, and comps data to support card-business decisions. Missing inputs are treated as constraints.",
+  promptSuggestions: [
+    "Build a 30-day plan to liquidate slow-moving inventory",
+    "Identify dead capital in my inventory",
+    "Which cards should I discount vs hold?",
+    "Analyze margin compression risks and pricing actions",
+    "Recommend pricing for faster sell-through",
+    "Which raw cards should I submit for grading?",
+    "Analyze grading ROI vs selling raw",
+    "Which cards should be auction vs Buy It Now?",
+    "Optimize my channel mix (eBay, shows, Whatnot)",
+  ],
+  placeholder:
+    "Describe the decision you’re trying to make (pricing, grading submissions, inventory turnover, liquidity, risk exposure, channel strategy…)",
+  submitButton: "Generate Analysis",
+} as const;
 
 type Phase = "idle" | "acknowledge" | "working" | "deliverable";
 type StepStatus = "queued" | "working" | "completed";
@@ -332,25 +347,18 @@ export default function BusinessConsultantPanel() {
 
   return (
     <section className="relative z-20 mt-3 rounded-lg border border-gray-800 bg-gray-900/80">
-      <div className="flex flex-col gap-2 border-b border-gray-800 px-3 py-2 sm:flex-row sm:items-start sm:justify-between">
+      <div className="border-b border-gray-800 px-3 py-2">
         <div>
-          <h2 className="text-sm font-semibold text-white">CardzCheck Business Consultant</h2>
-          <p className="text-xs text-gray-400">
-            Strategic Planning &amp; Business Optimization (Business Only)
-          </p>
+          <h2 className="text-sm font-semibold text-white">{CONSULTANT_COPY.title}</h2>
+          <p className="text-xs text-gray-400">{CONSULTANT_COPY.subtitle}</p>
         </div>
-        <span className="rounded border border-emerald-700/60 bg-emerald-900/30 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-emerald-300">
-          AI
-        </span>
       </div>
 
       <div className="space-y-2 p-3">
-        <div className="text-[11px] text-gray-500">
-          Uses your inventory and sales data only. Missing inputs are surfaced as constraints.
-        </div>
+        <div className="text-[11px] text-gray-500">{CONSULTANT_COPY.helper}</div>
 
         <div className="flex flex-wrap gap-1.5">
-          {PROMPT_SUGGESTIONS.map((suggestion) => (
+          {CONSULTANT_COPY.promptSuggestions.map((suggestion) => (
             <button
               key={suggestion}
               onClick={() => {
@@ -359,7 +367,7 @@ export default function BusinessConsultantPanel() {
                 if (textareaRef.current) textareaRef.current.value = suggestion;
               }}
               disabled={isWorking}
-              className="rounded border border-gray-800 bg-gray-950/50 px-2 py-1 text-[11px] text-gray-300 transition-colors hover:bg-gray-800 disabled:opacity-60 disabled:cursor-not-allowed"
+              className="rounded border border-gray-800 bg-gray-950/50 px-2 py-1 text-[10px] text-gray-300 transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {suggestion}
             </button>
@@ -416,7 +424,7 @@ export default function BusinessConsultantPanel() {
             setActiveConsultationId(null);
             setPrompt(e.target.value);
           }}
-          placeholder="Describe the business decision you need help with (pricing strategy, liquidation plan, expense discipline, channel mix, etc.)"
+          placeholder={CONSULTANT_COPY.placeholder}
           rows={4}
           disabled={isWorking}
           id="consultant-prompt-input"
@@ -438,7 +446,7 @@ export default function BusinessConsultantPanel() {
               ? "Analyzing…"
               : phase === "working"
                 ? "Working…"
-                : "Generate Consulting Analysis"}
+                : CONSULTANT_COPY.submitButton}
           </button>
         </div>
 
