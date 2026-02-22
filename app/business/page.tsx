@@ -393,19 +393,19 @@ function BusinessPageContent() {
           <div className="flex items-center gap-2 flex-wrap">
             {ebayStoreUrl ? (
               <a
-                href={ebayStoreUrl}
+                href={ebayStoreUrl.startsWith("http") ? ebayStoreUrl : `https://${ebayStoreUrl}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="px-3 py-1.5 border border-gray-700 text-gray-300 rounded-md hover:bg-gray-800 transition-colors text-xs font-medium whitespace-nowrap"
               >
-                Ebay Store
+                eBay Storefront
               </a>
             ) : (
               <Link
                 href="/settings"
                 className="px-3 py-1.5 border border-gray-600 text-gray-400 rounded-md hover:bg-gray-800 transition-colors text-xs font-medium whitespace-nowrap"
               >
-                Add Store Link
+                Add eBay Storefront
               </Link>
             )}
             <a
