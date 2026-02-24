@@ -24,13 +24,57 @@ import {
   type InventoryValueSummary,
 } from "@/lib/business/inventory-value";
 
+const EBAY_STORE_URL_STORAGE_KEY = "cardzcheck_ebay_store_url";
+const EBAY_STORE_URL_UPDATED_EVENT = "cardzcheck:ebay-store-url-updated";
+
+function normalizeEbayStoreUrl(value: string | null | undefined): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+function readStoredEbayStoreUrl(): string | null {
+  if (typeof window === "undefined") return null;
+  return normalizeEbayStoreUrl(
+    window.sessionStorage.getItem(EBAY_STORE_URL_STORAGE_KEY)
+  );
+}
+
+function persistEbayStoreUrl(value: string | null) {
+  if (typeof window === "undefined") return;
+  if (value) {
+    window.sessionStorage.setItem(EBAY_STORE_URL_STORAGE_KEY, value);
+  } else {
+    window.sessionStorage.removeItem(EBAY_STORE_URL_STORAGE_KEY);
+  }
+}
+
+/** Returns a valid https URL for the eBay store, or null if invalid. */
+function buildEbayStoreHref(value: string | null | undefined): string | null {
+  const raw = normalizeEbayStoreUrl(value);
+  if (!raw) return null;
+  const withScheme =
+    raw.startsWith("http://") || raw.startsWith("https://")
+      ? raw
+      : `https://${raw}`;
+  try {
+    const u = new URL(withScheme);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    return withScheme;
+  } catch {
+    return null;
+  }
+}
+
 function BusinessPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [hasAccess, setHasAccess] = useState<boolean | null>(null);
   const [businessName, setBusinessName] = useState<string | null>(null);
-  const [ebayStoreUrl, setEbayStoreUrl] = useState<string | null>(null);
+  const [ebayStoreUrl, setEbayStoreUrl] = useState<string | null>(() =>
+    readStoredEbayStoreUrl()
+  );
   const [items, setItems] = useState<BusinessInventoryItem[]>([]);
   const [metrics, setMetrics] = useState<MetricsType | null>(null);
   const [metricsLoading, setMetricsLoading] = useState(true);
@@ -50,6 +94,11 @@ function BusinessPageContent() {
     const list = filteredItems.length > 0 ? filteredItems : items;
     return computeInventoryValueSummary(list);
   }, [filteredItems, items]);
+
+  const ebayStoreHref = useMemo(
+    () => buildEbayStoreHref(ebayStoreUrl),
+    [ebayStoreUrl]
+  );
 
   const handleFilteredChange = useCallback((filtered: BusinessInventoryItem[]) => {
     setFilteredItems(filtered);
@@ -128,10 +177,12 @@ function BusinessPageContent() {
     } = await supabase.auth.getUser();
     if (!user) return null;
 
-    const metadataEbayStoreUrl =
+    const metadataEbayStoreUrl = normalizeEbayStoreUrl(
       typeof user.user_metadata?.ebay_store_url === "string"
         ? user.user_metadata.ebay_store_url
-        : null;
+        : null
+    );
+    const storedEbayStoreUrl = readStoredEbayStoreUrl();
 
     const { data: userData, error: userDataError } = await supabase
       .from("users")
@@ -149,10 +200,17 @@ function BusinessPageContent() {
         .eq("id", user.id)
         .maybeSingle();
       setBusinessName(fallbackUserData?.business_name || null);
-      setEbayStoreUrl(metadataEbayStoreUrl);
+      const resolvedEbayStoreUrl = metadataEbayStoreUrl || storedEbayStoreUrl;
+      setEbayStoreUrl(resolvedEbayStoreUrl);
+      persistEbayStoreUrl(resolvedEbayStoreUrl);
     } else {
       setBusinessName(userData?.business_name || null);
-      setEbayStoreUrl(userData?.ebay_store_url || metadataEbayStoreUrl);
+      const resolvedEbayStoreUrl =
+        normalizeEbayStoreUrl(userData?.ebay_store_url) ||
+        metadataEbayStoreUrl ||
+        storedEbayStoreUrl;
+      setEbayStoreUrl(resolvedEbayStoreUrl);
+      persistEbayStoreUrl(resolvedEbayStoreUrl);
     }
     return user;
   }, []);
@@ -179,6 +237,24 @@ function BusinessPageContent() {
     document.addEventListener("visibilitychange", handler);
     return () => document.removeEventListener("visibilitychange", handler);
   }, [loadUserProfile]);
+
+  useEffect(() => {
+    const handleEbayStoreUrlUpdated = (event: Event) => {
+      const customEvent = event as CustomEvent<{ value?: string | null }>;
+      setEbayStoreUrl(normalizeEbayStoreUrl(customEvent.detail?.value ?? null));
+    };
+
+    window.addEventListener(
+      EBAY_STORE_URL_UPDATED_EVENT,
+      handleEbayStoreUrlUpdated as EventListener
+    );
+    return () => {
+      window.removeEventListener(
+        EBAY_STORE_URL_UPDATED_EVENT,
+        handleEbayStoreUrlUpdated as EventListener
+      );
+    };
+  }, []);
 
   const handleInlineUpdate = async (id: string, field: string, value: any) => {
     try {
@@ -391,21 +467,21 @@ function BusinessPageContent() {
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            {ebayStoreUrl ? (
+            {ebayStoreHref ? (
               <a
-                href={ebayStoreUrl.startsWith("http") ? ebayStoreUrl : `https://${ebayStoreUrl}`}
+                href={ebayStoreHref}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="px-3 py-1.5 border border-gray-700 text-gray-300 rounded-md hover:bg-gray-800 transition-colors text-xs font-medium whitespace-nowrap"
               >
-                eBay Storefront
+                Ebay Storefront
               </a>
             ) : (
               <Link
                 href="/settings"
                 className="px-3 py-1.5 border border-gray-600 text-gray-400 rounded-md hover:bg-gray-800 transition-colors text-xs font-medium whitespace-nowrap"
               >
-                Add eBay Storefront
+                Add Ebay Storefront
               </Link>
             )}
             <a
