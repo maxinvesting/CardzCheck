@@ -11,6 +11,24 @@ import { LIMITS } from "@/types";
 import { isTestMode, getTestUser } from "@/lib/test-mode";
 
 const VIEW_MODE_STORAGE_KEY = "cardzcheck_view_mode";
+const EBAY_STORE_URL_STORAGE_KEY = "cardzcheck_ebay_store_url";
+const EBAY_STORE_URL_UPDATED_EVENT = "cardzcheck:ebay-store-url-updated";
+
+function normalizeEbayStoreUrl(value: string | null | undefined): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function persistEbayStoreUrl(value: string) {
+  if (typeof window === "undefined") return;
+  if (value) {
+    window.sessionStorage.setItem(EBAY_STORE_URL_STORAGE_KEY, value);
+  } else {
+    window.sessionStorage.removeItem(EBAY_STORE_URL_STORAGE_KEY);
+  }
+  window.dispatchEvent(
+    new CustomEvent(EBAY_STORE_URL_UPDATED_EVENT, { detail: { value } })
+  );
+}
 
 function SettingsContent() {
   const pathname = usePathname();
@@ -97,9 +115,9 @@ function SettingsContent() {
       const hasTableEbayStoreUrl =
         !!userData &&
         Object.prototype.hasOwnProperty.call(userData, "ebay_store_url");
-      const resolvedEbayStoreUrl = hasTableEbayStoreUrl
-        ? userData.ebay_store_url || ""
-        : metadataEbayStoreUrl;
+      const resolvedEbayStoreUrl = normalizeEbayStoreUrl(
+        hasTableEbayStoreUrl ? userData.ebay_store_url || "" : metadataEbayStoreUrl
+      );
 
       if (userData) {
         setUser({
@@ -110,8 +128,9 @@ function SettingsContent() {
         setBusinessName(userData.business_name || "");
         setEbayStoreUrl(resolvedEbayStoreUrl);
       } else {
-        setEbayStoreUrl(metadataEbayStoreUrl);
+        setEbayStoreUrl(normalizeEbayStoreUrl(metadataEbayStoreUrl));
       }
+      persistEbayStoreUrl(resolvedEbayStoreUrl);
 
       setLoading(false);
     }
@@ -179,22 +198,30 @@ function SettingsContent() {
   const handleEbayStoreUrlUpdate = async () => {
     setEbayStoreUrlLoading(true);
     try {
+      const normalizedInput = normalizeEbayStoreUrl(ebayStoreUrl);
       const response = await fetch("/api/user/name", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ebay_store_url: ebayStoreUrl.trim() || null,
+          ebay_store_url: normalizedInput || null,
         }),
       });
 
+      const data = await response.json().catch(() => ({}));
+
       if (!response.ok) {
-        const data = await response.json();
         alert(data.error || "Failed to update eBay Store URL");
         return;
       }
 
+      const savedEbayStoreUrl = normalizeEbayStoreUrl(
+        data?.data?.ebay_store_url ?? normalizedInput
+      );
+      setEbayStoreUrl(savedEbayStoreUrl);
+      persistEbayStoreUrl(savedEbayStoreUrl);
+
       if (user) {
-        setUser({ ...user, ebay_store_url: ebayStoreUrl.trim() || null });
+        setUser({ ...user, ebay_store_url: savedEbayStoreUrl || null });
       }
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 5000);

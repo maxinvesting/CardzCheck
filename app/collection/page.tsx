@@ -13,7 +13,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { CardIdentificationResult, CollectionItem, User } from "@/types";
 import { LIMITS } from "@/types";
 import { isTestMode, getTestUser } from "@/lib/test-mode";
-import { computeCollectionSummary, getEstCmv } from "@/lib/values";
+import { computeCollectionSummary, getEstCmv, getQuantity } from "@/lib/values";
 import { formatGraderGrade, normalizeCardNumber } from "@/lib/cards/format";
 import { normalizeHttpUrl, pickCollectionImageUrl, uniqueHttpUrls } from "@/lib/collection-images";
 
@@ -47,6 +47,7 @@ export default function CollectionPage() {
   const [showPickerConfirmModal, setShowPickerConfirmModal] = useState(false);
   const [pickerCardData, setPickerCardData] = useState<CardIdentificationResult | null>(null);
   const [pickerInitialCmv, setPickerInitialCmv] = useState<number | null>(null);
+  const [pickerInitialQuantity, setPickerInitialQuantity] = useState<number>(1);
   const [cardPickerError, setCardPickerError] = useState<string | null>(null);
   const [cardPickerLoading, setCardPickerLoading] = useState(false);
   const [toast, setToast] = useState<{type: 'success' | 'error', message: string} | null>(null);
@@ -384,7 +385,7 @@ export default function CollectionPage() {
       )
       .map(({ item, est, cost }) => {
         const c = cost ?? 0;
-        const e = est ?? 0;
+        const e = est !== null ? est * getQuantity(item) : 0;
         const dollarChange = e - c;
         const pctChange = c > 0 ? (dollarChange / c) * 100 : 0;
         return { item, est, cost, dollarChange, pctChange };
@@ -562,6 +563,7 @@ export default function CollectionPage() {
       };
 
       setPickerInitialCmv(cmv);
+      setPickerInitialQuantity(Math.max(1, card.quantity ?? 1));
       setPickerCardData(cardData);
       setShowCardPicker(false);
       setShowPickerConfirmModal(true);
@@ -733,6 +735,11 @@ export default function CollectionPage() {
                 <div className="space-y-3">
                   {topPerformers.map((item) => {
                     const imageUrl = pickCollectionImageUrl(item);
+                    const quantity = getQuantity(item);
+                    const lineCmv = (() => {
+                      const est = getEstCmv(item);
+                      return est !== null ? est * quantity : null;
+                    })();
                     return (
                       <div
                         key={item.id}
@@ -752,11 +759,12 @@ export default function CollectionPage() {
                             </p>
                             <p className="text-xs text-gray-500 dark:text-gray-400">
                               {item.year} {item.set_name}
+                              {quantity > 1 ? ` · Qty ${quantity}` : ""}
                             </p>
                           </div>
                         </div>
                         <p className="font-semibold text-gray-900 dark:text-white">
-                          {formatPrice(getEstCmv(item))}
+                          {formatPrice(lineCmv)}
                         </p>
                       </div>
                     );
@@ -780,7 +788,10 @@ export default function CollectionPage() {
               {recentlyAdded.length > 0 ? (
                 <div className="space-y-3">
                   {recentlyAdded.map((item) => {
-                    const estCmv = getEstCmv(item);
+                    const quantity = getQuantity(item);
+                    const estCmvPerCard = getEstCmv(item);
+                    const estCmv =
+                      estCmvPerCard !== null ? estCmvPerCard * quantity : null;
                     const imageUrl = pickCollectionImageUrl(item);
                     return (
                       <div
@@ -801,6 +812,7 @@ export default function CollectionPage() {
                             </p>
                             <p className="text-xs text-gray-500 dark:text-gray-400">
                               {item.year} {item.set_name}
+                              {quantity > 1 ? ` · Qty ${quantity}` : ""}
                             </p>
                             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                               {estCmv != null && estCmv > 0 ? (
@@ -962,6 +974,7 @@ export default function CollectionPage() {
           onOpenSmartSearch={() => {
             setShowAddModal(false);
             setCardPickerError(null);
+            setPickerInitialQuantity(1);
             setShowCardPicker(true);
           }}
         />
@@ -971,12 +984,15 @@ export default function CollectionPage() {
           onClose={() => {
             setShowCardPicker(false);
             setCardPickerError(null);
+            setPickerInitialQuantity(1);
           }}
           title="Add Card to Collection"
           mode="collection"
           onSelect={handleAddFromPicker}
           error={cardPickerError}
           busy={cardPickerLoading}
+          quantityEnabled
+          initialQuantity={pickerInitialQuantity}
         />
 
         <ConfirmAddCardModal
@@ -985,6 +1001,7 @@ export default function CollectionPage() {
             setShowPickerConfirmModal(false);
             setPickerCardData(null);
             setPickerInitialCmv(null);
+            setPickerInitialQuantity(1);
           }}
           onSuccess={(playerName, item, destination) => {
             const resolvedDestination =
@@ -1003,15 +1020,18 @@ export default function CollectionPage() {
             setShowPickerConfirmModal(false);
             setPickerCardData(null);
             setPickerInitialCmv(null);
+            setPickerInitialQuantity(1);
           }}
           onLimitReached={() => {
             setShowPickerConfirmModal(false);
             setPickerCardData(null);
             setPickerInitialCmv(null);
+            setPickerInitialQuantity(1);
             setShowPaywall(true);
           }}
           cardData={pickerCardData}
           initialCmv={pickerInitialCmv}
+          initialQuantity={pickerInitialQuantity}
         />
 
         {/* Toast Notification */}

@@ -19,7 +19,7 @@ export interface ValuedCollectionItem extends CollectionItem {
 export interface CollectionSummary {
   cardCount: number;
   /**
-   * Collection Value = sum of estimated CMV only (no cost-basis fallback).
+   * Collection Value = sum of estimated CMV * quantity only (no cost-basis fallback).
    * Only cards with CMV contribute. P/L is CMV minus cost basis.
    */
   totalDisplayValue: number | null;
@@ -66,6 +66,12 @@ function coercePositiveNumber(value: unknown): number | null {
   return parsed > 0 ? parsed : null;
 }
 
+export function getQuantity(item: ValuedCollectionItem): number {
+  const raw = coerceNumber((item as any).quantity);
+  if (raw === null || !Number.isInteger(raw) || raw < 1) return 1;
+  return raw;
+}
+
 function getRawEstCmv(item: ValuedCollectionItem): number | null {
   const anyItem = item as any;
 
@@ -98,10 +104,10 @@ export function getCostBasis(item: ValuedCollectionItem): number | null {
   return coerceNumber(item.purchase_price);
 }
 
-/** Collection Value per card: CMV only. No cost-basis fallback. */
+/** Collection Value per line item: CMV * quantity. No cost-basis fallback. */
 export function getCollectionValuePerCard(item: ValuedCollectionItem): number {
   const est = getEstCmv(item);
-  if (est !== null && est > 0) return est;
+  if (est !== null && est > 0) return est * getQuantity(item);
   return 0;
 }
 
@@ -112,9 +118,9 @@ export function aggregateCollectionValue(
   let cardsWithCmv = 0;
 
   for (const item of items) {
-    const est = getEstCmv(item);
-    if (est !== null && est > 0) {
-      total += est;
+    const lineValue = getCollectionValuePerCard(item);
+    if (lineValue > 0) {
+      total += lineValue;
       cardsWithCmv += 1;
     }
   }
@@ -142,9 +148,9 @@ export function getValueSource(item: ValuedCollectionItem): ValueSource {
 }
 
 export function getUnrealizedPL(item: ValuedCollectionItem): number | null {
-  const est = getEstCmv(item);
+  const est = getCollectionValuePerCard(item);
   const cost = getCostBasis(item);
-  if (est === null || cost === null) return null;
+  if (est <= 0 || cost === null) return null;
   return est - cost;
 }
 
@@ -168,9 +174,9 @@ export function computeCollectionSummary(
   let cardsWithBoth = 0;
 
   for (const item of items) {
-    const est = getEstCmv(item);
-    if (est !== null && est > 0) {
-      totalDisplayValue += est;
+    const lineValue = getCollectionValuePerCard(item);
+    if (lineValue > 0) {
+      totalDisplayValue += lineValue;
       cardsWithCmv += 1;
     }
 
@@ -180,8 +186,8 @@ export function computeCollectionSummary(
       cardsWithCostBasis += 1;
     }
 
-    if (est !== null && cost !== null) {
-      const pl = est - cost;
+    if (lineValue > 0 && cost !== null) {
+      const pl = lineValue - cost;
       totalUnrealizedPL = (totalUnrealizedPL ?? 0) + pl;
       totalCostBasisForPL += cost;
       cardsWithBoth += 1;
@@ -221,7 +227,9 @@ export function computePerformers(
   const withoutBoth: PerformerMetrics[] = [];
 
   for (const item of items) {
-    const estCmv = getEstCmv(item);
+    const rawEst = getEstCmv(item);
+    const estCmv =
+      rawEst !== null && rawEst > 0 ? rawEst * getQuantity(item) : null;
     const costBasis = getCostBasis(item);
 
     if (estCmv !== null && costBasis !== null && costBasis > 0) {

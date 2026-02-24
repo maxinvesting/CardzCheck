@@ -172,6 +172,8 @@ function BusinessPageContent() {
 
   const loadUserProfile = useCallback(async () => {
     const supabase = createClient();
+    // Refresh session so user_metadata (e.g. ebay_store_url) is up to date after saving in Settings (possibly in another tab)
+    await supabase.auth.refreshSession();
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -386,6 +388,7 @@ function BusinessPageContent() {
       parallel_type: card.variant,
       card_number: card.card_number,
       grade: card.grade,
+      quantity: card.quantity,
     });
     setShowAddCardToInventory(true);
   };
@@ -398,6 +401,7 @@ function BusinessPageContent() {
     card_number?: string;
     parallel_type?: string;
     grade?: string;
+    quantity?: number;
   }) => {
     setShowAddCardModal(false);
     setPendingInventoryCard(cardData);
@@ -630,6 +634,7 @@ function BusinessPageContent() {
           mode="collection"
           onClose={() => setShowCardPicker(false)}
           onSelect={handleCardPickerSelect}
+          quantityEnabled
         />
 
         {/* Business-specific confirm: set cost/channel/status, saves to business_inventory_items */}

@@ -113,13 +113,25 @@ function normalizeConditionStatus(
   return grade ? "graded" : "raw";
 }
 
+function normalizeQuantity(value: number | null | undefined): number {
+  if (
+    typeof value === "number" &&
+    Number.isFinite(value) &&
+    Number.isInteger(value) &&
+    value >= 1
+  ) {
+    return value;
+  }
+  return 1;
+}
+
 function toBusinessInventoryItem(row: BusinessInventoryRow): BusinessInventoryItem {
   return {
     id: row.id,
     user_id: row.user_id,
     card_id: row.card_id || row.id,
     title: row.title || "Untitled item",
-    quantity: row.quantity ?? 1,
+    quantity: normalizeQuantity(row.quantity),
     acquisition_date: row.acquisition_date ?? null,
     acquisition_type: normalizeAcquisitionType(row.acquisition_type),
     cost_basis_total_cents: row.cost_basis_total_cents ?? 0,
@@ -149,7 +161,7 @@ function buildInventoryInsertPayload(
     user_id: userId,
     card_id: (item as any).card_id || null,
     title: item.title || "Untitled item",
-    quantity: item.quantity ?? 1,
+    quantity: normalizeQuantity(item.quantity),
     acquisition_type: item.acquisition_type ?? "other",
     acquisition_date: item.acquisition_date || null,
     cost_basis_total_cents: item.cost_basis_total_cents ?? 0,
@@ -176,7 +188,8 @@ function buildInventoryUpdatePayload(
 ): Record<string, unknown> {
   const payload: Record<string, unknown> = {};
   if (updates.title !== undefined) payload.title = updates.title || "Untitled item";
-  if (updates.quantity !== undefined) payload.quantity = updates.quantity;
+  if (updates.quantity !== undefined)
+    payload.quantity = normalizeQuantity(updates.quantity);
   if (updates.acquisition_type !== undefined)
     payload.acquisition_type = updates.acquisition_type;
   if (updates.acquisition_date !== undefined)

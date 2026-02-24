@@ -20,6 +20,7 @@ export interface CardPickerSelection {
   grader?: string;
   grade?: string;
   card_number?: string;
+  quantity?: number;
 }
 
 interface TypeaheadOption {

@@ -34,6 +34,21 @@ function parsePurchasePrice(value: unknown): number | null {
   return parsed;
 }
 
+function parseQuantity(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+      ? Number(value.trim())
+      : Number.NaN;
+
+  if (!Number.isFinite(parsed)) return null;
+  if (!Number.isInteger(parsed)) return null;
+  if (parsed < 1) return null;
+  return parsed;
+}
+
 function getErrorCode(error: unknown): string | null {
   if (!error || typeof error !== "object") return null;
   return typeof (error as { code?: unknown }).code === "string"
@@ -242,9 +257,11 @@ export async function POST(request: NextRequest) {
     if (isTestMode()) {
       logDebug("🧪 TEST MODE: Bypassing collection limits");
       const body = await request.json();
+      const quantity = parseQuantity((body as { quantity?: unknown }).quantity) ?? 1;
       return NextResponse.json({
         item: {
           ...body,
+          quantity,
           acquisition_type: parseAcquisitionType((body as { acquisition_type?: unknown }).acquisition_type),
           id: `test-${Date.now()}`,
           user_id: "test-user-id",
@@ -306,6 +323,7 @@ export async function POST(request: NextRequest) {
       ebay_image_url,
       image_urls,
       notes,
+      quantity,
     } = body;
 
     if (!player_name) {
@@ -333,6 +351,19 @@ export async function POST(request: NextRequest) {
       typeof purchase_date === "string" && purchase_date.trim().length > 0
         ? purchase_date.trim()
         : null;
+    const parsedQuantity = parseQuantity(quantity);
+    const normalizedQuantity = parsedQuantity ?? 1;
+    const hasQuantityInput =
+      quantity !== null &&
+      quantity !== undefined &&
+      (typeof quantity !== "string" || quantity.trim().length > 0);
+
+    if (hasQuantityInput && parsedQuantity === null) {
+      return NextResponse.json(
+        { error: "Quantity must be a whole number of 1 or greater" },
+        { status: 400 }
+      );
+    }
 
     const normalizedUserImageUrl = normalizeHttpUrl(user_image_url) || null;
     const normalizedStockImageUrl = normalizeHttpUrl(stock_image_url) || null;
@@ -420,7 +451,7 @@ export async function POST(request: NextRequest) {
       stock_image_url: normalizedStockImageUrl,
       ebay_image_url: normalizedEbayImageUrl,
       notes: combinedNotes,
-      quantity: isBusinessUser ? 1 : undefined,
+      quantity: normalizedQuantity,
       acquisition_date: isBusinessUser ? normalizedPurchaseDate : undefined,
       cost_basis_total_cents:
         isBusinessUser && normalizedPurchasePrice !== null

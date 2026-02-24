@@ -10,6 +10,7 @@ export interface PendingInventoryCard {
   card_number?: string;
   grade?: string;
   imageUrl?: string;
+  quantity?: number;
 }
 
 interface Props {
@@ -34,6 +35,7 @@ function buildTitle(card: PendingInventoryCard): string {
 
 export default function AddCardToInventoryModal({ isOpen, card, onClose, onSuccess }: Props) {
   const [form, setForm] = useState({
+    quantity: String(Math.max(1, card?.quantity ?? 1)),
     acquisition_type: "buy",
     acquisition_date: new Date().toISOString().slice(0, 10),
     cost_basis: "",
@@ -54,6 +56,10 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
   // Fetch estimated CMV when modal opens with a card
   useEffect(() => {
     if (!isOpen || !card?.player_name) return;
+    setForm((prev) => ({
+      ...prev,
+      quantity: String(Math.max(1, card.quantity ?? 1)),
+    }));
     setCmvLoading(true);
     const q = new URLSearchParams({ player: card.player_name });
     if (card.year) q.set("year", card.year);
@@ -96,12 +102,14 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
     setError(null);
 
     try {
+      const parsedQuantity = Math.max(1, Number.parseInt(form.quantity, 10) || 1);
+
       const res = await fetch("/api/business/inventory", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title,
-          quantity: 1,
+          quantity: parsedQuantity,
           acquisition_type: form.acquisition_type,
           acquisition_date: form.acquisition_date || null,
           cost_basis_total_cents: toCents(form.cost_basis),
@@ -128,6 +136,7 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
 
       // Reset form
       setForm({
+        quantity: "1",
         acquisition_type: "buy",
         acquisition_date: new Date().toISOString().slice(0, 10),
         cost_basis: "",
@@ -175,7 +184,14 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
       ) : (
         <input
           type={type}
-          step={type === "number" ? "0.01" : undefined}
+          min={type === "number" && key === "quantity" ? "1" : undefined}
+          step={
+            type === "number"
+              ? key === "quantity"
+                ? "1"
+                : "0.01"
+              : undefined
+          }
           value={form[key]}
           onChange={(e) => setForm({ ...form, [key]: e.target.value })}
           placeholder={placeholder}
@@ -234,6 +250,7 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
           )}
 
           <div className="grid grid-cols-2 gap-4">
+            {inp("Quantity", "quantity", "number")}
             {inp("Acquisition Type", "acquisition_type", "select", ACQ_OPTIONS)}
             {inp("Acquisition Date", "acquisition_date", "date")}
           </div>
@@ -253,7 +270,7 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
             {inp("List Price ($)", "list_price", "number")}
             <div>
               <label className="block text-xs text-gray-400 mb-1">
-                Market Value ($)
+                Market Value / Card ($)
                 {cmvLoading && (
                   <span className="ml-2 text-amber-400">Fetching estimate…</span>
                 )}

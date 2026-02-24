@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import type { CollectionItem } from "@/types";
 import { formatCardSubtitle } from "@/lib/card-identity/display";
 import { formatCurrency, formatPct, computeGainLoss } from "@/lib/formatters";
-import { getEstCmv } from "@/lib/values";
+import { getEstCmv, getQuantity } from "@/lib/values";
 import { normalizeHttpUrl, uniqueHttpUrls } from "@/lib/collection-images";
 
 interface CollectionGridProps {
@@ -48,7 +48,9 @@ function CardItem({ item, onDelete }: CardItemProps) {
     setImageIndex(0);
   }, [item.id, imageCandidates.length]);
 
-  const cmv = getEstCmv(item);
+  const quantity = getQuantity(item);
+  const cmvPerCard = getEstCmv(item);
+  const cmv = cmvPerCard !== null ? cmvPerCard * quantity : null;
   const gainLoss = computeGainLoss(cmv, item.purchase_price);
   const isRecentlyAdded = item.created_at
     ? Date.now() - new Date(item.created_at).getTime() < 120_000
@@ -155,13 +157,25 @@ function CardItem({ item, onDelete }: CardItemProps) {
 
         <div className="mt-3 space-y-1">
           <div className="flex justify-between text-sm">
-            <span className="text-gray-500 dark:text-gray-400">Paid</span>
+            <span className="text-gray-500 dark:text-gray-400">
+              {quantity > 1 ? "Paid (Total)" : "Paid"}
+            </span>
             <span className="font-medium text-gray-900 dark:text-white">
               {formatCurrency(item.purchase_price)}
             </span>
           </div>
+          {quantity > 1 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500 dark:text-gray-400">Quantity</span>
+              <span className="font-medium text-gray-900 dark:text-white">
+                {quantity}
+              </span>
+            </div>
+          )}
           <div className="flex justify-between text-sm">
-            <span className="text-gray-500 dark:text-gray-400">CMV (Beta)</span>
+            <span className="text-gray-500 dark:text-gray-400">
+              {quantity > 1 ? "CMV Total (Beta)" : "CMV (Beta)"}
+            </span>
             <span className="font-medium text-gray-900 dark:text-white">
               {cmv !== null
                 ? formatCurrency(cmv)

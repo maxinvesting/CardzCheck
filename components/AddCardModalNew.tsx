@@ -31,6 +31,7 @@ interface AddCardModalNewProps {
     card_number?: string;
     parallel_type?: string;
     grade?: string;
+    quantity?: number;
   }) => void;
 }
 
@@ -75,6 +76,7 @@ export default function AddCardModalNew({
 
   // Confirm mode state
   const [acquisitionType, setAcquisitionType] = useState<AcquisitionType>("pulled");
+  const [quantity, setQuantity] = useState<string>("1");
   const [purchasePrice, setPurchasePrice] = useState<string>("");
   const [purchaseDate, setPurchaseDate] = useState<string>("");
   const [condition, setCondition] = useState<string>("Raw");
@@ -89,6 +91,7 @@ export default function AddCardModalNew({
     setIdentifiedCard(null);
     setManualForm({ player_name: "", year: "", set_name: "", parallel_type: "" });
     setAcquisitionType("pulled");
+    setQuantity("1");
     setPurchasePrice("");
     setPurchaseDate("");
     setCondition("Raw");
@@ -320,6 +323,7 @@ export default function AddCardModalNew({
 
     // For watchlist/business mode, pass card data to onCardSelected and close
     if ((addMode === "watchlist" || addMode === "business") && onCardSelected) {
+      const parsedQuantity = Math.max(1, Number.parseInt(quantity, 10) || 1);
       const cardData = {
         player_name: identifiedCard.player_name,
         year: identifiedCard.year,
@@ -327,6 +331,7 @@ export default function AddCardModalNew({
         card_number: identifiedCard.card_number,
         parallel_type: identifiedCard.parallel_type,
         grade: condition,
+        quantity: parsedQuantity,
       };
       onCardSelected(cardData);
       resetForm();
@@ -344,6 +349,18 @@ export default function AddCardModalNew({
       const normalizedPurchasePrice = hasPurchasePriceInput
         ? Number.parseFloat(purchasePrice)
         : null;
+      const hasQuantityInput = quantity.trim().length > 0;
+      const normalizedQuantity = Number.parseInt(quantity, 10);
+
+      if (
+        !hasQuantityInput ||
+        !Number.isInteger(normalizedQuantity) ||
+        normalizedQuantity < 1
+      ) {
+        setError("Quantity must be a whole number of 1 or greater");
+        setLoading(false);
+        return;
+      }
 
       if (
         hasPurchasePriceInput &&
@@ -387,6 +404,7 @@ export default function AddCardModalNew({
         image_url: canonicalImageUrl,
         image_urls: persistedImageUrls,
         notes: notesParts.length > 0 ? notesParts.join(" | ") : null,
+        quantity: normalizedQuantity,
       };
 
       const response = await fetch("/api/collection", {
@@ -744,6 +762,22 @@ export default function AddCardModalNew({
                 </div>
               ) : null}
 
+              {addMode !== "watchlist" && (
+                <div className="pt-2 border-t border-gray-200 dark:border-gray-800">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Quantity
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={quantity}
+                    onChange={(e) => setQuantity(e.target.value)}
+                    className="w-full max-w-40 px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+              )}
+
               {/* Form Fields - Only show for collection mode */}
               {addMode === "collection" && (
                 <div className="space-y-4 pt-2 border-t border-gray-200 dark:border-gray-800">
@@ -839,7 +873,13 @@ export default function AddCardModalNew({
                   disabled={loading}
                   className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
                 >
-                  {loading ? "Adding..." : addMode === "watchlist" ? "Continue to Set Target Price" : "Add to Collection"}
+                  {loading
+                    ? "Adding..."
+                    : addMode === "watchlist"
+                    ? "Continue to Set Target Price"
+                    : addMode === "business"
+                    ? "Continue to Inventory Details"
+                    : "Add to Collection"}
                 </button>
               </div>
             </div>

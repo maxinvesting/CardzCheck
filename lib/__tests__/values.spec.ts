@@ -83,4 +83,17 @@ describe("values helpers", () => {
 
     expect(aggregateCollectionValue([item as any])).toBeNull();
   });
+
+  it("multiplies CMV by quantity for collection totals", () => {
+    const item = {
+      estimated_cmv: 50,
+      quantity: 3,
+      purchase_price: 90,
+    };
+
+    const summary = computeCollectionSummary([item as any]);
+    expect(summary.totalDisplayValue).toBe(150);
+    expect(summary.totalUnrealizedPL).toBe(60);
+    expect(summary.totalUnrealizedPLPct).toBeCloseTo(60 / 90);
+  });
 });

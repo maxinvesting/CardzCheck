@@ -23,6 +23,7 @@ interface ConfirmAddCardModalProps {
   cardData: CardIdentificationResult | null;
   /** Pre-computed CMV from the Comps search results. Forwarded to the collection insert. */
   initialCmv?: number | null;
+  initialQuantity?: number;
 }
 
 function formatPrice(value: number | null | undefined): string {
@@ -42,10 +43,12 @@ export default function ConfirmAddCardModal({
   onLimitReached,
   cardData,
   initialCmv,
+  initialQuantity = 1,
 }: ConfirmAddCardModalProps) {
   const [acquisitionType, setAcquisitionType] = useState<AcquisitionType>("pulled");
   const [purchasePrice, setPurchasePrice] = useState<string>("");
   const [purchaseDate, setPurchaseDate] = useState<string>("");
+  const [quantity, setQuantity] = useState<string>(String(Math.max(1, initialQuantity || 1)));
   const [condition, setCondition] = useState<string>("Raw");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,13 +88,14 @@ export default function ConfirmAddCardModal({
       setEditableSet(cardData.set_name || "");
       setEditableInsert(cardData.insert || "");
       setEditableParallel(cardData.parallel_type || cardData.cardIdentity?.parallel || "");
+      setQuantity(String(Math.max(1, initialQuantity || 1)));
       setCondition(
         cardData.grade && CONDITION_OPTIONS.some((opt) => opt.value === cardData.grade)
           ? cardData.grade
           : "Raw"
       );
     }
-  }, [cardData]);
+  }, [cardData, initialQuantity]);
 
   const applyYearOverride = (nextYear: string) => {
     const trimmed = nextYear.trim();
@@ -105,6 +109,7 @@ export default function ConfirmAddCardModal({
     setAcquisitionType("pulled");
     setPurchasePrice("");
     setPurchaseDate("");
+    setQuantity(String(Math.max(1, initialQuantity || 1)));
     setCondition("Raw");
     setError(null);
   };
@@ -129,6 +134,7 @@ export default function ConfirmAddCardModal({
       const normalizedPurchasePrice = hasPurchasePriceInput
         ? Number.parseFloat(purchasePrice)
         : null;
+      const normalizedQuantity = Number.parseInt(quantity, 10);
 
       if (
         hasPurchasePriceInput &&
@@ -137,6 +143,12 @@ export default function ConfirmAddCardModal({
           normalizedPurchasePrice < 0)
       ) {
         setError("Purchase price must be a valid positive number");
+        setLoading(false);
+        return;
+      }
+
+      if (!Number.isInteger(normalizedQuantity) || normalizedQuantity < 1) {
+        setError("Quantity must be a whole number of 1 or greater");
         setLoading(false);
         return;
       }
@@ -210,6 +222,7 @@ export default function ConfirmAddCardModal({
         image_url: canonicalImageUrl,
         image_urls: persistedImageUrls,
         notes: notesParts.length > 0 ? notesParts.join(" | ") : null,
+        quantity: normalizedQuantity,
         ...(cmvValue !== null
           ? { est_cmv: cmvValue, estimated_cmv: cmvValue }
           : {}),
@@ -473,6 +486,19 @@ export default function ConfirmAddCardModal({
 
           {/* Form Fields */}
           <div className="space-y-4 pt-2 border-t border-gray-200 dark:border-gray-800">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Quantity
+              </label>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                className="w-full max-w-40 px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
             {/* Acquisition */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">

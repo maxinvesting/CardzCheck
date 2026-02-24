@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import CardPicker, { type CardPickerMode, type CardPickerSelection } from "@/components/CardPicker";
 
 interface CardPickerModalProps {
@@ -10,6 +11,8 @@ interface CardPickerModalProps {
   onSelect: (card: CardPickerSelection) => void;
   error?: string | null;
   busy?: boolean;
+  quantityEnabled?: boolean;
+  initialQuantity?: number;
 }
 
 export default function CardPickerModal({
@@ -20,7 +23,18 @@ export default function CardPickerModal({
   onSelect,
   error,
   busy = false,
+  quantityEnabled = false,
+  initialQuantity = 1,
 }: CardPickerModalProps) {
+  const [quantity, setQuantity] = useState(String(Math.max(1, initialQuantity || 1)));
+
+  useEffect(() => {
+    if (!isOpen || !quantityEnabled) return;
+    setQuantity(String(Math.max(1, initialQuantity || 1)));
+  }, [isOpen, quantityEnabled, initialQuantity]);
+
+  const resolvedQuantity = Math.max(1, Number.parseInt(quantity, 10) || 1);
+
   if (!isOpen) return null;
 
   return (
@@ -51,7 +65,27 @@ export default function CardPickerModal({
               <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
             </div>
           )}
-          <CardPicker mode={mode} onSelect={onSelect} disabled={busy} />
+          {quantityEnabled && (
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-2">
+                Quantity
+              </label>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                disabled={busy}
+                className="w-full max-w-40 px-3 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
+              />
+            </div>
+          )}
+          <CardPicker
+            mode={mode}
+            onSelect={(card) => onSelect({ ...card, quantity: quantityEnabled ? resolvedQuantity : undefined })}
+            disabled={busy}
+          />
         </div>
       </div>
     </div>

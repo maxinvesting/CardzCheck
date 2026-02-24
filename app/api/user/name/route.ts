@@ -147,20 +147,28 @@ export async function PATCH(request: NextRequest) {
       updates.ebay_store_url = trimmedUrl || null;
     }
 
+    const upsertPayload: {
+      id: string;
+      name?: string | null;
+      business_name?: string | null;
+      ebay_store_url?: string | null;
+    } = {
+      id: user.id,
+      ...updates,
+    };
+
     const { error: updateError } = await supabase
       .from("users")
-      .update(updates)
-      .eq("id", user.id);
+      .upsert(upsertPayload, { onConflict: "id" });
 
     if (updateError) {
       if (hasEbayStoreUrl && isMissingColumnError(updateError, "ebay_store_url")) {
-        const { ebay_store_url, ...nonEbayUpdates } = updates;
+        const { ebay_store_url, ...nonEbayUpdates } = upsertPayload;
 
         if (Object.keys(nonEbayUpdates).length > 0) {
           const { error: nonEbayUpdateError } = await supabase
             .from("users")
-            .update(nonEbayUpdates)
-            .eq("id", user.id);
+            .upsert(nonEbayUpdates, { onConflict: "id" });
 
           if (nonEbayUpdateError) {
             console.error("Error updating non-eBay user profile fields:", nonEbayUpdateError);
@@ -183,7 +191,11 @@ export async function PATCH(request: NextRequest) {
           );
         }
 
-        return NextResponse.json({ success: true, usedMetadataFallback: true });
+        return NextResponse.json({
+          success: true,
+          usedMetadataFallback: true,
+          data: { ebay_store_url: ebay_store_url ?? null },
+        });
       }
 
       console.error("Error updating user profile:", updateError);
@@ -202,7 +214,14 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({
+      success: true,
+      data: {
+        ...(hasName ? { name: updates.name ?? null } : {}),
+        ...(hasBusinessName ? { business_name: updates.business_name ?? null } : {}),
+        ...(hasEbayStoreUrl ? { ebay_store_url: updates.ebay_store_url ?? null } : {}),
+      },
+    });
   } catch (error) {
     console.error("Name update error:", error);
     return NextResponse.json(
