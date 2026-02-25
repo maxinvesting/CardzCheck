@@ -275,13 +275,16 @@ export async function canAccessFeature(
       }
       return { allowed: true };
 
-    case "grade_estimator":
+    case "grade_estimator": {
+      const businessAccess = await hasBusinessAccess(userId);
+      if (businessAccess) return { allowed: true };
       return {
         allowed: false,
         reason:
           "Grade Probability Engine is a Pro feature. Upgrade to get AI-based grade probabilities (not guaranteed).",
         upgradeRequired: true,
       };
+    }
 
     case "business": {
       const businessAccess = await hasBusinessAccess(userId);

@@ -1,7 +1,13 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import type { BusinessInventoryItem, BusinessSale } from "@/types";
+import type { GradeEstimatorCardInput } from "@/lib/grade-estimator/value";
+import GradeProbabilityPanel from "@/components/grading/GradeProbabilityPanel";
+import GradeEstimateProgressPanel from "@/components/grading/GradeEstimateProgressPanel";
+import { useGradeEstimateFromImages } from "@/lib/grading/useGradeEstimateFromImages";
+import { gradingCopy } from "@/copy/grading";
 
 function fmtCents(cents: number | null): string {
   if (cents === null) return "";
@@ -41,6 +47,11 @@ export default function ItemDetailDrawer({
     buyer_handle: "",
     notes: "",
   });
+  const [cardForGrade, setCardForGrade] = useState<{
+    imageUrls: string[];
+    cardIdentity: GradeEstimatorCardInput;
+  } | null>(null);
+  const [cardForGradeLoading, setCardForGradeLoading] = useState(false);
 
   useEffect(() => {
     if (!item) return;
@@ -85,6 +96,56 @@ export default function ItemDetailDrawer({
   useEffect(() => {
     loadSales();
   }, [loadSales]);
+
+  useEffect(() => {
+    if (!item?.card_id) {
+      setCardForGrade(null);
+      return;
+    }
+    let cancelled = false;
+    setCardForGradeLoading(true);
+    setCardForGrade(null);
+    fetch(`/api/cards/${item.card_id}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled || !data?.card) return;
+        const card = data.card;
+        const images = card.card_images ?? [];
+        const imageUrls = images
+          .map((img: { url?: string }) => img?.url)
+          .filter((u: unknown): u is string => typeof u === "string" && u.length > 0);
+        if (imageUrls.length === 0 && (card.image_url || card.user_image_url || card.stock_image_url || card.ebay_image_url)) {
+          if (card.image_url) imageUrls.push(card.image_url);
+          if (card.user_image_url) imageUrls.push(card.user_image_url);
+          if (card.stock_image_url) imageUrls.push(card.stock_image_url);
+          if (card.ebay_image_url) imageUrls.push(card.ebay_image_url);
+        }
+        const cardIdentity: GradeEstimatorCardInput = {
+          player_name: card.player_name ?? "",
+          year: card.year,
+          set_name: card.set_name,
+          card_number: card.card_number,
+          parallel_type: card.parallel_type,
+          variation: card.variation,
+          insert: card.insert,
+        };
+        setCardForGrade({ imageUrls, cardIdentity });
+      })
+      .catch(() => {
+        if (!cancelled) setCardForGrade(null);
+      })
+      .finally(() => {
+        if (!cancelled) setCardForGradeLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [item?.card_id]);
+
+  const gradeEstimate = useGradeEstimateFromImages({
+    imageUrls: cardForGrade?.imageUrls ?? [],
+    card: cardForGrade?.cardIdentity ?? null,
+  });
 
   if (!item) return null;
 
@@ -462,6 +523,69 @@ export default function ItemDetailDrawer({
                   </div>
                 ))}
               </div>
+            )}
+          </div>
+
+          {/* Grade probability */}
+          <div className="mt-8 pt-6 border-t border-gray-800" id="grade-probability-block">
+            <h3 className="text-md font-semibold text-white mb-3">{gradingCopy.title}</h3>
+            {!item.card_id ? (
+              <p className="text-xs text-gray-500">
+                Grade probability is available for items linked to a card with photos. Add this item from a card in your collection to enable it.
+              </p>
+            ) : cardForGradeLoading ? (
+              <p className="text-xs text-gray-500">Loading card photos...</p>
+            ) : !cardForGrade || cardForGrade.imageUrls.length === 0 ? (
+              <p className="text-xs text-gray-500">
+                No photos on the linked card. Add photos in the{" "}
+                <Link href={`/cards/${item.card_id}`} className="text-blue-400 hover:underline">
+                  card profile
+                </Link>{" "}
+                to run grade probability.
+              </p>
+            ) : (
+              <>
+                {!gradeEstimate.estimate && !gradeEstimate.isRunning && !gradeEstimate.error && (
+                  <button
+                    type="button"
+                    onClick={() => void gradeEstimate.run()}
+                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors"
+                  >
+                    Run grade estimate
+                  </button>
+                )}
+                {gradeEstimate.isRunning && gradeEstimate.job && (
+                  <div className="mt-2">
+                    <GradeEstimateProgressPanel
+                      status={gradeEstimate.job.status}
+                      steps={gradeEstimate.job.steps}
+                      errorMessage={gradeEstimate.job.error ?? null}
+                    />
+                  </div>
+                )}
+                {gradeEstimate.error && (
+                  <div className="flex flex-wrap items-center gap-2 mt-2">
+                    <p className="text-xs text-amber-400">{gradeEstimate.error}</p>
+                    <button
+                      type="button"
+                      onClick={() => { gradeEstimate.reset(); void gradeEstimate.run(); }}
+                      className="text-xs text-blue-400 hover:underline"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                )}
+                {gradeEstimate.estimate && (
+                  <div className="mt-3">
+                    <GradeProbabilityPanel
+                      estimate={gradeEstimate.estimate}
+                      cardIdentity={cardForGrade.cardIdentity}
+                      primaryImageUrl={cardForGrade.imageUrls[0] ?? null}
+                      imageUrls={cardForGrade.imageUrls}
+                    />
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>

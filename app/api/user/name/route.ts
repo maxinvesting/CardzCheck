@@ -3,6 +3,58 @@ import { createClient } from "@/lib/supabase/server";
 import { isTestMode } from "@/lib/test-mode";
 import { logDebug } from "@/lib/logging";
 
+/** GET: Return current user profile (name, business_name, ebay_store_url). Server-authoritative so Business page can rely on it. */
+export async function GET() {
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { data: row, error: selectError } = await supabase
+      .from("users")
+      .select("name, business_name, ebay_store_url")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (selectError) {
+      const hasEbayColumn = !String(selectError.message || "").toLowerCase().includes("ebay_store_url");
+      if (hasEbayColumn) {
+        console.error("Profile GET select error:", selectError);
+        return NextResponse.json({ error: "Failed to load profile" }, { status: 500 });
+      }
+      const metadataUrl =
+        typeof user.user_metadata?.ebay_store_url === "string"
+          ? user.user_metadata.ebay_store_url.trim() || null
+          : null;
+      return NextResponse.json({
+        name: null,
+        business_name: null,
+        ebay_store_url: metadataUrl,
+      });
+    }
+
+    const metadataUrl =
+      typeof user.user_metadata?.ebay_store_url === "string"
+        ? user.user_metadata.ebay_store_url.trim() || null
+        : null;
+
+    return NextResponse.json({
+      name: row?.name ?? null,
+      business_name: row?.business_name ?? null,
+      ebay_store_url:
+        (row && "ebay_store_url" in row && typeof row.ebay_store_url === "string"
+          ? row.ebay_store_url.trim() || null
+          : null) ?? metadataUrl,
+    });
+  } catch (err) {
+    console.error("Profile GET error:", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
+
 function isMissingColumnError(
   error: { code?: string | null; message?: string | null } | null,
   columnName: string

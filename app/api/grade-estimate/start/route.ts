@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+import { canAccessFeature } from "@/lib/access";
 import { extractImageUrls } from "@/lib/grading/gradeEstimateImages";
 import {
   createGradeEstimateJob,
@@ -15,6 +17,29 @@ type GradeEstimateStartPayload = {
 
 export async function POST(request: NextRequest) {
   try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json(
+        { error: "Unauthorized", code: "UNAUTHORIZED" },
+        { status: 401 }
+      );
+    }
+
+    const access = await canAccessFeature(user.id, "grade_estimator");
+    if (!access.allowed) {
+      return NextResponse.json(
+        {
+          error: access.reason ?? "Grade Probability Engine is not available.",
+          code: "FEATURE_ACCESS_DENIED",
+        },
+        { status: 403 }
+      );
+    }
+
     const body = (await request.json()) as GradeEstimateStartPayload;
     const imageUrls = extractImageUrls(body);
 

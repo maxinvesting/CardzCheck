@@ -262,6 +262,21 @@ export default function InventoryTable({
       }
       return <span className="tabular-nums">{formatted}</span>;
     }
+    if (field === "_grade") {
+      if (!item.card_id) return null;
+      return (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onItemClick(item);
+          }}
+          className="px-1.5 py-0.5 text-[10px] font-medium bg-blue-900/60 hover:bg-blue-800 text-blue-300 rounded"
+        >
+          Grade
+        </button>
+      );
+    }
     if (field === "location") {
       const str = val?.toString()?.trim() || "";
       if (!str) {
@@ -296,6 +311,7 @@ export default function InventoryTable({
     { key: "current_market_value_cents", label: "CMV", editable: true, width: "w-20 shrink-0", alignRight: true },
     { key: "location", label: "Storage", editable: true, width: "w-24 shrink-0" },
     { key: "acquisition_date", label: "Acquired", editable: true, width: "w-24 shrink-0" },
+    { key: "_grade", label: "", editable: false, width: "w-16 shrink-0" },
   ];
 
   return (

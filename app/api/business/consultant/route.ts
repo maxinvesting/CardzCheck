@@ -206,8 +206,9 @@ ${JSON.stringify(businessContext, null, 2)}`,
       savedConsultation = insertedConsultation as BusinessConsultation;
     }
 
-    // Retry save with service role when auth policies block insert/select on user client.
-    if (!savedConsultation && saveError?.code === "42501") {
+    // Retry save with service role when auth policies block insert/select on user client,
+    // or when .single() gets 0 rows (PGRST116) e.g. due to RLS hiding the returned row.
+    if (!savedConsultation && saveError && (saveError.code === "42501" || saveError.code === "PGRST116")) {
       try {
         const serviceSupabase = await createServiceClient();
         const { data: serviceInserted, error: serviceSaveError } = await serviceSupabase
@@ -227,7 +228,11 @@ ${JSON.stringify(businessContext, null, 2)}`,
           finalSaveError = null;
         } else {
           finalSaveError = serviceSaveError;
-          console.error("Service-role retry failed to save business consultation:", serviceSaveError);
+          console.error("Service-role retry failed to save business consultation:", {
+            code: serviceSaveError?.code,
+            message: serviceSaveError?.message,
+            details: serviceSaveError?.details,
+          });
         }
       } catch (serviceClientError) {
         console.error("Service-role retry unavailable for business consultation save:", serviceClientError);
@@ -235,7 +240,11 @@ ${JSON.stringify(businessContext, null, 2)}`,
     }
 
     if (!savedConsultation && finalSaveError) {
-      console.error("Failed to save business consultation:", finalSaveError);
+      console.error("Failed to save business consultation:", {
+        code: finalSaveError.code,
+        message: finalSaveError.message,
+        details: finalSaveError.details,
+      });
       if (finalSaveError.code === "42P01" || finalSaveError.code === "42703") {
         saveWarning = "Consultation history is not fully configured yet. Analysis still generated.";
       } else if (finalSaveError.code === "42501") {

@@ -23,15 +23,10 @@ import {
   computeInventoryValueSummary,
   type InventoryValueSummary,
 } from "@/lib/business/inventory-value";
+import { normalizeEbayStoreUrl, buildEbayStoreHref } from "@/lib/ebay-store-url";
 
 const EBAY_STORE_URL_STORAGE_KEY = "cardzcheck_ebay_store_url";
 const EBAY_STORE_URL_UPDATED_EVENT = "cardzcheck:ebay-store-url-updated";
-
-function normalizeEbayStoreUrl(value: string | null | undefined): string | null {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  return trimmed ? trimmed : null;
-}
 
 function readStoredEbayStoreUrl(): string | null {
   if (typeof window === "undefined") return null;
@@ -46,23 +41,6 @@ function persistEbayStoreUrl(value: string | null) {
     window.sessionStorage.setItem(EBAY_STORE_URL_STORAGE_KEY, value);
   } else {
     window.sessionStorage.removeItem(EBAY_STORE_URL_STORAGE_KEY);
-  }
-}
-
-/** Returns a valid https URL for the eBay store, or null if invalid. */
-function buildEbayStoreHref(value: string | null | undefined): string | null {
-  const raw = normalizeEbayStoreUrl(value);
-  if (!raw) return null;
-  const withScheme =
-    raw.startsWith("http://") || raw.startsWith("https://")
-      ? raw
-      : `https://${raw}`;
-  try {
-    const u = new URL(withScheme);
-    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
-    return withScheme;
-  } catch {
-    return null;
   }
 }
 
@@ -172,12 +150,28 @@ function BusinessPageContent() {
 
   const loadUserProfile = useCallback(async () => {
     const supabase = createClient();
-    // Refresh session so user_metadata (e.g. ebay_store_url) is up to date after saving in Settings (possibly in another tab)
     await supabase.auth.refreshSession();
     const {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return null;
+
+    // Prefer server-authoritative profile so eBay store URL is always current after saving in Settings
+    try {
+      const res = await fetch("/api/user/name", { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        const apiBusinessName =
+          typeof data.business_name === "string" ? data.business_name.trim() || null : null;
+        const apiEbayStoreUrl = normalizeEbayStoreUrl(data.ebay_store_url);
+        setBusinessName(apiBusinessName ?? null);
+        setEbayStoreUrl(apiEbayStoreUrl);
+        persistEbayStoreUrl(apiEbayStoreUrl);
+        return user;
+      }
+    } catch {
+      // fall through to client-side resolution
+    }
 
     const metadataEbayStoreUrl = normalizeEbayStoreUrl(
       typeof user.user_metadata?.ebay_store_url === "string"
