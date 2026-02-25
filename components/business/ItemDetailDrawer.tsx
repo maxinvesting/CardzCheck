@@ -284,17 +284,35 @@ export default function ItemDetailDrawer({
       <div className="fixed right-0 top-0 h-full w-full max-w-lg bg-[#0f1419] border-l border-gray-800 z-50 overflow-y-auto">
         <div className="p-6">
           {/* Header */}
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
             <h2 className="text-lg font-bold text-white">Edit Item</h2>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-white"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+            <div className="flex items-center gap-2">
+              {item.card_id && (
+                <Link
+                  href={`/cards/${item.card_id}`}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14" />
+                  </svg>
+                  Open card profile
+                </Link>
+              )}
+              <button
+                onClick={onClose}
+                className="text-gray-400 hover:text-white p-1"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
           </div>
+          {item.card_id && (
+            <p className="text-xs text-gray-400 mb-4 -mt-2">
+              Card profile has photos, full details, and grade probability.
+            </p>
+          )}
 
           {/* Form */}
           <div className="space-y-4">

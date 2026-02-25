@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
+import Link from "next/link";
 import type { BusinessInventoryItem } from "@/types";
 
 function fmtCents(cents: number | null): string {
@@ -215,14 +216,30 @@ export default function InventoryTable({
     if (field === "title") {
       const isWax = item.notes?.includes("[WAX]");
       const titleStr = val ?? "";
-      return (
-        <span className="flex items-center gap-1.5 min-w-0">
+      const titleContent = (
+        <>
           {isWax && (
             <span className="inline-flex items-center px-1 py-0.5 rounded text-[10px] font-semibold bg-amber-900/40 text-amber-400 whitespace-nowrap shrink-0">
               WAX
             </span>
           )}
           <span className="truncate" title={titleStr}>{titleStr}</span>
+        </>
+      );
+      if (item.card_id) {
+        return (
+          <Link
+            href={`/cards/${item.card_id}`}
+            onClick={(e) => e.stopPropagation()}
+            className="flex items-center gap-1.5 min-w-0 text-gray-300 hover:text-white hover:underline"
+          >
+            {titleContent}
+          </Link>
+        );
+      }
+      return (
+        <span className="flex items-center gap-1.5 min-w-0">
+          {titleContent}
         </span>
       );
     }
@@ -261,6 +278,18 @@ export default function InventoryTable({
         );
       }
       return <span className="tabular-nums">{formatted}</span>;
+    }
+    if (field === "_view") {
+      if (!item.card_id) return null;
+      return (
+        <Link
+          href={`/cards/${item.card_id}`}
+          onClick={(e) => e.stopPropagation()}
+          className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium text-blue-400 hover:text-blue-300 hover:underline rounded"
+        >
+          View
+        </Link>
+      );
     }
     if (field === "_grade") {
       if (!item.card_id) return null;
@@ -311,6 +340,7 @@ export default function InventoryTable({
     { key: "current_market_value_cents", label: "CMV", editable: true, width: "w-20 shrink-0", alignRight: true },
     { key: "location", label: "Storage", editable: true, width: "w-24 shrink-0" },
     { key: "acquisition_date", label: "Acquired", editable: true, width: "w-24 shrink-0" },
+    { key: "_view", label: "Card", editable: false, width: "w-20 shrink-0" },
     { key: "_grade", label: "", editable: false, width: "w-16 shrink-0" },
   ];
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { extractCardIdentityDetailed, type ImageInput } from "@/lib/card-identity";
+import { searchEbayDualSignal } from "@/lib/ebay";
 import { smartSearch } from "@/lib/smartSearch";
 import {
   ALLOWED_MIME_TYPES,
@@ -336,44 +337,78 @@ async function resolveStockImageUrls(
     };
   }
 
-  const queryParts = [
-    cardIdentity.player,
-    cardIdentity.year ? String(cardIdentity.year) : null,
-    cardIdentity.setName,
-    cardIdentity.subset,
-    cardIdentity.parallel,
-  ].filter((part): part is string => Boolean(part && part.trim()));
-
-  if (queryParts.length === 0) {
+  const player = (cardIdentity.player ?? "").trim();
+  if (!player) {
     return {
       stockImageUrl: fallbackUrl,
       ebayImageUrl: null,
     };
   }
 
+  // Prefer eBay Browse API (best-match sorted) for stock image
   try {
-    const smart = await smartSearch(queryParts.join(" "), "collection", {
-      limit: 8,
-      candidateLimit: 50,
-      source: "ebayCollection",
-    });
-
-    const ebayImageUrl =
-      smart.rawComps?.find(
-        (comp) => typeof comp.image === "string" && normalizeHttpUrl(comp.image)
-      )?.image || null;
-
-    return {
-      stockImageUrl: ebayImageUrl || fallbackUrl,
-      ebayImageUrl,
+    const params = {
+      player,
+      year: cardIdentity.year != null ? String(cardIdentity.year) : undefined,
+      set: [cardIdentity.setName, cardIdentity.subset].filter(Boolean).join(" ").trim() || undefined,
+      parallelType: (cardIdentity.parallel ?? "").trim() || undefined,
+      limit: 15,
     };
+
+    const response = await searchEbayDualSignal(params);
+    const bestMatch = response.forSale?.items?.find(
+      (item) => item.image && normalizeHttpUrl(item.image)
+    );
+    const ebayImageUrl = bestMatch?.image ? normalizeHttpUrl(bestMatch.image) : null;
+
+    if (ebayImageUrl) {
+      return {
+        stockImageUrl: ebayImageUrl,
+        ebayImageUrl,
+      };
+    }
   } catch (error) {
-    console.warn("[identify-card] stock image lookup failed", error);
-    return {
-      stockImageUrl: fallbackUrl,
-      ebayImageUrl: null,
-    };
+    console.warn("[identify-card] eBay Browse API stock image lookup failed", error);
   }
+
+  // Fallback: sold comps from smartSearch (may still have images)
+  try {
+    const queryParts = [
+      player,
+      cardIdentity.year ? String(cardIdentity.year) : null,
+      cardIdentity.setName,
+      cardIdentity.subset,
+      cardIdentity.parallel,
+    ].filter((part): part is string => Boolean(part && part.trim()));
+
+    if (queryParts.length > 0) {
+      const smart = await smartSearch(queryParts.join(" "), "collection", {
+        limit: 8,
+        candidateLimit: 50,
+        source: "ebayCollection",
+      });
+
+      const compImage =
+        smart.rawComps?.find(
+          (comp) => typeof comp.image === "string" && normalizeHttpUrl(comp.image)
+        )?.image || null;
+      const ebayImageUrl = compImage ? normalizeHttpUrl(compImage) : null;
+
+      if (ebayImageUrl) {
+        return {
+          stockImageUrl: ebayImageUrl,
+          ebayImageUrl,
+        };
+      }
+    }
+  } catch (error) {
+    console.warn("[identify-card] smartSearch stock image fallback failed", error);
+  }
+
+  return {
+    stockImageUrl: fallbackUrl,
+    ebayImageUrl: null,
+  };
 }
 
 export async function POST(request: NextRequest) {
