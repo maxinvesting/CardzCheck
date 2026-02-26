@@ -1,6 +1,16 @@
 "use client";
 
-import { Suspense, useState, useEffect, useCallback, useMemo } from "react";
+import {
+  Suspense,
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+  Profiler,
+  type ProfilerOnRenderCallback,
+  startTransition,
+} from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
@@ -30,9 +40,22 @@ import {
   type InventoryValueSummary,
 } from "@/lib/business/inventory-value";
 import { normalizeEbayStoreUrl, buildEbayStoreHref } from "@/lib/ebay-store-url";
+import {
+  isPerfEnabled,
+  setPerfInteraction,
+  activatePerfBucket,
+  deactivatePerfBucket,
+  recordInventoryCommit,
+  markClickStart,
+  markClickEnd,
+  startEventLoopLagMonitor,
+  getPerfSnapshot,
+  perfLog,
+} from "@/lib/dev/perf";
 
 const EBAY_STORE_URL_STORAGE_KEY = "cardzcheck_ebay_store_url";
 const EBAY_STORE_URL_UPDATED_EVENT = "cardzcheck:ebay-store-url-updated";
+const PERF_MOCK_ITEM_COUNT = 1200;
 
 function readStoredEbayStoreUrl(): string | null {
   if (typeof window === "undefined") return null;
@@ -59,6 +82,64 @@ function defaultSalesFilters(): SalesFilters {
     channel: "",
     search: "",
   };
+}
+
+function buildPerfMockInventory(count = PERF_MOCK_ITEM_COUNT): BusinessInventoryItem[] {
+  const channels: BusinessInventoryItem["channel"][] = [
+    "ebay",
+    "whatnot",
+    "instagram",
+    "show",
+    "local",
+    "other",
+  ];
+  const statuses: BusinessInventoryItem["status"][] = [
+    "unlisted",
+    "listed",
+    "pending_sale",
+    "sold",
+    "returned",
+  ];
+  const now = Date.now();
+
+  return Array.from({ length: count }, (_, index) => {
+    const listPrice =
+      index % 3 === 0 ? null : 2500 + ((index % 120) * 125);
+    const cmv = index % 5 === 0 ? null : 2200 + ((index % 100) * 135);
+    const createdAt = new Date(now - index * 3600_000).toISOString();
+    const grade = index % 4 === 0 ? "10" : index % 4 === 1 ? "9" : null;
+
+    return {
+      id: `perf-item-${index + 1}`,
+      user_id: "perf-user",
+      card_id: `perf-card-${index + 1}`,
+      title: `2024 Topps Chrome Prospect ${index + 1}`,
+      quantity: (index % 3) + 1,
+      acquisition_date: new Date(now - index * 86_400_000)
+        .toISOString()
+        .slice(0, 10),
+      acquisition_type: "buy",
+      cost_basis_total_cents: 1400 + ((index % 80) * 110),
+      tax_cents: 0,
+      shipping_cents: 0,
+      fees_paid_cents: 0,
+      condition_status: grade ? "graded" : "raw",
+      grading_company: grade ? "PSA" : null,
+      grade,
+      cert_number: grade ? `CERT-${100000 + index}` : null,
+      location: index % 2 === 0 ? "Shelf A" : "Bin B",
+      channel: channels[index % channels.length]!,
+      status: statuses[index % statuses.length]!,
+      list_price_cents: listPrice,
+      current_market_value_cents: cmv,
+      user_image_url: null,
+      stock_image_url: null,
+      ebay_image_url: null,
+      notes: index % 10 === 0 ? "[WAX] Sealed product" : null,
+      created_at: createdAt,
+      updated_at: createdAt,
+    };
+  });
 }
 
 function BusinessPageContent() {
@@ -94,6 +175,30 @@ function BusinessPageContent() {
   const [salesPage, setSalesPage] = useState(1);
   const [salesPageSize] = useState(50);
   const [salesTotal, setSalesTotal] = useState(0);
+  const perfEnabled = useMemo(() => isPerfEnabled(), []);
+  const perfMockMode = useMemo(
+    () => perfEnabled && searchParams.get("perfMock") === "1",
+    [perfEnabled, searchParams]
+  );
+  const initialBucketStartedRef = useRef(false);
+  const pendingFloorUpdatesRef = useRef<Map<string, BusinessInventoryItem>>(
+    new Map()
+  );
+  const floorFlushTimerRef = useRef<number | null>(null);
+
+  const handleInventoryProfilerRender = useCallback<ProfilerOnRenderCallback>(
+    (_id, phase, actualDuration, baseDuration, startTime, commitTime) => {
+      if (!perfEnabled) return;
+      recordInventoryCommit({
+        phase,
+        actualDuration,
+        baseDuration,
+        startTime,
+        commitTime,
+      });
+    },
+    [perfEnabled]
+  );
 
   const inventorySummary = useMemo((): InventoryValueSummary | null => {
     const list = filteredItems.length > 0 ? filteredItems : items;
@@ -108,6 +213,50 @@ function BusinessPageContent() {
   const handleFilteredChange = useCallback((filtered: BusinessInventoryItem[]) => {
     setFilteredItems(filtered);
   }, []);
+
+  const flushFloorUpdates = useCallback(() => {
+    floorFlushTimerRef.current = null;
+    const updates = new Map(pendingFloorUpdatesRef.current);
+    pendingFloorUpdatesRef.current.clear();
+    if (updates.size === 0) return;
+
+    if (perfEnabled) {
+      perfLog("market-floor flush", { updates: updates.size });
+    }
+
+    startTransition(() => {
+      setItems((prev) => prev.map((item) => updates.get(item.id) ?? item));
+      setSelectedItem((prev) => (prev ? updates.get(prev.id) ?? prev : prev));
+    });
+  }, [perfEnabled]);
+
+  const queueFloorUpdate = useCallback(
+    (updated: BusinessInventoryItem) => {
+      pendingFloorUpdatesRef.current.set(updated.id, updated);
+      if (floorFlushTimerRef.current !== null) return;
+      floorFlushTimerRef.current = window.setTimeout(flushFloorUpdates, 320);
+    },
+    [flushFloorUpdates]
+  );
+
+  useEffect(() => {
+    if (!perfEnabled) return;
+    const stopMonitor = startEventLoopLagMonitor();
+    return () => {
+      stopMonitor?.();
+    };
+  }, [perfEnabled]);
+
+  useEffect(
+    () => () => {
+      if (floorFlushTimerRef.current !== null) {
+        window.clearTimeout(floorFlushTimerRef.current);
+      }
+      floorFlushTimerRef.current = null;
+      pendingFloorUpdatesRef.current.clear();
+    },
+    []
+  );
 
   useEffect(() => {
     if (toast) {
@@ -136,6 +285,44 @@ function BusinessPageContent() {
   }, [searchParams]);
 
   const loadInventory = useCallback(async () => {
+    if (perfMockMode) {
+      if (perfEnabled) {
+        activatePerfBucket("initial-load");
+        setPerfInteraction("load");
+      }
+      const mockItems = buildPerfMockInventory();
+      setHasAccess(true);
+      setNeedsMigration(false);
+      setItems(mockItems);
+      setLoading(false);
+      setMetrics({
+        revenueMtd: 0,
+        revenueYtd: 0,
+        profitMtd: 0,
+        profitYtd: 0,
+        salesCountMtd: 0,
+        salesCountYtd: 0,
+        activeInventoryCount: mockItems.length,
+      });
+      setMetricsLoading(false);
+      if (perfEnabled) {
+        window.setTimeout(() => {
+          deactivatePerfBucket("initial-load", {
+            itemCount: mockItems.length,
+            source: "perfMock",
+          });
+        }, 300);
+      }
+      return;
+    }
+
+    if (perfEnabled && !initialBucketStartedRef.current) {
+      activatePerfBucket("initial-load");
+      setPerfInteraction("load");
+      initialBucketStartedRef.current = true;
+    }
+
+    let loadedItemCount = 0;
     try {
       const res = await fetch("/api/business/inventory", { cache: "no-store" });
       if (res.status === 403) {
@@ -152,15 +339,29 @@ function BusinessPageContent() {
       }
       setNeedsMigration(false);
       setHasAccess(true);
-      setItems(data.items ?? []);
+      const nextItems = data.items ?? [];
+      loadedItemCount = nextItems.length;
+      setItems(nextItems);
     } catch {
       setHasAccess(false);
     } finally {
       setLoading(false);
+      if (perfEnabled && initialBucketStartedRef.current) {
+        window.setTimeout(() => {
+          deactivatePerfBucket("initial-load", {
+            itemCount: loadedItemCount,
+            source: "api",
+          });
+        }, 300);
+      }
     }
-  }, []);
+  }, [perfEnabled, perfMockMode]);
 
   const loadMetrics = useCallback(async () => {
+    if (perfMockMode) {
+      setMetricsLoading(false);
+      return;
+    }
     setMetricsLoading(true);
     try {
       const res = await fetch("/api/business/kpis?range=mtd", { cache: "no-store" });
@@ -181,9 +382,15 @@ function BusinessPageContent() {
     } finally {
       setMetricsLoading(false);
     }
-  }, []);
+  }, [perfMockMode]);
 
   const loadSales = useCallback(async () => {
+    if (perfMockMode) {
+      setSales([]);
+      setSalesTotal(0);
+      setSalesLoading(false);
+      return;
+    }
     setSalesLoading(true);
     try {
       const params = new URLSearchParams();
@@ -206,9 +413,15 @@ function BusinessPageContent() {
     } finally {
       setSalesLoading(false);
     }
-  }, [salesFilters, salesPage, salesPageSize]);
+  }, [perfMockMode, salesFilters, salesPage, salesPageSize]);
 
   const loadUserProfile = useCallback(async () => {
+    if (perfMockMode) {
+      setBusinessName("Perf Mock Business");
+      setEbayStoreUrl(null);
+      return { id: "perf-user" } as { id: string };
+    }
+
     const supabase = createClient();
     await supabase.auth.refreshSession();
     const {
@@ -269,7 +482,7 @@ function BusinessPageContent() {
       persistEbayStoreUrl(resolvedEbayStoreUrl);
     }
     return user;
-  }, []);
+  }, [perfMockMode]);
 
   useEffect(() => {
     async function init() {
@@ -317,7 +530,65 @@ function BusinessPageContent() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!perfEnabled || !showAddCardModal) return;
+    markClickEnd("open-add-inventory-modal", { modalVisible: true });
+    window.setTimeout(() => {
+      deactivatePerfBucket("button-click", {
+        action: "open-add-inventory-modal",
+      });
+    }, 0);
+  }, [showAddCardModal, perfEnabled]);
+
+  useEffect(() => {
+    if (!perfEnabled || !markSoldItem) return;
+    markClickEnd("open-mark-sold-modal", {
+      modalVisible: true,
+      itemId: markSoldItem.id,
+    });
+    window.setTimeout(() => {
+      deactivatePerfBucket("button-click", {
+        action: "open-mark-sold-modal",
+      });
+    }, 0);
+  }, [markSoldItem, perfEnabled]);
+
+  useEffect(() => {
+    if (!perfEnabled) return;
+    const timer = window.setTimeout(() => {
+      const snapshot = getPerfSnapshot();
+      if (!snapshot) return;
+      perfLog("summary", {
+        commitAvgMs: snapshot.commitAvgMs,
+        commitP50Ms: snapshot.commitP50Ms,
+        commitP95Ms: snapshot.commitP95Ms,
+        commitCount: snapshot.commitCount,
+        renderedRows: snapshot.renderedRows,
+        domNodeCount: snapshot.domNodeCount,
+        eventLoopLagSpikes: snapshot.eventLoopLagSpikes.length,
+      });
+    }, 700);
+    return () => window.clearTimeout(timer);
+  }, [activeTab, items.length, loading, perfEnabled]);
+
   const handleInlineUpdate = async (id: string, field: string, value: any) => {
+    if (perfMockMode) {
+      const updated = { id, [field]: value } as Partial<BusinessInventoryItem> &
+        Pick<BusinessInventoryItem, "id">;
+      if (field === "current_market_value_cents") {
+        const existing = items.find((it) => it.id === id);
+        if (existing) {
+          queueFloorUpdate({ ...existing, ...updated });
+        }
+      } else {
+        startTransition(() => {
+          setItems((prev) =>
+            prev.map((it) => (it.id === id ? { ...it, [field]: value } : it))
+          );
+        });
+      }
+      return;
+    }
     try {
       const res = await fetch("/api/business/inventory", {
         method: "PATCH",
@@ -325,8 +596,14 @@ function BusinessPageContent() {
         body: JSON.stringify({ id, [field]: value }),
       });
       if (res.ok) {
-        const updated = await res.json();
-        setItems((prev) => prev.map((it) => (it.id === id ? updated : it)));
+        const updated = (await res.json()) as BusinessInventoryItem;
+        if (field === "current_market_value_cents") {
+          queueFloorUpdate(updated);
+        } else {
+          startTransition(() => {
+            setItems((prev) => prev.map((it) => (it.id === id ? updated : it)));
+          });
+        }
       } else {
         const data = await res.json().catch(() => ({}));
         setToast({
@@ -346,6 +623,23 @@ function BusinessPageContent() {
     ids: string[],
     payload?: any
   ) => {
+    if (perfMockMode) {
+      setItems((prev) =>
+        prev.map((it) => {
+          if (!ids.includes(it.id)) return it;
+          if (action === "set_status") {
+            return { ...it, status: payload ?? it.status };
+          }
+          if (action === "set_location") {
+            return { ...it, location: payload ?? it.location };
+          }
+          return it;
+        })
+      );
+      setToast({ type: "success", message: `Updated ${ids.length} items` });
+      return;
+    }
+
     try {
       const updates: Record<string, string> = {};
       if (action === "set_status") updates.status = payload;
@@ -367,6 +661,12 @@ function BusinessPageContent() {
   const handleDelete = async (ids: string[]) => {
     if (!confirm(`Delete ${ids.length} item(s)? This cannot be undone.`)) return;
 
+    if (perfMockMode) {
+      setItems((prev) => prev.filter((it) => !ids.includes(it.id)));
+      setToast({ type: "success", message: `Deleted ${ids.length} items` });
+      return;
+    }
+
     try {
       await fetch(`/api/business/inventory?ids=${ids.join(",")}`, {
         method: "DELETE",
@@ -380,6 +680,41 @@ function BusinessPageContent() {
   };
 
   const handleAddItem = async (item: any) => {
+    if (perfMockMode) {
+      const now = new Date().toISOString();
+      const created: BusinessInventoryItem = {
+        id: `perf-new-${Date.now()}`,
+        user_id: "perf-user",
+        card_id: null,
+        title: item.title || "Untitled item",
+        quantity: item.quantity || 1,
+        acquisition_date: item.acquisition_date || null,
+        acquisition_type: item.acquisition_type || "buy",
+        cost_basis_total_cents: item.cost_basis_total_cents || 0,
+        tax_cents: item.tax_cents || 0,
+        shipping_cents: item.shipping_cents || 0,
+        fees_paid_cents: item.fees_paid_cents || 0,
+        condition_status: item.condition_status || "raw",
+        grading_company: item.grading_company || null,
+        grade: item.grade || null,
+        cert_number: item.cert_number || null,
+        location: item.location || null,
+        channel: item.channel || "other",
+        status: item.status || "unlisted",
+        list_price_cents: item.list_price_cents ?? null,
+        current_market_value_cents: item.current_market_value_cents ?? null,
+        user_image_url: null,
+        stock_image_url: null,
+        ebay_image_url: null,
+        notes: item.notes || null,
+        created_at: now,
+        updated_at: now,
+      };
+      setItems((prev) => [created, ...prev]);
+      setToast({ type: "success", message: `Added "${created.title}"` });
+      return;
+    }
+
     try {
       const res = await fetch("/api/business/inventory", {
         method: "POST",
@@ -404,6 +739,17 @@ function BusinessPageContent() {
     id: string,
     updates: Partial<BusinessInventoryItem>
   ) => {
+    if (perfMockMode) {
+      setItems((prev) =>
+        prev.map((it) => (it.id === id ? { ...it, ...updates } : it))
+      );
+      setSelectedItem((prev) =>
+        prev && prev.id === id ? { ...prev, ...updates } : prev
+      );
+      setToast({ type: "success", message: "Item saved" });
+      return;
+    }
+
     try {
       const res = await fetch("/api/business/inventory", {
         method: "PATCH",
@@ -423,6 +769,11 @@ function BusinessPageContent() {
   };
 
   const handleMarkSold = (item: BusinessInventoryItem) => {
+    if (perfEnabled) {
+      activatePerfBucket("button-click");
+      setPerfInteraction("click:mark-sold");
+      markClickStart("open-mark-sold-modal", { itemId: item.id });
+    }
     setMarkSoldItem(item);
   };
 
@@ -438,6 +789,41 @@ function BusinessPageContent() {
             : it
         )
       );
+    }
+
+    if (perfMockMode) {
+      const mockSale: BusinessSale = {
+        id: `perf-sale-${Date.now()}`,
+        user_id: "perf-user",
+        business_id: "perf-business",
+        inventory_item_id: inventoryId,
+        channel: (sale.channel as BusinessSale["channel"]) || "ebay",
+        sold_at:
+          (sale.sold_at as string | undefined) ||
+          new Date().toISOString(),
+        sold_price_cents: (sale.sold_price_cents as number | undefined) || 0,
+        platform_fees_cents: (sale.platform_fees_cents as number | undefined) || 0,
+        shipping_charged_cents:
+          (sale.shipping_charged_cents as number | undefined) || 0,
+        shipping_cost_cents: (sale.shipping_cost_cents as number | undefined) || 0,
+        tax_cents: (sale.tax_cents as number | undefined) || 0,
+        net_payout_cents: (sale.net_payout_cents as number | undefined) || 0,
+        cogs_cents: (sale.cogs_cents as number | undefined) || 0,
+        gross_revenue_cents: (sale.sold_price_cents as number | undefined) || 0,
+        profit_cents: 0,
+        external_order_id: null,
+        notes: null,
+        is_deleted: false,
+        inventory_item: previousItem
+          ? { id: previousItem.id, title: previousItem.title }
+          : null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      setSales((prev) => [mockSale, ...prev]);
+      setToast({ type: "success", message: "Sale recorded" });
+      setSalesPage(1);
+      return;
     }
 
     try {
@@ -482,6 +868,14 @@ function BusinessPageContent() {
     saleId: string,
     updates: Record<string, unknown>
   ) => {
+    if (perfMockMode) {
+      setSales((prev) =>
+        prev.map((sale) => (sale.id === saleId ? { ...sale, ...updates } : sale))
+      );
+      setToast({ type: "success", message: "Sale updated" });
+      return;
+    }
+
     const res = await fetch(`/api/business/sales/${saleId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -496,6 +890,12 @@ function BusinessPageContent() {
   };
 
   const handleDeleteSale = async (saleId: string) => {
+    if (perfMockMode) {
+      setSales((prev) => prev.filter((sale) => sale.id !== saleId));
+      setToast({ type: "success", message: "Sale deleted" });
+      return;
+    }
+
     const res = await fetch(`/api/business/sales/${saleId}`, {
       method: "DELETE",
     });
@@ -510,6 +910,7 @@ function BusinessPageContent() {
   const handleCardAdded = (playerName: string) => {
     setPendingInventoryCard(null);
     setToast({ type: "success", message: `Added "${playerName}" to inventory` });
+    if (perfMockMode) return;
     loadInventory();
     loadMetrics();
   };
@@ -544,7 +945,21 @@ function BusinessPageContent() {
     setShowAddCardToInventory(true);
   };
 
+  const openAddInventoryModal = useCallback(() => {
+    if (perfEnabled) {
+      activatePerfBucket("button-click");
+      setPerfInteraction("click:add-inventory");
+      markClickStart("open-add-inventory-modal");
+    }
+    setShowAddCardModal(true);
+  }, [perfEnabled]);
+
   const handleAddWax = async (item: any) => {
+    if (perfMockMode) {
+      await handleAddItem({ ...item, notes: "[WAX] Sealed product" });
+      return;
+    }
+
     try {
       const res = await fetch("/api/business/inventory", {
         method: "POST",
@@ -633,7 +1048,7 @@ function BusinessPageContent() {
             <div className="relative">
               <div className="flex">
                 <button
-                  onClick={() => setShowAddCardModal(true)}
+                  onClick={openAddInventoryModal}
                   className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-l-md transition-colors text-xs font-medium flex items-center gap-1.5"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -655,7 +1070,7 @@ function BusinessPageContent() {
                   <button
                     onClick={() => {
                       setShowAddDropdown(false);
-                      setShowAddCardModal(true);
+                      openAddInventoryModal();
                     }}
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-800 rounded-t-lg"
                   >
@@ -748,17 +1163,37 @@ function BusinessPageContent() {
 
         {/* Inventory Table */}
         {!needsMigration && activeTab === "inventory" && (
-          <InventoryTable
-            items={items}
-            selectedItemId={selectedItem?.id ?? null}
-            onItemClick={setSelectedItem}
-            onInlineUpdate={handleInlineUpdate}
-            onBulkAction={handleBulkAction}
-            onDelete={handleDelete}
-            onMarkSold={handleMarkSold}
-            onFilteredChange={handleFilteredChange}
-            dense
-          />
+          perfEnabled ? (
+            <Profiler
+              id="BusinessInventoryTable"
+              onRender={handleInventoryProfilerRender}
+            >
+              <InventoryTable
+                items={items}
+                selectedItemId={selectedItem?.id ?? null}
+                onItemClick={setSelectedItem}
+                onInlineUpdate={handleInlineUpdate}
+                onBulkAction={handleBulkAction}
+                onDelete={handleDelete}
+                onMarkSold={handleMarkSold}
+                onFilteredChange={handleFilteredChange}
+                dense
+                perfEnabled={perfEnabled}
+              />
+            </Profiler>
+          ) : (
+            <InventoryTable
+              items={items}
+              selectedItemId={selectedItem?.id ?? null}
+              onItemClick={setSelectedItem}
+              onInlineUpdate={handleInlineUpdate}
+              onBulkAction={handleBulkAction}
+              onDelete={handleDelete}
+              onMarkSold={handleMarkSold}
+              onFilteredChange={handleFilteredChange}
+              dense
+            />
+          )
         )}
 
         {!needsMigration && activeTab === "sales" && (

@@ -1,16 +1,26 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import {
+  useState,
+  useMemo,
+  useEffect,
+  useRef,
+  forwardRef,
+  type ComponentPropsWithoutRef,
+} from "react";
 import Link from "next/link";
+import { TableVirtuoso } from "react-virtuoso";
 import type { BusinessInventoryItem } from "@/types";
+import {
+  setPerfInteraction,
+  activatePerfBucket,
+  deactivatePerfBucket,
+  recordDomMetrics,
+} from "@/lib/dev/perf";
 
 function fmtCents(cents: number | null): string {
   if (cents === null) return "";
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-  }).format(cents / 100);
+  return USD_FORMATTER.format(cents / 100);
 }
 
 /** Placeholder text for empty/null values in ledger table */
@@ -84,11 +94,83 @@ interface Props {
   onFilteredChange?: (filtered: BusinessInventoryItem[]) => void;
   /** Tighter row padding (Business mode) */
   dense?: boolean;
+  /** Enables dev-only perf instrumentation output */
+  perfEnabled?: boolean;
 }
 
 const STATUS_OPTIONS = ["unlisted", "listed", "pending_sale", "sold", "returned"] as const;
 const CHANNEL_OPTIONS = ["ebay", "whatnot", "instagram", "show", "local", "other"] as const;
 const CONDITION_OPTIONS = ["raw", "graded"] as const;
+const VIRTUALIZE_THRESHOLD = 200;
+
+const USD_FORMATTER = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  minimumFractionDigits: 2,
+});
+
+type ColumnDef = {
+  key: string;
+  label: string;
+  editable: boolean;
+  width: string;
+  alignRight?: boolean;
+};
+
+const COLUMNS: ColumnDef[] = [
+  { key: "title", label: "Title", editable: true, width: "min-w-[180px]" },
+  { key: "quantity", label: "Qty", editable: true, width: "w-12 shrink-0" },
+  {
+    key: "cost_basis_total_cents",
+    label: "Cost",
+    editable: true,
+    width: "w-20 shrink-0",
+    alignRight: true,
+  },
+  { key: "status", label: "Status", editable: true, width: "w-24 shrink-0" },
+  {
+    key: "channel",
+    label: "Channel",
+    editable: true,
+    width: "w-20 shrink-0",
+  },
+  {
+    key: "list_price_cents",
+    label: "List $",
+    editable: true,
+    width: "w-20 shrink-0",
+    alignRight: true,
+  },
+  {
+    key: "current_market_value_cents",
+    label: "CMV",
+    editable: true,
+    width: "w-20 shrink-0",
+    alignRight: true,
+  },
+  { key: "location", label: "Storage", editable: true, width: "w-24 shrink-0" },
+  {
+    key: "acquisition_date",
+    label: "Acquired",
+    editable: true,
+    width: "w-24 shrink-0",
+  },
+  { key: "_view", label: "Profile", editable: false, width: "w-20 shrink-0" },
+  { key: "_grade", label: "", editable: false, width: "w-16 shrink-0" },
+  { key: "_actions", label: "", editable: false, width: "w-20 shrink-0" },
+];
+
+const VirtuosoScroller = forwardRef<
+  HTMLDivElement,
+  ComponentPropsWithoutRef<"div">
+>(({ className, ...props }, ref) => (
+  <div
+    {...props}
+    ref={ref}
+    className={`overflow-auto ${className ?? ""}`.trim()}
+  />
+));
+VirtuosoScroller.displayName = "VirtuosoScroller";
 
 export default function InventoryTable({
   items,
@@ -100,6 +182,7 @@ export default function InventoryTable({
   onMarkSold,
   onFilteredChange,
   dense = false,
+  perfEnabled = false,
 }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
@@ -115,10 +198,15 @@ export default function InventoryTable({
   const [bulkAction, setBulkAction] = useState("");
   const [bulkPayload, setBulkPayload] = useState("");
   const [fetchingCmvId, setFetchingCmvId] = useState<string | null>(null);
+  const tableContainerRef = useRef<HTMLDivElement | null>(null);
 
   const handleFetchCmv = async (item: BusinessInventoryItem) => {
     if (item.current_market_value_cents != null && item.current_market_value_cents > 0) return;
     if (!item.title?.trim()) return;
+    if (perfEnabled) {
+      setPerfInteraction("market-floor");
+      activatePerfBucket("market-floor");
+    }
     setFetchingCmvId(item.id);
     try {
       const res = await fetch(
@@ -132,6 +220,11 @@ export default function InventoryTable({
       }
     } finally {
       setFetchingCmvId(null);
+      if (perfEnabled) {
+        window.setTimeout(() => {
+          deactivatePerfBucket("market-floor", { itemId: item.id });
+        }, 350);
+      }
     }
   };
 
@@ -165,6 +258,14 @@ export default function InventoryTable({
   useEffect(() => {
     onFilteredChange?.(filtered);
   }, [filtered, onFilteredChange]);
+
+  useEffect(() => {
+    if (!perfEnabled || !tableContainerRef.current) return;
+    const domNodeCount = tableContainerRef.current.querySelectorAll("*").length;
+    recordDomMetrics(filtered.length, domNodeCount, {
+      totalItems: items.length,
+    });
+  }, [filtered.length, items.length, perfEnabled]);
 
   const toggleAll = () => {
     if (selected.size === filtered.length) {
@@ -410,20 +511,93 @@ export default function InventoryTable({
     }
   };
 
-  const columns: { key: string; label: string; editable: boolean; width: string; alignRight?: boolean }[] = [
-    { key: "title", label: "Title", editable: true, width: "min-w-[180px]" },
-    { key: "quantity", label: "Qty", editable: true, width: "w-12 shrink-0" },
-    { key: "cost_basis_total_cents", label: "Cost", editable: true, width: "w-20 shrink-0", alignRight: true },
-    { key: "status", label: "Status", editable: true, width: "w-24 shrink-0" },
-    { key: "channel", label: "Channel", editable: true, width: "w-20 shrink-0" },
-    { key: "list_price_cents", label: "List $", editable: true, width: "w-20 shrink-0", alignRight: true },
-    { key: "current_market_value_cents", label: "CMV", editable: true, width: "w-20 shrink-0", alignRight: true },
-    { key: "location", label: "Storage", editable: true, width: "w-24 shrink-0" },
-    { key: "acquisition_date", label: "Acquired", editable: true, width: "w-24 shrink-0" },
-    { key: "_view", label: "Profile", editable: false, width: "w-20 shrink-0" },
-    { key: "_grade", label: "", editable: false, width: "w-16 shrink-0" },
-    { key: "_actions", label: "", editable: false, width: "w-20 shrink-0" },
-  ];
+  const shouldVirtualize = filtered.length > VIRTUALIZE_THRESHOLD;
+  const virtualTableHeight = useMemo(
+    () => Math.min(760, Math.max(360, filtered.length * (dense ? 28 : 34))),
+    [dense, filtered.length]
+  );
+
+  const rowClass = (item: BusinessInventoryItem, idx: number): string =>
+    `transition-colors cursor-pointer ${
+      selectedItemId === item.id
+        ? "bg-emerald-900/30 ring-inset"
+        : idx % 2 === 1
+        ? "bg-gray-900/30 hover:bg-gray-800/60"
+        : "hover:bg-gray-800/60"
+    }`;
+
+  const renderHeader = () => (
+    <tr>
+      <th className={`w-8 shrink-0 ${dense ? "px-2 py-1" : "px-2 py-1.5"}`}>
+        <input
+          type="checkbox"
+          checked={filtered.length > 0 && selected.size === filtered.length}
+          onChange={toggleAll}
+          className="rounded border-gray-600 text-emerald-500 focus:ring-emerald-500"
+        />
+      </th>
+      {COLUMNS.map((col) => (
+        <th
+          key={col.key}
+          className={`px-2 ${dense ? "py-1" : "py-1.5"} text-[10px] font-medium text-gray-500 uppercase tracking-wider ${col.width} ${col.alignRight ? "text-right" : ""}`}
+        >
+          {col.label}
+        </th>
+      ))}
+    </tr>
+  );
+
+  const renderRowCells = (item: BusinessInventoryItem) => (
+    <>
+      <td
+        className={`px-2 ${dense ? "py-0.5" : "py-1"}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <input
+          type="checkbox"
+          checked={selected.has(item.id)}
+          onChange={() => toggleOne(item.id)}
+          className="rounded border-gray-600 text-emerald-500 focus:ring-emerald-500"
+        />
+      </td>
+      {COLUMNS.map((col) => (
+        <td
+          key={`${item.id}-${col.key}`}
+          className={`px-2 ${dense ? "py-0.5" : "py-1"} text-gray-300 ${col.width} ${col.alignRight ? "text-right tabular-nums" : ""}`}
+          onClick={() => {
+            if (col.key === "_actions" || col.key === "_grade" || col.key === "_view") {
+              return;
+            }
+            if (editingCell?.id === item.id && editingCell?.field === col.key) {
+              return;
+            }
+            if (col.editable) {
+              const val = (item as any)[col.key];
+              const displayVal = col.key.endsWith("_cents") && val !== null
+                ? (val / 100).toFixed(2)
+                : val;
+              startEdit(item.id, col.key, displayVal);
+            }
+          }}
+          onDoubleClick={() => onItemClick(item)}
+        >
+          {col.key === "status" ? (
+            editingCell?.id === item.id && editingCell?.field === "status" ? (
+              renderCell(item, col.key)
+            ) : (
+              <span
+                className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${statusColor(item.status)}`}
+              >
+                {item.status}
+              </span>
+            )
+          ) : (
+            renderCell(item, col.key)
+          )}
+        </td>
+      ))}
+    </>
+  );
 
   return (
     <div>
@@ -488,7 +662,10 @@ export default function InventoryTable({
           <input
             type="text"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              if (perfEnabled) setPerfInteraction("filter");
+              setSearch(e.target.value);
+            }}
             placeholder="Search inventory..."
             className="w-full pl-8 pr-2.5 py-1.5 bg-gray-900 border border-gray-800 rounded-md text-xs text-white placeholder-gray-500 focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
           />
@@ -497,7 +674,10 @@ export default function InventoryTable({
         {/* Filters */}
         <select
           value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
+          onChange={(e) => {
+            if (perfEnabled) setPerfInteraction("filter");
+            setFilterStatus(e.target.value);
+          }}
           className="px-2.5 py-1.5 bg-gray-900 border border-gray-800 rounded-md text-xs text-white shrink-0"
         >
           <option value="">All Status</option>
@@ -508,7 +688,10 @@ export default function InventoryTable({
 
         <select
           value={filterChannel}
-          onChange={(e) => setFilterChannel(e.target.value)}
+          onChange={(e) => {
+            if (perfEnabled) setPerfInteraction("filter");
+            setFilterChannel(e.target.value);
+          }}
           className="px-2.5 py-1.5 bg-gray-900 border border-gray-800 rounded-md text-xs text-white shrink-0"
         >
           <option value="">All Channels</option>
@@ -519,7 +702,10 @@ export default function InventoryTable({
 
         <select
           value={filterCondition}
-          onChange={(e) => setFilterCondition(e.target.value)}
+          onChange={(e) => {
+            if (perfEnabled) setPerfInteraction("filter");
+            setFilterCondition(e.target.value);
+          }}
           className="px-2.5 py-1.5 bg-gray-900 border border-gray-800 rounded-md text-xs text-white shrink-0"
         >
           <option value="">Raw & Graded</option>
@@ -583,102 +769,58 @@ export default function InventoryTable({
       )}
 
       {/* Table — ledger style: tight rows, right-align money */}
-      <div className="overflow-x-auto border border-gray-800 rounded-lg">
-        <table className="w-full text-xs text-left">
-          <thead className="bg-gray-900 border-b border-gray-800">
-            <tr>
-              <th className={`w-8 shrink-0 ${dense ? "px-2 py-1" : "px-2 py-1.5"}`}>
-                <input
-                  type="checkbox"
-                  checked={filtered.length > 0 && selected.size === filtered.length}
-                  onChange={toggleAll}
-                  className="rounded border-gray-600 text-emerald-500 focus:ring-emerald-500"
-                />
-              </th>
-              {columns.map((col) => (
-                <th
-                  key={col.key}
-                  className={`px-2 ${dense ? "py-1" : "py-1.5"} text-[10px] font-medium text-gray-500 uppercase tracking-wider ${col.width} ${col.alignRight ? "text-right" : ""}`}
-                >
-                  {col.label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-800/80">
-            {filtered.length === 0 && (
-              <tr>
-                <td
-                  colSpan={columns.length + 1}
-                  className="px-4 py-8 text-center text-xs text-gray-500"
-                >
-                  {activeTab === "wax"
-                    ? "No wax / sealed products found. Use Add Wax to track boxes and cases."
-                    : activeTab === "cards"
-                    ? "No cards found. Use Add Inventory to add cards to your inventory."
-                    : "No inventory items found."}
-                </td>
-              </tr>
-            )}
-            {filtered.map((item, idx) => (
-              <tr
-                key={item.id}
-                className={`transition-colors cursor-pointer ${
-                  selectedItemId === item.id
-                    ? "bg-emerald-900/30 ring-inset"
-                    : idx % 2 === 1
-                    ? "bg-gray-900/30 hover:bg-gray-800/60"
-                    : "hover:bg-gray-800/60"
-                }`}
-              >
-                <td className={`px-2 ${dense ? "py-0.5" : "py-1"}`} onClick={(e) => e.stopPropagation()}>
-                  <input
-                    type="checkbox"
-                    checked={selected.has(item.id)}
-                    onChange={() => toggleOne(item.id)}
-                    className="rounded border-gray-600 text-emerald-500 focus:ring-emerald-500"
-                  />
-                </td>
-                {columns.map((col) => (
-                  <td
-                    key={col.key}
-                    className={`px-2 ${dense ? "py-0.5" : "py-1"} text-gray-300 ${col.width} ${col.alignRight ? "text-right tabular-nums" : ""}`}
-                    onClick={() => {
-                      if (col.key === "_actions" || col.key === "_grade" || col.key === "_view") {
-                        return;
-                      }
-                      if (editingCell?.id === item.id && editingCell?.field === col.key) {
-                        return;
-                      }
-                      if (col.editable) {
-                        const val = (item as any)[col.key];
-                        const displayVal = col.key.endsWith("_cents") && val !== null
-                          ? (val / 100).toFixed(2)
-                          : val;
-                        startEdit(item.id, col.key, displayVal);
-                      }
-                    }}
-                    onDoubleClick={() => onItemClick(item)}
-                  >
-                    {col.key === "status" ? (
-                      editingCell?.id === item.id && editingCell?.field === "status" ? (
-                        renderCell(item, col.key)
-                      ) : (
-                        <span
-                          className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${statusColor(item.status)}`}
-                        >
-                          {item.status}
-                        </span>
-                      )
-                    ) : (
-                      renderCell(item, col.key)
-                    )}
-                  </td>
+      <div
+        ref={tableContainerRef}
+        className="border border-gray-800 rounded-lg overflow-hidden"
+        onScrollCapture={() => {
+          if (perfEnabled) setPerfInteraction("scroll");
+        }}
+        onClickCapture={() => {
+          if (perfEnabled) setPerfInteraction("click");
+        }}
+      >
+        {filtered.length === 0 ? (
+          <div className="px-4 py-8 text-center text-xs text-gray-500">
+            {activeTab === "wax"
+              ? "No wax / sealed products found. Use Add Wax to track boxes and cases."
+              : activeTab === "cards"
+              ? "No cards found. Use Add Inventory to add cards to your inventory."
+              : "No inventory items found."}
+          </div>
+        ) : shouldVirtualize ? (
+          <TableVirtuoso
+            data={filtered}
+            style={{ height: virtualTableHeight }}
+            components={{
+              Scroller: VirtuosoScroller,
+              Table: (props) => <table {...props} className="w-full text-xs text-left" />,
+              TableHead: (props) => (
+                <thead {...props} className="bg-gray-900 border-b border-gray-800" />
+              ),
+              TableBody: (props) => <tbody {...props} className="divide-y divide-gray-800/80" />,
+            }}
+            itemClassName={(index, item) => rowClass(item, index)}
+            computeItemKey={(_index, item) => item.id}
+            fixedHeaderContent={renderHeader}
+            itemContent={(_index, item) => renderRowCells(item)}
+            increaseViewportBy={240}
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-left">
+              <thead className="bg-gray-900 border-b border-gray-800">
+                {renderHeader()}
+              </thead>
+              <tbody className="divide-y divide-gray-800/80">
+                {filtered.map((item, idx) => (
+                  <tr key={item.id} className={rowClass(item, idx)}>
+                    {renderRowCells(item)}
+                  </tr>
                 ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       <div className="mt-1.5 text-[10px] text-gray-500">
