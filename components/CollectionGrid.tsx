@@ -71,7 +71,7 @@ function CardItem({ item, onDelete }: CardItemProps) {
   const imageUrl = imageCandidates[imageIndex] || null;
 
   const handleCardClick = () => {
-    router.push(`/cards/${item.id}`);
+    router.push(`/card/${item.id}?from=collection`);
   };
 
   return (
