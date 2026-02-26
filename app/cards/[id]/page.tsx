@@ -173,15 +173,16 @@ export default function CardProfilePage() {
 
   const cardIdentity = useMemo(() => {
     if (!card) return null;
-    const c = card as CollectionItem & { card_number?: string; parallel_type?: string; variation?: string };
+    const c = card as CollectionItem & { variation?: string | null };
+    const asOptional = (value: string | null | undefined) => value ?? undefined;
     return {
       player_name: card.player_name ?? "",
-      year: card.year,
-      set_name: card.set_name,
-      card_number: c.card_number,
-      parallel_type: c.parallel_type,
-      variation: c.variation,
-      insert: card.insert,
+      year: asOptional(card.year),
+      set_name: asOptional(card.set_name),
+      card_number: asOptional(card.card_number),
+      parallel_type: asOptional(card.parallel_type),
+      variation: asOptional(c.variation),
+      insert: asOptional(card.insert),
     };
   }, [card]);
 
@@ -327,7 +328,7 @@ export default function CardProfilePage() {
         <section className="mt-10 pt-8 border-t border-gray-200 dark:border-gray-800">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-              {gradingCopy.title}
+              {gradingCopy.panel.title}
             </h2>
             <Link
               href="/grade-estimator"

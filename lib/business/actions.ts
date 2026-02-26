@@ -654,8 +654,8 @@ export async function listSales(
         .limit(200);
 
       const inventoryIds = (inventoryMatches ?? [])
-        .map((row) => row.id)
-        .filter((value): value is string => Boolean(value));
+        .map((row: { id: string | null }) => row.id)
+        .filter((value: string | null): value is string => Boolean(value));
       const escapedQ = q.replace(/%/g, "\\%").replace(/,/g, " ");
 
       if (inventoryIds.length > 0) {
