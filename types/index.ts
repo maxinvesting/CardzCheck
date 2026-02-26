@@ -50,6 +50,9 @@ export interface BusinessInventoryItem {
   status: "unlisted" | "listed" | "pending_sale" | "sold" | "returned";
   list_price_cents: number | null;
   current_market_value_cents: number | null;
+  user_image_url: string | null;
+  stock_image_url: string | null;
+  ebay_image_url: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;

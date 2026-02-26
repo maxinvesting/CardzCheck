@@ -26,6 +26,9 @@ type BusinessInventoryRow = {
   status: string | null;
   list_price_cents: number | null;
   current_market_value_cents: number | null;
+  user_image_url: string | null;
+  stock_image_url: string | null;
+  ebay_image_url: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string | null;
@@ -147,6 +150,9 @@ function toBusinessInventoryItem(row: BusinessInventoryRow): BusinessInventoryIt
     status: normalizeStatus(row.status),
     list_price_cents: row.list_price_cents ?? null,
     current_market_value_cents: row.current_market_value_cents ?? null,
+    user_image_url: row.user_image_url ?? null,
+    stock_image_url: row.stock_image_url ?? null,
+    ebay_image_url: row.ebay_image_url ?? null,
     notes: row.notes,
     created_at: row.created_at,
     updated_at: row.updated_at || row.created_at,
@@ -177,6 +183,9 @@ function buildInventoryInsertPayload(
     status: item.status ?? "unlisted",
     list_price_cents: item.list_price_cents ?? null,
     current_market_value_cents: item.current_market_value_cents ?? null,
+    user_image_url: (item as any).user_image_url || null,
+    stock_image_url: (item as any).stock_image_url || null,
+    ebay_image_url: (item as any).ebay_image_url || null,
     notes: item.notes || null,
   };
 }
@@ -215,6 +224,12 @@ function buildInventoryUpdatePayload(
   if (updates.current_market_value_cents !== undefined)
     payload.current_market_value_cents = updates.current_market_value_cents;
   if (updates.notes !== undefined) payload.notes = updates.notes;
+  if (updates.user_image_url !== undefined)
+    payload.user_image_url = updates.user_image_url;
+  if (updates.stock_image_url !== undefined)
+    payload.stock_image_url = updates.stock_image_url;
+  if (updates.ebay_image_url !== undefined)
+    payload.ebay_image_url = updates.ebay_image_url;
   return payload;
 }
 

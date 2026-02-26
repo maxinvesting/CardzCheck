@@ -280,14 +280,13 @@ export default function InventoryTable({
       return <span className="tabular-nums">{formatted}</span>;
     }
     if (field === "_view") {
-      if (!item.card_id) return null;
       return (
         <Link
-          href={`/cards/${item.card_id}`}
+          href={`/card/${item.id}?from=business`}
           onClick={(e) => e.stopPropagation()}
           className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium text-blue-400 hover:text-blue-300 hover:underline rounded"
         >
-          View
+          Profile
         </Link>
       );
     }
@@ -340,7 +339,7 @@ export default function InventoryTable({
     { key: "current_market_value_cents", label: "CMV", editable: true, width: "w-20 shrink-0", alignRight: true },
     { key: "location", label: "Storage", editable: true, width: "w-24 shrink-0" },
     { key: "acquisition_date", label: "Acquired", editable: true, width: "w-24 shrink-0" },
-    { key: "_view", label: "Card", editable: false, width: "w-20 shrink-0" },
+    { key: "_view", label: "Profile", editable: false, width: "w-20 shrink-0" },
     { key: "_grade", label: "", editable: false, width: "w-16 shrink-0" },
   ];
 
