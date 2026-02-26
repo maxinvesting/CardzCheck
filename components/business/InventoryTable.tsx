@@ -23,6 +23,54 @@ function emptyPlaceholder(field: string): string {
   }
 }
 
+const GRADER_GRADE_PATTERN = /^(PSA|BGS|SGC|CGC)\s*(\d+(?:\.\d+)?)$/i;
+const GRADER_PATTERN = /\b(PSA|BGS|SGC|CGC)\b/i;
+const WHOLE_GRADE_PATTERN = /^\d+(?:\.0)?$/;
+const HALF_GRADE_PATTERN = /^\d+\.5$/;
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function inferGradingCompany(gradeValue: string): string | null {
+  if (HALF_GRADE_PATTERN.test(gradeValue)) return "BGS";
+  if (WHOLE_GRADE_PATTERN.test(gradeValue)) return "PSA";
+  return null;
+}
+
+function buildDisplayTitle(item: BusinessInventoryItem): string {
+  const baseTitle = (item.title || "").trim();
+  if (!baseTitle) return baseTitle;
+
+  const rawGrade = item.grade?.trim() || "";
+  const rawGrader = item.grading_company?.trim() || "";
+  if (!rawGrade && !rawGrader) return baseTitle;
+  if (item.condition_status === "raw" || rawGrade.toLowerCase() === "raw") return baseTitle;
+
+  const parsed = rawGrade.match(GRADER_GRADE_PATTERN);
+  const parsedGrader = parsed?.[1]?.toUpperCase();
+  const parsedGrade = parsed?.[2];
+  const gradeValue = parsedGrade || rawGrade;
+  const grader = rawGrader
+    ? rawGrader.toUpperCase()
+    : parsedGrader || inferGradingCompany(gradeValue);
+  const gradeLabel = [grader, gradeValue].filter(Boolean).join(" ").trim();
+  if (!gradeLabel) return baseTitle;
+
+  if (new RegExp(`\\b${escapeRegExp(gradeLabel)}\\b`, "i").test(baseTitle)) {
+    return baseTitle;
+  }
+
+  if (gradeValue && grader && !GRADER_PATTERN.test(baseTitle)) {
+    const trailingGradePattern = new RegExp(`\\b${escapeRegExp(gradeValue)}\\s*$`, "i");
+    if (trailingGradePattern.test(baseTitle)) {
+      return baseTitle.replace(trailingGradePattern, gradeLabel);
+    }
+  }
+
+  return `${baseTitle} ${gradeLabel}`.replace(/\s+/g, " ").trim();
+}
+
 interface Props {
   items: BusinessInventoryItem[];
   /** Id of item currently open in detail drawer (for selected row highlight) */
@@ -31,6 +79,7 @@ interface Props {
   onInlineUpdate: (id: string, field: string, value: any) => void;
   onBulkAction: (action: string, ids: string[], payload?: any) => void;
   onDelete: (ids: string[]) => void;
+  onMarkSold?: (item: BusinessInventoryItem) => void;
   /** Called when filtered items change so parent can display filter-aware inventory value */
   onFilteredChange?: (filtered: BusinessInventoryItem[]) => void;
   /** Tighter row padding (Business mode) */
@@ -48,6 +97,7 @@ export default function InventoryTable({
   onInlineUpdate,
   onBulkAction,
   onDelete,
+  onMarkSold,
   onFilteredChange,
   dense = false,
 }: Props) {
@@ -100,7 +150,10 @@ export default function InventoryTable({
 
     if (search) {
       const q = search.toLowerCase();
-      result = result.filter((it) => it.title.toLowerCase().includes(q));
+      result = result.filter((it) =>
+        (it.title || "").toLowerCase().includes(q) ||
+        buildDisplayTitle(it).toLowerCase().includes(q)
+      );
     }
     if (filterStatus) result = result.filter((it) => it.status === filterStatus);
     if (filterChannel) result = result.filter((it) => it.channel === filterChannel);
@@ -133,15 +186,16 @@ export default function InventoryTable({
     setEditValue(currentValue?.toString() ?? "");
   };
 
-  const commitEdit = () => {
+  const commitEdit = (overrideValue?: string) => {
     if (!editingCell) return;
     const { id, field } = editingCell;
-    let value: any = editValue;
+    const nextValue = overrideValue ?? editValue;
+    let value: any = nextValue;
     if (field.endsWith("_cents")) {
-      const parsed = Math.round(parseFloat(editValue) * 100);
+      const parsed = Math.round(parseFloat(nextValue) * 100);
       value = Number.isNaN(parsed) ? 0 : parsed;
     } else if (field === "quantity") {
-      value = parseInt(editValue, 10) || 1;
+      value = parseInt(nextValue, 10) || 1;
     }
     onInlineUpdate(id, field, value);
     setEditingCell(null);
@@ -170,8 +224,13 @@ export default function InventoryTable({
         return (
           <select
             value={editValue}
-            onChange={(e) => setEditValue(e.target.value)}
-            onBlur={commitEdit}
+            onChange={(e) => {
+              const next = e.target.value;
+              setEditValue(next);
+              commitEdit(next);
+            }}
+            onBlur={() => setEditingCell(null)}
+            onClick={(e) => e.stopPropagation()}
             autoFocus
             className="w-full bg-gray-800 border border-emerald-500 rounded px-1 py-0.5 text-xs text-white"
           >
@@ -185,8 +244,13 @@ export default function InventoryTable({
         return (
           <select
             value={editValue}
-            onChange={(e) => setEditValue(e.target.value)}
-            onBlur={commitEdit}
+            onChange={(e) => {
+              const next = e.target.value;
+              setEditValue(next);
+              commitEdit(next);
+            }}
+            onBlur={() => setEditingCell(null)}
+            onClick={(e) => e.stopPropagation()}
             autoFocus
             className="w-full bg-gray-800 border border-emerald-500 rounded px-1 py-0.5 text-xs text-white"
           >
@@ -201,7 +265,7 @@ export default function InventoryTable({
           type="text"
           value={editValue}
           onChange={(e) => setEditValue(e.target.value)}
-          onBlur={commitEdit}
+          onBlur={() => commitEdit()}
           onKeyDown={(e) => {
             if (e.key === "Enter") commitEdit();
             if (e.key === "Escape") setEditingCell(null);
@@ -215,7 +279,7 @@ export default function InventoryTable({
     const val = (item as any)[field];
     if (field === "title") {
       const isWax = item.notes?.includes("[WAX]");
-      const titleStr = val ?? "";
+      const titleStr = buildDisplayTitle(item);
       const titleContent = (
         <>
           {isWax && (
@@ -306,6 +370,23 @@ export default function InventoryTable({
         </button>
       );
     }
+    if (field === "_actions") {
+      if (item.status === "sold") {
+        return <span className="text-[10px] text-gray-500">Recorded</span>;
+      }
+      return (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onMarkSold?.(item);
+          }}
+          className="rounded bg-emerald-900/50 px-2 py-0.5 text-[10px] font-medium text-emerald-300 hover:bg-emerald-800/60"
+        >
+          Mark Sold
+        </button>
+      );
+    }
     if (field === "location") {
       const str = val?.toString()?.trim() || "";
       if (!str) {
@@ -342,6 +423,7 @@ export default function InventoryTable({
     { key: "acquisition_date", label: "Acquired", editable: true, width: "w-24 shrink-0" },
     { key: "_view", label: "Card", editable: false, width: "w-20 shrink-0" },
     { key: "_grade", label: "", editable: false, width: "w-16 shrink-0" },
+    { key: "_actions", label: "", editable: false, width: "w-20 shrink-0" },
   ];
 
   return (
@@ -563,6 +645,12 @@ export default function InventoryTable({
                     key={col.key}
                     className={`px-2 ${dense ? "py-0.5" : "py-1"} text-gray-300 ${col.width} ${col.alignRight ? "text-right tabular-nums" : ""}`}
                     onClick={() => {
+                      if (col.key === "_actions" || col.key === "_grade" || col.key === "_view") {
+                        return;
+                      }
+                      if (editingCell?.id === item.id && editingCell?.field === col.key) {
+                        return;
+                      }
                       if (col.editable) {
                         const val = (item as any)[col.key];
                         const displayVal = col.key.endsWith("_cents") && val !== null

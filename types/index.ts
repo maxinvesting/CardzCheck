@@ -59,18 +59,26 @@ export interface BusinessInventoryItem {
 export interface BusinessSale {
   id: string;
   user_id: string;
-  inventory_item_id: string;
-  sale_date: string;
-  sale_price_cents: number;
+  business_id: string;
+  inventory_item_id: string | null;
+  channel: "ebay" | "whatnot" | "instagram" | "show" | "local" | "other";
+  sold_at: string;
+  sold_price_cents: number;
   platform_fees_cents: number;
   shipping_charged_cents: number;
-  shipping_paid_cents: number;
-  other_costs_cents: number;
-  net_proceeds_cents: number;
+  shipping_cost_cents: number;
+  tax_cents: number;
+  net_payout_cents: number;
+  cogs_cents: number;
+  gross_revenue_cents: number;
   profit_cents: number;
-  order_id: string | null;
-  buyer_handle: string | null;
+  external_order_id: string | null;
   notes: string | null;
+  is_deleted: boolean;
+  inventory_item?: {
+    id: string;
+    title: string;
+  } | null;
   created_at: string;
   updated_at: string;
 }
@@ -80,6 +88,8 @@ export interface BusinessMetrics {
   revenueYtd: number;
   profitMtd: number;
   profitYtd: number;
+  salesCountMtd: number;
+  salesCountYtd: number;
   activeInventoryCount: number;
 }
 

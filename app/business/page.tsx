@@ -9,6 +9,8 @@ import BusinessMetrics from "@/components/business/BusinessMetrics";
 import BusinessAnalystPreviewCard from "@/components/business/BusinessAnalystPreviewCard";
 import InventoryTable from "@/components/business/InventoryTable";
 import ItemDetailDrawer from "@/components/business/ItemDetailDrawer";
+import SalesTable, { type SalesFilters } from "@/components/business/SalesTable";
+import SaleFormModal from "@/components/business/SaleFormModal";
 import AddInventoryModal from "@/components/business/AddInventoryModal";
 import AddWaxModal from "@/components/business/AddWaxModal";
 import AddCardToInventoryModal from "@/components/business/AddCardToInventoryModal";
@@ -18,7 +20,11 @@ import AddCardModalNew from "@/components/AddCardModalNew";
 import CardPickerModal from "@/components/CardPickerModal";
 import type { CardPickerSelection } from "@/components/CardPicker";
 import { createClient } from "@/lib/supabase/client";
-import type { BusinessInventoryItem, BusinessMetrics as MetricsType } from "@/types";
+import type {
+  BusinessInventoryItem,
+  BusinessMetrics as MetricsType,
+  BusinessSale,
+} from "@/types";
 import {
   computeInventoryValueSummary,
   type InventoryValueSummary,
@@ -44,6 +50,17 @@ function persistEbayStoreUrl(value: string | null) {
   }
 }
 
+function defaultSalesFilters(): SalesFilters {
+  const now = new Date();
+  const from = new Date(now.getTime() - 29 * 24 * 60 * 60 * 1000);
+  return {
+    from: from.toISOString().slice(0, 10),
+    to: now.toISOString().slice(0, 10),
+    channel: "",
+    search: "",
+  };
+}
+
 function BusinessPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -67,6 +84,16 @@ function BusinessPageContent() {
   const [needsMigration, setNeedsMigration] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [filteredItems, setFilteredItems] = useState<BusinessInventoryItem[]>([]);
+  const [activeTab, setActiveTab] = useState<"inventory" | "sales">("inventory");
+  const [markSoldItem, setMarkSoldItem] = useState<BusinessInventoryItem | null>(null);
+  const [sales, setSales] = useState<BusinessSale[]>([]);
+  const [salesLoading, setSalesLoading] = useState(false);
+  const [salesFilters, setSalesFilters] = useState<SalesFilters>(() =>
+    defaultSalesFilters()
+  );
+  const [salesPage, setSalesPage] = useState(1);
+  const [salesPageSize] = useState(50);
+  const [salesTotal, setSalesTotal] = useState(0);
 
   const inventorySummary = useMemo((): InventoryValueSummary | null => {
     const list = filteredItems.length > 0 ? filteredItems : items;
@@ -136,10 +163,18 @@ function BusinessPageContent() {
   const loadMetrics = useCallback(async () => {
     setMetricsLoading(true);
     try {
-      const res = await fetch("/api/business/metrics", { cache: "no-store" });
+      const res = await fetch("/api/business/kpis?range=mtd", { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
-        setMetrics(data);
+        setMetrics({
+          revenueMtd: data.revenue_mtd_cents ?? 0,
+          revenueYtd: data.revenue_ytd_cents ?? 0,
+          profitMtd: data.profit_mtd_cents ?? 0,
+          profitYtd: data.profit_ytd_cents ?? 0,
+          salesCountMtd: data.sales_count_mtd ?? 0,
+          salesCountYtd: data.sales_count_ytd ?? 0,
+          activeInventoryCount: data.active_inventory_count ?? 0,
+        });
       }
     } catch {
       // ignore
@@ -147,6 +182,31 @@ function BusinessPageContent() {
       setMetricsLoading(false);
     }
   }, []);
+
+  const loadSales = useCallback(async () => {
+    setSalesLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set("from", salesFilters.from);
+      params.set("to", salesFilters.to);
+      params.set("page", String(salesPage));
+      params.set("page_size", String(salesPageSize));
+      if (salesFilters.channel) params.set("channel", salesFilters.channel);
+      if (salesFilters.search.trim()) params.set("search", salesFilters.search.trim());
+
+      const res = await fetch(`/api/business/sales?${params.toString()}`, {
+        cache: "no-store",
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setSales(data.sales ?? []);
+      setSalesTotal(data.total ?? 0);
+    } catch {
+      // ignore
+    } finally {
+      setSalesLoading(false);
+    }
+  }, [salesFilters, salesPage, salesPageSize]);
 
   const loadUserProfile = useCallback(async () => {
     const supabase = createClient();
@@ -223,6 +283,11 @@ function BusinessPageContent() {
     init();
   }, [router, loadUserProfile, loadInventory, loadMetrics]);
 
+  useEffect(() => {
+    if (activeTab !== "sales" || hasAccess === false || needsMigration) return;
+    loadSales();
+  }, [activeTab, hasAccess, needsMigration, loadSales]);
+
   // Refetch user profile when returning to the tab (e.g. after adding store link in Settings)
   useEffect(() => {
     const handler = () => {
@@ -262,6 +327,14 @@ function BusinessPageContent() {
       if (res.ok) {
         const updated = await res.json();
         setItems((prev) => prev.map((it) => (it.id === id ? updated : it)));
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setToast({
+          type: "error",
+          message:
+            (typeof data?.error === "string" && data.error) ||
+            `Failed to update ${field}`,
+        });
       }
     } catch {
       setToast({ type: "error", message: "Failed to update item" });
@@ -349,21 +422,89 @@ function BusinessPageContent() {
     }
   };
 
-  const handleAddSale = async (sale: any) => {
+  const handleMarkSold = (item: BusinessInventoryItem) => {
+    setMarkSoldItem(item);
+  };
+
+  const handleCreateSale = async (sale: Record<string, unknown>) => {
+    const inventoryId = (sale.inventory_item_id as string | null) || null;
+    let previousItem: BusinessInventoryItem | null = null;
+    if (inventoryId) {
+      previousItem = items.find((it) => it.id === inventoryId) || null;
+      setItems((prev) =>
+        prev.map((it) =>
+          it.id === inventoryId
+            ? { ...it, status: "sold" as BusinessInventoryItem["status"] }
+            : it
+        )
+      );
+    }
+
     try {
       const res = await fetch("/api/business/sales", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(sale),
       });
-      if (res.ok) {
-        setToast({ type: "success", message: "Sale recorded" });
-        loadInventory();
-        loadMetrics();
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (previousItem) {
+          setItems((prev) =>
+            prev.map((it) => (it.id === previousItem!.id ? previousItem! : it))
+          );
+        }
+        setToast({
+          type: "error",
+          message: data.error || "Failed to record sale",
+        });
+        return;
       }
+
+      setToast({ type: "success", message: "Sale recorded" });
+      setSalesPage(1);
+      if (activeTab === "sales") {
+        loadSales();
+      }
+      loadInventory();
+      loadMetrics();
     } catch {
+      if (previousItem) {
+        setItems((prev) =>
+          prev.map((it) => (it.id === previousItem!.id ? previousItem! : it))
+        );
+      }
       setToast({ type: "error", message: "Failed to record sale" });
     }
+  };
+
+  const handleUpdateSale = async (
+    saleId: string,
+    updates: Record<string, unknown>
+  ) => {
+    const res = await fetch(`/api/business/sales/${saleId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updates),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "Failed to update sale");
+    }
+    setToast({ type: "success", message: "Sale updated" });
+    await Promise.all([loadSales(), loadMetrics(), loadInventory()]);
+  };
+
+  const handleDeleteSale = async (saleId: string) => {
+    const res = await fetch(`/api/business/sales/${saleId}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "Failed to delete sale");
+    }
+    setToast({ type: "success", message: "Sale deleted" });
+    await Promise.all([loadSales(), loadMetrics(), loadInventory()]);
   };
 
   const handleCardAdded = (playerName: string) => {
@@ -381,6 +522,7 @@ function BusinessPageContent() {
       set_name: card.set_name,
       parallel_type: card.variant,
       card_number: card.card_number,
+      grader: card.grader,
       grade: card.grade,
       quantity: card.quantity,
     });
@@ -561,7 +703,36 @@ function BusinessPageContent() {
           compact
         />
 
-        {!needsMigration && <BusinessAnalystPreviewCard items={items} />}
+        {!needsMigration && activeTab === "inventory" && (
+          <BusinessAnalystPreviewCard items={items} />
+        )}
+
+        {!needsMigration && (
+          <div className="mb-2 flex items-center gap-1 border-b border-gray-800">
+            <button
+              type="button"
+              onClick={() => setActiveTab("inventory")}
+              className={`border-b-2 px-3 py-1.5 text-xs font-medium transition-colors ${
+                activeTab === "inventory"
+                  ? "border-emerald-500 text-emerald-400"
+                  : "border-transparent text-gray-500 hover:text-gray-300"
+              }`}
+            >
+              Inventory
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("sales")}
+              className={`border-b-2 px-3 py-1.5 text-xs font-medium transition-colors ${
+                activeTab === "sales"
+                  ? "border-emerald-500 text-emerald-400"
+                  : "border-transparent text-gray-500 hover:text-gray-300"
+              }`}
+            >
+              Sales
+            </button>
+          </div>
+        )}
 
         {/* Migration banner (shown when database tables haven't been created) */}
         {needsMigration && (
@@ -576,7 +747,7 @@ function BusinessPageContent() {
         )}
 
         {/* Inventory Table */}
-        {!needsMigration && (
+        {!needsMigration && activeTab === "inventory" && (
           <InventoryTable
             items={items}
             selectedItemId={selectedItem?.id ?? null}
@@ -584,8 +755,27 @@ function BusinessPageContent() {
             onInlineUpdate={handleInlineUpdate}
             onBulkAction={handleBulkAction}
             onDelete={handleDelete}
+            onMarkSold={handleMarkSold}
             onFilteredChange={handleFilteredChange}
             dense
+          />
+        )}
+
+        {!needsMigration && activeTab === "sales" && (
+          <SalesTable
+            sales={sales}
+            loading={salesLoading}
+            filters={salesFilters}
+            onFiltersChange={(next) => {
+              setSalesFilters(next);
+              setSalesPage(1);
+            }}
+            onEditSale={handleUpdateSale}
+            onDeleteSale={handleDeleteSale}
+            page={salesPage}
+            pageSize={salesPageSize}
+            total={salesTotal}
+            onPageChange={(next) => setSalesPage(next)}
           />
         )}
 
@@ -595,7 +785,6 @@ function BusinessPageContent() {
             item={selectedItem}
             onClose={() => setSelectedItem(null)}
             onSave={handleSaveItem}
-            onAddSale={handleAddSale}
           />
         )}
 
@@ -647,6 +836,28 @@ function BusinessPageContent() {
           isOpen={showAddWaxModal}
           onClose={() => setShowAddWaxModal(false)}
           onAdd={handleAddWax}
+        />
+
+        <SaleFormModal
+          isOpen={Boolean(markSoldItem)}
+          title={markSoldItem ? `Mark as sold: ${markSoldItem.title}` : "Mark as sold"}
+          submitLabel="Record sale"
+          defaults={
+            markSoldItem
+              ? {
+                  inventory_item_id: markSoldItem.id,
+                  channel: markSoldItem.channel,
+                  sold_at: new Date().toISOString(),
+                  cogs_cents: markSoldItem.cost_basis_total_cents,
+                }
+              : undefined
+          }
+          onClose={() => setMarkSoldItem(null)}
+          onSubmit={async (payload) => {
+            await handleCreateSale(payload as unknown as Record<string, unknown>);
+            setMarkSoldItem(null);
+          }}
+          showCogsField={false}
         />
 
         {/* Toast */}

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import type { BusinessInventoryItem, BusinessSale } from "@/types";
+import type { BusinessInventoryItem } from "@/types";
 import type { GradeEstimatorCardInput } from "@/lib/grade-estimator/value";
 import GradeProbabilityPanel from "@/components/grading/GradeProbabilityPanel";
 import GradeEstimateProgressPanel from "@/components/grading/GradeEstimateProgressPanel";
@@ -18,7 +18,6 @@ interface Props {
   item: BusinessInventoryItem | null;
   onClose: () => void;
   onSave: (id: string, updates: Partial<BusinessInventoryItem>) => void;
-  onAddSale: (sale: any) => void;
 }
 
 const STATUS_OPTIONS = ["unlisted", "listed", "pending_sale", "sold", "returned"] as const;
@@ -29,24 +28,9 @@ export default function ItemDetailDrawer({
   item,
   onClose,
   onSave,
-  onAddSale,
 }: Props) {
   const [form, setForm] = useState<Record<string, any>>({});
-  const [sales, setSales] = useState<BusinessSale[]>([]);
-  const [salesLoading, setSalesLoading] = useState(false);
   const [cmvLoading, setCmvLoading] = useState(false);
-  const [showSaleForm, setShowSaleForm] = useState(false);
-  const [saleForm, setSaleForm] = useState({
-    sale_date: new Date().toISOString().slice(0, 10),
-    sale_price: "",
-    platform_fees: "",
-    shipping_charged: "",
-    shipping_paid: "",
-    other_costs: "",
-    order_id: "",
-    buyer_handle: "",
-    notes: "",
-  });
   const [cardForGrade, setCardForGrade] = useState<{
     imageUrls: string[];
     cardIdentity: GradeEstimatorCardInput;
@@ -76,26 +60,6 @@ export default function ItemDetailDrawer({
       notes: item.notes ?? "",
     });
   }, [item]);
-
-  const loadSales = useCallback(async () => {
-    if (!item) return;
-    setSalesLoading(true);
-    try {
-      const res = await fetch(
-        `/api/business/sales?inventory_item_id=${item.id}`
-      );
-      const data = await res.json();
-      setSales(data.sales ?? []);
-    } catch {
-      // ignore
-    } finally {
-      setSalesLoading(false);
-    }
-  }, [item]);
-
-  useEffect(() => {
-    loadSales();
-  }, [loadSales]);
 
   useEffect(() => {
     if (!item?.card_id) {
@@ -201,39 +165,6 @@ export default function ItemDetailDrawer({
     } finally {
       setCmvLoading(false);
     }
-  };
-
-  const handleAddSale = () => {
-    const toCents = (val: string) => {
-      const n = parseFloat(val);
-      return Number.isNaN(n) ? 0 : Math.round(n * 100);
-    };
-
-    onAddSale({
-      inventory_item_id: item.id,
-      sale_date: saleForm.sale_date,
-      sale_price_cents: toCents(saleForm.sale_price),
-      platform_fees_cents: toCents(saleForm.platform_fees),
-      shipping_charged_cents: toCents(saleForm.shipping_charged),
-      shipping_paid_cents: toCents(saleForm.shipping_paid),
-      other_costs_cents: toCents(saleForm.other_costs),
-      order_id: saleForm.order_id || null,
-      buyer_handle: saleForm.buyer_handle || null,
-      notes: saleForm.notes || null,
-    });
-    setShowSaleForm(false);
-    setSaleForm({
-      sale_date: new Date().toISOString().slice(0, 10),
-      sale_price: "",
-      platform_fees: "",
-      shipping_charged: "",
-      shipping_paid: "",
-      other_costs: "",
-      order_id: "",
-      buyer_handle: "",
-      notes: "",
-    });
-    setTimeout(loadSales, 500);
   };
 
   const field = (
@@ -385,168 +316,9 @@ export default function ItemDetailDrawer({
             </button>
           </div>
 
-          {/* Sales section */}
-          <div className="mt-8 pt-6 border-t border-gray-800">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-md font-semibold text-white">Sales History</h3>
-              <button
-                onClick={() => setShowSaleForm(!showSaleForm)}
-                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm rounded-lg font-medium"
-              >
-                + Add Sale
-              </button>
-            </div>
-
-            {showSaleForm && (
-              <div className="mb-4 p-4 bg-gray-900 border border-gray-800 rounded-lg space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs text-gray-400 mb-1">Sale Date</label>
-                    <input
-                      type="date"
-                      value={saleForm.sale_date}
-                      onChange={(e) => setSaleForm({ ...saleForm, sale_date: e.target.value })}
-                      className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-400 mb-1">Sale Price ($)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={saleForm.sale_price}
-                      onChange={(e) => setSaleForm({ ...saleForm, sale_price: e.target.value })}
-                      className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-white"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs text-gray-400 mb-1">Platform Fees ($)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={saleForm.platform_fees}
-                      onChange={(e) => setSaleForm({ ...saleForm, platform_fees: e.target.value })}
-                      className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-400 mb-1">Shipping Charged ($)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={saleForm.shipping_charged}
-                      onChange={(e) => setSaleForm({ ...saleForm, shipping_charged: e.target.value })}
-                      className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-white"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs text-gray-400 mb-1">Shipping Paid ($)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={saleForm.shipping_paid}
-                      onChange={(e) => setSaleForm({ ...saleForm, shipping_paid: e.target.value })}
-                      className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-400 mb-1">Other Costs ($)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={saleForm.other_costs}
-                      onChange={(e) => setSaleForm({ ...saleForm, other_costs: e.target.value })}
-                      className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-white"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs text-gray-400 mb-1">Order ID</label>
-                    <input
-                      type="text"
-                      value={saleForm.order_id}
-                      onChange={(e) => setSaleForm({ ...saleForm, order_id: e.target.value })}
-                      className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-400 mb-1">Buyer</label>
-                    <input
-                      type="text"
-                      value={saleForm.buyer_handle}
-                      onChange={(e) => setSaleForm({ ...saleForm, buyer_handle: e.target.value })}
-                      className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-white"
-                    />
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleAddSale}
-                    className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm rounded font-medium"
-                  >
-                    Save Sale
-                  </button>
-                  <button
-                    onClick={() => setShowSaleForm(false)}
-                    className="px-4 py-1.5 text-gray-400 hover:text-white text-sm"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {salesLoading ? (
-              <div className="text-sm text-gray-500">Loading sales...</div>
-            ) : sales.length === 0 ? (
-              <p className="text-sm text-gray-500">No sales recorded yet.</p>
-            ) : (
-              <div className="space-y-2">
-                {sales.map((s) => (
-                  <div
-                    key={s.id}
-                    className="p-3 bg-gray-900 border border-gray-800 rounded-lg flex items-center justify-between"
-                  >
-                    <div>
-                      <p className="text-sm text-white font-medium">
-                        {new Intl.NumberFormat("en-US", {
-                          style: "currency",
-                          currency: "USD",
-                        }).format(s.sale_price_cents / 100)}
-                      </p>
-                      <p className="text-xs text-gray-400">
-                        {s.sale_date} · Net{" "}
-                        {new Intl.NumberFormat("en-US", {
-                          style: "currency",
-                          currency: "USD",
-                        }).format(s.net_proceeds_cents / 100)}
-                      </p>
-                    </div>
-                    <span
-                      className={`text-sm font-medium ${
-                        s.profit_cents >= 0 ? "text-emerald-400" : "text-red-400"
-                      }`}
-                    >
-                      {s.profit_cents >= 0 ? "+" : ""}
-                      {new Intl.NumberFormat("en-US", {
-                        style: "currency",
-                        currency: "USD",
-                      }).format(s.profit_cents / 100)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
           {/* Grade probability */}
           <div className="mt-8 pt-6 border-t border-gray-800" id="grade-probability-block">
-            <h3 className="text-md font-semibold text-white mb-3">{gradingCopy.title}</h3>
+            <h3 className="text-md font-semibold text-white mb-3">{gradingCopy.page.title}</h3>
             {!item.card_id ? (
               <p className="text-xs text-gray-500">
                 Grade probability is available for items linked to a card with photos. Add this item from a card in your collection to enable it.

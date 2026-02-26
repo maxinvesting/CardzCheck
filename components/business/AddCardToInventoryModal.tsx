@@ -8,6 +8,7 @@ export interface PendingInventoryCard {
   set_name?: string;
   parallel_type?: string;
   card_number?: string;
+  grader?: string;
   grade?: string;
   imageUrl?: string;
   quantity?: number;
@@ -23,10 +24,72 @@ interface Props {
 const CHANNEL_OPTIONS = ["ebay", "whatnot", "instagram", "show", "local", "other"] as const;
 const STATUS_OPTIONS = ["unlisted", "listed", "pending_sale", "sold", "returned"] as const;
 const ACQ_OPTIONS = ["buy", "trade", "rip", "consignment", "other"] as const;
+const GRADER_GRADE_PATTERN = /^(PSA|BGS|SGC|CGC)\s*(\d+(?:\.\d+)?)$/i;
+const WHOLE_GRADE_PATTERN = /^\d+(?:\.0)?$/;
+const HALF_GRADE_PATTERN = /^\d+\.5$/;
+
+function inferGradingCompany(gradeValue: string): string | null {
+  if (HALF_GRADE_PATTERN.test(gradeValue)) return "BGS";
+  if (WHOLE_GRADE_PATTERN.test(gradeValue)) return "PSA";
+  return null;
+}
+
+function resolveGradeFields(card: PendingInventoryCard): {
+  conditionStatus: "raw" | "graded";
+  gradingCompany: string | null;
+  gradeValue: string | null;
+  gradeLabel: string | null;
+} {
+  const rawGrader = card.grader?.trim() || "";
+  const rawGrade = card.grade?.trim() || "";
+  const graderUpper = rawGrader ? rawGrader.toUpperCase() : "";
+
+  if (graderUpper === "RAW" || rawGrade.toLowerCase() === "raw") {
+    return {
+      conditionStatus: "raw",
+      gradingCompany: null,
+      gradeValue: null,
+      gradeLabel: null,
+    };
+  }
+
+  const parsed = rawGrade.match(GRADER_GRADE_PATTERN);
+  const parsedGrader = parsed?.[1]?.toUpperCase();
+  const parsedGradeValue = parsed?.[2];
+  const normalizedGradeValue = parsedGradeValue || rawGrade || "";
+
+  const gradingCompany =
+    graderUpper && graderUpper !== "RAW"
+      ? graderUpper
+      : parsedGrader || inferGradingCompany(normalizedGradeValue) || null;
+  const gradeValue = normalizedGradeValue || null;
+
+  if (!gradingCompany && !gradeValue) {
+    return {
+      conditionStatus: "raw",
+      gradingCompany: null,
+      gradeValue: null,
+      gradeLabel: null,
+    };
+  }
+
+  const gradeLabel = [gradingCompany, gradeValue]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+
+  return {
+    conditionStatus: "graded",
+    gradingCompany,
+    gradeValue,
+    gradeLabel: gradeLabel || null,
+  };
+}
 
 function buildTitle(card: PendingInventoryCard): string {
+  const grade = resolveGradeFields(card);
   return (
-    [card.year, card.player_name, card.set_name, card.parallel_type, card.grade]
+    [card.year, card.player_name, card.set_name, card.parallel_type, grade.gradeLabel]
       .filter(Boolean)
       .join(" ")
       .trim() || card.player_name
@@ -64,7 +127,8 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
     const q = new URLSearchParams({ player: card.player_name });
     if (card.year) q.set("year", card.year);
     if (card.set_name) q.set("set", card.set_name);
-    if (card.grade) q.set("grade", card.grade);
+    const grade = resolveGradeFields(card);
+    if (grade.gradeLabel) q.set("grade", grade.gradeLabel);
     if (card.card_number) q.set("card_number", card.card_number);
     if (card.parallel_type) q.set("parallel_type", card.parallel_type);
     fetch(`/api/search?${q.toString()}`)
@@ -85,7 +149,7 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
         }
       })
       .finally(() => setCmvLoading(false));
-  }, [isOpen, card?.player_name, card?.year, card?.set_name, card?.grade, card?.card_number, card?.parallel_type]);
+  }, [isOpen, card?.player_name, card?.year, card?.set_name, card?.grader, card?.grade, card?.card_number, card?.parallel_type]);
 
   if (!isOpen || !card) return null;
 
@@ -95,6 +159,7 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
   };
 
   const title = buildTitle(card);
+  const gradeFields = resolveGradeFields(card);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -116,8 +181,9 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
           tax_cents: toCents(form.tax),
           shipping_cents: toCents(form.shipping),
           fees_paid_cents: toCents(form.fees_paid),
-          condition_status: card.grade && card.grade.toLowerCase() !== "raw" ? "graded" : "raw",
-          grade: card.grade || null,
+          condition_status: gradeFields.conditionStatus,
+          grading_company: gradeFields.gradingCompany,
+          grade: gradeFields.gradeValue,
           channel: form.channel,
           status: form.status,
           list_price_cents: form.list_price ? toCents(form.list_price) : null,
@@ -237,8 +303,8 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
               {card.parallel_type && (
                 <p className="text-xs text-emerald-400">{card.parallel_type}</p>
               )}
-              {card.grade && (
-                <p className="text-xs text-blue-400 font-medium">{card.grade}</p>
+              {gradeFields.gradeLabel && (
+                <p className="text-xs text-blue-400 font-medium">{gradeFields.gradeLabel}</p>
               )}
             </div>
           </div>

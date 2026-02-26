@@ -41,18 +41,22 @@ function makeSale(
   return {
     id,
     user_id: "user-1",
+    business_id: "user-1",
     inventory_item_id: "inv-1",
-    sale_date: "2026-02-15",
-    sale_price_cents: 20000,
+    channel: "ebay",
+    sold_at: "2026-02-15T00:00:00.000Z",
+    sold_price_cents: 20000,
     platform_fees_cents: 2500,
     shipping_charged_cents: 800,
-    shipping_paid_cents: 1200,
-    other_costs_cents: 0,
-    net_proceeds_cents: 17100,
+    shipping_cost_cents: 1200,
+    tax_cents: 0,
+    net_payout_cents: 17100,
+    cogs_cents: 12600,
+    gross_revenue_cents: 20800,
     profit_cents: 4500,
-    order_id: null,
-    buyer_handle: null,
+    external_order_id: null,
     notes: null,
+    is_deleted: false,
     created_at: "2026-02-15T00:00:00.000Z",
     updated_at: "2026-02-15T00:00:00.000Z",
     ...overrides,
@@ -62,10 +66,12 @@ function makeSale(
 describe("buildBusinessConsultantContext", () => {
   it("builds deterministic inventory and sales summaries", () => {
     const metrics: BusinessMetrics = {
-      revenueMtd: 20000,
-      revenueYtd: 20000,
+      revenueMtd: 20800,
+      revenueYtd: 20800,
       profitMtd: 4500,
       profitYtd: 4500,
+      salesCountMtd: 1,
+      salesCountYtd: 1,
       activeInventoryCount: 2,
     };
 
@@ -85,7 +91,7 @@ describe("buildBusinessConsultantContext", () => {
     expect(context.pricing_coverage.active_missing_cmv_count).toBe(1);
     expect(context.category_distribution.wax_count).toBe(1);
     expect(context.sales_summary.total_sales).toBe(1);
-    expect(context.sales_summary.fee_burden_pct).toBe(12.5);
+    expect(context.sales_summary.fee_burden_pct).toBe(12);
     expect(context.sales_summary.shipping_impact_cents).toBe(400);
   });
 });

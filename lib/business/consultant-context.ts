@@ -64,13 +64,14 @@ export interface BusinessConsultantContext {
     negative_profit_sales_count: number;
   };
   recent_sales: Array<{
-    sale_date: string;
-    sale_price_cents: number;
+    sold_at: string;
+    sold_price_cents: number;
     platform_fees_cents: number;
-    shipping_paid_cents: number;
+    shipping_cost_cents: number;
     shipping_charged_cents: number;
+    cogs_cents: number;
     profit_cents: number;
-    net_proceeds_cents: number;
+    net_payout_cents: number;
   }>;
   business_metrics: BusinessMetrics;
 }
@@ -247,9 +248,12 @@ export function buildBusinessConsultantContext(args: {
     })
     .slice(0, 12);
 
-  const revenueCents = sales.reduce((acc, sale) => acc + sale.sale_price_cents, 0);
-  const netProceedsCents = sales.reduce(
-    (acc, sale) => acc + sale.net_proceeds_cents,
+  const revenueCents = sales.reduce(
+    (acc, sale) => acc + sale.sold_price_cents + sale.shipping_charged_cents,
+    0
+  );
+  const netPayoutCents = sales.reduce(
+    (acc, sale) => acc + sale.net_payout_cents,
     0
   );
   const profitCents = sales.reduce((acc, sale) => acc + sale.profit_cents, 0);
@@ -258,12 +262,13 @@ export function buildBusinessConsultantContext(args: {
     0
   );
   const shippingImpactCents = sales.reduce(
-    (acc, sale) => acc + sale.shipping_paid_cents - sale.shipping_charged_cents,
+    (acc, sale) => acc + sale.shipping_cost_cents - sale.shipping_charged_cents,
     0
   );
   const lowMarginSalesCount = sales.filter((sale) => {
-    if (sale.sale_price_cents <= 0) return false;
-    return sale.profit_cents / sale.sale_price_cents < 0.1;
+    const gross = sale.sold_price_cents + sale.shipping_charged_cents;
+    if (gross <= 0) return false;
+    return sale.profit_cents / gross < 0.1;
   }).length;
   const negativeProfitSalesCount = sales.filter(
     (sale) => sale.profit_cents < 0
@@ -313,7 +318,7 @@ export function buildBusinessConsultantContext(args: {
     sales_summary: {
       total_sales: sales.length,
       revenue_cents: revenueCents,
-      net_proceeds_cents: netProceedsCents,
+      net_proceeds_cents: netPayoutCents,
       profit_cents: profitCents,
       average_margin_pct:
         revenueCents > 0 ? roundToOneDecimal((profitCents / revenueCents) * 100) : null,
@@ -326,13 +331,14 @@ export function buildBusinessConsultantContext(args: {
       negative_profit_sales_count: negativeProfitSalesCount,
     },
     recent_sales: sales.slice(0, 20).map((sale) => ({
-      sale_date: sale.sale_date,
-      sale_price_cents: sale.sale_price_cents,
+      sold_at: sale.sold_at,
+      sold_price_cents: sale.sold_price_cents,
       platform_fees_cents: sale.platform_fees_cents,
-      shipping_paid_cents: sale.shipping_paid_cents,
+      shipping_cost_cents: sale.shipping_cost_cents,
       shipping_charged_cents: sale.shipping_charged_cents,
+      cogs_cents: sale.cogs_cents,
       profit_cents: sale.profit_cents,
-      net_proceeds_cents: sale.net_proceeds_cents,
+      net_payout_cents: sale.net_payout_cents,
     })),
     business_metrics: metrics,
   };

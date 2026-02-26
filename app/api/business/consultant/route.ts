@@ -117,7 +117,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const [inventory, sales, metrics] = await Promise.all([
+    const [inventory, salesResult, metrics] = await Promise.all([
       listInventory(user.id),
       listSales(user.id),
       getBusinessMetrics(user.id),
@@ -125,7 +125,7 @@ export async function POST(request: NextRequest) {
 
     const businessContext = buildBusinessConsultantContext({
       inventory,
-      sales,
+      sales: salesResult.sales,
       metrics,
     });
 

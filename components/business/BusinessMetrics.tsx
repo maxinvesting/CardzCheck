@@ -53,6 +53,16 @@ export default function BusinessMetrics({
         metrics && metrics.profitYtd >= 0 ? "text-emerald-400" : "text-red-400",
     },
     {
+      label: "Sales MTD",
+      value: metrics ? String(metrics.salesCountMtd) : "—",
+      color: "text-white",
+    },
+    {
+      label: "Sales YTD",
+      value: metrics ? String(metrics.salesCountYtd) : "—",
+      color: "text-white",
+    },
+    {
       label: "Active Inventory",
       value: metrics ? String(metrics.activeInventoryCount) : "—",
       color: "text-white",
@@ -103,7 +113,7 @@ export default function BusinessMetrics({
     ) : null;
 
   return (
-    <div className={`grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 ${compact ? "gap-2 mb-2" : "gap-2.5 mb-3"}`}>
+    <div className={`grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 ${compact ? "gap-2 mb-2" : "gap-2.5 mb-3"}`}>
       {cards.map((c) => (
         <div
           key={c.label}
