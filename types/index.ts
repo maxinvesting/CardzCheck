@@ -283,6 +283,57 @@ export interface SearchResult {
 }
 
 // Grade estimation from AI analysis
+export type GradeFindingIssueType =
+  | "scratch"
+  | "scuff"
+  | "print_line"
+  | "dent"
+  | "dimple"
+  | "stain"
+  | "smudge"
+  | "foil_roll"
+  | "chipping"
+  | "rough_cut"
+  | "whitening"
+  | "corner_wear"
+  | "edge_wear"
+  | "other";
+
+export interface GradeFinding {
+  issue_type: GradeFindingIssueType;
+  location: string;
+  severity_0_3: number;
+  confidence_0_100: number;
+  notes: string;
+}
+
+export interface GradeImageQuality {
+  overall_image_score: number;
+  subscores: {
+    focus_sharpness: number;
+    lighting_glare_control: number;
+    coverage_angles: number;
+    resolution_distance: number;
+  };
+  key_issues: string[];
+  retake_tips: string[];
+}
+
+export interface GradeEstimateConfidence {
+  overall_confidence_score: number;
+  confidence_label: "high" | "medium" | "low";
+  limiting_factors: string[];
+  what_was_clear: string[];
+}
+
+export interface GradeEstimateCenteringDetail {
+  left_right_ratio: string;
+  top_bottom_ratio: string;
+  centering_confidence_score: number;
+  centering_severity_0_3: number;
+  centering_notes: string;
+}
+
 export interface GradeEstimate {
   estimated_grade_low: number;
   estimated_grade_high: number;
@@ -291,6 +342,12 @@ export interface GradeEstimate {
   surface: string;
   edges: string;
   grade_notes: string;
+  image_quality?: GradeImageQuality;
+  confidence?: GradeEstimateConfidence;
+  centering_detail?: GradeEstimateCenteringDetail;
+  surface_findings?: GradeFinding[];
+  corners_findings?: GradeFinding[];
+  edges_findings?: GradeFinding[];
   grade_probabilities?: GradeProbabilities;
   analysis_status?: "ok" | "low_confidence" | "unable";
   analysis_reason?: string;
@@ -506,6 +563,13 @@ export interface CardIdentificationResult extends SearchFormData {
   confirmedYear?: string;
   // gradeEstimate removed - only available via explicit grade-estimate API
 }
+
+export type CardImageFields = {
+  image_url?: string;
+  user_image_url?: string;
+  stock_image_url?: string;
+  ebay_image_url?: string;
+};
 
 export type AcquisitionType =
   | "pulled"

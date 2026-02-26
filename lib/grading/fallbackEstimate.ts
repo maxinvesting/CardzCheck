@@ -1,4 +1,11 @@
-import type { GradeEstimate, GradeProbabilities } from "@/types";
+import type {
+  GradeEstimate,
+  GradeProbabilities,
+  GradeFinding,
+  GradeImageQuality,
+  GradeEstimateConfidence,
+  GradeEstimateCenteringDetail,
+} from "@/types";
 import { distributionFromRange, type GradeOutcome } from "./gradeProbability";
 
 export type GradeEstimateStatus = "ok" | "low_confidence" | "unable";
@@ -66,10 +73,70 @@ function derivePhotoQuality(stats: ImageStats): number {
   return clamp(0.45 * countScore + 0.55 * sizeScore, 0, 1);
 }
 
-function deriveConfidence(quality: number): GradeProbabilities["confidence"] {
+function deriveConfidence(quality: number): "high" | "medium" | "low" {
   if (quality >= 0.7) return "high";
   if (quality >= 0.45) return "medium";
   return "low";
+}
+
+function qualityScoreFromRatio(ratio: number): number {
+  return clamp(Math.round(ratio * 100), 0, 100);
+}
+
+function qualitySubscoresFromRatio(ratio: number): GradeImageQuality["subscores"] {
+  const base = clamp(Math.round(ratio * 25), 0, 25);
+  return {
+    focus_sharpness: base,
+    lighting_glare_control: base,
+    coverage_angles: clamp(base + (ratio > 0.6 ? 1 : -1), 0, 25),
+    resolution_distance: base,
+  };
+}
+
+function confidenceScoreFromLabel(
+  label: "high" | "medium" | "low"
+): GradeEstimateConfidence["overall_confidence_score"] {
+  if (label === "high") return 82;
+  if (label === "medium") return 61;
+  return 38;
+}
+
+function fallbackCenteringDetail(label: GradeProbabilities["confidence"]): GradeEstimateCenteringDetail {
+  if (label === "high") {
+    return {
+      left_right_ratio: "53/47",
+      top_bottom_ratio: "54/46",
+      centering_confidence_score: 78,
+      centering_severity_0_3: 1,
+      centering_notes: "Centering appears acceptable, but this is still an estimate from photos.",
+    };
+  }
+  if (label === "medium") {
+    return {
+      left_right_ratio: "58/42",
+      top_bottom_ratio: "59/41",
+      centering_confidence_score: 56,
+      centering_severity_0_3: 2,
+      centering_notes: "Centering read is uncertain; better photos could change this assessment.",
+    };
+  }
+  return {
+    left_right_ratio: "62/38",
+    top_bottom_ratio: "63/37",
+    centering_confidence_score: 32,
+    centering_severity_0_3: 3,
+    centering_notes: "Centering is difficult to verify from the provided photos; estimate is conservative.",
+  };
+}
+
+function unknownFinding(note: string): GradeFinding {
+  return {
+    issue_type: "other",
+    location: "unassessable from provided image quality",
+    severity_0_3: 1,
+    confidence_0_100: 35,
+    notes: note,
+  };
 }
 
 function rangeForQuality(quality: number): { low: number; high: number } {
@@ -129,6 +196,10 @@ export function buildFallbackGradeEstimate(options: {
   const outcomes = distributionFromRange(rangeLabel, confidence);
   const psa = applyJitter(mapOutcomesToPsa(outcomes), jitterFromStats(options.imageStats));
   const bgs = mapPsaToBgs(psa);
+  const qualityScore = qualityScoreFromRatio(quality);
+  const qualitySubscores = qualitySubscoresFromRatio(quality);
+  const confidenceScore = confidenceScoreFromLabel(confidence);
+  const lowQuality = confidence === "low";
 
   return {
     estimated_grade_low: range.low,
@@ -139,6 +210,33 @@ export function buildFallbackGradeEstimate(options: {
     edges: "Edges are difficult to confirm at this resolution; estimate is cautious.",
     grade_notes:
       "Conservative probability estimate due to limited clarity or uncertainty in the analysis.",
+    image_quality: {
+      overall_image_score: qualityScore,
+      subscores: qualitySubscores,
+      key_issues: lowQuality
+        ? ["Blurred details", "Glare obscuring surface", "Insufficient angles"]
+        : ["Minor glare", "Could use closer crop"],
+      retake_tips: [
+        "Use bright indirect light to reduce glare and reflections.",
+        "Capture straight-on front and back shots, plus slight angle shots.",
+        "Move closer so corners/edges fill the frame and stay in focus.",
+        "Better photos = more accurate grading.",
+      ],
+    },
+    confidence: {
+      overall_confidence_score: confidenceScore,
+      confidence_label: confidence,
+      limiting_factors: lowQuality
+        ? ["Surface detail blocked by blur/glare", "Centering edges not fully clear"]
+        : ["Image evidence is good but still photo-limited vs in-hand grading"],
+      what_was_clear: lowQuality
+        ? ["Basic card identity and general condition range"]
+        : ["Major corner shape", "General edge cleanliness", "Approximate centering"],
+    },
+    centering_detail: fallbackCenteringDetail(confidence),
+    surface_findings: [unknownFinding("Surface could not be fully assessed due to image limitations.")],
+    corners_findings: [unknownFinding("Corners appear generally visible but fine defects remain uncertain.")],
+    edges_findings: [unknownFinding("Edges are partially visible; micro-chipping cannot be ruled out.")],
     grade_probabilities: {
       psa,
       bgs,

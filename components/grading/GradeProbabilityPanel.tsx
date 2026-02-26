@@ -282,6 +282,7 @@ export default function GradeProbabilityPanel({
   imageUrls,
   showPreliminaryBadge,
 }: GradeProbabilityPanelProps) {
+  const [showDetails, setShowDetails] = useState(false);
   const allowPsa10Override =
     estimate.grade_probabilities?.confidence === "high" &&
     meetsTopTierEvidence(estimate);
@@ -291,6 +292,10 @@ export default function GradeProbabilityPanel({
   const likely = mostLikely(psaOutcomes);
   const ev = expectedValue(psaOutcomes);
   const showPhotoQualityWarning = hasPhotoQualityFlag(estimate.grade_notes);
+  const imageQuality = estimate.image_quality;
+  const confidenceMeta = estimate.confidence;
+  const centeringMeta = estimate.centering_detail;
+  const topSurfaceFindings = (estimate.surface_findings ?? []).slice(0, 3);
   const evLabel = psaTotal > 0 ? ev.toFixed(1) : "--";
   const warningMessage = estimate.analysis_warning_code
     ? gradingCopy.panel.warnings[estimate.analysis_warning_code]
@@ -345,6 +350,151 @@ export default function GradeProbabilityPanel({
           {warningMessage}
         </div>
       ) : null}
+
+      <div className="mb-4 rounded-lg border border-gray-600/50 bg-[#0b1524] p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs font-semibold uppercase tracking-wider text-gray-300">
+            Quality & Confidence
+          </p>
+          <button
+            type="button"
+            onClick={() => setShowDetails((prev) => !prev)}
+            className="text-xs text-blue-300 hover:text-blue-200"
+          >
+            {showDetails ? "Hide details" : "Show details"}
+          </button>
+        </div>
+        <p className="text-[11px] text-amber-200 mt-1">
+          Better photos = more accurate grading.
+        </p>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+          <div className="rounded-md border border-gray-700/60 bg-[#0f1a2b] p-3">
+            <p className="text-[11px] uppercase tracking-wider text-gray-400">Image Quality</p>
+            <p className="text-lg font-semibold text-white mt-1">
+              {imageQuality?.overall_image_score ?? "—"}/100
+            </p>
+            {imageQuality?.subscores ? (
+              <div className="mt-2 space-y-1 text-xs text-gray-300">
+                <p>Focus: {imageQuality.subscores.focus_sharpness}/25</p>
+                <p>Glare control: {imageQuality.subscores.lighting_glare_control}/25</p>
+                <p>Coverage: {imageQuality.subscores.coverage_angles}/25</p>
+                <p>Resolution: {imageQuality.subscores.resolution_distance}/25</p>
+              </div>
+            ) : null}
+            {(imageQuality?.retake_tips?.length ?? 0) > 0 ? (
+              <ul className="mt-2 space-y-1 text-xs text-gray-300 list-disc list-inside">
+                {imageQuality!.retake_tips.slice(0, 4).map((tip, idx) => (
+                  <li key={`${tip}-${idx}`}>{tip}</li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+
+          <div className="rounded-md border border-gray-700/60 bg-[#0f1a2b] p-3">
+            <p className="text-[11px] uppercase tracking-wider text-gray-400">Confidence</p>
+            <p className="text-lg font-semibold text-white mt-1">
+              {confidenceMeta?.overall_confidence_score ?? "—"}/100
+              {confidenceMeta?.confidence_label ? (
+                <span className="ml-2 text-sm font-medium text-gray-300 uppercase">
+                  {confidenceMeta.confidence_label}
+                </span>
+              ) : null}
+            </p>
+            {(confidenceMeta?.limiting_factors?.length ?? 0) > 0 ? (
+              <ul className="mt-2 space-y-1 text-xs text-gray-300 list-disc list-inside">
+                {confidenceMeta!.limiting_factors.slice(0, 4).map((factor, idx) => (
+                  <li key={`${factor}-${idx}`}>{factor}</li>
+                ))}
+              </ul>
+            ) : null}
+            {(confidenceMeta?.what_was_clear?.length ?? 0) > 0 ? (
+              <ul className="mt-2 space-y-1 text-xs text-emerald-200 list-disc list-inside">
+                {confidenceMeta!.what_was_clear.slice(0, 4).map((fact, idx) => (
+                  <li key={`${fact}-${idx}`}>{fact}</li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+          <div className="rounded-md border border-gray-700/60 bg-[#0f1a2b] p-3">
+            <p className="text-[11px] uppercase tracking-wider text-gray-400">Centering</p>
+            <p className="text-xs text-gray-300 mt-1">
+              L/R: {centeringMeta?.left_right_ratio ?? "—"} · T/B:{" "}
+              {centeringMeta?.top_bottom_ratio ?? "—"}
+            </p>
+            <p className="text-xs text-gray-300 mt-1">
+              Score: {centeringMeta?.centering_confidence_score ?? "—"}/100 · Severity:{" "}
+              {centeringMeta?.centering_severity_0_3 ?? "—"}/3
+            </p>
+            <p className="text-xs text-gray-400 mt-2">
+              {centeringMeta?.centering_notes ?? estimate.centering}
+            </p>
+          </div>
+
+          <div className="rounded-md border border-gray-700/60 bg-[#0f1a2b] p-3">
+            <p className="text-[11px] uppercase tracking-wider text-gray-400">Surface Findings</p>
+            {topSurfaceFindings.length > 0 ? (
+              <div className="mt-2 space-y-2">
+                {topSurfaceFindings.map((finding, idx) => (
+                  <div key={`${finding.issue_type}-${finding.location}-${idx}`} className="text-xs">
+                    <p className="text-gray-200">
+                      <span className="uppercase">{finding.issue_type.replace(/_/g, " ")}</span>{" "}
+                      · {finding.location}
+                    </p>
+                    <p className="text-gray-400">
+                      Severity {finding.severity_0_3}/3 · Confidence {finding.confidence_0_100}/100
+                    </p>
+                    <p className="text-gray-500">{finding.notes}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-gray-400 mt-2">
+                Surface detail was limited or not explicitly detectable from provided photos.
+              </p>
+            )}
+          </div>
+        </div>
+
+        {showDetails ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+            <div className="rounded-md border border-gray-700/60 bg-[#0f1a2b] p-3">
+              <p className="text-[11px] uppercase tracking-wider text-gray-400">Corner Findings</p>
+              {(estimate.corners_findings?.length ?? 0) > 0 ? (
+                <ul className="mt-2 space-y-1 text-xs text-gray-300">
+                  {estimate.corners_findings!.slice(0, 3).map((finding, idx) => (
+                    <li key={`corner-${idx}`}>
+                      {finding.issue_type.replace(/_/g, " ")} · {finding.location} · sev{" "}
+                      {finding.severity_0_3}/3
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-2 text-xs text-gray-500">No explicit corner defects extracted.</p>
+              )}
+            </div>
+
+            <div className="rounded-md border border-gray-700/60 bg-[#0f1a2b] p-3">
+              <p className="text-[11px] uppercase tracking-wider text-gray-400">Edge Findings</p>
+              {(estimate.edges_findings?.length ?? 0) > 0 ? (
+                <ul className="mt-2 space-y-1 text-xs text-gray-300">
+                  {estimate.edges_findings!.slice(0, 3).map((finding, idx) => (
+                    <li key={`edge-${idx}`}>
+                      {finding.issue_type.replace(/_/g, " ")} · {finding.location} · sev{" "}
+                      {finding.severity_0_3}/3
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-2 text-xs text-gray-500">No explicit edge defects extracted.</p>
+              )}
+            </div>
+          </div>
+        ) : null}
+      </div>
 
       {/* ── 3-column layout: left boxes | center card identity | right boxes ── */}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] gap-5 mb-5">

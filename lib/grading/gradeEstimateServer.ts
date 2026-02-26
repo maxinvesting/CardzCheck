@@ -17,59 +17,88 @@ import {
 } from "@/lib/grade-estimator/value";
 import { DEFAULT_COMPS_WINDOW_DAYS } from "@/lib/grade-estimator/constants";
 
-const SYSTEM_PROMPT = `You are a sports trading card grading expert with deep knowledge of PSA, BGS, SGC, and CGC grading standards. Your job is to analyze card condition and estimate grades based on centering, corners, surface, and edges.`;
+const SYSTEM_PROMPT = `You are a sports card grading specialist. Produce strict JSON only. Use conservative assumptions and never inflate high-grade odds when evidence is weak.`;
 
-const USER_PROMPT = `Analyze these photos of the SAME sports trading card and estimate its condition/grade. The card is RAW (not already in a slab).
+const USER_PROMPT = `Analyze these photos of the SAME RAW (unslabbed) sports trading card.
 
-You may receive multiple angles or lighting variations. Use all photos together and prioritize the clearest details.
+Use ALL provided images. Better images increase analysis accuracy; explicitly reflect this in image_quality and confidence.
 
-1. CENTERING: Estimate the border ratios
-   - Left/Right: Compare relative width of left vs right borders (e.g., "50/50", "55/45", "60/40")
-   - Top/Bottom: Compare relative height of top vs bottom borders
-   - Perfect centering is 50/50 on both axes. Anything worse than 60/40 significantly impacts grade.
+Grading weighting rubric (must influence probabilities):
+- Centering: 40% (primary gate)
+- Surface: 30% (second-most important)
+- Corners: 15%
+- Edges: 15%
 
-2. CORNERS: Examine all four corners for:
-   - Whitening or wear (white showing through color)
-   - Dings or damage
-   - Fraying or softness
-   - Describe what you see (e.g., "Sharp on all 4 corners" or "Minor whitening on bottom-left corner")
+Centering gate rules (must enforce):
+- If centering is worse than 60/40 on either axis, PSA 10 must be very unlikely.
+- If centering is worse than 65/35 on either axis, PSA 9 must be unlikely.
+- Be quantitative and explicit with ratios.
 
-3. SURFACE: Look for:
-   - Scratches or scuffs
-   - Print lines or factory defects
-   - Staining or discoloration
-   - Fingerprints or smudges
-   - Describe what you see (e.g., "Clean, no visible scratches" or "Light surface scratches visible")
+Surface rules (must enforce):
+- Extract explicit surface defects with location + severity.
+- If glare/blur blocks surface reading, say that clearly, lower confidence, and shift probabilities downward.
 
-4. EDGES: Examine all four edges for:
-   - Chipping
-   - Rough cuts
-   - Wear or whitening
-   - Describe what you see (e.g., "Clean edges" or "Minor wear on top edge")
-
-Based on these factors, estimate a PSA grade range on a 1-10 scale:
-- 10 = Gem Mint (virtually perfect)
-- 9 = Mint (minor flaw, one corner or centering)
-- 8 = NM-MT (small flaw visible)
-- 7 = NM (minor flaws on corners or surface)
-- 6 = EX-MT (visible wear but still sharp)
-
-IMPORTANT:
-- Be conservative - it's better to underestimate than overestimate
-- Photo quality affects accuracy - note if image quality limits your assessment
-- Give a range (e.g., 7-9) to reflect uncertainty
-
-Return ONLY valid JSON with this structure (no prose):
+Output ONLY valid JSON (no markdown, no prose) with this exact schema:
 {
   "status": "ok" | "low_confidence" | "unable",
   "reason": "short reason",
   "estimated_grade_low": 0,
   "estimated_grade_high": 0,
-  "centering": "",
-  "corners": "",
-  "surface": "",
-  "edges": "",
-  "grade_notes": "",
+  "grade_notes": "short synthesis",
+  "image_quality": {
+    "overall_image_score": 0,
+    "subscores": {
+      "focus_sharpness": 0,
+      "lighting_glare_control": 0,
+      "coverage_angles": 0,
+      "resolution_distance": 0
+    },
+    "key_issues": ["..."],
+    "retake_tips": ["... include explicit guidance that better photos = better analysis ..."]
+  },
+  "confidence": {
+    "overall_confidence_score": 0,
+    "confidence_label": "high" | "medium" | "low",
+    "limiting_factors": ["..."],
+    "what_was_clear": ["..."]
+  },
+  "centering": {
+    "left_right_ratio": "55/45",
+    "top_bottom_ratio": "52/48",
+    "centering_confidence_score": 0,
+    "centering_severity_0_3": 0,
+    "centering_notes": "..."
+  },
+  "surface": "short summary",
+  "corners": "short summary",
+  "edges": "short summary",
+  "surface_findings": [
+    {
+      "issue_type": "scratch|scuff|print_line|dent|dimple|stain|smudge|foil_roll|other",
+      "location": "...",
+      "severity_0_3": 0,
+      "confidence_0_100": 0,
+      "notes": "..."
+    }
+  ],
+  "corners_findings": [
+    {
+      "issue_type": "corner_wear|dent|whitening|other",
+      "location": "...",
+      "severity_0_3": 0,
+      "confidence_0_100": 0,
+      "notes": "..."
+    }
+  ],
+  "edges_findings": [
+    {
+      "issue_type": "edge_wear|chipping|rough_cut|whitening|other",
+      "location": "...",
+      "severity_0_3": 0,
+      "confidence_0_100": 0,
+      "notes": "..."
+    }
+  ],
   "probabilities": [
     { "label": "PSA 10", "probability": 0.0 },
     { "label": "PSA 9", "probability": 0.0 },
@@ -84,11 +113,12 @@ Return ONLY valid JSON with this structure (no prose):
   ]
 }
 
-Rules:
-- Always include status, reason, and both probability arrays.
-- Probabilities must sum to 1.0 in each array.
-- If low_confidence or unable, still return conservative probabilities with more weight on lower grades.
-`;
+Hard requirements:
+- Use integers for all *_score, confidence_0_100, severity_0_3 fields.
+- Clamp: overall/confidence scores 0-100; subscores 0-25; severities 0-3.
+- Provide 1-5 key_issues and 2-5 retake_tips.
+- Probabilities in each array must sum to 1.0.
+- If uncertain, widen range and shift probability mass lower (conservative).`;
 
 function getAnthropicClient() {
   return new Anthropic({
