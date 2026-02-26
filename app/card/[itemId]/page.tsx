@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -18,6 +18,10 @@ import {
   fmtCents,
   fmtPct,
 } from "@/lib/business/pricing";
+import GradeProbabilityPanel from "@/components/grading/GradeProbabilityPanel";
+import { useGradeEstimateFromImages } from "@/lib/grading/useGradeEstimateFromImages";
+import type { GradeEstimatorCardInput, GradeEstimatorCardInput as GradeEstimatorCardInputType } from "@/lib/grade-estimator/value";
+import type { WorthGradingResult } from "@/types";
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -48,6 +52,7 @@ interface ProfileItem {
   stock_image_url?: string | null;
   ebay_image_url?: string | null;
   created_at?: string | null;
+  updated_at?: string | null;
 }
 
 interface ProfileSale {
@@ -101,6 +106,16 @@ function fmtDate(d: string | null | undefined): string {
   }
 }
 
+function toTimestamp(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function isValidHttpUrl(value: string): boolean {
+  return /^https?:\/\//i.test(value);
+}
+
 function statusBadge(status: string | null | undefined) {
   const s = (status ?? "").toLowerCase();
   const colors: Record<string, string> = {
@@ -146,6 +161,10 @@ export default function CardProfilePage() {
 
   // Image zoom
   const [imageZoom, setImageZoom] = useState(false);
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [imageUrlInput, setImageUrlInput] = useState("");
+  const [savingImage, setSavingImage] = useState(false);
+  const attemptedImageHydrationRef = useRef(false);
 
   // Update Price modal
   const [showPriceModal, setShowPriceModal] = useState(false);
@@ -166,6 +185,15 @@ export default function CardProfilePage() {
     type: "success" | "error";
     message: string;
   } | null>(null);
+
+  // Business grade estimate + worth-grading summary
+  const [cardForGrade, setCardForGrade] = useState<{
+    imageUrls: string[];
+    cardIdentity: GradeEstimatorCardInput;
+  } | null>(null);
+  const [valueResult, setValueResult] = useState<WorthGradingResult | null>(null);
+  const [valueLoading, setValueLoading] = useState(false);
+  const [valueError, setValueError] = useState<string | null>(null);
 
   useEffect(() => {
     if (toast) {
@@ -199,6 +227,36 @@ export default function CardProfilePage() {
       const data = await res.json();
       setItem(data.item);
       setSales(data.sales ?? []);
+
+      // Prepare Business-mode grade estimator input when we have images and identity
+      if (from === "business" && data.item) {
+        const businessItem = data.item as ProfileItem;
+        const imageCandidates = [
+          businessItem.user_image_url,
+          businessItem.stock_image_url,
+          businessItem.ebay_image_url,
+          businessItem.image_url,
+        ].filter((u): u is string => typeof u === "string" && u.length > 0);
+        if (imageCandidates.length > 0) {
+          const cardIdentity: GradeEstimatorCardInput = {
+            player_name: businessItem.player_name ?? businessItem.title ?? "",
+            year: businessItem.year ?? undefined,
+            set_name: businessItem.set_name ?? undefined,
+            card_number: undefined,
+            parallel_type: businessItem.parallel_type ?? undefined,
+            variation: businessItem.insert ?? undefined,
+            insert: undefined,
+          };
+          setCardForGrade({
+            imageUrls: imageCandidates,
+            cardIdentity,
+          });
+        } else {
+          setCardForGrade(null);
+        }
+      } else {
+        setCardForGrade(null);
+      }
     } catch {
       setError("Failed to load profile");
     } finally {
@@ -210,10 +268,60 @@ export default function CardProfilePage() {
     loadProfile();
   }, [loadProfile]);
 
+  useEffect(() => {
+    attemptedImageHydrationRef.current = false;
+  }, [itemId, from]);
+
   // ── Derived State ────────────────────────────────────────────────
 
   const imageUrl = item ? pickImageUrl(item) : null;
   const title = item ? displayTitle(item) : "";
+
+  useEffect(() => {
+    if (!isBusinessMode || !item || imageUrl || attemptedImageHydrationRef.current) {
+      return;
+    }
+    attemptedImageHydrationRef.current = true;
+
+    let cancelled = false;
+    fetch(`/api/business/inventory/fetch-cmv?item_id=${encodeURIComponent(item.id)}`)
+      .then(async (res) => {
+        if (!res.ok) return null;
+        return res.json().catch(() => null);
+      })
+      .then((data) => {
+        if (cancelled || !data) return;
+        const updatedItem = data.item as Partial<ProfileItem> | undefined;
+        if (updatedItem) {
+          setItem((prev) => (prev ? { ...prev, ...updatedItem } : prev));
+          return;
+        }
+        const stockImage = typeof data.stock_image_url === "string"
+          ? data.stock_image_url
+          : null;
+        const ebayImage = typeof data.ebay_image_url === "string"
+          ? data.ebay_image_url
+          : null;
+        if (stockImage || ebayImage) {
+          setItem((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  stock_image_url: prev.stock_image_url || stockImage,
+                  ebay_image_url: prev.ebay_image_url || ebayImage,
+                }
+              : prev
+          );
+        }
+      })
+      .catch(() => {
+        // Best-effort background hydration for missing image data.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isBusinessMode, item, imageUrl]);
 
   const position = useMemo(() => {
     if (!item) return null;
@@ -228,21 +336,138 @@ export default function CardProfilePage() {
     return estimateTakeHome(item.list_price_cents);
   }, [item]);
 
-  // Chart data: sales over time
+  const costCents = useMemo(() => {
+    if (!item) return null;
+    if (typeof item.cost_basis_total_cents === "number") {
+      return item.cost_basis_total_cents;
+    }
+    if (typeof item.purchase_price === "number") {
+      return Math.round(item.purchase_price * 100);
+    }
+    return null;
+  }, [item]);
+
+  const gradeEstimate = useGradeEstimateFromImages({
+    imageUrls: cardForGrade?.imageUrls ?? [],
+    card: cardForGrade?.cardIdentity ?? null,
+  });
+
+  const fetchWorthGrading = useCallback(async () => {
+    if (
+      !cardForGrade?.cardIdentity ||
+      !gradeEstimate.estimate?.grade_probabilities
+    ) {
+      return;
+    }
+    setValueLoading(true);
+    setValueError(null);
+    try {
+      const response = await fetch("/api/grade-estimator/value", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          card: cardForGrade.cardIdentity,
+          gradeProbabilities: gradeEstimate.estimate.grade_probabilities,
+          estimatorConfidence:
+            gradeEstimate.estimate.grade_probabilities.confidence,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error("POST_GRADING_VALUE_UNAVAILABLE");
+      }
+      const result: WorthGradingResult = await response.json();
+      setValueResult(result);
+    } catch {
+      setValueResult(null);
+      setValueError("Unable to estimate post-grading value right now.");
+    } finally {
+      setValueLoading(false);
+    }
+  }, [cardForGrade, gradeEstimate.estimate]);
+
+  useEffect(() => {
+    if (
+      !cardForGrade?.cardIdentity ||
+      !gradeEstimate.estimate?.grade_probabilities
+    ) {
+      setValueResult(null);
+      setValueError(null);
+      setValueLoading(false);
+      return;
+    }
+    void fetchWorthGrading();
+  }, [cardForGrade, gradeEstimate.estimate, fetchWorthGrading]);
+
+  // Chart data: timeline including cost, list, floor, and sales.
   const chartData = useMemo(() => {
-    if (sales.length === 0) return [];
-    return sales
-      .slice()
-      .sort(
-        (a, b) =>
-          new Date(a.sale_date || a.sold_at || "").getTime() -
-          new Date(b.sale_date || b.sold_at || "").getTime()
-      )
-      .map((s) => ({
-        date: fmtDate(s.sale_date || s.sold_at),
-        price: ((s.sale_price_cents ?? s.sold_price_cents ?? 0) / 100),
+    if (!item) return [];
+    const points: Array<{
+      ts: number;
+      date: string;
+      price: number;
+      label: string;
+    }> = [];
+
+    const nowTs = Date.now();
+    const createdTs = toTimestamp(item.created_at) ?? nowTs;
+    const acquiredTs =
+      toTimestamp(item.acquisition_date ?? item.purchase_date) ?? createdTs;
+    const updatedTs = toTimestamp(item.updated_at) ?? nowTs;
+
+    if (typeof costCents === "number" && costCents > 0) {
+      points.push({
+        ts: acquiredTs,
+        date: fmtDate(new Date(acquiredTs).toISOString()),
+        price: costCents / 100,
+        label: "Cost Basis",
+      });
+    }
+
+    if (typeof item.list_price_cents === "number" && item.list_price_cents > 0) {
+      points.push({
+        ts: updatedTs - 60_000,
+        date: fmtDate(new Date(updatedTs - 60_000).toISOString()),
+        price: item.list_price_cents / 100,
+        label: "List Price",
+      });
+    }
+
+    if (
+      typeof item.current_market_value_cents === "number" &&
+      item.current_market_value_cents > 0
+    ) {
+      points.push({
+        ts: updatedTs,
+        date: fmtDate(new Date(updatedTs).toISOString()),
+        price: item.current_market_value_cents / 100,
+        label: isBusinessMode ? "Market Floor" : "Market Value",
+      });
+    }
+
+    sales.forEach((sale, index) => {
+      const saleCents = sale.sale_price_cents ?? sale.sold_price_cents ?? 0;
+      if (saleCents <= 0) return;
+      const saleTs =
+        (toTimestamp(sale.sale_date || sale.sold_at) ?? nowTs) + index;
+      points.push({
+        ts: saleTs,
+        date: fmtDate(sale.sale_date || sale.sold_at),
+        price: saleCents / 100,
+        label: sale.channel ? `Sale (${sale.channel})` : "Sale",
+      });
+    });
+
+    if (points.length === 0) return [];
+
+    return points
+      .sort((a, b) => a.ts - b.ts)
+      .map((point, index) => ({
+        id: `${point.label}-${index}`,
+        date: point.date === "—" ? fmtDate(new Date(point.ts).toISOString()) : point.date,
+        price: Number(point.price.toFixed(2)),
+        label: point.label,
       }));
-  }, [sales]);
+  }, [item, sales, costCents, isBusinessMode]);
 
   // ── Actions ──────────────────────────────────────────────────────
 
@@ -322,6 +547,83 @@ export default function CardProfilePage() {
     }
   };
 
+  const handleSaveImageUrl = async () => {
+    if (!item || savingImage) return;
+    const trimmed = imageUrlInput.trim();
+    if (trimmed && !isValidHttpUrl(trimmed)) {
+      setToast({
+        type: "error",
+        message: "Please enter a full image URL that starts with http:// or https://",
+      });
+      return;
+    }
+
+    setSavingImage(true);
+    try {
+      const payloadUrl = trimmed || null;
+      const endpoint = isBusinessMode
+        ? "/api/business/inventory"
+        : `/api/cards/${item.id}`;
+      const body = isBusinessMode
+        ? { id: item.id, user_image_url: payloadUrl }
+        : { user_image_url: payloadUrl };
+
+      const res = await fetch(endpoint, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        setToast({ type: "error", message: "Failed to save image URL" });
+        return;
+      }
+
+      if (isBusinessMode) {
+        const updated = await res.json().catch(() => null);
+        setItem((prev) =>
+          prev
+            ? {
+                ...prev,
+                user_image_url:
+                  typeof updated?.user_image_url === "string"
+                    ? updated.user_image_url
+                    : payloadUrl,
+              }
+            : prev
+        );
+      } else {
+        const response = await res.json().catch(() => null);
+        const updatedCard = response?.card as Partial<ProfileItem> | undefined;
+        setItem((prev) =>
+          prev
+            ? {
+                ...prev,
+                user_image_url:
+                  typeof updatedCard?.user_image_url === "string"
+                    ? updatedCard.user_image_url
+                    : payloadUrl,
+                image_url:
+                  typeof updatedCard?.image_url === "string"
+                    ? updatedCard.image_url
+                    : prev.image_url,
+              }
+            : prev
+        );
+      }
+
+      setShowImageModal(false);
+      setToast({
+        type: "success",
+        message: payloadUrl ? "Image URL saved" : "Image URL removed",
+      });
+    } catch {
+      setToast({ type: "error", message: "Failed to save image URL" });
+    } finally {
+      setSavingImage(false);
+    }
+  };
+
   // ── Render: Loading / Error ──────────────────────────────────────
 
   if (loading) {
@@ -365,10 +667,6 @@ export default function CardProfilePage() {
       </div>
     );
   }
-
-  const costCents =
-    item.cost_basis_total_cents ??
-    (item.purchase_price != null ? Math.round(item.purchase_price * 100) : null);
 
   // ── Render: Profile ──────────────────────────────────────────────
 
@@ -447,59 +745,125 @@ export default function CardProfilePage() {
               )}
             </div>
 
-            {/* Key Facts */}
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-2">
-              <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">
-                Key Facts
-              </h3>
-              <Fact label="Grade" value={item.grade} />
-              <Fact
-                label="Condition"
-                value={item.condition_status}
-              />
-              <Fact label="Grader" value={item.grading_company} />
-              <Fact label="Cert #" value={item.cert_number} />
-              <Fact label="Parallel" value={item.parallel_type} />
-              <Fact label="Insert" value={item.insert} />
-              <Fact label="Year" value={item.year} />
-              <Fact label="Set" value={item.set_name} />
-              <Fact
-                label="Qty"
-                value={String(item.quantity ?? 1)}
-              />
-              <Fact
-                label="Acquired"
-                value={fmtDate(
-                  item.acquisition_date ?? item.purchase_date
+              {/* Key Facts */}
+              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-2">
+                <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">
+                  Key Facts
+                </h3>
+                <Fact label="Grade" value={item.grade} />
+                <Fact
+                  label="Condition"
+                  value={item.condition_status}
+                />
+                <Fact label="Grader" value={item.grading_company} />
+                <Fact label="Cert #" value={item.cert_number} />
+                <Fact label="Parallel" value={item.parallel_type} />
+                <Fact label="Insert" value={item.insert} />
+                <Fact label="Year" value={item.year} />
+                <Fact label="Set" value={item.set_name} />
+                <Fact
+                  label="Qty"
+                  value={String(item.quantity ?? 1)}
+                />
+                <Fact
+                  label="Acquired"
+                  value={fmtDate(
+                    item.acquisition_date ?? item.purchase_date
+                  )}
+                />
+                {item.notes && <Fact label="Notes" value={item.notes} />}
+
+                {isBusinessMode && cardForGrade && gradeEstimate.estimate && (
+                  <div className="mt-3 pt-3 border-t border-gray-800 space-y-1">
+                    <p className="text-[11px] font-semibold text-gray-300 uppercase tracking-wide">
+                      Grade estimate
+                    </p>
+                    <div className="text-[11px] text-gray-400">
+                      <span>
+                        Most likely range: PSA{" "}
+                        {gradeEstimate.estimate.estimated_grade_low}–
+                        {gradeEstimate.estimate.estimated_grade_high}
+                      </span>
+                      {gradeEstimate.estimate.grade_probabilities?.confidence && (
+                        <span className="ml-1 text-gray-500">
+                          · {gradeEstimate.estimate.grade_probabilities.confidence} confidence
+                        </span>
+                      )}
+                    </div>
+                    {valueResult && (
+                      <div className="text-[11px] text-gray-400">
+                        <span>
+                          Should grade?{" "}
+                          <span className="font-medium text-emerald-300">
+                            {valueResult.rating === "strong_yes"
+                              ? "Strong yes"
+                              : valueResult.rating === "yes"
+                              ? "Yes"
+                              : valueResult.rating === "maybe"
+                              ? "Maybe"
+                              : "No"}
+                          </span>
+                        </span>
+                        {valueResult.bestOption !== "none" && (
+                          <span className="ml-1 text-gray-500">
+                            · Best: {valueResult.bestOption.toUpperCase()}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    {!valueResult && valueLoading && (
+                      <p className="text-[11px] text-gray-500">
+                        Analyzing comps for grading recommendation…
+                      </p>
+                    )}
+                    {valueError && (
+                      <button
+                        type="button"
+                        onClick={() => void fetchWorthGrading()}
+                        className="mt-1 text-[11px] text-blue-300 hover:text-blue-200"
+                      >
+                        Retry grading value analysis
+                      </button>
+                    )}
+                  </div>
                 )}
-              />
-              {item.notes && <Fact label="Notes" value={item.notes} />}
-            </div>
+              </div>
 
             {/* Quick Actions */}
             {isBusinessMode && (
-              <div className="flex gap-2">
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      setNewPrice(
+                        item.list_price_cents != null
+                          ? (item.list_price_cents / 100).toFixed(2)
+                          : ""
+                      );
+                      setShowPriceModal(true);
+                    }}
+                    className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+                  >
+                    Update Price
+                  </button>
+                  {item.status !== "sold" && (
+                    <button
+                      onClick={() => setShowSoldModal(true)}
+                      className="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium transition-colors"
+                    >
+                      Mark Sold
+                    </button>
+                  )}
+                </div>
                 <button
                   onClick={() => {
-                    setNewPrice(
-                      item.list_price_cents != null
-                        ? (item.list_price_cents / 100).toFixed(2)
-                        : ""
-                    );
-                    setShowPriceModal(true);
+                    setImageUrlInput(imageUrl ?? "");
+                    setShowImageModal(true);
                   }}
-                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+                  className="w-full px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-100 rounded-lg text-sm font-medium transition-colors"
                 >
-                  Update Price
+                  {imageUrl ? "Change Image URL" : "Set Image URL"}
                 </button>
-                {item.status !== "sold" && (
-                  <button
-                    onClick={() => setShowSoldModal(true)}
-                    className="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium transition-colors"
-                  >
-                    Mark Sold
-                  </button>
-                )}
               </div>
             )}
             {!isBusinessMode && (
@@ -510,6 +874,15 @@ export default function CardProfilePage() {
                 >
                   Edit Details
                 </Link>
+                <button
+                  onClick={() => {
+                    setImageUrlInput(imageUrl ?? "");
+                    setShowImageModal(true);
+                  }}
+                  className="flex-1 px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-100 rounded-lg text-sm font-medium transition-colors"
+                >
+                  {imageUrl ? "Change Image URL" : "Set Image URL"}
+                </button>
               </div>
             )}
           </div>
@@ -674,8 +1047,9 @@ export default function CardProfilePage() {
                       }}
                       formatter={(value: number | undefined) => [
                         value != null ? `$${value.toFixed(2)}` : "—",
-                        "Sale Price",
+                        "Price Point",
                       ]}
+                      labelFormatter={(label) => String(label)}
                     />
                     <Line
                       type="monotone"
@@ -683,6 +1057,7 @@ export default function CardProfilePage() {
                       stroke="#10B981"
                       strokeWidth={2}
                       dot={{ fill: "#10B981", r: 4 }}
+                      activeDot={{ r: 6 }}
                     />
                   </LineChart>
                 </ResponsiveContainer>
@@ -966,6 +1341,46 @@ export default function CardProfilePage() {
                 className="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg font-medium"
               >
                 {recordingSale ? "Recording..." : "Record Sale"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Image URL Modal ─────────────────────────────────────── */}
+      {showImageModal && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-lg">
+            <h3 className="text-lg font-semibold mb-4">Set Image URL</h3>
+            <div className="space-y-2">
+              <label className="block text-sm text-gray-400">
+                Image URL (https://...)
+              </label>
+              <input
+                type="url"
+                value={imageUrlInput}
+                onChange={(e) => setImageUrlInput(e.target.value)}
+                placeholder="https://..."
+                autoFocus
+                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+              />
+              <p className="text-xs text-gray-500">
+                Leave blank to remove your custom image override.
+              </p>
+            </div>
+            <div className="flex gap-3 mt-5">
+              <button
+                onClick={() => setShowImageModal(false)}
+                className="flex-1 px-4 py-2 border border-gray-700 rounded-lg text-gray-300 hover:bg-gray-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveImageUrl}
+                disabled={savingImage}
+                className="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg font-medium"
+              >
+                {savingImage ? "Saving..." : "Save"}
               </button>
             </div>
           </div>

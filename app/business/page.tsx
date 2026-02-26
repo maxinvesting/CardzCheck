@@ -918,6 +918,7 @@ function BusinessPageContent() {
   const handleCardPickerSelect = (card: CardPickerSelection) => {
     setShowCardPicker(false);
     setPendingInventoryCard({
+      card_id: card.id,
       player_name: card.player_name,
       year: card.year,
       set_name: card.set_name,
@@ -925,6 +926,14 @@ function BusinessPageContent() {
       card_number: card.card_number,
       grader: card.grader,
       grade: card.grade,
+      imageUrl:
+        card.user_image_url ||
+        card.stock_image_url ||
+        card.ebay_image_url ||
+        card.image_url,
+      user_image_url: card.user_image_url,
+      stock_image_url: card.stock_image_url,
+      ebay_image_url: card.ebay_image_url,
       quantity: card.quantity,
     });
     setShowAddCardToInventory(true);
@@ -932,12 +941,17 @@ function BusinessPageContent() {
 
   // Called when AddCardModalNew identifies a card via upload (watchlist mode)
   const handleCardIdentified = (cardData: {
+    card_id?: string;
     player_name: string;
     year?: string;
     set_name?: string;
     card_number?: string;
     parallel_type?: string;
     grade?: string;
+    imageUrl?: string;
+    user_image_url?: string;
+    stock_image_url?: string;
+    ebay_image_url?: string;
     quantity?: number;
   }) => {
     setShowAddCardModal(false);

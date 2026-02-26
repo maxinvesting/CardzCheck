@@ -25,12 +25,17 @@ interface AddCardModalNewProps {
   /** Optional: for collection/business, open the CardPicker flow instead of manual entry */
   onOpenSmartSearch?: () => void;
   onCardSelected?: (cardData: {
+    card_id?: string;
     player_name: string;
     year?: string;
     set_name?: string;
     card_number?: string;
     parallel_type?: string;
     grade?: string;
+    imageUrl?: string;
+    user_image_url?: string;
+    stock_image_url?: string;
+    ebay_image_url?: string;
     quantity?: number;
   }) => void;
 }
@@ -331,6 +336,10 @@ export default function AddCardModalNew({
         card_number: identifiedCard.card_number,
         parallel_type: identifiedCard.parallel_type,
         grade: condition,
+        imageUrl: identifiedCard.imageUrl || undefined,
+        user_image_url: identifiedCard.userImageUrl || undefined,
+        stock_image_url: identifiedCard.stockImageUrl || undefined,
+        ebay_image_url: identifiedCard.ebayImageUrl || undefined,
         quantity: parsedQuantity,
       };
       onCardSelected(cardData);

@@ -1,5 +1,53 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { normalizeHttpUrl, resolveStoredImagePath } from "@/lib/collection-images";
+
+type ImageFields = {
+  id?: string | null;
+  card_id?: string | null;
+  title?: string | null;
+  image_url?: string | null;
+  user_image_url?: string | null;
+  stock_image_url?: string | null;
+  ebay_image_url?: string | null;
+};
+
+function firstImageUrl(...values: Array<string | null | undefined>): string | null {
+  for (const value of values) {
+    const normalized = normalizeHttpUrl(value ?? null);
+    if (normalized) return normalized;
+  }
+  return null;
+}
+
+function hasAnyImage(item: ImageFields | null | undefined): boolean {
+  return Boolean(
+    firstImageUrl(
+      item?.user_image_url,
+      item?.stock_image_url,
+      item?.ebay_image_url,
+      item?.image_url
+    )
+  );
+}
+
+function mergeImageFields(
+  base: ImageFields,
+  linked: ImageFields | null,
+  linkedCardImageUrl: string | null
+): ImageFields {
+  return {
+    ...base,
+    user_image_url:
+      firstImageUrl(base.user_image_url, linked?.user_image_url) ?? null,
+    stock_image_url:
+      firstImageUrl(base.stock_image_url, linked?.stock_image_url) ?? null,
+    ebay_image_url:
+      firstImageUrl(base.ebay_image_url, linked?.ebay_image_url) ?? null,
+    image_url:
+      firstImageUrl(base.image_url, linked?.image_url, linkedCardImageUrl) ?? null,
+  };
+}
 
 async function getAuthUserId() {
   const supabase = await createClient();
@@ -43,6 +91,64 @@ export async function GET(
       if (!item)
         return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+      let hydratedItem: Record<string, unknown> = item as Record<string, unknown>;
+      const baseItem = item as ImageFields;
+
+      // Business rows can miss image fields. Enrich from linked card data if needed.
+      if (!hasAnyImage(baseItem)) {
+        const cardSelect =
+          "id,title,image_url,user_image_url,stock_image_url,ebay_image_url";
+        let linkedCard: ImageFields | null = null;
+
+        if (baseItem.card_id) {
+          const { data } = await supabase
+            .from("collection_items")
+            .select(cardSelect)
+            .eq("id", baseItem.card_id)
+            .eq("user_id", userId)
+            .maybeSingle();
+          linkedCard = (data as ImageFields | null) ?? null;
+        }
+
+        if (!linkedCard && baseItem.title?.trim()) {
+          const { data } = await supabase
+            .from("collection_items")
+            .select(cardSelect)
+            .eq("user_id", userId)
+            .eq("title", baseItem.title.trim())
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          linkedCard = (data as ImageFields | null) ?? null;
+        }
+
+        let linkedCardImageUrl: string | null = null;
+        if (linkedCard?.id) {
+          const { data: cardImages } = await supabase
+            .from("card_images")
+            .select("storage_path")
+            .eq("card_id", linkedCard.id)
+            .eq("user_id", userId)
+            .order("position", { ascending: true })
+            .limit(1);
+
+          const storagePath =
+            Array.isArray(cardImages) && cardImages.length > 0
+              ? (cardImages[0] as { storage_path?: string | null }).storage_path
+              : null;
+
+          linkedCardImageUrl = resolveStoredImagePath(
+            storagePath,
+            (path) => supabase.storage.from("card-images").getPublicUrl(path).data.publicUrl
+          );
+        }
+
+        hydratedItem = {
+          ...item,
+          ...mergeImageFields(baseItem, linkedCard, linkedCardImageUrl),
+        };
+      }
+
       // Load sales for this item
       const { data: sales } = await supabase
         .from("business_sales")
@@ -52,7 +158,7 @@ export async function GET(
         .order("sale_date", { ascending: false });
 
       return NextResponse.json({
-        item,
+        item: hydratedItem,
         sales: sales ?? [],
         mode: "business",
       });

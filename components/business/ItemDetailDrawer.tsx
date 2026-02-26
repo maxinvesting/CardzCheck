@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import type { BusinessInventoryItem } from "@/types";
+import type { BusinessInventoryItem, WorthGradingResult } from "@/types";
 import type { GradeEstimatorCardInput } from "@/lib/grade-estimator/value";
 import GradeProbabilityPanel from "@/components/grading/GradeProbabilityPanel";
 import GradeEstimateProgressPanel from "@/components/grading/GradeEstimateProgressPanel";
@@ -36,6 +36,9 @@ export default function ItemDetailDrawer({
     cardIdentity: GradeEstimatorCardInput;
   } | null>(null);
   const [cardForGradeLoading, setCardForGradeLoading] = useState(false);
+  const [valueResult, setValueResult] = useState<WorthGradingResult | null>(null);
+  const [valueLoading, setValueLoading] = useState(false);
+  const [valueError, setValueError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!item) return;
@@ -110,6 +113,65 @@ export default function ItemDetailDrawer({
     imageUrls: cardForGrade?.imageUrls ?? [],
     card: cardForGrade?.cardIdentity ?? null,
   });
+
+  const fetchWorthGrading = useCallback(async () => {
+    if (
+      !cardForGrade?.cardIdentity ||
+      !gradeEstimate.estimate?.grade_probabilities
+    ) {
+      return;
+    }
+    setValueLoading(true);
+    setValueError(null);
+    try {
+      const response = await fetch("/api/grade-estimator/value", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          card: cardForGrade.cardIdentity,
+          gradeProbabilities: gradeEstimate.estimate.grade_probabilities,
+          estimatorConfidence:
+            gradeEstimate.estimate.grade_probabilities.confidence,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error("POST_GRADING_VALUE_UNAVAILABLE");
+      }
+      const result: WorthGradingResult = await response.json();
+      setValueResult(result);
+    } catch {
+      setValueResult(null);
+      setValueError(gradingCopy.status.postGradingValueFailed);
+    } finally {
+      setValueLoading(false);
+    }
+  }, [cardForGrade, gradeEstimate.estimate]);
+
+  useEffect(() => {
+    if (
+      !cardForGrade?.cardIdentity ||
+      !gradeEstimate.estimate?.grade_probabilities
+    ) {
+      setValueResult(null);
+      setValueError(null);
+      setValueLoading(false);
+      return;
+    }
+    void fetchWorthGrading();
+  }, [cardForGrade, gradeEstimate.estimate, fetchWorthGrading]);
+
+  const ratingLabel = (rating: WorthGradingResult["rating"]): string => {
+    switch (rating) {
+      case "strong_yes":
+        return "Strong yes";
+      case "yes":
+        return "Yes";
+      case "maybe":
+        return "Maybe";
+      default:
+        return "No";
+    }
+  };
 
   if (!item) return null;
 
@@ -344,6 +406,18 @@ export default function ItemDetailDrawer({
                     Run grade estimate
                   </button>
                 )}
+                {gradeEstimate.estimate && !gradeEstimate.isRunning && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      gradeEstimate.reset();
+                      void gradeEstimate.run();
+                    }}
+                    className="mt-2 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white text-xs font-medium rounded-lg transition-colors"
+                  >
+                    Re-run grade estimate
+                  </button>
+                )}
                 {gradeEstimate.isRunning && gradeEstimate.job && (
                   <div className="mt-2">
                     <GradeEstimateProgressPanel
@@ -373,6 +447,61 @@ export default function ItemDetailDrawer({
                       primaryImageUrl={cardForGrade.imageUrls[0] ?? null}
                       imageUrls={cardForGrade.imageUrls}
                     />
+                  </div>
+                )}
+                {gradeEstimate.estimate && (valueLoading || valueResult || valueError) && (
+                  <div className="mt-4 rounded-lg border border-gray-800 bg-gray-900/70 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[11px] font-semibold text-gray-300 uppercase tracking-wide">
+                        Should you grade this?
+                      </p>
+                      {valueLoading && (
+                        <span className="text-[10px] text-gray-400">
+                          Analyzing comps…
+                        </span>
+                      )}
+                    </div>
+                    {valueError && (
+                      <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-amber-300">
+                        <span>{valueError}</span>
+                        <button
+                          type="button"
+                          onClick={() => void fetchWorthGrading()}
+                          className="shrink-0 px-2 py-0.5 rounded bg-amber-500/20 text-amber-100 hover:bg-amber-500/30 text-[10px] font-medium"
+                        >
+                          Retry
+                        </button>
+                      </div>
+                    )}
+                    {valueResult && !valueError && (
+                      <div className="mt-2 space-y-1 text-[11px] text-gray-300">
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex items-center rounded-full border border-emerald-500/40 bg-emerald-900/40 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
+                            {ratingLabel(valueResult.rating)}
+                          </span>
+                          {valueResult.bestOption !== "none" && (
+                            <span className="text-[11px] text-gray-400">
+                              Best: {valueResult.bestOption.toUpperCase()}
+                            </span>
+                          )}
+                          <span className="ml-auto text-[11px] text-gray-400">
+                            EV: $
+                            {(valueResult.bestOption === "psa"
+                              ? valueResult.psa.ev
+                              : valueResult.bestOption === "bgs"
+                              ? valueResult.bgs.ev
+                              : 0
+                            ).toFixed(0)}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-gray-400">
+                          {valueResult.explanation}
+                        </p>
+                      </div>
+                    )}
+                    <p className="mt-2 text-[10px] text-gray-500">
+                      {gradingCopy.valuePanel.confidenceNote}
+                    </p>
                   </div>
                 )}
               </>

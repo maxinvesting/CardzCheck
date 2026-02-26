@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 
 export interface PendingInventoryCard {
+  card_id?: string;
   player_name: string;
   year?: string;
   set_name?: string;
@@ -11,6 +12,9 @@ export interface PendingInventoryCard {
   grader?: string;
   grade?: string;
   imageUrl?: string;
+  user_image_url?: string;
+  stock_image_url?: string;
+  ebay_image_url?: string;
   quantity?: number;
 }
 
@@ -173,6 +177,7 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          card_id: card.card_id ?? null,
           title,
           quantity: parsedQuantity,
           acquisition_type: form.acquisition_type,
@@ -190,6 +195,9 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
           current_market_value_cents: form.current_market_value
             ? toCents(form.current_market_value)
             : null,
+          user_image_url: card.user_image_url || null,
+          stock_image_url: card.stock_image_url || null,
+          ebay_image_url: card.ebay_image_url || null,
           location: form.location || null,
           notes: form.notes || null,
         }),
