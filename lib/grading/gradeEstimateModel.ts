@@ -262,6 +262,100 @@ function maybeWarnProbabilitySum(label: string, total: number): void {
   }
 }
 
+function mapWeightedScoreToRange(weightedScore: number): { low: number; high: number } {
+  if (weightedScore >= 90) return { low: 9, high: 10 };
+  if (weightedScore >= 82) return { low: 8, high: 9 };
+  if (weightedScore >= 72) return { low: 7, high: 9 };
+  if (weightedScore >= 62) return { low: 7, high: 8 };
+  if (weightedScore >= 52) return { low: 6, high: 8 };
+  return { low: 5, high: 7 };
+}
+
+function hasAssessmentBlockedLanguage(text: string): boolean {
+  const lower = text.toLowerCase();
+  return (
+    lower.includes("unable") ||
+    lower.includes("unassessable") ||
+    lower.includes("cannot assess") ||
+    lower.includes("difficult to assess") ||
+    lower.includes("blocked by glare") ||
+    lower.includes("blur")
+  );
+}
+
+function scoreFromFindings(
+  findings: GradeFinding[],
+  summaryText: string,
+  baselineScore: number
+): number {
+  if (findings.length === 0) {
+    return hasAssessmentBlockedLanguage(summaryText) ? baselineScore - 20 : baselineScore;
+  }
+
+  const weightedPenalty =
+    findings.reduce((sum, finding) => {
+      const confidenceFactor = clamp(finding.confidence_0_100 / 100, 0.2, 1);
+      return sum + finding.severity_0_3 * 20 * confidenceFactor;
+    }, 0) / findings.length;
+
+  return clamp(100 - weightedPenalty, 5, 100);
+}
+
+function scoreCentering(centering: GradeEstimateCenteringDetail): number {
+  const worstAxis = Math.max(
+    ratioDeviation(centering.left_right_ratio) ?? 50,
+    ratioDeviation(centering.top_bottom_ratio) ?? 50
+  );
+  const axisPenalty = clamp((worstAxis - 50) * 6, 0, 70);
+  const severityPenalty = centering.centering_severity_0_3 * 9;
+  const confidenceBoost = (centering.centering_confidence_score - 50) * 0.25;
+  return clamp(100 - axisPenalty - severityPenalty + confidenceBoost, 5, 100);
+}
+
+function buildDeterministicPsaFromWeightedScore(
+  weightedScore: number
+): GradeProbabilities["psa"] {
+  let dist: GradeProbabilities["psa"];
+  if (weightedScore >= 92) {
+    dist = { "10": 0.24, "9": 0.55, "8": 0.16, "7_or_lower": 0.05 };
+  } else if (weightedScore >= 84) {
+    dist = { "10": 0.12, "9": 0.52, "8": 0.25, "7_or_lower": 0.11 };
+  } else if (weightedScore >= 74) {
+    dist = { "10": 0.05, "9": 0.4, "8": 0.34, "7_or_lower": 0.21 };
+  } else if (weightedScore >= 64) {
+    dist = { "10": 0.02, "9": 0.25, "8": 0.39, "7_or_lower": 0.34 };
+  } else if (weightedScore >= 54) {
+    dist = { "10": 0.01, "9": 0.14, "8": 0.36, "7_or_lower": 0.49 };
+  } else {
+    dist = { "10": 0, "9": 0.07, "8": 0.27, "7_or_lower": 0.66 };
+  }
+  return normalizeProbabilityMap(dist);
+}
+
+function blendPsaDistributions(
+  deterministic: GradeProbabilities["psa"],
+  modelBased: GradeProbabilities["psa"] | null,
+  confidence: GradeEstimateConfidence["confidence_label"],
+  status: GradeEstimateStatus
+): GradeProbabilities["psa"] {
+  if (!modelBased) return deterministic;
+
+  let modelWeight = 0.4;
+  if (confidence === "high") modelWeight = 0.55;
+  if (confidence === "low") modelWeight = 0.2;
+  if (status !== "ok") modelWeight = Math.min(modelWeight, 0.25);
+
+  const blended: GradeProbabilities["psa"] = {
+    "10": deterministic["10"] * (1 - modelWeight) + modelBased["10"] * modelWeight,
+    "9": deterministic["9"] * (1 - modelWeight) + modelBased["9"] * modelWeight,
+    "8": deterministic["8"] * (1 - modelWeight) + modelBased["8"] * modelWeight,
+    "7_or_lower":
+      deterministic["7_or_lower"] * (1 - modelWeight) +
+      modelBased["7_or_lower"] * modelWeight,
+  };
+  return normalizeProbabilityMap(blended);
+}
+
 function applyCenteringGate(
   psa: GradeProbabilities["psa"],
   centering: GradeEstimateCenteringDetail,
@@ -472,14 +566,48 @@ function buildEstimateFromParsed(
       ? "low_confidence"
       : status;
 
+  const centeringScore = scoreCentering(centeringDetail);
+  const surfaceScore = scoreFromFindings(
+    surfaceFindings,
+    toText(result.surface, ""),
+    64
+  );
+  const cornersScore = scoreFromFindings(
+    cornersFindings,
+    toText(result.corners, ""),
+    74
+  );
+  const edgesScore = scoreFromFindings(
+    edgesFindings,
+    toText(result.edges, ""),
+    74
+  );
+  const weightedEvidenceScore =
+    centeringScore * 0.4 +
+    surfaceScore * 0.3 +
+    cornersScore * 0.15 +
+    edgesScore * 0.15;
+  const imageInfluence = (imageQuality.overall_image_score - 50) * 0.12;
+  const confidenceInfluence = (confidence.overall_confidence_score - 50) * 0.12;
+  const calibratedScore = clamp(
+    weightedEvidenceScore + imageInfluence + confidenceInfluence,
+    0,
+    100
+  );
+  const mappedRange = mapWeightedScoreToRange(calibratedScore);
+  const finalLow = Math.min(normalizedLow, mappedRange.low);
+  const finalHigh = Math.max(normalizedHigh, mappedRange.high);
+
   const estimate: GradeEstimate = {
-    estimated_grade_low: normalizedLow,
-    estimated_grade_high: normalizedHigh,
+    estimated_grade_low: finalLow,
+    estimated_grade_high: finalHigh,
     centering: `${centeringDetail.left_right_ratio} L/R, ${centeringDetail.top_bottom_ratio} T/B. ${centeringDetail.centering_notes}`,
     corners: toText(result.corners, fallback.corners),
     surface: toText(result.surface, fallback.surface),
     edges: toText(result.edges, fallback.edges),
-    grade_notes: toText(result.grade_notes, fallback.grade_notes),
+    grade_notes: `${toText(result.grade_notes, fallback.grade_notes)} Weighted evidence score ${Math.round(
+      calibratedScore
+    )}/100 (C 40% / S 30% / Co 15% / E 15%).`,
     image_quality: imageQuality,
     confidence,
     centering_detail: centeringDetail,
@@ -508,14 +636,19 @@ function buildEstimateFromParsed(
 
   const psaOutcomesRaw = normalizeOutcomeArray(result.probabilities);
   const bgsOutcomesRaw = normalizeOutcomeArray(result.bgs_probabilities);
-  const rangeLabel =
-    buildRangeLabel(estimate.estimated_grade_low, estimate.estimated_grade_high) ?? "PSA 6-8";
-
-  let psa = psaOutcomesRaw
+  const rangeLabel = buildRangeLabel(finalLow, finalHigh) ?? "PSA 6-8";
+  const modelPsa = psaOutcomesRaw
     ? mapOutcomesToPsa(psaOutcomesRaw)
     : mapOutcomesToPsa(
         distributionFromRange(rangeLabel, confidence.confidence_label)
       );
+  const deterministicPsa = buildDeterministicPsaFromWeightedScore(calibratedScore);
+  let psa = blendPsaDistributions(
+    deterministicPsa,
+    modelPsa,
+    confidence.confidence_label,
+    analysisStatus
+  );
   psa = applyCenteringGate(psa, centeringDetail, analysisStatus);
   psa = applyConfidencePenalty(psa, confidence.confidence_label);
   maybeWarnProbabilitySum(

@@ -17,17 +17,17 @@ import {
 } from "@/lib/grade-estimator/value";
 import { DEFAULT_COMPS_WINDOW_DAYS } from "@/lib/grade-estimator/constants";
 
-const SYSTEM_PROMPT = `You are a sports card grading specialist. Produce strict JSON only. Use conservative assumptions and never inflate high-grade odds when evidence is weak.`;
+const SYSTEM_PROMPT = `You are a sports card grading specialist. Produce strict JSON only. Use conservative(but still rational) assumptions and never inflate high-grade odds when evidence is weak.`;
 
 const USER_PROMPT = `Analyze these photos of the SAME RAW (unslabbed) sports trading card.
 
 Use ALL provided images. Better images increase analysis accuracy; explicitly reflect this in image_quality and confidence.
 
 Grading weighting rubric (must influence probabilities):
-- Centering: 40% (primary gate)
+- Centering: 30% (primary gate)
 - Surface: 30% (second-most important)
-- Corners: 15%
-- Edges: 15%
+- Corners: 20%
+- Edges: 20%
 
 Centering gate rules (must enforce):
 - If centering is worse than 60/40 on either axis, PSA 10 must be very unlikely.

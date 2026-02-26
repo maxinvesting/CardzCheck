@@ -257,4 +257,109 @@ describe("parseGradeEstimateModelOutput", () => {
     expect(parsed.estimate.centering_detail?.centering_confidence_score).toBe(100);
     expect(parsed.estimate.centering_detail?.centering_severity_0_3).toBe(3);
   });
+
+  it("produces distinct probabilities for cards with different evidence profiles", () => {
+    const highQuality = runParse({
+      status: "ok",
+      reason: "Strong photos and clean card",
+      estimated_grade_low: 8,
+      estimated_grade_high: 10,
+      grade_notes: "Clean copy",
+      image_quality: {
+        overall_image_score: 92,
+        subscores: {
+          focus_sharpness: 24,
+          lighting_glare_control: 23,
+          coverage_angles: 23,
+          resolution_distance: 22,
+        },
+        key_issues: ["Tiny edge speck"],
+        retake_tips: ["Great lighting", "Better photos = more accurate grading."],
+      },
+      confidence: {
+        overall_confidence_score: 90,
+        confidence_label: "high",
+        limiting_factors: [],
+        what_was_clear: ["All four corners", "Surface texture", "Centering ratios"],
+      },
+      centering: {
+        left_right_ratio: "51/49",
+        top_bottom_ratio: "52/48",
+        centering_confidence_score: 92,
+        centering_severity_0_3: 0,
+        centering_notes: "Very strong centering.",
+      },
+      surface: "No significant defects.",
+      corners: "Sharp corners.",
+      edges: "Clean edges.",
+      surface_findings: [],
+      corners_findings: [],
+      edges_findings: [],
+      probabilities: [
+        { label: "PSA 10", probability: 0.4 },
+        { label: "PSA 9", probability: 0.4 },
+        { label: "PSA 8", probability: 0.15 },
+        { label: "PSA 7 or lower", probability: 0.05 },
+      ],
+    });
+
+    const lowQuality = runParse({
+      status: "low_confidence",
+      reason: "Blur and glare",
+      estimated_grade_low: 7,
+      estimated_grade_high: 9,
+      grade_notes: "Surface difficult to assess due to glare.",
+      image_quality: {
+        overall_image_score: 38,
+        subscores: {
+          focus_sharpness: 10,
+          lighting_glare_control: 7,
+          coverage_angles: 9,
+          resolution_distance: 12,
+        },
+        key_issues: ["Glare", "Blur"],
+        retake_tips: ["Use diffused light", "Better photos = more accurate grading."],
+      },
+      confidence: {
+        overall_confidence_score: 34,
+        confidence_label: "low",
+        limiting_factors: ["Surface blocked by glare", "Corners out of focus"],
+        what_was_clear: ["General card shape"],
+      },
+      centering: {
+        left_right_ratio: "62/38",
+        top_bottom_ratio: "66/34",
+        centering_confidence_score: 45,
+        centering_severity_0_3: 3,
+        centering_notes: "Off-center and uncertain due to blur.",
+      },
+      surface: "Unable to assess full surface due to glare.",
+      corners: "Corners partially visible.",
+      edges: "Edges soft in image.",
+      surface_findings: [
+        {
+          issue_type: "other",
+          location: "full front",
+          severity_0_3: 2,
+          confidence_0_100: 65,
+          notes: "Assessment blocked by glare/blur",
+        },
+      ],
+      corners_findings: [],
+      edges_findings: [],
+      probabilities: [
+        { label: "PSA 10", probability: 0.2 },
+        { label: "PSA 9", probability: 0.4 },
+        { label: "PSA 8", probability: 0.25 },
+        { label: "PSA 7 or lower", probability: 0.15 },
+      ],
+    });
+
+    const highDist = highQuality.estimate.grade_probabilities!.psa;
+    const lowDist = lowQuality.estimate.grade_probabilities!.psa;
+
+    expect(highDist["10"]).toBeGreaterThan(lowDist["10"]);
+    expect(highDist["9"]).toBeGreaterThan(lowDist["9"]);
+    expect(lowDist["7_or_lower"]).toBeGreaterThan(highDist["7_or_lower"]);
+  });
 });
