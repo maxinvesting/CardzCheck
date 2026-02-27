@@ -76,8 +76,12 @@ export async function POST(request: NextRequest) {
       );
     }
     console.error("Business inventory POST error:", err);
+    const detail =
+      typeof err?.message === "string" && err.message.trim().length > 0
+        ? err.message
+        : "Failed to create item";
     return NextResponse.json(
-      { error: "Failed to create item" },
+      { error: detail },
       { status: 500 }
     );
   }

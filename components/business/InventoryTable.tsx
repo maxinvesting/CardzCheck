@@ -798,8 +798,10 @@ export default function InventoryTable({
                 <thead {...props} className="bg-gray-900 border-b border-gray-800" />
               ),
               TableBody: (props) => <tbody {...props} className="divide-y divide-gray-800/80" />,
+              TableRow: ({ item, context: _context, ...props }) => (
+                <tr {...props} className={rowClass(item, props["data-index"])} />
+              ),
             }}
-            itemClassName={(index, item) => rowClass(item, index)}
             computeItemKey={(_index, item) => item.id}
             fixedHeaderContent={renderHeader}
             itemContent={(_index, item) => renderRowCells(item)}

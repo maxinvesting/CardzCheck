@@ -129,6 +129,46 @@ function normalizeQuantity(value: number | null | undefined): number {
   return 1;
 }
 
+function normalizeAcquisitionDate(
+  value: string | null | undefined
+): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  // Accept already-normalized ISO date.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+
+  // Accept common US date input (MM/DD/YYYY) from browser-localized controls.
+  const usDate = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (usDate) {
+    const month = Number.parseInt(usDate[1], 10);
+    const day = Number.parseInt(usDate[2], 10);
+    const year = Number.parseInt(usDate[3], 10);
+    if (
+      Number.isInteger(month) &&
+      Number.isInteger(day) &&
+      Number.isInteger(year) &&
+      month >= 1 &&
+      month <= 12 &&
+      day >= 1 &&
+      day <= 31
+    ) {
+      const isoMonth = String(month).padStart(2, "0");
+      const isoDay = String(day).padStart(2, "0");
+      return `${year}-${isoMonth}-${isoDay}`;
+    }
+  }
+
+  return null;
+}
+
+function normalizeCardId(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 function toBusinessInventoryItem(row: BusinessInventoryRow): BusinessInventoryItem {
   return {
     id: row.id,
@@ -166,11 +206,11 @@ function buildInventoryInsertPayload(
 ): Record<string, unknown> {
   return {
     user_id: userId,
-    card_id: (item as any).card_id || null,
+    card_id: normalizeCardId((item as any).card_id),
     title: item.title || "Untitled item",
     quantity: normalizeQuantity(item.quantity),
     acquisition_type: item.acquisition_type ?? "other",
-    acquisition_date: item.acquisition_date || null,
+    acquisition_date: normalizeAcquisitionDate(item.acquisition_date),
     cost_basis_total_cents: item.cost_basis_total_cents ?? 0,
     tax_cents: item.tax_cents ?? 0,
     shipping_cents: item.shipping_cents ?? 0,
@@ -203,7 +243,7 @@ function buildInventoryUpdatePayload(
   if (updates.acquisition_type !== undefined)
     payload.acquisition_type = updates.acquisition_type;
   if (updates.acquisition_date !== undefined)
-    payload.acquisition_date = updates.acquisition_date;
+    payload.acquisition_date = normalizeAcquisitionDate(updates.acquisition_date);
   if (updates.cost_basis_total_cents !== undefined)
     payload.cost_basis_total_cents = updates.cost_basis_total_cents;
   if (updates.tax_cents !== undefined) payload.tax_cents = updates.tax_cents;
