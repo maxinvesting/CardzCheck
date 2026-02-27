@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { ShopListing } from "@/types/shop";
 
 const PUBLIC_COLUMNS =
-  "id,created_at,updated_at,slug,description,player_name,year,set_brand,parallel_variant,card_number,grade,cert_number,sport,price,cmv,quantity,quantity_sold,image_urls,thumbnail_url,status,featured,is_premium,shipping_method,shipping_cost,notes,tags";
+  "id,created_at,updated_at,slug,description,player_name,year,set_brand,parallel_variant,card_number,grade,cert_number,sport,price,cmv,quantity,quantity_sold,image_urls,thumbnail_url,status,featured,is_premium,shipping_method,shipping_cost,tags";
 
 export interface ShopStats {
   activeCount: number;
