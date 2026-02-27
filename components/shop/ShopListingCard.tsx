@@ -12,11 +12,38 @@ import {
 } from "./shop-formatters";
 
 interface ShopListingCardProps {
-  listing: ShopListing;
+  listing?: ShopListing;
+  skeleton?: boolean;
   onQuickView?: (listing: ShopListing) => void;
 }
 
-export default function ShopListingCard({ listing }: ShopListingCardProps) {
+function ShopListingCardSkeleton() {
+  return (
+    <article className="flex h-full flex-col overflow-hidden rounded-2xl border border-slate-800/80 bg-slate-950/70 shadow-[0_8px_30px_rgba(2,12,22,0.3)]">
+      <div className="aspect-[4/5] border-b border-slate-800/80 bg-slate-900/80">
+        <div className="h-full w-full animate-pulse bg-slate-800/80" />
+      </div>
+      <div className="flex flex-1 flex-col gap-3 p-4">
+        <div className="space-y-2">
+          <div className="h-4 w-5/6 animate-pulse rounded bg-slate-800/90" />
+          <div className="h-4 w-2/3 animate-pulse rounded bg-slate-800/70" />
+        </div>
+        <div className="h-7 w-1/3 animate-pulse rounded bg-slate-800/90" />
+        <div className="h-3.5 w-1/2 animate-pulse rounded bg-slate-800/70" />
+        <div className="h-3.5 w-2/3 animate-pulse rounded bg-slate-800/60" />
+      </div>
+    </article>
+  );
+}
+
+export default function ShopListingCard({
+  listing,
+  skeleton = false,
+}: ShopListingCardProps) {
+  if (skeleton || !listing) {
+    return <ShopListingCardSkeleton />;
+  }
+
   const { addItem } = useShopCart();
   const available = Math.max(0, listing.quantity - listing.quantity_sold);
   const canAdd = available > 0;
@@ -27,7 +54,7 @@ export default function ShopListingCard({ listing }: ShopListingCardProps) {
   const isPremium = listing.is_premium || listing.price >= 200;
 
   const cmv = getCmvDeltaPresentation(listing.price, listing.cmv);
-  const shippingLine = `${getShippingLabel(listing.shipping_cost)} - Ships in 1-2 days`;
+  const shippingLine = `${getShippingLabel(listing.shipping_cost)} • Ships in 1-2 days`;
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -39,7 +66,7 @@ export default function ShopListingCard({ listing }: ShopListingCardProps) {
   };
 
   return (
-    <article className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-700/70 bg-slate-950/75 shadow-[0_6px_30px_rgba(2,12,22,0.3)] transition-all duration-300 hover:-translate-y-1 hover:border-cyan-400/40 hover:shadow-[0_20px_45px_rgba(6,18,30,0.45)]">
+    <article className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-800/80 bg-slate-950/75 shadow-[0_8px_30px_rgba(2,12,22,0.35)] transition-all duration-300 hover:-translate-y-1 hover:border-cyan-400/45 hover:shadow-[0_20px_48px_rgba(6,18,30,0.5)]">
       <Link href={detailHref} className="relative block">
         <div className="aspect-[4/5] overflow-hidden border-b border-slate-800/80 bg-slate-900">
           {imgUrl ? (
@@ -63,7 +90,7 @@ export default function ShopListingCard({ listing }: ShopListingCardProps) {
         )}
       </Link>
 
-      <div className="flex flex-1 flex-col gap-3 p-4">
+      <div className="flex flex-1 flex-col gap-3.5 p-4">
         <div className="flex items-start justify-between gap-3">
           <h3 className="line-clamp-2 text-sm font-semibold leading-5 text-slate-100">
             {title}
@@ -77,11 +104,11 @@ export default function ShopListingCard({ listing }: ShopListingCardProps) {
           </span>
         </div>
 
-        <div className="space-y-1.5">
-          <div className="text-2xl font-semibold tabular-nums text-white">
+        <div className="space-y-1">
+          <div className="text-2xl font-semibold tabular-nums tracking-tight text-white">
             {formatUsd(Number(listing.price), 2)}
           </div>
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-5">
             {cmv.cmvLabel ? (
               <span className="text-slate-400">{cmv.cmvLabel}</span>
             ) : (
@@ -93,7 +120,7 @@ export default function ShopListingCard({ listing }: ShopListingCardProps) {
 
         <p className="text-xs text-slate-400">{shippingLine}</p>
 
-        <div className="mt-auto flex items-center gap-2 pt-1">
+        <div className="mt-auto flex items-center gap-2 pt-1.5">
           <button
             onClick={handleAddToCart}
             disabled={!canAdd}

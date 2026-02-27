@@ -2,7 +2,6 @@
 
 import { useCallback, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
-import ShopStatsStrip from "./ShopStatsStrip";
 import ShopListingCard from "./ShopListingCard";
 import ShopFilterBar, {
   type SortValue,
@@ -20,9 +19,63 @@ interface ShopStorefrontProps {
 
 type MerchandisingPreset = "featured" | "below-cmv" | "premium";
 
+interface Tile {
+  title: string;
+  description: string;
+  iconPath: string;
+}
+
 const CATALOG_ID = "shop-catalog";
+const FIRST_ACCESS_ID = "first-access";
 const PAGE_SIZE = 24;
 const CURATED_ROW_SIZE = 8;
+const SKELETON_COUNT = 8;
+
+const EMPTY_TILES: Tile[] = [
+  {
+    title: "Slabs",
+    description: "Top graded cards with clean cert details.",
+    iconPath:
+      "M4.5 6.75A2.25 2.25 0 016.75 4.5h10.5a2.25 2.25 0 012.25 2.25v10.5A2.25 2.25 0 0117.25 19.5H6.75a2.25 2.25 0 01-2.25-2.25V6.75z",
+  },
+  {
+    title: "Singles",
+    description: "Collector-grade singles priced to move.",
+    iconPath:
+      "M3.75 7.5A2.25 2.25 0 016 5.25h12A2.25 2.25 0 0120.25 7.5v9A2.25 2.25 0 0118 18.75H6a2.25 2.25 0 01-2.25-2.25v-9z",
+  },
+  {
+    title: "Sealed",
+    description: "Premium wax and sealed releases when available.",
+    iconPath:
+      "M12 3l8.25 4.5L12 12 3.75 7.5 12 3zm8.25 4.5V16.5L12 21l-8.25-4.5V7.5",
+  },
+  {
+    title: "Deals below CMV",
+    description: "Clear discounts versus current market value.",
+    iconPath:
+      "M5.25 8.25h13.5M6.75 12h10.5M8.25 15.75h7.5M6 3.75h12A2.25 2.25 0 0120.25 6v12A2.25 2.25 0 0118 20.25H6A2.25 2.25 0 013.75 18V6A2.25 2.25 0 016 3.75z",
+  },
+];
+
+const TRUST_CHIPS = [
+  "Secure checkout",
+  "Fast shipping",
+  "Condition-first photos",
+  "CMV transparency",
+];
+
+const TOP_TRUST_CHIPS = [
+  "Secure checkout",
+  "Fast shipping",
+  "CMV transparency",
+];
+
+const WAITLIST_BULLETS = [
+  "Drops 1-2x/week",
+  "Verified condition photos",
+  "CMV included",
+];
 
 function applyPriceRange(
   list: ShopListing[],
@@ -43,6 +96,17 @@ function applyPriceRange(
 function discountRatio(listing: ShopListing): number {
   if (listing.cmv == null || listing.cmv <= 0) return -Infinity;
   return (listing.cmv - listing.price) / listing.cmv;
+}
+
+function trustChip(label: string) {
+  return (
+    <span
+      key={label}
+      className="rounded-full border border-slate-700/80 bg-slate-900/70 px-3 py-1.5 text-xs text-slate-200"
+    >
+      {label}
+    </span>
+  );
 }
 
 export default function ShopStorefront({
@@ -128,9 +192,6 @@ export default function ShopStorefront({
       case "discount":
         list.sort((a, b) => discountRatio(b) - discountRatio(a));
         break;
-      case "player":
-        list.sort((a, b) => a.player_name.localeCompare(b.player_name));
-        break;
       default:
         list.sort(
           (a, b) =>
@@ -149,14 +210,20 @@ export default function ShopStorefront({
     sort,
   ]);
 
-  const catalogPageCount = Math.max(1, Math.ceil(catalogFiltered.length / PAGE_SIZE));
+  const catalogPageCount = Math.max(
+    1,
+    Math.ceil(catalogFiltered.length / PAGE_SIZE)
+  );
   const catalogPageItems = catalogFiltered.slice(
     (catalogPage - 1) * PAGE_SIZE,
     catalogPage * PAGE_SIZE
   );
 
   const featuredListings = useMemo(
-    () => initialListings.filter((listing) => listing.featured).slice(0, CURATED_ROW_SIZE),
+    () =>
+      initialListings
+        .filter((listing) => listing.featured)
+        .slice(0, CURATED_ROW_SIZE),
     [initialListings]
   );
 
@@ -203,6 +270,13 @@ export default function ShopStorefront({
     const catalog = document.getElementById(CATALOG_ID);
     if (catalog) {
       catalog.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, []);
+
+  const scrollToFirstAccess = useCallback(() => {
+    const target = document.getElementById(FIRST_ACCESS_ID);
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   }, []);
 
@@ -265,111 +339,208 @@ export default function ShopStorefront({
 
   if (isEmpty) {
     return (
-      <div className="space-y-8 md:space-y-10">
-        <section className="mx-auto max-w-2xl py-8 text-center md:py-10">
-          <p className="text-xs uppercase tracking-[0.2em] text-cyan-300/80">CardzCheck Shop</p>
-          <h1 className="mt-3 text-3xl font-semibold text-white md:text-4xl">
-            Curated cards are landing soon.
-          </h1>
-          <p className="mx-auto mt-4 max-w-xl text-base text-slate-400 md:text-lg">
-            We launch inventory in tight drops with full CMV transparency and verified
-            condition details. Join the waitlist for first access.
-          </p>
+      <div className="space-y-8 md:space-y-9">
+        <section className="relative overflow-hidden rounded-3xl border border-slate-800/80 bg-slate-950/80">
+          <img
+            src="/shop/hero-bg.png"
+            alt=""
+            aria-hidden="true"
+            className="absolute inset-0 h-full w-full object-cover opacity-[0.14]"
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-slate-900/20 via-slate-950/70 to-slate-950/95" />
 
-          <form
-            onSubmit={handleWaitlistSubmit}
-            className="mx-auto mt-7 flex max-w-md flex-col gap-2 sm:flex-row"
-          >
-            <input
-              type="email"
-              value={waitlistEmail}
-              onChange={(event) => setWaitlistEmail(event.target.value)}
-              placeholder="your@email.com"
-              className="flex-1 rounded-lg border border-slate-700 bg-slate-900/80 px-4 py-3 text-white placeholder:text-slate-500 focus:border-cyan-500 focus:outline-none"
-              required
-            />
-            <button
-              type="submit"
-              disabled={waitlistStatus === "loading"}
-              className="rounded-lg bg-cyan-600 px-6 py-3 font-medium text-white transition-colors hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {waitlistStatus === "loading"
-                ? "Joining..."
-                : waitlistStatus === "success"
-                ? "Joined"
-                : "Join waitlist"}
-            </button>
-          </form>
+          <div className="relative space-y-4 p-3 sm:p-4 md:p-6">
+            <div className="flex min-h-[46px] items-center justify-between gap-3 rounded-xl border border-cyan-500/25 bg-slate-900/80 px-3 text-xs text-slate-200">
+              <span className="font-medium uppercase tracking-[0.16em] text-cyan-300">
+                Next Drop
+              </span>
+              <span className="hidden text-slate-300 sm:inline">
+                Curated singles &amp; slabs with CMV transparency
+              </span>
+              <button
+                onClick={scrollToFirstAccess}
+                className="rounded-md bg-cyan-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-cyan-500"
+              >
+                Join waitlist
+              </button>
+            </div>
 
-          {waitlistStatus === "error" && (
-            <p className="mt-3 text-sm text-rose-400">
-              Something went wrong while joining the waitlist.
-            </p>
-          )}
+            <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,400px)_1fr]">
+              <article
+                id={FIRST_ACCESS_ID}
+                className="rounded-2xl border border-slate-800/90 bg-slate-950/80 p-5"
+              >
+                <p className="text-xs uppercase tracking-[0.16em] text-cyan-300/90">
+                  Get first access
+                </p>
+                <h1 className="mt-2 text-2xl font-semibold text-white">
+                  Boutique drops, released in tight windows.
+                </h1>
+                <p className="mt-2 text-sm text-slate-400">
+                  Join the waitlist for first look access to each drop and new featured
+                  inventory.
+                </p>
+
+                <form
+                  onSubmit={handleWaitlistSubmit}
+                  className="mt-5 flex flex-col gap-2 sm:flex-row"
+                >
+                  <input
+                    type="email"
+                    value={waitlistEmail}
+                    onChange={(event) => setWaitlistEmail(event.target.value)}
+                    placeholder="you@email.com"
+                    className="h-11 flex-1 rounded-lg border border-slate-700/80 bg-slate-900/90 px-3 text-sm text-slate-100 placeholder:text-slate-500 focus:border-cyan-500 focus:outline-none"
+                    required
+                  />
+                  <button
+                    type="submit"
+                    disabled={waitlistStatus === "loading"}
+                    className="h-11 rounded-lg bg-cyan-600 px-5 text-sm font-medium text-white transition-colors hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {waitlistStatus === "loading"
+                      ? "Joining..."
+                      : waitlistStatus === "success"
+                      ? "Joined"
+                      : "Join waitlist"}
+                  </button>
+                </form>
+
+                {waitlistStatus === "error" && (
+                  <p className="mt-3 text-sm text-rose-400">
+                    Something went wrong while joining the waitlist.
+                  </p>
+                )}
+
+                <ul className="mt-5 space-y-2 text-sm text-slate-300">
+                  {WAITLIST_BULLETS.map((bullet) => (
+                    <li key={bullet} className="flex items-center gap-2">
+                      <span className="h-1.5 w-1.5 rounded-full bg-cyan-400" />
+                      {bullet}
+                    </li>
+                  ))}
+                </ul>
+              </article>
+
+              <article className="rounded-2xl border border-slate-800/90 bg-slate-950/70 p-5">
+                <p className="text-xs uppercase tracking-[0.16em] text-cyan-300/90">
+                  What you'll find
+                </p>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  {EMPTY_TILES.map((tile) => (
+                    <div
+                      key={tile.title}
+                      className="rounded-xl border border-slate-800/80 bg-slate-900/70 p-4"
+                    >
+                      <svg
+                        className="h-5 w-5 text-cyan-300"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={1.6}
+                          d={tile.iconPath}
+                        />
+                      </svg>
+                      <h3 className="mt-3 text-sm font-medium text-white">{tile.title}</h3>
+                      <p className="mt-1 text-xs leading-5 text-slate-400">
+                        {tile.description}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </article>
+            </div>
+          </div>
         </section>
 
-        <ShopStatsStrip stats={stats} isAdmin={isAdmin} compact />
+        <section className="space-y-4">
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-white">Featured (coming soon)</h2>
+              <p className="mt-1 text-sm text-slate-400">
+                Inventory preview for the next live drop.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {Array.from({ length: SKELETON_COUNT }).map((_, index) => (
+              <ShopListingCard key={`skeleton-${index}`} skeleton />
+            ))}
+          </div>
+        </section>
+
+        <section className="flex flex-wrap gap-2.5">
+          {TRUST_CHIPS.map((chip) => trustChip(chip))}
+        </section>
+
+        {isAdmin && (
+          <div className="pt-1">
+            <Link
+              href="/admin/shop"
+              className="text-sm text-slate-400 transition-colors hover:text-cyan-300"
+            >
+              Add listings in Admin
+            </Link>
+          </div>
+        )}
       </div>
     );
   }
 
   return (
-    <div className="space-y-10 md:space-y-12">
-      <section className="space-y-5">
-        <div className="flex flex-wrap items-end justify-between gap-4">
+    <div className="space-y-8 md:space-y-9">
+      <section className="rounded-2xl border border-slate-800/80 bg-slate-950/70 p-4 md:p-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-cyan-300/80">CardzCheck Shop</p>
-            <h1 className="mt-2 text-3xl font-semibold text-white md:text-4xl">
-              Curated inventory. Transparent pricing.
-            </h1>
+            <h1 className="text-2xl font-semibold text-white md:text-3xl">CardzCheck Shop</h1>
+            <p className="mt-1.5 text-sm text-slate-400">
+              {stats.activeCount} active listings with CMV market pricing context.
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              Prices are benchmarked against CardzCheck Market Value.{" "}
+              <Link
+                href="/comps"
+                className="text-slate-400 transition-colors hover:text-cyan-300"
+              >
+                Learn how CMV works
+              </Link>
+              .
+            </p>
           </div>
-          <Link
-            href="/comps"
-            className="text-sm font-medium text-slate-400 transition-colors hover:text-cyan-300"
-          >
-            How CMV works
-          </Link>
-        </div>
 
-        <div className="flex flex-wrap gap-2">
-          <span className="rounded-full border border-slate-700 bg-slate-900/70 px-3 py-1.5 text-xs text-slate-300">
-            Secure Stripe Checkout
-          </span>
-          <span className="rounded-full border border-slate-700 bg-slate-900/70 px-3 py-1.5 text-xs text-slate-300">
-            Ships in 1-2 days
-          </span>
-          <span className="rounded-full border border-slate-700 bg-slate-900/70 px-3 py-1.5 text-xs text-slate-300">
-            Verified slabs + raw
-          </span>
+          <div className="flex flex-wrap gap-2">{TOP_TRUST_CHIPS.map((chip) => trustChip(chip))}</div>
         </div>
-
-        <ShopStatsStrip stats={stats} isAdmin={isAdmin} compact />
       </section>
 
-      <section className="space-y-8">
+      <section className="space-y-7">
         <ShopSectionCarousel
           title="Featured"
-          subtitle="Handpicked cards from current inventory"
+          subtitle="Featured inventory from the current drop."
           listings={featuredListings}
           onSeeAll={() => applyMerchandisingPreset("featured")}
         />
 
         <ShopSectionCarousel
           title="Below CMV deals"
-          subtitle="Best discounts versus CardzCheck Market Value"
+          subtitle="Sorted by largest discount to market value."
           listings={belowCmvDeals}
           onSeeAll={() => applyMerchandisingPreset("below-cmv")}
         />
 
         <ShopSectionCarousel
           title="Premium"
-          subtitle="High-end slabs and flagship cards"
+          subtitle="High-end slabs and flagship cards."
           listings={premiumListings}
           onSeeAll={() => applyMerchandisingPreset("premium")}
         />
       </section>
 
-      <section id={CATALOG_ID} className="scroll-mt-28 space-y-5">
+      <section id={CATALOG_ID} className="scroll-mt-28 space-y-4">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-xl font-semibold text-white">Full catalog</h2>
           {hasActiveFilters && (
@@ -383,18 +554,8 @@ export default function ShopStorefront({
         </div>
 
         <div className="space-y-3 rounded-2xl border border-slate-800/80 bg-slate-950/40 p-4 md:p-5">
-          <input
-            type="search"
-            value={search}
-            onChange={(event) => {
-              setSearch(event.target.value);
-              setCatalogPage(1);
-            }}
-            placeholder="Search player, set, year, tags..."
-            className="w-full rounded-lg border border-slate-700/80 bg-slate-900/80 px-4 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 focus:border-cyan-500 focus:outline-none md:max-w-sm"
-          />
-
           <ShopFilterBar
+            search={search}
             sports={sports}
             grades={grades}
             sportFilter={sportFilter}
@@ -402,6 +563,10 @@ export default function ShopStorefront({
             priceRange={priceRange}
             belowCmvOnly={belowCmvOnly}
             sort={sort}
+            onSearchChange={(value) => {
+              setSearch(value);
+              setCatalogPage(1);
+            }}
             onSportChange={(value) => {
               setSportFilter(value);
               setCatalogPage(1);
@@ -461,7 +626,7 @@ export default function ShopStorefront({
                 >
                   Previous
                 </button>
-                <span className="px-3 text-sm text-slate-400 tabular-nums">
+                <span className="px-3 text-sm tabular-nums text-slate-400">
                   {catalogPage} / {catalogPageCount}
                 </span>
                 <button

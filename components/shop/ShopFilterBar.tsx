@@ -5,25 +5,25 @@ import { useState } from "react";
 const PRICE_RANGES = [
   { value: "", label: "Price: All" },
   { value: "0-25", label: "Under $25" },
-  { value: "25-50", label: "$25–$50" },
-  { value: "50-100", label: "$50–$100" },
-  { value: "100-200", label: "$100–$200" },
+  { value: "25-50", label: "$25-$50" },
+  { value: "50-100", label: "$50-$100" },
+  { value: "100-200", label: "$100-$200" },
   { value: "200+", label: "$200+" },
 ] as const;
 
 const SORTS = [
   { value: "featured", label: "Featured" },
   { value: "newest", label: "Newest" },
-  { value: "price_asc", label: "Price: Low to High" },
-  { value: "price_desc", label: "Price: High to Low" },
+  { value: "price_asc", label: "Price: Low-High" },
+  { value: "price_desc", label: "Price: High-Low" },
   { value: "discount", label: "Biggest Discount" },
-  { value: "player", label: "Player A-Z" },
 ] as const;
 
 export type SortValue = (typeof SORTS)[number]["value"];
 export type PriceRangeValue = (typeof PRICE_RANGES)[number]["value"];
 
 export interface ShopFilterBarProps {
+  search: string;
   sports: string[];
   grades: string[];
   sportFilter: string | null;
@@ -31,6 +31,7 @@ export interface ShopFilterBarProps {
   priceRange: PriceRangeValue;
   belowCmvOnly: boolean;
   sort: SortValue;
+  onSearchChange: (value: string) => void;
   onSportChange: (value: string | null) => void;
   onGradeChange: (value: string | null) => void;
   onPriceRangeChange: (value: PriceRangeValue) => void;
@@ -40,6 +41,7 @@ export interface ShopFilterBarProps {
 }
 
 function FilterControls({
+  search,
   sports,
   grades,
   sportFilter,
@@ -47,80 +49,82 @@ function FilterControls({
   priceRange,
   belowCmvOnly,
   sort,
+  onSearchChange,
   onSportChange,
   onGradeChange,
   onPriceRangeChange,
   onBelowCmvChange,
   onSortChange,
-  compact = false,
-}: Omit<ShopFilterBarProps, "resultCount"> & { compact?: boolean }) {
+}: Omit<ShopFilterBarProps, "resultCount">) {
   const baseSelect =
-    "px-3 py-2 rounded-lg bg-gray-800/80 text-gray-300 text-sm border border-gray-700/60 focus:border-cyan-500/50 focus:outline-none min-w-0";
+    "h-10 rounded-lg border border-slate-700/80 bg-slate-900/80 px-3 text-sm text-slate-200 focus:border-cyan-500 focus:outline-none";
 
   return (
-    <div
-      className={`flex flex-wrap items-center gap-2 ${compact ? "flex-col" : ""}`}
-    >
+    <div className="grid gap-2 md:grid-cols-[minmax(220px,1.3fr)_repeat(5,minmax(0,1fr))]">
+      <input
+        type="search"
+        value={search}
+        onChange={(event) => onSearchChange(event.target.value)}
+        placeholder="Search player, set, year, tags..."
+        className="h-10 rounded-lg border border-slate-700/80 bg-slate-900/80 px-3 text-sm text-slate-200 placeholder:text-slate-500 focus:border-cyan-500 focus:outline-none"
+      />
+
       <select
         value={sportFilter ?? ""}
-        onChange={(e) => onSportChange(e.target.value || null)}
+        onChange={(event) => onSportChange(event.target.value || null)}
         className={baseSelect}
       >
-        <option value="">Sport: All</option>
-        {sports.map((s) => (
-          <option key={s} value={s}>
-            {s}
+        <option value="">Sport</option>
+        {sports.map((sport) => (
+          <option key={sport} value={sport}>
+            {sport}
           </option>
         ))}
       </select>
 
       <select
         value={gradeFilter ?? ""}
-        onChange={(e) => onGradeChange(e.target.value || null)}
+        onChange={(event) => onGradeChange(event.target.value || null)}
         className={baseSelect}
       >
-        <option value="">Grade: All</option>
-        {grades.map((g) => (
-          <option key={g} value={g}>
-            {g}
+        <option value="">Grade</option>
+        {grades.map((grade) => (
+          <option key={grade} value={grade}>
+            {grade}
           </option>
         ))}
       </select>
 
       <select
         value={priceRange}
-        onChange={(e) =>
-          onPriceRangeChange(e.target.value as PriceRangeValue)
-        }
+        onChange={(event) => onPriceRangeChange(event.target.value as PriceRangeValue)}
         className={baseSelect}
       >
-        {PRICE_RANGES.map((r) => (
-          <option key={r.value || "all"} value={r.value}>
-            {r.label}
+        {PRICE_RANGES.map((range) => (
+          <option key={range.value || "all"} value={range.value}>
+            {range.label}
           </option>
         ))}
       </select>
 
-      <label className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800/80 border border-gray-700/60 cursor-pointer hover:border-gray-600 transition-colors">
+      <label className="flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-700/80 bg-slate-900/80 px-3 text-sm text-slate-200">
         <input
           type="checkbox"
           checked={belowCmvOnly}
-          onChange={(e) => onBelowCmvChange(e.target.checked)}
-          className="w-4 h-4 rounded border-gray-600 bg-gray-800 text-cyan-500 focus:ring-cyan-500/50"
+          onChange={(event) => onBelowCmvChange(event.target.checked)}
+          className="h-4 w-4 rounded border-slate-600 bg-slate-800 text-cyan-500 focus:ring-cyan-500/40"
         />
-        <span className="text-sm text-gray-400 whitespace-nowrap">
-          Below CMV
-        </span>
+        <span>Below CMV</span>
       </label>
 
       <select
         value={sort}
-        onChange={(e) => onSortChange(e.target.value as SortValue)}
+        onChange={(event) => onSortChange(event.target.value as SortValue)}
         className={baseSelect}
       >
-        {SORTS.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
+        {SORTS.map((sortOption) => (
+          <option key={sortOption.value} value={sortOption.value}>
+            {sortOption.label}
           </option>
         ))}
       </select>
@@ -129,6 +133,7 @@ function FilterControls({
 }
 
 export default function ShopFilterBar({
+  search,
   sports,
   grades,
   sportFilter,
@@ -136,6 +141,7 @@ export default function ShopFilterBar({
   priceRange,
   belowCmvOnly,
   sort,
+  onSearchChange,
   onSportChange,
   onGradeChange,
   onPriceRangeChange,
@@ -147,35 +153,37 @@ export default function ShopFilterBar({
 
   return (
     <>
-      {/* Desktop: horizontal filter row */}
-      <div className="hidden md:flex items-center justify-between gap-4 flex-wrap">
-        <FilterControls
-          sports={sports}
-          grades={grades}
-          sportFilter={sportFilter}
-          gradeFilter={gradeFilter}
-          priceRange={priceRange}
-          belowCmvOnly={belowCmvOnly}
-          sort={sort}
-          onSportChange={onSportChange}
-          onGradeChange={onGradeChange}
-          onPriceRangeChange={onPriceRangeChange}
-          onBelowCmvChange={onBelowCmvChange}
-          onSortChange={onSortChange}
-        />
-        <span className="text-sm text-gray-500 tabular-nums">
+      <div className="hidden items-center justify-between gap-4 md:flex">
+        <div className="w-full">
+          <FilterControls
+            search={search}
+            sports={sports}
+            grades={grades}
+            sportFilter={sportFilter}
+            gradeFilter={gradeFilter}
+            priceRange={priceRange}
+            belowCmvOnly={belowCmvOnly}
+            sort={sort}
+            onSearchChange={onSearchChange}
+            onSportChange={onSportChange}
+            onGradeChange={onGradeChange}
+            onPriceRangeChange={onPriceRangeChange}
+            onBelowCmvChange={onBelowCmvChange}
+            onSortChange={onSortChange}
+          />
+        </div>
+        <span className="shrink-0 text-sm tabular-nums text-slate-500">
           {resultCount} listings
         </span>
       </div>
 
-      {/* Mobile: Filters button + slide-over */}
-      <div className="flex md:hidden items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-3 md:hidden">
         <button
           onClick={() => setMobileOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-800/80 border border-gray-700/60 text-sm text-gray-300 hover:text-white hover:border-gray-600 transition-colors"
+          className="flex items-center gap-2 rounded-lg border border-slate-700/80 bg-slate-900/80 px-4 py-2 text-sm text-slate-200 transition-colors hover:border-slate-500 hover:text-white"
         >
           <svg
-            className="w-4 h-4"
+            className="h-4 w-4"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -189,33 +197,30 @@ export default function ShopFilterBar({
           </svg>
           Filters
         </button>
-        <span className="text-sm text-gray-500 tabular-nums">
-          {resultCount} listings
-        </span>
+        <span className="text-sm tabular-nums text-slate-500">{resultCount} listings</span>
       </div>
 
-      {/* Mobile slide-over */}
       {mobileOpen && (
         <>
           <div
-            className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm md:hidden"
+            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm md:hidden"
             onClick={() => setMobileOpen(false)}
             aria-hidden="true"
           />
           <div
-            className="fixed inset-y-0 right-0 z-50 w-full max-w-sm bg-[#0f1419] border-l border-gray-800 shadow-xl p-6 overflow-y-auto md:hidden"
+            className="fixed inset-y-0 right-0 z-50 w-full max-w-sm overflow-y-auto border-l border-slate-800 bg-[#0f1419] p-6 md:hidden"
             role="dialog"
             aria-label="Filters"
           >
-            <div className="flex items-center justify-between mb-6">
+            <div className="mb-6 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-white">Filters</h3>
               <button
                 onClick={() => setMobileOpen(false)}
-                className="p-2 text-gray-400 hover:text-white rounded-lg transition-colors"
+                className="rounded-lg p-2 text-slate-400 transition-colors hover:text-white"
                 aria-label="Close filters"
               >
                 <svg
-                  className="w-5 h-5"
+                  className="h-5 w-5"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -229,29 +234,84 @@ export default function ShopFilterBar({
                 </svg>
               </button>
             </div>
-            <FilterControls
-              sports={sports}
-              grades={grades}
-              sportFilter={sportFilter}
-              gradeFilter={gradeFilter}
-              priceRange={priceRange}
-              belowCmvOnly={belowCmvOnly}
-              sort={sort}
-              onSportChange={onSportChange}
-              onGradeChange={onGradeChange}
-              onPriceRangeChange={onPriceRangeChange}
-              onBelowCmvChange={onBelowCmvChange}
-              onSortChange={(v) => {
-                onSortChange(v);
-                setMobileOpen(false);
-              }}
-              compact
-            />
+
+            <div className="space-y-3">
+              <input
+                type="search"
+                value={search}
+                onChange={(event) => onSearchChange(event.target.value)}
+                placeholder="Search player, set, year, tags..."
+                className="h-10 w-full rounded-lg border border-slate-700/80 bg-slate-900/80 px-3 text-sm text-slate-200 placeholder:text-slate-500 focus:border-cyan-500 focus:outline-none"
+              />
+
+              <select
+                value={sportFilter ?? ""}
+                onChange={(event) => onSportChange(event.target.value || null)}
+                className="h-10 w-full rounded-lg border border-slate-700/80 bg-slate-900/80 px-3 text-sm text-slate-200 focus:border-cyan-500 focus:outline-none"
+              >
+                <option value="">Sport</option>
+                {sports.map((sport) => (
+                  <option key={sport} value={sport}>
+                    {sport}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={gradeFilter ?? ""}
+                onChange={(event) => onGradeChange(event.target.value || null)}
+                className="h-10 w-full rounded-lg border border-slate-700/80 bg-slate-900/80 px-3 text-sm text-slate-200 focus:border-cyan-500 focus:outline-none"
+              >
+                <option value="">Grade</option>
+                {grades.map((grade) => (
+                  <option key={grade} value={grade}>
+                    {grade}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={priceRange}
+                onChange={(event) =>
+                  onPriceRangeChange(event.target.value as PriceRangeValue)
+                }
+                className="h-10 w-full rounded-lg border border-slate-700/80 bg-slate-900/80 px-3 text-sm text-slate-200 focus:border-cyan-500 focus:outline-none"
+              >
+                {PRICE_RANGES.map((range) => (
+                  <option key={range.value || "all"} value={range.value}>
+                    {range.label}
+                  </option>
+                ))}
+              </select>
+
+              <label className="flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-700/80 bg-slate-900/80 px-3 text-sm text-slate-200">
+                <input
+                  type="checkbox"
+                  checked={belowCmvOnly}
+                  onChange={(event) => onBelowCmvChange(event.target.checked)}
+                  className="h-4 w-4 rounded border-slate-600 bg-slate-800 text-cyan-500 focus:ring-cyan-500/40"
+                />
+                <span>Below CMV</span>
+              </label>
+
+              <select
+                value={sort}
+                onChange={(event) => onSortChange(event.target.value as SortValue)}
+                className="h-10 w-full rounded-lg border border-slate-700/80 bg-slate-900/80 px-3 text-sm text-slate-200 focus:border-cyan-500 focus:outline-none"
+              >
+                {SORTS.map((sortOption) => (
+                  <option key={sortOption.value} value={sortOption.value}>
+                    {sortOption.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <button
               onClick={() => setMobileOpen(false)}
-              className="mt-6 w-full py-3 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white font-medium transition-colors"
+              className="mt-6 w-full rounded-lg bg-cyan-600 py-3 text-sm font-medium text-white transition-colors hover:bg-cyan-500"
             >
-              Apply
+              Apply filters
             </button>
           </div>
         </>
