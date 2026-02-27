@@ -10,7 +10,6 @@ import type { User } from "@/types";
 import { LIMITS } from "@/types";
 import { isTestMode, getTestUser } from "@/lib/test-mode";
 
-const VIEW_MODE_STORAGE_KEY = "cardzcheck_view_mode";
 const EBAY_STORE_URL_STORAGE_KEY = "cardzcheck_ebay_store_url";
 const EBAY_STORE_URL_UPDATED_EVENT = "cardzcheck:ebay-store-url-updated";
 
@@ -46,26 +45,7 @@ function SettingsContent() {
   const [pricingOpen, setPricingOpen] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [settingsMode, setSettingsMode] = useState<"personal" | "business">(
-    pathname.startsWith("/business") ? "business" : "personal"
-  );
-  const isBusinessSettings = settingsMode === "business";
-
-  useEffect(() => {
-    if (pathname.startsWith("/business")) {
-      setSettingsMode("business");
-      return;
-    }
-
-    if (typeof window === "undefined") return;
-    const stored = window.sessionStorage.getItem(VIEW_MODE_STORAGE_KEY);
-    if (stored === "personal" || stored === "business") {
-      setSettingsMode(stored);
-      return;
-    }
-
-    setSettingsMode("personal");
-  }, [pathname]);
+  const isBusinessSettings = pathname.startsWith("/business");
 
   useEffect(() => {
     if (searchParams.get("success") === "true") {

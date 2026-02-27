@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
-      let next = nextParam ?? "/comps";
+      let next = nextParam ?? "/dashboard";
 
       if (!nextParam) {
         const {

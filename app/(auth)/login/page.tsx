@@ -36,7 +36,7 @@ function LoginForm() {
 
     // Ensure we have a session before redirecting
     if (data.session) {
-      let redirectTarget = redirectParam || "/comps";
+      let redirectTarget = redirectParam || "/dashboard";
 
       if (!redirectParam && data.user) {
         const { data: sub } = await supabase

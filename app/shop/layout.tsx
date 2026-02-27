@@ -63,13 +63,16 @@ function ShopNav() {
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
+                aria-hidden="true"
               >
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"
+                  d="M3 5h2l1 12h12l1-8H6"
                 />
+                <circle cx="10" cy="19" r="1.25" />
+                <circle cx="17" cy="19" r="1.25" />
               </svg>
               <span>Cart</span>
               {totalItems > 0 && (

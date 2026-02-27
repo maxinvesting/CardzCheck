@@ -15,7 +15,7 @@ const MAIN_TABS = [
 const MORE_LINKS = [
   { name: "Watchlist", href: "/watchlist" },
   { name: "Comps", href: "/comps" },
-  { name: "Grade Engine", href: "/grade-estimator" },
+  { name: "Grade Engine", href: "/grade-probability" },
   { name: "Analyst", href: "/analyst" },
   { name: "Settings", href: "/settings" },
 ];
@@ -27,6 +27,7 @@ const TAB_BASE_PATHS = [
   "/shop",
   "/watchlist",
   "/comps",
+  "/grade-probability",
   "/grade-estimator",
   "/analyst",
   "/settings",

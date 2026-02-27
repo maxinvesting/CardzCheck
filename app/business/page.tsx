@@ -11,7 +11,7 @@ import {
   type ProfilerOnRenderCallback,
   startTransition,
 } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import BusinessPaywall from "@/components/business/BusinessPaywall";
@@ -84,6 +84,15 @@ function defaultSalesFilters(): SalesFilters {
   };
 }
 
+function resolveBusinessTab(
+  pathname: string,
+  tabParam: string | null
+): "inventory" | "sales" {
+  if (pathname.startsWith("/business/sales")) return "sales";
+  if (pathname.startsWith("/business/inventory")) return "inventory";
+  return tabParam === "sales" ? "sales" : "inventory";
+}
+
 function buildPerfMockInventory(count = PERF_MOCK_ITEM_COUNT): BusinessInventoryItem[] {
   const channels: BusinessInventoryItem["channel"][] = [
     "ebay",
@@ -143,6 +152,7 @@ function buildPerfMockInventory(count = PERF_MOCK_ITEM_COUNT): BusinessInventory
 }
 
 function BusinessPageContent() {
+  const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
@@ -165,7 +175,9 @@ function BusinessPageContent() {
   const [needsMigration, setNeedsMigration] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [filteredItems, setFilteredItems] = useState<BusinessInventoryItem[]>([]);
-  const [activeTab, setActiveTab] = useState<"inventory" | "sales">("inventory");
+  const [activeTab, setActiveTab] = useState<"inventory" | "sales">(() =>
+    resolveBusinessTab(pathname, searchParams.get("tab"))
+  );
   const [markSoldItem, setMarkSoldItem] = useState<BusinessInventoryItem | null>(null);
   const [sales, setSales] = useState<BusinessSale[]>([]);
   const [salesLoading, setSalesLoading] = useState(false);
@@ -283,6 +295,24 @@ function BusinessPageContent() {
       });
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    setActiveTab(resolveBusinessTab(pathname, searchParams.get("tab")));
+  }, [pathname, searchParams]);
+
+  const handleTabChange = useCallback(
+    (tab: "inventory" | "sales") => {
+      setActiveTab(tab);
+      if (tab === "sales" && pathname !== "/business/sales") {
+        router.push("/business/sales");
+        return;
+      }
+      if (tab === "inventory" && pathname.startsWith("/business/sales")) {
+        router.push("/business/inventory");
+      }
+    },
+    [pathname, router]
+  );
 
   const loadInventory = useCallback(async () => {
     if (perfMockMode) {
@@ -1047,7 +1077,7 @@ function BusinessPageContent() {
               </a>
             ) : (
               <Link
-                href="/settings"
+                href="/business/settings"
                 className="px-3 py-1.5 border border-gray-600 text-gray-400 rounded-md hover:bg-gray-800 transition-colors text-xs font-medium whitespace-nowrap"
               >
                 Add Ebay Storefront
@@ -1140,7 +1170,7 @@ function BusinessPageContent() {
           <div className="mb-2 flex items-center gap-1 border-b border-gray-800">
             <button
               type="button"
-              onClick={() => setActiveTab("inventory")}
+              onClick={() => handleTabChange("inventory")}
               className={`border-b-2 px-3 py-1.5 text-xs font-medium transition-colors ${
                 activeTab === "inventory"
                   ? "border-emerald-500 text-emerald-400"
@@ -1151,7 +1181,7 @@ function BusinessPageContent() {
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab("sales")}
+              onClick={() => handleTabChange("sales")}
               className={`border-b-2 px-3 py-1.5 text-xs font-medium transition-colors ${
                 activeTab === "sales"
                   ? "border-emerald-500 text-emerald-400"

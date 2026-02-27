@@ -12,13 +12,61 @@ const PROTECTED_PATHS = [
   "/settings",
   "/analyst",
 ];
-const BUSINESS_REQUIRED_PATHS = ["/business"];
+
+const PERSONAL_WORKSPACE_PATHS = [
+  "/dashboard",
+  "/collection",
+  "/watchlist",
+  "/comps",
+  "/grade-probability",
+  "/grade-estimator",
+  "/analyst",
+];
+
+type RedirectRule = {
+  from: string;
+  to: string;
+};
+
+const PERSONAL_TO_BUSINESS_REDIRECTS: RedirectRule[] = [
+  { from: "/comps", to: "/business/comps" },
+  { from: "/grade-probability", to: "/business/grade-probability" },
+  { from: "/grade-estimator", to: "/business/grade-probability" },
+  { from: "/analyst", to: "/business/analyst" },
+  { from: "/dashboard", to: "/business" },
+  { from: "/collection", to: "/business" },
+  { from: "/watchlist", to: "/business" },
+];
+
+const BUSINESS_TO_PERSONAL_REDIRECTS: RedirectRule[] = [
+  { from: "/business/comps", to: "/comps" },
+  { from: "/business/grade-probability", to: "/grade-probability" },
+  { from: "/business/grade-estimator", to: "/grade-probability" },
+  { from: "/business/analyst", to: "/analyst" },
+  { from: "/business/settings", to: "/settings" },
+  { from: "/business/shop", to: "/shop" },
+  { from: "/business", to: "/dashboard" },
+];
+
+function matchesPrefix(pathname: string, prefix: string): boolean {
+  return pathname === prefix || pathname.startsWith(`${prefix}/`);
+}
+
+function findRedirect(pathname: string, rules: RedirectRule[]): string | null {
+  for (const rule of rules) {
+    if (matchesPrefix(pathname, rule.from)) {
+      return rule.to;
+    }
+  }
+  return null;
+}
 
 export async function updateSession(request: NextRequest) {
   if (isTestMode()) {
     return { response: NextResponse.next({ request }), userId: null };
   }
 
+  const pathname = request.nextUrl.pathname;
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -30,7 +78,6 @@ export async function updateSession(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
-          // Must set on request AND rebuild response — required by Supabase SSR
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
           supabaseResponse = NextResponse.next({ request });
           cookiesToSet.forEach(({ name, value, options }) =>
@@ -41,39 +88,55 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  const isProtected = PROTECTED_PATHS.some((p) =>
-    request.nextUrl.pathname.startsWith(p)
-  );
+  const isProtected = PROTECTED_PATHS.some((path) => matchesPrefix(pathname, path));
 
   if (isProtected && !user) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    url.searchParams.set("redirect", request.nextUrl.pathname);
+    url.searchParams.set("redirect", pathname);
     return { response: NextResponse.redirect(url), userId: null };
   }
 
-  const isBusinessRequiredPath = BUSINESS_REQUIRED_PATHS.some((path) =>
-    request.nextUrl.pathname.startsWith(path)
-  );
-
-  if (user && isBusinessRequiredPath) {
-    const { data: subscription } = await supabase
-      .from("subscriptions")
-      .select("tier, status, current_period_end")
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    const hasBusinessTier = hasActiveBusinessTier(subscription);
-
-    if (!hasBusinessTier) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/account";
-      url.searchParams.set("notice", "business_required");
-      return { response: NextResponse.redirect(url), userId: user.id };
-    }
+  if (!user) {
+    return { response: supabaseResponse, userId: null };
   }
 
-  return { response: supabaseResponse, userId: user?.id ?? null };
+  const shouldResolveWorkspace =
+    matchesPrefix(pathname, "/business") ||
+    PERSONAL_WORKSPACE_PATHS.some((path) => matchesPrefix(pathname, path));
+
+  if (!shouldResolveWorkspace) {
+    return { response: supabaseResponse, userId: user.id };
+  }
+
+  const { data: subscription } = await supabase
+    .from("subscriptions")
+    .select("tier, status, current_period_end")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  const hasBusinessTier = hasActiveBusinessTier(subscription);
+
+  if (hasBusinessTier) {
+    const redirectPath = findRedirect(pathname, PERSONAL_TO_BUSINESS_REDIRECTS);
+    if (redirectPath) {
+      const url = request.nextUrl.clone();
+      url.pathname = redirectPath;
+      return { response: NextResponse.redirect(url), userId: user.id };
+    }
+    return { response: supabaseResponse, userId: user.id };
+  }
+
+  if (matchesPrefix(pathname, "/business")) {
+    const redirectPath = findRedirect(pathname, BUSINESS_TO_PERSONAL_REDIRECTS) ?? "/dashboard";
+    const url = request.nextUrl.clone();
+    url.pathname = redirectPath;
+    return { response: NextResponse.redirect(url), userId: user.id };
+  }
+
+  return { response: supabaseResponse, userId: user.id };
 }

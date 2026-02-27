@@ -292,13 +292,7 @@ export default function ShopStorefront({
   return (
     <div className="space-y-0">
       <section className="relative overflow-hidden border-b border-slate-200 bg-white">
-        <img
-          src="/shop/hero-bg.png"
-          alt=""
-          aria-hidden="true"
-          className="absolute inset-0 h-full w-full object-cover opacity-[0.1]"
-        />
-        <div className="absolute inset-0 bg-gradient-to-r from-white via-white/95 to-slate-100/75" />
+        <div className="absolute inset-0 bg-gradient-to-r from-white via-white/96 to-slate-100/80" />
 
         <div className="relative mx-auto grid max-w-7xl items-center gap-10 px-4 py-14 lg:grid-cols-[1.1fr_0.9fr] lg:py-20">
           <div className="max-w-2xl space-y-5">
@@ -345,14 +339,30 @@ export default function ShopStorefront({
             </div>
           </div>
 
-          <div className="relative hidden h-full min-h-[360px] lg:block">
-            <div className="absolute -left-16 top-20 h-40 w-40 rounded-full bg-cyan-100/80 blur-3xl" />
-            <div className="absolute bottom-12 right-6 h-52 w-52 rounded-full bg-slate-200/70 blur-3xl" />
-            <img
-              src="/shop/hero-bg.png"
-              alt=""
-              aria-hidden="true"
-              className="absolute right-0 top-0 h-full w-full object-cover opacity-80 blur-[2px]"
+          <div className="relative hidden h-full min-h-[360px] overflow-hidden rounded-3xl bg-slate-950 lg:block">
+            {/* Deep navy backdrop */}
+            <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950" />
+
+            {/* Soft cyan spotlight, inspired by slab lighting */}
+            <div className="absolute -right-10 top-10 h-56 w-56 rounded-full bg-cyan-500/35 blur-3xl" />
+            <div className="absolute -left-16 bottom-0 h-48 w-48 rounded-full bg-sky-500/25 blur-3xl" />
+
+            {/* Blurred slab silhouettes */}
+            <div className="absolute -left-6 bottom-4 h-52 w-32 rounded-xl border border-slate-600/40 bg-slate-900/80 shadow-[0_0_40px_rgba(15,23,42,0.7)] blur-[1px]" />
+            <div className="absolute left-16 bottom-10 h-56 w-34 rounded-xl border border-slate-500/45 bg-slate-900/90 shadow-[0_0_38px_rgba(15,23,42,0.6)] blur-[1.5px]" />
+            <div className="absolute left-32 bottom-16 h-60 w-36 rounded-xl border border-slate-400/45 bg-slate-900/95 shadow-[0_0_42px_rgba(15,23,42,0.75)] blur-[2px]" />
+
+            {/* Far background slabs */}
+            <div className="absolute right-6 top-10 h-40 w-26 rounded-lg border border-slate-700/40 bg-slate-900/80 blur-[1.5px]" />
+            <div className="absolute right-20 bottom-16 h-44 w-28 rounded-lg border border-slate-600/35 bg-slate-900/85 blur-[1.5px]" />
+
+            {/* Fine noise overlay to keep it from feeling flat */}
+            <div
+              className="absolute inset-0 opacity-[0.18]"
+              style={{
+                backgroundImage:
+                  "radial-gradient(circle at 0 0, rgba(148,163,184,0.24) 0, transparent 50%), radial-gradient(circle at 100% 100%, rgba(15,23,42,0.9) 0, transparent 55%)",
+              }}
             />
           </div>
         </div>
