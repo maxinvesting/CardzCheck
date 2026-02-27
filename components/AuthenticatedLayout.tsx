@@ -2,6 +2,7 @@
 
 import Sidebar from "./Sidebar";
 import SportsCardBackground from "./SportsCardBackground";
+import BottomTabBar from "./BottomTabBar";
 
 export default function AuthenticatedLayout({
   children,
@@ -14,10 +15,11 @@ export default function AuthenticatedLayout({
       <SportsCardBackground variant="default" />
 
       <Sidebar />
-      {/* Main content area with padding for sidebar */}
-      <div className="flex-1 lg:ml-64 relative z-10">
+      {/* Main content area with padding for sidebar and bottom tab */}
+      <div className="flex-1 lg:ml-64 relative z-10 pb-20 lg:pb-0">
         <div className="min-h-screen">{children}</div>
       </div>
+      <BottomTabBar />
     </div>
   );
 }

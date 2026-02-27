@@ -256,6 +256,25 @@ export default function Sidebar() {
       isPro: true,
       badge: "Pro",
     },
+    {
+      name: "Shop",
+      href: "/shop",
+      icon: (
+        <svg
+          className="w-5 h-5"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"
+          />
+        </svg>
+      ),
+    },
     ...(isBusiness
       ? [
           {
@@ -313,10 +332,13 @@ export default function Sidebar() {
       item.href === "/watchlist" ||
       item.href === "/comps" ||
       item.href === "/grade-estimator" ||
-      item.href === "/analyst"
+      item.href === "/analyst" ||
+      item.href === "/shop"
   );
+  const shopNavItem = navItems.find((item) => item.href === "/shop");
   const businessNavItems = [
     ...navItems.filter((item) => item.href === "/business"),
+    ...(shopNavItem ? [shopNavItem] : []),
     {
       name: "CardzCheck Business Consultant",
       href: "/business/analyst",
@@ -449,7 +471,9 @@ export default function Sidebar() {
                 onClick={() => setIsOpen(false)}
                 className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
                   isActive(item.href)
-                    ? "bg-blue-600 text-white"
+                    ? item.href === "/shop"
+                      ? "bg-cyan-600 text-white"
+                      : "bg-blue-600 text-white"
                     : "text-gray-400 hover:text-white hover:bg-gray-800"
                 }`}
               >

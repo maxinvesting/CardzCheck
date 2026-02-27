@@ -158,6 +158,65 @@ export async function createBusinessSubscriptionCheckout(
   return session;
 }
 
+export interface ShopCheckoutItem {
+  listingId: string;
+  quantity: number;
+  price: number;
+  shippingCost: number;
+  playerName: string;
+  year: number;
+  setBrand: string;
+  grade: string;
+}
+
+/**
+ * Create a Stripe Checkout session for shop (one-time payment).
+ * Prices and shipping come from DB; never trust client.
+ */
+export async function createShopCheckoutSession(
+  items: ShopCheckoutItem[],
+  successUrl: string,
+  cancelUrl: string
+) {
+  const stripe = getStripeClient();
+
+  const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
+
+  for (const item of items) {
+    const unitPrice = item.price + item.shippingCost;
+    lineItems.push({
+      price_data: {
+        currency: "usd",
+        product_data: {
+          name: `${item.playerName} ${item.year} ${item.setBrand} - ${item.grade}`,
+          description:
+            item.quantity > 1 ? `Quantity: ${item.quantity}` : undefined,
+          images: item.quantity > 1 ? undefined : undefined,
+        },
+        unit_amount: Math.round(unitPrice * 100), // cents
+      },
+      quantity: item.quantity,
+    });
+  }
+
+  const listingIds = items.map((i) => i.listingId);
+  const quantities = items.map((i) => i.quantity);
+
+  const session = await stripe.checkout.sessions.create({
+    payment_method_types: ["card"],
+    line_items: lineItems,
+    mode: "payment",
+    success_url: successUrl,
+    cancel_url: cancelUrl,
+    metadata: {
+      listingIds: JSON.stringify(listingIds),
+      quantities: JSON.stringify(quantities),
+    },
+  });
+
+  return session;
+}
+
 /**
  * Create a Stripe Customer Portal session for subscription management
  */
