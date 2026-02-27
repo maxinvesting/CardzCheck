@@ -5,6 +5,7 @@ import { useState } from "react";
 import SportsCardBackground from "@/components/SportsCardBackground";
 import { ShopCartProvider, useShopCart } from "@/contexts/ShopCartContext";
 import CartDrawer from "@/components/shop/CartDrawer";
+import ShopFooter from "@/components/shop/ShopFooter";
 
 function ShopNav() {
   const [cartOpen, setCartOpen] = useState(false);
@@ -76,6 +77,7 @@ export default function ShopLayout({
         <div className="relative z-10">
           <ShopNav />
           <main>{children}</main>
+          <ShopFooter />
         </div>
       </div>
     </ShopCartProvider>

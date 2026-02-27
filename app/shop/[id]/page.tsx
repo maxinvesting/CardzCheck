@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import ShopListingDetail from "@/components/shop/ShopListingDetail";
+import { getRelatedListings } from "@/lib/shop/server";
 import type { ShopListing } from "@/types/shop";
 
 const PUBLIC_COLUMNS =
@@ -25,12 +26,18 @@ export default async function ShopListingPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const listing = await getListing(id);
+  const [listing, relatedListings] = await Promise.all([
+    getListing(id),
+    getListing(id).then((l) =>
+      l ? getRelatedListings(id, l) : Promise.resolve([])
+    ),
+  ]);
+
   if (!listing) notFound();
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
-      <ShopListingDetail listing={listing} />
+      <ShopListingDetail listing={listing} relatedListings={relatedListings} />
     </div>
   );
 }
