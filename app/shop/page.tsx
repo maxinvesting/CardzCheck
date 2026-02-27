@@ -9,7 +9,7 @@ export default async function ShopPage() {
   ]);
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-10 md:py-12">
+    <div className="mx-auto max-w-7xl px-4 py-8 md:py-10">
       <ShopStorefront
         initialListings={listings}
         stats={stats}

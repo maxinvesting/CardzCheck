@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useCallback, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import ShopStatsStrip from "./ShopStatsStrip";
 import ShopListingCard from "./ShopListingCard";
@@ -8,6 +8,7 @@ import ShopFilterBar, {
   type SortValue,
   type PriceRangeValue,
 } from "./ShopFilterBar";
+import ShopSectionCarousel from "./ShopSectionCarousel";
 import type { ShopListing } from "@/types/shop";
 import type { ShopStats } from "@/lib/shop/server";
 
@@ -17,7 +18,11 @@ interface ShopStorefrontProps {
   isAdmin?: boolean;
 }
 
+type MerchandisingPreset = "featured" | "below-cmv" | "premium";
+
 const CATALOG_ID = "shop-catalog";
+const PAGE_SIZE = 24;
+const CURATED_ROW_SIZE = 8;
 
 function applyPriceRange(
   list: ShopListing[],
@@ -35,6 +40,11 @@ function applyPriceRange(
   return list;
 }
 
+function discountRatio(listing: ShopListing): number {
+  if (listing.cmv == null || listing.cmv <= 0) return -Infinity;
+  return (listing.cmv - listing.price) / listing.cmv;
+}
+
 export default function ShopStorefront({
   initialListings,
   stats,
@@ -48,16 +58,18 @@ export default function ShopStorefront({
   const [sort, setSort] = useState<SortValue>("newest");
   const [catalogPage, setCatalogPage] = useState(1);
   const [waitlistEmail, setWaitlistEmail] = useState("");
-  const [waitlistStatus, setWaitlistStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [waitlistStatus, setWaitlistStatus] = useState<
+    "idle" | "loading" | "success" | "error"
+  >("idle");
 
   const sports = useMemo(() => {
-    const set = new Set(initialListings.map((l) => l.sport).filter(Boolean));
-    return Array.from(set).sort();
+    const sportSet = new Set(initialListings.map((l) => l.sport).filter(Boolean));
+    return Array.from(sportSet).sort();
   }, [initialListings]);
 
   const grades = useMemo(() => {
-    const set = new Set(initialListings.map((l) => l.grade).filter(Boolean));
-    return Array.from(set).sort();
+    const gradeSet = new Set(initialListings.map((l) => l.grade).filter(Boolean));
+    return Array.from(gradeSet).sort();
   }, [initialListings]);
 
   const searchLower = search.toLowerCase().trim();
@@ -66,31 +78,46 @@ export default function ShopStorefront({
 
     if (searchLower) {
       const terms = searchLower.split(/\s+/);
-      list = list.filter((l) => {
+      list = list.filter((listing) => {
         const haystack = [
-          l.player_name,
-          l.set_brand,
-          String(l.year),
-          (l.tags ?? []).join(" "),
+          listing.player_name,
+          listing.set_brand,
+          String(listing.year),
+          (listing.tags ?? []).join(" "),
         ]
           .join(" ")
           .toLowerCase();
-        return terms.every((t) => haystack.includes(t));
+
+        return terms.every((term) => haystack.includes(term));
       });
     }
-    if (sportFilter) list = list.filter((l) => l.sport === sportFilter);
-    if (gradeFilter) list = list.filter((l) => l.grade === gradeFilter);
+
+    if (sportFilter) {
+      list = list.filter((listing) => listing.sport === sportFilter);
+    }
+
+    if (gradeFilter) {
+      list = list.filter((listing) => listing.grade === gradeFilter);
+    }
+
     list = applyPriceRange(list, priceRange);
-    if (belowCmvOnly)
-      list = list.filter((l) => l.cmv != null && l.cmv > 0 && l.price < l.cmv);
+
+    if (belowCmvOnly) {
+      list = list.filter(
+        (listing) =>
+          listing.cmv != null && listing.cmv > 0 && listing.price < listing.cmv
+      );
+    }
 
     switch (sort) {
       case "featured":
-        list.sort((a, b) => (b.featured ? 1 : 0) - (a.featured ? 1 : 0));
-        list.sort(
-          (a, b) =>
+        list.sort((a, b) => {
+          const featuredDelta = Number(b.featured) - Number(a.featured);
+          if (featuredDelta !== 0) return featuredDelta;
+          return (
             new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
+          );
+        });
         break;
       case "price_asc":
         list.sort((a, b) => a.price - b.price);
@@ -99,17 +126,7 @@ export default function ShopStorefront({
         list.sort((a, b) => b.price - a.price);
         break;
       case "discount":
-        list.sort((a, b) => {
-          const da =
-            a.cmv != null && a.cmv > 0
-              ? (a.cmv - a.price) / a.cmv
-              : -Infinity;
-          const db =
-            b.cmv != null && b.cmv > 0
-              ? (b.cmv - b.price) / b.cmv
-              : -Infinity;
-          return db - da;
-        });
+        list.sort((a, b) => discountRatio(b) - discountRatio(a));
         break;
       case "player":
         list.sort((a, b) => a.player_name.localeCompare(b.player_name));
@@ -120,6 +137,7 @@ export default function ShopStorefront({
             new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         );
     }
+
     return list;
   }, [
     initialListings,
@@ -131,12 +149,45 @@ export default function ShopStorefront({
     sort,
   ]);
 
-  const PAGE_SIZE = 30;
-  const catalogPageCount = Math.ceil(catalogFiltered.length / PAGE_SIZE);
+  const catalogPageCount = Math.max(1, Math.ceil(catalogFiltered.length / PAGE_SIZE));
   const catalogPageItems = catalogFiltered.slice(
     (catalogPage - 1) * PAGE_SIZE,
     catalogPage * PAGE_SIZE
   );
+
+  const featuredListings = useMemo(
+    () => initialListings.filter((listing) => listing.featured).slice(0, CURATED_ROW_SIZE),
+    [initialListings]
+  );
+
+  const belowCmvDeals = useMemo(
+    () =>
+      [...initialListings]
+        .filter(
+          (listing) =>
+            listing.cmv != null && listing.cmv > 0 && listing.price < listing.cmv
+        )
+        .sort((a, b) => discountRatio(b) - discountRatio(a))
+        .slice(0, CURATED_ROW_SIZE),
+    [initialListings]
+  );
+
+  const premiumListings = useMemo(
+    () =>
+      [...initialListings]
+        .filter((listing) => listing.price >= 200 || listing.is_premium)
+        .sort((a, b) => b.price - a.price)
+        .slice(0, CURATED_ROW_SIZE),
+    [initialListings]
+  );
+
+  const hasActiveFilters =
+    Boolean(search) ||
+    Boolean(sportFilter) ||
+    Boolean(gradeFilter) ||
+    Boolean(priceRange) ||
+    belowCmvOnly ||
+    sort !== "newest";
 
   const clearFilters = useCallback(() => {
     setSearch("");
@@ -144,21 +195,62 @@ export default function ShopStorefront({
     setGradeFilter(null);
     setPriceRange("");
     setBelowCmvOnly(false);
+    setSort("newest");
     setCatalogPage(1);
   }, []);
 
-  const handleWaitlistSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const scrollToCatalog = useCallback(() => {
+    const catalog = document.getElementById(CATALOG_ID);
+    if (catalog) {
+      catalog.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, []);
+
+  const applyMerchandisingPreset = useCallback(
+    (preset: MerchandisingPreset) => {
+      setSearch("");
+      setSportFilter(null);
+      setGradeFilter(null);
+      setCatalogPage(1);
+
+      if (preset === "featured") {
+        setPriceRange("");
+        setBelowCmvOnly(false);
+        setSort("featured");
+      }
+
+      if (preset === "below-cmv") {
+        setPriceRange("");
+        setBelowCmvOnly(true);
+        setSort("discount");
+      }
+
+      if (preset === "premium") {
+        setPriceRange("200+");
+        setBelowCmvOnly(false);
+        setSort("price_desc");
+      }
+
+      scrollToCatalog();
+    },
+    [scrollToCatalog]
+  );
+
+  const handleWaitlistSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+
     if (!waitlistEmail.trim()) return;
+
     setWaitlistStatus("loading");
+
     try {
-      const res = await fetch("/api/shop/waitlist", {
+      const response = await fetch("/api/shop/waitlist", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: waitlistEmail.trim() }),
       });
-      const data = await res.json();
-      if (res.ok) {
+
+      if (response.ok) {
         setWaitlistStatus("success");
         setWaitlistEmail("");
       } else {
@@ -173,100 +265,135 @@ export default function ShopStorefront({
 
   if (isEmpty) {
     return (
-      <div className="space-y-10">
-        {/* Hero - minimal empty state */}
-        <section className="text-center py-10">
-          <h1 className="text-3xl md:text-5xl font-bold text-white">
-            Authenticated Cards. Data-Driven Pricing.
+      <div className="space-y-8 md:space-y-10">
+        <section className="mx-auto max-w-2xl py-8 text-center md:py-10">
+          <p className="text-xs uppercase tracking-[0.2em] text-cyan-300/80">CardzCheck Shop</p>
+          <h1 className="mt-3 text-3xl font-semibold text-white md:text-4xl">
+            Curated cards are landing soon.
           </h1>
-          <p className="mt-4 text-lg text-gray-400 max-w-xl mx-auto">
-            Every listing includes CardzCheck Market Value (CMV) and transparent pricing deltas.
+          <p className="mx-auto mt-4 max-w-xl text-base text-slate-400 md:text-lg">
+            We launch inventory in tight drops with full CMV transparency and verified
+            condition details. Join the waitlist for first access.
           </p>
 
           <form
             onSubmit={handleWaitlistSubmit}
-            className="mt-8 max-w-sm mx-auto flex flex-col sm:flex-row gap-2"
+            className="mx-auto mt-7 flex max-w-md flex-col gap-2 sm:flex-row"
           >
             <input
               type="email"
               value={waitlistEmail}
-              onChange={(e) => setWaitlistEmail(e.target.value)}
+              onChange={(event) => setWaitlistEmail(event.target.value)}
               placeholder="your@email.com"
-              className="flex-1 px-4 py-3 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:border-cyan-500 focus:outline-none"
+              className="flex-1 rounded-lg border border-slate-700 bg-slate-900/80 px-4 py-3 text-white placeholder:text-slate-500 focus:border-cyan-500 focus:outline-none"
               required
             />
             <button
               type="submit"
               disabled={waitlistStatus === "loading"}
-              className="px-6 py-3 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white font-medium disabled:opacity-50"
+              className="rounded-lg bg-cyan-600 px-6 py-3 font-medium text-white transition-colors hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {waitlistStatus === "loading"
                 ? "Joining..."
                 : waitlistStatus === "success"
-                ? "Joined!"
-                : "Join Waitlist"}
+                ? "Joined"
+                : "Join waitlist"}
             </button>
           </form>
+
           {waitlistStatus === "error" && (
-            <p className="mt-2 text-sm text-red-400">Something went wrong. Try again.</p>
+            <p className="mt-3 text-sm text-rose-400">
+              Something went wrong while joining the waitlist.
+            </p>
           )}
         </section>
 
-        <ShopStatsStrip stats={stats} isAdmin={isAdmin} />
+        <ShopStatsStrip stats={stats} isAdmin={isAdmin} compact />
       </div>
     );
   }
 
   return (
-    <div className="space-y-14">
-      {/* Hero - tightened, trust chips */}
-      <section className="text-center py-10">
-        <h1 className="text-3xl md:text-5xl font-bold text-white">
-          Authenticated Cards. Data-Driven Pricing.
-        </h1>
-        <p className="mt-4 text-lg text-gray-400 max-w-xl mx-auto">
-          Every listing includes CardzCheck Market Value (CMV) and transparent pricing deltas.
-        </p>
-        <div className="mt-6 flex flex-wrap justify-center gap-3">
-          <span className="px-3 py-1.5 rounded-full text-sm text-gray-400 border border-gray-700/60 bg-gray-800/30">
+    <div className="space-y-10 md:space-y-12">
+      <section className="space-y-5">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-cyan-300/80">CardzCheck Shop</p>
+            <h1 className="mt-2 text-3xl font-semibold text-white md:text-4xl">
+              Curated inventory. Transparent pricing.
+            </h1>
+          </div>
+          <Link
+            href="/comps"
+            className="text-sm font-medium text-slate-400 transition-colors hover:text-cyan-300"
+          >
+            How CMV works
+          </Link>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <span className="rounded-full border border-slate-700 bg-slate-900/70 px-3 py-1.5 text-xs text-slate-300">
             Secure Stripe Checkout
           </span>
-          <span className="px-3 py-1.5 rounded-full text-sm text-gray-400 border border-gray-700/60 bg-gray-800/30">
-            Fast 1–2 Day Shipping
+          <span className="rounded-full border border-slate-700 bg-slate-900/70 px-3 py-1.5 text-xs text-slate-300">
+            Ships in 1-2 days
           </span>
-          <span className="px-3 py-1.5 rounded-full text-sm text-gray-400 border border-gray-700/60 bg-gray-800/30">
-            Verified Graded Slabs
+          <span className="rounded-full border border-slate-700 bg-slate-900/70 px-3 py-1.5 text-xs text-slate-300">
+            Verified slabs + raw
           </span>
         </div>
-        <Link
-          href="/comps"
-          className="mt-4 inline-block text-sm text-gray-500 hover:text-gray-400 transition-colors"
-        >
-          How CMV Works
-        </Link>
+
+        <ShopStatsStrip stats={stats} isAdmin={isAdmin} compact />
       </section>
 
-      {/* Stats */}
-      <div className="mt-2">
-        <ShopStatsStrip stats={stats} isAdmin={isAdmin} />
-      </div>
+      <section className="space-y-8">
+        <ShopSectionCarousel
+          title="Featured"
+          subtitle="Handpicked cards from current inventory"
+          listings={featuredListings}
+          onSeeAll={() => applyMerchandisingPreset("featured")}
+        />
 
-      {/* Catalog */}
-      <section id={CATALOG_ID} className="scroll-mt-8 pt-2">
-        <h2 className="text-xl font-semibold text-white mb-6">Inventory</h2>
+        <ShopSectionCarousel
+          title="Below CMV deals"
+          subtitle="Best discounts versus CardzCheck Market Value"
+          listings={belowCmvDeals}
+          onSeeAll={() => applyMerchandisingPreset("below-cmv")}
+        />
 
-        {/* Search + Filter bar - sticky */}
-        <div className="sticky top-[73px] z-20 py-4 -mx-4 px-4 md:mx-0 md:px-0 bg-[#0f1419]/95 backdrop-blur mb-6 space-y-3">
+        <ShopSectionCarousel
+          title="Premium"
+          subtitle="High-end slabs and flagship cards"
+          listings={premiumListings}
+          onSeeAll={() => applyMerchandisingPreset("premium")}
+        />
+      </section>
+
+      <section id={CATALOG_ID} className="scroll-mt-28 space-y-5">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-xl font-semibold text-white">Full catalog</h2>
+          {hasActiveFilters && (
+            <button
+              onClick={clearFilters}
+              className="text-sm text-slate-400 transition-colors hover:text-cyan-300"
+            >
+              Reset filters
+            </button>
+          )}
+        </div>
+
+        <div className="space-y-3 rounded-2xl border border-slate-800/80 bg-slate-950/40 p-4 md:p-5">
           <input
             type="search"
             value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
+            onChange={(event) => {
+              setSearch(event.target.value);
               setCatalogPage(1);
             }}
             placeholder="Search player, set, year, tags..."
-            className="w-full md:max-w-xs px-4 py-2 rounded-lg bg-gray-800/80 border border-gray-700/60 text-gray-300 placeholder-gray-500 focus:border-cyan-500/50 focus:outline-none text-sm"
+            className="w-full rounded-lg border border-slate-700/80 bg-slate-900/80 px-4 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 focus:border-cyan-500 focus:outline-none md:max-w-sm"
           />
+
           <ShopFilterBar
             sports={sports}
             grades={grades}
@@ -275,24 +402,24 @@ export default function ShopStorefront({
             priceRange={priceRange}
             belowCmvOnly={belowCmvOnly}
             sort={sort}
-            onSportChange={(v) => {
-              setSportFilter(v);
+            onSportChange={(value) => {
+              setSportFilter(value);
               setCatalogPage(1);
             }}
-            onGradeChange={(v) => {
-              setGradeFilter(v);
+            onGradeChange={(value) => {
+              setGradeFilter(value);
               setCatalogPage(1);
             }}
-            onPriceRangeChange={(v) => {
-              setPriceRange(v);
+            onPriceRangeChange={(value) => {
+              setPriceRange(value);
               setCatalogPage(1);
             }}
-            onBelowCmvChange={(v) => {
-              setBelowCmvOnly(v);
+            onBelowCmvChange={(value) => {
+              setBelowCmvOnly(value);
               setCatalogPage(1);
             }}
-            onSortChange={(v) => {
-              setSort(v);
+            onSortChange={(value) => {
+              setSort(value);
               setCatalogPage(1);
             }}
             resultCount={catalogFiltered.length}
@@ -300,48 +427,49 @@ export default function ShopStorefront({
         </div>
 
         {catalogFiltered.length === 0 ? (
-          <div className="text-center py-16">
-            <p className="text-gray-400 mb-4">No listings match your filters.</p>
-            <div className="flex gap-4 justify-center">
+          <div className="rounded-2xl border border-slate-800/80 bg-slate-950/40 py-14 text-center">
+            <p className="text-slate-400">No listings match these filters.</p>
+            <div className="mt-4 flex items-center justify-center gap-3">
               <button
                 onClick={clearFilters}
-                className="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white font-medium"
+                className="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-cyan-500"
               >
                 Clear filters
               </button>
-              <Link
-                href="/shop"
-                className="px-4 py-2 rounded-lg border border-gray-600 text-gray-300 hover:text-white font-medium"
+              <button
+                onClick={() => applyMerchandisingPreset("featured")}
+                className="rounded-lg border border-slate-600 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:border-slate-400 hover:text-white"
               >
-                Browse Featured
-              </Link>
+                View featured
+              </button>
             </div>
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6 md:gap-8">
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {catalogPageItems.map((listing) => (
                 <ShopListingCard key={listing.id} listing={listing} />
               ))}
             </div>
+
             {catalogPageCount > 1 && (
-              <div className="mt-8 flex justify-center gap-2">
+              <div className="flex items-center justify-center gap-2 pt-2">
                 <button
-                  onClick={() => setCatalogPage((p) => Math.max(1, p - 1))}
+                  onClick={() => setCatalogPage((page) => Math.max(1, page - 1))}
                   disabled={catalogPage <= 1}
-                  className="px-4 py-2 rounded-lg bg-gray-800 text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:text-white"
+                  className="rounded-lg border border-slate-700 bg-slate-900/70 px-4 py-2 text-sm text-slate-200 transition-colors hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Previous
                 </button>
-                <span className="px-4 py-2 text-gray-400">
+                <span className="px-3 text-sm text-slate-400 tabular-nums">
                   {catalogPage} / {catalogPageCount}
                 </span>
                 <button
                   onClick={() =>
-                    setCatalogPage((p) => Math.min(catalogPageCount, p + 1))
+                    setCatalogPage((page) => Math.min(catalogPageCount, page + 1))
                   }
                   disabled={catalogPage >= catalogPageCount}
-                  className="px-4 py-2 rounded-lg bg-gray-800 text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:text-white"
+                  className="rounded-lg border border-slate-700 bg-slate-900/70 px-4 py-2 text-sm text-slate-200 transition-colors hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Next
                 </button>

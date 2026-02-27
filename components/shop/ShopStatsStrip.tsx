@@ -2,65 +2,81 @@
 
 import Link from "next/link";
 import type { ShopStats } from "@/lib/shop/server";
+import { formatUsd } from "./shop-formatters";
 
 interface ShopStatsStripProps {
   stats: ShopStats;
   isAdmin?: boolean;
+  compact?: boolean;
 }
 
-function formatUsd(value: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value);
+interface StatItem {
+  label: string;
+  value: string;
+  valueClassName?: string;
 }
 
-export default function ShopStatsStrip({ stats, isAdmin }: ShopStatsStripProps) {
+export default function ShopStatsStrip({
+  stats,
+  isAdmin,
+  compact,
+}: ShopStatsStripProps) {
   const isEmpty = stats.activeCount === 0;
 
+  const statItems: StatItem[] = [
+    {
+      label: "Active listings",
+      value: isEmpty ? "0" : stats.activeCount.toString(),
+      valueClassName: "text-slate-100",
+    },
+    {
+      label: "Inventory value",
+      value: isEmpty ? "-" : formatUsd(stats.totalInventoryValue, 0),
+      valueClassName: "text-slate-100",
+    },
+    {
+      label: "Below CMV count",
+      value: isEmpty ? "-" : stats.belowCmvCount.toString(),
+      valueClassName: "text-emerald-300",
+    },
+    {
+      label: "Avg grade",
+      value: isEmpty ? "-" : stats.avgGrade,
+      valueClassName: "text-slate-100",
+    },
+  ];
+
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-      <div className="px-4 py-3 rounded-lg bg-gray-900/30 border border-gray-800/60">
-        <div className="text-[10px] text-gray-500 uppercase tracking-wider">
-          Active Listings
-        </div>
-        <div className="text-lg font-semibold text-gray-200 mt-0.5 tabular-nums">
-          {isEmpty ? "0" : stats.activeCount}
-        </div>
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {statItems.map((item) => (
+          <div
+            key={item.label}
+            className={`rounded-xl border border-slate-800/80 bg-slate-950/50 px-4 ${
+              compact ? "py-3" : "py-4"
+            }`}
+          >
+            <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">
+              {item.label}
+            </p>
+            <p
+              className={`mt-1 font-semibold tabular-nums ${
+                compact ? "text-base" : "text-lg"
+              } ${item.valueClassName ?? "text-slate-100"}`}
+            >
+              {item.value}
+            </p>
+          </div>
+        ))}
       </div>
-      <div className="px-4 py-3 rounded-lg bg-gray-900/30 border border-gray-800/60">
-        <div className="text-[10px] text-gray-500 uppercase tracking-wider">
-          Inventory Value
-        </div>
-        <div className="text-lg font-semibold text-gray-300 mt-0.5 tabular-nums">
-          {isEmpty ? "—" : formatUsd(stats.totalInventoryValue)}
-        </div>
-      </div>
-      <div className="px-4 py-3 rounded-lg bg-gray-900/30 border border-gray-800/60">
-        <div className="text-[10px] text-gray-500 uppercase tracking-wider">
-          Below CMV
-        </div>
-        <div className="text-lg font-semibold text-emerald-400/90 mt-0.5 tabular-nums">
-          {isEmpty ? "—" : `${stats.belowCmvPct.toFixed(0)}%`}
-        </div>
-      </div>
-      <div className="px-4 py-3 rounded-lg bg-gray-900/30 border border-gray-800/60">
-        <div className="text-[10px] text-gray-500 uppercase tracking-wider">
-          Avg Grade
-        </div>
-        <div className="text-lg font-semibold text-gray-200 mt-0.5">
-          {isEmpty ? "—" : stats.avgGrade}
-        </div>
-      </div>
+
       {isEmpty && isAdmin && (
-        <div className="col-span-2 md:col-span-4 flex items-center justify-center pt-3">
+        <div className="flex items-center justify-center">
           <Link
             href="/admin/shop"
-            className="text-sm text-gray-400 hover:text-cyan-400 transition-colors"
+            className="text-sm text-slate-400 transition-colors hover:text-cyan-300"
           >
-            Add listings in Admin →
+            {"Add listings in Admin ->"}
           </Link>
         </div>
       )}

@@ -3,140 +3,116 @@
 import Link from "next/link";
 import { useShopCart } from "@/contexts/ShopCartContext";
 import type { ShopListing } from "@/types/shop";
+import {
+  buildListingTitle,
+  formatUsd,
+  getCmvDeltaPresentation,
+  getGradeChipClass,
+  getShippingLabel,
+} from "./shop-formatters";
 
 interface ShopListingCardProps {
   listing: ShopListing;
   onQuickView?: (listing: ShopListing) => void;
 }
 
-function getGradeChipClass(grade: string): string {
-  const g = (grade ?? "").toLowerCase();
-  if (g.includes("10") || g === "psa 10" || g === "bgs 10" || g === "sgc 10") {
-    return "bg-emerald-900/60 text-emerald-300 border border-emerald-700/50";
-  }
-  if (g.includes("9") || g.includes("9.5")) {
-    return "bg-blue-900/60 text-blue-300 border border-blue-700/50";
-  }
-  if (g.includes("raw") || g === "" || g.includes("ungraded")) {
-    return "bg-amber-900/60 text-amber-300 border border-amber-700/50";
-  }
-  return "bg-gray-800/80 text-gray-300 border border-gray-700/60";
-}
-
-export default function ShopListingCard({
-  listing,
-  onQuickView,
-}: ShopListingCardProps) {
+export default function ShopListingCard({ listing }: ShopListingCardProps) {
   const { addItem } = useShopCart();
   const available = Math.max(0, listing.quantity - listing.quantity_sold);
   const canAdd = available > 0;
-  const isBelowCmv =
-    listing.cmv != null && listing.cmv > 0 && listing.price < listing.cmv;
-  const discountPct =
-    listing.cmv != null && listing.cmv > 0
-      ? Math.round(((listing.cmv - listing.price) / listing.cmv) * 100)
-      : 0;
+
+  const title = buildListingTitle(listing);
+  const imgUrl = listing.thumbnail_url || listing.image_urls?.[0];
+  const detailHref = `/shop/${listing.id}`;
   const isPremium = listing.is_premium || listing.price >= 200;
 
-  const cmvValue =
-    listing.cmv != null && listing.cmv > 0
-      ? `CMV $${listing.cmv.toFixed(0)}`
-      : null;
+  const cmv = getCmvDeltaPresentation(listing.price, listing.cmv);
+  const shippingLine = `${getShippingLabel(listing.shipping_cost)} - Ships in 1-2 days`;
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+
     if (!canAdd) return;
+
     addItem(listing.id, 1, listing);
   };
 
-  const imgUrl = listing.thumbnail_url || listing.image_urls?.[0];
-  const title = [listing.player_name, listing.year, listing.set_brand]
-    .filter(Boolean)
-    .join(" ");
-
-  const detailHref = `/shop/${listing.id}`;
-
   return (
-    <div className="rounded-xl border border-gray-700/50 bg-gray-900/50 overflow-hidden hover:border-gray-600 hover:shadow-lg hover:-translate-y-1 transition-all duration-200 group">
-      <Link href={detailHref} className="block">
-        <div className="aspect-[3/4] bg-gray-800/80 relative overflow-hidden">
-        {imgUrl ? (
-          <img
-            src={imgUrl}
-            alt={title}
-            className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-gray-500 text-sm">
-            No image
-          </div>
-        )}
-
-        {isPremium && (
-          <span className="absolute top-2 right-2 px-2 py-0.5 text-xs font-medium rounded bg-amber-800/90 text-amber-200 border border-amber-600/50">
-            Premium
-          </span>
-        )}
-        </div>
-
-        <div className="p-4 space-y-3">
-        <h3 className="font-semibold text-white line-clamp-2 leading-snug">
-          {title}
-          {listing.parallel_variant ? ` ${listing.parallel_variant}` : ""}
-        </h3>
-        <span
-          className={`inline-block px-2 py-0.5 text-xs font-medium rounded ${getGradeChipClass(
-            listing.grade
-          )}`}
-        >
-          {listing.grade || "Raw"}
-        </span>
-
-        <div className="space-y-1">
-          <span className="text-xl font-bold text-white tabular-nums">
-            ${Number(listing.price).toFixed(2)}
-          </span>
-          {cmvValue && (
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm text-gray-500">{cmvValue}</span>
-              {isBelowCmv && (
-                <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-emerald-900/60 text-emerald-300 border border-emerald-700/50">
-                  ▼ {discountPct}% Below Market
-                </span>
-              )}
+    <article className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-700/70 bg-slate-950/75 shadow-[0_6px_30px_rgba(2,12,22,0.3)] transition-all duration-300 hover:-translate-y-1 hover:border-cyan-400/40 hover:shadow-[0_20px_45px_rgba(6,18,30,0.45)]">
+      <Link href={detailHref} className="relative block">
+        <div className="aspect-[4/5] overflow-hidden border-b border-slate-800/80 bg-slate-900">
+          {imgUrl ? (
+            <img
+              src={imgUrl}
+              alt={title}
+              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+              loading="lazy"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-sm text-slate-500">
+              No image available
             </div>
           )}
         </div>
 
-        <p className="text-xs text-gray-500">
-          {"Free shipping • Ships in 1-2 days"}
-        </p>
-        </div>
+        {isPremium && (
+          <span className="absolute left-3 top-3 rounded-full border border-cyan-400/40 bg-cyan-500/15 px-2.5 py-1 text-[11px] font-medium tracking-wide text-cyan-200">
+            Premium
+          </span>
+        )}
       </Link>
 
-      {canAdd ? (
-        <div className="px-4 pb-4 pt-1 flex gap-2">
+      <div className="flex flex-1 flex-col gap-3 p-4">
+        <div className="flex items-start justify-between gap-3">
+          <h3 className="line-clamp-2 text-sm font-semibold leading-5 text-slate-100">
+            {title}
+          </h3>
+          <span
+            className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-medium ${getGradeChipClass(
+              listing.grade
+            )}`}
+          >
+            {listing.grade || "Raw"}
+          </span>
+        </div>
+
+        <div className="space-y-1.5">
+          <div className="text-2xl font-semibold tabular-nums text-white">
+            {formatUsd(Number(listing.price), 2)}
+          </div>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+            {cmv.cmvLabel ? (
+              <span className="text-slate-400">{cmv.cmvLabel}</span>
+            ) : (
+              <span className="text-slate-500">CMV unavailable</span>
+            )}
+            <span className={cmv.deltaClass}>{cmv.deltaLabel}</span>
+          </div>
+        </div>
+
+        <p className="text-xs text-slate-400">{shippingLine}</p>
+
+        <div className="mt-auto flex items-center gap-2 pt-1">
           <button
             onClick={handleAddToCart}
-            className="flex-1 py-2.5 px-3 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white text-sm font-medium transition-colors"
+            disabled={!canAdd}
+            className={`flex-1 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+              canAdd
+                ? "bg-cyan-600 text-white hover:bg-cyan-500"
+                : "cursor-not-allowed bg-slate-800 text-slate-500"
+            }`}
           >
-            Add to Cart
+            {canAdd ? "Add to Cart" : "Sold Out"}
           </button>
           <Link
             href={detailHref}
-            className="py-2.5 px-3 rounded-lg border border-gray-600 text-gray-400 hover:text-white hover:border-gray-500 text-sm font-medium transition-colors text-center"
+            className="rounded-lg border border-slate-600/80 px-3 py-2.5 text-sm font-medium text-slate-200 transition-colors hover:border-slate-400 hover:text-white"
           >
-            View Details
+            View details
           </Link>
         </div>
-      ) : (
-        <div className="px-4 pb-4 pt-1">
-          <div className="py-2.5 rounded-lg bg-gray-800/80 text-gray-500 text-sm font-medium text-center">
-            Sold
-          </div>
-        </div>
-      )}
-    </div>
+      </div>
+    </article>
   );
 }

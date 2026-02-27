@@ -14,7 +14,7 @@ function ShopNav() {
   return (
     <>
       <header className="sticky top-0 z-30 border-b border-gray-800 bg-[#0f1419]/95 backdrop-blur">
-        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
           <Link
             href="/shop"
             className="flex items-center gap-3 hover:opacity-90 transition-opacity"

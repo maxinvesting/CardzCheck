@@ -26,17 +26,16 @@ export default async function ShopListingPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [listing, relatedListings] = await Promise.all([
-    getListing(id),
-    getListing(id).then((l) =>
-      l ? getRelatedListings(id, l) : Promise.resolve([])
-    ),
-  ]);
+  const listing = await getListing(id);
 
-  if (!listing) notFound();
+  if (!listing) {
+    notFound();
+  }
+
+  const relatedListings = await getRelatedListings(id, listing);
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-10 md:py-12">
+    <div className="mx-auto max-w-7xl px-4 py-10 md:py-12">
       <ShopListingDetail listing={listing} relatedListings={relatedListings} />
     </div>
   );
