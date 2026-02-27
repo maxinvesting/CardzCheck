@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import { getAdminAuth } from "@/lib/admin";
 import AdminShopClient from "@/app/admin/shop/AdminShopClient";
@@ -20,6 +21,14 @@ export default async function AdminShopPage() {
               Manage shop listings, sync from business inventory, and upload
               images.
             </p>
+            {admin.user.appRole === "owner" && (
+              <Link
+                href="/admin/access"
+                className="mt-2 inline-block text-sm text-cyan-400 hover:text-cyan-300"
+              >
+                Manage admin access
+              </Link>
+            )}
           </div>
           <AdminShopClient />
         </div>

@@ -3,9 +3,16 @@ import { createClient } from "@/lib/supabase/server";
 import { isTestMode } from "@/lib/test-mode";
 import { logDebug } from "@/lib/logging";
 
-/** GET: Return current user profile (name, business_name, ebay_store_url). Server-authoritative so Business page can rely on it. */
+/** GET: Return current user profile (name, business_name, ebay_store_url, app_role). Server-authoritative so Business page can rely on it. */
 export async function GET() {
   try {
+    type ProfileRow = {
+      name?: string | null;
+      business_name?: string | null;
+      ebay_store_url?: string | null;
+      app_role?: string | null;
+    };
+
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
@@ -13,26 +20,46 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { data: row, error: selectError } = await supabase
+    let row: ProfileRow | null = null;
+
+    let selectError: { code?: string | null; message?: string | null } | null = null;
+
+    const primarySelect = await supabase
       .from("users")
-      .select("name, business_name, ebay_store_url")
+      .select("name, business_name, ebay_store_url, app_role")
       .eq("id", user.id)
       .maybeSingle();
 
+    if (primarySelect.error && isMissingColumnError(primarySelect.error, "app_role")) {
+      const fallbackSelect = await supabase
+        .from("users")
+        .select("name, business_name, ebay_store_url")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      row = (fallbackSelect.data ?? null) as ProfileRow | null;
+      selectError = fallbackSelect.error;
+    } else {
+      row = (primarySelect.data ?? null) as ProfileRow | null;
+      selectError = primarySelect.error;
+    }
+
     if (selectError) {
-      const hasEbayColumn = !String(selectError.message || "").toLowerCase().includes("ebay_store_url");
-      if (hasEbayColumn) {
+      if (!isMissingColumnError(selectError, "ebay_store_url")) {
         console.error("Profile GET select error:", selectError);
         return NextResponse.json({ error: "Failed to load profile" }, { status: 500 });
       }
+
       const metadataUrl =
         typeof user.user_metadata?.ebay_store_url === "string"
           ? user.user_metadata.ebay_store_url.trim() || null
           : null;
+
       return NextResponse.json({
         name: null,
         business_name: null,
         ebay_store_url: metadataUrl,
+        app_role: null,
       });
     }
 
@@ -48,6 +75,10 @@ export async function GET() {
         (row && "ebay_store_url" in row && typeof row.ebay_store_url === "string"
           ? row.ebay_store_url.trim() || null
           : null) ?? metadataUrl,
+      app_role:
+        row && "app_role" in row && typeof row.app_role === "string"
+          ? row.app_role
+          : null,
     });
   } catch (err) {
     console.error("Profile GET error:", err);

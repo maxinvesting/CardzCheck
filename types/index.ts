@@ -4,6 +4,7 @@ export interface User {
   name?: string | null; // User's display name
   business_name?: string | null; // Optional business display name for business workspace
   ebay_store_url?: string | null; // Optional eBay store URL for Sales Channels shortcut
+  app_role?: "member" | "admin" | "owner" | null; // App-level role for owner/admin access
   is_paid: boolean;
   stripe_customer_id: string | null;
   free_searches_used: number;
