@@ -53,7 +53,7 @@ export default function ShopCheckoutPage() {
           setStatus("error");
           setError("No checkout URL returned");
         }
-      } catch (err) {
+      } catch {
         if (!cancelled) {
           setStatus("error");
           setError("Checkout failed. Please try again.");
@@ -69,39 +69,39 @@ export default function ShopCheckoutPage() {
 
   if (!isHydrated || (items.length === 0 && status === "idle")) {
     return (
-      <div className="max-w-lg mx-auto px-4 py-16 text-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-500 mx-auto" />
-        <p className="mt-4 text-gray-400">Redirecting...</p>
+      <div className="mx-auto max-w-lg px-4 py-16 text-center">
+        <div className="mx-auto h-8 w-8 animate-spin rounded-full border-b-2 border-cyan-500" />
+        <p className="mt-4 text-slate-600">Redirecting...</p>
       </div>
     );
   }
 
   if (status === "loading") {
     return (
-      <div className="max-w-lg mx-auto px-4 py-16 text-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-500 mx-auto" />
-        <p className="mt-4 text-gray-400">Redirecting to checkout...</p>
+      <div className="mx-auto max-w-lg px-4 py-16 text-center">
+        <div className="mx-auto h-8 w-8 animate-spin rounded-full border-b-2 border-cyan-500" />
+        <p className="mt-4 text-slate-600">Redirecting to checkout...</p>
       </div>
     );
   }
 
   if (status === "error") {
     return (
-      <div className="max-w-lg mx-auto px-4 py-16 text-center">
-        <h1 className="text-xl font-bold text-white">Checkout Failed</h1>
-        <p className="mt-2 text-red-400">{error}</p>
-        <div className="mt-6 flex gap-4 justify-center">
+      <div className="mx-auto max-w-lg px-4 py-16 text-center">
+        <h1 className="text-xl font-bold text-slate-900">Checkout failed</h1>
+        <p className="mt-2 text-rose-600">{error}</p>
+        <div className="mt-6 flex justify-center gap-4">
           <Link
             href="/shop"
-            className="px-6 py-3 bg-cyan-600 hover:bg-cyan-700 text-white font-medium rounded-lg"
+            className="rounded-lg bg-cyan-600 px-6 py-3 font-medium text-white hover:bg-cyan-500"
           >
-            Back to Shop
+            Back to shop
           </Link>
           <button
             onClick={() => setStatus("idle")}
-            className="px-6 py-3 border border-gray-600 text-gray-300 hover:text-white font-medium rounded-lg"
+            className="rounded-lg border border-slate-300 px-6 py-3 font-medium text-slate-700 hover:border-slate-400 hover:text-slate-900"
           >
-            Try Again
+            Try again
           </button>
         </div>
       </div>
@@ -109,9 +109,9 @@ export default function ShopCheckoutPage() {
   }
 
   return (
-    <div className="max-w-lg mx-auto px-4 py-16 text-center">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-500 mx-auto" />
-      <p className="mt-4 text-gray-400">Redirecting...</p>
+    <div className="mx-auto max-w-lg px-4 py-16 text-center">
+      <div className="mx-auto h-8 w-8 animate-spin rounded-full border-b-2 border-cyan-500" />
+      <p className="mt-4 text-slate-600">Redirecting...</p>
     </div>
   );
 }

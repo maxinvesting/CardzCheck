@@ -30,25 +30,25 @@ export default function ShopSectionCarousel({
         event.preventDefault();
         onSeeAll();
       }}
-      className="text-sm font-medium text-cyan-300 transition-colors hover:text-cyan-200"
+      className="text-sm font-medium text-cyan-700 transition-colors hover:text-cyan-600"
     >
       {seeAllLabel}
     </a>
   ) : seeAllHref ? (
     <Link
       href={seeAllHref}
-      className="text-sm font-medium text-cyan-300 transition-colors hover:text-cyan-200"
+      className="text-sm font-medium text-cyan-700 transition-colors hover:text-cyan-600"
     >
       {seeAllLabel}
     </Link>
   ) : null;
 
   return (
-    <section className="space-y-4">
+    <section className="space-y-5 border-t border-slate-200 pt-8">
       <div className="flex items-end justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold text-white">{title}</h2>
-          {subtitle && <p className="mt-1 text-sm text-slate-400">{subtitle}</p>}
+          <h2 className="text-xl font-semibold text-slate-900">{title}</h2>
+          {subtitle && <p className="mt-1 text-sm text-slate-600">{subtitle}</p>}
         </div>
         {cta}
       </div>

@@ -19,63 +19,26 @@ interface ShopStorefrontProps {
 
 type MerchandisingPreset = "featured" | "below-cmv" | "premium";
 
-interface Tile {
-  title: string;
-  description: string;
-  iconPath: string;
-}
-
 const CATALOG_ID = "shop-catalog";
-const FIRST_ACCESS_ID = "first-access";
+const WAITLIST_ID = "shop-waitlist";
 const PAGE_SIZE = 24;
 const CURATED_ROW_SIZE = 8;
 const SKELETON_COUNT = 8;
 
-const EMPTY_TILES: Tile[] = [
+const EMPTY_FEATURES = [
   {
-    title: "Slabs",
-    description: "Top graded cards with clean cert details.",
-    iconPath:
-      "M4.5 6.75A2.25 2.25 0 016.75 4.5h10.5a2.25 2.25 0 012.25 2.25v10.5A2.25 2.25 0 0117.25 19.5H6.75a2.25 2.25 0 01-2.25-2.25V6.75z",
+    title: "Verified slabs",
+    description: "High-resolution photos and cert-forward listing details.",
   },
   {
-    title: "Singles",
-    description: "Collector-grade singles priced to move.",
-    iconPath:
-      "M3.75 7.5A2.25 2.25 0 016 5.25h12A2.25 2.25 0 0120.25 7.5v9A2.25 2.25 0 0118 18.75H6a2.25 2.25 0 01-2.25-2.25v-9z",
+    title: "Transparent CMV pricing",
+    description: "Live CardzCheck Market Value context shown on every listing.",
   },
   {
-    title: "Sealed",
-    description: "Premium wax and sealed releases when available.",
-    iconPath:
-      "M12 3l8.25 4.5L12 12 3.75 7.5 12 3zm8.25 4.5V16.5L12 21l-8.25-4.5V7.5",
+    title: "Fast shipping",
+    description: "Orders packed securely and shipped quickly with tracking.",
   },
-  {
-    title: "Deals below CMV",
-    description: "Clear discounts versus current market value.",
-    iconPath:
-      "M5.25 8.25h13.5M6.75 12h10.5M8.25 15.75h7.5M6 3.75h12A2.25 2.25 0 0120.25 6v12A2.25 2.25 0 0118 20.25H6A2.25 2.25 0 013.75 18V6A2.25 2.25 0 016 3.75z",
-  },
-];
-
-const TRUST_CHIPS = [
-  "Secure checkout",
-  "Fast shipping",
-  "Condition-first photos",
-  "CMV transparency",
-];
-
-const TOP_TRUST_CHIPS = [
-  "Secure checkout",
-  "Fast shipping",
-  "CMV transparency",
-];
-
-const WAITLIST_BULLETS = [
-  "Drops 1-2x/week",
-  "Verified condition photos",
-  "CMV included",
-];
+] as const;
 
 function applyPriceRange(
   list: ShopListing[],
@@ -96,17 +59,6 @@ function applyPriceRange(
 function discountRatio(listing: ShopListing): number {
   if (listing.cmv == null || listing.cmv <= 0) return -Infinity;
   return (listing.cmv - listing.price) / listing.cmv;
-}
-
-function trustChip(label: string) {
-  return (
-    <span
-      key={label}
-      className="rounded-full border border-slate-700/80 bg-slate-900/70 px-3 py-1.5 text-xs text-slate-200"
-    >
-      {label}
-    </span>
-  );
 }
 
 export default function ShopStorefront({
@@ -273,8 +225,8 @@ export default function ShopStorefront({
     }
   }, []);
 
-  const scrollToFirstAccess = useCallback(() => {
-    const target = document.getElementById(FIRST_ACCESS_ID);
+  const scrollToWaitlist = useCallback(() => {
+    const target = document.getElementById(WAITLIST_ID);
     if (target) {
       target.scrollIntoView({ behavior: "smooth", block: "start" });
     }
@@ -337,312 +289,315 @@ export default function ShopStorefront({
 
   const isEmpty = initialListings.length === 0;
 
-  if (isEmpty) {
-    return (
-      <div className="space-y-8 md:space-y-9">
-        <section className="relative overflow-hidden rounded-3xl border border-slate-800/80 bg-slate-950/80">
-          <img
-            src="/shop/hero-bg.png"
-            alt=""
-            aria-hidden="true"
-            className="absolute inset-0 h-full w-full object-cover opacity-[0.14]"
-          />
-          <div className="absolute inset-0 bg-gradient-to-b from-slate-900/20 via-slate-950/70 to-slate-950/95" />
+  return (
+    <div className="space-y-0">
+      <section className="relative overflow-hidden border-b border-slate-200 bg-white">
+        <img
+          src="/shop/hero-bg.png"
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 h-full w-full object-cover opacity-[0.1]"
+        />
+        <div className="absolute inset-0 bg-gradient-to-r from-white via-white/95 to-slate-100/75" />
 
-          <div className="relative space-y-4 p-3 sm:p-4 md:p-6">
-            <div className="flex min-h-[46px] items-center justify-between gap-3 rounded-xl border border-cyan-500/25 bg-slate-900/80 px-3 text-xs text-slate-200">
-              <span className="font-medium uppercase tracking-[0.16em] text-cyan-300">
-                Next Drop
-              </span>
-              <span className="hidden text-slate-300 sm:inline">
-                Curated singles &amp; slabs with CMV transparency
-              </span>
+        <div className="relative mx-auto grid max-w-7xl items-center gap-10 px-4 py-14 lg:grid-cols-[1.1fr_0.9fr] lg:py-20">
+          <div className="max-w-2xl space-y-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+              CardzCheck Shop
+            </p>
+
+            {isEmpty ? (
+              <>
+                <h1 className="text-4xl font-semibold tracking-tight text-slate-900 md:text-5xl">
+                  Next drop landing soon.
+                </h1>
+                <p className="text-base text-slate-600 md:text-lg">
+                  Join the waitlist for early access.
+                </p>
+              </>
+            ) : (
+              <>
+                <h1 className="text-4xl font-semibold tracking-tight text-slate-900 md:text-5xl">
+                  Curated slabs. Data-backed pricing.
+                </h1>
+                <p className="text-base text-slate-600 md:text-lg">
+                  Each card includes live CardzCheck Market Value (CMV) and transparent deltas.
+                </p>
+                <p className="text-sm text-slate-500">
+                  {stats.activeCount} active listings with transparent market context.
+                </p>
+              </>
+            )}
+
+            <div className="flex flex-wrap items-center gap-3 pt-1">
               <button
-                onClick={scrollToFirstAccess}
-                className="rounded-md bg-cyan-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-cyan-500"
+                onClick={scrollToCatalog}
+                className="rounded-lg bg-cyan-600 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-cyan-500"
+              >
+                Browse inventory
+              </button>
+              <button
+                onClick={scrollToWaitlist}
+                className="rounded-lg border border-slate-300 bg-white px-5 py-3 text-sm font-medium text-slate-700 transition-colors hover:border-slate-400 hover:text-slate-900"
               >
                 Join waitlist
               </button>
             </div>
-
-            <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,400px)_1fr]">
-              <article
-                id={FIRST_ACCESS_ID}
-                className="rounded-2xl border border-slate-800/90 bg-slate-950/80 p-5"
-              >
-                <p className="text-xs uppercase tracking-[0.16em] text-cyan-300/90">
-                  Get first access
-                </p>
-                <h1 className="mt-2 text-2xl font-semibold text-white">
-                  Boutique drops, released in tight windows.
-                </h1>
-                <p className="mt-2 text-sm text-slate-400">
-                  Join the waitlist for first look access to each drop and new featured
-                  inventory.
-                </p>
-
-                <form
-                  onSubmit={handleWaitlistSubmit}
-                  className="mt-5 flex flex-col gap-2 sm:flex-row"
-                >
-                  <input
-                    type="email"
-                    value={waitlistEmail}
-                    onChange={(event) => setWaitlistEmail(event.target.value)}
-                    placeholder="you@email.com"
-                    className="h-11 flex-1 rounded-lg border border-slate-700/80 bg-slate-900/90 px-3 text-sm text-slate-100 placeholder:text-slate-500 focus:border-cyan-500 focus:outline-none"
-                    required
-                  />
-                  <button
-                    type="submit"
-                    disabled={waitlistStatus === "loading"}
-                    className="h-11 rounded-lg bg-cyan-600 px-5 text-sm font-medium text-white transition-colors hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {waitlistStatus === "loading"
-                      ? "Joining..."
-                      : waitlistStatus === "success"
-                      ? "Joined"
-                      : "Join waitlist"}
-                  </button>
-                </form>
-
-                {waitlistStatus === "error" && (
-                  <p className="mt-3 text-sm text-rose-400">
-                    Something went wrong while joining the waitlist.
-                  </p>
-                )}
-
-                <ul className="mt-5 space-y-2 text-sm text-slate-300">
-                  {WAITLIST_BULLETS.map((bullet) => (
-                    <li key={bullet} className="flex items-center gap-2">
-                      <span className="h-1.5 w-1.5 rounded-full bg-cyan-400" />
-                      {bullet}
-                    </li>
-                  ))}
-                </ul>
-              </article>
-
-              <article className="rounded-2xl border border-slate-800/90 bg-slate-950/70 p-5">
-                <p className="text-xs uppercase tracking-[0.16em] text-cyan-300/90">
-                  What you'll find
-                </p>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  {EMPTY_TILES.map((tile) => (
-                    <div
-                      key={tile.title}
-                      className="rounded-xl border border-slate-800/80 bg-slate-900/70 p-4"
-                    >
-                      <svg
-                        className="h-5 w-5 text-cyan-300"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={1.6}
-                          d={tile.iconPath}
-                        />
-                      </svg>
-                      <h3 className="mt-3 text-sm font-medium text-white">{tile.title}</h3>
-                      <p className="mt-1 text-xs leading-5 text-slate-400">
-                        {tile.description}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </article>
-            </div>
-          </div>
-        </section>
-
-        <section className="space-y-4">
-          <div className="flex items-end justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-semibold text-white">Featured (coming soon)</h2>
-              <p className="mt-1 text-sm text-slate-400">
-                Inventory preview for the next live drop.
-              </p>
-            </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {Array.from({ length: SKELETON_COUNT }).map((_, index) => (
-              <ShopListingCard key={`skeleton-${index}`} skeleton />
-            ))}
+          <div className="relative hidden h-full min-h-[360px] lg:block">
+            <div className="absolute -left-16 top-20 h-40 w-40 rounded-full bg-cyan-100/80 blur-3xl" />
+            <div className="absolute bottom-12 right-6 h-52 w-52 rounded-full bg-slate-200/70 blur-3xl" />
+            <img
+              src="/shop/hero-bg.png"
+              alt=""
+              aria-hidden="true"
+              className="absolute right-0 top-0 h-full w-full object-cover opacity-80 blur-[2px]"
+            />
           </div>
-        </section>
+        </div>
+      </section>
 
-        <section className="flex flex-wrap gap-2.5">
-          {TRUST_CHIPS.map((chip) => trustChip(chip))}
-        </section>
-
-        {isAdmin && (
-          <div className="pt-1">
-            <Link
-              href="/admin/shop"
-              className="text-sm text-slate-400 transition-colors hover:text-cyan-300"
-            >
-              Add listings in Admin
-            </Link>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-8 md:space-y-9">
-      <section className="rounded-2xl border border-slate-800/80 bg-slate-950/70 p-4 md:p-5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
+      <section id={WAITLIST_ID} className="mx-auto max-w-7xl border-b border-slate-200 px-4 py-12">
+        <div className="grid gap-8 lg:grid-cols-[1fr_auto] lg:items-end">
           <div>
-            <h1 className="text-2xl font-semibold text-white md:text-3xl">CardzCheck Shop</h1>
-            <p className="mt-1.5 text-sm text-slate-400">
-              {stats.activeCount} active listings with CMV market pricing context.
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+              Get first access
             </p>
-            <p className="mt-1 text-xs text-slate-500">
-              Prices are benchmarked against CardzCheck Market Value.{" "}
-              <Link
-                href="/comps"
-                className="text-slate-400 transition-colors hover:text-cyan-300"
-              >
-                Learn how CMV works
-              </Link>
-              .
+            <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-900 md:text-4xl">
+              Join the next release window.
+            </h2>
+            <p className="mt-2 max-w-2xl text-sm text-slate-600 md:text-base">
+              Get early notice on incoming inventory, certified slabs, and below-CMV opportunities.
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-2">{TOP_TRUST_CHIPS.map((chip) => trustChip(chip))}</div>
-        </div>
-      </section>
-
-      <section className="space-y-7">
-        <ShopSectionCarousel
-          title="Featured"
-          subtitle="Featured inventory from the current drop."
-          listings={featuredListings}
-          onSeeAll={() => applyMerchandisingPreset("featured")}
-        />
-
-        <ShopSectionCarousel
-          title="Below CMV deals"
-          subtitle="Sorted by largest discount to market value."
-          listings={belowCmvDeals}
-          onSeeAll={() => applyMerchandisingPreset("below-cmv")}
-        />
-
-        <ShopSectionCarousel
-          title="Premium"
-          subtitle="High-end slabs and flagship cards."
-          listings={premiumListings}
-          onSeeAll={() => applyMerchandisingPreset("premium")}
-        />
-      </section>
-
-      <section id={CATALOG_ID} className="scroll-mt-28 space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-xl font-semibold text-white">Full catalog</h2>
-          {hasActiveFilters && (
+          <form
+            onSubmit={handleWaitlistSubmit}
+            className="flex w-full max-w-xl flex-col gap-2 sm:flex-row"
+          >
+            <input
+              type="email"
+              value={waitlistEmail}
+              onChange={(event) => setWaitlistEmail(event.target.value)}
+              placeholder="you@email.com"
+              className="h-11 flex-1 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-500 focus:border-cyan-500 focus:outline-none"
+              required
+            />
             <button
-              onClick={clearFilters}
-              className="text-sm text-slate-400 transition-colors hover:text-cyan-300"
+              type="submit"
+              disabled={waitlistStatus === "loading"}
+              className="h-11 rounded-lg bg-cyan-600 px-5 text-sm font-medium text-white transition-colors hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Reset filters
+              {waitlistStatus === "loading"
+                ? "Joining..."
+                : waitlistStatus === "success"
+                ? "Joined"
+                : "Join waitlist"}
             </button>
-          )}
+          </form>
         </div>
 
-        <div className="space-y-3 rounded-2xl border border-slate-800/80 bg-slate-950/40 p-4 md:p-5">
-          <ShopFilterBar
-            search={search}
-            sports={sports}
-            grades={grades}
-            sportFilter={sportFilter}
-            gradeFilter={gradeFilter}
-            priceRange={priceRange}
-            belowCmvOnly={belowCmvOnly}
-            sort={sort}
-            onSearchChange={(value) => {
-              setSearch(value);
-              setCatalogPage(1);
-            }}
-            onSportChange={(value) => {
-              setSportFilter(value);
-              setCatalogPage(1);
-            }}
-            onGradeChange={(value) => {
-              setGradeFilter(value);
-              setCatalogPage(1);
-            }}
-            onPriceRangeChange={(value) => {
-              setPriceRange(value);
-              setCatalogPage(1);
-            }}
-            onBelowCmvChange={(value) => {
-              setBelowCmvOnly(value);
-              setCatalogPage(1);
-            }}
-            onSortChange={(value) => {
-              setSort(value);
-              setCatalogPage(1);
-            }}
-            resultCount={catalogFiltered.length}
-          />
-        </div>
+        {waitlistStatus === "error" && (
+          <p className="mt-3 text-sm text-rose-600">
+            Something went wrong while joining the waitlist.
+          </p>
+        )}
+      </section>
 
-        {catalogFiltered.length === 0 ? (
-          <div className="rounded-2xl border border-slate-800/80 bg-slate-950/40 py-14 text-center">
-            <p className="text-slate-400">No listings match these filters.</p>
-            <div className="mt-4 flex items-center justify-center gap-3">
-              <button
-                onClick={clearFilters}
-                className="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-cyan-500"
-              >
-                Clear filters
-              </button>
-              <button
-                onClick={() => applyMerchandisingPreset("featured")}
-                className="rounded-lg border border-slate-600 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:border-slate-400 hover:text-white"
-              >
-                View featured
-              </button>
-            </div>
-          </div>
-        ) : (
-          <>
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {catalogPageItems.map((listing) => (
-                <ShopListingCard key={listing.id} listing={listing} />
+      {isEmpty ? (
+        <>
+          <section className="mx-auto max-w-7xl px-4 py-12">
+            <div className="grid gap-5 md:grid-cols-3">
+              {EMPTY_FEATURES.map((feature) => (
+                <article key={feature.title} className="space-y-2">
+                  <h3 className="text-lg font-semibold text-slate-900">{feature.title}</h3>
+                  <p className="text-sm text-slate-600">{feature.description}</p>
+                </article>
               ))}
             </div>
+          </section>
 
-            {catalogPageCount > 1 && (
-              <div className="flex items-center justify-center gap-2 pt-2">
-                <button
-                  onClick={() => setCatalogPage((page) => Math.max(1, page - 1))}
-                  disabled={catalogPage <= 1}
-                  className="rounded-lg border border-slate-700 bg-slate-900/70 px-4 py-2 text-sm text-slate-200 transition-colors hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Previous
-                </button>
-                <span className="px-3 text-sm tabular-nums text-slate-400">
-                  {catalogPage} / {catalogPageCount}
-                </span>
-                <button
-                  onClick={() =>
-                    setCatalogPage((page) => Math.min(catalogPageCount, page + 1))
-                  }
-                  disabled={catalogPage >= catalogPageCount}
-                  className="rounded-lg border border-slate-700 bg-slate-900/70 px-4 py-2 text-sm text-slate-200 transition-colors hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Next
-                </button>
+          <section id={CATALOG_ID} className="shop-section-alt border-y border-slate-200 scroll-mt-28">
+            <div className="mx-auto max-w-7xl px-4 py-12">
+              <div className="mb-6">
+                <h2 className="text-2xl font-semibold text-slate-900">Featured preview</h2>
+                <p className="mt-1 text-sm text-slate-600">
+                  Inventory placeholders for the upcoming drop.
+                </p>
               </div>
-            )}
-          </>
-        )}
-      </section>
+
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {Array.from({ length: SKELETON_COUNT }).map((_, index) => (
+                  <ShopListingCard key={`skeleton-${index}`} skeleton />
+                ))}
+              </div>
+            </div>
+          </section>
+
+          {isAdmin && (
+            <div className="mx-auto max-w-7xl px-4 pt-6">
+              <Link
+                href="/admin/shop"
+                className="text-sm text-slate-600 transition-colors hover:text-cyan-700"
+              >
+                Add listings in Admin
+              </Link>
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          <section className="shop-section-alt border-y border-slate-200">
+            <div className="mx-auto max-w-7xl space-y-8 px-4 py-12">
+              <div>
+                <h2 className="text-2xl font-semibold text-slate-900">Curated inventory</h2>
+                <p className="mt-1 text-sm text-slate-600">
+                  Featured cards, discounts versus CMV, and premium picks.
+                </p>
+                <p className="mt-2 text-sm text-slate-500">
+                  Prices are benchmarked against CardzCheck Market Value. {" "}
+                  <Link
+                    href="/comps"
+                    className="text-cyan-700 transition-colors hover:text-cyan-600"
+                  >
+                    Learn how CMV works
+                  </Link>
+                  .
+                </p>
+              </div>
+
+              <ShopSectionCarousel
+                title="Featured"
+                subtitle="Featured inventory from the current drop."
+                listings={featuredListings}
+                onSeeAll={() => applyMerchandisingPreset("featured")}
+              />
+
+              <ShopSectionCarousel
+                title="Below CMV deals"
+                subtitle="Sorted by largest discount to market value."
+                listings={belowCmvDeals}
+                onSeeAll={() => applyMerchandisingPreset("below-cmv")}
+              />
+
+              <ShopSectionCarousel
+                title="Premium"
+                subtitle="High-end slabs and flagship cards."
+                listings={premiumListings}
+                onSeeAll={() => applyMerchandisingPreset("premium")}
+              />
+            </div>
+          </section>
+
+          <section
+            id={CATALOG_ID}
+            className="scroll-mt-28 border-b border-slate-200 bg-white"
+          >
+            <div className="mx-auto max-w-7xl space-y-6 px-4 py-12">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-2xl font-semibold text-slate-900">Browse inventory</h2>
+                {hasActiveFilters && (
+                  <button
+                    onClick={clearFilters}
+                    className="text-sm text-slate-600 transition-colors hover:text-cyan-700"
+                  >
+                    Reset filters
+                  </button>
+                )}
+              </div>
+
+              <ShopFilterBar
+                search={search}
+                sports={sports}
+                grades={grades}
+                sportFilter={sportFilter}
+                gradeFilter={gradeFilter}
+                priceRange={priceRange}
+                belowCmvOnly={belowCmvOnly}
+                sort={sort}
+                onSearchChange={(value) => {
+                  setSearch(value);
+                  setCatalogPage(1);
+                }}
+                onSportChange={(value) => {
+                  setSportFilter(value);
+                  setCatalogPage(1);
+                }}
+                onGradeChange={(value) => {
+                  setGradeFilter(value);
+                  setCatalogPage(1);
+                }}
+                onPriceRangeChange={(value) => {
+                  setPriceRange(value);
+                  setCatalogPage(1);
+                }}
+                onBelowCmvChange={(value) => {
+                  setBelowCmvOnly(value);
+                  setCatalogPage(1);
+                }}
+                onSortChange={(value) => {
+                  setSort(value);
+                  setCatalogPage(1);
+                }}
+                resultCount={catalogFiltered.length}
+              />
+
+              {catalogFiltered.length === 0 ? (
+                <div className="border-t border-slate-200 py-14 text-center">
+                  <p className="text-slate-600">No listings match these filters.</p>
+                  <div className="mt-4 flex items-center justify-center gap-3">
+                    <button
+                      onClick={clearFilters}
+                      className="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-cyan-500"
+                    >
+                      Clear filters
+                    </button>
+                    <button
+                      onClick={() => applyMerchandisingPreset("featured")}
+                      className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:border-slate-400 hover:text-slate-900"
+                    >
+                      View featured
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    {catalogPageItems.map((listing) => (
+                      <ShopListingCard key={listing.id} listing={listing} />
+                    ))}
+                  </div>
+
+                  {catalogPageCount > 1 && (
+                    <div className="flex items-center justify-center gap-2 pt-2">
+                      <button
+                        onClick={() => setCatalogPage((page) => Math.max(1, page - 1))}
+                        disabled={catalogPage <= 1}
+                        className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 transition-colors hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Previous
+                      </button>
+                      <span className="px-3 text-sm tabular-nums text-slate-500">
+                        {catalogPage} / {catalogPageCount}
+                      </span>
+                      <button
+                        onClick={() =>
+                          setCatalogPage((page) => Math.min(catalogPageCount, page + 1))
+                        }
+                        disabled={catalogPage >= catalogPageCount}
+                        className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 transition-colors hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </section>
+        </>
+      )}
     </div>
   );
 }

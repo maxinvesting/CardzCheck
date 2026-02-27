@@ -37,62 +37,63 @@ export default function ShopQuickViewModal({
 
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-200/60 p-4"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       <div
-        className="bg-gray-900 border border-gray-800 rounded-xl w-full max-w-md shadow-2xl"
+        className="w-full max-w-md rounded-xl border border-slate-200 bg-white shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-4 border-b border-gray-800 flex items-start justify-between">
-          <h3 className="text-lg font-semibold text-white">Quick View</h3>
+        <div className="flex items-start justify-between border-b border-slate-200 p-4">
+          <h3 className="text-lg font-semibold text-slate-900">Quick view</h3>
           <button
             onClick={onClose}
-            className="p-2 text-gray-400 hover:text-white transition-colors"
+            className="p-2 text-slate-500 transition-colors hover:text-slate-900"
             aria-label="Close"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
-        <div className="p-4 space-y-4">
-          <div className="aspect-[3/4] bg-gray-800 rounded-lg overflow-hidden">
+        <div className="space-y-4 p-4">
+          <div className="aspect-[3/4] overflow-hidden rounded-lg bg-slate-100">
             {imgUrl ? (
               <img
                 src={imgUrl}
                 alt={`${listing.player_name} ${listing.year}`}
-                className="w-full h-full object-contain"
+                className="h-full w-full object-contain"
               />
             ) : (
-              <div className="w-full h-full flex items-center justify-center text-gray-500">
+              <div className="flex h-full w-full items-center justify-center text-slate-500">
                 No image
               </div>
             )}
           </div>
 
           <div>
-            <h4 className="font-semibold text-white">{listing.player_name}</h4>
-            <p className="text-sm text-gray-400 mt-0.5">
+            <h4 className="font-semibold text-slate-900">{listing.player_name}</h4>
+            <p className="mt-0.5 text-sm text-slate-600">
               {listing.year} {listing.set_brand}
               {listing.parallel_variant ? ` ${listing.parallel_variant}` : ""} • {listing.grade}
             </p>
           </div>
 
           <div className="flex items-baseline gap-2">
-            <span className="text-xl font-bold text-cyan-400 tabular-nums">
+            <span className="text-xl font-bold text-slate-900 tabular-nums">
               ${Number(listing.price).toFixed(2)}
             </span>
             {listing.cmv != null && listing.cmv > 0 && (
-              <span className="text-sm text-gray-400">
+              <span className="text-sm text-slate-600">
                 CMV: ${listing.cmv.toFixed(0)}
                 {cmvDelta != null && (
-                  <span className={cmvDelta < 0 ? "text-emerald-400" : "text-amber-400"}>
+                  <span className={cmvDelta < 0 ? "text-emerald-600" : "text-amber-600"}>
                     {" "}
-                    ({cmvDelta > 0 ? "+" : ""}{cmvDelta}%)
+                    ({cmvDelta > 0 ? "+" : ""}
+                    {cmvDelta}%)
                   </span>
                 )}
               </span>
@@ -104,20 +105,20 @@ export default function ShopQuickViewModal({
               <>
                 <button
                   onClick={handleAddToCart}
-                  className="flex-1 py-3 px-4 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white font-medium transition-colors"
+                  className="flex-1 rounded-lg bg-cyan-600 px-4 py-3 font-medium text-white transition-colors hover:bg-cyan-500"
                 >
-                  Add to Cart
+                  Add to cart
                 </button>
                 <Link
                   href={`/shop/${listing.id}`}
                   onClick={onClose}
-                  className="flex-1 py-3 px-4 rounded-lg border border-gray-600 text-gray-300 hover:text-white hover:border-gray-500 font-medium text-center transition-colors"
+                  className="flex-1 rounded-lg border border-slate-300 px-4 py-3 text-center font-medium text-slate-700 transition-colors hover:border-slate-400 hover:text-slate-900"
                 >
-                  View Details
+                  View details
                 </Link>
               </>
             ) : (
-              <div className="w-full py-3 px-4 rounded-lg bg-gray-800 text-gray-500 font-medium text-center">
+              <div className="w-full rounded-lg bg-slate-100 px-4 py-3 text-center font-medium text-slate-500">
                 Sold
               </div>
             )}

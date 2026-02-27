@@ -108,15 +108,15 @@ export default function ShopListingDetail({
     <div className="space-y-12">
       <Link
         href="/shop"
-        className="inline-flex items-center text-sm text-slate-400 transition-colors hover:text-cyan-300"
+        className="inline-flex items-center text-sm text-slate-600 transition-colors hover:text-cyan-700"
       >
         {"<- Back to shop"}
       </Link>
 
       <div className="grid grid-cols-1 gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:gap-12">
         <section className="space-y-4">
-          <div className="overflow-hidden rounded-2xl border border-slate-800/80 bg-slate-950/75 shadow-[0_12px_36px_rgba(2,12,22,0.35)]">
-            <div className="aspect-[4/5] bg-slate-900">
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+            <div className="aspect-[4/5] bg-slate-100">
               {images[selectedImage] ? (
                 <img
                   src={images[selectedImage]}
@@ -139,8 +139,8 @@ export default function ShopListingDetail({
                   onClick={() => setSelectedImage(index)}
                   className={`h-20 w-16 shrink-0 snap-start overflow-hidden rounded-lg border transition-colors sm:h-24 sm:w-20 ${
                     selectedImage === index
-                      ? "border-cyan-400/70"
-                      : "border-slate-700/80 hover:border-slate-500"
+                      ? "border-cyan-500"
+                      : "border-slate-200 hover:border-slate-300"
                   }`}
                 >
                   <img src={imageUrl} alt="" className="h-full w-full object-cover" />
@@ -152,16 +152,16 @@ export default function ShopListingDetail({
 
         <section className="space-y-6 lg:sticky lg:top-24 lg:self-start">
           <header>
-            <h1 className="text-3xl font-semibold text-white">{title}</h1>
-            <p className="mt-2 text-sm text-slate-400">
-              {listing.card_number ? `Card #${listing.card_number} - ` : ""}
+            <h1 className="text-3xl font-semibold text-slate-900">{title}</h1>
+            <p className="mt-2 text-sm text-slate-600">
+              {listing.card_number ? `Card #${listing.card_number} • ` : ""}
               {listing.sport}
             </p>
           </header>
 
-          <div className="space-y-5 rounded-2xl border border-slate-800/80 bg-slate-950/65 p-6">
+          <div className="space-y-5 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="flex items-center justify-between gap-3">
-              <p className="text-3xl font-semibold tabular-nums text-white">
+              <p className="text-3xl font-semibold tabular-nums text-slate-900">
                 {formatUsd(Number(listing.price), 2)}
               </p>
               <span
@@ -173,28 +173,28 @@ export default function ShopListingDetail({
               </span>
             </div>
 
-            <div className="space-y-1 text-sm text-slate-400">
+            <div className="space-y-1 text-sm text-slate-600">
               {listing.cert_number && <p>Certification #{listing.cert_number}</p>}
-              <p>{shippingLabel} - Ships in 1-2 days</p>
+              <p>{shippingLabel} • Ships in 1-2 days</p>
             </div>
 
-            <div className="rounded-xl border border-slate-700/80 bg-slate-900/60 p-4">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
               <p className="text-xs uppercase tracking-[0.16em] text-slate-500">
                 CMV pricing transparency
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-                <span className="text-slate-300">
+                <span className="text-slate-700">
                   {cmv.cmvLabel ?? "CMV currently unavailable"}
                 </span>
                 <span className={cmv.deltaClass}>{cmv.deltaLabel}</span>
               </div>
-              <p className="mt-2 text-sm leading-relaxed text-slate-400">
+              <p className="mt-2 text-sm leading-relaxed text-slate-600">
                 {pricingTransparencyText}
               </p>
             </div>
 
             <div className="flex items-center gap-3">
-              <label htmlFor="listing-qty" className="text-sm text-slate-400">
+              <label htmlFor="listing-qty" className="text-sm text-slate-600">
                 Qty
               </label>
               <select
@@ -202,7 +202,7 @@ export default function ShopListingDetail({
                 value={quantity}
                 onChange={(event) => setQuantity(Number(event.target.value))}
                 disabled={!canAdd}
-                className="rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2 text-sm text-white focus:border-cyan-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-cyan-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {Array.from({ length: Math.min(Math.max(available, 1), 10) }, (_, index) => (
                   <option key={index + 1} value={index + 1}>
@@ -220,7 +220,7 @@ export default function ShopListingDetail({
                 className={`rounded-lg px-5 py-3 text-sm font-medium transition-colors ${
                   canAdd
                     ? "bg-cyan-600 text-white hover:bg-cyan-500"
-                    : "cursor-not-allowed bg-slate-800 text-slate-500"
+                    : "cursor-not-allowed bg-slate-200 text-slate-500"
                 }`}
               >
                 {added ? "Added" : "Add to Cart"}
@@ -230,11 +230,11 @@ export default function ShopListingDetail({
                 disabled={!canAdd}
                 className={`rounded-lg border px-5 py-3 text-sm font-medium transition-colors ${
                   canAdd
-                    ? "border-slate-600 text-slate-100 hover:border-slate-400"
-                    : "cursor-not-allowed border-slate-800 text-slate-500"
+                    ? "border-slate-300 text-slate-800 hover:border-slate-400"
+                    : "cursor-not-allowed border-slate-200 text-slate-400"
                 }`}
               >
-                Buy Now
+                Buy now
               </button>
             </div>
           </div>
@@ -243,7 +243,7 @@ export default function ShopListingDetail({
             {POLICY_SECTIONS.map((policy) => (
               <article
                 key={policy.id}
-                className="overflow-hidden rounded-xl border border-slate-800/80"
+                className="overflow-hidden rounded-lg border border-slate-200"
               >
                 <button
                   onClick={() =>
@@ -251,13 +251,13 @@ export default function ShopListingDetail({
                       current === policy.id ? null : policy.id
                     )
                   }
-                  className="flex w-full items-center justify-between bg-slate-950/60 px-4 py-3 text-left text-sm font-medium text-slate-100 transition-colors hover:bg-slate-900"
+                  className="flex w-full items-center justify-between bg-white px-4 py-3 text-left text-sm font-medium text-slate-800 transition-colors hover:bg-slate-50"
                 >
                   {policy.title}
                   <span className="text-slate-500">{openPolicy === policy.id ? "-" : "+"}</span>
                 </button>
                 {openPolicy === policy.id && (
-                  <div className="border-t border-slate-800/80 bg-slate-950/30 px-4 py-3 text-sm leading-relaxed text-slate-400">
+                  <div className="border-t border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-relaxed text-slate-600">
                     {policy.content(listing)}
                   </div>
                 )}
@@ -266,23 +266,23 @@ export default function ShopListingDetail({
           </div>
 
           {listing.description && (
-            <p className="text-sm leading-relaxed text-slate-400">{listing.description}</p>
+            <p className="text-sm leading-relaxed text-slate-600">{listing.description}</p>
           )}
         </section>
       </div>
 
       {relatedListings.length > 0 && (
-        <section className="space-y-5">
+        <section className="space-y-5 border-t border-slate-200 pt-10">
           <div className="flex items-end justify-between gap-3">
             <div>
-              <h2 className="text-xl font-semibold text-white">Related items</h2>
-              <p className="mt-1 text-sm text-slate-400">
+              <h2 className="text-xl font-semibold text-slate-900">Related items</h2>
+              <p className="mt-1 text-sm text-slate-600">
                 Similar picks by sport and price point.
               </p>
             </div>
             <Link
               href="/shop"
-              className="text-sm text-slate-400 transition-colors hover:text-cyan-300"
+              className="text-sm text-slate-600 transition-colors hover:text-cyan-700"
             >
               Browse all
             </Link>

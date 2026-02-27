@@ -9,12 +9,10 @@ export default async function ShopPage() {
   ]);
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-5 md:py-6">
-      <ShopStorefront
-        initialListings={listings}
-        stats={stats}
-        isAdmin={!!admin.user}
-      />
-    </div>
+    <ShopStorefront
+      initialListings={listings}
+      stats={stats}
+      isAdmin={!!admin.user}
+    />
   );
 }

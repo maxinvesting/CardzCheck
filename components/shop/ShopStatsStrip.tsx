@@ -27,22 +27,22 @@ export default function ShopStatsStrip({
     {
       label: "Active listings",
       value: isEmpty ? "0" : stats.activeCount.toString(),
-      valueClassName: "text-slate-100",
+      valueClassName: "text-slate-900",
     },
     {
       label: "Inventory value",
       value: isEmpty ? "-" : formatUsd(stats.totalInventoryValue, 0),
-      valueClassName: "text-slate-100",
+      valueClassName: "text-slate-900",
     },
     {
       label: "Below CMV count",
       value: isEmpty ? "-" : stats.belowCmvCount.toString(),
-      valueClassName: "text-emerald-300",
+      valueClassName: "text-emerald-600",
     },
     {
       label: "Avg grade",
       value: isEmpty ? "-" : stats.avgGrade,
-      valueClassName: "text-slate-100",
+      valueClassName: "text-slate-900",
     },
   ];
 
@@ -52,7 +52,7 @@ export default function ShopStatsStrip({
         {statItems.map((item) => (
           <div
             key={item.label}
-            className={`rounded-xl border border-slate-800/80 bg-slate-950/50 px-4 ${
+            className={`rounded-lg border border-slate-200 bg-white px-4 ${
               compact ? "py-3" : "py-4"
             }`}
           >
@@ -62,7 +62,7 @@ export default function ShopStatsStrip({
             <p
               className={`mt-1 font-semibold tabular-nums ${
                 compact ? "text-base" : "text-lg"
-              } ${item.valueClassName ?? "text-slate-100"}`}
+              } ${item.valueClassName ?? "text-slate-900"}`}
             >
               {item.value}
             </p>
@@ -74,9 +74,9 @@ export default function ShopStatsStrip({
         <div className="flex items-center justify-center">
           <Link
             href="/admin/shop"
-            className="text-sm text-slate-400 transition-colors hover:text-cyan-300"
+            className="text-sm text-slate-600 transition-colors hover:text-cyan-700"
           >
-            {"Add listings in Admin ->"}
+            Add listings in Admin →
           </Link>
         </div>
       )}

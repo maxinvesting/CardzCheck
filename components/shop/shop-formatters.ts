@@ -30,18 +30,18 @@ export function getGradeChipClass(grade: string | null | undefined): string {
   const normalized = (grade ?? "").toLowerCase();
 
   if (normalized.includes("10")) {
-    return "bg-emerald-500/10 border border-emerald-400/40 text-emerald-300";
+    return "border border-emerald-200 bg-emerald-50 text-emerald-700";
   }
 
   if (normalized.includes("9")) {
-    return "bg-sky-500/10 border border-sky-400/40 text-sky-300";
+    return "border border-sky-200 bg-sky-50 text-sky-700";
   }
 
   if (normalized.includes("raw") || normalized.includes("ungraded") || !normalized) {
-    return "bg-amber-500/10 border border-amber-400/40 text-amber-300";
+    return "border border-amber-200 bg-amber-50 text-amber-700";
   }
 
-  return "bg-slate-800/80 border border-slate-700/70 text-slate-300";
+  return "border border-slate-200 bg-slate-50 text-slate-700";
 }
 
 export interface CmvDeltaPresentation {
@@ -67,23 +67,23 @@ export function getCmvDeltaPresentation(
   if (Math.abs(deltaPct) <= 1) {
     return {
       cmvLabel: `CMV ${formatUsd(cmv, 0)}`,
-      deltaLabel: "≈ at market",
-      deltaClass: "text-slate-400",
+      deltaLabel: "~ at market",
+      deltaClass: "text-slate-600",
     };
   }
 
   if (deltaPct < 0) {
     return {
       cmvLabel: `CMV ${formatUsd(cmv, 0)}`,
-      deltaLabel: `▼ ${Math.abs(deltaPct)}% below market`,
-      deltaClass: "text-emerald-400",
+      deltaLabel: `${Math.abs(deltaPct)}% below market`,
+      deltaClass: "text-emerald-600",
     };
   }
 
   return {
     cmvLabel: `CMV ${formatUsd(cmv, 0)}`,
-    deltaLabel: `▲ ${deltaPct}% above market`,
-    deltaClass: "text-amber-300",
+    deltaLabel: `${deltaPct}% above market`,
+    deltaClass: "text-amber-600",
   };
 }
 

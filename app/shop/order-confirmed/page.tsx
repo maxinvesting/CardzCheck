@@ -13,7 +13,12 @@ export default async function OrderConfirmedPage({
     redirect("/shop");
   }
 
-  type SessionInfo = { id: string; amount_total: number | null; customer_details: { email?: string; name?: string } | null };
+  type SessionInfo = {
+    id: string;
+    amount_total: number | null;
+    customer_details: { email?: string; name?: string } | null;
+  };
+
   let session: SessionInfo | null = null;
 
   try {
@@ -37,17 +42,17 @@ export default async function OrderConfirmedPage({
 
   if (!session) {
     return (
-      <div className="max-w-lg mx-auto px-4 py-16 text-center">
-        <h1 className="text-2xl font-bold text-white">Order Not Found</h1>
-        <p className="mt-2 text-gray-400">
+      <div className="mx-auto max-w-lg px-4 py-16 text-center">
+        <h1 className="text-2xl font-bold text-slate-900">Order not found</h1>
+        <p className="mt-2 text-slate-600">
           We could not find your order. If you completed payment, you should
           receive a receipt by email.
         </p>
         <Link
           href="/shop"
-          className="mt-6 inline-block px-6 py-3 bg-cyan-600 hover:bg-cyan-700 text-white font-medium rounded-lg"
+          className="mt-6 inline-block rounded-lg bg-cyan-600 px-6 py-3 font-medium text-white hover:bg-cyan-500"
         >
-          Back to Shop
+          Back to shop
         </Link>
       </div>
     );
@@ -58,32 +63,24 @@ export default async function OrderConfirmedPage({
   const name = session.customer_details?.name ?? "";
 
   return (
-    <div className="max-w-lg mx-auto px-4 py-16">
-      <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-8">
-        <h1 className="text-2xl font-bold text-white">Thank you for your order!</h1>
-        <p className="mt-2 text-gray-400">
-          A confirmation has been sent to {email}.
-        </p>
-        {name && (
-          <p className="mt-1 text-gray-400">
-            Order for {name}
-          </p>
-        )}
-        <div className="mt-6 pt-6 border-t border-gray-800">
-          <p className="text-gray-400">Total paid</p>
-          <p className="text-2xl font-bold text-cyan-400 mt-1">
-            ${total.toFixed(2)}
-          </p>
+    <div className="mx-auto max-w-lg px-4 py-16">
+      <div className="rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
+        <h1 className="text-2xl font-bold text-slate-900">Thank you for your order</h1>
+        <p className="mt-2 text-slate-600">A confirmation has been sent to {email}.</p>
+        {name && <p className="mt-1 text-slate-600">Order for {name}</p>}
+        <div className="mt-6 border-t border-slate-200 pt-6">
+          <p className="text-slate-600">Total paid</p>
+          <p className="mt-1 text-2xl font-bold text-slate-900">${total.toFixed(2)}</p>
         </div>
-        <p className="mt-6 text-sm text-gray-500">
+        <p className="mt-6 text-sm text-slate-500">
           We will ship your order as soon as possible. You will receive tracking
           information via email when it ships.
         </p>
         <Link
           href="/shop"
-          className="mt-8 block w-full py-3 px-4 bg-cyan-600 hover:bg-cyan-700 text-white font-medium rounded-lg text-center transition-colors"
+          className="mt-8 block w-full rounded-lg bg-cyan-600 px-4 py-3 text-center font-medium text-white transition-colors hover:bg-cyan-500"
         >
-          Continue Shopping
+          Continue shopping
         </Link>
       </div>
     </div>
