@@ -17,6 +17,7 @@ import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import BusinessPaywall from "@/components/business/BusinessPaywall";
 import BusinessMetrics from "@/components/business/BusinessMetrics";
 import BusinessAnalystPreviewCard from "@/components/business/BusinessAnalystPreviewCard";
+import BusinessDashboard from "@/components/business/BusinessDashboard";
 import InventoryTable from "@/components/business/InventoryTable";
 import ItemDetailDrawer from "@/components/business/ItemDetailDrawer";
 import SalesTable, { type SalesFilters } from "@/components/business/SalesTable";
@@ -87,9 +88,10 @@ function defaultSalesFilters(): SalesFilters {
 function resolveBusinessTab(
   pathname: string,
   tabParam: string | null
-): "inventory" | "sales" {
+): "dashboard" | "inventory" | "sales" {
   if (pathname.startsWith("/business/sales")) return "sales";
   if (pathname.startsWith("/business/inventory")) return "inventory";
+  if (pathname === "/business") return "dashboard";
   return tabParam === "sales" ? "sales" : "inventory";
 }
 
@@ -175,7 +177,7 @@ function BusinessPageContent() {
   const [needsMigration, setNeedsMigration] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [filteredItems, setFilteredItems] = useState<BusinessInventoryItem[]>([]);
-  const [activeTab, setActiveTab] = useState<"inventory" | "sales">(() =>
+  const [activeTab, setActiveTab] = useState<"dashboard" | "inventory" | "sales">(() =>
     resolveBusinessTab(pathname, searchParams.get("tab"))
   );
   const [markSoldItem, setMarkSoldItem] = useState<BusinessInventoryItem | null>(null);
@@ -301,13 +303,17 @@ function BusinessPageContent() {
   }, [pathname, searchParams]);
 
   const handleTabChange = useCallback(
-    (tab: "inventory" | "sales") => {
+    (tab: "dashboard" | "inventory" | "sales") => {
       setActiveTab(tab);
+      if (tab === "dashboard" && pathname !== "/business") {
+        router.push("/business");
+        return;
+      }
       if (tab === "sales" && pathname !== "/business/sales") {
         router.push("/business/sales");
         return;
       }
-      if (tab === "inventory" && pathname.startsWith("/business/sales")) {
+      if (tab === "inventory" && !pathname.startsWith("/business/inventory")) {
         router.push("/business/inventory");
       }
     },
@@ -1062,7 +1068,9 @@ function BusinessPageContent() {
               CardzCheck Business
             </h1>
             <p className="text-gray-400 text-xs mt-0.5">
-              Inventory tracking & sales analytics
+              {activeTab === "dashboard"
+                ? "Your daily decision engine"
+                : "Inventory tracking & sales analytics"}
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -1153,109 +1161,126 @@ function BusinessPageContent() {
           </div>
         </div>
 
-        {/* Metrics — compact in Business mode */}
-        <BusinessMetrics
-          metrics={metrics}
-          loading={metricsLoading}
-          inventorySummary={inventorySummary}
-          totalItemCount={items.length}
-          compact
-        />
-
-        {!needsMigration && activeTab === "inventory" && (
-          <BusinessAnalystPreviewCard items={items} />
-        )}
-
-        {!needsMigration && (
-          <div className="mb-2 flex items-center gap-1 border-b border-gray-800">
-            <button
-              type="button"
-              onClick={() => handleTabChange("inventory")}
-              className={`border-b-2 px-3 py-1.5 text-xs font-medium transition-colors ${
-                activeTab === "inventory"
-                  ? "border-emerald-500 text-emerald-400"
-                  : "border-transparent text-gray-500 hover:text-gray-300"
-              }`}
-            >
-              Inventory
-            </button>
-            <button
-              type="button"
-              onClick={() => handleTabChange("sales")}
-              className={`border-b-2 px-3 py-1.5 text-xs font-medium transition-colors ${
-                activeTab === "sales"
-                  ? "border-emerald-500 text-emerald-400"
-                  : "border-transparent text-gray-500 hover:text-gray-300"
-              }`}
-            >
-              Sales
-            </button>
-          </div>
-        )}
-
-        {/* Migration banner (shown when database tables haven't been created) */}
-        {needsMigration && (
-          <div className="mt-3">
-            <BusinessMigrationBanner
-              onRetry={() => {
-                setLoading(true);
-                loadInventory();
-              }}
-            />
-          </div>
-        )}
-
-        {/* Inventory Table */}
-        {!needsMigration && activeTab === "inventory" && (
-          perfEnabled ? (
-            <Profiler
-              id="BusinessInventoryTable"
-              onRender={handleInventoryProfilerRender}
-            >
-              <InventoryTable
-                items={items}
-                selectedItemId={selectedItem?.id ?? null}
-                onItemClick={setSelectedItem}
-                onInlineUpdate={handleInlineUpdate}
-                onBulkAction={handleBulkAction}
-                onDelete={handleDelete}
-                onMarkSold={handleMarkSold}
-                onFilteredChange={handleFilteredChange}
-                dense
-                perfEnabled={perfEnabled}
-              />
-            </Profiler>
-          ) : (
-            <InventoryTable
-              items={items}
-              selectedItemId={selectedItem?.id ?? null}
-              onItemClick={setSelectedItem}
-              onInlineUpdate={handleInlineUpdate}
-              onBulkAction={handleBulkAction}
-              onDelete={handleDelete}
-              onMarkSold={handleMarkSold}
-              onFilteredChange={handleFilteredChange}
-              dense
-            />
-          )
-        )}
-
-        {!needsMigration && activeTab === "sales" && (
-          <SalesTable
-            sales={sales}
-            loading={salesLoading}
-            filters={salesFilters}
-            onFiltersChange={(next) => {
-              setSalesFilters(next);
-              setSalesPage(1);
-            }}
-            onEditSale={handleUpdateSale}
-            onDeleteSale={handleDeleteSale}
-            page={salesPage}
-            pageSize={salesPageSize}
-            total={salesTotal}
-            onPageChange={(next) => setSalesPage(next)}
+        {/* Dashboard view — shown only at /business (exact) */}
+        {activeTab === "dashboard" && !needsMigration && (
+          <BusinessDashboard
+            items={items}
+            metrics={metrics}
+            metricsLoading={metricsLoading}
+            inventorySummary={inventorySummary}
+            onSelectItem={setSelectedItem}
+            onSwitchToInventory={() => handleTabChange("inventory")}
           />
+        )}
+
+        {/* Inventory / Sales view — shown at /business/inventory and /business/sales */}
+        {activeTab !== "dashboard" && (
+          <>
+            {/* Metrics — compact in Business mode */}
+            <BusinessMetrics
+              metrics={metrics}
+              loading={metricsLoading}
+              inventorySummary={inventorySummary}
+              totalItemCount={items.length}
+              compact
+            />
+
+            {!needsMigration && activeTab === "inventory" && (
+              <BusinessAnalystPreviewCard items={items} />
+            )}
+
+            {!needsMigration && (
+              <div className="mb-2 flex items-center gap-1 border-b border-gray-800">
+                <button
+                  type="button"
+                  onClick={() => handleTabChange("inventory")}
+                  className={`border-b-2 px-3 py-1.5 text-xs font-medium transition-colors ${
+                    activeTab === "inventory"
+                      ? "border-emerald-500 text-emerald-400"
+                      : "border-transparent text-gray-500 hover:text-gray-300"
+                  }`}
+                >
+                  Inventory
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleTabChange("sales")}
+                  className={`border-b-2 px-3 py-1.5 text-xs font-medium transition-colors ${
+                    activeTab === "sales"
+                      ? "border-emerald-500 text-emerald-400"
+                      : "border-transparent text-gray-500 hover:text-gray-300"
+                  }`}
+                >
+                  Sales
+                </button>
+              </div>
+            )}
+
+            {/* Migration banner (shown when database tables haven't been created) */}
+            {needsMigration && (
+              <div className="mt-3">
+                <BusinessMigrationBanner
+                  onRetry={() => {
+                    setLoading(true);
+                    loadInventory();
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Inventory Table */}
+            {!needsMigration && activeTab === "inventory" && (
+              perfEnabled ? (
+                <Profiler
+                  id="BusinessInventoryTable"
+                  onRender={handleInventoryProfilerRender}
+                >
+                  <InventoryTable
+                    items={items}
+                    selectedItemId={selectedItem?.id ?? null}
+                    onItemClick={setSelectedItem}
+                    onInlineUpdate={handleInlineUpdate}
+                    onBulkAction={handleBulkAction}
+                    onDelete={handleDelete}
+                    onMarkSold={handleMarkSold}
+                    onFilteredChange={handleFilteredChange}
+                    dense
+                    perfEnabled={perfEnabled}
+                  />
+                </Profiler>
+              ) : (
+                <InventoryTable
+                  items={items}
+                  selectedItemId={selectedItem?.id ?? null}
+                  onItemClick={setSelectedItem}
+                  onInlineUpdate={handleInlineUpdate}
+                  onBulkAction={handleBulkAction}
+                  onDelete={handleDelete}
+                  onMarkSold={handleMarkSold}
+                  onFilteredChange={handleFilteredChange}
+                  dense
+                />
+              )
+            )}
+
+            {!needsMigration && activeTab === "sales" && (
+              <SalesTable
+                sales={sales}
+                loading={salesLoading}
+                filters={salesFilters}
+                onFiltersChange={(next) => {
+                  setSalesFilters(next);
+                  setSalesPage(1);
+                }}
+                onEditSale={handleUpdateSale}
+                onDeleteSale={handleDeleteSale}
+                page={salesPage}
+                pageSize={salesPageSize}
+                total={salesTotal}
+                onPageChange={(next) => setSalesPage(next)}
+              />
+            )}
+          </>
         )}
 
         {/* Detail Drawer */}

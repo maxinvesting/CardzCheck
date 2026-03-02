@@ -170,14 +170,13 @@ function BUSINESS_NAV_ITEMS(): NavItem[] {
   return [
     { name: "Dashboard", href: "/business", icon: <HomeIcon />, exact: true },
     { name: "Inventory", href: "/business/inventory", icon: <BoxIcon /> },
-    { name: "Sales", href: "/business/sales", icon: <ReceiptIcon /> },
     { name: "Comps", href: "/business/comps", icon: <ChartIcon />, badge: "Beta" },
     {
       name: "Grade Probability Engine",
       href: "/business/grade-probability",
       icon: <BadgeIcon />,
     },
-    { name: "Business Consultant", href: "/business/consultant", icon: <AnalystIcon /> },
+    { name: "CardzCheck Analyst", href: "/business/consultant", icon: <AnalystIcon /> },
     { name: "Shop", href: "/shop", icon: <ShopIcon /> },
     { name: "Settings", href: "/business/settings", icon: <SettingsIcon /> },
   ];
