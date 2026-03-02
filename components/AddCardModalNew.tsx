@@ -231,8 +231,8 @@ export default function AddCardModalNew({
       const hasFallbackDataUrls = imageInputs.some(isDataUrl);
       const identifyInput =
         imageInputs.length > 1 && !hasFallbackDataUrls
-          ? { imageUrls: imageInputs, includeStockImage: true }
-          : { imageUrl: primaryIdentifyImage, includeStockImage: true };
+          ? { imageUrls: imageInputs, includeStockImage: false }
+          : { imageUrl: primaryIdentifyImage, includeStockImage: false };
 
       const identify = await identifyCardFromImages(identifyInput);
 
@@ -243,13 +243,14 @@ export default function AddCardModalNew({
         return;
       }
 
-      const sanitizedUserImageUrls = uniqueHttpUrls(imageInputs);
-      const primaryUserImage = sanitizedUserImageUrls[0] || null;
+      const selectedImageUrls = imageInputs.filter(
+        (url): url is string => typeof url === "string" && url.trim().length > 0
+      );
+      const persistedUserImageUrls = uniqueHttpUrls(selectedImageUrls);
+      const primaryUserImage = persistedUserImageUrls[0] || null;
       const result = identify.data;
-      const stockImageUrl = normalizeHttpUrl(result.stock_image_url || null);
-      const ebayImageUrl = normalizeHttpUrl(result.ebay_image_url || null);
       const displayImageUrl =
-        primaryUserImage || stockImageUrl || ebayImageUrl || previewUrls[0] || "";
+        selectedImageUrls[0] || previewUrls[0] || "";
 
       // Success - set identified card (NO gradeEstimate - that's separate)
       setIdentifiedCard(normalizeIdentificationResult({
@@ -261,10 +262,10 @@ export default function AddCardModalNew({
         grade: result.grade || undefined,
         parallel_type: result.variant || undefined,
         imageUrl: displayImageUrl,
-        imageUrls: sanitizedUserImageUrls.length > 0 ? sanitizedUserImageUrls : undefined,
+        imageUrls: selectedImageUrls.length > 0 ? selectedImageUrls : undefined,
         userImageUrl: primaryUserImage || undefined,
-        stockImageUrl: stockImageUrl || undefined,
-        ebayImageUrl: ebayImageUrl || undefined,
+        stockImageUrl: undefined,
+        ebayImageUrl: undefined,
         confidence: result.confidence,
         cardIdentity: result.card_identity,
       }));
@@ -520,6 +521,13 @@ export default function AddCardModalNew({
   const yearNeedsConfirmation = identifiedCard
     ? needsYearConfirmation(identifiedCard.year, identifiedCard.confidence, yearFieldConfidence)
     : false;
+  const showingBestMatchInDatabase = identifiedCard
+    ? !identifiedCard.userImageUrl &&
+      Boolean(identifiedCard.imageUrl) &&
+      !isDataUrl(identifiedCard.imageUrl || "") &&
+      (identifiedCard.imageUrl === identifiedCard.stockImageUrl ||
+        identifiedCard.imageUrl === identifiedCard.ebayImageUrl)
+    : false;
 
   if (!isOpen) return null;
 
@@ -756,6 +764,11 @@ export default function AddCardModalNew({
                       alt={identifiedCard.player_name}
                       className="w-24 h-32 object-cover rounded-lg shadow-md bg-gray-200 dark:bg-gray-800"
                     />
+                    {showingBestMatchInDatabase ? (
+                      <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                        Best match in database
+                      </p>
+                    ) : null}
                     {identifiedCard.imageUrls && identifiedCard.imageUrls.length > 1 ? (
                       <div className="flex gap-2">
                         {identifiedCard.imageUrls.slice(1, 3).map((url, index) => (
