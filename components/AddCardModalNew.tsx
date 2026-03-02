@@ -43,6 +43,8 @@ interface AddCardModalNewProps {
 type ModalMode = "select" | "upload" | "manual" | "confirm";
 const MAX_IDENTIFY_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_FALLBACK_DATA_URL_BYTES = 350 * 1024;
+const GRADE_WITH_COMPANY_PATTERN = /^(PSA|BGS|SGC|CGC)\s*(\d+(?:\.\d+)?)$/i;
+const NUMERIC_GRADE_PATTERN = /^\d+(?:\.\d+)?$/;
 
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -95,6 +97,25 @@ async function compressDataUrl(
     image.onerror = () => resolve(null);
     image.src = dataUrl;
   });
+}
+
+function normalizeDetectedGrade(rawGrade?: string | null): string | null {
+  if (!rawGrade) return null;
+  const trimmed = rawGrade.trim();
+  if (!trimmed) return null;
+  if (/^raw$/i.test(trimmed) || /^ungraded$/i.test(trimmed)) return "Raw";
+
+  const withCompany = trimmed.match(GRADE_WITH_COMPANY_PATTERN);
+  if (withCompany?.[1] && withCompany[2]) {
+    return `${withCompany[1].toUpperCase()} ${withCompany[2]}`;
+  }
+
+  if (NUMERIC_GRADE_PATTERN.test(trimmed)) {
+    const inferredCompany = trimmed.includes(".5") ? "BGS" : "PSA";
+    return `${inferredCompany} ${trimmed}`;
+  }
+
+  return null;
 }
 
 export default function AddCardModalNew({
@@ -282,12 +303,15 @@ export default function AddCardModalNew({
   useEffect(() => {
     if (identifiedCard) {
       setYearDraft(identifiedCard.year || "");
-      setCondition(
-        identifiedCard.grade &&
-          CONDITION_OPTIONS.some((option) => option.value === identifiedCard.grade)
-          ? identifiedCard.grade
-          : "Raw"
+      const normalizedDetected = normalizeDetectedGrade(identifiedCard.grade);
+      if (!normalizedDetected) {
+        setCondition("Raw");
+        return;
+      }
+      const matchedOption = CONDITION_OPTIONS.find(
+        (option) => option.value.toLowerCase() === normalizedDetected.toLowerCase()
       );
+      setCondition(matchedOption?.value || "Raw");
     }
   }, [identifiedCard]);
 
@@ -400,13 +424,21 @@ export default function AddCardModalNew({
     // For watchlist/business mode, pass card data to onCardSelected and close
     if ((addMode === "watchlist" || addMode === "business") && onCardSelected) {
       const parsedQuantity = Math.max(1, Number.parseInt(quantity, 10) || 1);
+      const normalizedCondition = normalizeDetectedGrade(condition) || condition;
+      const normalizedDetected = normalizeDetectedGrade(identifiedCard.grade);
+      const effectiveGrade =
+        (normalizedCondition === "Raw" || !normalizedCondition) &&
+        normalizedDetected &&
+        normalizedDetected !== "Raw"
+          ? normalizedDetected
+          : normalizedCondition;
       const cardData = {
         player_name: identifiedCard.player_name,
         year: identifiedCard.year,
         set_name: identifiedCard.set_name,
         card_number: identifiedCard.card_number,
         parallel_type: identifiedCard.parallel_type,
-        grade: condition,
+        grade: effectiveGrade,
         imageUrl: identifiedCard.imageUrl || undefined,
         user_image_url: identifiedCard.userImageUrl || undefined,
         stock_image_url: identifiedCard.stockImageUrl || undefined,

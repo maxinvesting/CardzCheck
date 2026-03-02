@@ -3,6 +3,10 @@ import { createClient } from "@/lib/supabase/server";
 import { getInventoryItem, updateInventoryItem } from "@/lib/business/actions";
 import { hasBusinessAccess } from "@/lib/access";
 import { normalizeHttpUrl } from "@/lib/collection-images";
+import { parseSmartSearch } from "@/lib/smart-search-parser";
+
+const GRADE_WITH_COMPANY_PATTERN = /^(PSA|BGS|SGC|CGC)\s*(\d+(?:\.\d+)?)$/i;
+const NUMERIC_GRADE_PATTERN = /^\d+(?:\.\d+)?$/;
 
 async function getAuthUserId() {
   const supabase = await createClient();
@@ -10,6 +14,28 @@ async function getAuthUserId() {
     data: { user },
   } = await supabase.auth.getUser();
   return user?.id ?? null;
+}
+
+function normalizeGradeLabel(
+  rawGrade?: string | null,
+  rawCompany?: string | null
+): string | undefined {
+  if (!rawGrade) return undefined;
+  const grade = rawGrade.trim();
+  if (!grade || /^raw$/i.test(grade) || /^ungraded$/i.test(grade)) return undefined;
+
+  const company = rawCompany?.trim().toUpperCase() || "";
+  const withCompany = grade.match(GRADE_WITH_COMPANY_PATTERN);
+  if (withCompany?.[1] && withCompany[2]) {
+    return `${withCompany[1].toUpperCase()} ${withCompany[2]}`;
+  }
+
+  if (NUMERIC_GRADE_PATTERN.test(grade)) {
+    if (company) return `${company} ${grade}`;
+    return grade.includes(".5") ? `BGS ${grade}` : `PSA ${grade}`;
+  }
+
+  return company ? `${company} ${grade}` : grade;
 }
 
 /**
@@ -62,10 +88,23 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Call search API with full title as player (eBay-style query)
+    const parsed = parseSmartSearch(title);
+    const resolvedPlayer = parsed.player_name?.trim() || title;
+    const resolvedGrade =
+      (inventoryItem &&
+        normalizeGradeLabel(inventoryItem.grade, inventoryItem.grading_company)) ||
+      normalizeGradeLabel(parsed.grade);
+
+    // Call search API with structured query fields and dual-format CMV output
     const base = request.nextUrl.origin;
     const searchUrl = new URL("/api/search", base);
-    searchUrl.searchParams.set("player", title);
+    searchUrl.searchParams.set("player", resolvedPlayer);
+    searchUrl.searchParams.set("format", "dual");
+    if (parsed.year) searchUrl.searchParams.set("year", parsed.year);
+    if (parsed.set_name) searchUrl.searchParams.set("set", parsed.set_name);
+    if (resolvedGrade) searchUrl.searchParams.set("grade", resolvedGrade);
+    if (parsed.card_number) searchUrl.searchParams.set("card_number", parsed.card_number);
+    if (parsed.parallel_type) searchUrl.searchParams.set("parallel_type", parsed.parallel_type);
 
     const cookieHeader = request.headers.get("cookie");
     const res = await fetch(searchUrl.toString(), {
@@ -80,15 +119,17 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const stats = data?.stats;
-    const cmv =
-      typeof stats?.cmv === "number" &&
-      Number.isFinite(stats.cmv) &&
-      stats.cmv > 0
-        ? stats.cmv
+    const modeledCmv =
+      typeof data?._marketDiscount?.cmv === "number" &&
+      Number.isFinite(data._marketDiscount.cmv) &&
+      data._marketDiscount.cmv > 0
+        ? data._marketDiscount.cmv
         : null;
+    const cmv = modeledCmv;
 
-    const forSaleItems = Array.isArray(data?._forSale?.items)
+    const forSaleItems = Array.isArray(data?.forSale?.items)
+      ? data.forSale.items
+      : Array.isArray(data?._forSale?.items)
       ? data._forSale.items
       : [];
     const compItems = Array.isArray(data?.comps) ? data.comps : [];

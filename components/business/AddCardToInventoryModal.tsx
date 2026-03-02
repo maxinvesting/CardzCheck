@@ -128,7 +128,7 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
       quantity: String(Math.max(1, card.quantity ?? 1)),
     }));
     setCmvLoading(true);
-    const q = new URLSearchParams({ player: card.player_name });
+    const q = new URLSearchParams({ player: card.player_name, format: "dual" });
     if (card.year) q.set("year", card.year);
     if (card.set_name) q.set("set", card.set_name);
     const grade = resolveGradeFields(card);
@@ -138,13 +138,15 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
     fetch(`/api/search?${q.toString()}`)
       .then((res) => res.json().catch(() => null))
       .then((data) => {
-        const cmv =
-          data?.stats?.cmv != null &&
-          typeof data.stats.cmv === "number" &&
-          Number.isFinite(data.stats.cmv) &&
-          data.stats.cmv > 0
-            ? data.stats.cmv
+        const modeledCmv =
+          data?._marketDiscount?.cmv != null &&
+          typeof data._marketDiscount.cmv === "number" &&
+          Number.isFinite(data._marketDiscount.cmv) &&
+          data._marketDiscount.cmv > 0
+            ? data._marketDiscount.cmv
             : null;
+
+        const cmv = modeledCmv;
         if (cmv != null) {
           setForm((prev) => ({
             ...prev,
