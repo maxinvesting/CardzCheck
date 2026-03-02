@@ -177,7 +177,7 @@ function BUSINESS_NAV_ITEMS(): NavItem[] {
       href: "/business/grade-probability",
       icon: <BadgeIcon />,
     },
-    { name: "CardzCheck Analyst", href: "/business/analyst", icon: <AnalystIcon /> },
+    { name: "Business Consultant", href: "/business/consultant", icon: <AnalystIcon /> },
     { name: "Shop", href: "/shop", icon: <ShopIcon /> },
     { name: "Settings", href: "/business/settings", icon: <SettingsIcon /> },
   ];

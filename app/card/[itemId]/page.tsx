@@ -205,31 +205,12 @@ export default function CardProfilePage() {
   // ── Data Loading ─────────────────────────────────────────────────
 
   const loadProfile = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(
-        `/api/card-profile/${itemId}?from=${from}`,
-        { cache: "no-store" }
-      );
-      if (res.status === 401) {
-        router.push("/login");
-        return;
-      }
-      if (res.status === 404) {
-        setError("Item not found");
-        return;
-      }
-      if (!res.ok) {
-        setError("Failed to load profile");
-        return;
-      }
-      const data = await res.json();
+    const applyProfile = (data: any, mode: Mode) => {
       setItem(data.item);
       setSales(data.sales ?? []);
 
       // Prepare Business-mode grade estimator input when we have images and identity
-      if (from === "business" && data.item) {
+      if (mode === "business" && data.item) {
         const businessItem = data.item as ProfileItem;
         const imageCandidates = [
           businessItem.user_image_url,
@@ -257,6 +238,79 @@ export default function CardProfilePage() {
       } else {
         setCardForGrade(null);
       }
+    };
+
+    const fetchProfile = async (mode: Mode) => {
+      const res = await fetch(`/api/card-profile/${itemId}?from=${mode}`, {
+        cache: "no-store",
+      });
+      if (res.status === 401) {
+        return { status: "unauthorized" as const };
+      }
+      if (res.status === 404) {
+        return { status: "not_found" as const };
+      }
+      if (!res.ok) {
+        return { status: "error" as const };
+      }
+      const data = await res.json();
+      return { status: "ok" as const, data };
+    };
+
+    setLoading(true);
+    setError(null);
+    try {
+      const primaryMode: Mode = from;
+      const primary = await fetchProfile(primaryMode);
+
+      if (primary.status === "unauthorized") {
+        router.push("/login");
+        return;
+      }
+
+      if (primary.status === "ok") {
+        const data = primary.data;
+        applyProfile(data, primaryMode);
+        const resolvedId =
+          typeof data?.item?.id === "string" && data.item.id.length > 0
+            ? data.item.id
+            : itemId;
+        if (resolvedId !== itemId) {
+          router.replace(`/card/${resolvedId}?from=${primaryMode}`);
+        }
+        return;
+      }
+
+      if (primary.status === "not_found") {
+        const fallbackMode: Mode = primaryMode === "business" ? "collection" : "business";
+        const fallback = await fetchProfile(fallbackMode);
+
+        if (fallback.status === "unauthorized") {
+          router.push("/login");
+          return;
+        }
+
+        if (fallback.status === "ok") {
+          const data = fallback.data;
+          applyProfile(data, fallbackMode);
+          const resolvedId =
+            typeof data?.item?.id === "string" && data.item.id.length > 0
+              ? data.item.id
+              : itemId;
+          router.replace(`/card/${resolvedId}?from=${fallbackMode}`);
+          return;
+        }
+
+        if (fallback.status === "not_found") {
+          setError("Item not found");
+          return;
+        }
+
+        setError("Failed to load profile");
+        return;
+      }
+
+      setError("Failed to load profile");
     } catch {
       setError("Failed to load profile");
     } finally {

@@ -80,16 +80,32 @@ export async function GET(
 
     if (from === "business") {
       // Load from business_inventory_items
-      const { data: item, error: itemErr } = await supabase
+      const { data: itemById, error: itemByIdErr } = await supabase
         .from("business_inventory_items")
         .select("*")
         .eq("id", itemId)
         .eq("user_id", userId)
         .maybeSingle();
 
-      if (itemErr && itemErr.code !== "PGRST116") throw itemErr;
-      if (!item)
-        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      if (itemByIdErr && itemByIdErr.code !== "PGRST116") throw itemByIdErr;
+
+      let item = itemById;
+      if (!item) {
+        // Backward-compatibility: legacy links may pass collection `card_id`
+        // instead of business inventory `id`.
+        const { data: itemByCardIdRows, error: itemByCardIdErr } = await supabase
+          .from("business_inventory_items")
+          .select("*")
+          .eq("card_id", itemId)
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false })
+          .limit(1);
+
+        if (itemByCardIdErr) throw itemByCardIdErr;
+        item = Array.isArray(itemByCardIdRows) ? itemByCardIdRows[0] ?? null : null;
+      }
+
+      if (!item) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
       let hydratedItem: Record<string, unknown> = item as Record<string, unknown>;
       const baseItem = item as ImageFields;
@@ -111,15 +127,17 @@ export async function GET(
         }
 
         if (!linkedCard && baseItem.title?.trim()) {
-          const { data } = await supabase
+          const { data: titleMatchedRows, error: titleMatchError } = await supabase
             .from("collection_items")
             .select(cardSelect)
             .eq("user_id", userId)
             .eq("title", baseItem.title.trim())
             .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          linkedCard = (data as ImageFields | null) ?? null;
+            .limit(1);
+          if (titleMatchError) throw titleMatchError;
+          linkedCard = Array.isArray(titleMatchedRows)
+            ? ((titleMatchedRows[0] as ImageFields | undefined) ?? null)
+            : null;
         }
 
         let linkedCardImageUrl: string | null = null;
@@ -153,7 +171,7 @@ export async function GET(
       const { data: sales } = await supabase
         .from("business_sales")
         .select("*")
-        .eq("inventory_item_id", itemId)
+        .eq("inventory_item_id", item.id)
         .eq("user_id", userId)
         .order("sale_date", { ascending: false });
 

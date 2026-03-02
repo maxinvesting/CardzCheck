@@ -57,7 +57,46 @@ export default function CardProfilePage() {
 
       if (!response.ok) {
         if (response.status === 404) {
-          setError("Card not found");
+          // Backward-compatibility: old links may pass business inventory item ids.
+          // Try unified profile routes before showing a hard 404.
+          const businessProfileResponse = await fetch(
+            `/api/card-profile/${cardId}?from=business`,
+            { cache: "no-store" }
+          );
+          if (businessProfileResponse.ok) {
+            const businessProfile = await businessProfileResponse
+              .json()
+              .catch(() => null);
+            const businessItemId =
+              typeof businessProfile?.item?.id === "string" &&
+              businessProfile.item.id.length > 0
+                ? businessProfile.item.id
+                : cardId;
+            router.replace(`/card/${businessItemId}?from=business`);
+            return;
+          }
+
+          const collectionProfileResponse = await fetch(
+            `/api/card-profile/${cardId}?from=collection`,
+            { cache: "no-store" }
+          );
+          if (collectionProfileResponse.ok) {
+            const collectionProfile = await collectionProfileResponse
+              .json()
+              .catch(() => null);
+            const collectionItemId =
+              typeof collectionProfile?.item?.id === "string" &&
+              collectionProfile.item.id.length > 0
+                ? collectionProfile.item.id
+                : cardId;
+            router.replace(`/card/${collectionItemId}?from=collection`);
+            return;
+          }
+
+          // Final fallback: hand off to unified profile route so it can run
+          // cross-mode resolution logic.
+          router.replace(`/card/${cardId}?from=business`);
+          return;
         } else if (response.status === 401) {
           router.push("/signin");
           return;

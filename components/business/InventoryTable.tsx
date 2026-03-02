@@ -391,21 +391,14 @@ export default function InventoryTable({
           <span className="truncate" title={titleStr}>{titleStr}</span>
         </>
       );
-      if (item.card_id) {
-        return (
-          <Link
-            href={`/cards/${item.card_id}`}
-            onClick={(e) => e.stopPropagation()}
-            className="flex items-center gap-1.5 min-w-0 text-gray-300 hover:text-white hover:underline"
-          >
-            {titleContent}
-          </Link>
-        );
-      }
       return (
-        <span className="flex items-center gap-1.5 min-w-0">
+        <Link
+          href={`/card/${item.id}?from=business`}
+          onClick={(e) => e.stopPropagation()}
+          className="flex items-center gap-1.5 min-w-0 text-gray-300 hover:text-white hover:underline"
+        >
           {titleContent}
-        </span>
+        </Link>
       );
     }
     if (field === "list_price_cents") {

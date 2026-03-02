@@ -280,9 +280,9 @@ export default function ItemDetailDrawer({
           <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
             <h2 className="text-lg font-bold text-white">Edit Item</h2>
             <div className="flex items-center gap-2">
-              {item.card_id && (
+              {item.id && (
                 <Link
-                  href={`/cards/${item.card_id}`}
+                  href={`/card/${item.id}?from=business`}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -301,7 +301,7 @@ export default function ItemDetailDrawer({
               </button>
             </div>
           </div>
-          {item.card_id && (
+          {item.id && (
             <p className="text-xs text-gray-400 mb-4 -mt-2">
               Card profile has photos, full details, and grade probability.
             </p>
@@ -390,7 +390,7 @@ export default function ItemDetailDrawer({
             ) : !cardForGrade || cardForGrade.imageUrls.length === 0 ? (
               <p className="text-xs text-gray-500">
                 No photos on the linked card. Add photos in the{" "}
-                <Link href={`/cards/${item.card_id}`} className="text-blue-400 hover:underline">
+                <Link href={`/card/${item.id}?from=business`} className="text-blue-400 hover:underline">
                   card profile
                 </Link>{" "}
                 to run grade probability.
