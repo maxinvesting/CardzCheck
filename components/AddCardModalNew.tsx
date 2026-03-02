@@ -139,8 +139,40 @@ export default function AddCardModalNew({
     setPreviews(previewUrls);
 
     try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) {
+        throw new Error("Please sign in to upload photos");
+      }
+
+      const uploadedUserImageUrls = await Promise.all(
+        incoming.map(async (file, index) => {
+          const safeName = file.name.replace(/[^\w.-]+/g, "_");
+          const fileName = `${user.id}/${Date.now()}-${index}-${safeName}`;
+          const { data: uploadData, error: uploadError } = await supabase.storage
+            .from("card-images")
+            .upload(fileName, file);
+
+          if (uploadError) {
+            throw new Error(uploadError.message || "Failed to upload image");
+          }
+
+          const { data: { publicUrl } } = supabase.storage
+            .from("card-images")
+            .getPublicUrl(uploadData.path);
+          return publicUrl;
+        })
+      );
+      const sanitizedUserImageUrls = uniqueHttpUrls(uploadedUserImageUrls);
+      const primaryUserImage = sanitizedUserImageUrls[0] || null;
+
+      if (!primaryUserImage) {
+        throw new Error("Failed to upload image");
+      }
+
       const identify = await identifyCardFromImages({
-        files: incoming,
+        imageUrls: sanitizedUserImageUrls,
         includeStockImage: true,
       });
 
@@ -150,30 +182,6 @@ export default function AddCardModalNew({
         setIdentifiedCard(null);
         return;
       }
-
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-
-      const userImageUrls = await Promise.all(
-        incoming.map(async (file) => {
-          if (!user) return null;
-          const fileName = `${user.id}/${Date.now()}-${file.name}`;
-          const { data: uploadData, error: uploadError } = await supabase.storage
-            .from("card-images")
-            .upload(fileName, file);
-
-          if (uploadError) {
-            return null;
-          }
-
-          const { data: { publicUrl } } = supabase.storage
-            .from("card-images")
-            .getPublicUrl(uploadData.path);
-          return publicUrl;
-        })
-      );
-      const sanitizedUserImageUrls = uniqueHttpUrls(userImageUrls);
-      const primaryUserImage = sanitizedUserImageUrls[0] || null;
 
       const result = identify.data;
       const stockImageUrl = normalizeHttpUrl(result.stock_image_url || null);
