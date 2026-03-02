@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { normalizeHttpUrl, resolveStoredImagePath } from "@/lib/collection-images";
 
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isUuid(value: string | null | undefined): value is string {
+  return typeof value === "string" && UUID_REGEX.test(value);
+}
+
 type ImageFields = {
   id?: string | null;
   card_id?: string | null;
@@ -80,12 +87,14 @@ export async function GET(
 
     if (from === "business") {
       // Load from business_inventory_items
-      const { data: itemById, error: itemByIdErr } = await supabase
-        .from("business_inventory_items")
-        .select("*")
-        .eq("id", itemId)
-        .eq("user_id", userId)
-        .maybeSingle();
+      const { data: itemById, error: itemByIdErr } = isUuid(itemId)
+        ? await supabase
+            .from("business_inventory_items")
+            .select("*")
+            .eq("id", itemId)
+            .eq("user_id", userId)
+            .maybeSingle()
+        : { data: null, error: null };
 
       if (itemByIdErr && itemByIdErr.code !== "PGRST116") throw itemByIdErr;
 
@@ -116,7 +125,7 @@ export async function GET(
           "id,title,image_url,user_image_url,stock_image_url,ebay_image_url";
         let linkedCard: ImageFields | null = null;
 
-        if (baseItem.card_id) {
+        if (isUuid(baseItem.card_id)) {
           const { data } = await supabase
             .from("collection_items")
             .select(cardSelect)
@@ -183,6 +192,10 @@ export async function GET(
     }
 
     // Load from collection_items (personal)
+    if (!isUuid(itemId)) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
     const { data: item, error: itemErr } = await supabase
       .from("collection_items")
       .select("*")

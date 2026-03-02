@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { CardImage } from "@/types";
 
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isUuid(value: string | null | undefined): value is string {
+  return typeof value === "string" && UUID_REGEX.test(value);
+}
+
 type BusinessInventoryLinkRow = {
   id: string;
   card_id: string | null;
@@ -40,6 +47,7 @@ export async function GET(
     }
 
     const fetchCollectionCardById = async (id: string) => {
+      if (!isUuid(id)) return null;
       const { data, error } = await supabase
         .from("collection_items")
         .select("*")
@@ -119,7 +127,9 @@ export async function GET(
             ? businessLink.cost_basis_total_cents / 100
             : null;
 
-        resolvedCardId = businessLink.card_id || businessLink.id;
+        resolvedCardId = isUuid(businessLink.card_id)
+          ? businessLink.card_id
+          : businessLink.id;
         card = {
           id: resolvedCardId,
           user_id: user.id,
@@ -152,11 +162,13 @@ export async function GET(
     }
 
     // Fetch all images for this card
-    const { data: images } = await supabase
-      .from("card_images")
-      .select("*")
-      .eq("card_id", resolvedCardId)
-      .order("position", { ascending: true });
+    const { data: images } = isUuid(resolvedCardId)
+      ? await supabase
+          .from("card_images")
+          .select("*")
+          .eq("card_id", resolvedCardId)
+          .order("position", { ascending: true })
+      : { data: [] as CardImage[] };
 
     const resolveImageUrl = (path: string | null | undefined): string | null => {
       if (!path) return null;
