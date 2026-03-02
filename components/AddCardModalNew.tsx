@@ -42,6 +42,7 @@ interface AddCardModalNewProps {
 
 type ModalMode = "select" | "upload" | "manual" | "confirm";
 const MAX_IDENTIFY_IMAGE_BYTES = 8 * 1024 * 1024;
+const MAX_FALLBACK_DATA_URL_BYTES = 350 * 1024;
 
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -49,6 +50,50 @@ function readFileAsDataUrl(file: File): Promise<string> {
     reader.onload = () => resolve(reader.result as string);
     reader.onerror = reject;
     reader.readAsDataURL(file);
+  });
+}
+
+function estimateDataUrlByteLength(dataUrl: string): number {
+  const commaIndex = dataUrl.indexOf(",");
+  if (commaIndex === -1) return 0;
+  const base64 = dataUrl.slice(commaIndex + 1);
+  const padding =
+    base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
+  return Math.max(0, Math.floor((base64.length * 3) / 4) - padding);
+}
+
+function isDataUrl(value: string): boolean {
+  return value.trim().startsWith("data:");
+}
+
+async function compressDataUrl(
+  dataUrl: string,
+  options: { maxWidth: number; maxHeight: number; quality: number }
+): Promise<string | null> {
+  if (typeof window === "undefined") return null;
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => {
+      const scale = Math.min(
+        1,
+        options.maxWidth / image.width,
+        options.maxHeight / image.height
+      );
+      const width = Math.max(1, Math.round(image.width * scale));
+      const height = Math.max(1, Math.round(image.height * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        resolve(null);
+        return;
+      }
+      ctx.drawImage(image, 0, 0, width, height);
+      resolve(canvas.toDataURL("image/jpeg", options.quality));
+    };
+    image.onerror = () => resolve(null);
+    image.src = dataUrl;
   });
 }
 
@@ -141,40 +186,55 @@ export default function AddCardModalNew({
     try {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
-
-      if (!user) {
-        throw new Error("Please sign in to upload photos");
-      }
-
-      const uploadedUserImageUrls = await Promise.all(
+      const imageInputs = await Promise.all(
         incoming.map(async (file, index) => {
-          const safeName = file.name.replace(/[^\w.-]+/g, "_");
-          const fileName = `${user.id}/${Date.now()}-${index}-${safeName}`;
-          const { data: uploadData, error: uploadError } = await supabase.storage
-            .from("card-images")
-            .upload(fileName, file);
+          try {
+            if (!user) {
+              throw new Error("No authenticated user");
+            }
 
-          if (uploadError) {
-            throw new Error(uploadError.message || "Failed to upload image");
+            const safeName = file.name.replace(/[^\w.-]+/g, "_");
+            const fileName = `${user.id}/${Date.now()}-${index}-${safeName}`;
+            const { data: uploadData, error: uploadError } = await supabase.storage
+              .from("card-images")
+              .upload(fileName, file);
+
+            if (uploadError) {
+              throw new Error(uploadError.message || "Failed to upload image");
+            }
+
+            const { data: { publicUrl } } = supabase.storage
+              .from("card-images")
+              .getPublicUrl(uploadData.path);
+            return publicUrl;
+          } catch {
+            const preview = previewUrls[index];
+            const fallbackBytes = estimateDataUrlByteLength(preview);
+            if (fallbackBytes <= MAX_FALLBACK_DATA_URL_BYTES) {
+              return preview;
+            }
+            const compressed = await compressDataUrl(preview, {
+              maxWidth: 1200,
+              maxHeight: 1200,
+              quality: 0.72,
+            });
+            return compressed || preview;
           }
-
-          const { data: { publicUrl } } = supabase.storage
-            .from("card-images")
-            .getPublicUrl(uploadData.path);
-          return publicUrl;
         })
       );
-      const sanitizedUserImageUrls = uniqueHttpUrls(uploadedUserImageUrls);
-      const primaryUserImage = sanitizedUserImageUrls[0] || null;
 
-      if (!primaryUserImage) {
-        throw new Error("Failed to upload image");
+      const primaryIdentifyImage = imageInputs[0];
+      if (!primaryIdentifyImage) {
+        throw new Error("Failed to prepare image");
       }
 
-      const identify = await identifyCardFromImages({
-        imageUrls: sanitizedUserImageUrls,
-        includeStockImage: true,
-      });
+      const hasFallbackDataUrls = imageInputs.some(isDataUrl);
+      const identifyInput =
+        imageInputs.length > 1 && !hasFallbackDataUrls
+          ? { imageUrls: imageInputs, includeStockImage: true }
+          : { imageUrl: primaryIdentifyImage, includeStockImage: true };
+
+      const identify = await identifyCardFromImages(identifyInput);
 
       if (!identify.ok || !identify.data || "error" in identify.data) {
         setError(identify.errorMessage || "Failed to identify card");
@@ -183,6 +243,8 @@ export default function AddCardModalNew({
         return;
       }
 
+      const sanitizedUserImageUrls = uniqueHttpUrls(imageInputs);
+      const primaryUserImage = sanitizedUserImageUrls[0] || null;
       const result = identify.data;
       const stockImageUrl = normalizeHttpUrl(result.stock_image_url || null);
       const ebayImageUrl = normalizeHttpUrl(result.ebay_image_url || null);
