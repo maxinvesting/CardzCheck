@@ -1,34 +1,10 @@
 "use client";
 
-import {
-  Suspense,
-  useState,
-  useEffect,
-  useCallback,
-  useMemo,
-  useRef,
-  Profiler,
-  type ProfilerOnRenderCallback,
-  startTransition,
-} from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
+import { Suspense, useState, useEffect, useCallback, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import BusinessPaywall from "@/components/business/BusinessPaywall";
-import BusinessMetrics from "@/components/business/BusinessMetrics";
-import BusinessAnalystPreviewCard from "@/components/business/BusinessAnalystPreviewCard";
-import InventoryTable from "@/components/business/InventoryTable";
-import ItemDetailDrawer from "@/components/business/ItemDetailDrawer";
-import SalesTable, { type SalesFilters } from "@/components/business/SalesTable";
-import SaleFormModal from "@/components/business/SaleFormModal";
-import AddInventoryModal from "@/components/business/AddInventoryModal";
-import AddWaxModal from "@/components/business/AddWaxModal";
-import AddCardToInventoryModal from "@/components/business/AddCardToInventoryModal";
-import BusinessMigrationBanner from "@/components/business/BusinessMigrationBanner";
-import type { PendingInventoryCard } from "@/components/business/AddCardToInventoryModal";
-import AddCardModalNew from "@/components/AddCardModalNew";
-import CardPickerModal from "@/components/CardPickerModal";
-import type { CardPickerSelection } from "@/components/CardPicker";
+import BusinessDashboardView from "@/components/business/BusinessDashboardView";
 import { createClient } from "@/lib/supabase/client";
 import type {
   BusinessInventoryItem,
@@ -40,22 +16,9 @@ import {
   type InventoryValueSummary,
 } from "@/lib/business/inventory-value";
 import { normalizeEbayStoreUrl, buildEbayStoreHref } from "@/lib/ebay-store-url";
-import {
-  isPerfEnabled,
-  setPerfInteraction,
-  activatePerfBucket,
-  deactivatePerfBucket,
-  recordInventoryCommit,
-  markClickStart,
-  markClickEnd,
-  startEventLoopLagMonitor,
-  getPerfSnapshot,
-  perfLog,
-} from "@/lib/dev/perf";
 
 const EBAY_STORE_URL_STORAGE_KEY = "cardzcheck_ebay_store_url";
 const EBAY_STORE_URL_UPDATED_EVENT = "cardzcheck:ebay-store-url-updated";
-const PERF_MOCK_ITEM_COUNT = 1200;
 
 function readStoredEbayStoreUrl(): string | null {
   if (typeof window === "undefined") return null;
@@ -73,88 +36,8 @@ function persistEbayStoreUrl(value: string | null) {
   }
 }
 
-function defaultSalesFilters(): SalesFilters {
-  const now = new Date();
-  const from = new Date(now.getTime() - 29 * 24 * 60 * 60 * 1000);
-  return {
-    from: from.toISOString().slice(0, 10),
-    to: now.toISOString().slice(0, 10),
-    channel: "",
-    search: "",
-  };
-}
-
-function resolveBusinessTab(
-  pathname: string,
-  tabParam: string | null
-): "inventory" | "sales" {
-  if (pathname.startsWith("/business/sales")) return "sales";
-  if (pathname.startsWith("/business/inventory")) return "inventory";
-  return tabParam === "sales" ? "sales" : "inventory";
-}
-
-function buildPerfMockInventory(count = PERF_MOCK_ITEM_COUNT): BusinessInventoryItem[] {
-  const channels: BusinessInventoryItem["channel"][] = [
-    "ebay",
-    "whatnot",
-    "instagram",
-    "show",
-    "local",
-    "other",
-  ];
-  const statuses: BusinessInventoryItem["status"][] = [
-    "unlisted",
-    "listed",
-    "pending_sale",
-    "sold",
-    "returned",
-  ];
-  const now = Date.now();
-
-  return Array.from({ length: count }, (_, index) => {
-    const listPrice =
-      index % 3 === 0 ? null : 2500 + ((index % 120) * 125);
-    const cmv = index % 5 === 0 ? null : 2200 + ((index % 100) * 135);
-    const createdAt = new Date(now - index * 3600_000).toISOString();
-    const grade = index % 4 === 0 ? "10" : index % 4 === 1 ? "9" : null;
-
-    return {
-      id: `perf-item-${index + 1}`,
-      user_id: "perf-user",
-      card_id: `perf-card-${index + 1}`,
-      title: `2024 Topps Chrome Prospect ${index + 1}`,
-      quantity: (index % 3) + 1,
-      acquisition_date: new Date(now - index * 86_400_000)
-        .toISOString()
-        .slice(0, 10),
-      acquisition_type: "buy",
-      cost_basis_total_cents: 1400 + ((index % 80) * 110),
-      tax_cents: 0,
-      shipping_cents: 0,
-      fees_paid_cents: 0,
-      condition_status: grade ? "graded" : "raw",
-      grading_company: grade ? "PSA" : null,
-      grade,
-      cert_number: grade ? `CERT-${100000 + index}` : null,
-      location: index % 2 === 0 ? "Shelf A" : "Bin B",
-      channel: channels[index % channels.length]!,
-      status: statuses[index % statuses.length]!,
-      list_price_cents: listPrice,
-      current_market_value_cents: cmv,
-      user_image_url: null,
-      stock_image_url: null,
-      ebay_image_url: null,
-      notes: index % 10 === 0 ? "[WAX] Sealed product" : null,
-      created_at: createdAt,
-      updated_at: createdAt,
-    };
-  });
-}
-
-function BusinessPageContent() {
-  const pathname = usePathname();
+function BusinessDashboardContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [hasAccess, setHasAccess] = useState<boolean | null>(null);
   const [businessName, setBusinessName] = useState<string | null>(null);
@@ -164,195 +47,20 @@ function BusinessPageContent() {
   const [items, setItems] = useState<BusinessInventoryItem[]>([]);
   const [metrics, setMetrics] = useState<MetricsType | null>(null);
   const [metricsLoading, setMetricsLoading] = useState(true);
-  const [selectedItem, setSelectedItem] = useState<BusinessInventoryItem | null>(null);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showAddCardModal, setShowAddCardModal] = useState(false);
-  const [showCardPicker, setShowCardPicker] = useState(false);
-  const [showAddCardToInventory, setShowAddCardToInventory] = useState(false);
-  const [pendingInventoryCard, setPendingInventoryCard] = useState<PendingInventoryCard | null>(null);
-  const [showAddWaxModal, setShowAddWaxModal] = useState(false);
-  const [showAddDropdown, setShowAddDropdown] = useState(false);
+  const [recentSales, setRecentSales] = useState<BusinessSale[]>([]);
+  const [recentSalesLoading, setRecentSalesLoading] = useState(false);
   const [needsMigration, setNeedsMigration] = useState(false);
-  const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
-  const [filteredItems, setFilteredItems] = useState<BusinessInventoryItem[]>([]);
-  const [activeTab, setActiveTab] = useState<"inventory" | "sales">(() =>
-    resolveBusinessTab(pathname, searchParams.get("tab"))
-  );
-  const [markSoldItem, setMarkSoldItem] = useState<BusinessInventoryItem | null>(null);
-  const [sales, setSales] = useState<BusinessSale[]>([]);
-  const [salesLoading, setSalesLoading] = useState(false);
-  const [salesFilters, setSalesFilters] = useState<SalesFilters>(() =>
-    defaultSalesFilters()
-  );
-  const [salesPage, setSalesPage] = useState(1);
-  const [salesPageSize] = useState(50);
-  const [salesTotal, setSalesTotal] = useState(0);
-  const perfEnabled = useMemo(() => isPerfEnabled(), []);
-  const perfMockMode = useMemo(
-    () => perfEnabled && searchParams.get("perfMock") === "1",
-    [perfEnabled, searchParams]
-  );
-  const initialBucketStartedRef = useRef(false);
-  const pendingFloorUpdatesRef = useRef<Map<string, BusinessInventoryItem>>(
-    new Map()
-  );
-  const floorFlushTimerRef = useRef<number | null>(null);
-
-  const handleInventoryProfilerRender = useCallback<ProfilerOnRenderCallback>(
-    (_id, phase, actualDuration, baseDuration, startTime, commitTime) => {
-      if (!perfEnabled) return;
-      recordInventoryCommit({
-        phase,
-        actualDuration,
-        baseDuration,
-        startTime,
-        commitTime,
-      });
-    },
-    [perfEnabled]
-  );
-
-  const inventorySummary = useMemo((): InventoryValueSummary | null => {
-    const list = filteredItems.length > 0 ? filteredItems : items;
-    return computeInventoryValueSummary(list);
-  }, [filteredItems, items]);
 
   const ebayStoreHref = useMemo(
     () => buildEbayStoreHref(ebayStoreUrl),
     [ebayStoreUrl]
   );
 
-  const handleFilteredChange = useCallback((filtered: BusinessInventoryItem[]) => {
-    setFilteredItems(filtered);
-  }, []);
-
-  const flushFloorUpdates = useCallback(() => {
-    floorFlushTimerRef.current = null;
-    const updates = new Map(pendingFloorUpdatesRef.current);
-    pendingFloorUpdatesRef.current.clear();
-    if (updates.size === 0) return;
-
-    if (perfEnabled) {
-      perfLog("market-floor flush", { updates: updates.size });
-    }
-
-    startTransition(() => {
-      setItems((prev) => prev.map((item) => updates.get(item.id) ?? item));
-      setSelectedItem((prev) => (prev ? updates.get(prev.id) ?? prev : prev));
-    });
-  }, [perfEnabled]);
-
-  const queueFloorUpdate = useCallback(
-    (updated: BusinessInventoryItem) => {
-      pendingFloorUpdatesRef.current.set(updated.id, updated);
-      if (floorFlushTimerRef.current !== null) return;
-      floorFlushTimerRef.current = window.setTimeout(flushFloorUpdates, 320);
-    },
-    [flushFloorUpdates]
-  );
-
-  useEffect(() => {
-    if (!perfEnabled) return;
-    const stopMonitor = startEventLoopLagMonitor();
-    return () => {
-      stopMonitor?.();
-    };
-  }, [perfEnabled]);
-
-  useEffect(
-    () => () => {
-      if (floorFlushTimerRef.current !== null) {
-        window.clearTimeout(floorFlushTimerRef.current);
-      }
-      floorFlushTimerRef.current = null;
-      pendingFloorUpdatesRef.current.clear();
-    },
-    []
-  );
-
-  useEffect(() => {
-    if (toast) {
-      const timer = setTimeout(() => setToast(null), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [toast]);
-
-  useEffect(() => {
-    if (!showAddDropdown) return;
-    const handleClick = () => setShowAddDropdown(false);
-    const timer = setTimeout(() => document.addEventListener("click", handleClick), 0);
-    return () => {
-      clearTimeout(timer);
-      document.removeEventListener("click", handleClick);
-    };
-  }, [showAddDropdown]);
-
-  useEffect(() => {
-    if (searchParams.get("notice") === "business_mode") {
-      setToast({
-        type: "success",
-        message: "Business accounts use Inventory/Prospects.",
-      });
-    }
-  }, [searchParams]);
-
-  useEffect(() => {
-    setActiveTab(resolveBusinessTab(pathname, searchParams.get("tab")));
-  }, [pathname, searchParams]);
-
-  const handleTabChange = useCallback(
-    (tab: "inventory" | "sales") => {
-      setActiveTab(tab);
-      if (tab === "sales" && pathname !== "/business/sales") {
-        router.push("/business/sales");
-        return;
-      }
-      if (tab === "inventory" && pathname.startsWith("/business/sales")) {
-        router.push("/business/inventory");
-      }
-    },
-    [pathname, router]
-  );
+  const inventorySummary = useMemo((): InventoryValueSummary | null => {
+    return computeInventoryValueSummary(items);
+  }, [items]);
 
   const loadInventory = useCallback(async () => {
-    if (perfMockMode) {
-      if (perfEnabled) {
-        activatePerfBucket("initial-load");
-        setPerfInteraction("load");
-      }
-      const mockItems = buildPerfMockInventory();
-      setHasAccess(true);
-      setNeedsMigration(false);
-      setItems(mockItems);
-      setLoading(false);
-      setMetrics({
-        revenueMtd: 0,
-        revenueYtd: 0,
-        profitMtd: 0,
-        profitYtd: 0,
-        salesCountMtd: 0,
-        salesCountYtd: 0,
-        activeInventoryCount: mockItems.length,
-      });
-      setMetricsLoading(false);
-      if (perfEnabled) {
-        window.setTimeout(() => {
-          deactivatePerfBucket("initial-load", {
-            itemCount: mockItems.length,
-            source: "perfMock",
-          });
-        }, 300);
-      }
-      return;
-    }
-
-    if (perfEnabled && !initialBucketStartedRef.current) {
-      activatePerfBucket("initial-load");
-      setPerfInteraction("load");
-      initialBucketStartedRef.current = true;
-    }
-
-    let loadedItemCount = 0;
     try {
       const res = await fetch("/api/business/inventory", { cache: "no-store" });
       if (res.status === 403) {
@@ -369,29 +77,15 @@ function BusinessPageContent() {
       }
       setNeedsMigration(false);
       setHasAccess(true);
-      const nextItems = data.items ?? [];
-      loadedItemCount = nextItems.length;
-      setItems(nextItems);
+      setItems(data.items ?? []);
     } catch {
       setHasAccess(false);
     } finally {
       setLoading(false);
-      if (perfEnabled && initialBucketStartedRef.current) {
-        window.setTimeout(() => {
-          deactivatePerfBucket("initial-load", {
-            itemCount: loadedItemCount,
-            source: "api",
-          });
-        }, 300);
-      }
     }
-  }, [perfEnabled, perfMockMode]);
+  }, []);
 
   const loadMetrics = useCallback(async () => {
-    if (perfMockMode) {
-      setMetricsLoading(false);
-      return;
-    }
     setMetricsLoading(true);
     try {
       const res = await fetch("/api/business/kpis?range=mtd", { cache: "no-store" });
@@ -412,46 +106,34 @@ function BusinessPageContent() {
     } finally {
       setMetricsLoading(false);
     }
-  }, [perfMockMode]);
+  }, []);
 
-  const loadSales = useCallback(async () => {
-    if (perfMockMode) {
-      setSales([]);
-      setSalesTotal(0);
-      setSalesLoading(false);
-      return;
-    }
-    setSalesLoading(true);
+  const loadRecentSales = useCallback(async () => {
+    setRecentSalesLoading(true);
     try {
-      const params = new URLSearchParams();
-      params.set("from", salesFilters.from);
-      params.set("to", salesFilters.to);
-      params.set("page", String(salesPage));
-      params.set("page_size", String(salesPageSize));
-      if (salesFilters.channel) params.set("channel", salesFilters.channel);
-      if (salesFilters.search.trim()) params.set("search", salesFilters.search.trim());
-
+      const now = new Date();
+      const from = new Date(now.getTime() - 29 * 24 * 60 * 60 * 1000);
+      const params = new URLSearchParams({
+        from: from.toISOString().slice(0, 10),
+        to: now.toISOString().slice(0, 10),
+        page: "1",
+        page_size: "8",
+      });
       const res = await fetch(`/api/business/sales?${params.toString()}`, {
         cache: "no-store",
       });
-      if (!res.ok) return;
-      const data = await res.json();
-      setSales(data.sales ?? []);
-      setSalesTotal(data.total ?? 0);
+      if (res.ok) {
+        const data = await res.json();
+        setRecentSales(data.sales ?? []);
+      }
     } catch {
       // ignore
     } finally {
-      setSalesLoading(false);
+      setRecentSalesLoading(false);
     }
-  }, [perfMockMode, salesFilters, salesPage, salesPageSize]);
+  }, []);
 
   const loadUserProfile = useCallback(async () => {
-    if (perfMockMode) {
-      setBusinessName("Perf Mock Business");
-      setEbayStoreUrl(null);
-      return { id: "perf-user" } as { id: string };
-    }
-
     const supabase = createClient();
     await supabase.auth.refreshSession();
     const {
@@ -459,7 +141,6 @@ function BusinessPageContent() {
     } = await supabase.auth.getUser();
     if (!user) return null;
 
-    // Prefer server-authoritative profile so eBay store URL is always current after saving in Settings
     try {
       const res = await fetch("/api/user/name", { cache: "no-store" });
       if (res.ok) {
@@ -512,7 +193,7 @@ function BusinessPageContent() {
       persistEbayStoreUrl(resolvedEbayStoreUrl);
     }
     return user;
-  }, [perfMockMode]);
+  }, []);
 
   useEffect(() => {
     async function init() {
@@ -521,17 +202,12 @@ function BusinessPageContent() {
         router.push("/login?redirect=/business");
         return;
       }
-      await Promise.all([loadInventory(), loadMetrics()]);
+      await Promise.all([loadInventory(), loadMetrics(), loadRecentSales()]);
     }
     init();
-  }, [router, loadUserProfile, loadInventory, loadMetrics]);
+  }, [router, loadUserProfile, loadInventory, loadMetrics, loadRecentSales]);
 
-  useEffect(() => {
-    if (activeTab !== "sales" || hasAccess === false || needsMigration) return;
-    loadSales();
-  }, [activeTab, hasAccess, needsMigration, loadSales]);
-
-  // Refetch user profile when returning to the tab (e.g. after adding store link in Settings)
+  // Refresh profile when returning to tab (e.g. after settings update)
   useEffect(() => {
     const handler = () => {
       if (document.visibilityState === "visible") {
@@ -547,7 +223,6 @@ function BusinessPageContent() {
       const customEvent = event as CustomEvent<{ value?: string | null }>;
       setEbayStoreUrl(normalizeEbayStoreUrl(customEvent.detail?.value ?? null));
     };
-
     window.addEventListener(
       EBAY_STORE_URL_UPDATED_EVENT,
       handleEbayStoreUrlUpdated as EventListener
@@ -560,482 +235,21 @@ function BusinessPageContent() {
     };
   }, []);
 
-  useEffect(() => {
-    if (!perfEnabled || !showAddCardModal) return;
-    markClickEnd("open-add-inventory-modal", { modalVisible: true });
-    window.setTimeout(() => {
-      deactivatePerfBucket("button-click", {
-        action: "open-add-inventory-modal",
-      });
-    }, 0);
-  }, [showAddCardModal, perfEnabled]);
-
-  useEffect(() => {
-    if (!perfEnabled || !markSoldItem) return;
-    markClickEnd("open-mark-sold-modal", {
-      modalVisible: true,
-      itemId: markSoldItem.id,
-    });
-    window.setTimeout(() => {
-      deactivatePerfBucket("button-click", {
-        action: "open-mark-sold-modal",
-      });
-    }, 0);
-  }, [markSoldItem, perfEnabled]);
-
-  useEffect(() => {
-    if (!perfEnabled) return;
-    const timer = window.setTimeout(() => {
-      const snapshot = getPerfSnapshot();
-      if (!snapshot) return;
-      perfLog("summary", {
-        commitAvgMs: snapshot.commitAvgMs,
-        commitP50Ms: snapshot.commitP50Ms,
-        commitP95Ms: snapshot.commitP95Ms,
-        commitCount: snapshot.commitCount,
-        renderedRows: snapshot.renderedRows,
-        domNodeCount: snapshot.domNodeCount,
-        eventLoopLagSpikes: snapshot.eventLoopLagSpikes.length,
-      });
-    }, 700);
-    return () => window.clearTimeout(timer);
-  }, [activeTab, items.length, loading, perfEnabled]);
-
-  const handleInlineUpdate = async (id: string, field: string, value: any) => {
-    if (perfMockMode) {
-      const updated = { id, [field]: value } as Partial<BusinessInventoryItem> &
-        Pick<BusinessInventoryItem, "id">;
-      if (field === "current_market_value_cents") {
-        const existing = items.find((it) => it.id === id);
-        if (existing) {
-          queueFloorUpdate({ ...existing, ...updated });
-        }
-      } else {
-        startTransition(() => {
-          setItems((prev) =>
-            prev.map((it) => (it.id === id ? { ...it, [field]: value } : it))
-          );
-        });
-      }
-      return;
-    }
-    try {
-      const res = await fetch("/api/business/inventory", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, [field]: value }),
-      });
-      if (res.ok) {
-        const updated = (await res.json()) as BusinessInventoryItem;
-        if (field === "current_market_value_cents") {
-          queueFloorUpdate(updated);
-        } else {
-          startTransition(() => {
-            setItems((prev) => prev.map((it) => (it.id === id ? updated : it)));
-          });
-        }
-      } else {
-        const data = await res.json().catch(() => ({}));
-        setToast({
-          type: "error",
-          message:
-            (typeof data?.error === "string" && data.error) ||
-            `Failed to update ${field}`,
-        });
-      }
-    } catch {
-      setToast({ type: "error", message: "Failed to update item" });
-    }
-  };
-
-  const handleBulkAction = async (
-    action: string,
-    ids: string[],
-    payload?: any
-  ) => {
-    if (perfMockMode) {
-      setItems((prev) =>
-        prev.map((it) => {
-          if (!ids.includes(it.id)) return it;
-          if (action === "set_status") {
-            return { ...it, status: payload ?? it.status };
-          }
-          if (action === "set_location") {
-            return { ...it, location: payload ?? it.location };
-          }
-          return it;
-        })
-      );
-      setToast({ type: "success", message: `Updated ${ids.length} items` });
-      return;
-    }
-
-    try {
-      const updates: Record<string, string> = {};
-      if (action === "set_status") updates.status = payload;
-      if (action === "set_location") updates.location = payload;
-
-      await fetch("/api/business/inventory/bulk", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids, updates }),
-      });
-
-      setToast({ type: "success", message: `Updated ${ids.length} items` });
-      loadInventory();
-    } catch {
-      setToast({ type: "error", message: "Bulk update failed" });
-    }
-  };
-
-  const handleDelete = async (ids: string[]) => {
-    if (!confirm(`Delete ${ids.length} item(s)? This cannot be undone.`)) return;
-
-    if (perfMockMode) {
-      setItems((prev) => prev.filter((it) => !ids.includes(it.id)));
-      setToast({ type: "success", message: `Deleted ${ids.length} items` });
-      return;
-    }
-
-    try {
-      await fetch(`/api/business/inventory?ids=${ids.join(",")}`, {
-        method: "DELETE",
-      });
-      setItems((prev) => prev.filter((it) => !ids.includes(it.id)));
-      setToast({ type: "success", message: `Deleted ${ids.length} items` });
-      loadMetrics();
-    } catch {
-      setToast({ type: "error", message: "Delete failed" });
-    }
-  };
-
-  const handleAddItem = async (item: any) => {
-    if (perfMockMode) {
-      const now = new Date().toISOString();
-      const created: BusinessInventoryItem = {
-        id: `perf-new-${Date.now()}`,
-        user_id: "perf-user",
-        card_id: null,
-        title: item.title || "Untitled item",
-        quantity: item.quantity || 1,
-        acquisition_date: item.acquisition_date || null,
-        acquisition_type: item.acquisition_type || "buy",
-        cost_basis_total_cents: item.cost_basis_total_cents || 0,
-        tax_cents: item.tax_cents || 0,
-        shipping_cents: item.shipping_cents || 0,
-        fees_paid_cents: item.fees_paid_cents || 0,
-        condition_status: item.condition_status || "raw",
-        grading_company: item.grading_company || null,
-        grade: item.grade || null,
-        cert_number: item.cert_number || null,
-        location: item.location || null,
-        channel: item.channel || "other",
-        status: item.status || "unlisted",
-        list_price_cents: item.list_price_cents ?? null,
-        current_market_value_cents: item.current_market_value_cents ?? null,
-        user_image_url: null,
-        stock_image_url: null,
-        ebay_image_url: null,
-        notes: item.notes || null,
-        created_at: now,
-        updated_at: now,
-      };
-      setItems((prev) => [created, ...prev]);
-      setToast({ type: "success", message: `Added "${created.title}"` });
-      return;
-    }
-
-    try {
-      const res = await fetch("/api/business/inventory", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(item),
-      });
-      if (res.ok) {
-        const created = await res.json();
-        setItems((prev) => [created, ...prev]);
-        setToast({ type: "success", message: `Added "${item.title}"` });
-        loadMetrics();
-      } else {
-        const data = await res.json().catch(() => ({}));
-        setToast({ type: "error", message: data.error || "Failed to add item" });
-      }
-    } catch {
-      setToast({ type: "error", message: "Failed to add item" });
-    }
-  };
-
-  const handleSaveItem = async (
-    id: string,
-    updates: Partial<BusinessInventoryItem>
-  ) => {
-    if (perfMockMode) {
-      setItems((prev) =>
-        prev.map((it) => (it.id === id ? { ...it, ...updates } : it))
-      );
-      setSelectedItem((prev) =>
-        prev && prev.id === id ? { ...prev, ...updates } : prev
-      );
-      setToast({ type: "success", message: "Item saved" });
-      return;
-    }
-
-    try {
-      const res = await fetch("/api/business/inventory", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, ...updates }),
-      });
-      if (res.ok) {
-        const updated = await res.json();
-        setItems((prev) => prev.map((it) => (it.id === id ? updated : it)));
-        setSelectedItem(updated);
-        setToast({ type: "success", message: "Item saved" });
-        loadMetrics();
-      }
-    } catch {
-      setToast({ type: "error", message: "Failed to save item" });
-    }
-  };
-
-  const handleMarkSold = (item: BusinessInventoryItem) => {
-    if (perfEnabled) {
-      activatePerfBucket("button-click");
-      setPerfInteraction("click:mark-sold");
-      markClickStart("open-mark-sold-modal", { itemId: item.id });
-    }
-    setMarkSoldItem(item);
-  };
-
-  const handleCreateSale = async (sale: Record<string, unknown>) => {
-    const inventoryId = (sale.inventory_item_id as string | null) || null;
-    let previousItem: BusinessInventoryItem | null = null;
-    if (inventoryId) {
-      previousItem = items.find((it) => it.id === inventoryId) || null;
-      setItems((prev) =>
-        prev.map((it) =>
-          it.id === inventoryId
-            ? { ...it, status: "sold" as BusinessInventoryItem["status"] }
-            : it
-        )
-      );
-    }
-
-    if (perfMockMode) {
-      const mockSale: BusinessSale = {
-        id: `perf-sale-${Date.now()}`,
-        user_id: "perf-user",
-        business_id: "perf-business",
-        inventory_item_id: inventoryId,
-        channel: (sale.channel as BusinessSale["channel"]) || "ebay",
-        sold_at:
-          (sale.sold_at as string | undefined) ||
-          new Date().toISOString(),
-        sold_price_cents: (sale.sold_price_cents as number | undefined) || 0,
-        platform_fees_cents: (sale.platform_fees_cents as number | undefined) || 0,
-        shipping_charged_cents:
-          (sale.shipping_charged_cents as number | undefined) || 0,
-        shipping_cost_cents: (sale.shipping_cost_cents as number | undefined) || 0,
-        tax_cents: (sale.tax_cents as number | undefined) || 0,
-        net_payout_cents: (sale.net_payout_cents as number | undefined) || 0,
-        cogs_cents: (sale.cogs_cents as number | undefined) || 0,
-        gross_revenue_cents: (sale.sold_price_cents as number | undefined) || 0,
-        profit_cents: 0,
-        external_order_id: null,
-        notes: null,
-        is_deleted: false,
-        inventory_item: previousItem
-          ? { id: previousItem.id, title: previousItem.title }
-          : null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-      setSales((prev) => [mockSale, ...prev]);
-      setToast({ type: "success", message: "Sale recorded" });
-      setSalesPage(1);
-      return;
-    }
-
-    try {
-      const res = await fetch("/api/business/sales", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(sale),
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        if (previousItem) {
-          setItems((prev) =>
-            prev.map((it) => (it.id === previousItem!.id ? previousItem! : it))
-          );
-        }
-        setToast({
-          type: "error",
-          message: data.error || "Failed to record sale",
-        });
-        return;
-      }
-
-      setToast({ type: "success", message: "Sale recorded" });
-      setSalesPage(1);
-      if (activeTab === "sales") {
-        loadSales();
-      }
-      loadInventory();
-      loadMetrics();
-    } catch {
-      if (previousItem) {
-        setItems((prev) =>
-          prev.map((it) => (it.id === previousItem!.id ? previousItem! : it))
-        );
-      }
-      setToast({ type: "error", message: "Failed to record sale" });
-    }
-  };
-
-  const handleUpdateSale = async (
-    saleId: string,
-    updates: Record<string, unknown>
-  ) => {
-    if (perfMockMode) {
-      setSales((prev) =>
-        prev.map((sale) => (sale.id === saleId ? { ...sale, ...updates } : sale))
-      );
-      setToast({ type: "success", message: "Sale updated" });
-      return;
-    }
-
-    const res = await fetch(`/api/business/sales/${saleId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(updates),
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error(data.error || "Failed to update sale");
-    }
-    setToast({ type: "success", message: "Sale updated" });
-    await Promise.all([loadSales(), loadMetrics(), loadInventory()]);
-  };
-
-  const handleDeleteSale = async (saleId: string) => {
-    if (perfMockMode) {
-      setSales((prev) => prev.filter((sale) => sale.id !== saleId));
-      setToast({ type: "success", message: "Sale deleted" });
-      return;
-    }
-
-    const res = await fetch(`/api/business/sales/${saleId}`, {
-      method: "DELETE",
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error(data.error || "Failed to delete sale");
-    }
-    setToast({ type: "success", message: "Sale deleted" });
-    await Promise.all([loadSales(), loadMetrics(), loadInventory()]);
-  };
-
-  const handleCardAdded = (playerName: string) => {
-    setPendingInventoryCard(null);
-    setToast({ type: "success", message: `Added "${playerName}" to inventory` });
-    if (perfMockMode) return;
-    loadInventory();
-    loadMetrics();
-  };
-
-  const handleCardPickerSelect = (card: CardPickerSelection) => {
-    setShowCardPicker(false);
-    setPendingInventoryCard({
-      card_id: card.id,
-      player_name: card.player_name,
-      year: card.year,
-      set_name: card.set_name,
-      parallel_type: card.variant,
-      card_number: card.card_number,
-      grader: card.grader,
-      grade: card.grade,
-      imageUrl:
-        card.user_image_url ||
-        card.stock_image_url ||
-        card.ebay_image_url ||
-        card.image_url,
-      user_image_url: card.user_image_url,
-      stock_image_url: card.stock_image_url,
-      ebay_image_url: card.ebay_image_url,
-      quantity: card.quantity,
-    });
-    setShowAddCardToInventory(true);
-  };
-
-  // Called when AddCardModalNew identifies a card via upload (watchlist mode)
-  const handleCardIdentified = (cardData: {
-    card_id?: string;
-    player_name: string;
-    year?: string;
-    set_name?: string;
-    card_number?: string;
-    parallel_type?: string;
-    grade?: string;
-    imageUrl?: string;
-    user_image_url?: string;
-    stock_image_url?: string;
-    ebay_image_url?: string;
-    quantity?: number;
-  }) => {
-    setShowAddCardModal(false);
-    setPendingInventoryCard(cardData);
-    setShowAddCardToInventory(true);
-  };
-
-  const openAddInventoryModal = useCallback(() => {
-    if (perfEnabled) {
-      activatePerfBucket("button-click");
-      setPerfInteraction("click:add-inventory");
-      markClickStart("open-add-inventory-modal");
-    }
-    setShowAddCardModal(true);
-  }, [perfEnabled]);
-
-  const handleAddWax = async (item: any) => {
-    if (perfMockMode) {
-      await handleAddItem({ ...item, notes: "[WAX] Sealed product" });
-      return;
-    }
-
-    try {
-      const res = await fetch("/api/business/inventory", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(item),
-      });
-      if (res.ok) {
-        const created = await res.json();
-        setItems((prev) => [created, ...prev]);
-        setToast({ type: "success", message: `Added "${item.title}"` });
-        loadMetrics();
-      } else {
-        const data = await res.json().catch(() => ({}));
-        setToast({ type: "error", message: data.error || "Failed to add wax item" });
-      }
-    } catch {
-      setToast({ type: "error", message: "Failed to add wax item" });
-    }
-  };
-
   if (loading) {
     return (
       <AuthenticatedLayout>
         <main className="max-w-7xl mx-auto px-4 py-4">
           <div className="animate-pulse space-y-4">
             <div className="h-8 w-48 bg-gray-800 rounded" />
-            <div className="grid grid-cols-5 gap-4">
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="h-20 bg-gray-800 rounded-xl" />
+            <div className="grid grid-cols-4 gap-4">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="h-20 bg-gray-800 rounded-lg" />
               ))}
             </div>
-            <div className="h-64 bg-gray-800 rounded-xl" />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="h-48 bg-gray-800 rounded-lg" />
+              <div className="h-48 bg-gray-800 rounded-lg" />
+            </div>
           </div>
         </main>
       </AuthenticatedLayout>
@@ -1054,314 +268,24 @@ function BusinessPageContent() {
 
   return (
     <AuthenticatedLayout>
-      <main className="max-w-7xl mx-auto px-4 py-3 business-density">
-        {/* Header — compact for dense ledger dashboard */}
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <h1 className="text-xl font-bold text-white">
-              CardzCheck Business
-            </h1>
-            <p className="text-gray-400 text-xs mt-0.5">
-              Inventory tracking & sales analytics
-            </p>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            {ebayStoreHref ? (
-              <a
-                href={ebayStoreHref}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-3 py-1.5 border border-gray-700 text-gray-300 rounded-md hover:bg-gray-800 transition-colors text-xs font-medium whitespace-nowrap"
-              >
-                Ebay Storefront
-              </a>
-            ) : (
-              <Link
-                href="/business/settings"
-                className="px-3 py-1.5 border border-gray-600 text-gray-400 rounded-md hover:bg-gray-800 transition-colors text-xs font-medium whitespace-nowrap"
-              >
-                Add Ebay Storefront
-              </Link>
-            )}
-            <a
-              href="/api/business/export?type=inventory"
-              className="px-3 py-1.5 border border-gray-700 text-gray-300 rounded-md hover:bg-gray-800 transition-colors text-xs font-medium whitespace-nowrap"
-            >
-              Export for Accounting
-            </a>
-            <div className="relative">
-              <div className="flex">
-                <button
-                  onClick={openAddInventoryModal}
-                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-l-md transition-colors text-xs font-medium flex items-center gap-1.5"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  Add Inventory
-                </button>
-                <button
-                  onClick={() => setShowAddDropdown((prev) => !prev)}
-                  className="px-1.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-r-md transition-colors border-l border-emerald-500"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-              </div>
-              {showAddDropdown && (
-                <div className="absolute right-0 mt-1 w-48 bg-gray-900 border border-gray-700 rounded-lg shadow-lg z-20">
-                  <button
-                    onClick={() => {
-                      setShowAddDropdown(false);
-                      openAddInventoryModal();
-                    }}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-800 rounded-t-lg"
-                  >
-                    <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                    </svg>
-                    Add Inventory
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowAddDropdown(false);
-                      setShowAddWaxModal(true);
-                    }}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-800"
-                  >
-                    <svg className="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                    </svg>
-                    Add Wax
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowAddDropdown(false);
-                      setShowAddModal(true);
-                    }}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-800 rounded-b-lg"
-                  >
-                    <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                    Manual Entry
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Metrics — compact in Business mode */}
-        <BusinessMetrics
+      <main className="max-w-7xl mx-auto px-4 py-3">
+        <BusinessDashboardView
+          businessName={businessName}
           metrics={metrics}
-          loading={metricsLoading}
+          metricsLoading={metricsLoading}
           inventorySummary={inventorySummary}
-          totalItemCount={items.length}
-          compact
+          items={items}
+          recentSales={recentSales}
+          recentSalesLoading={recentSalesLoading}
+          ebayStoreHref={ebayStoreHref}
+          needsMigration={needsMigration}
         />
-
-        {!needsMigration && activeTab === "inventory" && (
-          <BusinessAnalystPreviewCard items={items} />
-        )}
-
-        {!needsMigration && (
-          <div className="mb-2 flex items-center gap-1 border-b border-gray-800">
-            <button
-              type="button"
-              onClick={() => handleTabChange("inventory")}
-              className={`border-b-2 px-3 py-1.5 text-xs font-medium transition-colors ${
-                activeTab === "inventory"
-                  ? "border-emerald-500 text-emerald-400"
-                  : "border-transparent text-gray-500 hover:text-gray-300"
-              }`}
-            >
-              Inventory
-            </button>
-            <button
-              type="button"
-              onClick={() => handleTabChange("sales")}
-              className={`border-b-2 px-3 py-1.5 text-xs font-medium transition-colors ${
-                activeTab === "sales"
-                  ? "border-emerald-500 text-emerald-400"
-                  : "border-transparent text-gray-500 hover:text-gray-300"
-              }`}
-            >
-              Sales
-            </button>
-          </div>
-        )}
-
-        {/* Migration banner (shown when database tables haven't been created) */}
-        {needsMigration && (
-          <div className="mt-3">
-            <BusinessMigrationBanner
-              onRetry={() => {
-                setLoading(true);
-                loadInventory();
-              }}
-            />
-          </div>
-        )}
-
-        {/* Inventory Table */}
-        {!needsMigration && activeTab === "inventory" && (
-          perfEnabled ? (
-            <Profiler
-              id="BusinessInventoryTable"
-              onRender={handleInventoryProfilerRender}
-            >
-              <InventoryTable
-                items={items}
-                selectedItemId={selectedItem?.id ?? null}
-                onItemClick={setSelectedItem}
-                onInlineUpdate={handleInlineUpdate}
-                onBulkAction={handleBulkAction}
-                onDelete={handleDelete}
-                onMarkSold={handleMarkSold}
-                onFilteredChange={handleFilteredChange}
-                dense
-                perfEnabled={perfEnabled}
-              />
-            </Profiler>
-          ) : (
-            <InventoryTable
-              items={items}
-              selectedItemId={selectedItem?.id ?? null}
-              onItemClick={setSelectedItem}
-              onInlineUpdate={handleInlineUpdate}
-              onBulkAction={handleBulkAction}
-              onDelete={handleDelete}
-              onMarkSold={handleMarkSold}
-              onFilteredChange={handleFilteredChange}
-              dense
-            />
-          )
-        )}
-
-        {!needsMigration && activeTab === "sales" && (
-          <SalesTable
-            sales={sales}
-            loading={salesLoading}
-            filters={salesFilters}
-            onFiltersChange={(next) => {
-              setSalesFilters(next);
-              setSalesPage(1);
-            }}
-            onEditSale={handleUpdateSale}
-            onDeleteSale={handleDeleteSale}
-            page={salesPage}
-            pageSize={salesPageSize}
-            total={salesTotal}
-            onPageChange={(next) => setSalesPage(next)}
-          />
-        )}
-
-        {/* Detail Drawer */}
-        {selectedItem && (
-          <ItemDetailDrawer
-            item={selectedItem}
-            onClose={() => setSelectedItem(null)}
-            onSave={handleSaveItem}
-          />
-        )}
-
-        {/* Manual Add Modal */}
-        <AddInventoryModal
-          isOpen={showAddModal}
-          onClose={() => setShowAddModal(false)}
-          onAdd={handleAddItem}
-        />
-
-        {/* Add Card Modal — identify via photo or open card database search */}
-        <AddCardModalNew
-          isOpen={showAddCardModal}
-          onClose={() => setShowAddCardModal(false)}
-          onSuccess={() => {}}
-          onLimitReached={() => {}}
-          addMode="business"
-          modalTitle="Add Card to Inventory"
-          onOpenSmartSearch={() => {
-            setShowAddCardModal(false);
-            setShowCardPicker(true);
-          }}
-          onCardSelected={handleCardIdentified}
-        />
-
-        {/* Card Database Search Picker */}
-        <CardPickerModal
-          isOpen={showCardPicker}
-          title="Add Card to Inventory"
-          mode="collection"
-          onClose={() => setShowCardPicker(false)}
-          onSelect={handleCardPickerSelect}
-          quantityEnabled
-        />
-
-        {/* Business-specific confirm: set cost/channel/status, saves to business_inventory_items */}
-        <AddCardToInventoryModal
-          isOpen={showAddCardToInventory}
-          card={pendingInventoryCard}
-          onClose={() => {
-            setShowAddCardToInventory(false);
-            setPendingInventoryCard(null);
-          }}
-          onSuccess={handleCardAdded}
-        />
-
-        {/* Add Wax Modal */}
-        <AddWaxModal
-          isOpen={showAddWaxModal}
-          onClose={() => setShowAddWaxModal(false)}
-          onAdd={handleAddWax}
-        />
-
-        <SaleFormModal
-          isOpen={Boolean(markSoldItem)}
-          title={markSoldItem ? `Mark as sold: ${markSoldItem.title}` : "Mark as sold"}
-          submitLabel="Record sale"
-          defaults={
-            markSoldItem
-              ? {
-                  inventory_item_id: markSoldItem.id,
-                  channel: markSoldItem.channel,
-                  sold_at: new Date().toISOString(),
-                  cogs_cents: markSoldItem.cost_basis_total_cents,
-                }
-              : undefined
-          }
-          onClose={() => setMarkSoldItem(null)}
-          onSubmit={async (payload) => {
-            await handleCreateSale(payload as unknown as Record<string, unknown>);
-            setMarkSoldItem(null);
-          }}
-          showCogsField={false}
-        />
-
-        {/* Toast */}
-        {toast && (
-          <div
-            className={`fixed bottom-4 right-4 p-4 rounded-lg shadow-lg z-50 flex items-center gap-3 ${
-              toast.type === "success"
-                ? "bg-emerald-600 text-white"
-                : "bg-red-600 text-white"
-            }`}
-          >
-            <span>{toast.message}</span>
-            <button onClick={() => setToast(null)} className="hover:opacity-75">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-        )}
       </main>
     </AuthenticatedLayout>
   );
 }
 
-export default function BusinessPage() {
+export default function BusinessDashboardPage() {
   return (
     <Suspense
       fallback={
@@ -1369,18 +293,21 @@ export default function BusinessPage() {
           <main className="max-w-7xl mx-auto px-4 py-4">
             <div className="animate-pulse space-y-4">
               <div className="h-8 w-48 bg-gray-800 rounded" />
-              <div className="grid grid-cols-5 gap-4">
-                {[...Array(5)].map((_, i) => (
-                  <div key={i} className="h-20 bg-gray-800 rounded-xl" />
+              <div className="grid grid-cols-4 gap-4">
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="h-20 bg-gray-800 rounded-lg" />
                 ))}
               </div>
-              <div className="h-64 bg-gray-800 rounded-xl" />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="h-48 bg-gray-800 rounded-lg" />
+                <div className="h-48 bg-gray-800 rounded-lg" />
+              </div>
             </div>
           </main>
         </AuthenticatedLayout>
       }
     >
-      <BusinessPageContent />
+      <BusinessDashboardContent />
     </Suspense>
   );
 }

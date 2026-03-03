@@ -2,7 +2,7 @@ import type { ShopListing } from "@/types/shop";
 
 type ListingPreview = Pick<
   ShopListing,
-  "player_name" | "year" | "set_brand" | "parallel_variant"
+  "title" | "player_name" | "year" | "set_brand" | "parallel_variant"
 >;
 
 export function formatUsd(value: number, digits = 0): string {
@@ -15,6 +15,10 @@ export function formatUsd(value: number, digits = 0): string {
 }
 
 export function buildListingTitle(listing: ListingPreview): string {
+  if (listing.title?.trim()) {
+    return listing.title.trim();
+  }
+
   const base = [listing.player_name, listing.year, listing.set_brand]
     .filter(Boolean)
     .join(" ");

@@ -43,7 +43,7 @@ function ShopNav() {
               CardzCheck
             </span>
             <span className="rounded bg-cyan-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-cyan-700">
-              Shop
+              Marketplace
             </span>
           </Link>
 

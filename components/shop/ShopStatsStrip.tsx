@@ -76,7 +76,7 @@ export default function ShopStatsStrip({
             href="/admin/shop"
             className="text-sm text-slate-600 transition-colors hover:text-cyan-700"
           >
-            Add listings in Admin →
+            Add listings in Marketplace Admin →
           </Link>
         </div>
       )}

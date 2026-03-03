@@ -18,7 +18,7 @@ export async function POST() {
   const { data: inventoryItems, error: invError } = await supabase
     .from("business_inventory_items")
     .select(
-      "id,title,quantity,grade,cert_number,list_price_cents,current_market_value_cents,cost_basis_total_cents,status,condition_status"
+      "id,title,quantity,grade,cert_number,list_price_cents,current_market_value_cents,cost_basis_total_cents,status,condition_status,channel"
     )
     .eq("status", "listed")
     .in("condition_status", ["graded", "raw"]);
@@ -37,7 +37,10 @@ export async function POST() {
   for (const inv of items) {
     const title = String(inv.title ?? "").trim();
     const grade = inv.grade ?? "";
-    if (!title || !grade) {
+    const condition = inv.condition_status === "raw" ? "raw" : "graded";
+    const normalizedGrade = grade || (condition === "raw" ? "Raw" : "Graded");
+
+    if (!title) {
       results.skipped++;
       continue;
     }
@@ -68,7 +71,7 @@ export async function POST() {
       .eq("player_name", playerName)
       .eq("year", year)
       .eq("set_brand", setBrand)
-      .eq("grade", grade)
+      .eq("grade", normalizedGrade)
       .maybeSingle();
 
     if (existing) {
@@ -80,16 +83,21 @@ export async function POST() {
       else results.flagged.push(`update failed: ${inv.id}`);
     } else if (price > 0 && qty > 0) {
       const insert = {
+        title,
+        inventory_item_id: inv.id,
         player_name: playerName,
         year,
         set_brand: setBrand,
-        grade,
+        grade: normalizedGrade,
+        condition,
         cert_number: inv.cert_number ?? null,
         price,
         cmv,
         quantity: qty,
         status: "active",
+        publish_state: "published",
         sport: "Football",
+        tags: inv.channel ? [inv.channel] : [],
       };
       const { error: insErr } = await supabase
         .from("shop_listings")

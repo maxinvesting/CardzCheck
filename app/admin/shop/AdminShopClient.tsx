@@ -2,9 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import type { ShopListing } from "@/types/shop";
 
-type ListingStatus = "active" | "delisted" | "sold";
+type ListingStatus = "active" | "delisted" | "sold" | "reserved";
+type PublishState = "draft" | "published";
+type ListingCondition = "raw" | "graded" | "sealed";
+type ShippingMethod = "pwe" | "bmwt" | "box" | "pickup";
 type GradeOption =
   | "Raw"
   | "PSA 10"
@@ -27,6 +31,8 @@ type ImageItem =
     };
 
 interface ListingFormState {
+  title: string;
+  inventory_item_id: string;
   player_name: string;
   year: string;
   set_brand: string;
@@ -35,15 +41,34 @@ interface ListingFormState {
   grade_choice: GradeOption;
   grade_other: string;
   cert_number: string;
+  condition: ListingCondition;
   sport: "Football" | "Basketball" | "Baseball" | "Other";
   price: string;
+  quantity: string;
   cmv: string;
+  shipping_method: ShippingMethod;
   shipping_cost: string;
+  free_shipping: boolean;
   status: ListingStatus;
+  publish_state: PublishState;
   featured: boolean;
   is_premium: boolean;
   tags: string;
   notes: string;
+}
+
+interface InventoryListItem {
+  id: string;
+  title: string | null;
+  quantity: number | null;
+  grade: string | null;
+  condition_status: "raw" | "graded" | null;
+  list_price_cents: number | null;
+  current_market_value_cents: number | null;
+  channel: string | null;
+  status: string | null;
+  cert_number: string | null;
+  created_at: string;
 }
 
 const GRADE_OPTIONS: GradeOption[] = [
@@ -62,9 +87,14 @@ const SPORT_OPTIONS: ListingFormState["sport"][] = [
   "Other",
 ];
 
-const STATUS_OPTIONS: ListingStatus[] = ["active", "delisted", "sold"];
+const STATUS_OPTIONS: ListingStatus[] = ["active", "delisted", "reserved", "sold"];
+const PUBLISH_STATE_OPTIONS: PublishState[] = ["draft", "published"];
+const CONDITION_OPTIONS: ListingCondition[] = ["raw", "graded", "sealed"];
+const SHIPPING_OPTIONS: ShippingMethod[] = ["pwe", "bmwt", "box", "pickup"];
 
 const DEFAULT_FORM: ListingFormState = {
+  title: "",
+  inventory_item_id: "",
   player_name: "",
   year: "",
   set_brand: "",
@@ -73,11 +103,16 @@ const DEFAULT_FORM: ListingFormState = {
   grade_choice: "Raw",
   grade_other: "",
   cert_number: "",
+  condition: "graded",
   sport: "Football",
   price: "",
+  quantity: "1",
   cmv: "",
+  shipping_method: "bmwt",
   shipping_cost: "4.00",
+  free_shipping: false,
   status: "active",
+  publish_state: "published",
   featured: false,
   is_premium: false,
   tags: "",
@@ -98,6 +133,14 @@ function revokePendingUrls(images: ImageItem[]) {
       URL.revokeObjectURL(image.previewUrl);
     }
   }
+}
+
+function parseYearFromTitle(title: string | null | undefined): number | null {
+  if (!title) return null;
+  const match = title.match(/\b(19|20)\d{2}\b/);
+  if (!match) return null;
+  const year = Number(match[0]);
+  return Number.isFinite(year) ? year : null;
 }
 
 function extractGrade(listing: ShopListing): {
@@ -122,8 +165,16 @@ function extractGrade(listing: ShopListing): {
 
 function listingToForm(listing: ShopListing): ListingFormState {
   const grade = extractGrade(listing);
+  const shippingCost = listing.shipping_cost != null ? Number(listing.shipping_cost) : 4;
+  const quantity = Math.max(1, listing.quantity ?? 1);
 
   return {
+    title:
+      listing.title ||
+      [listing.player_name, listing.year, listing.set_brand, listing.parallel_variant]
+        .filter(Boolean)
+        .join(" "),
+    inventory_item_id: listing.inventory_item_id || "",
     player_name: listing.player_name || "",
     year: listing.year ? String(listing.year) : "",
     set_brand: listing.set_brand || "",
@@ -132,16 +183,24 @@ function listingToForm(listing: ShopListing): ListingFormState {
     grade_choice: grade.grade_choice,
     grade_other: grade.grade_other,
     cert_number: listing.cert_number || "",
+    condition: listing.condition ?? "graded",
     sport: SPORT_OPTIONS.includes(listing.sport as ListingFormState["sport"])
       ? (listing.sport as ListingFormState["sport"])
       : "Other",
     price: listing.price != null ? String(listing.price) : "",
+    quantity: String(quantity),
     cmv: listing.cmv != null ? String(listing.cmv) : "",
-    shipping_cost:
-      listing.shipping_cost != null ? String(listing.shipping_cost) : "4.00",
+    shipping_method: SHIPPING_OPTIONS.includes(
+      listing.shipping_method as ShippingMethod
+    )
+      ? (listing.shipping_method as ShippingMethod)
+      : "bmwt",
+    shipping_cost: shippingCost.toFixed(2),
+    free_shipping: shippingCost <= 0,
     status: STATUS_OPTIONS.includes(listing.status as ListingStatus)
       ? (listing.status as ListingStatus)
       : "active",
+    publish_state: listing.publish_state ?? "published",
     featured: Boolean(listing.featured),
     is_premium: Boolean(listing.is_premium),
     tags: Array.isArray(listing.tags) ? listing.tags.join(", ") : "",
@@ -158,24 +217,31 @@ function parseTags(raw: string): string[] {
 
 function formToPayload(form: ListingFormState) {
   const price = Number(form.price);
-  const year = Number(form.year);
-  const shippingCost = Number(form.shipping_cost);
+  const inferredYear = parseYearFromTitle(form.title);
+  const year = Number(form.year || inferredYear || 0);
+  const quantity = Number(form.quantity);
+  const shippingCost = form.free_shipping ? 0 : Number(form.shipping_cost);
   const cmv = form.cmv.trim() ? Number(form.cmv) : null;
+  const normalizedTitle = form.title.trim();
 
-  if (!form.player_name.trim()) {
-    throw new Error("Player name is required.");
+  if (!normalizedTitle && !form.player_name.trim()) {
+    throw new Error("Title or player name is required.");
   }
 
   if (!Number.isFinite(year) || year <= 0) {
-    throw new Error("Year is required.");
+    throw new Error("Year is required (or include one in the title).");
   }
 
-  if (!form.set_brand.trim()) {
-    throw new Error("Set/brand is required.");
+  if (!form.set_brand.trim() && !normalizedTitle) {
+    throw new Error("Set/brand is required when title is empty.");
   }
 
   if (!Number.isFinite(price) || price < 0) {
     throw new Error("Price must be a valid number.");
+  }
+
+  if (!Number.isFinite(quantity) || quantity < 1) {
+    throw new Error("Quantity must be at least 1.");
   }
 
   if (!Number.isFinite(shippingCost) || shippingCost < 0) {
@@ -191,19 +257,27 @@ function formToPayload(form: ListingFormState) {
       ? form.grade_other.trim() || "Raw"
       : form.grade_choice;
 
+  const titleOrFallback = normalizedTitle || form.player_name.trim();
+
   return {
-    player_name: form.player_name.trim(),
+    title: titleOrFallback,
+    inventory_item_id: form.inventory_item_id.trim() || null,
+    player_name: form.player_name.trim() || titleOrFallback,
     year,
-    set_brand: form.set_brand.trim(),
+    set_brand: form.set_brand.trim() || titleOrFallback,
     parallel_variant: form.parallel_variant.trim() || null,
     card_number: form.card_number.trim() || null,
-    grade,
+    grade: form.condition === "raw" ? "Raw" : grade,
     cert_number: form.cert_number.trim() || null,
+    condition: form.condition,
     sport: form.sport,
     price,
+    quantity: Math.trunc(quantity),
     cmv,
+    shipping_method: form.shipping_method,
     shipping_cost: shippingCost,
     status: form.status,
+    publish_state: form.publish_state,
     featured: form.featured,
     is_premium: form.is_premium,
     tags: parseTags(form.tags),
@@ -221,18 +295,22 @@ function toImageItemsFromUrls(urls: string[]): ImageItem[] {
 
 function cloneListingForCreate(listing: ShopListing) {
   return {
+    title: listing.title,
+    inventory_item_id: listing.inventory_item_id,
     player_name: listing.player_name,
     year: listing.year,
     set_brand: listing.set_brand,
     parallel_variant: listing.parallel_variant,
     card_number: listing.card_number,
     grade: listing.grade,
+    condition: listing.condition,
     cert_number: listing.cert_number,
     sport: listing.sport,
     price: listing.price,
     cmv: listing.cmv,
     shipping_cost: listing.shipping_cost,
     status: listing.status,
+    publish_state: listing.publish_state,
     featured: listing.featured,
     is_premium: listing.is_premium,
     tags: listing.tags,
@@ -240,6 +318,42 @@ function cloneListingForCreate(listing: ShopListing) {
     image_urls: listing.image_urls,
     thumbnail_url: listing.thumbnail_url,
     quantity: Math.max(1, (listing.quantity ?? 1) - (listing.quantity_sold ?? 0)),
+  };
+}
+
+function inventoryItemToFormPatch(item: InventoryListItem): Partial<ListingFormState> {
+  const title = (item.title || "").trim();
+  const year = parseYearFromTitle(title);
+  const listPrice =
+    item.list_price_cents != null && Number.isFinite(item.list_price_cents)
+      ? (item.list_price_cents / 100).toFixed(2)
+      : "";
+  const cmv =
+    item.current_market_value_cents != null &&
+    Number.isFinite(item.current_market_value_cents)
+      ? (item.current_market_value_cents / 100).toFixed(2)
+      : "";
+  const quantity =
+    item.quantity != null && Number.isFinite(item.quantity)
+      ? String(Math.max(1, Math.trunc(item.quantity)))
+      : "1";
+
+  return {
+    title,
+    inventory_item_id: item.id,
+    player_name: title,
+    year: year ? String(year) : "",
+    set_brand: title,
+    grade_choice: "Other",
+    grade_other: (item.grade || "").trim(),
+    cert_number: (item.cert_number || "").trim(),
+    condition: item.condition_status === "raw" ? "raw" : "graded",
+    price: listPrice,
+    quantity,
+    cmv,
+    status: "active",
+    publish_state: "draft",
+    tags: item.channel ? item.channel : "",
   };
 }
 
@@ -410,8 +524,27 @@ function ListingFields({
 }) {
   return (
     <div className="grid gap-3 md:grid-cols-2">
+      <label className="space-y-1 text-sm md:col-span-2">
+        <span className="text-gray-300">Listing title *</span>
+        <input
+          value={form.title}
+          onChange={(event) =>
+            setForm((previous) => ({ ...previous, title: event.target.value }))
+          }
+          className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-white"
+          placeholder="e.g. 2024 Topps Chrome C.J. Stroud PSA 10"
+          required
+        />
+      </label>
+
+      {form.inventory_item_id && (
+        <div className="rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-xs text-gray-300 md:col-span-2">
+          Linked inventory item: <span className="font-mono">{form.inventory_item_id}</span>
+        </div>
+      )}
+
       <label className="space-y-1 text-sm">
-        <span className="text-gray-300">Player name *</span>
+        <span className="text-gray-300">Player name / entity *</span>
         <input
           value={form.player_name}
           onChange={(event) =>
@@ -515,6 +648,26 @@ function ListingFields({
       </label>
 
       <div className="space-y-1 text-sm">
+        <span className="text-gray-300">Condition *</span>
+        <select
+          value={form.condition}
+          onChange={(event) =>
+            setForm((previous) => ({
+              ...previous,
+              condition: event.target.value as ListingCondition,
+            }))
+          }
+          className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-white"
+        >
+          {CONDITION_OPTIONS.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="space-y-1 text-sm">
         <span className="text-gray-300">Sport *</span>
         <select
           value={form.sport}
@@ -549,6 +702,21 @@ function ListingFields({
       </label>
 
       <label className="space-y-1 text-sm">
+        <span className="text-gray-300">Quantity *</span>
+        <input
+          type="number"
+          min="1"
+          step="1"
+          value={form.quantity}
+          onChange={(event) =>
+            setForm((previous) => ({ ...previous, quantity: event.target.value }))
+          }
+          className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-white"
+          required
+        />
+      </label>
+
+      <label className="space-y-1 text-sm">
         <span className="text-gray-300">CMV</span>
         <input
           type="number"
@@ -561,6 +729,26 @@ function ListingFields({
         />
       </label>
 
+      <div className="space-y-1 text-sm">
+        <span className="text-gray-300">Shipping method *</span>
+        <select
+          value={form.shipping_method}
+          onChange={(event) =>
+            setForm((previous) => ({
+              ...previous,
+              shipping_method: event.target.value as ShippingMethod,
+            }))
+          }
+          className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-white"
+        >
+          {SHIPPING_OPTIONS.map((option) => (
+            <option key={option} value={option}>
+              {option.toUpperCase()}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <label className="space-y-1 text-sm">
         <span className="text-gray-300">Shipping cost *</span>
         <input
@@ -571,13 +759,50 @@ function ListingFields({
           onChange={(event) =>
             setForm((previous) => ({ ...previous, shipping_cost: event.target.value }))
           }
+          disabled={form.free_shipping}
           className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-white"
           required
         />
       </label>
 
+      <label className="flex items-center gap-2 rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-300">
+        <input
+          type="checkbox"
+          checked={form.free_shipping}
+          onChange={(event) =>
+            setForm((previous) => ({
+              ...previous,
+              free_shipping: event.target.checked,
+              shipping_cost: event.target.checked ? "0.00" : previous.shipping_cost,
+            }))
+          }
+          className="rounded border-gray-600"
+        />
+        Free shipping
+      </label>
+
       <div className="space-y-1 text-sm">
-        <span className="text-gray-300">Status *</span>
+        <span className="text-gray-300">Publish state *</span>
+        <select
+          value={form.publish_state}
+          onChange={(event) =>
+            setForm((previous) => ({
+              ...previous,
+              publish_state: event.target.value as PublishState,
+            }))
+          }
+          className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-white"
+        >
+          {PUBLISH_STATE_OPTIONS.map((publishState) => (
+            <option key={publishState} value={publishState}>
+              {publishState}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="space-y-1 text-sm">
+        <span className="text-gray-300">Lifecycle status *</span>
         <select
           value={form.status}
           onChange={(event) =>
@@ -597,7 +822,7 @@ function ListingFields({
       </div>
 
       <label className="space-y-1 text-sm md:col-span-2">
-        <span className="text-gray-300">Tags (comma-separated)</span>
+        <span className="text-gray-300">Channel tags (optional, comma-separated)</span>
         <input
           value={form.tags}
           onChange={(event) =>
@@ -648,6 +873,7 @@ function ListingFields({
 }
 
 export default function AdminShopClient() {
+  const searchParams = useSearchParams();
   const [listings, setListings] = useState<ShopListing[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -657,6 +883,12 @@ export default function AdminShopClient() {
 
   const [createForm, setCreateForm] = useState<ListingFormState>(DEFAULT_FORM);
   const [createImages, setCreateImages] = useState<ImageItem[]>([]);
+  const [inventoryItems, setInventoryItems] = useState<InventoryListItem[]>([]);
+  const [inventoryLoading, setInventoryLoading] = useState(false);
+  const [inventoryError, setInventoryError] = useState<string | null>(null);
+  const [inventoryQuery, setInventoryQuery] = useState("");
+  const [selectedInventoryId, setSelectedInventoryId] = useState("");
+  const [queryPrefillApplied, setQueryPrefillApplied] = useState(false);
 
   const [editingListing, setEditingListing] = useState<ShopListing | null>(null);
   const [editForm, setEditForm] = useState<ListingFormState>(DEFAULT_FORM);
@@ -671,12 +903,21 @@ export default function AdminShopClient() {
         price: string;
         shipping_cost: string;
         status: ListingStatus;
+        publish_state: PublishState;
         featured: boolean;
       }
     >
   >({});
 
   const [busyRow, setBusyRow] = useState<string | null>(null);
+
+  const filteredInventoryItems = useMemo(() => {
+    const query = inventoryQuery.trim().toLowerCase();
+    if (!query) return inventoryItems;
+    return inventoryItems.filter((item) =>
+      (item.title || "").toLowerCase().includes(query)
+    );
+  }, [inventoryItems, inventoryQuery]);
 
   const loadListings = useCallback(async () => {
     setLoading(true);
@@ -701,6 +942,7 @@ export default function AdminShopClient() {
               status: STATUS_OPTIONS.includes(listing.status as ListingStatus)
                 ? (listing.status as ListingStatus)
                 : "active",
+              publish_state: listing.publish_state ?? "published",
               featured: Boolean(listing.featured),
             },
           ])
@@ -716,6 +958,59 @@ export default function AdminShopClient() {
   useEffect(() => {
     loadListings();
   }, [loadListings]);
+
+  const loadInventoryItems = useCallback(async () => {
+    setInventoryLoading(true);
+    setInventoryError(null);
+    try {
+      const response = await fetch("/api/admin/shop/inventory?limit=200", {
+        cache: "no-store",
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error || "Failed to load inventory items.");
+      }
+      setInventoryItems(Array.isArray(data?.items) ? data.items : []);
+    } catch (error) {
+      setInventoryError(
+        error instanceof Error ? error.message : "Failed to load inventory items."
+      );
+    } finally {
+      setInventoryLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadInventoryItems();
+  }, [loadInventoryItems]);
+
+  const applyInventoryPrefill = useCallback((item: InventoryListItem) => {
+    const patch = inventoryItemToFormPatch(item);
+    setCreateForm((previous) => ({
+      ...previous,
+      ...patch,
+    }));
+    setCreateError(null);
+    setCreateSuccess(`Prefilled from inventory item: ${item.title || item.id}`);
+  }, []);
+
+  useEffect(() => {
+    if (queryPrefillApplied) return;
+    const inventoryItemId = searchParams.get("inventory_item_id");
+    if (!inventoryItemId || inventoryItems.length === 0) return;
+
+    const item = inventoryItems.find((candidate) => candidate.id === inventoryItemId);
+    if (!item) return;
+
+    setSelectedInventoryId(item.id);
+    applyInventoryPrefill(item);
+    setQueryPrefillApplied(true);
+  }, [
+    applyInventoryPrefill,
+    inventoryItems,
+    queryPrefillApplied,
+    searchParams,
+  ]);
 
   const uploadPendingImages = async (listingId: string, images: ImageItem[]) => {
     const urls: string[] = [];
@@ -762,15 +1057,16 @@ export default function AdminShopClient() {
     return data;
   };
 
-  const handleCreate = async (event: React.FormEvent) => {
-    event.preventDefault();
-
+  const createListing = async (publishState: PublishState) => {
     setCreateSubmitting(true);
     setCreateError(null);
     setCreateSuccess(null);
 
     try {
-      const payload = formToPayload(createForm);
+      const payload = formToPayload({
+        ...createForm,
+        publish_state: publishState,
+      });
 
       const createResponse = await fetch("/api/admin/shop/listings", {
         method: "POST",
@@ -796,13 +1092,23 @@ export default function AdminShopClient() {
       revokePendingUrls(createImages);
       setCreateImages([]);
       setCreateForm(DEFAULT_FORM);
-      setCreateSuccess("Listing created and published.");
+      setSelectedInventoryId("");
+      setCreateSuccess(
+        publishState === "published"
+          ? "Listing published to marketplace."
+          : "Listing saved as draft."
+      );
       await loadListings();
     } catch (error) {
       setCreateError(error instanceof Error ? error.message : "Failed to create listing.");
     } finally {
       setCreateSubmitting(false);
     }
+  };
+
+  const handleCreate = async (event: React.FormEvent) => {
+    event.preventDefault();
+    await createListing(createForm.publish_state);
   };
 
   const handleSync = async () => {
@@ -865,6 +1171,7 @@ export default function AdminShopClient() {
       price: string;
       shipping_cost: string;
       status: ListingStatus;
+      publish_state: PublishState;
       featured: boolean;
     }>
   ) => {
@@ -879,7 +1186,7 @@ export default function AdminShopClient() {
 
   const commitInline = async (
     listing: ShopListing,
-    field: "price" | "shipping_cost" | "status" | "featured"
+    field: "price" | "shipping_cost" | "status" | "publish_state" | "featured"
   ) => {
     const draft = inlineDrafts[listing.id];
     if (!draft) return;
@@ -909,6 +1216,13 @@ export default function AdminShopClient() {
 
       if (field === "status" && listing.status !== draft.status) {
         await patchListing(listing.id, { status: draft.status });
+      }
+
+      if (
+        field === "publish_state" &&
+        (listing.publish_state ?? "published") !== draft.publish_state
+      ) {
+        await patchListing(listing.id, { publish_state: draft.publish_state });
       }
 
       if (field === "featured" && Boolean(listing.featured) !== draft.featured) {
@@ -961,8 +1275,21 @@ export default function AdminShopClient() {
     }
   };
 
-  const totalActive = useMemo(
-    () => listings.filter((listing) => listing.status === "active").length,
+  const totalPublishedActive = useMemo(
+    () =>
+      listings.filter(
+        (listing) =>
+          listing.status === "active" &&
+          (listing.publish_state ?? "published") === "published"
+      ).length,
+    [listings]
+  );
+
+  const totalDraft = useMemo(
+    () =>
+      listings.filter(
+        (listing) => (listing.publish_state ?? "published") === "draft"
+      ).length,
     [listings]
   );
 
@@ -971,9 +1298,9 @@ export default function AdminShopClient() {
       <section className="rounded-2xl border border-gray-800 bg-gray-900/50 p-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-xl font-semibold text-white">Create listing</h2>
+            <h2 className="text-xl font-semibold text-white">Create marketplace listing</h2>
             <p className="text-sm text-gray-400">
-              Add cards with photos, pricing, shipping, and publish status.
+              Add listings from inventory or manual entry with photos, condition, shipping, and publish controls.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -983,7 +1310,7 @@ export default function AdminShopClient() {
               rel="noopener noreferrer"
               className="rounded-lg border border-gray-700 px-3 py-2 text-sm text-gray-300 hover:border-gray-600 hover:text-white"
             >
-              View shop
+              View marketplace
             </Link>
             <button
               onClick={handleSync}
@@ -996,6 +1323,59 @@ export default function AdminShopClient() {
         </div>
 
         <form className="space-y-4" onSubmit={handleCreate}>
+          <div className="rounded-xl border border-gray-800 bg-gray-950/60 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-sm font-medium text-gray-200">Prefill from inventory</h3>
+              <button
+                type="button"
+                onClick={loadInventoryItems}
+                disabled={inventoryLoading}
+                className="rounded border border-gray-700 px-2 py-1 text-xs text-gray-300 hover:border-gray-600 disabled:opacity-60"
+              >
+                {inventoryLoading ? "Refreshing..." : "Refresh inventory"}
+              </button>
+            </div>
+
+            <div className="mt-3 grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+              <input
+                value={inventoryQuery}
+                onChange={(event) => setInventoryQuery(event.target.value)}
+                placeholder="Search inventory title"
+                className="rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white"
+              />
+              <select
+                value={selectedInventoryId}
+                onChange={(event) => setSelectedInventoryId(event.target.value)}
+                className="rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white"
+              >
+                <option value="">Select inventory item</option>
+                {filteredInventoryItems.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {(item.title || "Untitled")} · Qty {item.quantity ?? 0} · {item.status || "unknown"}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => {
+                  const item = inventoryItems.find(
+                    (candidate) => candidate.id === selectedInventoryId
+                  );
+                  if (!item) return;
+                  applyInventoryPrefill(item);
+                }}
+                disabled={!selectedInventoryId}
+                className="rounded-lg bg-cyan-700 px-3 py-2 text-sm font-medium text-white hover:bg-cyan-600 disabled:opacity-60"
+              >
+                Use item
+              </button>
+            </div>
+
+            {inventoryError && (
+              <p className="mt-2 text-xs text-rose-400">{inventoryError}</p>
+            )}
+          </div>
+
           <ListingFields form={createForm} setForm={setCreateForm} />
           <div className="space-y-2">
             <h3 className="text-sm font-medium text-gray-200">Photos</h3>
@@ -1009,22 +1389,33 @@ export default function AdminShopClient() {
           {createError && <p className="text-sm text-rose-400">{createError}</p>}
           {createSuccess && <p className="text-sm text-emerald-400">{createSuccess}</p>}
 
-          <button
-            type="submit"
-            disabled={createSubmitting}
-            className="rounded-lg bg-cyan-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-cyan-500 disabled:opacity-60"
-          >
-            {createSubmitting ? "Publishing..." : "Create listing"}
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={createSubmitting}
+              onClick={() => void createListing("draft")}
+              className="rounded-lg border border-gray-600 px-5 py-2.5 text-sm font-medium text-gray-100 hover:border-gray-500 disabled:opacity-60"
+            >
+              {createSubmitting ? "Submitting..." : "Save draft"}
+            </button>
+            <button
+              type="button"
+              disabled={createSubmitting}
+              onClick={() => void createListing("published")}
+              className="rounded-lg bg-cyan-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-cyan-500 disabled:opacity-60"
+            >
+              {createSubmitting ? "Publishing..." : "Publish to marketplace"}
+            </button>
+          </div>
         </form>
       </section>
 
       <section className="rounded-2xl border border-gray-800 bg-gray-900/50 p-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h2 className="text-xl font-semibold text-white">My listings</h2>
+            <h2 className="text-xl font-semibold text-white">Marketplace listings</h2>
             <p className="text-sm text-gray-400">
-              {listings.length} total • {totalActive} active
+              {listings.length} total • {totalPublishedActive} live • {totalDraft} draft
             </p>
           </div>
         </div>
@@ -1032,18 +1423,19 @@ export default function AdminShopClient() {
         {loading ? (
           <p className="text-sm text-gray-400">Loading listings...</p>
         ) : listings.length === 0 ? (
-          <p className="text-sm text-gray-400">No listings yet.</p>
+          <p className="text-sm text-gray-400">No marketplace listings yet.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
               <thead>
                 <tr className="border-b border-gray-800 text-gray-400">
                   <th className="px-3 py-2 font-medium">Thumbnail</th>
-                  <th className="px-3 py-2 font-medium">Player / Year / Set</th>
-                  <th className="px-3 py-2 font-medium">Grade</th>
+                  <th className="px-3 py-2 font-medium">Title</th>
+                  <th className="px-3 py-2 font-medium">Condition / Grade</th>
                   <th className="px-3 py-2 font-medium">Price</th>
                   <th className="px-3 py-2 font-medium">Shipping</th>
-                  <th className="px-3 py-2 font-medium">Status</th>
+                  <th className="px-3 py-2 font-medium">Lifecycle</th>
+                  <th className="px-3 py-2 font-medium">Visibility</th>
                   <th className="px-3 py-2 font-medium">Featured</th>
                   <th className="px-3 py-2 font-medium">Created</th>
                   <th className="px-3 py-2 font-medium">Actions</th>
@@ -1069,12 +1461,15 @@ export default function AdminShopClient() {
                         )}
                       </td>
                       <td className="px-3 py-2 text-white">
-                        <div className="font-medium">{listing.player_name}</div>
+                        <div className="font-medium">{listing.title || listing.player_name}</div>
                         <div className="text-xs text-gray-400">
                           {listing.year} • {listing.set_brand}
                         </div>
                       </td>
-                      <td className="px-3 py-2 text-gray-200">{listing.grade}</td>
+                      <td className="px-3 py-2 text-gray-200">
+                        <div className="capitalize">{listing.condition || "graded"}</div>
+                        <div className="text-xs text-gray-400">{listing.grade}</div>
+                      </td>
                       <td className="px-3 py-2">
                         <input
                           type="number"
@@ -1120,6 +1515,25 @@ export default function AdminShopClient() {
                         </select>
                       </td>
                       <td className="px-3 py-2">
+                        <select
+                          value={draft?.publish_state ?? listing.publish_state ?? "published"}
+                          onChange={(event) => {
+                            const publishState = event.target.value as PublishState;
+                            updateInlineDraft(listing.id, { publish_state: publishState });
+                            void runRowAction(listing.id, {
+                              publish_state: publishState,
+                            });
+                          }}
+                          className="rounded border border-gray-700 bg-gray-900 px-2 py-1 text-white"
+                        >
+                          {PUBLISH_STATE_OPTIONS.map((publishState) => (
+                            <option key={publishState} value={publishState}>
+                              {publishState}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="px-3 py-2">
                         <label className="inline-flex items-center gap-2 text-xs text-gray-300">
                           <input
                             type="checkbox"
@@ -1152,6 +1566,21 @@ export default function AdminShopClient() {
                             className="rounded border border-gray-700 px-2 py-1 text-xs text-gray-200 hover:border-gray-500"
                           >
                             Duplicate
+                          </button>
+                          <button
+                            onClick={() =>
+                              runRowAction(listing.id, {
+                                publish_state:
+                                  (listing.publish_state ?? "published") === "published"
+                                    ? "draft"
+                                    : "published",
+                              })
+                            }
+                            className="rounded border border-indigo-800 px-2 py-1 text-xs text-indigo-300 hover:border-indigo-600"
+                          >
+                            {(listing.publish_state ?? "published") === "published"
+                              ? "Move to draft"
+                              : "Publish"}
                           </button>
                           <button
                             onClick={() => runRowAction(listing.id, { status: "sold" })}
@@ -1201,7 +1630,7 @@ export default function AdminShopClient() {
           <div className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl border border-gray-700 bg-gray-950 p-5">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-white">
-                Edit listing: {editingListing.player_name}
+                Edit listing: {editingListing.title || editingListing.player_name}
               </h3>
               <button
                 onClick={closeEditModal}

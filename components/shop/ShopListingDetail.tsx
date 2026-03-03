@@ -110,7 +110,7 @@ export default function ShopListingDetail({
         href="/shop"
         className="inline-flex items-center text-sm text-slate-600 transition-colors hover:text-cyan-700"
       >
-        {"<- Back to shop"}
+        {"<- Back to marketplace"}
       </Link>
 
       <div className="grid grid-cols-1 gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:gap-12">
@@ -180,11 +180,11 @@ export default function ShopListingDetail({
 
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
               <p className="text-xs uppercase tracking-[0.16em] text-slate-500">
-                CMV pricing transparency
+                Est. Market Value (CMV)
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
                 <span className="text-slate-700">
-                  {cmv.cmvLabel ?? "CMV currently unavailable"}
+                  {cmv.cmvLabel ?? "Est. Market Value currently unavailable"}
                 </span>
                 <span className={cmv.deltaClass}>{cmv.deltaLabel}</span>
               </div>

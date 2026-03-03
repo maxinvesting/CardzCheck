@@ -98,7 +98,7 @@ export default function BusinessMetrics({
             </p>
             <p className="text-[10px] text-gray-500 mt-0.5">
               {inventorySummary.itemsWithCmv > 0
-                ? `Est. CMV · ${inventorySummary.itemCount} item${inventorySummary.itemCount !== 1 ? "s" : ""}`
+                ? `Est. Market Value · ${inventorySummary.itemCount} item${inventorySummary.itemCount !== 1 ? "s" : ""}`
                 : `Cost basis · ${inventorySummary.itemCount} item${inventorySummary.itemCount !== 1 ? "s" : ""}`}
             </p>
             {inventorySummary.itemsWithCmv > 0 &&

@@ -96,6 +96,7 @@ export default function ShopStorefront({
       const terms = searchLower.split(/\s+/);
       list = list.filter((listing) => {
         const haystack = [
+          listing.title,
           listing.player_name,
           listing.set_brand,
           String(listing.year),
@@ -297,25 +298,25 @@ export default function ShopStorefront({
         <div className="relative mx-auto grid max-w-7xl items-center gap-10 px-4 py-14 lg:grid-cols-[1.1fr_0.9fr] lg:py-20">
           <div className="max-w-2xl space-y-5">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-              CardzCheck Shop
+              CardzCheck Marketplace
             </p>
 
             {isEmpty ? (
               <>
                 <h1 className="text-4xl font-semibold tracking-tight text-slate-900 md:text-5xl">
-                  Next drop landing soon.
+                  CardzCheck Marketplace
                 </h1>
                 <p className="text-base text-slate-600 md:text-lg">
-                  Join the waitlist for early access.
+                  Next drop landing soon. Join the waitlist for early access.
                 </p>
               </>
             ) : (
               <>
                 <h1 className="text-4xl font-semibold tracking-tight text-slate-900 md:text-5xl">
-                  Curated slabs. Data-backed pricing.
+                  CardzCheck Marketplace
                 </h1>
                 <p className="text-base text-slate-600 md:text-lg">
-                  Each card includes live CardzCheck Market Value (CMV) and transparent deltas.
+                  Curated slabs with live CardzCheck Market Value (CMV) and transparent deltas.
                 </p>
                 <p className="text-sm text-slate-500">
                   {stats.activeCount} active listings with transparent market context.
@@ -451,7 +452,7 @@ export default function ShopStorefront({
                 href="/admin/shop"
                 className="text-sm text-slate-600 transition-colors hover:text-cyan-700"
               >
-                Add listings in Admin
+                Add listings in Marketplace Admin
               </Link>
             </div>
           )}
