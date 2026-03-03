@@ -16,7 +16,7 @@ interface CardUploaderProps {
   compact?: boolean;
 }
 
-const DEFAULT_MAX_FILES = 3; // Allow front, back, and one detail shot
+const DEFAULT_MAX_FILES = 3;
 const MAX_FALLBACK_DATA_URL_BYTES = 350 * 1024;
 const MAX_IDENTIFY_IMAGE_BYTES = 8 * 1024 * 1024;
 
@@ -71,6 +71,46 @@ async function compressDataUrl(
     image.onerror = () => resolve(null);
     image.src = dataUrl;
   });
+}
+
+// ── Corner bracket decoration ──────────────────────────────────────────────
+function CornerBracket({
+  corner,
+  active,
+}: {
+  corner: "tl" | "tr" | "bl" | "br";
+  active: boolean;
+}) {
+  const paths: Record<string, string> = {
+    tl: "M3 14 L3 3 L14 3",
+    tr: "M10 3 L21 3 L21 14",
+    bl: "M3 10 L3 21 L14 21",
+    br: "M10 21 L21 21 L21 10",
+  };
+  const pos: Record<string, string> = {
+    tl: "top-3 left-3",
+    tr: "top-3 right-3",
+    bl: "bottom-3 left-3",
+    br: "bottom-3 right-3",
+  };
+  return (
+    <svg
+      className={`absolute ${pos[corner]} w-6 h-6 transition-colors duration-200 ${
+        active ? "text-blue-400" : "text-white/20"
+      }`}
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d={paths[corner]}
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
 }
 
 export default function CardUploader({
@@ -185,7 +225,6 @@ export default function CardUploader({
         imageUrls.find((url) => typeof url === "string" && url.trim().length > 0) ||
         "";
 
-      // Check confidence level / parse errors
       if (result.card_identity?.warnings?.includes("parse_error")) {
         setError("We couldn't read the card details clearly. Please confirm the year and set.");
       } else if (result.confidence === "low") {
@@ -194,7 +233,6 @@ export default function CardUploader({
         );
       }
 
-      // Success - pass data to parent with image URLs (NO grade estimate - that's separate)
       onIdentified(
         normalizeIdentificationResult({
           player_name: result.player_name,
@@ -224,9 +262,8 @@ export default function CardUploader({
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-
     const files = e.dataTransfer.files;
-    if (files?.length) handleFiles(files);
+    if (files?.length) void handleFiles(files);
   }, [handleFiles]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -241,13 +278,15 @@ export default function CardUploader({
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (files?.length) handleFiles(files);
+    if (files?.length) void handleFiles(files);
   }, [handleFiles]);
 
   const reset = () => {
     setPreviews([]);
     setError(null);
   };
+
+  const minHeight = compact ? "min-h-[140px]" : "min-h-[200px]";
 
   return (
     <div className="w-full">
@@ -256,83 +295,101 @@ export default function CardUploader({
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         className={`
-          relative border-2 border-dashed rounded-xl text-center transition-all ${compact ? "p-5" : "p-8"}
+          relative ${minHeight} rounded-xl transition-all duration-200
           ${isDragging
-            ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
-            : "border-gray-300 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-600"
+            ? "bg-blue-500/5"
+            : "bg-[#07111d] hover:bg-[#091529]"
           }
           ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
         `}
       >
+        {/* Corner brackets */}
+        <CornerBracket corner="tl" active={isDragging} />
+        <CornerBracket corner="tr" active={isDragging} />
+        <CornerBracket corner="bl" active={isDragging} />
+        <CornerBracket corner="br" active={isDragging} />
+
         {loading ? (
-          <div className="flex flex-col items-center py-4">
-            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mb-4"></div>
-            <p className="text-gray-600 dark:text-gray-400">Processing card...</p>
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+            <div className="relative">
+              <div className="w-8 h-8 rounded-full border border-white/10" />
+              <div className="absolute inset-0 w-8 h-8 rounded-full border-t border-blue-500 animate-spin" />
+            </div>
+            <p className="text-sm text-[#7a91a8]">Analyzing photos…</p>
           </div>
         ) : previews.length > 0 ? (
-          <div className="flex flex-col items-center gap-3">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-6">
             {maxFiles === 1 ? (
               <img
                 src={previews[0]}
                 alt="Card preview"
-                className="max-h-48 rounded-lg shadow-md"
+                className="max-h-40 rounded-lg shadow-lg ring-1 ring-white/10"
               />
             ) : (
               <>
-                <div className="grid grid-cols-4 gap-2">
+                <div className="flex gap-2">
                   {previews.map((preview, index) => (
                     <div key={`${preview}-${index}`} className="relative">
                       <img
                         src={preview}
                         alt={`Card preview ${index + 1}`}
-                        className={`h-16 w-12 object-cover rounded-md shadow-sm ${
-                          index === 0 ? "ring-2 ring-blue-500" : ""
+                        className={`h-20 w-14 object-cover rounded-md shadow-md ${
+                          index === 0
+                            ? "ring-1 ring-blue-400/60"
+                            : "ring-1 ring-white/10"
                         }`}
                       />
                       {index === 0 ? (
-                        <span className="absolute -top-2 -left-2 rounded-full bg-blue-600 text-white text-[10px] px-1.5 py-0.5">
-                          Primary
+                        <span className="absolute -top-1.5 -left-1.5 rounded-full bg-blue-500 text-white text-[9px] px-1.5 py-0.5 font-medium">
+                          Front
                         </span>
                       ) : null}
                     </div>
                   ))}
                 </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {previews.length}/{maxFiles} photos uploaded. Primary photo is used for identification.
+                <p className="text-xs text-[#7a91a8]">
+                  {previews.length} of {maxFiles} photos ready
                 </p>
               </>
             )}
             <button
               onClick={reset}
-              className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+              className="text-xs text-[#3a5068] hover:text-[#7a91a8] transition-colors"
             >
-              Upload different {maxFiles === 1 ? "image" : "photos"}
+              Upload different photos
             </button>
           </div>
         ) : (
-          <label className={`flex flex-col items-center ${disabled ? "" : "cursor-pointer"}`}>
+          <label className={`absolute inset-0 flex flex-col items-center justify-center gap-3 ${compact ? "p-5" : "p-8"} ${disabled ? "" : "cursor-pointer"}`}>
+            {/* Upload icon */}
             <svg
-              className={`${compact ? "mb-3 h-9 w-9" : "mb-4 h-12 w-12"} text-gray-400`}
+              className={`${compact ? "w-8 h-8" : "w-10 h-10"} text-white/20`}
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
+              aria-hidden="true"
             >
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                strokeWidth={1.5}
-                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                strokeWidth={1.25}
+                d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"
               />
             </svg>
-            <p className={`${compact ? "text-base" : "text-lg"} mb-1 font-medium text-gray-700 dark:text-gray-300`}>
-              Drop your card photos here
+
+            <div className="text-center space-y-1">
+              <p className={`${compact ? "text-sm" : "text-base"} font-medium text-[#e2eaf3]`}>
+                {isDragging ? "Release to scan" : "Upload photos to scan"}
+              </p>
+              <p className="text-xs text-[#3a5068]">
+                or click to select · front + back recommended
+              </p>
+            </div>
+
+            <p className="text-[10px] text-[#3a5068] uppercase tracking-wider">
+              JPG · PNG · WebP &nbsp;·&nbsp; up to 8 MB
             </p>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              or click to select
-            </p>
-            <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
-              JPG, PNG, WebP or GIF up to 8MB each
-            </p>
+
             <input
               type="file"
               accept="image/*"
@@ -345,11 +402,11 @@ export default function CardUploader({
         )}
       </div>
 
-      {error && (
-        <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+      {error ? (
+        <div className="mt-3 p-3 bg-amber-500/5 border border-amber-500/15 rounded-lg">
+          <p className="text-xs text-amber-300">{error}</p>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

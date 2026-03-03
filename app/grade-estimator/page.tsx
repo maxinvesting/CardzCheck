@@ -31,6 +31,7 @@ import type {
   GradeEstimateJobStatusResponse,
   GradeEstimateJobSteps,
 } from "@/lib/grading/gradeEstimateJob";
+import { confidencePillClasses } from "@/theme/tokens";
 
 const HISTORY_CARD_STORAGE_KEY = "gradeEstimateHistoryCard";
 
@@ -158,6 +159,68 @@ function clearStoredHistoryCard(jobId?: string | null) {
   } catch {
     sessionStorage.removeItem(HISTORY_CARD_STORAGE_KEY);
   }
+}
+
+const SCANNER_TIPS = [
+  "Use flat, even lighting — avoid glare, shadows, or direct flash.",
+  "Include both front and back for the most accurate analysis.",
+  "Fill the frame and keep the card sharp — blurry edges reduce confidence.",
+];
+
+// ── Scanner Tips module ────────────────────────────────────────────────────
+function ScannerTips() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="flex items-start gap-3">
+      {/* Icon */}
+      <svg
+        className="w-3.5 h-3.5 mt-0.5 text-[#3a5068] shrink-0"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+        />
+      </svg>
+
+      <div className="flex-1 min-w-0">
+        <button
+          onClick={() => setOpen((prev) => !prev)}
+          className="flex items-center gap-1.5 text-xs text-[#3a5068] hover:text-[#7a91a8] transition-colors group"
+        >
+          <span className="font-medium uppercase tracking-wider">Scanner tips</span>
+          <svg
+            className={`w-3 h-3 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+
+        {open ? (
+          <ul className="mt-2 space-y-1.5">
+            {SCANNER_TIPS.map((tip, i) => (
+              <li key={i} className="flex items-start gap-2 text-xs text-[#7a91a8]">
+                <span className="mt-px text-[#3a5068] shrink-0 font-mono text-[10px]">
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                {tip}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
+    </div>
+  );
 }
 
 export default function GradeEstimatorPage() {
@@ -398,14 +461,14 @@ export default function GradeEstimatorPage() {
               }
         ),
       });
-      
+
       if (!response.ok) {
         const payload = await response.json().catch(() => null);
         const message =
           payload?.reason || payload?.error || gradingCopy.status.estimateFailedFallback;
         throw new Error(message);
       }
-      
+
       const payload = await response.json();
       if (!payload?.jobId) {
         throw new Error(gradingCopy.status.estimateFailedFallback);
@@ -469,15 +532,13 @@ export default function GradeEstimatorPage() {
       const result: WorthGradingResult = await response.json();
       setValueResult(result);
       setValueError(null);
-    } catch (error) {
+    } catch {
       setValueResult(null);
       setValueError(gradingCopy.status.postGradingValueFailed);
     } finally {
       setValueLoading(false);
     }
   }, [gradeEstimate, identifiedCard]);
-
-  // Market analysis is driven by the grade estimate job; manual retry uses fetchValue.
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -667,7 +728,7 @@ export default function GradeEstimatorPage() {
       if (identity.setName) parts.push(identity.setName);
       if (identity.parallel) parts.push(identity.parallel);
       if (parts.length) {
-        return parts.join(" | ");
+        return parts.join(" · ");
       }
     }
 
@@ -677,7 +738,7 @@ export default function GradeEstimatorPage() {
       if (identifiedCard.year) parts.push(identifiedCard.year);
       if (identifiedCard.set_name) parts.push(identifiedCard.set_name);
       if (identifiedCard.parallel_type) parts.push(identifiedCard.parallel_type);
-      return parts.length ? parts.join(" | ") : null;
+      return parts.length ? parts.join(" · ") : null;
     }
 
     return null;
@@ -687,45 +748,29 @@ export default function GradeEstimatorPage() {
     gradeEstimate && gradeJob && gradeJob.status !== "done"
   );
 
+  const confidencePillClass = identifiedCard?.confidence
+    ? (confidencePillClasses[identifiedCard.confidence] ?? confidencePillClasses.medium)
+    : null;
+
   return (
     <AuthenticatedLayout>
-      <main className="max-w-3xl lg:max-w-7xl mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-white">{gradingCopy.page.title}</h1>
-          <p className="text-gray-400 mt-1">{gradingCopy.page.subtitle}</p>
-        </div>
+      <main className="max-w-3xl lg:max-w-5xl mx-auto px-4 py-10">
 
-        {/* Info Card */}
-        <div className="mb-6 p-4 bg-blue-900/20 border border-blue-800/50 rounded-xl">
-          <div className="flex items-start gap-3">
-            <svg
-              className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-            <div className="text-sm text-blue-300">
-              <p className="font-medium mb-1">{gradingCopy.page.howItWorks.title}</p>
-              <ul className="text-blue-400 space-y-1">
-                {gradingCopy.page.howItWorks.steps.map((step, index) => (
-                  <li key={`${step}-${index}`}>{index + 1}. {step}</li>
-                ))}
-              </ul>
-            </div>
-          </div>
+        {/* ── Page header ───────────────────────────────────────────── */}
+        <div className="mb-10">
+          <h1 className="text-2xl font-semibold tracking-tight text-[#e2eaf3]">
+            {gradingCopy.page.title}
+          </h1>
+          <p className="text-sm text-[#3a5068] mt-1.5 leading-relaxed">
+            {gradingCopy.page.subtitle}
+          </p>
         </div>
 
         {!identifiedCard ? (
-          <div className="space-y-6">
-            <div className="bg-gray-800/50 rounded-xl border border-gray-700 p-6">
+          <div className="space-y-8">
+
+            {/* ── Scanner Bay ─────────────────────────────────────── */}
+            <section>
               <CardUploader
                 onIdentified={(data: CardIdentificationResult) => {
                   setIdentifiedCard(data);
@@ -751,30 +796,37 @@ export default function GradeEstimatorPage() {
                 disabled={false}
                 maxFiles={8}
               />
-            </div>
 
+              {/* Scanner Tips — anchored beneath the dropzone */}
+              <div className="mt-4 px-1">
+                <ScannerTips />
+              </div>
+            </section>
+
+            {/* ── Recent Scans ─────────────────────────────────────── */}
             <GradeEstimatorHistoryPanel
               refreshToken={historyRefreshToken}
               onSelect={handleHistorySelect}
             />
 
-            <div className="rounded-xl border border-gray-700 bg-gray-800/50 p-4">
+            {/* ── Submission Builder (collapsed by default) ─────────── */}
+            <div className="rounded-xl border border-white/[0.06] bg-[#07111d] p-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-sm font-semibold text-white">Submission Builder (Optional)</h3>
-                  <p className="text-xs text-gray-400">
-                    Keep the grade analysis workflow primary, then build submissions when needed.
+                  <h3 className="text-sm font-medium text-[#e2eaf3]">Submission Builder</h3>
+                  <p className="text-xs text-[#3a5068] mt-0.5">
+                    Plan PSA submissions after your grade analysis.
                   </p>
                 </div>
                 <button
                   onClick={() => setShowSubmissionBuilder((prev) => !prev)}
-                  className="rounded border border-gray-600 px-3 py-1 text-xs text-gray-200 hover:bg-gray-700"
+                  className="rounded-lg border border-white/[0.08] px-3 py-1.5 text-xs text-[#7a91a8] hover:bg-white/[0.04] hover:text-[#e2eaf3] transition-colors"
                 >
                   {showSubmissionBuilder ? "Hide" : "Show"}
                 </button>
               </div>
               {showSubmissionBuilder ? (
-                <div className="mt-3">
+                <div className="mt-4 pt-4 border-t border-white/[0.06]">
                   <SubmissionBuilderPanel
                     identifiedCard={identifiedCard}
                     gradeEstimate={gradeEstimate}
@@ -785,327 +837,304 @@ export default function GradeEstimatorPage() {
           </div>
         ) : (
           <>
-            <GradeEstimatorHistoryPanel
-              refreshToken={historyRefreshToken}
-              onSelect={handleHistorySelect}
-            />
+            {/* ── Recent Scans (above results) ─────────────────────── */}
+            <div className="mb-8">
+              <GradeEstimatorHistoryPanel
+                refreshToken={historyRefreshToken}
+                onSelect={handleHistorySelect}
+              />
+            </div>
 
             <div className="space-y-6">
-            {/* Identified Card Preview */}
-            <div className="bg-gray-800/50 rounded-xl border border-gray-700 p-6">
-              <div className="flex items-start gap-4">
-                {identifiedCard.imageUrl && (
-                  <div className="flex flex-col items-start">
-                    <img
-                      src={identifiedCard.imageUrl}
-                      alt={identifiedCard.player_name}
-                      className="w-32 h-44 object-cover rounded-lg shadow-md"
-                    />
-                    {identifiedCard.imageUrls && identifiedCard.imageUrls.length > 1 ? (
-                      <div className="mt-3 flex flex-wrap gap-2 max-w-[128px]">
-                        {identifiedCard.imageUrls.slice(1).map((url, index) => (
-                          <img
-                            key={`${url}-${index}`}
-                            src={url}
-                            alt={`${identifiedCard.player_name} preview ${index + 2}`}
-                            className="w-10 h-14 object-cover rounded-md border border-gray-700"
-                          />
-                        ))}
-                      </div>
-                    ) : null}
-                    {identifiedCard.imageUrls && identifiedCard.imageUrls.length > 1 ? (
-                      <p className="mt-2 text-xs text-gray-400">
-                        {identifiedCard.imageUrls.length} photos uploaded
-                      </p>
-                    ) : null}
-                  </div>
-                )}
-                <div className="flex-1">
-                  <h2 className="text-xl font-bold text-white">
-                    {identifiedCard.player_name ?? ""}
-                  </h2>
-                  <div className="mt-1">
-                    <CardIdentitySubtitle
-                      identity={
-                        identifiedCard.cardIdentity ?? (identifiedCard
-                          ? {
-                              year: identifiedCard.year ? Number(identifiedCard.year) : null,
-                              brand: null,
-                              setName: identifiedCard.set_name ?? null,
-                              subset: null,
-                              parallel: identifiedCard.parallel_type ?? null,
-                            }
-                          : null)
-                      }
-                      className="text-gray-400"
-                    />
-                  </div>
-                  {needsYearConfirmation(
-                    identifiedCard.year,
-                    identifiedCard.confidence,
-                    identifiedCard.cardIdentity?.fieldConfidence?.year
-                  ) ? (
-                    <div className="mt-2">
-                      <NeedsConfirmationPill label="Year" />
+              {/* ── Identified Card Preview ───────────────────────── */}
+              <div className="rounded-xl border border-white/[0.06] bg-[#07111d] p-6">
+                <div className="flex items-start gap-5">
+                  {identifiedCard.imageUrl ? (
+                    <div className="shrink-0 flex flex-col items-start gap-2">
+                      <img
+                        src={identifiedCard.imageUrl}
+                        alt={identifiedCard.player_name}
+                        className="w-28 h-40 object-cover rounded-lg ring-1 ring-white/10 shadow-lg"
+                      />
+                      {identifiedCard.imageUrls && identifiedCard.imageUrls.length > 1 ? (
+                        <div className="flex flex-wrap gap-1.5 max-w-[112px]">
+                          {identifiedCard.imageUrls.slice(1).map((url, index) => (
+                            <img
+                              key={`${url}-${index}`}
+                              src={url}
+                              alt={`${identifiedCard.player_name} ${index + 2}`}
+                              className="w-8 h-11 object-cover rounded ring-1 ring-white/[0.08]"
+                            />
+                          ))}
+                        </div>
+                      ) : null}
+                      {identifiedCard.imageUrls && identifiedCard.imageUrls.length > 1 ? (
+                        <p className="text-[10px] text-[#3a5068]">
+                          {identifiedCard.imageUrls.length} photos
+                        </p>
+                      ) : null}
                     </div>
                   ) : null}
 
-                  <div className="mt-3">
-                    <ConfidenceBadge
-                      confidence={identifiedCard.confidence}
-                      fieldConfidence={identifiedCard.cardIdentity?.fieldConfidence}
-                      label={gradingCopy.status.confidenceLabels[identifiedCard.confidence]}
-                    />
-                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h2 className="text-xl font-semibold text-[#e2eaf3] leading-tight">
+                      {identifiedCard.player_name ?? ""}
+                    </h2>
+                    <div className="mt-1">
+                      <CardIdentitySubtitle
+                        identity={
+                          identifiedCard.cardIdentity ?? (identifiedCard
+                            ? {
+                                year: identifiedCard.year ? Number(identifiedCard.year) : null,
+                                brand: null,
+                                setName: identifiedCard.set_name ?? null,
+                                subset: null,
+                                parallel: identifiedCard.parallel_type ?? null,
+                              }
+                            : null)
+                        }
+                        className="text-sm text-[#7a91a8]"
+                      />
+                    </div>
 
-                  {/* Actions */}
-                  <div className="mt-4 flex flex-wrap gap-3">
-                    <button
-                      onClick={handleEstimateGrade}
-                      disabled={estimatingGrade || !!gradeEstimate || !!identifiedCard.grade}
-                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                    >
-                      {estimatingGrade ? (
-                        <>
-                          <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                          </svg>
-                          {gradingCopy.actions.analyzing}
-                        </>
-                      ) : (
-                        <>
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          {gradingCopy.actions.analyze}
-                        </>
-                      )}
-                    </button>
-                    <button
-                      onClick={() => setShowConfirmModal(true)}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors"
-                    >
-                      {gradingCopy.actions.addToCollection}
-                    </button>
-                    <button
-                      onClick={handleReset}
-                      className="px-4 py-2 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-800 font-medium transition-colors"
-                    >
-                      {gradingCopy.actions.uploadNewCard}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Grade Estimate */}
-            {gradeEstimate || gradeJob ? (
-              <div className="space-y-6">
-                {gradeJob ? (
-                  <GradeEstimateProgressPanel
-                    status={gradeJob.status}
-                    steps={gradeJob.steps}
-                    identityLabel={progressIdentityLabel}
-                    errorMessage={gradeJob.status === "error" ? estimateError : null}
-                    elapsedLabel={elapsedLabel}
-                  />
-                ) : null}
-
-                {gradeEstimate ? (
-                  <GradeProbabilityPanel
-                    estimate={gradeEstimate}
-                    cardIdentity={identifiedCard ? {
-                      player_name: identifiedCard.player_name,
-                      year: identifiedCard.year,
-                      set_name: identifiedCard.set_name,
-                      parallel_type: identifiedCard.parallel_type,
-                    } : null}
-                    primaryImageUrl={
-                      identifiedCard?.imageUrl || identifiedCard?.imageUrls?.[0] || null
-                    }
-                    imageUrls={identifiedCard?.imageUrls ?? null}
-                    showPreliminaryBadge={showPreliminaryBadge}
-                  />
-                ) : null}
-
-                {gradeEstimate && (valueLoading || valueResult || valueError) ? (
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="text-xs font-medium text-gray-400 uppercase tracking-wider">
-                        {gradingCopy.valuePanel.marketAnalysisLabel}
+                    {needsYearConfirmation(
+                      identifiedCard.year,
+                      identifiedCard.confidence,
+                      identifiedCard.cardIdentity?.fieldConfidence?.year
+                    ) ? (
+                      <div className="mt-2">
+                        <NeedsConfirmationPill label="Year" />
                       </div>
+                    ) : null}
+
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <ConfidenceBadge
+                        confidence={identifiedCard.confidence}
+                        fieldConfidence={identifiedCard.cardIdentity?.fieldConfidence}
+                        label={gradingCopy.status.confidenceLabels[identifiedCard.confidence]}
+                      />
+                      {confidencePillClass ? (
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide ${confidencePillClass}`}>
+                          {identifiedCard.confidence}
+                        </span>
+                      ) : null}
+                    </div>
+
+                    {/* Actions */}
+                    <div className="mt-5 flex flex-wrap gap-2">
                       <button
-                        onClick={() => setShowMarketAnalysis((prev) => !prev)}
-                        className="text-xs font-medium text-blue-300 hover:text-blue-200 transition-colors"
+                        onClick={handleEstimateGrade}
+                        disabled={estimatingGrade || !!gradeEstimate || !!identifiedCard.grade}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                       >
-                        {showMarketAnalysis
-                          ? gradingCopy.valuePanel.hideMarketImpact
-                          : gradingCopy.valuePanel.showMarketImpact}
+                        {estimatingGrade ? (
+                          <>
+                            <svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                            </svg>
+                            {gradingCopy.actions.analyzing}
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            {gradingCopy.actions.analyze}
+                          </>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => setShowConfirmModal(true)}
+                        className="inline-flex items-center gap-2 px-4 py-2 border border-white/[0.10] text-[#e2eaf3] text-sm font-medium rounded-lg hover:bg-white/[0.04] transition-colors"
+                      >
+                        {gradingCopy.actions.addToCollection}
+                      </button>
+                      <button
+                        onClick={handleReset}
+                        className="inline-flex items-center gap-2 px-4 py-2 text-[#3a5068] text-sm font-medium rounded-lg hover:text-[#7a91a8] transition-colors"
+                      >
+                        {gradingCopy.actions.uploadNewCard}
                       </button>
                     </div>
-                    {showMarketAnalysis ? (
-                      valueError ? (
-                        <div className="space-y-2">
-                          <InlineNotice type="warning">
-                            <p>{valueError}</p>
-                            <button
-                              onClick={fetchValue}
-                              className="mt-2 px-3 py-1.5 text-xs font-medium bg-amber-500/20 text-amber-200 rounded hover:bg-amber-500/30"
-                            >
-                              Retry
-                            </button>
-                          </InlineNotice>
-                        </div>
-                      ) : (
-                        <GradeEstimatorValuePanel
-                          result={
-                            valueResult ?? {
-                              raw: { price: null, n: 0, method: "none" },
-                              psa: {
-                                "10": { price: null, n: 0, method: "none" },
-                                "9": { price: null, n: 0, method: "none" },
-                                "8": { price: null, n: 0, method: "none" },
-                                ev: 0,
-                                netGain: 0,
-                                roi: 0,
-                              },
-                              bgs: {
-                                "9.5": { price: null, n: 0, method: "none" },
-                                "9": { price: null, n: 0, method: "none" },
-                                "8.5": { price: null, n: 0, method: "none" },
-                                ev: 0,
-                                netGain: 0,
-                                roi: 0,
-                              },
-                              bestOption: "none",
-                              rating: "no",
-                              confidence: "low",
-                              explanation: gradingCopy.status.postGradingValueLoading,
-                            }
-                          }
-                          loading={valueLoading}
-                        />
-                      )
-                    ) : null}
                   </div>
-                ) : null}
+                </div>
+              </div>
 
-                {gradeJob?.status === "error" && !gradeEstimate ? (
-                  <div className="bg-amber-900/20 border border-amber-800/50 rounded-xl p-6">
-                    <div className="flex items-center gap-3">
-                      <svg
-                        className="w-6 h-6 text-amber-400"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                        />
-                      </svg>
-                      <div>
-                        <p className="text-amber-300 font-medium">
-                          {gradingCopy.status.estimateUnavailableTitle}
-                        </p>
-                        <p className="text-amber-400/80 text-sm">
-                          {estimateError
-                            ? estimateError
-                            : gradingCopy.status.estimateUnavailableBody}
-                        </p>
+              {/* ── Grade Estimate ────────────────────────────────── */}
+              {gradeEstimate || gradeJob ? (
+                <div className="space-y-6">
+                  {gradeJob ? (
+                    <GradeEstimateProgressPanel
+                      status={gradeJob.status}
+                      steps={gradeJob.steps}
+                      identityLabel={progressIdentityLabel}
+                      errorMessage={gradeJob.status === "error" ? estimateError : null}
+                      elapsedLabel={elapsedLabel}
+                    />
+                  ) : null}
+
+                  {gradeEstimate ? (
+                    <GradeProbabilityPanel
+                      estimate={gradeEstimate}
+                      cardIdentity={identifiedCard ? {
+                        player_name: identifiedCard.player_name,
+                        year: identifiedCard.year,
+                        set_name: identifiedCard.set_name,
+                        parallel_type: identifiedCard.parallel_type,
+                      } : null}
+                      primaryImageUrl={
+                        identifiedCard?.imageUrl || identifiedCard?.imageUrls?.[0] || null
+                      }
+                      imageUrls={identifiedCard?.imageUrls ?? null}
+                      showPreliminaryBadge={showPreliminaryBadge}
+                    />
+                  ) : null}
+
+                  {gradeEstimate && (valueLoading || valueResult || valueError) ? (
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-[10px] font-medium text-[#3a5068] uppercase tracking-wider">
+                          {gradingCopy.valuePanel.marketAnalysisLabel}
+                        </span>
+                        <button
+                          onClick={() => setShowMarketAnalysis((prev) => !prev)}
+                          className="text-xs font-medium text-blue-400 hover:text-blue-300 transition-colors"
+                        >
+                          {showMarketAnalysis
+                            ? gradingCopy.valuePanel.hideMarketImpact
+                            : gradingCopy.valuePanel.showMarketImpact}
+                        </button>
+                      </div>
+                      {showMarketAnalysis ? (
+                        valueError ? (
+                          <div className="space-y-2">
+                            <InlineNotice type="warning">
+                              <p>{valueError}</p>
+                              <button
+                                onClick={fetchValue}
+                                className="mt-2 px-3 py-1.5 text-xs font-medium bg-amber-500/10 text-amber-300 rounded-lg hover:bg-amber-500/15 transition-colors"
+                              >
+                                Retry
+                              </button>
+                            </InlineNotice>
+                          </div>
+                        ) : (
+                          <GradeEstimatorValuePanel
+                            result={
+                              valueResult ?? {
+                                raw: { price: null, n: 0, method: "none" },
+                                psa: {
+                                  "10": { price: null, n: 0, method: "none" },
+                                  "9": { price: null, n: 0, method: "none" },
+                                  "8": { price: null, n: 0, method: "none" },
+                                  ev: 0,
+                                  netGain: 0,
+                                  roi: 0,
+                                },
+                                bgs: {
+                                  "9.5": { price: null, n: 0, method: "none" },
+                                  "9": { price: null, n: 0, method: "none" },
+                                  "8.5": { price: null, n: 0, method: "none" },
+                                  ev: 0,
+                                  netGain: 0,
+                                  roi: 0,
+                                },
+                                bestOption: "none",
+                                rating: "no",
+                                confidence: "low",
+                                explanation: gradingCopy.status.postGradingValueLoading,
+                              }
+                            }
+                            loading={valueLoading}
+                          />
+                        )
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  {gradeJob?.status === "error" && !gradeEstimate ? (
+                    <div className="rounded-xl border border-amber-500/15 bg-amber-500/5 p-5">
+                      <div className="flex items-start gap-3">
+                        <svg className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        <div>
+                          <p className="text-sm font-medium text-amber-300">
+                            {gradingCopy.status.estimateUnavailableTitle}
+                          </p>
+                          <p className="text-xs text-amber-400/70 mt-0.5">
+                            {estimateError || gradingCopy.status.estimateUnavailableBody}
+                          </p>
+                        </div>
                       </div>
                     </div>
+                  ) : null}
+                </div>
+              ) : identifiedCard.grade ? (
+                <div className="rounded-xl border border-white/[0.06] bg-[#07111d] p-5">
+                  <div className="flex items-start gap-3">
+                    <svg className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <div>
+                      <p className="text-sm font-medium text-[#e2eaf3]">
+                        {gradingCopy.status.alreadyGradedTitle}
+                      </p>
+                      <p className="text-xs text-[#7a91a8] mt-0.5">
+                        {gradingCopy.status.alreadyGradedBody(identifiedCard.grade)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : estimateAttempted && !estimatingGrade && !gradeJob ? (
+                <div className="rounded-xl border border-amber-500/15 bg-amber-500/5 p-5">
+                  <div className="flex items-start gap-3">
+                    <svg className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <div>
+                      <p className="text-sm font-medium text-amber-300">
+                        {gradingCopy.status.estimateUnavailableTitle}
+                      </p>
+                      <p className="text-xs text-amber-400/70 mt-0.5">
+                        {estimateError || gradingCopy.status.estimateUnavailableBody}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              {/* ── Submission Builder ────────────────────────────── */}
+              <div className="rounded-xl border border-white/[0.06] bg-[#07111d] p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-medium text-[#e2eaf3]">Submission Builder</h3>
+                    <p className="text-xs text-[#3a5068] mt-0.5">
+                      Plan a PSA submission using this analysis.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowSubmissionBuilder((prev) => !prev)}
+                    className="rounded-lg border border-white/[0.08] px-3 py-1.5 text-xs text-[#7a91a8] hover:bg-white/[0.04] hover:text-[#e2eaf3] transition-colors"
+                  >
+                    {showSubmissionBuilder ? "Hide" : "Show"}
+                  </button>
+                </div>
+                {showSubmissionBuilder ? (
+                  <div className="mt-4 pt-4 border-t border-white/[0.06]">
+                    <SubmissionBuilderPanel
+                      identifiedCard={identifiedCard}
+                      gradeEstimate={gradeEstimate}
+                    />
                   </div>
                 ) : null}
               </div>
-            ) : identifiedCard.grade ? (
-              <div className="bg-gray-800/50 rounded-xl border border-gray-700 p-6">
-                <div className="flex items-center gap-3">
-                  <svg
-                    className="w-6 h-6 text-blue-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
-                  <div>
-                    <p className="text-white font-medium">
-                      {gradingCopy.status.alreadyGradedTitle}
-                    </p>
-                    <p className="text-gray-400 text-sm">
-                      {gradingCopy.status.alreadyGradedBody(identifiedCard.grade)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ) : estimateAttempted && !estimatingGrade && !gradeJob ? (
-              <div className="bg-amber-900/20 border border-amber-800/50 rounded-xl p-6">
-                <div className="flex items-center gap-3">
-                  <svg
-                    className="w-6 h-6 text-amber-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                    />
-                  </svg>
-                  <div>
-                    <p className="text-amber-300 font-medium">
-                      {gradingCopy.status.estimateUnavailableTitle}
-                    </p>
-                    <p className="text-amber-400/80 text-sm">
-                      {estimateError
-                        ? estimateError
-                        : gradingCopy.status.estimateUnavailableBody}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ) : null}
-            </div>
-
-            <div className="rounded-xl border border-gray-700 bg-gray-800/50 p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-sm font-semibold text-white">Submission Builder (Optional)</h3>
-                  <p className="text-xs text-gray-400">
-                    Use this after analysis when you want to plan or track a PSA submission.
-                  </p>
-                </div>
-                <button
-                  onClick={() => setShowSubmissionBuilder((prev) => !prev)}
-                  className="rounded border border-gray-600 px-3 py-1 text-xs text-gray-200 hover:bg-gray-700"
-                >
-                  {showSubmissionBuilder ? "Hide" : "Show"}
-                </button>
-              </div>
-              {showSubmissionBuilder ? (
-                <div className="mt-3">
-                  <SubmissionBuilderPanel
-                    identifiedCard={identifiedCard}
-                    gradeEstimate={gradeEstimate}
-                  />
-                </div>
-              ) : null}
             </div>
           </>
         )}
 
-        {/* Confirm Add Card Modal */}
+        {/* ── Confirm Add Card Modal ─────────────────────────────────── */}
         <ConfirmAddCardModal
           isOpen={showConfirmModal}
           onClose={() => setShowConfirmModal(false)}
@@ -1129,27 +1158,30 @@ export default function GradeEstimatorPage() {
           cardData={identifiedCard}
         />
 
-        {/* Paywall Modal */}
+        {/* ── Paywall Modal ──────────────────────────────────────────── */}
         <PaywallModal
           isOpen={showPaywall}
           onClose={() => setShowPaywall(false)}
           type="collection"
         />
 
-        {/* Toast */}
-        {toast && (
-          <div className="fixed bottom-4 right-4 p-4 rounded-lg shadow-lg z-50 flex items-center gap-3 bg-green-600 text-white">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        {/* ── Toast ─────────────────────────────────────────────────── */}
+        {toast ? (
+          <div className="fixed bottom-5 right-5 flex items-center gap-3 px-4 py-3 rounded-xl shadow-xl bg-[#0f1f35] border border-emerald-500/20 text-[#e2eaf3] z-50">
+            <svg className="w-4 h-4 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
-            <span>{toast.message}</span>
-            <button onClick={() => setToast(null)} className="ml-2 hover:opacity-75">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <span className="text-sm">{toast.message}</span>
+            <button
+              onClick={() => setToast(null)}
+              className="ml-1 text-[#3a5068] hover:text-[#7a91a8] transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
-        )}
+        ) : null}
       </main>
     </AuthenticatedLayout>
   );
