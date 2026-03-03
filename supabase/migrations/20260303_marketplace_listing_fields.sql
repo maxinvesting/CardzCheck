@@ -9,12 +9,13 @@ ALTER TABLE IF EXISTS public.shop_listings
 
 DO $$
 BEGIN
-  IF NOT EXISTS (
-    SELECT 1
-    FROM pg_constraint
-    WHERE conname = 'shop_listings_condition_check'
-      AND conrelid = 'public.shop_listings'::regclass
-  ) THEN
+  IF to_regclass('public.shop_listings') IS NOT NULL
+     AND NOT EXISTS (
+       SELECT 1
+       FROM pg_constraint
+       WHERE conname = 'shop_listings_condition_check'
+         AND conrelid = 'public.shop_listings'::regclass
+     ) THEN
     ALTER TABLE public.shop_listings
       ADD CONSTRAINT shop_listings_condition_check
       CHECK (condition IN ('raw', 'graded', 'sealed'));
@@ -23,12 +24,13 @@ END $$;
 
 DO $$
 BEGIN
-  IF NOT EXISTS (
-    SELECT 1
-    FROM pg_constraint
-    WHERE conname = 'shop_listings_publish_state_check'
-      AND conrelid = 'public.shop_listings'::regclass
-  ) THEN
+  IF to_regclass('public.shop_listings') IS NOT NULL
+     AND NOT EXISTS (
+       SELECT 1
+       FROM pg_constraint
+       WHERE conname = 'shop_listings_publish_state_check'
+         AND conrelid = 'public.shop_listings'::regclass
+     ) THEN
     ALTER TABLE public.shop_listings
       ADD CONSTRAINT shop_listings_publish_state_check
       CHECK (publish_state IN ('draft', 'published'));

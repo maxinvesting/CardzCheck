@@ -189,6 +189,33 @@ export default function BusinessDashboardView({
         </div>
       )}
 
+      {/* Grade Probability Engine feature banner */}
+      {!needsMigration && (
+        <div className="rounded-lg border border-amber-700/40 bg-amber-900/20 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 shrink-0 w-8 h-8 rounded-md bg-amber-500/20 flex items-center justify-center">
+              <svg className="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-amber-300">
+                Grade your cards before you sell
+              </p>
+              <p className="text-xs text-amber-200/60 mt-0.5">
+                Instantly estimate grade probability and know if submitting to PSA/BGS is worth it — before you pay.
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/business/grade-probability"
+            className="shrink-0 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-gray-900 font-semibold text-xs rounded-md transition-colors whitespace-nowrap"
+          >
+            Try Grade Probability Engine →
+          </Link>
+        </div>
+      )}
+
       {/* At a Glance — 2-column grid on desktop */}
       {!needsMigration && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -370,13 +397,13 @@ export default function BusinessDashboardView({
                   </Link>
                 )}
                 <Link
-                  href="/business/consultant"
-                  className="flex items-center gap-2 px-3 py-2.5 border border-gray-700 text-gray-300 hover:bg-gray-800 rounded-md transition-colors text-xs font-medium"
+                  href="/business/grade-probability"
+                  className="flex items-center gap-2 px-3 py-2.5 bg-amber-600/20 border border-amber-700/40 text-amber-300 hover:bg-amber-600/30 rounded-md transition-colors text-xs font-medium"
                 >
                   <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
                   </svg>
-                  AI Consultant
+                  Grade Probability
                 </Link>
               </div>
             </PanelCard>

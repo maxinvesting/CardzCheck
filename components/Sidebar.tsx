@@ -144,9 +144,9 @@ function PERSONAL_NAV_ITEMS(): NavItem[] {
   return [
     { name: "Dashboard", href: "/dashboard", icon: <HomeIcon />, exact: true },
     { name: "Collection", href: "/collection", icon: <CollectionIcon /> },
+    { name: "Grade Probability Engine", href: "/grade-probability", icon: <BadgeIcon />, badge: "Featured" },
     { name: "Watchlist", href: "/watchlist", icon: <EyeIcon />, isPro: true, badge: "Pro" },
     { name: "Comps", href: "/comps", icon: <ChartIcon />, badge: "Beta" },
-    { name: "Grade Probability Engine", href: "/grade-probability", icon: <BadgeIcon /> },
     { name: "CardzCheck Analyst", href: "/analyst", icon: <AnalystIcon />, isPro: true, badge: "Pro" },
     { name: "Marketplace", href: "/shop", icon: <ShopIcon /> },
     { name: "Settings", href: "/settings", icon: <SettingsIcon /> },
@@ -157,12 +157,8 @@ function BUSINESS_NAV_ITEMS(): NavItem[] {
   return [
     { name: "Dashboard", href: "/business", icon: <HomeIcon />, exact: true },
     { name: "Ledger", href: "/business/ledger", icon: <LedgerIcon /> },
+    { name: "Grade Probability Engine", href: "/business/grade-probability", icon: <BadgeIcon />, badge: "Featured" },
     { name: "Comps", href: "/business/comps", icon: <ChartIcon />, badge: "Beta" },
-    {
-      name: "Grade Probability Engine",
-      href: "/business/grade-probability",
-      icon: <BadgeIcon />,
-    },
     { name: "Business Consultant", href: "/business/consultant", icon: <AnalystIcon /> },
     { name: "Marketplace", href: "/shop", icon: <ShopIcon /> },
     { name: "Settings", href: "/business/settings", icon: <SettingsIcon /> },
@@ -279,7 +275,11 @@ export default function Sidebar() {
                 {item.icon}
                 <span className="font-medium">{item.name}</span>
                 {item.badge && !isProFeature && (
-                  <span className="ml-auto px-1.5 py-0.5 bg-blue-500/20 text-blue-400 text-xs font-medium rounded">
+                  <span className={`ml-auto px-1.5 py-0.5 text-xs font-medium rounded ${
+                    item.badge === "Featured"
+                      ? "bg-amber-500/20 text-amber-400"
+                      : "bg-blue-500/20 text-blue-400"
+                  }`}>
                     {item.badge}
                   </span>
                 )}
