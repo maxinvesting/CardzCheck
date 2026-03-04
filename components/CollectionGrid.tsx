@@ -124,7 +124,7 @@ function CardItem({ item, onDelete }: CardItemProps) {
             e.stopPropagation();
             setShowDeleteConfirm(true);
           }}
-          className="absolute top-2 right-2 p-1.5 bg-white/90 dark:bg-gray-900/90 rounded-full text-gray-400 hover:text-red-500 transition-colors"
+          className="absolute top-2 right-2 p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center bg-white/90 dark:bg-gray-900/90 rounded-full text-gray-400 hover:text-red-500 transition-colors"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -174,14 +174,14 @@ function CardItem({ item, onDelete }: CardItemProps) {
           )}
           <div className="flex justify-between text-sm">
             <span className="text-gray-500 dark:text-gray-400">
-              {quantity > 1 ? "CMV Total (Beta)" : "CMV (Beta)"}
+              {quantity > 1 ? "Est. Market Value Total" : "Est. Market Value"}
             </span>
             <span className="font-medium text-gray-900 dark:text-white">
               {cmv !== null
                 ? formatCurrency(cmv)
                 : isRecentlyAdded && item.cmv_confidence !== "unavailable"
                 ? "Calculating..."
-                : "CMV (Beta) unavailable"}
+                : "Est. Market Value unavailable"}
             </span>
           </div>
           {cmv === null && (
@@ -226,7 +226,7 @@ function CardItem({ item, onDelete }: CardItemProps) {
             <div className="flex gap-3 mt-6">
               <button
                 onClick={() => setShowDeleteConfirm(false)}
-                className="flex-1 py-2 px-4 border border-gray-300 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+                className="flex-1 py-2.5 px-4 min-h-[44px] border border-gray-300 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
               >
                 Cancel
               </button>
@@ -235,7 +235,7 @@ function CardItem({ item, onDelete }: CardItemProps) {
                   onDelete();
                   setShowDeleteConfirm(false);
                 }}
-                className="flex-1 py-2 px-4 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                className="flex-1 py-2.5 px-4 min-h-[44px] bg-red-600 text-white rounded-lg hover:bg-red-700"
               >
                 Remove
               </button>
@@ -277,7 +277,7 @@ export default function CollectionGrid({ items, onDelete, onRefresh }: Collectio
   return (
     <div>
       {/* Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {items.map((item) => (
           <CardItem
             key={item.id}

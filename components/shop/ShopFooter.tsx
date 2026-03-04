@@ -38,7 +38,7 @@ export default function ShopFooter() {
               CardzCheck
             </h4>
             <p className="text-sm text-slate-600">
-              Powered by CardzCheck CMV with transparent pricing context from real comps.
+              Powered by CardzCheck Est. Market Value with transparent pricing context from real listings.
             </p>
             <Link
               href="/comps"

@@ -147,7 +147,7 @@ export default function Home() {
                 </span>
               </h3>
               <p className="text-gray-600 dark:text-gray-400">
-                See actual eBay sold prices. Get the CMV (Current Market Value) (Beta) based on recent sales.
+                See actual eBay listing prices. Get the Est. Market Value based on active listings.
               </p>
             </div>
 

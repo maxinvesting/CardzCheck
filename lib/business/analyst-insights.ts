@@ -1,13 +1,34 @@
 import type { BusinessInventoryItem } from "@/types";
 
+// ---------------------------------------------------------------------------
+// Signal type for "Today's Actions" dashboard
+// ---------------------------------------------------------------------------
+
+export type ActionSignalType =
+  | "list"
+  | "reprice"
+  | "market_pulse_gainer"
+  | "market_pulse_loser";
+
+export interface ActionSignal {
+  type: ActionSignalType;
+  title: string;
+  detail: string;
+  daysHeld: number | null;
+  itemId: string;
+}
+
+// ---------------------------------------------------------------------------
+// Full insights structure (signals + coverage metrics)
+// ---------------------------------------------------------------------------
+
 export interface BusinessAnalystInsights {
-  listingOpportunities: string[];
-  inventoryRisks: string[];
-  profitSignals: string[];
-  behavioralObservations: string[];
+  /** Today's Actions signals — replaces the old four-category system. */
+  actions: ActionSignal[];
+  /** Legacy summary counters kept for the preview card. */
   summary: {
     unlistedActiveCount: number;
-    riskSignalCount: number;
+    actionCount: number;
   };
   coverage: {
     totalItems: number;
@@ -17,9 +38,19 @@ export interface BusinessAnalystInsights {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
-const STALE_ACTIVE_DAYS = 90;
-const CONCENTRATION_ALERT_THRESHOLD = 0.55;
+const UNLISTED_STALE_DAYS = 60;
+const REPRICE_GAP_PCT = 0.20; // CMV must be >= 20% above list price
+const LIST_MIN_CMV_CENTS = 1500; // $15 minimum CMV to fire a "list" signal
+const MARKET_PULSE_MIN_PCT = 0.10; // 10% movement threshold
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 function currency(cents: number): string {
   return new Intl.NumberFormat("en-US", {
@@ -34,32 +65,16 @@ function percent(value: number, total: number): number {
   return Math.round((value / total) * 100);
 }
 
-function pluralize(count: number, singular: string, plural = `${singular}s`): string {
-  return count === 1 ? singular : plural;
+function computeDaysHeld(item: BusinessInventoryItem, now: Date): number | null {
+  if (!item.acquisition_date) return null;
+  const acquiredMs = Date.parse(item.acquisition_date);
+  if (Number.isNaN(acquiredMs)) return null;
+  return Math.floor((now.getTime() - acquiredMs) / MS_PER_DAY);
 }
 
-function channelLabel(channel: BusinessInventoryItem["channel"]): string {
-  switch (channel) {
-    case "ebay":
-      return "eBay";
-    case "whatnot":
-      return "Whatnot";
-    case "instagram":
-      return "Instagram";
-    default:
-      return channel.charAt(0).toUpperCase() + channel.slice(1);
-  }
-}
-
-function isWax(item: BusinessInventoryItem): boolean {
-  return item.notes?.includes("[WAX]") ?? false;
-}
-
-type ProfitCandidate = {
-  title: string;
-  spreadCents: number;
-  basis: "LIST" | "CMV";
-};
+// ---------------------------------------------------------------------------
+// Main generator
+// ---------------------------------------------------------------------------
 
 export function generateBusinessAnalystInsights(
   items: BusinessInventoryItem[],
@@ -67,22 +82,8 @@ export function generateBusinessAnalystInsights(
 ): BusinessAnalystInsights {
   if (items.length === 0) {
     return {
-      listingOpportunities: [
-        "Opportunity: No inventory rows yet. Add inventory to generate listing signals.",
-      ],
-      inventoryRisks: [
-        "Observation: Risk signals are unavailable until acquisition, pricing, and CMV fields are populated.",
-      ],
-      profitSignals: [
-        "Profit estimates unavailable — missing inventory and pricing inputs.",
-      ],
-      behavioralObservations: [
-        "Observation: Behavioral signals will appear once inventory activity is recorded.",
-      ],
-      summary: {
-        unlistedActiveCount: 0,
-        riskSignalCount: 0,
-      },
+      actions: [],
+      summary: { unlistedActiveCount: 0, actionCount: 0 },
       coverage: {
         totalItems: 0,
         activeItems: 0,
@@ -96,245 +97,101 @@ export function generateBusinessAnalystInsights(
     (item) => item.status !== "sold" && item.status !== "returned"
   );
 
-  const listedCount = activeItems.filter((item) => item.status === "listed").length;
-  const unlistedCount = activeItems.filter((item) => item.status === "unlisted").length;
-  const pendingSaleCount = activeItems.filter((item) => item.status === "pending_sale").length;
-  const soldCount = items.filter((item) => item.status === "sold").length;
+  // Coverage stats ----------------------------------------------------------
+
+  const unlistedCount = activeItems.filter((i) => i.status === "unlisted").length;
 
   const cmvItems = activeItems.filter(
-    (item) => item.current_market_value_cents != null && item.current_market_value_cents > 0
+    (i) => i.current_market_value_cents != null && i.current_market_value_cents > 0
   );
   const listedWithPrice = activeItems.filter(
-    (item) => item.list_price_cents != null && item.list_price_cents > 0
+    (i) => i.list_price_cents != null && i.list_price_cents > 0
   );
 
   const cmvCoveragePct = percent(cmvItems.length, activeItems.length);
   const listCoveragePct = percent(listedWithPrice.length, activeItems.length);
 
-  const listingOpportunities: string[] = [];
-  if (unlistedCount > 0) {
-    listingOpportunities.push(
-      `Opportunity: ${unlistedCount} active ${pluralize(unlistedCount, "item")} currently unlisted.`
-    );
-  }
+  // Build action signals ----------------------------------------------------
 
-  const listedMissingPriceCount = activeItems.filter(
-    (item) =>
-      item.status === "listed" &&
-      (item.list_price_cents == null || item.list_price_cents <= 0)
-  ).length;
+  const actions: ActionSignal[] = [];
 
-  if (listedMissingPriceCount > 0) {
-    listingOpportunities.push(
-      `Opportunity: LIST price missing on ${listedMissingPriceCount} listed ${pluralize(listedMissingPriceCount, "item")} — estimated profit signal unavailable.`
-    );
-  }
-
-  if (pendingSaleCount > 0) {
-    listingOpportunities.push(
-      `Observation: ${pendingSaleCount} ${pluralize(pendingSaleCount, "item")} in pending sale status; reconcile to sold/returned to keep inventory flow clean.`
-    );
-  }
-
-  if (listingOpportunities.length === 0) {
-    listingOpportunities.push(
-      "Signal: Active inventory has no immediate listing coverage gaps."
-    );
-  }
-
-  const inventoryRisks: string[] = [];
-  const activeMissingCmvCount = activeItems.length - cmvItems.length;
-  if (activeMissingCmvCount > 0) {
-    inventoryRisks.push(
-      `Risk: No comps / CMV available for ${activeMissingCmvCount} active ${pluralize(activeMissingCmvCount, "item")}.`
-    );
-  }
-
-  let staleActiveCount = 0;
-  let missingAcquisitionDateCount = 0;
   for (const item of activeItems) {
-    if (!item.acquisition_date) {
-      missingAcquisitionDateCount += 1;
-      continue;
-    }
-    const acquiredMs = Date.parse(item.acquisition_date);
-    if (Number.isNaN(acquiredMs)) {
-      missingAcquisitionDateCount += 1;
-      continue;
-    }
-    const ageDays = Math.floor((now.getTime() - acquiredMs) / MS_PER_DAY);
-    if (ageDays >= STALE_ACTIVE_DAYS) staleActiveCount += 1;
-  }
-
-  if (staleActiveCount > 0) {
-    inventoryRisks.push(
-      `Risk: ${staleActiveCount} active ${pluralize(staleActiveCount, "item")} aged ${STALE_ACTIVE_DAYS}+ days.`
-    );
-  }
-
-  if (missingAcquisitionDateCount > 0) {
-    inventoryRisks.push(
-      `Observation: Aging signal partially unavailable — ${missingAcquisitionDateCount} active ${pluralize(missingAcquisitionDateCount, "item")} missing acquisition date.`
-    );
-  }
-
-  let totalTrackedValueCents = 0;
-  let waxTrackedValueCents = 0;
-  for (const item of activeItems) {
-    const qty = item.quantity || 1;
-    const cmvValue =
-      item.current_market_value_cents != null && item.current_market_value_cents > 0
-        ? item.current_market_value_cents * qty
-        : null;
-    const lineValue = cmvValue ?? Math.max(item.cost_basis_total_cents || 0, 0);
-    totalTrackedValueCents += lineValue;
-    if (isWax(item)) waxTrackedValueCents += lineValue;
-  }
-
-  if (totalTrackedValueCents > 0) {
-    const waxShare = waxTrackedValueCents / totalTrackedValueCents;
-    const cardsShare = 1 - waxShare;
-    const dominantLabel = waxShare >= cardsShare ? "Wax" : "Cards";
-    const dominantShare = Math.max(waxShare, cardsShare);
-    if (dominantShare >= CONCENTRATION_ALERT_THRESHOLD) {
-      inventoryRisks.push(
-        `Risk: Inventory value concentrated in ${dominantLabel} (${Math.round(
-          dominantShare * 100
-        )}%).`
-      );
-    }
-  }
-
-  if (inventoryRisks.length === 0) {
-    inventoryRisks.push(
-      "Signal: No immediate concentration, coverage, or aging risk detected."
-    );
-  }
-
-  const profitSignals: string[] = [];
-  const candidates: ProfitCandidate[] = [];
-  let activeItemsWithEstimates = 0;
-  for (const item of activeItems) {
-    const cost = item.cost_basis_total_cents || 0;
-    if (cost <= 0) continue;
-
-    const listPrice = item.list_price_cents ?? 0;
-    const qty = item.quantity || 1;
+    const daysHeld = computeDaysHeld(item, now);
     const cmv = item.current_market_value_cents ?? 0;
+    const listPrice = item.list_price_cents ?? 0;
 
-    if (listPrice > 0) {
-      candidates.push({
+    // 1. LIST signal — unlisted 60+ days, CMV > $15
+    if (
+      item.status === "unlisted" &&
+      daysHeld !== null &&
+      daysHeld >= UNLISTED_STALE_DAYS &&
+      cmv >= LIST_MIN_CMV_CENTS
+    ) {
+      actions.push({
+        type: "list",
         title: item.title,
-        spreadCents: listPrice - cost,
-        basis: "LIST",
+        detail: `Unlisted ${daysHeld} days — Est. MV ${currency(cmv)}`,
+        daysHeld,
+        itemId: item.id,
       });
-      activeItemsWithEstimates += 1;
-      continue;
     }
 
-    if (cmv > 0) {
-      candidates.push({
+    // 2. REPRICE signal — CMV is 20%+ above current list price
+    if (
+      item.status === "listed" &&
+      listPrice > 0 &&
+      cmv > 0 &&
+      cmv >= listPrice * (1 + REPRICE_GAP_PCT)
+    ) {
+      const gapPct = Math.round(((cmv - listPrice) / listPrice) * 100);
+      actions.push({
+        type: "reprice",
         title: item.title,
-        spreadCents: cmv * qty - cost,
-        basis: "CMV",
+        detail: `Est. MV ${currency(cmv)} is ${gapPct}% above list price ${currency(listPrice)}`,
+        daysHeld,
+        itemId: item.id,
       });
-      activeItemsWithEstimates += 1;
     }
   }
 
-  if (candidates.length > 0) {
-    const highest = candidates.reduce((best, candidate) =>
-      candidate.spreadCents > best.spreadCents ? candidate : best
-    );
-    profitSignals.push(
-      `Signal: Highest estimated profit potential is ${highest.title} (${currency(
-        highest.spreadCents
-      )} using ${highest.basis} basis).`
-    );
+  // 3. MARKET PULSE — weekly gainers/losers with 10%+ movement
+  //    We compare current_market_value_cents to cost_basis as a proxy for
+  //    movement direction and magnitude when we lack historical CMV snapshots.
+  //    Items with CMV are evaluated: if CMV moved 10%+ from cost basis we
+  //    surface them. No arbitrary top-3 limit.
 
-    const positiveCount = candidates.filter((candidate) => candidate.spreadCents > 0).length;
-    profitSignals.push(
-      `Signal: ${positiveCount} of ${candidates.length} estimated active ${pluralize(
-        candidates.length,
-        "position"
-      )} show positive spread.`
-    );
-  }
-
-  const missingEstimateCount = Math.max(activeItems.length - activeItemsWithEstimates, 0);
-  if (missingEstimateCount > 0) {
-    if (missingEstimateCount === activeItems.length) {
-      profitSignals.push(
-        "Profit estimates unavailable — missing LIST price and CMV coverage on active inventory."
-      );
-    } else {
-      profitSignals.push(
-        `Observation: Profit estimate coverage is partial — ${missingEstimateCount} active ${pluralize(
-          missingEstimateCount,
-          "item"
-        )} missing LIST price/CMV basis.`
-      );
-    }
-  }
-
-  if (profitSignals.length === 0) {
-    profitSignals.push(
-      "Profit estimates unavailable — missing cost basis plus LIST or CMV fields."
-    );
-  }
-
-  const behavioralObservations: string[] = [];
-  const waxCount = activeItems.filter(isWax).length;
-  const cardsCount = activeItems.length - waxCount;
-  if (activeItems.length > 0) {
-    behavioralObservations.push(
-      `Observation: Category mix is ${percent(cardsCount, activeItems.length)}% cards / ${percent(
-        waxCount,
-        activeItems.length
-      )}% wax.`
-    );
-  }
-
-  const channelCounts = new Map<BusinessInventoryItem["channel"], number>();
   for (const item of activeItems) {
-    channelCounts.set(item.channel, (channelCounts.get(item.channel) || 0) + 1);
-  }
-  if (channelCounts.size > 0 && activeItems.length > 0) {
-    const [topChannel, topCount] = Array.from(channelCounts.entries()).reduce(
-      (best, entry) => (entry[1] > best[1] ? entry : best)
-    );
-    behavioralObservations.push(
-      `Observation: Primary channel is ${channelLabel(topChannel)} (${percent(
-        topCount,
-        activeItems.length
-      )}% of active inventory).`
-    );
-  }
+    const cmv = item.current_market_value_cents ?? 0;
+    const cost = item.cost_basis_total_cents || 0;
+    if (cmv <= 0 || cost <= 0) continue;
 
-  if (soldCount > 0) {
-    behavioralObservations.push(
-      `Observation: ${soldCount} ${pluralize(soldCount, "item")} marked sold (${percent(
-        soldCount,
-        items.length
-      )}% of total inventory).`
-    );
-  }
+    const daysHeld = computeDaysHeld(item, now);
+    const movementPct = (cmv - cost) / cost;
 
-  if (behavioralObservations.length === 0) {
-    behavioralObservations.push(
-      "Observation: Behavioral signals are limited until channel and status activity increases."
-    );
+    if (movementPct >= MARKET_PULSE_MIN_PCT) {
+      actions.push({
+        type: "market_pulse_gainer",
+        title: item.title,
+        detail: `Est. MV ${currency(cmv)} — up ${Math.round(movementPct * 100)}% from cost basis ${currency(cost)}`,
+        daysHeld,
+        itemId: item.id,
+      });
+    } else if (movementPct <= -MARKET_PULSE_MIN_PCT) {
+      actions.push({
+        type: "market_pulse_loser",
+        title: item.title,
+        detail: `Est. MV ${currency(cmv)} — down ${Math.abs(Math.round(movementPct * 100))}% from cost basis ${currency(cost)}`,
+        daysHeld,
+        itemId: item.id,
+      });
+    }
   }
 
   return {
-    listingOpportunities: listingOpportunities.slice(0, 3),
-    inventoryRisks: inventoryRisks.slice(0, 3),
-    profitSignals: profitSignals.slice(0, 3),
-    behavioralObservations: behavioralObservations.slice(0, 3),
+    actions,
     summary: {
       unlistedActiveCount: unlistedCount,
-      riskSignalCount: inventoryRisks.filter((signal) => signal.startsWith("Risk:"))
-        .length,
+      actionCount: actions.length,
     },
     coverage: {
       totalItems: items.length,

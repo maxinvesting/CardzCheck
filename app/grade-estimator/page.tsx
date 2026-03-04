@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
-import CardUploader from "@/components/CardUploader";
+import DualCardUploader from "@/components/DualCardUploader";
 import GradeProbabilityPanel from "@/components/grading/GradeProbabilityPanel";
 import GradeEstimateProgressPanel from "@/components/grading/GradeEstimateProgressPanel";
 import GradeEstimatorValuePanel from "@/components/GradeEstimatorValuePanel";
 import GradeEstimatorHistoryPanel from "@/components/grading/GradeEstimatorHistoryPanel";
 import SubmissionBuilderPanel from "@/components/grading/SubmissionBuilderPanel";
+import GradeDecisionPanel from "@/components/grading/GradeDecisionPanel";
 import ConfirmAddCardModal from "@/components/ConfirmAddCardModal";
 import PaywallModal from "@/components/PaywallModal";
 import { gradingCopy } from "@/copy/grading";
@@ -769,9 +770,9 @@ export default function GradeEstimatorPage() {
         {!identifiedCard ? (
           <div className="space-y-8">
 
-            {/* ── Scanner Bay ─────────────────────────────────────── */}
+            {/* ── Scanner Bay (Dual Upload: Front + Back Required) ── */}
             <section>
-              <CardUploader
+              <DualCardUploader
                 onIdentified={(data: CardIdentificationResult) => {
                   setIdentifiedCard(data);
                 }}
@@ -794,7 +795,6 @@ export default function GradeEstimatorPage() {
                   setGradeJobId(null);
                 }}
                 disabled={false}
-                maxFiles={8}
               />
 
               {/* Scanner Tips — anchored beneath the dropzone */}
@@ -1051,6 +1051,17 @@ export default function GradeEstimatorPage() {
                         )
                       ) : null}
                     </div>
+                  ) : null}
+
+                  {/* ── Connected "What should I do?" Decision Panel ── */}
+                  {gradeEstimate && gradeJob?.status === "done" && identifiedCard ? (
+                    <GradeDecisionPanel
+                      estimate={gradeEstimate}
+                      valueResult={valueResult}
+                      identifiedCard={identifiedCard}
+                      onAddToCollection={() => setShowConfirmModal(true)}
+                      onAddToInventory={() => setShowConfirmModal(true)}
+                    />
                   ) : null}
 
                   {gradeJob?.status === "error" && !gradeEstimate ? (

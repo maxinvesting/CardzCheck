@@ -126,7 +126,7 @@ export default function FeaturedSearchCard({
         <div className="flex items-center gap-2 flex-shrink-0">
           {cmv !== null && (
             <span className="text-base font-bold text-blue-400">
-              {formatPrice(cmv)} CMV (Beta)
+              {formatPrice(cmv)} Est. MV
             </span>
           )}
           <svg
@@ -148,7 +148,7 @@ export default function FeaturedSearchCard({
             {cmv !== null && (
               <div className="p-4 bg-gray-900/50 rounded-xl">
                 <h3 className="text-sm font-medium text-gray-400 mb-2">
-                  CMV model ({modeled?.method === "sold_median" ? "sold median" : "listing-adjusted"})
+                  Est. Market Value ({modeled?.method === "sold_median" ? "sold median" : "listing-adjusted"})
                 </h3>
                 <div className="flex flex-wrap items-baseline gap-3">
                   <span className="text-2xl font-bold text-white">
@@ -161,7 +161,7 @@ export default function FeaturedSearchCard({
                       : formatPrice(cmv)}
                   </span>
                   <span className="text-sm text-gray-500">
-                    CMV (Beta) {formatPrice(cmv)} · {modeled?.listingCount ?? est?.marketAsk?.count ?? 0} listings
+                    Est. MV {formatPrice(cmv)} · {modeled?.listingCount ?? est?.marketAsk?.count ?? 0} listings
                   </span>
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
@@ -184,7 +184,7 @@ export default function FeaturedSearchCard({
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={(e) => e.stopPropagation()}
-                        className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-800/60 text-left"
+                        className="flex items-center gap-3 p-2 min-h-[44px] rounded-lg hover:bg-gray-800/60 text-left"
                       >
                         {item.image && (
                           <img
@@ -224,7 +224,7 @@ export default function FeaturedSearchCard({
                     type="button"
                     onClick={handleWatch}
                     disabled={watchLoading}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="inline-flex items-center gap-2 px-4 py-2.5 min-h-[44px] rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {watchLoading ? (
                       <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />

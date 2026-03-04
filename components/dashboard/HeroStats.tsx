@@ -115,7 +115,7 @@ export default function HeroStats({ items, loading, onSearch }: HeroStatsProps) 
           {/* Advanced filters link */}
           <Link
             href="/comps"
-            className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
+            className="inline-flex items-center text-xs text-gray-500 hover:text-gray-300 transition-colors min-h-[44px]"
           >
             Advanced filters →
           </Link>
@@ -142,12 +142,12 @@ export default function HeroStats({ items, loading, onSearch }: HeroStatsProps) 
             {/* Trend indicator placeholder */}
             <div className="flex items-center gap-1.5 mt-2">
               {summary.cardsWithCmv > 0 ? (
-                <span className="text-xs text-gray-500">
-                  Based on estimated CMV (Beta) (comps)
+                <span className="text-xs text-gray-500" title="Based on active eBay listings. Actual sold prices may differ.">
+                  Based on Est. Market Value (comps)
                 </span>
               ) : (
                 <span className="text-xs text-gray-500">
-                  Collection value is CMV (Beta) only — add comps for estimates
+                  Collection value requires comps — add comps for estimates
                 </span>
               )}
             </div>

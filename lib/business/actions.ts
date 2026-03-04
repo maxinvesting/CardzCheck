@@ -625,13 +625,6 @@ function buildComputedSalePayload(args: {
     notes: base.notes?.trim() || null,
     external_order_id: base.external_order_id?.trim() || null,
     is_deleted: false,
-    // Legacy columns retained for compatibility with historical schema/exports.
-    sale_date: soldAt.slice(0, 10),
-    sale_price_cents: soldPriceCents,
-    shipping_paid_cents: shippingCostCents,
-    other_costs_cents: taxCents,
-    net_proceeds_cents: netPayoutCents,
-    order_id: base.external_order_id?.trim() || null,
   };
 }
 
@@ -869,6 +862,42 @@ export async function deleteSale(userId: string, saleId: string): Promise<void> 
 // METRICS
 // =============================================
 
+/**
+ * Aggregate sales KPIs for a date range using a direct query.
+ * Used as the primary computation method (avoids dependency on an RPC function
+ * that may not be deployed yet).
+ */
+async function aggregateSalesKpis(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  businessId: string,
+  from: string,
+  to: string
+): Promise<{ revenue_cents: number; profit_cents: number; sales_count: number }> {
+  const { data, error } = await supabase
+    .from("business_sales")
+    .select("sold_price_cents, shipping_charged_cents, profit_cents")
+    .eq("business_id", businessId)
+    .eq("is_deleted", false)
+    .gte("sold_at", from)
+    .lt("sold_at", to);
+
+  if (error) throw error;
+
+  const rows = data ?? [];
+  let revenueCents = 0;
+  let profitCents = 0;
+  for (const row of rows) {
+    revenueCents += toInt(row.sold_price_cents) + toInt(row.shipping_charged_cents);
+    profitCents += toInt(row.profit_cents);
+  }
+
+  return {
+    revenue_cents: revenueCents,
+    profit_cents: profitCents,
+    sales_count: rows.length,
+  };
+}
+
 export async function getBusinessMetrics(userId: string): Promise<BusinessMetrics> {
   await requireBusinessAccess(userId);
   const supabase = await createClient();
@@ -878,32 +907,37 @@ export async function getBusinessMetrics(userId: string): Promise<BusinessMetric
   const yearStart = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
   const rangeEnd = new Date(now.getTime() + 1000);
 
-  const [mtdAgg, ytdAgg] = await Promise.all([
-    supabase.rpc("get_business_kpis_agg", {
-      p_business_id: userId,
-      p_from: monthStart.toISOString(),
-      p_to: rangeEnd.toISOString(),
-    }),
-    supabase.rpc("get_business_kpis_agg", {
-      p_business_id: userId,
-      p_from: yearStart.toISOString(),
-      p_to: rangeEnd.toISOString(),
-    }),
-  ]);
+  type KpiRow = { revenue_cents: number; profit_cents: number; sales_count: number };
+  let mtd: KpiRow;
+  let ytd: KpiRow;
 
-  if (mtdAgg.error) throw mtdAgg.error;
-  if (ytdAgg.error) throw ytdAgg.error;
+  // Try the dedicated RPC first; fall back to a direct query if the function
+  // hasn't been deployed yet (e.g. migration not yet applied).
+  try {
+    const [mtdAgg, ytdAgg] = await Promise.all([
+      supabase.rpc("get_business_kpis_agg", {
+        p_business_id: userId,
+        p_from: monthStart.toISOString(),
+        p_to: rangeEnd.toISOString(),
+      }),
+      supabase.rpc("get_business_kpis_agg", {
+        p_business_id: userId,
+        p_from: yearStart.toISOString(),
+        p_to: rangeEnd.toISOString(),
+      }),
+    ]);
 
-  const mtd = (mtdAgg.data?.[0] ?? {
-    revenue_cents: 0,
-    profit_cents: 0,
-    sales_count: 0,
-  }) as { revenue_cents: number; profit_cents: number; sales_count: number };
-  const ytd = (ytdAgg.data?.[0] ?? {
-    revenue_cents: 0,
-    profit_cents: 0,
-    sales_count: 0,
-  }) as { revenue_cents: number; profit_cents: number; sales_count: number };
+    if (mtdAgg.error || ytdAgg.error) throw mtdAgg.error ?? ytdAgg.error;
+
+    mtd = (mtdAgg.data?.[0] ?? { revenue_cents: 0, profit_cents: 0, sales_count: 0 }) as KpiRow;
+    ytd = (ytdAgg.data?.[0] ?? { revenue_cents: 0, profit_cents: 0, sales_count: 0 }) as KpiRow;
+  } catch {
+    // RPC unavailable — compute from direct queries
+    [mtd, ytd] = await Promise.all([
+      aggregateSalesKpis(supabase, userId, monthStart.toISOString(), rangeEnd.toISOString()),
+      aggregateSalesKpis(supabase, userId, yearStart.toISOString(), rangeEnd.toISOString()),
+    ]);
+  }
 
   // Active inventory count
   const { count: activeCount } = await supabase

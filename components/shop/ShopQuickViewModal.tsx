@@ -88,7 +88,7 @@ export default function ShopQuickViewModal({
             </span>
             {listing.cmv != null && listing.cmv > 0 && (
               <span className="text-sm text-slate-600">
-                CMV: ${listing.cmv.toFixed(0)}
+                Est. MV: ${listing.cmv.toFixed(0)}
                 {cmvDelta != null && (
                   <span className={cmvDelta < 0 ? "text-emerald-600" : "text-amber-600"}>
                     {" "}

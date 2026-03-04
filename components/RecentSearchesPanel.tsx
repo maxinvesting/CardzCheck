@@ -120,7 +120,7 @@ export default function RecentSearchesPanel({
       {/* Header / Toggle */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="flex items-center gap-2 text-sm font-medium text-gray-400 hover:text-white transition-colors w-full"
+        className="flex items-center gap-2 text-sm font-medium text-gray-400 hover:text-white transition-colors w-full min-h-[44px]"
       >
         <svg
           className="w-4 h-4"
@@ -168,7 +168,7 @@ export default function RecentSearchesPanel({
                 <button
                   onClick={handleClearAll}
                   disabled={clearing}
-                  className="text-xs text-gray-500 hover:text-red-400 transition-colors disabled:opacity-50"
+                  className="text-xs text-gray-500 hover:text-red-400 transition-colors disabled:opacity-50 min-h-[44px] inline-flex items-center px-1"
                 >
                   {clearing ? "Clearing..." : "Clear History"}
                 </button>
@@ -180,7 +180,7 @@ export default function RecentSearchesPanel({
                   <button
                     key={search.id}
                     onClick={() => handleSearchClick(search)}
-                    className="w-full text-left p-3 bg-gray-700/30 hover:bg-gray-700/50 rounded-lg transition-colors group"
+                    className="w-full text-left p-3 min-h-[44px] bg-gray-700/30 hover:bg-gray-700/50 rounded-lg transition-colors group"
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex-1 min-w-0">
@@ -198,7 +198,7 @@ export default function RecentSearchesPanel({
                           )}
                           {search.cmv !== null && (
                             <span className="text-xs text-green-400">
-                              CMV (Beta): {formatCurrency(search.cmv)}
+                              Est. MV: {formatCurrency(search.cmv)}
                             </span>
                           )}
                         </div>
@@ -221,7 +221,7 @@ export default function RecentSearchesPanel({
                         {/* Delete button */}
                         <button
                           onClick={(e) => handleDeleteSearch(search.id, e)}
-                          className="p-1 text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center text-gray-600 hover:text-red-400 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                           title="Remove from history"
                         >
                           <svg

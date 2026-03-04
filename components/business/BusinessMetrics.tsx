@@ -98,7 +98,7 @@ export default function BusinessMetrics({
             </p>
             <p className="text-[10px] text-gray-500 mt-0.5">
               {inventorySummary.itemsWithCmv > 0
-                ? `Est. CMV · ${inventorySummary.itemCount} item${inventorySummary.itemCount !== 1 ? "s" : ""}`
+                ? `Est. Market Value · ${inventorySummary.itemCount} item${inventorySummary.itemCount !== 1 ? "s" : ""}`
                 : `Cost basis · ${inventorySummary.itemCount} item${inventorySummary.itemCount !== 1 ? "s" : ""}`}
             </p>
             {inventorySummary.itemsWithCmv > 0 &&
@@ -113,7 +113,7 @@ export default function BusinessMetrics({
     ) : null;
 
   return (
-    <div className={`grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 ${compact ? "gap-2 mb-2" : "gap-2.5 mb-3"}`}>
+    <div className={`grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-8 ${compact ? "gap-2 mb-2" : "gap-2.5 mb-3"}`}>
       {cards.map((c) => (
         <div
           key={c.label}

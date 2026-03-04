@@ -2,13 +2,13 @@ export const gradingCopy = {
   page: {
     title: "Grade Probability Engine",
     subtitle:
-      "Upload a photo of your card to get an AI-based condition estimate mapped to PSA-style outcomes (not guaranteed).",
+      "Upload front and back photos of your card for an AI-based condition estimate mapped to PSA-style outcomes (not guaranteed).",
     howItWorks: {
       title: "How it works",
       steps: [
-        "Upload a clear, well-lit photo of your raw (ungraded) card",
-        "Our AI analyzes centering, corners, surface, and edges",
-        "Get an AI-based condition estimate mapped to PSA-style outcomes (not guaranteed)",
+        "Upload clear, well-lit photos of the front and back of your raw (ungraded) card",
+        "Our AI analyzes centering, corners, surface, edges, and back print quality in parallel",
+        "Get an AI-based condition estimate with a decision recommendation (not guaranteed)",
       ],
     },
   },
@@ -74,9 +74,9 @@ export const gradingCopy = {
     bestLabel: "Best",
     roiBadge: (level: "High" | "Medium" | "Low") =>
       `Grading ROI: ${level} (market-dependent)`,
-    rawTitle: "Raw CMV",
-    psaTitle: "PSA CMV",
-    bgsTitle: "BGS CMV",
+    rawTitle: "Raw Est. MV",
+    psaTitle: "PSA Est. MV",
+    bgsTitle: "BGS Est. MV",
     insufficientComps: "Insufficient comps",
     compsSuffix: "comps",
     evLabel: "EV",

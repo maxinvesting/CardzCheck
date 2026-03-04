@@ -8,6 +8,8 @@ import GradeProbabilityPanel from "@/components/grading/GradeProbabilityPanel";
 import GradeEstimateProgressPanel from "@/components/grading/GradeEstimateProgressPanel";
 import { useGradeEstimateFromImages } from "@/lib/grading/useGradeEstimateFromImages";
 import { gradingCopy } from "@/copy/grading";
+import { formatEbayTitle, calculateEbayParityPrice, EBAY_FEE_RATES } from "@/lib/ebay/parity-price";
+import type { EbayFeeRateKey } from "@/lib/ebay/parity-price";
 
 function fmtCents(cents: number | null): string {
   if (cents === null) return "";
@@ -24,6 +26,21 @@ const STATUS_OPTIONS = ["unlisted", "listed", "pending_sale", "sold", "returned"
 const CHANNEL_OPTIONS = ["ebay", "whatnot", "instagram", "show", "local", "other"] as const;
 const ACQ_OPTIONS = ["buy", "trade", "rip", "consignment", "other"] as const;
 
+function getDaysHeld(acquisitionDate: string | null | undefined): number | null {
+  if (!acquisitionDate) return null;
+  const acq = new Date(acquisitionDate);
+  if (isNaN(acq.getTime())) return null;
+  const now = new Date();
+  return Math.floor((now.getTime() - acq.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function getDaysHeldColor(days: number | null): string {
+  if (days === null) return "text-gray-500";
+  if (days < 30) return "text-emerald-400";
+  if (days <= 60) return "text-amber-400";
+  return "text-red-400";
+}
+
 export default function ItemDetailDrawer({
   item,
   onClose,
@@ -39,6 +56,8 @@ export default function ItemDetailDrawer({
   const [valueResult, setValueResult] = useState<WorthGradingResult | null>(null);
   const [valueLoading, setValueLoading] = useState(false);
   const [valueError, setValueError] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [ebayTitleCopied, setEbayTitleCopied] = useState(false);
 
   useEffect(() => {
     if (!item) return;
@@ -175,7 +194,22 @@ export default function ItemDetailDrawer({
 
   if (!item) return null;
 
+  const daysHeld = getDaysHeld(form.acquisition_date || item.acquisition_date);
+  const daysHeldColor = getDaysHeldColor(daysHeld);
+
   const handleSave = () => {
+    // Validation
+    if (!form.title?.trim()) {
+      setValidationError("Title cannot be empty.");
+      return;
+    }
+    const costVal = parseFloat(form.cost_basis_total);
+    if (!isNaN(costVal) && costVal < 0) {
+      setValidationError("Cost basis cannot be negative.");
+      return;
+    }
+    setValidationError(null);
+
     const toCents = (val: string) => {
       const n = parseFloat(val);
       return Number.isNaN(n) ? 0 : Math.round(n * 100);
@@ -283,7 +317,7 @@ export default function ItemDetailDrawer({
               {item.id && (
                 <Link
                   href={`/card/${item.id}?from=business`}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14" />
@@ -293,7 +327,7 @@ export default function ItemDetailDrawer({
               )}
               <button
                 onClick={onClose}
-                className="text-gray-400 hover:text-white p-1"
+                className="text-gray-400 hover:text-white p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -305,6 +339,56 @@ export default function ItemDetailDrawer({
             <p className="text-xs text-gray-400 mb-4 -mt-2">
               Card profile has photos, full details, and grade probability.
             </p>
+          )}
+
+          {/* Copy eBay Title */}
+          <button
+            type="button"
+            onClick={() => {
+              const title = item.title || "";
+              // Try to parse structured parts from the title for optimal eBay format
+              const ebayTitle = formatEbayTitle({
+                player: title, // Use full title as fallback
+                grade: form.grade || item.grade,
+                grading_company: form.grading_company || item.grading_company,
+              });
+              navigator.clipboard.writeText(ebayTitle || title).then(() => {
+                setEbayTitleCopied(true);
+                setTimeout(() => setEbayTitleCopied(false), 2000);
+              });
+            }}
+            className="mb-4 w-full flex items-center justify-center gap-2 px-3 py-2.5 min-h-[44px] bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-xs font-medium text-gray-300 transition-colors"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+            </svg>
+            {ebayTitleCopied ? "Copied!" : "Copy eBay Title"}
+          </button>
+
+          {/* Days Held Badge */}
+          <div className="mb-4 rounded-lg border border-gray-800 bg-gray-900/70 px-4 py-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-400 uppercase tracking-wider">Days Held</span>
+              <span className={`text-lg font-bold tabular-nums ${daysHeldColor}`}>
+                {daysHeld !== null ? `${daysHeld} days` : "—"}
+              </span>
+            </div>
+            {daysHeld !== null && (
+              <p className="text-[10px] text-gray-500 mt-1">
+                {daysHeld < 30
+                  ? "Recently acquired"
+                  : daysHeld <= 60
+                  ? "Consider listing or selling soon"
+                  : "Held over 60 days — consider taking action"}
+              </p>
+            )}
+          </div>
+
+          {/* Validation Error */}
+          {validationError && (
+            <div className="mb-3 rounded-lg border border-red-800 bg-red-900/30 px-3 py-2 text-sm text-red-300">
+              {validationError}
+            </div>
           )}
 
           {/* Form */}
@@ -340,7 +424,7 @@ export default function ItemDetailDrawer({
               {field("List Price ($)", "list_price", "number")}
               <div>
                 <label className="block text-xs text-gray-400 mb-1">
-                  Current Market Value ($)
+                  Est. Market Value ($)
                 </label>
                 <div className="flex gap-2">
                   <input
@@ -368,11 +452,44 @@ export default function ItemDetailDrawer({
                 </p>
               </div>
             </div>
+            {/* eBay Parity Price (read-only, auto-calculated) */}
+            {(() => {
+              const listPriceCents = item.list_price_cents;
+              if (!listPriceCents || listPriceCents <= 0) return null;
+              const listPriceDollars = listPriceCents / 100;
+              const feeRateKey: EbayFeeRateKey =
+                typeof window !== "undefined"
+                  ? ((window.localStorage.getItem("cardzcheck_ebay_fee_rate") as EbayFeeRateKey) || "standard")
+                  : "standard";
+              const parityPrice = calculateEbayParityPrice(listPriceDollars, feeRateKey);
+              const feeLabel = feeRateKey === "top_rated_plus" ? "12% TRP" : "13% Std";
+              return (
+                <div className="rounded-lg bg-gray-800/50 border border-gray-700/50 p-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wider text-gray-400 font-medium">
+                        eBay Parity Price
+                      </p>
+                      <p className="text-lg font-semibold text-blue-400">
+                        ${parityPrice.toFixed(2)}
+                      </p>
+                    </div>
+                    <span className="text-[10px] text-gray-500 bg-gray-800 px-2 py-0.5 rounded">
+                      {feeLabel} fee
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-gray-500 mt-1">
+                    List at this price on eBay to net the same as your ${listPriceDollars.toFixed(2)} shop price after fees.
+                  </p>
+                </div>
+              );
+            })()}
+
             {field("Notes", "notes", "textarea")}
 
             <button
               onClick={handleSave}
-              className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg transition-colors"
+              className="w-full py-2.5 min-h-[44px] bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg transition-colors"
             >
               Save Changes
             </button>
@@ -401,7 +518,7 @@ export default function ItemDetailDrawer({
                   <button
                     type="button"
                     onClick={() => void gradeEstimate.run()}
-                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors"
+                    className="px-3 py-2.5 min-h-[44px] bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors"
                   >
                     Run grade estimate
                   </button>
@@ -413,7 +530,7 @@ export default function ItemDetailDrawer({
                       gradeEstimate.reset();
                       void gradeEstimate.run();
                     }}
-                    className="mt-2 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white text-xs font-medium rounded-lg transition-colors"
+                    className="mt-2 px-3 py-2.5 min-h-[44px] bg-gray-700 hover:bg-gray-600 text-white text-xs font-medium rounded-lg transition-colors"
                   >
                     Re-run grade estimate
                   </button>

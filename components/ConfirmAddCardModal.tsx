@@ -480,7 +480,7 @@ export default function ConfirmAddCardModal({
           ) : null}
 
           <div className="rounded-lg border border-blue-500/40 bg-blue-500/10 px-3 py-2">
-            <p className="text-xs text-blue-200 uppercase tracking-wide">Estimated CMV (eBay)</p>
+            <p className="text-xs text-blue-200 uppercase tracking-wide" title="Based on active eBay listings. Actual sold prices may differ.">Est. Market Value</p>
             <p className="text-sm font-semibold text-blue-100">{formatPrice(initialCmv)}</p>
           </div>
 

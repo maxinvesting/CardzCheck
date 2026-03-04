@@ -137,7 +137,9 @@ export default function SaleFormModal({
       shipping_cost_cents: inputToCents(shippingCost),
       tax_cents: inputToCents(tax),
       net_payout_cents: autoCalcNetPayout ? null : inputToCents(manualNetPayout),
-      cogs_cents: showCogsField ? inputToCents(cogs) : null,
+      cogs_cents: showCogsField
+        ? inputToCents(cogs)
+        : defaults?.cogs_cents ?? null,
       notes: notes.trim() ? notes.trim() : null,
       external_order_id: externalOrderId.trim() ? externalOrderId.trim() : null,
     };
