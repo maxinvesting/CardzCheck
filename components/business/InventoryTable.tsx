@@ -92,10 +92,14 @@ interface Props {
   onMarkSold?: (item: BusinessInventoryItem) => void;
   /** Called when filtered items change so parent can display filter-aware inventory value */
   onFilteredChange?: (filtered: BusinessInventoryItem[]) => void;
+  /** Called when user wants to move item from inventory to personal collection */
+  onToggleItemKind?: (item: BusinessInventoryItem, targetKind: "owned" | "inventory") => void;
   /** Tighter row padding (Business mode) */
   dense?: boolean;
   /** Enables dev-only perf instrumentation output */
   perfEnabled?: boolean;
+  /** Whether the user has eBay connected (shows Sync button) */
+  ebayConnected?: boolean;
 }
 
 const STATUS_OPTIONS = ["unlisted", "listed", "pending_sale", "sold", "returned"] as const;
@@ -215,8 +219,10 @@ export default function InventoryTable({
   onDelete,
   onMarkSold,
   onFilteredChange,
+  onToggleItemKind,
   dense = false,
   perfEnabled = false,
+  ebayConnected = false,
 }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
@@ -578,9 +584,10 @@ export default function InventoryTable({
     }
   };
 
-  const channelBadge = (channel: string) => {
+  const channelBadge = (channel: string, item?: BusinessInventoryItem) => {
+    const listingUrl = item?.ebay_listing_url || (item?.ebay_item_id ? `https://www.ebay.com/itm/${item.ebay_item_id}` : null);
     if (channel === "ebay") {
-      return (
+      const badge = (
         <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-[#86b817]/15 text-[#86b817] border border-[#86b817]/20">
           <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <path d="M6.26 8.68c-1.04 0-2.08.37-2.08 1.63 0 .74.48 1.27 1.2 1.27.99 0 1.68-.87 1.74-1.93l.03-.97h-.89zm2.79 3.3h-1.8l.03-.72h-.03c-.56.6-1.32.88-2.12.88C3.63 12.14 2.7 11.19 2.7 9.97c0-1.92 1.64-2.49 3.2-2.49h1.2V7.2c0-.7-.54-1.08-1.39-1.08-.65 0-1.35.24-1.87.6l-.05-1.45c.65-.32 1.56-.51 2.28-.51 1.74 0 2.78.71 2.78 2.48v4.74zM13.3 5.6h1.82l-.6 1.47h-.04c.67-.98 1.44-1.63 2.62-1.63.12 0 .24.01.34.04l-.32 1.82a1.97 1.97 0 0 0-.41-.04c-1.48 0-2.25 1.45-2.51 2.77l-.73 3.95h-1.92L13.3 5.6zm-3.33 0l-1.75 8.38H6.3l1.75-8.38h1.92zm8.1 0l-1.11 5.37c-.17.85.13 1.16.69 1.16.2 0 .38-.02.57-.08l-.17 1.39c-.33.1-.71.16-1.1.16-1.28 0-2.1-.63-1.8-2.14L16.26 5.6h1.82z"/>
@@ -588,6 +595,14 @@ export default function InventoryTable({
           eBay
         </span>
       );
+      if (listingUrl) {
+        return (
+          <a href={listingUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title="View eBay listing">
+            {badge}
+          </a>
+        );
+      }
+      return badge;
     }
     return (
       <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-800 text-gray-400">
@@ -690,8 +705,21 @@ export default function InventoryTable({
           <span className={`px-2 py-1 rounded text-[11px] font-medium ${statusColor(item.status)}`}>
             {item.status}
           </span>
-          {item.channel && channelBadge(item.channel)}
+          {item.channel && channelBadge(item.channel, item)}
           <div className="ml-auto flex items-center gap-1.5">
+            {onToggleItemKind && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleItemKind(item, "owned");
+                }}
+                title="Move to Personal Collection"
+                className="px-2 py-1 text-[10px] font-medium bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-gray-200 rounded min-h-[32px]"
+              >
+                → PC
+              </button>
+            )}
             {item.card_id && (
               <button
                 type="button"
@@ -845,7 +873,7 @@ export default function InventoryTable({
             editingCell?.id === item.id && editingCell?.field === "channel" ? (
               renderCell(item, col.key)
             ) : (
-              channelBadge(item.channel)
+              channelBadge(item.channel, item)
             )
           ) : (
             renderCell(item, col.key)

@@ -48,6 +48,14 @@ function persistEbayStoreUrl(value: string) {
   );
 }
 
+type EbayStatus = {
+  connected: boolean;
+  username: string | null;
+  last_inventory_sync: string | null;
+  last_sales_sync: string | null;
+  fee_rate: EbayFeeRateKey;
+};
+
 function SettingsContent() {
   const pathname = usePathname();
   const router = useRouter();
@@ -61,6 +69,14 @@ function SettingsContent() {
   const [ebayStoreUrl, setEbayStoreUrl] = useState("");
   const [ebayStoreUrlLoading, setEbayStoreUrlLoading] = useState(false);
   const [ebayFeeRate, setEbayFeeRate] = useState<EbayFeeRateKey>("standard");
+  const [ebayFeeRateSaving, setEbayFeeRateSaving] = useState(false);
+  const [websiteUrl, setWebsiteUrl] = useState("");
+  const [websiteUrlLoading, setWebsiteUrlLoading] = useState(false);
+  const [ebayStatus, setEbayStatus] = useState<EbayStatus | null>(null);
+  const [ebayStatusLoading, setEbayStatusLoading] = useState(false);
+  const [ebayConnectLoading, setEbayConnectLoading] = useState(false);
+  const [ebayDisconnectLoading, setEbayDisconnectLoading] = useState(false);
+  const [ebayBanner, setEbayBanner] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [pricingOpen, setPricingOpen] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -70,8 +86,15 @@ function SettingsContent() {
   useEffect(() => {
     if (searchParams.get("success") === "true") {
       setShowSuccess(true);
-      // Auto-hide after 5 seconds
       setTimeout(() => setShowSuccess(false), 5000);
+    }
+    const ebayConnected = searchParams.get("ebay_connected");
+    const ebayError = searchParams.get("ebay_error");
+    if (ebayConnected === "true") {
+      setEbayBanner({ type: "success", message: "eBay account connected successfully!" });
+      setTimeout(() => setEbayBanner(null), 6000);
+    } else if (ebayError) {
+      setEbayBanner({ type: "error", message: decodeURIComponent(ebayError) });
     }
   }, [searchParams]);
 
@@ -128,11 +151,27 @@ function SettingsContent() {
         setName(userData.name || "");
         setBusinessName(userData.business_name || "");
         setEbayStoreUrl(resolvedEbayStoreUrl);
+        setWebsiteUrl(userData.website_url || "");
+        // Prefer DB fee rate; fall back to localStorage
+        const dbFeeRate = userData.ebay_fee_rate === "top_rated_plus" ? "top_rated_plus" : "standard";
+        setEbayFeeRate(dbFeeRate);
+        persistEbayFeeRate(dbFeeRate);
       } else {
         setEbayStoreUrl(normalizeEbayStoreUrl(metadataEbayStoreUrl));
+        setEbayFeeRate(getStoredEbayFeeRate());
       }
       persistEbayStoreUrl(resolvedEbayStoreUrl);
-      setEbayFeeRate(getStoredEbayFeeRate());
+
+      // Fetch eBay OAuth status (Business only)
+      try {
+        const ebayRes = await fetch("/api/ebay/status");
+        if (ebayRes.ok) {
+          const ebayData = await ebayRes.json();
+          setEbayStatus(ebayData);
+        }
+      } catch {
+        // Non-fatal — just don't show eBay status
+      }
 
       setLoading(false);
     }
@@ -232,6 +271,115 @@ function SettingsContent() {
       alert("Failed to update eBay Store URL");
     } finally {
       setEbayStoreUrlLoading(false);
+    }
+  };
+
+  const handleEbayFeeRateChange = async (value: EbayFeeRateKey) => {
+    setEbayFeeRate(value);
+    persistEbayFeeRate(value);
+    setEbayFeeRateSaving(true);
+    try {
+      await fetch("/api/user/name", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ebay_fee_rate: value }),
+      });
+    } catch {
+      // Non-fatal — localStorage already updated
+    } finally {
+      setEbayFeeRateSaving(false);
+    }
+  };
+
+  const handleWebsiteUrlUpdate = async () => {
+    setWebsiteUrlLoading(true);
+    try {
+      const response = await fetch("/api/user/name", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ website_url: websiteUrl.trim() || null }),
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        alert(data.error || "Failed to update website URL");
+        return;
+      }
+      if (user) setUser({ ...user, website_url: websiteUrl.trim() || null });
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 5000);
+    } catch {
+      alert("Failed to update website URL");
+    } finally {
+      setWebsiteUrlLoading(false);
+    }
+  };
+
+  const handleEbayConnect = () => {
+    setEbayConnectLoading(true);
+    window.location.href = "/api/ebay/connect";
+  };
+
+  const handleEbayDisconnect = async () => {
+    if (!confirm("Disconnect your eBay account? You can reconnect at any time.")) return;
+    setEbayDisconnectLoading(true);
+    try {
+      const res = await fetch("/api/ebay/disconnect", { method: "POST" });
+      if (res.ok) {
+        setEbayStatus((prev) => prev ? { ...prev, connected: false, username: null } : null);
+        setEbayBanner({ type: "success", message: "eBay account disconnected." });
+        setTimeout(() => setEbayBanner(null), 5000);
+      } else {
+        const data = await res.json();
+        alert(data.error || "Failed to disconnect eBay account");
+      }
+    } catch {
+      alert("Failed to disconnect eBay account");
+    } finally {
+      setEbayDisconnectLoading(false);
+    }
+  };
+
+  const handleEbayInventorySync = async () => {
+    setEbayStatusLoading(true);
+    try {
+      const res = await fetch("/api/ebay/inventory/sync", { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        setEbayStatus((prev) => prev ? { ...prev, last_inventory_sync: data.synced_at } : prev);
+        setEbayBanner({
+          type: "success",
+          message: `Inventory synced: ${data.added} added, ${data.updated} updated.`,
+        });
+        setTimeout(() => setEbayBanner(null), 6000);
+      } else {
+        alert(data.error || "Inventory sync failed");
+      }
+    } catch {
+      alert("Inventory sync failed");
+    } finally {
+      setEbayStatusLoading(false);
+    }
+  };
+
+  const handleEbaySalesSync = async () => {
+    setEbayStatusLoading(true);
+    try {
+      const res = await fetch("/api/ebay/sales/sync", { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        setEbayStatus((prev) => prev ? { ...prev, last_sales_sync: data.synced_at } : prev);
+        setEbayBanner({
+          type: "success",
+          message: `Sales synced: ${data.imported} imported, ${data.skipped} skipped.`,
+        });
+        setTimeout(() => setEbayBanner(null), 6000);
+      } else {
+        alert(data.error || "Sales sync failed");
+      }
+    } catch {
+      alert("Sales sync failed");
+    } finally {
+      setEbayStatusLoading(false);
     }
   };
 
@@ -434,11 +582,9 @@ function SettingsContent() {
                   </label>
                   <div className="flex gap-2">
                     <button
-                      onClick={() => {
-                        setEbayFeeRate("standard");
-                        persistEbayFeeRate("standard");
-                      }}
-                      className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium border transition-colors ${
+                      onClick={() => handleEbayFeeRateChange("standard")}
+                      disabled={ebayFeeRateSaving}
+                      className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium border transition-colors disabled:opacity-50 ${
                         ebayFeeRate === "standard"
                           ? "bg-blue-600 text-white border-blue-600"
                           : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
@@ -447,11 +593,9 @@ function SettingsContent() {
                       Standard — 13%
                     </button>
                     <button
-                      onClick={() => {
-                        setEbayFeeRate("top_rated_plus");
-                        persistEbayFeeRate("top_rated_plus");
-                      }}
-                      className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium border transition-colors ${
+                      onClick={() => handleEbayFeeRateChange("top_rated_plus")}
+                      disabled={ebayFeeRateSaving}
+                      className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium border transition-colors disabled:opacity-50 ${
                         ebayFeeRate === "top_rated_plus"
                           ? "bg-blue-600 text-white border-blue-600"
                           : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
@@ -463,6 +607,131 @@ function SettingsContent() {
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     Used to calculate eBay Parity Price in your inventory and shop listings
                   </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Website URL */}
+          {isBusinessSettings && (
+            <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                Your Website
+              </h2>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Website URL
+                </label>
+                <div className="flex gap-2 flex-wrap sm:flex-nowrap">
+                  <input
+                    type="url"
+                    value={websiteUrl}
+                    onChange={(e) => setWebsiteUrl(e.target.value)}
+                    placeholder="https://yourstore.com"
+                    maxLength={2048}
+                    className="flex-1 min-w-0 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  <button
+                    onClick={handleWebsiteUrlUpdate}
+                    disabled={websiteUrlLoading || websiteUrl === (user?.website_url || "")}
+                    className="px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                  >
+                    {websiteUrlLoading ? "Saving..." : "Save"}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Your personal or business website
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* eBay Integrations */}
+          {isBusinessSettings && (
+            <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+                Integrations
+              </h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">
+                Connect your eBay seller account to sync inventory and sales automatically.
+              </p>
+
+              {/* eBay OAuth banner */}
+              {ebayBanner && (
+                <div className={`mb-4 p-3 rounded-lg text-sm border ${
+                  ebayBanner.type === "success"
+                    ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-200"
+                    : "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200"
+                }`}>
+                  {ebayBanner.message}
+                </div>
+              )}
+
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-sm font-medium text-gray-900 dark:text-white">eBay Seller Account</span>
+                    {ebayStatus?.connected ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800">
+                        Connected
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700">
+                        Not connected
+                      </span>
+                    )}
+                  </div>
+                  {ebayStatus?.connected && ebayStatus.username && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Connected as <span className="font-medium text-gray-700 dark:text-gray-300">{ebayStatus.username}</span>
+                    </p>
+                  )}
+                  {ebayStatus?.connected && (
+                    <div className="mt-1.5 text-xs text-gray-400 dark:text-gray-500 space-y-0.5">
+                      {ebayStatus.last_inventory_sync && (
+                        <p>Inventory synced: {new Date(ebayStatus.last_inventory_sync).toLocaleDateString()}</p>
+                      )}
+                      {ebayStatus.last_sales_sync && (
+                        <p>Sales synced: {new Date(ebayStatus.last_sales_sync).toLocaleDateString()}</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  {ebayStatus?.connected ? (
+                    <>
+                      <button
+                        onClick={handleEbayInventorySync}
+                        disabled={ebayStatusLoading}
+                        className="px-3 py-1.5 text-xs font-medium border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
+                      >
+                        {ebayStatusLoading ? "Syncing..." : "Sync Inventory"}
+                      </button>
+                      <button
+                        onClick={handleEbaySalesSync}
+                        disabled={ebayStatusLoading}
+                        className="px-3 py-1.5 text-xs font-medium border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
+                      >
+                        {ebayStatusLoading ? "Syncing..." : "Sync Sales"}
+                      </button>
+                      <button
+                        onClick={handleEbayDisconnect}
+                        disabled={ebayDisconnectLoading}
+                        className="px-3 py-1.5 text-xs font-medium border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50"
+                      >
+                        {ebayDisconnectLoading ? "Disconnecting..." : "Disconnect"}
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={handleEbayConnect}
+                      disabled={ebayConnectLoading}
+                      className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                    >
+                      {ebayConnectLoading ? "Connecting..." : "Connect eBay"}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

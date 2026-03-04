@@ -812,6 +812,40 @@ function LedgerPageContent() {
     setMarkSoldItem(item);
   };
 
+  const handleToggleItemKind = async (
+    item: BusinessInventoryItem,
+    targetKind: "owned" | "inventory"
+  ) => {
+    const confirmed = window.confirm(
+      targetKind === "owned"
+        ? "Move this card to your Personal Collection? P&L data will be hidden but not deleted."
+        : "Move this card to Business Inventory? Full P&L tracking will be enabled."
+    );
+    if (!confirmed) return;
+
+    try {
+      const res = await fetch("/api/business/inventory/toggle-kind", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: item.id, target_kind: targetKind }),
+      });
+      if (!res.ok) throw new Error("Failed to toggle item kind");
+      // Remove from inventory list if moved to PC
+      if (targetKind === "owned") {
+        setItems((prev) => prev.filter((it) => it.id !== item.id));
+        if (selectedItem?.id === item.id) setSelectedItem(null);
+        setToast({ type: "success", message: "Card moved to Personal Collection." });
+      } else {
+        setItems((prev) =>
+          prev.map((it) => (it.id === item.id ? { ...it, item_kind: "inventory" } : it))
+        );
+        setToast({ type: "success", message: "Card moved to Business Inventory." });
+      }
+    } catch {
+      setToast({ type: "error", message: "Failed to move card. Please try again." });
+    }
+  };
+
   const handleCreateSale = async (sale: Record<string, unknown>) => {
     const inventoryId = (sale.inventory_item_id as string | null) || null;
     let previousItem: BusinessInventoryItem | null = null;
@@ -1104,6 +1138,7 @@ function LedgerPageContent() {
                   onDelete={handleDelete}
                   onMarkSold={handleMarkSold}
                   onFilteredChange={handleFilteredChange}
+                  onToggleItemKind={handleToggleItemKind}
                   dense
                   perfEnabled={perfEnabled}
                 />
@@ -1118,6 +1153,7 @@ function LedgerPageContent() {
                 onDelete={handleDelete}
                 onMarkSold={handleMarkSold}
                 onFilteredChange={handleFilteredChange}
+                onToggleItemKind={handleToggleItemKind}
                 dense
               />
             )

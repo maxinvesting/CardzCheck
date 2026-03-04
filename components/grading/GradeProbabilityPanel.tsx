@@ -188,6 +188,36 @@ function hasPhotoQualityFlag(notes?: string | null): boolean {
   );
 }
 
+function buildPsaPopUrl(cardIdentity: {
+  player_name?: string;
+  year?: string;
+  set_name?: string;
+  parallel_type?: string;
+}): string {
+  const parts = [
+    cardIdentity.player_name,
+    cardIdentity.year,
+    cardIdentity.set_name,
+    cardIdentity.parallel_type,
+  ].filter(Boolean) as string[];
+  const q = parts.join(" ");
+  return `https://www.psacard.com/pop/search?q=${encodeURIComponent(q)}`;
+}
+
+function buildBgsPopUrl(cardIdentity: {
+  player_name?: string;
+  year?: string;
+  set_name?: string;
+}): string {
+  const parts = [
+    cardIdentity.player_name,
+    cardIdentity.year,
+    cardIdentity.set_name,
+  ].filter(Boolean) as string[];
+  const q = parts.join(" ");
+  return `https://www.beckett.com/search/#q=${encodeURIComponent(q)}&tab=population`;
+}
+
 function buildCardIdentityLabel(cardIdentity?: {
   player_name?: string;
   year?: string;
@@ -732,7 +762,37 @@ export default function GradeProbabilityPanel({
           {gradingCopy.panel.disclaimer}
         </p>
 
-        <p data-export-ignore="true">
+        <div className="flex flex-wrap items-center gap-3" data-export-ignore="true">
+          {/* PSA Pop Report link */}
+          {cardIdentity?.player_name ? (
+            <a
+              href={buildPsaPopUrl(cardIdentity)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs text-[#3a5068] hover:text-blue-400 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              PSA Pop
+            </a>
+          ) : null}
+
+          {/* BGS Pop Report link */}
+          {cardIdentity?.player_name ? (
+            <a
+              href={buildBgsPopUrl(cardIdentity)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs text-[#3a5068] hover:text-emerald-400 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              BGS Pop
+            </a>
+          ) : null}
+
           <button
             type="button"
             onClick={handleExportImage}
@@ -744,7 +804,7 @@ export default function GradeProbabilityPanel({
             </svg>
             {exporting ? "Exporting…" : "Export report"}
           </button>
-        </p>
+        </div>
       </div>
 
       {exportError ? (

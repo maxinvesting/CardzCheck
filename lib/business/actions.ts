@@ -3,13 +3,14 @@ import { hasBusinessAccess } from "@/lib/access";
 import type { BusinessInventoryItem, BusinessSale, BusinessMetrics } from "@/types";
 import { computeNetPayout, computeProfit } from "@/lib/business/sales-utils";
 
-// Uses business_inventory_items table (unified collection_items migration not yet applied)
-const BUSINESS_TABLE = "business_inventory_items" as const;
+// Uses unified collection_items table with item_kind = 'inventory'
+const BUSINESS_TABLE = "collection_items" as const;
+const BUSINESS_ITEM_KIND = "inventory" as const;
 
 type BusinessInventoryRow = {
   id: string;
   user_id: string;
-  card_id: string | null;
+  item_kind: string | null;
   title: string;
   quantity: number | null;
   acquisition_date: string | null;
@@ -173,7 +174,7 @@ function toBusinessInventoryItem(row: BusinessInventoryRow): BusinessInventoryIt
   return {
     id: row.id,
     user_id: row.user_id,
-    card_id: row.card_id || row.id,
+    card_id: row.id,
     title: row.title || "Untitled item",
     quantity: normalizeQuantity(row.quantity),
     acquisition_date: row.acquisition_date ?? null,
@@ -195,6 +196,9 @@ function toBusinessInventoryItem(row: BusinessInventoryRow): BusinessInventoryIt
     stock_image_url: row.stock_image_url ?? null,
     ebay_image_url: row.ebay_image_url ?? null,
     notes: row.notes,
+    ebay_item_id: (row as any).ebay_item_id ?? null,
+    ebay_listing_url: (row as any).ebay_listing_url ?? null,
+    item_kind: (row.item_kind as "owned" | "inventory" | null) ?? null,
     created_at: row.created_at,
     updated_at: row.updated_at || row.created_at,
   };
@@ -204,10 +208,12 @@ function buildInventoryInsertPayload(
   userId: string,
   item: Omit<BusinessInventoryItem, "id" | "user_id" | "created_at" | "updated_at">
 ): Record<string, unknown> {
+  const title = item.title || "Untitled item";
   return {
     user_id: userId,
-    card_id: normalizeCardId((item as any).card_id),
-    title: item.title || "Untitled item",
+    item_kind: BUSINESS_ITEM_KIND,
+    title,
+    player_name: (item as any).player_name || title,
     quantity: normalizeQuantity(item.quantity),
     acquisition_type: item.acquisition_type ?? "other",
     acquisition_date: normalizeAcquisitionDate(item.acquisition_date),
@@ -294,6 +300,7 @@ export async function listInventory(
     .from(BUSINESS_TABLE)
     .select("*")
     .eq("user_id", userId)
+    .eq("item_kind", BUSINESS_ITEM_KIND)
     .order("created_at", { ascending: false });
 
   if (filters?.status) query = query.eq("status", filters.status);
@@ -327,6 +334,7 @@ export async function getInventoryItem(
     .select("*")
     .eq("id", itemId)
     .eq("user_id", userId)
+    .eq("item_kind", BUSINESS_ITEM_KIND)
     .maybeSingle();
 
   if (error && error.code !== "PGRST116") throw error;
@@ -364,6 +372,7 @@ export async function updateInventoryItem(
     .update(buildInventoryUpdatePayload(updates))
     .eq("id", itemId)
     .eq("user_id", userId)
+    .eq("item_kind", BUSINESS_ITEM_KIND)
     .select("*")
     .single();
 
@@ -382,6 +391,35 @@ export async function deleteInventoryItems(
     .from(BUSINESS_TABLE)
     .delete()
     .in("id", itemIds)
+    .eq("user_id", userId)
+    .eq("item_kind", BUSINESS_ITEM_KIND);
+
+  if (error) throw error;
+}
+
+/**
+ * Toggle an item between personal collection ('owned') and business inventory ('inventory').
+ * When moving to inventory, cost_basis_total_cents can be provided if not already set.
+ * Requires Business access since toggling affects inventory tracking.
+ */
+export async function updateItemKind(
+  userId: string,
+  itemId: string,
+  targetKind: "owned" | "inventory",
+  options?: { cost_basis_total_cents?: number }
+): Promise<void> {
+  await requireBusinessAccess(userId);
+  const supabase = await createClient();
+
+  const payload: Record<string, unknown> = { item_kind: targetKind };
+  if (targetKind === "inventory" && options?.cost_basis_total_cents !== undefined) {
+    payload.cost_basis_total_cents = options.cost_basis_total_cents;
+  }
+
+  const { error } = await supabase
+    .from("collection_items")
+    .update(payload)
+    .eq("id", itemId)
     .eq("user_id", userId);
 
   if (error) throw error;
@@ -403,7 +441,8 @@ export async function bulkUpdateInventory(
     .from(BUSINESS_TABLE)
     .update(payload)
     .in("id", itemIds)
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    .eq("item_kind", BUSINESS_ITEM_KIND);
 
   if (error) throw error;
 }
@@ -636,49 +675,16 @@ async function getInventoryContextForSale(
 }
 
 /**
- * Ensure a minimal collection_items mirror row exists for inventory-backed sales.
- * This supports deployments where business_sales.inventory_item_id references collection_items(id).
+ * No-op: inventory items are now stored directly in collection_items,
+ * so no mirror row needs to be created before recording a sale.
+ * The inventory item IS already a collection_items row.
  */
 async function ensureCollectionItemMirrorForSale(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  userId: string,
-  inventoryContext: { id: string; title: string | null } | null
+  _supabase: Awaited<ReturnType<typeof createClient>>,
+  _userId: string,
+  _inventoryContext: { id: string; title: string | null } | null
 ): Promise<void> {
-  if (!inventoryContext) return;
-
-  const label = inventoryContext.title?.trim() || "Inventory Item";
-  const { error } = await supabase
-    .from("collection_items")
-    .upsert(
-      {
-        id: inventoryContext.id,
-        user_id: userId,
-        player_name: label,
-        notes: "Auto-linked from business inventory for sale record consistency",
-      },
-      { onConflict: "id", ignoreDuplicates: true }
-    );
-
-  if (!error) return;
-
-  const code = String((error as { code?: string })?.code ?? "");
-  const message = String((error as { message?: string })?.message ?? "");
-  const details = String((error as { details?: string })?.details ?? "");
-  const combined = `${message} ${details}`.toLowerCase();
-
-  // Older deployments may not have collection_items; in those schemas this mirror is unnecessary.
-  if (
-    code === "PGRST205" ||
-    (combined.includes("collection_items") &&
-      (combined.includes("not exist") || combined.includes("could not find")))
-  ) {
-    return;
-  }
-
-  // Mirror row already exists.
-  if (code === "23505") return;
-
-  throw error;
+  // Nothing to do — business inventory lives in collection_items directly.
 }
 
 function buildComputedSalePayload(args: {
@@ -1048,6 +1054,7 @@ export async function getBusinessMetrics(userId: string): Promise<BusinessMetric
     .from(BUSINESS_TABLE)
     .select("id", { count: "exact", head: true })
     .eq("user_id", userId)
+    .eq("item_kind", BUSINESS_ITEM_KIND)
     .neq("status", "sold");
 
   return {
