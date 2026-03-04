@@ -20,6 +20,7 @@ export async function POST() {
     .select(
       "id,title,quantity,grade,cert_number,list_price_cents,current_market_value_cents,cost_basis_total_cents,status,condition_status,channel"
     )
+    .eq("user_id", admin.user.id)
     .eq("status", "listed")
     .in("condition_status", ["graded", "raw"]);
 

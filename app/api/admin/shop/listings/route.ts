@@ -11,7 +11,6 @@ const ALLOWED_STATUS: ListingStatus[] = [
   "sold",
   "reserved",
   "delisted",
-  "draft",
 ];
 const ALLOWED_PUBLISH_STATES: PublishState[] = ["draft", "published"];
 const ALLOWED_CONDITIONS: ListingCondition[] = ["raw", "graded", "sealed"];
