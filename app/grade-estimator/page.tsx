@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import CardUploader from "@/components/CardUploader";
 import GradeProbabilityPanel from "@/components/grading/GradeProbabilityPanel";
@@ -8,6 +9,7 @@ import GradeEstimateProgressPanel from "@/components/grading/GradeEstimateProgre
 import GradeEstimatorValuePanel from "@/components/GradeEstimatorValuePanel";
 import GradeEstimatorHistoryPanel from "@/components/grading/GradeEstimatorHistoryPanel";
 import SubmissionBuilderPanel from "@/components/grading/SubmissionBuilderPanel";
+import GradeAnalysisAnimation from "@/components/grading/GradeAnalysisAnimation";
 import ConfirmAddCardModal from "@/components/ConfirmAddCardModal";
 import PaywallModal from "@/components/PaywallModal";
 import { gradingCopy } from "@/copy/grading";
@@ -238,6 +240,7 @@ export default function GradeEstimatorPage() {
   const [jobStartTime, setJobStartTime] = useState<number | null>(null);
   const [elapsedLabel, setElapsedLabel] = useState<string | null>(null);
   const [showMarketAnalysis, setShowMarketAnalysis] = useState(false);
+  const [showAnimation, setShowAnimation] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
   const [showSubmissionBuilder, setShowSubmissionBuilder] = useState(false);
@@ -283,6 +286,7 @@ export default function GradeEstimatorPage() {
     setJobStartTime(null);
     setElapsedLabel(null);
     setShowMarketAnalysis(false);
+    setShowAnimation(false);
     if (typeof window !== "undefined") {
       sessionStorage.removeItem("gradeEstimateJobId");
       sessionStorage.removeItem("gradeEstimateJobStart");
@@ -399,6 +403,7 @@ export default function GradeEstimatorPage() {
     setJobStartTime(null);
     setElapsedLabel(null);
     setShowMarketAnalysis(false);
+    setShowAnimation(false);
     if (typeof window !== "undefined") {
       sessionStorage.removeItem("gradeEstimateJobId");
       sessionStorage.removeItem("gradeEstimateJobStart");
@@ -425,6 +430,7 @@ export default function GradeEstimatorPage() {
     setJobStartTime(null);
     setElapsedLabel(null);
     setShowMarketAnalysis(false);
+    setShowAnimation(true);
     try {
       const response = await fetch("/api/grade-estimate/start", {
         method: "POST",
@@ -964,112 +970,140 @@ export default function GradeEstimatorPage() {
               {/* ── Grade Estimate ────────────────────────────────── */}
               {gradeEstimate || gradeJob ? (
                 <div className="space-y-6">
-                  {gradeJob ? (
-                    <GradeEstimateProgressPanel
-                      status={gradeJob.status}
-                      steps={gradeJob.steps}
-                      identityLabel={progressIdentityLabel}
-                      errorMessage={gradeJob.status === "error" ? estimateError : null}
-                      elapsedLabel={elapsedLabel}
-                    />
-                  ) : null}
 
-                  {gradeEstimate ? (
-                    <GradeProbabilityPanel
-                      estimate={gradeEstimate}
-                      cardIdentity={identifiedCard ? {
-                        player_name: identifiedCard.player_name,
-                        year: identifiedCard.year,
-                        set_name: identifiedCard.set_name,
-                        parallel_type: identifiedCard.parallel_type,
-                      } : null}
-                      primaryImageUrl={
-                        identifiedCard?.imageUrl || identifiedCard?.imageUrls?.[0] || null
-                      }
-                      imageUrls={identifiedCard?.imageUrls ?? null}
-                      showPreliminaryBadge={showPreliminaryBadge}
-                    />
-                  ) : null}
-
-                  {gradeEstimate && (valueLoading || valueResult || valueError) ? (
-                    <div className="space-y-2">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="text-[10px] font-medium text-[#3a5068] uppercase tracking-wider">
-                          {gradingCopy.valuePanel.marketAnalysisLabel}
-                        </span>
-                        <button
-                          onClick={() => setShowMarketAnalysis((prev) => !prev)}
-                          className="text-xs font-medium text-blue-400 hover:text-blue-300 transition-colors"
-                        >
-                          {showMarketAnalysis
-                            ? gradingCopy.valuePanel.hideMarketImpact
-                            : gradingCopy.valuePanel.showMarketImpact}
-                        </button>
-                      </div>
-                      {showMarketAnalysis ? (
-                        valueError ? (
-                          <div className="space-y-2">
-                            <InlineNotice type="warning">
-                              <p>{valueError}</p>
-                              <button
-                                onClick={fetchValue}
-                                className="mt-2 px-3 py-1.5 text-xs font-medium bg-amber-500/10 text-amber-300 rounded-lg hover:bg-amber-500/15 transition-colors"
-                              >
-                                Retry
-                              </button>
-                            </InlineNotice>
-                          </div>
-                        ) : (
-                          <GradeEstimatorValuePanel
-                            result={
-                              valueResult ?? {
-                                raw: { price: null, n: 0, method: "none" },
-                                psa: {
-                                  "10": { price: null, n: 0, method: "none" },
-                                  "9": { price: null, n: 0, method: "none" },
-                                  "8": { price: null, n: 0, method: "none" },
-                                  ev: 0,
-                                  netGain: 0,
-                                  roi: 0,
-                                },
-                                bgs: {
-                                  "9.5": { price: null, n: 0, method: "none" },
-                                  "9": { price: null, n: 0, method: "none" },
-                                  "8.5": { price: null, n: 0, method: "none" },
-                                  ev: 0,
-                                  netGain: 0,
-                                  roi: 0,
-                                },
-                                bestOption: "none",
-                                rating: "no",
-                                confidence: "low",
-                                explanation: gradingCopy.status.postGradingValueLoading,
-                              }
-                            }
-                            loading={valueLoading}
+                  {/* Animation sequence — shown while estimate is processing */}
+                  <AnimatePresence mode="wait">
+                    {showAnimation ? (
+                      <motion.div key="animation">
+                        <GradeAnalysisAnimation
+                          imageUrl={
+                            identifiedCard?.imageUrl ||
+                            identifiedCard?.imageUrls?.[0] ||
+                            null
+                          }
+                          estimate={gradeEstimate}
+                          valueResult={valueResult}
+                          hasError={gradeJob?.status === "error"}
+                          onComplete={() => setShowAnimation(false)}
+                        />
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        key="results"
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.4, ease: "easeOut" }}
+                        className="space-y-6"
+                      >
+                        {gradeJob ? (
+                          <GradeEstimateProgressPanel
+                            status={gradeJob.status}
+                            steps={gradeJob.steps}
+                            identityLabel={progressIdentityLabel}
+                            errorMessage={gradeJob.status === "error" ? estimateError : null}
+                            elapsedLabel={elapsedLabel}
                           />
-                        )
-                      ) : null}
-                    </div>
-                  ) : null}
+                        ) : null}
 
-                  {gradeJob?.status === "error" && !gradeEstimate ? (
-                    <div className="rounded-xl border border-amber-500/15 bg-amber-500/5 p-5">
-                      <div className="flex items-start gap-3">
-                        <svg className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                        </svg>
-                        <div>
-                          <p className="text-sm font-medium text-amber-300">
-                            {gradingCopy.status.estimateUnavailableTitle}
-                          </p>
-                          <p className="text-xs text-amber-400/70 mt-0.5">
-                            {estimateError || gradingCopy.status.estimateUnavailableBody}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  ) : null}
+                        {gradeEstimate ? (
+                          <GradeProbabilityPanel
+                            estimate={gradeEstimate}
+                            cardIdentity={identifiedCard ? {
+                              player_name: identifiedCard.player_name,
+                              year: identifiedCard.year,
+                              set_name: identifiedCard.set_name,
+                              parallel_type: identifiedCard.parallel_type,
+                            } : null}
+                            primaryImageUrl={
+                              identifiedCard?.imageUrl || identifiedCard?.imageUrls?.[0] || null
+                            }
+                            imageUrls={identifiedCard?.imageUrls ?? null}
+                            showPreliminaryBadge={showPreliminaryBadge}
+                          />
+                        ) : null}
+
+                        {gradeEstimate && (valueLoading || valueResult || valueError) ? (
+                          <div className="space-y-2">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <span className="text-[10px] font-medium text-[#3a5068] uppercase tracking-wider">
+                                {gradingCopy.valuePanel.marketAnalysisLabel}
+                              </span>
+                              <button
+                                onClick={() => setShowMarketAnalysis((prev) => !prev)}
+                                className="text-xs font-medium text-blue-400 hover:text-blue-300 transition-colors"
+                              >
+                                {showMarketAnalysis
+                                  ? gradingCopy.valuePanel.hideMarketImpact
+                                  : gradingCopy.valuePanel.showMarketImpact}
+                              </button>
+                            </div>
+                            {showMarketAnalysis ? (
+                              valueError ? (
+                                <div className="space-y-2">
+                                  <InlineNotice type="warning">
+                                    <p>{valueError}</p>
+                                    <button
+                                      onClick={fetchValue}
+                                      className="mt-2 px-3 py-1.5 text-xs font-medium bg-amber-500/10 text-amber-300 rounded-lg hover:bg-amber-500/15 transition-colors"
+                                    >
+                                      Retry
+                                    </button>
+                                  </InlineNotice>
+                                </div>
+                              ) : (
+                                <GradeEstimatorValuePanel
+                                  result={
+                                    valueResult ?? {
+                                      raw: { price: null, n: 0, method: "none" },
+                                      psa: {
+                                        "10": { price: null, n: 0, method: "none" },
+                                        "9": { price: null, n: 0, method: "none" },
+                                        "8": { price: null, n: 0, method: "none" },
+                                        ev: 0,
+                                        netGain: 0,
+                                        roi: 0,
+                                      },
+                                      bgs: {
+                                        "9.5": { price: null, n: 0, method: "none" },
+                                        "9": { price: null, n: 0, method: "none" },
+                                        "8.5": { price: null, n: 0, method: "none" },
+                                        ev: 0,
+                                        netGain: 0,
+                                        roi: 0,
+                                      },
+                                      bestOption: "none",
+                                      rating: "no",
+                                      confidence: "low",
+                                      explanation: gradingCopy.status.postGradingValueLoading,
+                                    }
+                                  }
+                                  loading={valueLoading}
+                                />
+                              )
+                            ) : null}
+                          </div>
+                        ) : null}
+
+                        {gradeJob?.status === "error" && !gradeEstimate ? (
+                          <div className="rounded-xl border border-amber-500/15 bg-amber-500/5 p-5">
+                            <div className="flex items-start gap-3">
+                              <svg className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                              </svg>
+                              <div>
+                                <p className="text-sm font-medium text-amber-300">
+                                  {gradingCopy.status.estimateUnavailableTitle}
+                                </p>
+                                <p className="text-xs text-amber-400/70 mt-0.5">
+                                  {estimateError || gradingCopy.status.estimateUnavailableBody}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ) : null}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
               ) : identifiedCard.grade ? (
                 <div className="rounded-xl border border-white/[0.06] bg-[#07111d] p-5">
