@@ -560,7 +560,7 @@ export default function InventoryTable({
           >
             Mark Sold
           </button>
-          {!hasEbayListing && item.status !== "sold" && (
+          {!hasEbayListing && (item.status as string) !== "sold" && (
             <button
               type="button"
               onClick={(e) => {

@@ -12,9 +12,10 @@ export const dynamic = "force-dynamic";
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { jobId: string } }
+  { params }: { params: Promise<{ jobId: string }> }
 ): Promise<NextResponse> {
   try {
+    const { jobId } = await params;
     const supabase = await createClient();
     const {
       data: { user },
@@ -26,7 +27,7 @@ export async function GET(
     const { data: job, error } = await supabase
       .from("ebay_import_jobs")
       .select("*")
-      .eq("id", params.jobId)
+      .eq("id", jobId)
       .eq("user_id", user.id)
       .maybeSingle();
 

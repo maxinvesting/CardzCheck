@@ -12,12 +12,13 @@ import { businessInventoryProvider } from "@/lib/inventory/business-inventory-pr
 
 export const dynamic = "force-dynamic";
 
-type RouteContext = { params: { ebayItemId: string } };
+type RouteContext = { params: Promise<{ ebayItemId: string }> };
 
 // ─── PATCH ────────────────────────────────────────────────────────────────────
 
 export async function PATCH(req: NextRequest, { params }: RouteContext): Promise<NextResponse> {
   try {
+    const { ebayItemId } = await params;
     const supabase = await createClient();
     const {
       data: { user },
@@ -25,8 +26,6 @@ export async function PATCH(req: NextRequest, { params }: RouteContext): Promise
 
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     await requireBusinessAccess(user.id);
-
-    const { ebayItemId } = params;
     const body = await req.json();
     const { price_cents, offer_id } = body;
 
@@ -72,6 +71,7 @@ export async function PATCH(req: NextRequest, { params }: RouteContext): Promise
 
 export async function DELETE(_req: NextRequest, { params }: RouteContext): Promise<NextResponse> {
   try {
+    const { ebayItemId } = await params;
     const supabase = await createClient();
     const {
       data: { user },
@@ -79,8 +79,6 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext): Promi
 
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     await requireBusinessAccess(user.id);
-
-    const { ebayItemId } = params;
 
     // Verify listing belongs to this user and get inventory item ID
     const { data: listing } = await supabase
