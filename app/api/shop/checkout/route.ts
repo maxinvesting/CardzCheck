@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     const listingIds = items.map((i) => i.listingId);
     const { data: listings, error: fetchError } = await supabase
       .from("shop_listings")
-      .select("id,price,shipping_cost,quantity,quantity_sold,status,player_name,year,set_brand,grade")
+      .select("id,price,shipping_cost,quantity,quantity_sold,status,publish_state,player_name,year,set_brand,grade")
       .in("id", listingIds);
 
     if (fetchError) {
@@ -58,6 +58,12 @@ export async function POST(request: NextRequest) {
         );
       }
       if (listing.status !== "active") {
+        return NextResponse.json(
+          { error: `Listing ${listingId} is not available` },
+          { status: 400 }
+        );
+      }
+      if (listing.publish_state !== "published") {
         return NextResponse.json(
           { error: `Listing ${listingId} is not available` },
           { status: 400 }

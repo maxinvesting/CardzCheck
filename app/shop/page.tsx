@@ -1,6 +1,11 @@
-import { getAdminAuth } from "@/lib/admin";
+import type { Metadata } from "next";
+import { getAdminAuth, isAdmin } from "@/lib/admin";
 import { getShopListingsWithStats } from "@/lib/shop/server";
 import ShopStorefront from "@/components/shop/ShopStorefront";
+
+export const metadata: Metadata = {
+  title: "CardzCheck Marketplace",
+};
 
 export default async function ShopPage() {
   const [{ listings, stats }, admin] = await Promise.all([
@@ -12,7 +17,7 @@ export default async function ShopPage() {
     <ShopStorefront
       initialListings={listings}
       stats={stats}
-      isAdmin={!!admin.user}
+      isAdmin={isAdmin(admin.user)}
     />
   );
 }

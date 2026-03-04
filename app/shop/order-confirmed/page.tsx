@@ -52,7 +52,7 @@ export default async function OrderConfirmedPage({
           href="/shop"
           className="mt-6 inline-block rounded-lg bg-cyan-600 px-6 py-3 font-medium text-white hover:bg-cyan-500"
         >
-          Back to shop
+          Back to marketplace
         </Link>
       </div>
     );
@@ -80,7 +80,7 @@ export default async function OrderConfirmedPage({
           href="/shop"
           className="mt-8 block w-full rounded-lg bg-cyan-600 px-4 py-3 text-center font-medium text-white transition-colors hover:bg-cyan-500"
         >
-          Continue shopping
+          Continue browsing marketplace
         </Link>
       </div>
     </div>

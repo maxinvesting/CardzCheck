@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useShopCart } from "@/contexts/ShopCartContext";
 import type { ShopListing } from "@/types/shop";
+import { buildListingTitle } from "./shop-formatters";
 
 interface ShopQuickViewModalProps {
   listing: ShopListing | null;
@@ -34,6 +35,7 @@ export default function ShopQuickViewModal({
   };
 
   const imgUrl = listing.thumbnail_url || listing.image_urls?.[0];
+  const title = buildListingTitle(listing);
 
   return (
     <div
@@ -75,7 +77,7 @@ export default function ShopQuickViewModal({
           </div>
 
           <div>
-            <h4 className="font-semibold text-slate-900">{listing.player_name}</h4>
+            <h4 className="font-semibold text-slate-900">{title}</h4>
             <p className="mt-0.5 text-sm text-slate-600">
               {listing.year} {listing.set_brand}
               {listing.parallel_variant ? ` ${listing.parallel_variant}` : ""} • {listing.grade}

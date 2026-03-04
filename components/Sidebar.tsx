@@ -127,27 +127,14 @@ function SettingsIcon() {
   );
 }
 
-function BoxIcon() {
+function LedgerIcon() {
   return (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
         strokeWidth={2}
-        d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
-      />
-    </svg>
-  );
-}
-
-function ReceiptIcon() {
-  return (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={2}
-        d="M9 14h6m-6 4h6M9 10h6M7 4h10a2 2 0 012 2v14l-3-2-3 2-3-2-3 2V6a2 2 0 012-2z"
+        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"
       />
     </svg>
   );
@@ -157,11 +144,11 @@ function PERSONAL_NAV_ITEMS(): NavItem[] {
   return [
     { name: "Dashboard", href: "/dashboard", icon: <HomeIcon />, exact: true },
     { name: "Collection", href: "/collection", icon: <CollectionIcon /> },
+    { name: "Grade Probability Engine", href: "/grade-probability", icon: <BadgeIcon />, badge: "Featured" },
     { name: "Watchlist", href: "/watchlist", icon: <EyeIcon />, isPro: true, badge: "Pro" },
     { name: "Comps", href: "/comps", icon: <ChartIcon />, badge: "Beta" },
-    { name: "Grade Probability Engine", href: "/grade-probability", icon: <BadgeIcon /> },
     { name: "CardzCheck Analyst", href: "/analyst", icon: <AnalystIcon />, isPro: true, badge: "Pro" },
-    { name: "Shop", href: "/shop", icon: <ShopIcon /> },
+    { name: "Marketplace", href: "/shop", icon: <ShopIcon /> },
     { name: "Settings", href: "/settings", icon: <SettingsIcon /> },
   ];
 }
@@ -169,16 +156,11 @@ function PERSONAL_NAV_ITEMS(): NavItem[] {
 function BUSINESS_NAV_ITEMS(): NavItem[] {
   return [
     { name: "Dashboard", href: "/business", icon: <HomeIcon />, exact: true },
-    { name: "Inventory", href: "/business/inventory", icon: <BoxIcon /> },
-    { name: "Sales", href: "/business/sales", icon: <ReceiptIcon /> },
+    { name: "Ledger", href: "/business/ledger", icon: <LedgerIcon /> },
+    { name: "Grade Probability Engine", href: "/business/grade-probability", icon: <BadgeIcon />, badge: "Featured" },
     { name: "Comps", href: "/business/comps", icon: <ChartIcon />, badge: "Beta" },
-    {
-      name: "Grade Probability Engine",
-      href: "/business/grade-probability",
-      icon: <BadgeIcon />,
-    },
     { name: "Business Consultant", href: "/business/consultant", icon: <AnalystIcon /> },
-    { name: "Shop", href: "/shop", icon: <ShopIcon /> },
+    { name: "Marketplace", href: "/shop", icon: <ShopIcon /> },
     { name: "Settings", href: "/business/settings", icon: <SettingsIcon /> },
   ];
 }
@@ -293,7 +275,11 @@ export default function Sidebar() {
                 {item.icon}
                 <span className="font-medium">{item.name}</span>
                 {item.badge && !isProFeature && (
-                  <span className="ml-auto px-1.5 py-0.5 bg-blue-500/20 text-blue-400 text-xs font-medium rounded">
+                  <span className={`ml-auto px-1.5 py-0.5 text-xs font-medium rounded ${
+                    item.badge === "Featured"
+                      ? "bg-amber-500/20 text-amber-400"
+                      : "bg-blue-500/20 text-blue-400"
+                  }`}>
                     {item.badge}
                   </span>
                 )}

@@ -14,6 +14,10 @@ vi.mock("@/lib/access", () => ({
 function buildSupabaseMock() {
   const insertedPayloads: Record<string, unknown>[] = [];
   const updates: Array<{ table: string; payload: Record<string, unknown> }> = [];
+  /** Set to a Supabase-style error to simulate insert failure (used by tests). */
+  const nextInsertError = { current: null as { code: string; message: string; details?: string } | null };
+  /** When true, inventory lookup returns null (inventory item not found). */
+  let inventoryNotFound = false;
 
   const from = vi.fn((table: string) => {
     const state: {
@@ -27,6 +31,7 @@ function buildSupabaseMock() {
       in: vi.fn(() => builder),
       maybeSingle: vi.fn(async () => {
         if (table === "business_inventory_items") {
+          if (inventoryNotFound) return { data: null, error: null };
           return {
             data: {
               id: "inv-1",
@@ -50,6 +55,11 @@ function buildSupabaseMock() {
       }),
       single: vi.fn(async () => {
         if (table === "business_sales") {
+          const err = nextInsertError.current;
+          if (err) {
+            nextInsertError.current = null;
+            return { data: null, error: err };
+          }
           const payload = state.insertedPayload || {};
           return {
             data: {
@@ -69,16 +79,22 @@ function buildSupabaseMock() {
     return builder;
   });
 
-  return {
-    client: {
-      auth: {
-        getUser: vi.fn(async () => ({
-          data: { user: { id: "user-1" } },
-          error: null,
-        })),
-      },
-      from,
+  const client = {
+    auth: {
+      getUser: vi.fn(async () => ({
+        data: { user: { id: "user-1" } },
+        error: null,
+      })),
     },
+    from,
+    nextInsertError,
+    setInventoryNotFound: (v: boolean) => {
+      inventoryNotFound = v;
+    },
+  };
+
+  return {
+    client,
     insertedPayloads,
     updates,
   };
@@ -152,5 +168,124 @@ describe("POST /api/business/sales", () => {
     expect(body.net_payout_cents).toBe(17000);
     expect(body.profit_cents).toBe(5000);
     expect(body.gross_revenue_cents).toBe(20500);
+  });
+
+  it("returns 403 when user has no business subscription", async () => {
+    hasBusinessAccessMock.mockResolvedValue(false);
+    const { client } = buildSupabaseMock();
+    createClientMock.mockResolvedValue(client);
+
+    const response = await callPost(
+      new Request("http://localhost/api/business/sales", {
+        method: "POST",
+        body: JSON.stringify({
+          sold_price_cents: 15000,
+          channel: "ebay",
+        }),
+        headers: { "Content-Type": "application/json" },
+      }) as any
+    );
+
+    expect(response.status).toBe(403);
+    const body = await response.json();
+    expect(body.error).toBe("Business subscription required");
+  });
+
+  it("returns 400 when inventory item is not found for this business", async () => {
+    const { client } = buildSupabaseMock();
+    createClientMock.mockResolvedValue(client);
+    client.setInventoryNotFound(true);
+
+    const response = await callPost(
+      new Request("http://localhost/api/business/sales", {
+        method: "POST",
+        body: JSON.stringify({
+          inventory_item_id: "11111111-1111-1111-1111-111111111111",
+          sold_price_cents: 15000,
+          channel: "ebay",
+        }),
+        headers: { "Content-Type": "application/json" },
+      }) as any
+    );
+
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(body.error).toBe("Inventory item not found for this business");
+  });
+
+  it("returns 400 with clear message when external order ID is duplicate (23505)", async () => {
+    const { client } = buildSupabaseMock();
+    createClientMock.mockResolvedValue(client);
+    client.nextInsertError.current = {
+      code: "23505",
+      message: "duplicate key value violates unique constraint idx_business_sales_business_external_order",
+      details: "Key (business_id, external_order_id)=(...) already exists.",
+    };
+
+    const response = await callPost(
+      new Request("http://localhost/api/business/sales", {
+        method: "POST",
+        body: JSON.stringify({
+          inventory_item_id: "11111111-1111-1111-1111-111111111111",
+          sold_price_cents: 15000,
+          channel: "ebay",
+        }),
+        headers: { "Content-Type": "application/json" },
+      }) as any
+    );
+
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(body.error).toContain("External order ID is already used");
+  });
+
+  it("returns 403 with clear message on RLS/permission error (42501)", async () => {
+    const { client } = buildSupabaseMock();
+    createClientMock.mockResolvedValue(client);
+    client.nextInsertError.current = {
+      code: "42501",
+      message: "permission denied for table business_sales",
+    };
+
+    const response = await callPost(
+      new Request("http://localhost/api/business/sales", {
+        method: "POST",
+        body: JSON.stringify({
+          inventory_item_id: "11111111-1111-1111-1111-111111111111",
+          sold_price_cents: 15000,
+          channel: "ebay",
+        }),
+        headers: { "Content-Type": "application/json" },
+      }) as any
+    );
+
+    expect(response.status).toBe(403);
+    const body = await response.json();
+    expect(body.error).toContain("permission");
+  });
+
+  it("returns 500 and generic message for unmapped DB errors", async () => {
+    const { client } = buildSupabaseMock();
+    createClientMock.mockResolvedValue(client);
+    client.nextInsertError.current = {
+      code: "22P02",
+      message: "invalid input syntax for type uuid",
+    };
+
+    const response = await callPost(
+      new Request("http://localhost/api/business/sales", {
+        method: "POST",
+        body: JSON.stringify({
+          inventory_item_id: "11111111-1111-1111-1111-111111111111",
+          sold_price_cents: 15000,
+          channel: "ebay",
+        }),
+        headers: { "Content-Type": "application/json" },
+      }) as any
+    );
+
+    expect(response.status).toBe(500);
+    const body = await response.json();
+    expect(body.error).toBe("Failed to create sale");
   });
 });

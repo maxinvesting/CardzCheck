@@ -83,9 +83,16 @@ export async function POST(request: NextRequest) {
   } catch (err: any) {
     if (err?.status === 403)
       return NextResponse.json({ error: err.message }, { status: 403 });
+    // 400 includes validation and mapped business errors (e.g. duplicate external_order_id).
     if (err?.status === 400)
       return NextResponse.json({ error: err.message }, { status: 400 });
-    console.error("Business sales POST error:", err);
+    // Enrich logging for debugging: Supabase/Postgres code, message, details (no PII).
+    console.error("Business sales POST error:", {
+      message: err?.message,
+      code: err?.code,
+      details: err?.details,
+      hint: err?.hint,
+    });
     return NextResponse.json(
       { error: "Failed to create sale" },
       { status: 500 }

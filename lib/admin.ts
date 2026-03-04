@@ -4,8 +4,31 @@ import { isTestMode } from "@/lib/test-mode";
 
 export type AppRole = "member" | "admin" | "owner";
 
+const DEFAULT_OWNER_EMAIL = "maxwellmario97@gmail.com";
+
+export function isOwnerRole(role: AppRole | null | undefined): boolean {
+  return role === "owner";
+}
+
+export function isAdminRole(role: AppRole | null | undefined): boolean {
+  return role === "owner" || role === "admin";
+}
+
+export function isOwner(user: { appRole?: AppRole | null } | null | undefined): boolean {
+  return isOwnerRole(user?.appRole ?? null);
+}
+
+export function isAdmin(user: { appRole?: AppRole | null } | null | undefined): boolean {
+  return isAdminRole(user?.appRole ?? null);
+}
+
 function parseBootstrapAdminEmails(): Set<string> {
-  const raw = process.env.ADMIN_EMAILS ?? "";
+  const raw = [
+    process.env.ADMIN_EMAILS ?? "",
+    process.env.OWNER_EMAIL ?? "",
+    DEFAULT_OWNER_EMAIL,
+  ].join(",");
+
   return new Set(
     raw
       .split(",")
@@ -43,7 +66,7 @@ function normalizeRole(value: unknown): AppRole | null {
 }
 
 function isElevatedRole(role: AppRole | null): boolean {
-  return role === "owner" || role === "admin";
+  return isAdminRole(role);
 }
 
 async function getUserRole(userId: string): Promise<AppRole | null> {

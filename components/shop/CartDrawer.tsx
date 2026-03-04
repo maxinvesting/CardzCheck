@@ -2,6 +2,7 @@
 
 import { useShopCart } from "@/contexts/ShopCartContext";
 import Link from "next/link";
+import { buildListingTitle } from "./shop-formatters";
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -68,7 +69,7 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
 
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium text-slate-900">
-                      {item.listing?.player_name ?? "Unknown"}
+                      {item.listing ? buildListingTitle(item.listing) : "Unknown"}
                     </p>
                     <p className="text-sm text-slate-600">
                       {item.listing?.year} {item.listing?.set_brand} • {item.listing?.grade}

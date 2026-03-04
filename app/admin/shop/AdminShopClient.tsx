@@ -2,22 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import type { ShopListing } from "@/types/shop";
-import {
-  calculateEbayParityPrice,
-  calculateEbayFees,
-} from "@/lib/ebay-parity";
-import {
-  EBAY_FEE_RATES,
-  EBAY_FEE_LABELS,
-  type EbayFeeProfile,
-} from "@/contexts/EbaySettingsContext";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-type ListingStatus = "active" | "delisted" | "sold" | "draft";
+type ListingStatus = "active" | "delisted" | "sold" | "reserved";
+type PublishState = "draft" | "published";
+type ListingCondition = "raw" | "graded" | "sealed";
+type ShippingMethod = "pwe" | "bmwt" | "box" | "pickup";
 type GradeOption =
   | "Raw"
   | "PSA 10"
@@ -31,6 +22,8 @@ type ImageItem =
   | { id: string; kind: "pending"; file: File; previewUrl: string };
 
 interface ListingFormState {
+  title: string;
+  inventory_item_id: string;
   player_name: string;
   year: string;
   set_brand: string;
@@ -39,14 +32,16 @@ interface ListingFormState {
   grade_choice: GradeOption;
   grade_other: string;
   cert_number: string;
+  condition: ListingCondition;
   sport: "Football" | "Basketball" | "Baseball" | "Other";
   price: string;
+  quantity: string;
   cmv: string;
-  cost_basis: string;
-  ebay_sold_comp: string;
-  price_override: boolean;
+  shipping_method: ShippingMethod;
   shipping_cost: string;
+  free_shipping: boolean;
   status: ListingStatus;
+  publish_state: PublishState;
   featured: boolean;
   is_premium: boolean;
   tags: string;
@@ -55,12 +50,19 @@ interface ListingFormState {
   quantity: string;
 }
 
-type TableSortKey = "margin" | "price" | "date" | "status" | "cost_basis";
-type TableSortDir = "asc" | "desc";
-
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
+interface InventoryListItem {
+  id: string;
+  title: string | null;
+  quantity: number | null;
+  grade: string | null;
+  condition_status: "raw" | "graded" | null;
+  list_price_cents: number | null;
+  current_market_value_cents: number | null;
+  channel: string | null;
+  status: string | null;
+  cert_number: string | null;
+  created_at: string;
+}
 
 const GRADE_OPTIONS: GradeOption[] = [
   "Raw",
@@ -78,16 +80,14 @@ const SPORT_OPTIONS: ListingFormState["sport"][] = [
   "Other",
 ];
 
-const STATUS_OPTIONS: ListingStatus[] = ["draft", "active", "delisted", "sold"];
-
-const STATUS_COLORS: Record<ListingStatus, string> = {
-  draft: "bg-slate-600/20 text-slate-300 border-slate-600",
-  active: "bg-emerald-500/15 text-emerald-300 border-emerald-600",
-  delisted: "bg-amber-500/15 text-amber-300 border-amber-600",
-  sold: "bg-cyan-500/15 text-cyan-300 border-cyan-600",
-};
+const STATUS_OPTIONS: ListingStatus[] = ["active", "delisted", "reserved", "sold"];
+const PUBLISH_STATE_OPTIONS: PublishState[] = ["draft", "published"];
+const CONDITION_OPTIONS: ListingCondition[] = ["raw", "graded", "sealed"];
+const SHIPPING_OPTIONS: ShippingMethod[] = ["pwe", "bmwt", "box", "pickup"];
 
 const DEFAULT_FORM: ListingFormState = {
+  title: "",
+  inventory_item_id: "",
   player_name: "",
   year: "",
   set_brand: "",
@@ -96,14 +96,16 @@ const DEFAULT_FORM: ListingFormState = {
   grade_choice: "Raw",
   grade_other: "",
   cert_number: "",
+  condition: "graded",
   sport: "Football",
   price: "",
+  quantity: "1",
   cmv: "",
-  cost_basis: "",
-  ebay_sold_comp: "",
-  price_override: false,
+  shipping_method: "bmwt",
   shipping_cost: "4.00",
-  status: "draft",
+  free_shipping: false,
+  status: "active",
+  publish_state: "published",
   featured: false,
   is_premium: false,
   tags: "",
@@ -131,6 +133,14 @@ function revokePendingUrls(images: ImageItem[]) {
   }
 }
 
+function parseYearFromTitle(title: string | null | undefined): number | null {
+  if (!title) return null;
+  const match = title.match(/\b(19|20)\d{2}\b/);
+  if (!match) return null;
+  const year = Number(match[0]);
+  return Number.isFinite(year) ? year : null;
+}
+
 function extractGrade(listing: ShopListing): {
   grade_choice: GradeOption;
   grade_other: string;
@@ -145,7 +155,16 @@ function extractGrade(listing: ShopListing): {
 
 function listingToForm(listing: ShopListing): ListingFormState {
   const grade = extractGrade(listing);
+  const shippingCost = listing.shipping_cost != null ? Number(listing.shipping_cost) : 4;
+  const quantity = Math.max(1, listing.quantity ?? 1);
+
   return {
+    title:
+      listing.title ||
+      [listing.player_name, listing.year, listing.set_brand, listing.parallel_variant]
+        .filter(Boolean)
+        .join(" "),
+    inventory_item_id: listing.inventory_item_id || "",
     player_name: listing.player_name || "",
     year: listing.year ? String(listing.year) : "",
     set_brand: listing.set_brand || "",
@@ -154,27 +173,24 @@ function listingToForm(listing: ShopListing): ListingFormState {
     grade_choice: grade.grade_choice,
     grade_other: grade.grade_other,
     cert_number: listing.cert_number || "",
+    condition: listing.condition ?? "graded",
     sport: SPORT_OPTIONS.includes(listing.sport as ListingFormState["sport"])
       ? (listing.sport as ListingFormState["sport"])
       : "Other",
     price: listing.price != null ? String(listing.price) : "",
+    quantity: String(quantity),
     cmv: listing.cmv != null ? String(listing.cmv) : "",
-    cost_basis:
-      listing.cost_basis != null ? String(listing.cost_basis) : "",
-    ebay_sold_comp:
-      (listing as ShopListing & { ebay_sold_comp?: number | null })
-        .ebay_sold_comp != null
-        ? String(
-            (listing as ShopListing & { ebay_sold_comp?: number | null })
-              .ebay_sold_comp
-          )
-        : "",
-    price_override: true, // when editing, treat as override since price already set
-    shipping_cost:
-      listing.shipping_cost != null ? String(listing.shipping_cost) : "4.00",
+    shipping_method: SHIPPING_OPTIONS.includes(
+      listing.shipping_method as ShippingMethod
+    )
+      ? (listing.shipping_method as ShippingMethod)
+      : "bmwt",
+    shipping_cost: shippingCost.toFixed(2),
+    free_shipping: shippingCost <= 0,
     status: STATUS_OPTIONS.includes(listing.status as ListingStatus)
       ? (listing.status as ListingStatus)
       : "active",
+    publish_state: listing.publish_state ?? "published",
     featured: Boolean(listing.featured),
     is_premium: Boolean(listing.is_premium),
     tags: Array.isArray(listing.tags) ? listing.tags.join(", ") : "",
@@ -193,21 +209,34 @@ function parseTags(raw: string): string[] {
 
 function formToPayload(form: ListingFormState) {
   const price = Number(form.price);
-  const year = Number(form.year);
-  const shippingCost = Number(form.shipping_cost);
+  const inferredYear = parseYearFromTitle(form.title);
+  const year = Number(form.year || inferredYear || 0);
+  const quantity = Number(form.quantity);
+  const shippingCost = form.free_shipping ? 0 : Number(form.shipping_cost);
   const cmv = form.cmv.trim() ? Number(form.cmv) : null;
-  const costBasis = form.cost_basis.trim() ? Number(form.cost_basis) : null;
-  const ebaySoldComp = form.ebay_sold_comp.trim()
-    ? Number(form.ebay_sold_comp)
-    : null;
-  const quantity = form.quantity.trim() ? Number(form.quantity) : 1;
+  const normalizedTitle = form.title.trim();
 
-  if (!form.player_name.trim()) throw new Error("Player name is required.");
-  if (!Number.isFinite(year) || year <= 0) throw new Error("Year is required.");
-  if (!form.set_brand.trim()) throw new Error("Set/brand is required.");
-  if (!Number.isFinite(price) || price < 0)
+  if (!normalizedTitle && !form.player_name.trim()) {
+    throw new Error("Title or player name is required.");
+  }
+
+  if (!Number.isFinite(year) || year <= 0) {
+    throw new Error("Year is required (or include one in the title).");
+  }
+
+  if (!form.set_brand.trim() && !normalizedTitle) {
+    throw new Error("Set/brand is required when title is empty.");
+  }
+
+  if (!Number.isFinite(price) || price < 0) {
     throw new Error("Price must be a valid number.");
-  if (!Number.isFinite(shippingCost) || shippingCost < 0)
+  }
+
+  if (!Number.isFinite(quantity) || quantity < 1) {
+    throw new Error("Quantity must be at least 1.");
+  }
+
+  if (!Number.isFinite(shippingCost) || shippingCost < 0) {
     throw new Error("Shipping cost must be 0 or greater.");
   if (cmv != null && (!Number.isFinite(cmv) || cmv < 0))
     throw new Error("CMV must be empty or a valid number.");
@@ -217,21 +246,27 @@ function formToPayload(form: ListingFormState) {
       ? form.grade_other.trim() || "Raw"
       : form.grade_choice;
 
+  const titleOrFallback = normalizedTitle || form.player_name.trim();
+
   return {
-    player_name: form.player_name.trim(),
+    title: titleOrFallback,
+    inventory_item_id: form.inventory_item_id.trim() || null,
+    player_name: form.player_name.trim() || titleOrFallback,
     year,
-    set_brand: form.set_brand.trim(),
+    set_brand: form.set_brand.trim() || titleOrFallback,
     parallel_variant: form.parallel_variant.trim() || null,
     card_number: form.card_number.trim() || null,
-    grade,
+    grade: form.condition === "raw" ? "Raw" : grade,
     cert_number: form.cert_number.trim() || null,
+    condition: form.condition,
     sport: form.sport,
     price,
+    quantity: Math.trunc(quantity),
     cmv,
-    cost_basis: costBasis,
-    ebay_sold_comp: ebaySoldComp,
+    shipping_method: form.shipping_method,
     shipping_cost: shippingCost,
     status: form.status,
+    publish_state: form.publish_state,
     featured: form.featured,
     is_premium: form.is_premium,
     tags: parseTags(form.tags),
@@ -251,12 +286,15 @@ function toImageItemsFromUrls(urls: string[]): ImageItem[] {
 
 function cloneListingForCreate(listing: ShopListing) {
   return {
+    title: listing.title,
+    inventory_item_id: listing.inventory_item_id,
     player_name: listing.player_name,
     year: listing.year,
     set_brand: listing.set_brand,
     parallel_variant: listing.parallel_variant,
     card_number: listing.card_number,
     grade: listing.grade,
+    condition: listing.condition,
     cert_number: listing.cert_number,
     sport: listing.sport,
     price: listing.price,
@@ -267,6 +305,7 @@ function cloneListingForCreate(listing: ShopListing) {
         .ebay_sold_comp ?? null,
     shipping_cost: listing.shipping_cost,
     status: listing.status,
+    publish_state: listing.publish_state,
     featured: listing.featured,
     is_premium: listing.is_premium,
     tags: listing.tags,
@@ -281,26 +320,41 @@ function cloneListingForCreate(listing: ShopListing) {
   };
 }
 
-function computeMargin(
-  price: number | undefined | null,
-  costBasis: number | undefined | null
-): number | null {
-  if (!price || !costBasis || costBasis <= 0) return null;
-  return ((price - costBasis) / costBasis) * 100;
-}
+function inventoryItemToFormPatch(item: InventoryListItem): Partial<ListingFormState> {
+  const title = (item.title || "").trim();
+  const year = parseYearFromTitle(title);
+  const listPrice =
+    item.list_price_cents != null && Number.isFinite(item.list_price_cents)
+      ? (item.list_price_cents / 100).toFixed(2)
+      : "";
+  const cmv =
+    item.current_market_value_cents != null &&
+    Number.isFinite(item.current_market_value_cents)
+      ? (item.current_market_value_cents / 100).toFixed(2)
+      : "";
+  const quantity =
+    item.quantity != null && Number.isFinite(item.quantity)
+      ? String(Math.max(1, Math.trunc(item.quantity)))
+      : "1";
 
-function formatUsd(value: number, digits = 2): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  }).format(value);
+  return {
+    title,
+    inventory_item_id: item.id,
+    player_name: title,
+    year: year ? String(year) : "",
+    set_brand: title,
+    grade_choice: "Other",
+    grade_other: (item.grade || "").trim(),
+    cert_number: (item.cert_number || "").trim(),
+    condition: item.condition_status === "raw" ? "raw" : "graded",
+    price: listPrice,
+    quantity,
+    cmv,
+    status: "active",
+    publish_state: "draft",
+    tags: item.channel ? item.channel : "",
+  };
 }
-
-// ---------------------------------------------------------------------------
-// Sub-components
-// ---------------------------------------------------------------------------
 
 function ImageManager({
   images,
@@ -567,20 +621,37 @@ function ListingFields({
     "w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-white focus:border-cyan-600 focus:outline-none focus:ring-1 focus:ring-cyan-600/30";
 
   return (
-    <div className="space-y-4">
-      {/* Card identity fields */}
-      <div className="grid gap-3 md:grid-cols-2">
-        <label className="space-y-1 text-sm">
-          <span className="text-gray-300">Player name *</span>
-          <input
-            value={form.player_name}
-            onChange={(e) =>
-              setForm((p) => ({ ...p, player_name: e.target.value }))
-            }
-            className={inputClass}
-            required
-          />
-        </label>
+    <div className="grid gap-3 md:grid-cols-2">
+      <label className="space-y-1 text-sm md:col-span-2">
+        <span className="text-gray-300">Listing title *</span>
+        <input
+          value={form.title}
+          onChange={(event) =>
+            setForm((previous) => ({ ...previous, title: event.target.value }))
+          }
+          className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-white"
+          placeholder="e.g. 2024 Topps Chrome C.J. Stroud PSA 10"
+          required
+        />
+      </label>
+
+      {form.inventory_item_id && (
+        <div className="rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-xs text-gray-300 md:col-span-2">
+          Linked inventory item: <span className="font-mono">{form.inventory_item_id}</span>
+        </div>
+      )}
+
+      <label className="space-y-1 text-sm">
+        <span className="text-gray-300">Player name / entity *</span>
+        <input
+          value={form.player_name}
+          onChange={(event) =>
+            setForm((previous) => ({ ...previous, player_name: event.target.value }))
+          }
+          className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-white"
+          required
+        />
+      </label>
 
         <label className="space-y-1 text-sm">
           <span className="text-gray-300">Year *</span>
@@ -692,19 +763,44 @@ function ListingFields({
           </select>
         </div>
 
-        <label className="space-y-1 text-sm">
-          <span className="text-gray-300">Quantity *</span>
-          <input
-            type="number"
-            min="1"
-            value={form.quantity}
-            onChange={(e) =>
-              setForm((p) => ({ ...p, quantity: e.target.value }))
-            }
-            className={inputClass}
-            required
-          />
-        </label>
+      <div className="space-y-1 text-sm">
+        <span className="text-gray-300">Condition *</span>
+        <select
+          value={form.condition}
+          onChange={(event) =>
+            setForm((previous) => ({
+              ...previous,
+              condition: event.target.value as ListingCondition,
+            }))
+          }
+          className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-white"
+        >
+          {CONDITION_OPTIONS.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="space-y-1 text-sm">
+        <span className="text-gray-300">Sport *</span>
+        <select
+          value={form.sport}
+          onChange={(event) =>
+            setForm((previous) => ({
+              ...previous,
+              sport: event.target.value as ListingFormState["sport"],
+            }))
+          }
+          className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-white"
+        >
+          {SPORT_OPTIONS.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* Description / condition notes */}
@@ -721,186 +817,137 @@ function ListingFields({
         />
       </label>
 
-      {/* Pricing section */}
-      <div className="rounded-xl border border-gray-800 bg-gray-900/60 p-4 space-y-4">
-        <h4 className="text-sm font-semibold text-gray-200">
-          Pricing & Cost
-        </h4>
+      <label className="space-y-1 text-sm">
+        <span className="text-gray-300">Quantity *</span>
+        <input
+          type="number"
+          min="1"
+          step="1"
+          value={form.quantity}
+          onChange={(event) =>
+            setForm((previous) => ({ ...previous, quantity: event.target.value }))
+          }
+          className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-white"
+          required
+        />
+      </label>
 
-        <div className="grid gap-3 md:grid-cols-2">
-          <label className="space-y-1 text-sm">
-            <span className="text-amber-400 font-medium">
-              Cost Basis (private)
-            </span>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={form.cost_basis}
-              onChange={(e) =>
-                setForm((p) => ({ ...p, cost_basis: e.target.value }))
-              }
-              className={inputClass}
-              placeholder="What you paid"
-            />
-            <span className="text-[11px] text-gray-500">
-              Never shown to buyers.
-            </span>
-          </label>
+      <label className="space-y-1 text-sm">
+        <span className="text-gray-300">CMV</span>
+        <input
+          type="number"
+          step="0.01"
+          value={form.cmv}
+          onChange={(event) =>
+            setForm((previous) => ({ ...previous, cmv: event.target.value }))
+          }
+          className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-white"
+        />
+      </label>
 
-          <label className="space-y-1 text-sm">
-            <span className="text-gray-300">
-              eBay Sold Comp
-            </span>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={form.ebay_sold_comp}
-              onChange={(e) => handleEbaySoldCompChange(e.target.value)}
-              className={inputClass}
-              placeholder="Reference eBay sold price"
-            />
-            <span className="text-[11px] text-gray-500">
-              Shop price auto-calculates at 95% of this value.
-            </span>
-          </label>
-
-          <div className="space-y-1 text-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-gray-300">Shop Price *</span>
-              {form.price_override &&
-                Number(form.ebay_sold_comp) > 0 && (
-                  <button
-                    type="button"
-                    onClick={resetPriceToComp}
-                    className="text-[11px] text-cyan-400 hover:text-cyan-300"
-                  >
-                    Reset to 95%
-                  </button>
-                )}
-            </div>
-            <input
-              type="number"
-              step="0.01"
-              value={form.price}
-              onChange={(e) => handlePriceChange(e.target.value)}
-              className={inputClass}
-              required
-            />
-            {form.price_override && Number(form.ebay_sold_comp) > 0 && (
-              <span className="text-[11px] text-amber-400">
-                Price manually overridden (auto = {formatUsd(Number(form.ebay_sold_comp) * 0.95)})
-              </span>
-            )}
-          </div>
-
-          <label className="space-y-1 text-sm">
-            <span className="text-gray-300">Est. Market Value</span>
-            <input
-              type="number"
-              step="0.01"
-              value={form.cmv}
-              onChange={(e) =>
-                setForm((p) => ({ ...p, cmv: e.target.value }))
-              }
-              className={inputClass}
-            />
-          </label>
-
-          <label className="space-y-1 text-sm">
-            <span className="text-gray-300">Shipping cost *</span>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={form.shipping_cost}
-              onChange={(e) =>
-                setForm((p) => ({ ...p, shipping_cost: e.target.value }))
-              }
-              className={inputClass}
-              required
-            />
-          </label>
-
-          <div className="space-y-1 text-sm">
-            <span className="text-gray-300">Status *</span>
-            <select
-              value={form.status}
-              onChange={(e) =>
-                setForm((p) => ({
-                  ...p,
-                  status: e.target.value as ListingStatus,
-                }))
-              }
-              className={inputClass}
-            >
-              {STATUS_OPTIONS.map((status) => (
-                <option key={status} value={status}>
-                  {status.charAt(0).toUpperCase() + status.slice(1)}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* Margin display */}
-        {Number(form.cost_basis) > 0 && Number(form.price) > 0 && (
-          <div className="flex items-center gap-4 rounded-lg bg-gray-800/50 px-4 py-3">
-            <div>
-              <span className="text-[10px] uppercase tracking-wider text-gray-500">
-                Margin
-              </span>
-              <p
-                className={`text-lg font-bold tabular-nums ${
-                  computeMargin(Number(form.price), Number(form.cost_basis))! >= 0
-                    ? "text-emerald-400"
-                    : "text-rose-400"
-                }`}
-              >
-                {computeMargin(
-                  Number(form.price),
-                  Number(form.cost_basis)
-                )!.toFixed(1)}
-                %
-              </p>
-            </div>
-            <div>
-              <span className="text-[10px] uppercase tracking-wider text-gray-500">
-                Profit
-              </span>
-              <p
-                className={`text-lg font-bold tabular-nums ${
-                  Number(form.price) - Number(form.cost_basis) >= 0
-                    ? "text-emerald-400"
-                    : "text-rose-400"
-                }`}
-              >
-                {formatUsd(
-                  Number(form.price) - Number(form.cost_basis)
-                )}
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* eBay Parity Calculator */}
-        <EbayParityCalculator shopPrice={shopPrice} />
+      <div className="space-y-1 text-sm">
+        <span className="text-gray-300">Shipping method *</span>
+        <select
+          value={form.shipping_method}
+          onChange={(event) =>
+            setForm((previous) => ({
+              ...previous,
+              shipping_method: event.target.value as ShippingMethod,
+            }))
+          }
+          className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-white"
+        >
+          {SHIPPING_OPTIONS.map((option) => (
+            <option key={option} value={option}>
+              {option.toUpperCase()}
+            </option>
+          ))}
+        </select>
       </div>
 
-      {/* Tags, notes, checkboxes */}
-      <div className="grid gap-3 md:grid-cols-2">
-        <label className="space-y-1 text-sm md:col-span-2">
-          <span className="text-gray-300">Tags (comma-separated)</span>
-          <input
-            value={form.tags}
-            onChange={(e) =>
-              setForm((p) => ({ ...p, tags: e.target.value }))
-            }
-            className={inputClass}
-            placeholder="rookie, prizm, color match"
-          />
-        </label>
+      <label className="space-y-1 text-sm">
+        <span className="text-gray-300">Shipping cost *</span>
+        <input
+          type="number"
+          step="0.01"
+          min="0"
+          value={form.shipping_cost}
+          onChange={(event) =>
+            setForm((previous) => ({ ...previous, shipping_cost: event.target.value }))
+          }
+          disabled={form.free_shipping}
+          className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-white"
+          required
+        />
+      </label>
+
+      <label className="flex items-center gap-2 rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-300">
+        <input
+          type="checkbox"
+          checked={form.free_shipping}
+          onChange={(event) =>
+            setForm((previous) => ({
+              ...previous,
+              free_shipping: event.target.checked,
+              shipping_cost: event.target.checked ? "0.00" : previous.shipping_cost,
+            }))
+          }
+          className="rounded border-gray-600"
+        />
+        Free shipping
+      </label>
+
+      <div className="space-y-1 text-sm">
+        <span className="text-gray-300">Publish state *</span>
+        <select
+          value={form.publish_state}
+          onChange={(event) =>
+            setForm((previous) => ({
+              ...previous,
+              publish_state: event.target.value as PublishState,
+            }))
+          }
+          className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-white"
+        >
+          {PUBLISH_STATE_OPTIONS.map((publishState) => (
+            <option key={publishState} value={publishState}>
+              {publishState}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="space-y-1 text-sm">
+        <span className="text-gray-300">Lifecycle status *</span>
+        <select
+          value={form.status}
+          onChange={(event) =>
+            setForm((previous) => ({
+              ...previous,
+              status: event.target.value as ListingStatus,
+            }))
+          }
+          className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-white"
+        >
+          {STATUS_OPTIONS.map((status) => (
+            <option key={status} value={status}>
+              {status}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <label className="space-y-1 text-sm md:col-span-2">
+        <span className="text-gray-300">Channel tags (optional, comma-separated)</span>
+        <input
+          value={form.tags}
+          onChange={(event) =>
+            setForm((previous) => ({ ...previous, tags: event.target.value }))
+          }
+          className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-white"
+          placeholder="rookie, prizm, color match"
+        />
+      </label>
 
         <label className="space-y-1 text-sm md:col-span-2">
           <span className="text-gray-300">Private notes (admin only)</span>
@@ -947,6 +994,7 @@ function ListingFields({
 // ---------------------------------------------------------------------------
 
 export default function AdminShopClient() {
+  const searchParams = useSearchParams();
   const [listings, setListings] = useState<ShopListing[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -956,6 +1004,12 @@ export default function AdminShopClient() {
 
   const [createForm, setCreateForm] = useState<ListingFormState>(DEFAULT_FORM);
   const [createImages, setCreateImages] = useState<ImageItem[]>([]);
+  const [inventoryItems, setInventoryItems] = useState<InventoryListItem[]>([]);
+  const [inventoryLoading, setInventoryLoading] = useState(false);
+  const [inventoryError, setInventoryError] = useState<string | null>(null);
+  const [inventoryQuery, setInventoryQuery] = useState("");
+  const [selectedInventoryId, setSelectedInventoryId] = useState("");
+  const [queryPrefillApplied, setQueryPrefillApplied] = useState(false);
 
   const [editingListing, setEditingListing] = useState<ShopListing | null>(
     null
@@ -965,17 +1019,28 @@ export default function AdminShopClient() {
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
-  // Table state
-  const [sortKey, setSortKey] = useState<TableSortKey>("date");
-  const [sortDir, setSortDir] = useState<TableSortDir>("desc");
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [bulkBusy, setBulkBusy] = useState(false);
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [inlineDrafts, setInlineDrafts] = useState<
+    Record<
+      string,
+      {
+        price: string;
+        shipping_cost: string;
+        status: ListingStatus;
+        publish_state: PublishState;
+        featured: boolean;
+      }
+    >
+  >({});
 
   const [busyRow, setBusyRow] = useState<string | null>(null);
 
-  // Collapsed/expanded form sections
-  const [createFormOpen, setCreateFormOpen] = useState(false);
+  const filteredInventoryItems = useMemo(() => {
+    const query = inventoryQuery.trim().toLowerCase();
+    if (!query) return inventoryItems;
+    return inventoryItems.filter((item) =>
+      (item.title || "").toLowerCase().includes(query)
+    );
+  }, [inventoryItems, inventoryQuery]);
 
   const loadListings = useCallback(async () => {
     setLoading(true);
@@ -986,7 +1051,26 @@ export default function AdminShopClient() {
       const data = await response.json();
       if (!response.ok)
         throw new Error(data?.error || "Failed to load listings.");
-      setListings(Array.isArray(data?.listings) ? data.listings : []);
+      }
+
+      const nextListings = Array.isArray(data?.listings) ? data.listings : [];
+      setListings(nextListings);
+      setInlineDrafts(
+        Object.fromEntries(
+          nextListings.map((listing: ShopListing) => [
+            listing.id,
+            {
+              price: Number(listing.price).toFixed(2),
+              shipping_cost: Number(listing.shipping_cost ?? 0).toFixed(2),
+              status: STATUS_OPTIONS.includes(listing.status as ListingStatus)
+                ? (listing.status as ListingStatus)
+                : "active",
+              publish_state: listing.publish_state ?? "published",
+              featured: Boolean(listing.featured),
+            },
+          ])
+        )
+      );
     } catch (error) {
       console.error(error);
     } finally {
@@ -998,10 +1082,60 @@ export default function AdminShopClient() {
     loadListings();
   }, [loadListings]);
 
-  const uploadPendingImages = async (
-    listingId: string,
-    images: ImageItem[]
-  ) => {
+  const loadInventoryItems = useCallback(async () => {
+    setInventoryLoading(true);
+    setInventoryError(null);
+    try {
+      const response = await fetch("/api/admin/shop/inventory?limit=200", {
+        cache: "no-store",
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error || "Failed to load inventory items.");
+      }
+      setInventoryItems(Array.isArray(data?.items) ? data.items : []);
+    } catch (error) {
+      setInventoryError(
+        error instanceof Error ? error.message : "Failed to load inventory items."
+      );
+    } finally {
+      setInventoryLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadInventoryItems();
+  }, [loadInventoryItems]);
+
+  const applyInventoryPrefill = useCallback((item: InventoryListItem) => {
+    const patch = inventoryItemToFormPatch(item);
+    setCreateForm((previous) => ({
+      ...previous,
+      ...patch,
+    }));
+    setCreateError(null);
+    setCreateSuccess(`Prefilled from inventory item: ${item.title || item.id}`);
+  }, []);
+
+  useEffect(() => {
+    if (queryPrefillApplied) return;
+    const inventoryItemId = searchParams.get("inventory_item_id");
+    if (!inventoryItemId || inventoryItems.length === 0) return;
+
+    const item = inventoryItems.find((candidate) => candidate.id === inventoryItemId);
+    if (!item) return;
+
+    setSelectedInventoryId(item.id);
+    applyInventoryPrefill(item);
+    setQueryPrefillApplied(true);
+  }, [
+    applyInventoryPrefill,
+    inventoryItems,
+    queryPrefillApplied,
+    searchParams,
+  ]);
+
+  const uploadPendingImages = async (listingId: string, images: ImageItem[]) => {
     const urls: string[] = [];
     for (const image of images) {
       if (image.kind === "existing") {
@@ -1037,13 +1171,16 @@ export default function AdminShopClient() {
     return data;
   };
 
-  const handleCreate = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const createListing = async (publishState: PublishState) => {
     setCreateSubmitting(true);
     setCreateError(null);
     setCreateSuccess(null);
     try {
-      const payload = formToPayload(createForm);
+      const payload = formToPayload({
+        ...createForm,
+        publish_state: publishState,
+      });
+
       const createResponse = await fetch("/api/admin/shop/listings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1064,8 +1201,12 @@ export default function AdminShopClient() {
       revokePendingUrls(createImages);
       setCreateImages([]);
       setCreateForm(DEFAULT_FORM);
-      setCreateSuccess("Listing created.");
-      setCreateFormOpen(false);
+      setSelectedInventoryId("");
+      setCreateSuccess(
+        publishState === "published"
+          ? "Listing published to marketplace."
+          : "Listing saved as draft."
+      );
       await loadListings();
     } catch (error) {
       setCreateError(
@@ -1074,6 +1215,11 @@ export default function AdminShopClient() {
     } finally {
       setCreateSubmitting(false);
     }
+  };
+
+  const handleCreate = async (event: React.FormEvent) => {
+    event.preventDefault();
+    await createListing(createForm.publish_state);
   };
 
   const handleSync = async () => {
@@ -1129,15 +1275,70 @@ export default function AdminShopClient() {
     }
   };
 
-  const deleteListing = async (id: string) => {
+  const updateInlineDraft = (
+    listingId: string,
+    patch: Partial<{
+      price: string;
+      shipping_cost: string;
+      status: ListingStatus;
+      publish_state: PublishState;
+      featured: boolean;
+    }>
+  ) => {
+    setInlineDrafts((previous) => ({
+      ...previous,
+      [listingId]: {
+        ...previous[listingId],
+        ...patch,
+      },
+    }));
+  };
+
+  const commitInline = async (
+    listing: ShopListing,
+    field: "price" | "shipping_cost" | "status" | "publish_state" | "featured"
+  ) => {
+    const draft = inlineDrafts[listing.id];
+    if (!draft) return;
+
     try {
-      setBusyRow(id);
-      const response = await fetch(`/api/admin/shop/listings?id=${id}`, {
-        method: "DELETE",
-      });
-      const data = await response.json();
-      if (!response.ok)
-        throw new Error(data?.error || "Failed to delete listing.");
+      setBusyRow(listing.id);
+
+      if (field === "price") {
+        const next = Number(draft.price);
+        if (!Number.isFinite(next) || next < 0) {
+          throw new Error("Price must be a valid number.");
+        }
+        if (Number(listing.price) !== next) {
+          await patchListing(listing.id, { price: next });
+        }
+      }
+
+      if (field === "shipping_cost") {
+        const next = Number(draft.shipping_cost);
+        if (!Number.isFinite(next) || next < 0) {
+          throw new Error("Shipping cost must be 0 or greater.");
+        }
+        if (Number(listing.shipping_cost ?? 0) !== next) {
+          await patchListing(listing.id, { shipping_cost: next });
+        }
+      }
+
+      if (field === "status" && listing.status !== draft.status) {
+        await patchListing(listing.id, { status: draft.status });
+      }
+
+      if (
+        field === "publish_state" &&
+        (listing.publish_state ?? "published") !== draft.publish_state
+      ) {
+        await patchListing(listing.id, { publish_state: draft.publish_state });
+      }
+
+      if (field === "featured" && Boolean(listing.featured) !== draft.featured) {
+        await patchListing(listing.id, { featured: draft.featured });
+      }
+
       await loadListings();
       setDeleteConfirmId(null);
       if (editingListing?.id === id) closeEditModal();
@@ -1184,128 +1385,23 @@ export default function AdminShopClient() {
     }
   };
 
-  // Bulk actions
-  const bulkUpdateStatus = async (status: ListingStatus) => {
-    if (selectedIds.size === 0) return;
-    setBulkBusy(true);
-    try {
-      const response = await fetch("/api/admin/shop/listings", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ids: Array.from(selectedIds),
-          status,
-        }),
-      });
-      if (!response.ok) throw new Error("Bulk update failed.");
-      setSelectedIds(new Set());
-      await loadListings();
-    } catch (error) {
-      alert(error instanceof Error ? error.message : "Bulk update failed.");
-    } finally {
-      setBulkBusy(false);
-    }
-  };
+  const totalPublishedActive = useMemo(
+    () =>
+      listings.filter(
+        (listing) =>
+          listing.status === "active" &&
+          (listing.publish_state ?? "published") === "published"
+      ).length,
+    [listings]
+  );
 
-  const toggleSelectAll = () => {
-    if (selectedIds.size === sortedListings.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(sortedListings.map((l) => l.id)));
-    }
-  };
-
-  const toggleSelect = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  // Sorting
-  const toggleSort = (key: TableSortKey) => {
-    if (sortKey === key) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    } else {
-      setSortKey(key);
-      setSortDir("desc");
-    }
-  };
-
-  const sortedListings = useMemo(() => {
-    const list = [...listings];
-    const dir = sortDir === "asc" ? 1 : -1;
-
-    list.sort((a, b) => {
-      switch (sortKey) {
-        case "margin": {
-          const mA = computeMargin(a.price, a.cost_basis) ?? -Infinity;
-          const mB = computeMargin(b.price, b.cost_basis) ?? -Infinity;
-          return (mA - mB) * dir;
-        }
-        case "price":
-          return (a.price - b.price) * dir;
-        case "cost_basis": {
-          const cA = a.cost_basis ?? 0;
-          const cB = b.cost_basis ?? 0;
-          return (cA - cB) * dir;
-        }
-        case "status": {
-          const statusOrder: Record<string, number> = {
-            draft: 0,
-            active: 1,
-            delisted: 2,
-            sold: 3,
-          };
-          return (
-            ((statusOrder[a.status] ?? 4) - (statusOrder[b.status] ?? 4)) * dir
-          );
-        }
-        case "date":
-        default:
-          return (
-            (new Date(a.created_at).getTime() -
-              new Date(b.created_at).getTime()) *
-            dir
-          );
-      }
-    });
-
-    return list;
-  }, [listings, sortKey, sortDir]);
-
-  // Summary stats
-  const stats = useMemo(() => {
-    const active = listings.filter((l) => l.status === "active");
-    const draft = listings.filter((l) => l.status === "draft");
-    const sold = listings.filter((l) => l.status === "sold");
-    const totalValue = active.reduce(
-      (sum, l) =>
-        sum +
-        Number(l.price) *
-          Math.max(0, (l.quantity ?? 0) - (l.quantity_sold ?? 0)),
-      0
-    );
-    const totalCost = listings
-      .filter((l) => l.cost_basis != null && l.cost_basis > 0)
-      .reduce((sum, l) => sum + Number(l.cost_basis!), 0);
-
-    return {
-      total: listings.length,
-      active: active.length,
-      draft: draft.length,
-      sold: sold.length,
-      totalValue,
-      totalCost,
-    };
-  }, [listings]);
-
-  const sortIndicator = (key: TableSortKey) => {
-    if (sortKey !== key) return "";
-    return sortDir === "asc" ? " ^" : " v";
-  };
+  const totalDraft = useMemo(
+    () =>
+      listings.filter(
+        (listing) => (listing.publish_state ?? "published") === "draft"
+      ).length,
+    [listings]
+  );
 
   return (
     <div className="space-y-6">
@@ -1341,11 +1437,9 @@ export default function AdminShopClient() {
           className="flex w-full items-center justify-between px-5 py-4 text-left"
         >
           <div>
-            <h2 className="text-xl font-semibold text-white">
-              Create listing
-            </h2>
+            <h2 className="text-xl font-semibold text-white">Create marketplace listing</h2>
             <p className="text-sm text-gray-400">
-              Add cards with photos, pricing, cost basis, and publish status.
+              Add listings from inventory or manual entry with photos, condition, shipping, and publish controls.
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -1356,7 +1450,7 @@ export default function AdminShopClient() {
               className="rounded-lg border border-gray-700 px-3 py-2 text-sm text-gray-300 hover:border-gray-600 hover:text-white"
               onClick={(e) => e.stopPropagation()}
             >
-              View shop
+              View marketplace
             </Link>
             <button
               type="button"
@@ -1375,19 +1469,69 @@ export default function AdminShopClient() {
           </div>
         </button>
 
-        {createFormOpen && (
-          <div className="border-t border-gray-800 px-5 pb-5 pt-4">
-            <form className="space-y-4" onSubmit={handleCreate}>
-              <ListingFields form={createForm} setForm={setCreateForm} />
+        <form className="space-y-4" onSubmit={handleCreate}>
+          <div className="rounded-xl border border-gray-800 bg-gray-950/60 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-sm font-medium text-gray-200">Prefill from inventory</h3>
+              <button
+                type="button"
+                onClick={loadInventoryItems}
+                disabled={inventoryLoading}
+                className="rounded border border-gray-700 px-2 py-1 text-xs text-gray-300 hover:border-gray-600 disabled:opacity-60"
+              >
+                {inventoryLoading ? "Refreshing..." : "Refresh inventory"}
+              </button>
+            </div>
 
-              <div className="space-y-2">
-                <h3 className="text-sm font-medium text-gray-200">Photos</h3>
-                <ImageManager
-                  images={createImages}
-                  setImages={setCreateImages}
-                  uploaderId="create-listing-images"
-                />
-              </div>
+            <div className="mt-3 grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+              <input
+                value={inventoryQuery}
+                onChange={(event) => setInventoryQuery(event.target.value)}
+                placeholder="Search inventory title"
+                className="rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white"
+              />
+              <select
+                value={selectedInventoryId}
+                onChange={(event) => setSelectedInventoryId(event.target.value)}
+                className="rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white"
+              >
+                <option value="">Select inventory item</option>
+                {filteredInventoryItems.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {(item.title || "Untitled")} · Qty {item.quantity ?? 0} · {item.status || "unknown"}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => {
+                  const item = inventoryItems.find(
+                    (candidate) => candidate.id === selectedInventoryId
+                  );
+                  if (!item) return;
+                  applyInventoryPrefill(item);
+                }}
+                disabled={!selectedInventoryId}
+                className="rounded-lg bg-cyan-700 px-3 py-2 text-sm font-medium text-white hover:bg-cyan-600 disabled:opacity-60"
+              >
+                Use item
+              </button>
+            </div>
+
+            {inventoryError && (
+              <p className="mt-2 text-xs text-rose-400">{inventoryError}</p>
+            )}
+          </div>
+
+          <ListingFields form={createForm} setForm={setCreateForm} />
+          <div className="space-y-2">
+            <h3 className="text-sm font-medium text-gray-200">Photos</h3>
+            <ImageManager
+              images={createImages}
+              setImages={setCreateImages}
+              uploaderId="create-listing-images"
+            />
+          </div>
 
               {createError && (
                 <p className="text-sm text-rose-400">{createError}</p>
@@ -1396,26 +1540,34 @@ export default function AdminShopClient() {
                 <p className="text-sm text-emerald-400">{createSuccess}</p>
               )}
 
-              <button
-                type="submit"
-                disabled={createSubmitting}
-                className="rounded-lg bg-cyan-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-cyan-500 disabled:opacity-60"
-              >
-                {createSubmitting ? "Publishing..." : "Create listing"}
-              </button>
-            </form>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={createSubmitting}
+              onClick={() => void createListing("draft")}
+              className="rounded-lg border border-gray-600 px-5 py-2.5 text-sm font-medium text-gray-100 hover:border-gray-500 disabled:opacity-60"
+            >
+              {createSubmitting ? "Submitting..." : "Save draft"}
+            </button>
+            <button
+              type="button"
+              disabled={createSubmitting}
+              onClick={() => void createListing("published")}
+              className="rounded-lg bg-cyan-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-cyan-500 disabled:opacity-60"
+            >
+              {createSubmitting ? "Publishing..." : "Publish to marketplace"}
+            </button>
           </div>
-        )}
+        </form>
       </section>
 
       {/* Listing Management Table */}
       <section className="rounded-2xl border border-gray-800 bg-gray-900/50 p-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-xl font-semibold text-white">My listings</h2>
+            <h2 className="text-xl font-semibold text-white">Marketplace listings</h2>
             <p className="text-sm text-gray-400">
-              {stats.total} total &middot; {stats.active} active &middot;{" "}
-              {stats.draft} draft &middot; {stats.sold} sold
+              {listings.length} total • {totalPublishedActive} live • {totalDraft} draft
             </p>
           </div>
 
@@ -1466,58 +1618,22 @@ export default function AdminShopClient() {
         {loading ? (
           <p className="text-sm text-gray-400">Loading listings...</p>
         ) : listings.length === 0 ? (
-          <p className="text-sm text-gray-400">No listings yet.</p>
+          <p className="text-sm text-gray-400">No marketplace listings yet.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
               <thead>
                 <tr className="border-b border-gray-800 text-gray-400">
-                  <th className="px-2 py-2 font-medium">
-                    <input
-                      type="checkbox"
-                      checked={
-                        selectedIds.size === sortedListings.length &&
-                        sortedListings.length > 0
-                      }
-                      onChange={toggleSelectAll}
-                      className="rounded border-gray-600"
-                    />
-                  </th>
-                  <th className="px-2 py-2 font-medium">Thumb</th>
-                  <th className="px-2 py-2 font-medium">Card</th>
-                  <th className="px-2 py-2 font-medium">Grade</th>
-                  <th
-                    className="cursor-pointer px-2 py-2 font-medium hover:text-white"
-                    onClick={() => toggleSort("cost_basis")}
-                  >
-                    Cost{sortIndicator("cost_basis")}
-                  </th>
-                  <th
-                    className="cursor-pointer px-2 py-2 font-medium hover:text-white"
-                    onClick={() => toggleSort("price")}
-                  >
-                    Shop Price{sortIndicator("price")}
-                  </th>
-                  <th
-                    className="cursor-pointer px-2 py-2 font-medium hover:text-white"
-                    onClick={() => toggleSort("margin")}
-                  >
-                    Margin{sortIndicator("margin")}
-                  </th>
-                  <th
-                    className="cursor-pointer px-2 py-2 font-medium hover:text-white"
-                    onClick={() => toggleSort("status")}
-                  >
-                    Status{sortIndicator("status")}
-                  </th>
-                  <th className="px-2 py-2 font-medium">Qty</th>
-                  <th
-                    className="cursor-pointer px-2 py-2 font-medium hover:text-white"
-                    onClick={() => toggleSort("date")}
-                  >
-                    Date{sortIndicator("date")}
-                  </th>
-                  <th className="px-2 py-2 font-medium">Actions</th>
+                  <th className="px-3 py-2 font-medium">Thumbnail</th>
+                  <th className="px-3 py-2 font-medium">Title</th>
+                  <th className="px-3 py-2 font-medium">Condition / Grade</th>
+                  <th className="px-3 py-2 font-medium">Price</th>
+                  <th className="px-3 py-2 font-medium">Shipping</th>
+                  <th className="px-3 py-2 font-medium">Lifecycle</th>
+                  <th className="px-3 py-2 font-medium">Visibility</th>
+                  <th className="px-3 py-2 font-medium">Featured</th>
+                  <th className="px-3 py-2 font-medium">Created</th>
+                  <th className="px-3 py-2 font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-800/60">
@@ -1563,19 +1679,27 @@ export default function AdminShopClient() {
                           </div>
                         )}
                       </td>
-                      <td className="max-w-[180px] px-2 py-2 text-white">
-                        <div className="truncate font-medium">
-                          {listing.player_name}
-                        </div>
-                        <div className="truncate text-xs text-gray-400">
-                          {listing.year} {listing.set_brand}
-                          {listing.parallel_variant
-                            ? ` ${listing.parallel_variant}`
-                            : ""}
+                      <td className="px-3 py-2 text-white">
+                        <div className="font-medium">{listing.title || listing.player_name}</div>
+                        <div className="text-xs text-gray-400">
+                          {listing.year} • {listing.set_brand}
                         </div>
                       </td>
-                      <td className="px-2 py-2 text-gray-200 whitespace-nowrap">
-                        {listing.grade}
+                      <td className="px-3 py-2 text-gray-200">
+                        <div className="capitalize">{listing.condition || "graded"}</div>
+                        <div className="text-xs text-gray-400">{listing.grade}</div>
+                      </td>
+                      <td className="px-3 py-2">
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={draft?.price ?? ""}
+                          onChange={(event) =>
+                            updateInlineDraft(listing.id, { price: event.target.value })
+                          }
+                          onBlur={() => commitInline(listing, "price")}
+                          className="w-24 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-white"
+                        />
                       </td>
                       <td className="px-2 py-2 tabular-nums text-amber-400 whitespace-nowrap">
                         {listing.cost_basis != null && listing.cost_basis > 0
@@ -1611,8 +1735,41 @@ export default function AdminShopClient() {
                           {listing.status}
                         </span>
                       </td>
-                      <td className="px-2 py-2 tabular-nums text-gray-300 text-center">
-                        {available}/{listing.quantity ?? 0}
+                      <td className="px-3 py-2">
+                        <select
+                          value={draft?.publish_state ?? listing.publish_state ?? "published"}
+                          onChange={(event) => {
+                            const publishState = event.target.value as PublishState;
+                            updateInlineDraft(listing.id, { publish_state: publishState });
+                            void runRowAction(listing.id, {
+                              publish_state: publishState,
+                            });
+                          }}
+                          className="rounded border border-gray-700 bg-gray-900 px-2 py-1 text-white"
+                        >
+                          {PUBLISH_STATE_OPTIONS.map((publishState) => (
+                            <option key={publishState} value={publishState}>
+                              {publishState}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="px-3 py-2">
+                        <label className="inline-flex items-center gap-2 text-xs text-gray-300">
+                          <input
+                            type="checkbox"
+                            checked={draft?.featured ?? false}
+                            onChange={(event) => {
+                              updateInlineDraft(listing.id, {
+                                featured: event.target.checked,
+                              });
+                              void runRowAction(listing.id, {
+                                featured: event.target.checked,
+                              });
+                            }}
+                          />
+                          Yes
+                        </label>
                       </td>
                       <td className="px-2 py-2 text-xs text-gray-400 whitespace-nowrap">
                         {new Date(listing.created_at).toLocaleDateString()}
@@ -1629,7 +1786,28 @@ export default function AdminShopClient() {
                             onClick={() => duplicateListing(listing)}
                             className="rounded border border-gray-700 px-2 py-1 text-xs text-gray-200 hover:border-gray-500"
                           >
-                            Dup
+                            Duplicate
+                          </button>
+                          <button
+                            onClick={() =>
+                              runRowAction(listing.id, {
+                                publish_state:
+                                  (listing.publish_state ?? "published") === "published"
+                                    ? "draft"
+                                    : "published",
+                              })
+                            }
+                            className="rounded border border-indigo-800 px-2 py-1 text-xs text-indigo-300 hover:border-indigo-600"
+                          >
+                            {(listing.publish_state ?? "published") === "published"
+                              ? "Move to draft"
+                              : "Publish"}
+                          </button>
+                          <button
+                            onClick={() => runRowAction(listing.id, { status: "sold" })}
+                            className="rounded border border-emerald-800 px-2 py-1 text-xs text-emerald-300 hover:border-emerald-600"
+                          >
+                            Mark sold
                           </button>
                           {listing.status !== "active" && (
                             <button
@@ -1717,7 +1895,7 @@ export default function AdminShopClient() {
           <div className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl border border-gray-700 bg-gray-950 p-5">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-white">
-                Edit listing: {editingListing.player_name}
+                Edit listing: {editingListing.title || editingListing.player_name}
               </h3>
               <button
                 onClick={closeEditModal}

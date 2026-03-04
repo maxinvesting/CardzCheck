@@ -115,6 +115,7 @@ type ColumnDef = {
   editable: boolean;
   width: string;
   alignRight?: boolean;
+  sortable?: boolean;
 };
 
 function getDaysHeld(acquisitionDate: string | null | undefined): number | null {
@@ -134,13 +135,20 @@ function getDaysHeldColor(days: number | null): string {
 
 const COLUMNS: ColumnDef[] = [
   { key: "title", label: "Title", editable: true, width: "min-w-[180px]" },
-  { key: "quantity", label: "Qty", editable: true, width: "w-12 shrink-0" },
+  {
+    key: "quantity",
+    label: "Qty",
+    editable: true,
+    width: "w-12 shrink-0",
+    sortable: true,
+  },
   {
     key: "cost_basis_total_cents",
     label: "Cost",
     editable: true,
     width: "w-20 shrink-0",
     alignRight: true,
+    sortable: true,
   },
   { key: "status", label: "Status", editable: true, width: "w-24 shrink-0" },
   {
@@ -155,6 +163,7 @@ const COLUMNS: ColumnDef[] = [
     editable: true,
     width: "w-20 shrink-0",
     alignRight: true,
+    sortable: true,
   },
   {
     key: "current_market_value_cents",
@@ -162,6 +171,7 @@ const COLUMNS: ColumnDef[] = [
     editable: true,
     width: "w-20 shrink-0",
     alignRight: true,
+    sortable: true,
   },
   { key: "_days_held", label: "Days Held", editable: false, width: "w-18 shrink-0" },
   { key: "location", label: "Storage", editable: true, width: "w-24 shrink-0" },
@@ -187,6 +197,14 @@ const VirtuosoScroller = forwardRef<
   />
 ));
 VirtuosoScroller.displayName = "VirtuosoScroller";
+
+type SortableColumnKey =
+  | "quantity"
+  | "cost_basis_total_cents"
+  | "list_price_cents"
+  | "current_market_value_cents";
+
+type SortDirection = "desc" | "asc";
 
 export default function InventoryTable({
   items,
@@ -214,6 +232,8 @@ export default function InventoryTable({
   const [bulkAction, setBulkAction] = useState("");
   const [bulkPayload, setBulkPayload] = useState("");
   const [fetchingCmvId, setFetchingCmvId] = useState<string | null>(null);
+  const [sortKey, setSortKey] = useState<SortableColumnKey | null>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
 
   const handleFetchCmv = async (item: BusinessInventoryItem) => {
@@ -271,9 +291,38 @@ export default function InventoryTable({
     return result;
   }, [items, search, filterStatus, filterChannel, filterCondition, activeTab]);
 
+  const sortedItems = useMemo(() => {
+    if (!sortKey) return filtered;
+
+    const toSortableNumber = (value: unknown): number | null => {
+      if (typeof value !== "number" || !Number.isFinite(value)) return null;
+      return value;
+    };
+
+    const withIndex = filtered.map((item, index) => ({ item, index }));
+
+    withIndex.sort((a, b) => {
+      const aValue = toSortableNumber((a.item as any)[sortKey]);
+      const bValue = toSortableNumber((b.item as any)[sortKey]);
+      const aMissing = aValue === null;
+      const bMissing = bValue === null;
+
+      // Keep missing values at the bottom for both directions.
+      if (aMissing && bMissing) return a.index - b.index;
+      if (aMissing) return 1;
+      if (bMissing) return -1;
+
+      if (aValue === bValue) return a.index - b.index;
+      if (sortDirection === "desc") return bValue - aValue;
+      return aValue - bValue;
+    });
+
+    return withIndex.map((entry) => entry.item);
+  }, [filtered, sortKey, sortDirection]);
+
   useEffect(() => {
-    onFilteredChange?.(filtered);
-  }, [filtered, onFilteredChange]);
+    onFilteredChange?.(sortedItems);
+  }, [sortedItems, onFilteredChange]);
 
   useEffect(() => {
     if (!perfEnabled || !tableContainerRef.current) return;
@@ -284,10 +333,10 @@ export default function InventoryTable({
   }, [filtered.length, items.length, perfEnabled]);
 
   const toggleAll = () => {
-    if (selected.size === filtered.length) {
+    if (selected.size === sortedItems.length) {
       setSelected(new Set());
     } else {
-      setSelected(new Set(filtered.map((it) => it.id)));
+      setSelected(new Set(sortedItems.map((it) => it.id)));
     }
   };
 
@@ -681,6 +730,15 @@ export default function InventoryTable({
     [dense, filtered.length]
   );
 
+  const handleSortToggle = (key: SortableColumnKey) => {
+    if (sortKey === key) {
+      setSortDirection((prev) => (prev === "desc" ? "asc" : "desc"));
+      return;
+    }
+    setSortKey(key);
+    setSortDirection("desc");
+  };
+
   const rowClass = (item: BusinessInventoryItem, idx: number): string =>
     `transition-colors cursor-pointer ${
       selectedItemId === item.id
@@ -695,19 +753,47 @@ export default function InventoryTable({
       <th className={`w-8 shrink-0 ${dense ? "px-2 py-1" : "px-2 py-1.5"}`}>
         <input
           type="checkbox"
-          checked={filtered.length > 0 && selected.size === filtered.length}
+          checked={sortedItems.length > 0 && selected.size === sortedItems.length}
           onChange={toggleAll}
           className="rounded border-gray-600 text-emerald-500 focus:ring-emerald-500"
         />
       </th>
-      {COLUMNS.map((col) => (
-        <th
-          key={col.key}
-          className={`px-2 ${dense ? "py-1" : "py-1.5"} text-[10px] font-medium text-gray-500 uppercase tracking-wider ${col.width} ${col.alignRight ? "text-right" : ""}`}
-        >
-          {col.label}
-        </th>
-      ))}
+      {COLUMNS.map((col) => {
+        const isSortable = Boolean(col.sortable);
+        const isActiveSort = isSortable && sortKey === col.key;
+        const ariaSort = isSortable
+          ? isActiveSort
+            ? sortDirection === "desc"
+              ? "descending"
+              : "ascending"
+            : "none"
+          : undefined;
+
+        return (
+          <th
+            key={col.key}
+            aria-sort={ariaSort}
+            className={`px-2 ${dense ? "py-1" : "py-1.5"} text-[10px] font-medium text-gray-500 uppercase tracking-wider ${col.width} ${col.alignRight ? "text-right" : ""}`}
+          >
+            {isSortable ? (
+              <button
+                type="button"
+                onClick={() => handleSortToggle(col.key as SortableColumnKey)}
+                className={`inline-flex items-center gap-1 ${col.alignRight ? "ml-auto" : ""} cursor-pointer select-none hover:text-gray-300 focus:outline-none focus-visible:text-gray-200`}
+              >
+                <span>{col.label}</span>
+                {isActiveSort ? (
+                  <span aria-hidden="true">
+                    {sortDirection === "desc" ? "▼" : "▲"}
+                  </span>
+                ) : null}
+              </button>
+            ) : (
+              col.label
+            )}
+          </th>
+        );
+      })}
     </tr>
   );
 
@@ -980,7 +1066,7 @@ export default function InventoryTable({
           </div>
         ) : shouldVirtualize ? (
           <TableVirtuoso
-            data={filtered}
+            data={sortedItems}
             style={{ height: virtualTableHeight }}
             components={{
               Scroller: VirtuosoScroller,
@@ -1005,7 +1091,7 @@ export default function InventoryTable({
                 {renderHeader()}
               </thead>
               <tbody className="divide-y divide-gray-800/80">
-                {filtered.map((item, idx) => (
+                {sortedItems.map((item, idx) => (
                   <tr key={item.id} className={rowClass(item, idx)}>
                     {renderRowCells(item)}
                   </tr>

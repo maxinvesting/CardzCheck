@@ -176,17 +176,21 @@ export async function GET(
         };
       }
 
-      // Load sales for this item
-      const { data: sales } = await supabase
+      // Load sales for this item (use business_id to match RLS; order by sold_at)
+      let sales: unknown[] = [];
+      const salesRes = await supabase
         .from("business_sales")
         .select("*")
         .eq("inventory_item_id", item.id)
-        .eq("user_id", userId)
-        .order("sale_date", { ascending: false });
+        .eq("business_id", userId)
+        .eq("is_deleted", false)
+        .order("sold_at", { ascending: false });
+      if (!salesRes.error) sales = salesRes.data ?? [];
+      // If sales query errors (e.g. schema/RLS), still return profile with empty sales
 
       return NextResponse.json({
         item: hydratedItem,
-        sales: sales ?? [],
+        sales,
         mode: "business",
       });
     }

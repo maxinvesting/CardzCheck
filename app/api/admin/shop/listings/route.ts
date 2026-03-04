@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAdminAuth } from "@/lib/admin";
 import { createServiceClient } from "@/lib/supabase/server";
 
-type ListingStatus = "active" | "sold" | "reserved" | "delisted" | "draft";
+type ListingStatus = "active" | "sold" | "reserved" | "delisted";
+type PublishState = "draft" | "published";
+type ListingCondition = "raw" | "graded" | "sealed";
 
 const ALLOWED_STATUS: ListingStatus[] = [
   "active",
@@ -11,6 +13,8 @@ const ALLOWED_STATUS: ListingStatus[] = [
   "delisted",
   "draft",
 ];
+const ALLOWED_PUBLISH_STATES: PublishState[] = ["draft", "published"];
+const ALLOWED_CONDITIONS: ListingCondition[] = ["raw", "graded", "sealed"];
 
 const ALLOWED_SPORTS = new Set(["Football", "Basketball", "Baseball", "Other"]);
 
@@ -49,6 +53,26 @@ function asStatus(value: unknown, fallback: ListingStatus = "active"): ListingSt
     : fallback;
 }
 
+function asPublishState(
+  value: unknown,
+  fallback: PublishState = "published"
+): PublishState {
+  if (typeof value !== "string") return fallback;
+  return ALLOWED_PUBLISH_STATES.includes(value as PublishState)
+    ? (value as PublishState)
+    : fallback;
+}
+
+function asCondition(
+  value: unknown,
+  fallback: ListingCondition = "graded"
+): ListingCondition {
+  if (typeof value !== "string") return fallback;
+  return ALLOWED_CONDITIONS.includes(value as ListingCondition)
+    ? (value as ListingCondition)
+    : fallback;
+}
+
 function asTags(value: unknown): string[] {
   if (Array.isArray(value)) {
     return value
@@ -78,6 +102,14 @@ function sanitizeSport(value: unknown): string {
   const sport = asString(value);
   if (!sport) return "Football";
   return ALLOWED_SPORTS.has(sport) ? sport : "Other";
+}
+
+function parseYearFromText(value: string | null): number | null {
+  if (!value) return null;
+  const match = value.match(/\b(19|20)\d{2}\b/);
+  if (!match) return null;
+  const parsed = Number(match[0]);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 export async function GET() {
@@ -143,6 +175,14 @@ export async function PATCH(request: NextRequest) {
 
   const filtered: Record<string, unknown> = {};
 
+  if ("title" in updates) {
+    filtered.title = asNullableString(updates.title);
+  }
+
+  if ("inventory_item_id" in updates) {
+    filtered.inventory_item_id = asNullableString(updates.inventory_item_id);
+  }
+
   const playerName = asString(updates.player_name);
   if ("player_name" in updates && playerName) filtered.player_name = playerName;
 
@@ -162,6 +202,10 @@ export async function PATCH(request: NextRequest) {
 
   const grade = asString(updates.grade);
   if ("grade" in updates && grade) filtered.grade = grade;
+
+  if ("condition" in updates) {
+    filtered.condition = asCondition(updates.condition, "graded");
+  }
 
   if ("cert_number" in updates) {
     filtered.cert_number = asNullableString(updates.cert_number);
@@ -196,6 +240,10 @@ export async function PATCH(request: NextRequest) {
 
   if ("status" in updates) {
     filtered.status = asStatus(updates.status, "active");
+  }
+
+  if ("publish_state" in updates) {
+    filtered.publish_state = asPublishState(updates.publish_state, "published");
   }
 
   if ("featured" in updates) {
@@ -276,10 +324,13 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const playerName = asString(body?.player_name);
-  const year = asNumber(body?.year);
-  const setBrand = asString(body?.set_brand);
-  const grade = asString(body?.grade);
+  const title = asNullableString(body?.title);
+  const playerName = asString(body?.player_name) ?? title;
+  const year = asNumber(body?.year) ?? parseYearFromText(title);
+  const setBrand = asString(body?.set_brand) ?? title;
+  const grade =
+    asString(body?.grade) ??
+    (asCondition(body?.condition, "graded") === "raw" ? "Raw" : null);
   const price = asNumber(body?.price);
 
   if (!playerName || year == null || !setBrand || !grade || price == null) {
@@ -296,7 +347,9 @@ export async function POST(request: NextRequest) {
   const shippingCost = asNumber(body?.shipping_cost);
   const imageUrls = asImageUrls(body?.image_urls);
 
-  const insert: Record<string, unknown> = {
+  const insert = {
+    title,
+    inventory_item_id: asNullableString(body?.inventory_item_id),
     player_name: playerName,
     year: Math.trunc(year),
     set_brand: setBrand,
@@ -304,6 +357,7 @@ export async function POST(request: NextRequest) {
     card_number: asNullableString(body?.card_number),
     grade,
     cert_number: asNullableString(body?.cert_number),
+    condition: asCondition(body?.condition, "graded"),
     sport: sanitizeSport(body?.sport),
     price,
     cmv,
@@ -312,6 +366,7 @@ export async function POST(request: NextRequest) {
     description: asNullableString(body?.description),
     quantity: quantity != null ? Math.max(1, Math.trunc(quantity)) : 1,
     status: asStatus(body?.status, "active"),
+    publish_state: asPublishState(body?.publish_state, "published"),
     shipping_method: asNullableString(body?.shipping_method) ?? "bmwt",
     shipping_cost: shippingCost != null ? Math.max(0, shippingCost) : 4,
     image_urls: imageUrls,
