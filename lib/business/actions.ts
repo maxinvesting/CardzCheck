@@ -668,13 +668,6 @@ function buildComputedSalePayload(args: {
     notes: base.notes?.trim() || null,
     external_order_id: base.external_order_id?.trim() || null,
     is_deleted: false,
-    // Legacy columns retained for compatibility with historical schema/exports.
-    sale_date: soldAt.slice(0, 10),
-    sale_price_cents: soldPriceCents,
-    shipping_paid_cents: shippingCostCents,
-    other_costs_cents: taxCents,
-    net_proceeds_cents: netPayoutCents,
-    order_id: base.external_order_id?.trim() || null,
   };
 }
 
@@ -916,6 +909,42 @@ export async function deleteSale(userId: string, saleId: string): Promise<void> 
 // =============================================
 // METRICS
 // =============================================
+
+/**
+ * Aggregate sales KPIs for a date range using a direct query.
+ * Used as the primary computation method (avoids dependency on an RPC function
+ * that may not be deployed yet).
+ */
+async function aggregateSalesKpis(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  businessId: string,
+  from: string,
+  to: string
+): Promise<{ revenue_cents: number; profit_cents: number; sales_count: number }> {
+  const { data, error } = await supabase
+    .from("business_sales")
+    .select("sold_price_cents, shipping_charged_cents, profit_cents")
+    .eq("business_id", businessId)
+    .eq("is_deleted", false)
+    .gte("sold_at", from)
+    .lt("sold_at", to);
+
+  if (error) throw error;
+
+  const rows = data ?? [];
+  let revenueCents = 0;
+  let profitCents = 0;
+  for (const row of rows) {
+    revenueCents += toInt(row.sold_price_cents) + toInt(row.shipping_charged_cents);
+    profitCents += toInt(row.profit_cents);
+  }
+
+  return {
+    revenue_cents: revenueCents,
+    profit_cents: profitCents,
+    sales_count: rows.length,
+  };
+}
 
 export async function getBusinessMetrics(userId: string): Promise<BusinessMetrics> {
   await requireBusinessAccess(userId);

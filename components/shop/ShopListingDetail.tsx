@@ -73,9 +73,15 @@ export default function ShopListingDetail({
   const cmv = getCmvDeltaPresentation(listing.price, listing.cmv);
   const shippingLabel = getShippingLabel(listing.shipping_cost);
 
+  const normalizedGrade = (listing.grade ?? "").toLowerCase();
+  const isGraded =
+    normalizedGrade.length > 0 &&
+    !normalizedGrade.includes("raw") &&
+    !normalizedGrade.includes("ungraded");
+
   const pricingTransparencyText = (() => {
     if (listing.cmv == null || listing.cmv <= 0) {
-      return "CardzCheck CMV is generated from recent comparable sales and updates as new market data arrives.";
+      return "Est. Market Value is generated from active eBay listings and updates as new market data arrives. Actual sold prices may differ.";
     }
 
     if (cmv.deltaLabel.includes("below market")) {
@@ -86,7 +92,7 @@ export default function ShopListingDetail({
       return "This card carries a premium versus comps, usually driven by scarcity, eye appeal, or stronger sub-grades.";
     }
 
-    return "Price is aligned to current CMV using recent comparable transactions.";
+    return "Price is aligned to current Est. Market Value using recent comparable listings.";
   })();
 
   const handleAddToCart = () => {
@@ -153,10 +159,28 @@ export default function ShopListingDetail({
         <section className="space-y-6 lg:sticky lg:top-24 lg:self-start">
           <header>
             <h1 className="text-3xl font-semibold text-slate-900">{title}</h1>
-            <p className="mt-2 text-sm text-slate-600">
-              {listing.card_number ? `Card #${listing.card_number} • ` : ""}
-              {listing.sport}
-            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <p className="text-sm text-slate-600">
+                {listing.card_number ? `Card #${listing.card_number} • ` : ""}
+                {listing.sport}
+              </p>
+              {isGraded && (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                  <svg
+                    className="h-3.5 w-3.5"
+                    fill="currentColor"
+                    viewBox="0 0 20 20"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  Verified slab
+                </span>
+              )}
+            </div>
           </header>
 
           <div className="space-y-5 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">

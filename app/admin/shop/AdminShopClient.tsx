@@ -18,17 +18,8 @@ type GradeOption =
   | "Other";
 
 type ImageItem =
-  | {
-      id: string;
-      kind: "existing";
-      url: string;
-    }
-  | {
-      id: string;
-      kind: "pending";
-      file: File;
-      previewUrl: string;
-    };
+  | { id: string; kind: "existing"; url: string }
+  | { id: string; kind: "pending"; file: File; previewUrl: string };
 
 interface ListingFormState {
   title: string;
@@ -55,6 +46,8 @@ interface ListingFormState {
   is_premium: boolean;
   tags: string;
   notes: string;
+  description: string;
+  quantity: string;
 }
 
 interface InventoryListItem {
@@ -117,13 +110,18 @@ const DEFAULT_FORM: ListingFormState = {
   is_premium: false,
   tags: "",
   notes: "",
+  description: "",
+  quantity: "1",
 };
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 function createImageId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return crypto.randomUUID();
   }
-
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
@@ -149,18 +147,10 @@ function extractGrade(listing: ShopListing): {
 } {
   const grade = listing.grade || "Raw";
   const directMatch = GRADE_OPTIONS.find((option) => option === grade);
-
   if (directMatch && directMatch !== "Other") {
-    return {
-      grade_choice: directMatch,
-      grade_other: "",
-    };
+    return { grade_choice: directMatch, grade_other: "" };
   }
-
-  return {
-    grade_choice: "Other",
-    grade_other: grade,
-  };
+  return { grade_choice: "Other", grade_other: grade };
 }
 
 function listingToForm(listing: ShopListing): ListingFormState {
@@ -205,6 +195,8 @@ function listingToForm(listing: ShopListing): ListingFormState {
     is_premium: Boolean(listing.is_premium),
     tags: Array.isArray(listing.tags) ? listing.tags.join(", ") : "",
     notes: listing.notes || "",
+    description: listing.description || "",
+    quantity: listing.quantity != null ? String(listing.quantity) : "1",
   };
 }
 
@@ -246,11 +238,8 @@ function formToPayload(form: ListingFormState) {
 
   if (!Number.isFinite(shippingCost) || shippingCost < 0) {
     throw new Error("Shipping cost must be 0 or greater.");
-  }
-
-  if (cmv != null && (!Number.isFinite(cmv) || cmv < 0)) {
+  if (cmv != null && (!Number.isFinite(cmv) || cmv < 0))
     throw new Error("CMV must be empty or a valid number.");
-  }
 
   const grade =
     form.grade_choice === "Other"
@@ -282,6 +271,8 @@ function formToPayload(form: ListingFormState) {
     is_premium: form.is_premium,
     tags: parseTags(form.tags),
     notes: form.notes.trim() || null,
+    description: form.description.trim() || null,
+    quantity: Math.max(1, Math.trunc(quantity)),
   };
 }
 
@@ -308,6 +299,10 @@ function cloneListingForCreate(listing: ShopListing) {
     sport: listing.sport,
     price: listing.price,
     cmv: listing.cmv,
+    cost_basis: listing.cost_basis ?? null,
+    ebay_sold_comp:
+      (listing as ShopListing & { ebay_sold_comp?: number | null })
+        .ebay_sold_comp ?? null,
     shipping_cost: listing.shipping_cost,
     status: listing.status,
     publish_state: listing.publish_state,
@@ -315,9 +310,13 @@ function cloneListingForCreate(listing: ShopListing) {
     is_premium: listing.is_premium,
     tags: listing.tags,
     notes: listing.notes,
+    description: listing.description,
     image_urls: listing.image_urls,
     thumbnail_url: listing.thumbnail_url,
-    quantity: Math.max(1, (listing.quantity ?? 1) - (listing.quantity_sold ?? 0)),
+    quantity: Math.max(
+      1,
+      (listing.quantity ?? 1) - (listing.quantity_sold ?? 0)
+    ),
   };
 }
 
@@ -372,9 +371,7 @@ function ImageManager({
     const nextFiles = Array.from(files).filter((file) =>
       file.type.startsWith("image/")
     );
-
     if (nextFiles.length === 0) return;
-
     setImages((previous) => [
       ...previous,
       ...nextFiles.map((file) => ({
@@ -389,9 +386,7 @@ function ImageManager({
   const removeImage = (id: string) => {
     setImages((previous) => {
       const target = previous.find((image) => image.id === id);
-      if (target?.kind === "pending") {
-        URL.revokeObjectURL(target.previewUrl);
-      }
+      if (target?.kind === "pending") URL.revokeObjectURL(target.previewUrl);
       return previous.filter((image) => image.id !== id);
     });
   };
@@ -400,10 +395,8 @@ function ImageManager({
     setImages((previous) => {
       const index = previous.findIndex((image) => image.id === id);
       if (index < 0) return previous;
-
       const nextIndex = index + direction;
       if (nextIndex < 0 || nextIndex >= previous.length) return previous;
-
       const next = [...previous];
       const [item] = next.splice(index, 1);
       next.splice(nextIndex, 0, item);
@@ -441,9 +434,7 @@ function ImageManager({
           multiple
           className="hidden"
           onChange={(event) => {
-            if (event.target.files) {
-              addFiles(event.target.files);
-            }
+            if (event.target.files) addFiles(event.target.files);
             event.target.value = "";
           }}
         />
@@ -453,17 +444,20 @@ function ImageManager({
       {images.length > 0 && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {images.map((image, index) => {
-            const src = image.kind === "existing" ? image.url : image.previewUrl;
-
+            const src =
+              image.kind === "existing" ? image.url : image.previewUrl;
             return (
               <div
                 key={image.id}
                 className="overflow-hidden rounded-lg border border-gray-700 bg-gray-900"
               >
                 <div className="aspect-square bg-black/30">
-                  <img src={src} alt="Listing preview" className="h-full w-full object-cover" />
+                  <img
+                    src={src}
+                    alt="Listing preview"
+                    className="h-full w-full object-cover"
+                  />
                 </div>
-
                 <div className="space-y-2 px-2 py-2">
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-gray-400">
@@ -479,7 +473,6 @@ function ImageManager({
                       {image.kind === "existing" ? "Saved" : "New"}
                     </span>
                   </div>
-
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
@@ -487,7 +480,7 @@ function ImageManager({
                       disabled={index === 0}
                       className="rounded border border-gray-700 px-2 py-1 text-xs text-gray-300 disabled:opacity-40"
                     >
-                      ←
+                      &larr;
                     </button>
                     <button
                       type="button"
@@ -495,7 +488,7 @@ function ImageManager({
                       disabled={index === images.length - 1}
                       className="rounded border border-gray-700 px-2 py-1 text-xs text-gray-300 disabled:opacity-40"
                     >
-                      →
+                      &rarr;
                     </button>
                     <button
                       type="button"
@@ -515,6 +508,78 @@ function ImageManager({
   );
 }
 
+// ---------------------------------------------------------------------------
+// eBay Parity Calculator Widget
+// ---------------------------------------------------------------------------
+
+function EbayParityCalculator({ shopPrice }: { shopPrice: number }) {
+  const [profile, setProfile] = useState<EbayFeeProfile>("standard");
+  const feeRate = EBAY_FEE_RATES[profile];
+  const ebayPrice = calculateEbayParityPrice(shopPrice, feeRate);
+  const ebayFees = calculateEbayFees(ebayPrice, feeRate);
+
+  if (!shopPrice || shopPrice <= 0) {
+    return null;
+  }
+
+  return (
+    <div className="rounded-xl border border-cyan-800/40 bg-cyan-950/30 p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <h4 className="text-sm font-semibold text-cyan-300">
+          eBay Parity Price
+        </h4>
+        <select
+          value={profile}
+          onChange={(e) => setProfile(e.target.value as EbayFeeProfile)}
+          className="rounded border border-gray-700 bg-gray-900 px-2 py-1 text-xs text-gray-200"
+        >
+          {(Object.keys(EBAY_FEE_LABELS) as EbayFeeProfile[]).map((key) => (
+            <option key={key} value={key}>
+              {EBAY_FEE_LABELS[key]}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3 text-center">
+        <div>
+          <p className="text-[10px] uppercase tracking-wider text-gray-500">
+            Shop Price
+          </p>
+          <p className="text-lg font-semibold tabular-nums text-white">
+            {formatUsd(shopPrice)}
+          </p>
+        </div>
+        <div>
+          <p className="text-[10px] uppercase tracking-wider text-gray-500">
+            eBay Price
+          </p>
+          <p className="text-lg font-semibold tabular-nums text-cyan-300">
+            {formatUsd(ebayPrice)}
+          </p>
+        </div>
+        <div>
+          <p className="text-[10px] uppercase tracking-wider text-gray-500">
+            eBay Fees
+          </p>
+          <p className="text-lg font-semibold tabular-nums text-rose-400">
+            -{formatUsd(ebayFees)}
+          </p>
+        </div>
+      </div>
+
+      <p className="text-xs text-gray-500 text-center">
+        List at {formatUsd(ebayPrice)} on eBay to net the same{" "}
+        {formatUsd(shopPrice)} after {Math.round(feeRate * 100)}% fees.
+      </p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Listing Form Fields
+// ---------------------------------------------------------------------------
+
 function ListingFields({
   form,
   setForm,
@@ -522,6 +587,39 @@ function ListingFields({
   form: ListingFormState;
   setForm: React.Dispatch<React.SetStateAction<ListingFormState>>;
 }) {
+  const shopPrice = Number(form.price) || 0;
+
+  // Auto-calculate price at 95% of eBay Sold Comp when comp changes
+  // (only if price_override is false)
+  const handleEbaySoldCompChange = (value: string) => {
+    setForm((prev) => {
+      const next = { ...prev, ebay_sold_comp: value };
+      const compVal = Number(value);
+      if (compVal > 0 && !prev.price_override) {
+        next.price = (compVal * 0.95).toFixed(2);
+      }
+      return next;
+    });
+  };
+
+  const handlePriceChange = (value: string) => {
+    setForm((prev) => ({ ...prev, price: value, price_override: true }));
+  };
+
+  const resetPriceToComp = () => {
+    const compVal = Number(form.ebay_sold_comp);
+    if (compVal > 0) {
+      setForm((prev) => ({
+        ...prev,
+        price: (compVal * 0.95).toFixed(2),
+        price_override: false,
+      }));
+    }
+  };
+
+  const inputClass =
+    "w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-white focus:border-cyan-600 focus:outline-none focus:ring-1 focus:ring-cyan-600/30";
+
   return (
     <div className="grid gap-3 md:grid-cols-2">
       <label className="space-y-1 text-sm md:col-span-2">
@@ -555,97 +653,115 @@ function ListingFields({
         />
       </label>
 
-      <label className="space-y-1 text-sm">
-        <span className="text-gray-300">Year *</span>
-        <input
-          type="number"
-          value={form.year}
-          onChange={(event) =>
-            setForm((previous) => ({ ...previous, year: event.target.value }))
-          }
-          className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-white"
-          required
-        />
-      </label>
-
-      <label className="space-y-1 text-sm">
-        <span className="text-gray-300">Set / brand *</span>
-        <input
-          value={form.set_brand}
-          onChange={(event) =>
-            setForm((previous) => ({ ...previous, set_brand: event.target.value }))
-          }
-          className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-white"
-          required
-        />
-      </label>
-
-      <label className="space-y-1 text-sm">
-        <span className="text-gray-300">Parallel variant</span>
-        <input
-          value={form.parallel_variant}
-          onChange={(event) =>
-            setForm((previous) => ({ ...previous, parallel_variant: event.target.value }))
-          }
-          className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-white"
-        />
-      </label>
-
-      <label className="space-y-1 text-sm">
-        <span className="text-gray-300">Card number</span>
-        <input
-          value={form.card_number}
-          onChange={(event) =>
-            setForm((previous) => ({ ...previous, card_number: event.target.value }))
-          }
-          className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-white"
-        />
-      </label>
-
-      <div className="space-y-1 text-sm">
-        <span className="text-gray-300">Grade *</span>
-        <select
-          value={form.grade_choice}
-          onChange={(event) =>
-            setForm((previous) => ({
-              ...previous,
-              grade_choice: event.target.value as GradeOption,
-            }))
-          }
-          className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-white"
-        >
-          {GRADE_OPTIONS.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {form.grade_choice === "Other" && (
         <label className="space-y-1 text-sm">
-          <span className="text-gray-300">Custom grade</span>
+          <span className="text-gray-300">Year *</span>
           <input
-            value={form.grade_other}
-            onChange={(event) =>
-              setForm((previous) => ({ ...previous, grade_other: event.target.value }))
-            }
-            className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-white"
-            placeholder="e.g. PSA 8"
+            type="number"
+            value={form.year}
+            onChange={(e) => setForm((p) => ({ ...p, year: e.target.value }))}
+            className={inputClass}
+            required
           />
         </label>
-      )}
 
-      <label className="space-y-1 text-sm">
-        <span className="text-gray-300">Cert number</span>
-        <input
-          value={form.cert_number}
-          onChange={(event) =>
-            setForm((previous) => ({ ...previous, cert_number: event.target.value }))
-          }
-          className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-white"
-        />
-      </label>
+        <label className="space-y-1 text-sm">
+          <span className="text-gray-300">Set / brand *</span>
+          <input
+            value={form.set_brand}
+            onChange={(e) =>
+              setForm((p) => ({ ...p, set_brand: e.target.value }))
+            }
+            className={inputClass}
+            required
+          />
+        </label>
+
+        <label className="space-y-1 text-sm">
+          <span className="text-gray-300">Parallel variant</span>
+          <input
+            value={form.parallel_variant}
+            onChange={(e) =>
+              setForm((p) => ({ ...p, parallel_variant: e.target.value }))
+            }
+            className={inputClass}
+          />
+        </label>
+
+        <label className="space-y-1 text-sm">
+          <span className="text-gray-300">Card number</span>
+          <input
+            value={form.card_number}
+            onChange={(e) =>
+              setForm((p) => ({ ...p, card_number: e.target.value }))
+            }
+            className={inputClass}
+          />
+        </label>
+
+        <div className="space-y-1 text-sm">
+          <span className="text-gray-300">Grade *</span>
+          <select
+            value={form.grade_choice}
+            onChange={(e) =>
+              setForm((p) => ({
+                ...p,
+                grade_choice: e.target.value as GradeOption,
+              }))
+            }
+            className={inputClass}
+          >
+            {GRADE_OPTIONS.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {form.grade_choice === "Other" && (
+          <label className="space-y-1 text-sm">
+            <span className="text-gray-300">Custom grade</span>
+            <input
+              value={form.grade_other}
+              onChange={(e) =>
+                setForm((p) => ({ ...p, grade_other: e.target.value }))
+              }
+              className={inputClass}
+              placeholder="e.g. PSA 8"
+            />
+          </label>
+        )}
+
+        <label className="space-y-1 text-sm">
+          <span className="text-gray-300">Cert number</span>
+          <input
+            value={form.cert_number}
+            onChange={(e) =>
+              setForm((p) => ({ ...p, cert_number: e.target.value }))
+            }
+            className={inputClass}
+          />
+        </label>
+
+        <div className="space-y-1 text-sm">
+          <span className="text-gray-300">Sport *</span>
+          <select
+            value={form.sport}
+            onChange={(e) =>
+              setForm((p) => ({
+                ...p,
+                sport: e.target.value as ListingFormState["sport"],
+              }))
+            }
+            className={inputClass}
+          >
+            {SPORT_OPTIONS.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </div>
 
       <div className="space-y-1 text-sm">
         <span className="text-gray-300">Condition *</span>
@@ -687,17 +803,17 @@ function ListingFields({
         </select>
       </div>
 
-      <label className="space-y-1 text-sm">
-        <span className="text-gray-300">Price *</span>
-        <input
-          type="number"
-          step="0.01"
-          value={form.price}
-          onChange={(event) =>
-            setForm((previous) => ({ ...previous, price: event.target.value }))
+      {/* Description / condition notes */}
+      <label className="block space-y-1 text-sm">
+        <span className="text-gray-300">Card description / condition notes</span>
+        <textarea
+          rows={3}
+          value={form.description}
+          onChange={(e) =>
+            setForm((p) => ({ ...p, description: e.target.value }))
           }
-          className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-white"
-          required
+          className={inputClass}
+          placeholder="Describe the card condition, centering, surface quality, etc."
         />
       </label>
 
@@ -833,44 +949,49 @@ function ListingFields({
         />
       </label>
 
-      <label className="space-y-1 text-sm md:col-span-2">
-        <span className="text-gray-300">Notes (private)</span>
-        <textarea
-          rows={3}
-          value={form.notes}
-          onChange={(event) =>
-            setForm((previous) => ({ ...previous, notes: event.target.value }))
-          }
-          className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-white"
-        />
-      </label>
+        <label className="space-y-1 text-sm md:col-span-2">
+          <span className="text-gray-300">Private notes (admin only)</span>
+          <textarea
+            rows={2}
+            value={form.notes}
+            onChange={(e) =>
+              setForm((p) => ({ ...p, notes: e.target.value }))
+            }
+            className={inputClass}
+          />
+        </label>
 
-      <label className="flex items-center gap-2 rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-300">
-        <input
-          type="checkbox"
-          checked={form.featured}
-          onChange={(event) =>
-            setForm((previous) => ({ ...previous, featured: event.target.checked }))
-          }
-          className="rounded border-gray-600"
-        />
-        Featured
-      </label>
+        <label className="flex items-center gap-2 rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-300">
+          <input
+            type="checkbox"
+            checked={form.featured}
+            onChange={(e) =>
+              setForm((p) => ({ ...p, featured: e.target.checked }))
+            }
+            className="rounded border-gray-600"
+          />
+          Featured
+        </label>
 
-      <label className="flex items-center gap-2 rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-300">
-        <input
-          type="checkbox"
-          checked={form.is_premium}
-          onChange={(event) =>
-            setForm((previous) => ({ ...previous, is_premium: event.target.checked }))
-          }
-          className="rounded border-gray-600"
-        />
-        Premium
-      </label>
+        <label className="flex items-center gap-2 rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-300">
+          <input
+            type="checkbox"
+            checked={form.is_premium}
+            onChange={(e) =>
+              setForm((p) => ({ ...p, is_premium: e.target.checked }))
+            }
+            className="rounded border-gray-600"
+          />
+          Premium
+        </label>
+      </div>
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Main Component
+// ---------------------------------------------------------------------------
 
 export default function AdminShopClient() {
   const searchParams = useSearchParams();
@@ -890,7 +1011,9 @@ export default function AdminShopClient() {
   const [selectedInventoryId, setSelectedInventoryId] = useState("");
   const [queryPrefillApplied, setQueryPrefillApplied] = useState(false);
 
-  const [editingListing, setEditingListing] = useState<ShopListing | null>(null);
+  const [editingListing, setEditingListing] = useState<ShopListing | null>(
+    null
+  );
   const [editForm, setEditForm] = useState<ListingFormState>(DEFAULT_FORM);
   const [editImages, setEditImages] = useState<ImageItem[]>([]);
   const [savingEdit, setSavingEdit] = useState(false);
@@ -921,12 +1044,12 @@ export default function AdminShopClient() {
 
   const loadListings = useCallback(async () => {
     setLoading(true);
-
     try {
-      const response = await fetch("/api/admin/shop/listings", { cache: "no-store" });
+      const response = await fetch("/api/admin/shop/listings", {
+        cache: "no-store",
+      });
       const data = await response.json();
-
-      if (!response.ok) {
+      if (!response.ok)
         throw new Error(data?.error || "Failed to load listings.");
       }
 
@@ -1014,46 +1137,37 @@ export default function AdminShopClient() {
 
   const uploadPendingImages = async (listingId: string, images: ImageItem[]) => {
     const urls: string[] = [];
-
     for (const image of images) {
       if (image.kind === "existing") {
         urls.push(image.url);
         continue;
       }
-
       const formData = new FormData();
       formData.append("file", image.file);
       formData.append("listingId", listingId);
-
       const response = await fetch("/api/admin/shop/images", {
         method: "POST",
         body: formData,
       });
-
       const data = await response.json();
-      if (!response.ok || !data?.url) {
+      if (!response.ok || !data?.url)
         throw new Error(data?.error || "Image upload failed.");
-      }
-
       urls.push(data.url);
     }
-
     return urls;
   };
 
-  const patchListing = async (id: string, updates: Record<string, unknown>) => {
+  const patchListing = async (
+    id: string,
+    updates: Record<string, unknown>
+  ) => {
     const response = await fetch("/api/admin/shop/listings", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, updates }),
     });
-
     const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data?.error || "Failed to update listing.");
-    }
-
+    if (!response.ok) throw new Error(data?.error || "Failed to update.");
     return data;
   };
 
@@ -1061,7 +1175,6 @@ export default function AdminShopClient() {
     setCreateSubmitting(true);
     setCreateError(null);
     setCreateSuccess(null);
-
     try {
       const payload = formToPayload({
         ...createForm,
@@ -1073,22 +1186,18 @@ export default function AdminShopClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-
       const createData = await createResponse.json();
-      if (!createResponse.ok || !createData?.listing?.id) {
+      if (!createResponse.ok || !createData?.listing?.id)
         throw new Error(createData?.error || "Failed to create listing.");
-      }
 
       const listingId = createData.listing.id as string;
       const uploadedUrls = await uploadPendingImages(listingId, createImages);
-
       if (uploadedUrls.length > 0) {
         await patchListing(listingId, {
           image_urls: uploadedUrls,
           thumbnail_url: uploadedUrls[0],
         });
       }
-
       revokePendingUrls(createImages);
       setCreateImages([]);
       setCreateForm(DEFAULT_FORM);
@@ -1100,7 +1209,9 @@ export default function AdminShopClient() {
       );
       await loadListings();
     } catch (error) {
-      setCreateError(error instanceof Error ? error.message : "Failed to create listing.");
+      setCreateError(
+        error instanceof Error ? error.message : "Failed to create listing."
+      );
     } finally {
       setCreateSubmitting(false);
     }
@@ -1113,7 +1224,6 @@ export default function AdminShopClient() {
 
   const handleSync = async () => {
     setSyncing(true);
-
     try {
       await fetch("/api/admin/shop/sync", { method: "POST" });
       await loadListings();
@@ -1140,26 +1250,26 @@ export default function AdminShopClient() {
 
   const handleSaveEdit = async (event: React.FormEvent) => {
     event.preventDefault();
-
     if (!editingListing) return;
-
     setSavingEdit(true);
     setEditError(null);
-
     try {
       const payload = formToPayload(editForm);
       await patchListing(editingListing.id, payload);
-
-      const uploadedUrls = await uploadPendingImages(editingListing.id, editImages);
+      const uploadedUrls = await uploadPendingImages(
+        editingListing.id,
+        editImages
+      );
       await patchListing(editingListing.id, {
         image_urls: uploadedUrls,
         thumbnail_url: uploadedUrls[0] ?? null,
       });
-
       await loadListings();
       closeEditModal();
     } catch (error) {
-      setEditError(error instanceof Error ? error.message : "Failed to save listing.");
+      setEditError(
+        error instanceof Error ? error.message : "Failed to save."
+      );
     } finally {
       setSavingEdit(false);
     }
@@ -1230,8 +1340,12 @@ export default function AdminShopClient() {
       }
 
       await loadListings();
+      setDeleteConfirmId(null);
+      if (editingListing?.id === id) closeEditModal();
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Inline update failed.");
+      alert(
+        error instanceof Error ? error.message : "Failed to delete listing."
+      );
     } finally {
       setBusyRow(null);
     }
@@ -1246,7 +1360,7 @@ export default function AdminShopClient() {
       await patchListing(listingId, updates);
       await loadListings();
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Failed to update listing.");
+      alert(error instanceof Error ? error.message : "Update failed.");
     } finally {
       setBusyRow(null);
     }
@@ -1255,21 +1369,17 @@ export default function AdminShopClient() {
   const duplicateListing = async (listing: ShopListing) => {
     try {
       setBusyRow(listing.id);
-
       const response = await fetch("/api/admin/shop/listings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(cloneListingForCreate(listing)),
       });
-
       const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data?.error || "Failed to duplicate listing.");
-      }
-
+      if (!response.ok)
+        throw new Error(data?.error || "Failed to duplicate.");
       await loadListings();
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Failed to duplicate listing.");
+      alert(error instanceof Error ? error.message : "Failed to duplicate.");
     } finally {
       setBusyRow(null);
     }
@@ -1294,33 +1404,70 @@ export default function AdminShopClient() {
   );
 
   return (
-    <div className="space-y-8">
-      <section className="rounded-2xl border border-gray-800 bg-gray-900/50 p-5">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+    <div className="space-y-6">
+      {/* Summary stats bar */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        {[
+          { label: "Total", value: String(stats.total) },
+          { label: "Active", value: String(stats.active) },
+          { label: "Draft", value: String(stats.draft) },
+          { label: "Sold", value: String(stats.sold) },
+          { label: "Inventory Value", value: formatUsd(stats.totalValue) },
+          { label: "Total Cost", value: formatUsd(stats.totalCost) },
+        ].map((stat) => (
+          <div
+            key={stat.label}
+            className="rounded-xl border border-gray-800 bg-gray-900/50 px-4 py-3"
+          >
+            <p className="text-[10px] uppercase tracking-wider text-gray-500">
+              {stat.label}
+            </p>
+            <p className="text-lg font-semibold tabular-nums text-white">
+              {stat.value}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      {/* Create listing section (collapsible) */}
+      <section className="rounded-2xl border border-gray-800 bg-gray-900/50">
+        <button
+          type="button"
+          onClick={() => setCreateFormOpen((prev) => !prev)}
+          className="flex w-full items-center justify-between px-5 py-4 text-left"
+        >
           <div>
             <h2 className="text-xl font-semibold text-white">Create marketplace listing</h2>
             <p className="text-sm text-gray-400">
               Add listings from inventory or manual entry with photos, condition, shipping, and publish controls.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <Link
               href="/shop"
               target="_blank"
               rel="noopener noreferrer"
               className="rounded-lg border border-gray-700 px-3 py-2 text-sm text-gray-300 hover:border-gray-600 hover:text-white"
+              onClick={(e) => e.stopPropagation()}
             >
               View marketplace
             </Link>
             <button
-              onClick={handleSync}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleSync();
+              }}
               disabled={syncing}
               className="rounded-lg bg-gray-800 px-3 py-2 text-sm text-white hover:bg-gray-700 disabled:opacity-60"
             >
               {syncing ? "Syncing..." : "Sync from inventory"}
             </button>
+            <span className="text-lg text-gray-500">
+              {createFormOpen ? "-" : "+"}
+            </span>
           </div>
-        </div>
+        </button>
 
         <form className="space-y-4" onSubmit={handleCreate}>
           <div className="rounded-xl border border-gray-800 bg-gray-950/60 p-4">
@@ -1386,8 +1533,12 @@ export default function AdminShopClient() {
             />
           </div>
 
-          {createError && <p className="text-sm text-rose-400">{createError}</p>}
-          {createSuccess && <p className="text-sm text-emerald-400">{createSuccess}</p>}
+              {createError && (
+                <p className="text-sm text-rose-400">{createError}</p>
+              )}
+              {createSuccess && (
+                <p className="text-sm text-emerald-400">{createSuccess}</p>
+              )}
 
           <div className="flex flex-wrap items-center gap-2">
             <button
@@ -1410,14 +1561,58 @@ export default function AdminShopClient() {
         </form>
       </section>
 
+      {/* Listing Management Table */}
       <section className="rounded-2xl border border-gray-800 bg-gray-900/50 p-5">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-xl font-semibold text-white">Marketplace listings</h2>
             <p className="text-sm text-gray-400">
               {listings.length} total • {totalPublishedActive} live • {totalDraft} draft
             </p>
           </div>
+
+          {/* Bulk actions */}
+          {selectedIds.size > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-400">
+                {selectedIds.size} selected
+              </span>
+              <button
+                onClick={() => bulkUpdateStatus("active")}
+                disabled={bulkBusy}
+                className="rounded border border-emerald-800 px-3 py-1.5 text-xs font-medium text-emerald-300 hover:border-emerald-600 disabled:opacity-50"
+              >
+                Activate
+              </button>
+              <button
+                onClick={() => bulkUpdateStatus("sold")}
+                disabled={bulkBusy}
+                className="rounded border border-cyan-800 px-3 py-1.5 text-xs font-medium text-cyan-300 hover:border-cyan-600 disabled:opacity-50"
+              >
+                Mark Sold
+              </button>
+              <button
+                onClick={() => bulkUpdateStatus("delisted")}
+                disabled={bulkBusy}
+                className="rounded border border-amber-800 px-3 py-1.5 text-xs font-medium text-amber-300 hover:border-amber-600 disabled:opacity-50"
+              >
+                Delist
+              </button>
+              <button
+                onClick={() => bulkUpdateStatus("draft")}
+                disabled={bulkBusy}
+                className="rounded border border-gray-700 px-3 py-1.5 text-xs font-medium text-gray-300 hover:border-gray-500 disabled:opacity-50"
+              >
+                Draft
+              </button>
+              <button
+                onClick={() => setSelectedIds(new Set())}
+                className="text-xs text-gray-500 hover:text-gray-300"
+              >
+                Clear
+              </button>
+            </div>
+          )}
         </div>
 
         {loading ? (
@@ -1441,22 +1636,46 @@ export default function AdminShopClient() {
                   <th className="px-3 py-2 font-medium">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-800">
-                {listings.map((listing) => {
-                  const draft = inlineDrafts[listing.id];
+              <tbody className="divide-y divide-gray-800/60">
+                {sortedListings.map((listing) => {
+                  const margin = computeMargin(
+                    listing.price,
+                    listing.cost_basis
+                  );
+                  const available = Math.max(
+                    0,
+                    (listing.quantity ?? 0) - (listing.quantity_sold ?? 0)
+                  );
 
                   return (
-                    <tr key={listing.id}>
-                      <td className="px-3 py-2">
+                    <tr
+                      key={listing.id}
+                      className={`transition-colors ${
+                        selectedIds.has(listing.id)
+                          ? "bg-cyan-950/20"
+                          : "hover:bg-gray-800/30"
+                      }`}
+                    >
+                      <td className="px-2 py-2">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(listing.id)}
+                          onChange={() => toggleSelect(listing.id)}
+                          className="rounded border-gray-600"
+                        />
+                      </td>
+                      <td className="px-2 py-2">
                         {listing.thumbnail_url || listing.image_urls?.[0] ? (
                           <img
-                            src={listing.thumbnail_url || listing.image_urls?.[0]}
+                            src={
+                              listing.thumbnail_url || listing.image_urls?.[0]
+                            }
                             alt=""
-                            className="h-12 w-12 rounded object-cover"
+                            className="h-10 w-10 rounded object-cover"
                           />
                         ) : (
-                          <div className="flex h-12 w-12 items-center justify-center rounded bg-gray-800 text-[10px] text-gray-500">
-                            No image
+                          <div className="flex h-10 w-10 items-center justify-center rounded bg-gray-800 text-[9px] text-gray-500">
+                            No img
                           </div>
                         )}
                       </td>
@@ -1482,37 +1701,39 @@ export default function AdminShopClient() {
                           className="w-24 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-white"
                         />
                       </td>
-                      <td className="px-3 py-2">
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={draft?.shipping_cost ?? ""}
-                          onChange={(event) =>
-                            updateInlineDraft(listing.id, {
-                              shipping_cost: event.target.value,
-                            })
-                          }
-                          onBlur={() => commitInline(listing, "shipping_cost")}
-                          className="w-24 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-white"
-                        />
+                      <td className="px-2 py-2 tabular-nums text-amber-400 whitespace-nowrap">
+                        {listing.cost_basis != null && listing.cost_basis > 0
+                          ? formatUsd(listing.cost_basis)
+                          : "--"}
                       </td>
-                      <td className="px-3 py-2">
-                        <select
-                          value={draft?.status ?? listing.status}
-                          onChange={(event) => {
-                            const status = event.target.value as ListingStatus;
-                            updateInlineDraft(listing.id, { status });
-                            void runRowAction(listing.id, { status });
-                          }}
-                          className="rounded border border-gray-700 bg-gray-900 px-2 py-1 text-white"
+                      <td className="px-2 py-2 tabular-nums text-white whitespace-nowrap font-medium">
+                        {formatUsd(listing.price)}
+                      </td>
+                      <td className="px-2 py-2 tabular-nums whitespace-nowrap">
+                        {margin != null ? (
+                          <span
+                            className={`font-medium ${
+                              margin >= 0
+                                ? "text-emerald-400"
+                                : "text-rose-400"
+                            }`}
+                          >
+                            {margin >= 0 ? "+" : ""}
+                            {margin.toFixed(1)}%
+                          </span>
+                        ) : (
+                          <span className="text-gray-600">--</span>
+                        )}
+                      </td>
+                      <td className="px-2 py-2">
+                        <span
+                          className={`inline-block rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+                            STATUS_COLORS[listing.status as ListingStatus] ??
+                            STATUS_COLORS.draft
+                          }`}
                         >
-                          {STATUS_OPTIONS.map((status) => (
-                            <option key={status} value={status}>
-                              {status}
-                            </option>
-                          ))}
-                        </select>
+                          {listing.status}
+                        </span>
                       </td>
                       <td className="px-3 py-2">
                         <select
@@ -1550,14 +1771,14 @@ export default function AdminShopClient() {
                           Yes
                         </label>
                       </td>
-                      <td className="px-3 py-2 text-xs text-gray-400">
+                      <td className="px-2 py-2 text-xs text-gray-400 whitespace-nowrap">
                         {new Date(listing.created_at).toLocaleDateString()}
                       </td>
-                      <td className="px-3 py-2">
-                        <div className="flex flex-wrap gap-2">
+                      <td className="px-2 py-2">
+                        <div className="flex flex-wrap gap-1.5">
                           <button
                             onClick={() => openEditModal(listing)}
-                            className="rounded border border-gray-700 px-2 py-1 text-xs text-gray-200 hover:border-gray-500"
+                            className="rounded border border-gray-700 px-2 py-1 text-xs text-gray-200 hover:border-cyan-600 hover:text-cyan-300"
                           >
                             Edit
                           </button>
@@ -1588,25 +1809,37 @@ export default function AdminShopClient() {
                           >
                             Mark sold
                           </button>
+                          {listing.status !== "active" && (
+                            <button
+                              onClick={() =>
+                                runRowAction(listing.id, { status: "active" })
+                              }
+                              className="rounded border border-emerald-800 px-2 py-1 text-xs text-emerald-300 hover:border-emerald-600"
+                            >
+                              Activate
+                            </button>
+                          )}
+                          {listing.status !== "sold" && (
+                            <button
+                              onClick={() =>
+                                runRowAction(listing.id, { status: "sold" })
+                              }
+                              className="rounded border border-cyan-800 px-2 py-1 text-xs text-cyan-300 hover:border-cyan-600"
+                            >
+                              Sold
+                            </button>
+                          )}
                           <button
-                            onClick={() => runRowAction(listing.id, { status: "delisted" })}
-                            className="rounded border border-amber-800 px-2 py-1 text-xs text-amber-300 hover:border-amber-600"
+                            onClick={() => setDeleteConfirmId(listing.id)}
+                            className="rounded border border-rose-800 px-2 py-1 text-xs text-rose-300 hover:border-rose-600"
                           >
-                            Delist
-                          </button>
-                          <button
-                            onClick={() =>
-                              runRowAction(listing.id, {
-                                featured: !listing.featured,
-                              })
-                            }
-                            className="rounded border border-cyan-800 px-2 py-1 text-xs text-cyan-300 hover:border-cyan-600"
-                          >
-                            {listing.featured ? "Unfeature" : "Feature"}
+                            Del
                           </button>
                         </div>
                         {busyRow === listing.id && (
-                          <div className="mt-1 text-[11px] text-gray-500">Saving...</div>
+                          <div className="mt-1 text-[11px] text-gray-500">
+                            Saving...
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -1618,13 +1851,45 @@ export default function AdminShopClient() {
         )}
       </section>
 
+      {/* Delete confirmation dialog */}
+      {deleteConfirmId && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setDeleteConfirmId(null);
+          }}
+        >
+          <div className="w-full max-w-sm rounded-2xl border border-gray-700 bg-gray-950 p-6 text-center">
+            <h3 className="text-lg font-semibold text-white">
+              Delete listing?
+            </h3>
+            <p className="mt-2 text-sm text-gray-400">
+              This action cannot be undone.
+            </p>
+            <div className="mt-5 flex items-center justify-center gap-3">
+              <button
+                onClick={() => setDeleteConfirmId(null)}
+                className="rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => deleteListing(deleteConfirmId)}
+                className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-500"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit modal */}
       {editingListing && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
           onClick={(event) => {
-            if (event.target === event.currentTarget) {
-              closeEditModal();
-            }
+            if (event.target === event.currentTarget) closeEditModal();
           }}
         >
           <div className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl border border-gray-700 bg-gray-950 p-5">
@@ -1652,7 +1917,9 @@ export default function AdminShopClient() {
                 />
               </div>
 
-              {editError && <p className="text-sm text-rose-400">{editError}</p>}
+              {editError && (
+                <p className="text-sm text-rose-400">{editError}</p>
+              )}
 
               <div className="flex items-center gap-2">
                 <button
@@ -1662,7 +1929,6 @@ export default function AdminShopClient() {
                 >
                   {savingEdit ? "Saving..." : "Save changes"}
                 </button>
-
                 <button
                   type="button"
                   onClick={closeEditModal}
@@ -1670,40 +1936,9 @@ export default function AdminShopClient() {
                 >
                   Cancel
                 </button>
-
                 <button
                   type="button"
-                  onClick={async () => {
-                    if (!confirm("Delete this listing? This cannot be undone.")) {
-                      return;
-                    }
-
-                    try {
-                      setSavingEdit(true);
-                      const response = await fetch(
-                        `/api/admin/shop/listings?id=${editingListing.id}`,
-                        {
-                          method: "DELETE",
-                        }
-                      );
-
-                      const data = await response.json();
-                      if (!response.ok) {
-                        throw new Error(data?.error || "Failed to delete listing.");
-                      }
-
-                      await loadListings();
-                      closeEditModal();
-                    } catch (error) {
-                      setEditError(
-                        error instanceof Error
-                          ? error.message
-                          : "Failed to delete listing."
-                      );
-                    } finally {
-                      setSavingEdit(false);
-                    }
-                  }}
+                  onClick={() => setDeleteConfirmId(editingListing.id)}
                   className="ml-auto rounded-lg border border-rose-800 px-4 py-2 text-sm text-rose-300"
                 >
                   Delete listing

@@ -11,6 +11,7 @@ const ALLOWED_STATUS: ListingStatus[] = [
   "sold",
   "reserved",
   "delisted",
+  "draft",
 ];
 const ALLOWED_PUBLISH_STATES: PublishState[] = ["draft", "published"];
 const ALLOWED_CONDITIONS: ListingCondition[] = ["raw", "graded", "sealed"];
@@ -141,6 +142,27 @@ export async function PATCH(request: NextRequest) {
   }
 
   const body = await request.json();
+
+  // --- Bulk status update: { ids: string[], status: string } ---
+  if (Array.isArray(body?.ids) && body?.ids.length > 0 && typeof body?.status === "string") {
+    const ids = body.ids.filter((v: unknown) => typeof v === "string" && v.trim().length > 0) as string[];
+    const status = asStatus(body.status, "active");
+    if (ids.length === 0) {
+      return NextResponse.json({ error: "ids array must contain valid strings" }, { status: 400 });
+    }
+    const supabase = await createServiceClient();
+    const { error } = await supabase
+      .from("shop_listings")
+      .update({ status })
+      .in("id", ids);
+
+    if (error) {
+      console.error("Admin shop listings bulk update error:", error);
+      return NextResponse.json({ error: "Bulk update failed" }, { status: 500 });
+    }
+    return NextResponse.json({ success: true, updated: ids.length });
+  }
+
   const id = asString(body?.id);
   const updates = body?.updates as Record<string, unknown> | undefined;
 
@@ -199,6 +221,16 @@ export async function PATCH(request: NextRequest) {
   if ("cmv" in updates) {
     const cmv = asNumber(updates.cmv);
     filtered.cmv = cmv != null ? cmv : null;
+  }
+
+  if ("cost_basis" in updates) {
+    const costBasis = asNumber(updates.cost_basis);
+    filtered.cost_basis = costBasis != null ? costBasis : null;
+  }
+
+  if ("ebay_sold_comp" in updates) {
+    const ebaySoldComp = asNumber(updates.ebay_sold_comp);
+    filtered.ebay_sold_comp = ebaySoldComp != null ? ebaySoldComp : null;
   }
 
   if ("shipping_cost" in updates) {
@@ -310,6 +342,8 @@ export async function POST(request: NextRequest) {
 
   const quantity = asNumber(body?.quantity);
   const cmv = asNumber(body?.cmv);
+  const costBasis = asNumber(body?.cost_basis);
+  const ebaySoldComp = asNumber(body?.ebay_sold_comp);
   const shippingCost = asNumber(body?.shipping_cost);
   const imageUrls = asImageUrls(body?.image_urls);
 
@@ -327,6 +361,9 @@ export async function POST(request: NextRequest) {
     sport: sanitizeSport(body?.sport),
     price,
     cmv,
+    cost_basis: costBasis,
+    ebay_sold_comp: ebaySoldComp,
+    description: asNullableString(body?.description),
     quantity: quantity != null ? Math.max(1, Math.trunc(quantity)) : 1,
     status: asStatus(body?.status, "active"),
     publish_state: asPublishState(body?.publish_state, "published"),

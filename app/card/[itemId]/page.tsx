@@ -959,7 +959,7 @@ export default function CardProfilePage() {
                 {/* Market Floor / CMV */}
                 <div>
                   <p className="text-xs text-gray-500 mb-1">
-                    {isBusinessMode ? "Market Floor (CMV)" : "Est. Market Value"}
+                    {isBusinessMode ? "Est. Market Value" : "Est. Market Value"}
                   </p>
                   <p className="text-xl font-bold tabular-nums">
                     {fmtCents(item.current_market_value_cents)}

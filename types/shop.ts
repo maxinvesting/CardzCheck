@@ -20,6 +20,7 @@ export interface ShopListing {
   price: number;
   cmv: number | null;
   cost_basis?: number | null; // admin only, excluded from public API
+  ebay_sold_comp?: number | null; // admin only — reference eBay sold comp price
   quantity: number;
   quantity_sold: number;
   image_urls: string[];

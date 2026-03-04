@@ -120,7 +120,7 @@ export default function CollectionStats({ items, loading }: CollectionStatsProps
             {gain >= 0 ? "+" : ""}{formatCurrency(gain)}
           </p>
         ) : (
-          <p className="text-3xl font-bold text-gray-500">CMV (Beta) unavailable</p>
+          <p className="text-3xl font-bold text-gray-500">Est. Market Value unavailable</p>
         )}
       </div>
     </div>

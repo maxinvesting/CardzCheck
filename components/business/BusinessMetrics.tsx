@@ -113,7 +113,7 @@ export default function BusinessMetrics({
     ) : null;
 
   return (
-    <div className={`grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 ${compact ? "gap-2 mb-2" : "gap-2.5 mb-3"}`}>
+    <div className={`grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-8 ${compact ? "gap-2 mb-2" : "gap-2.5 mb-3"}`}>
       {cards.map((c) => (
         <div
           key={c.label}

@@ -31,7 +31,7 @@ const EMPTY_FEATURES = [
     description: "High-resolution photos and cert-forward listing details.",
   },
   {
-    title: "Transparent CMV pricing",
+    title: "Transparent pricing",
     description: "Live CardzCheck Market Value context shown on every listing.",
   },
   {
@@ -327,13 +327,13 @@ export default function ShopStorefront({
             <div className="flex flex-wrap items-center gap-3 pt-1">
               <button
                 onClick={scrollToCatalog}
-                className="rounded-lg bg-cyan-600 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-cyan-500"
+                className="rounded-lg bg-cyan-600 px-5 py-3 min-h-[44px] text-sm font-medium text-white transition-colors hover:bg-cyan-500"
               >
                 Browse inventory
               </button>
               <button
                 onClick={scrollToWaitlist}
-                className="rounded-lg border border-slate-300 bg-white px-5 py-3 text-sm font-medium text-slate-700 transition-colors hover:border-slate-400 hover:text-slate-900"
+                className="rounded-lg border border-slate-300 bg-white px-5 py-3 min-h-[44px] text-sm font-medium text-slate-700 transition-colors hover:border-slate-400 hover:text-slate-900"
               >
                 Join waitlist
               </button>
@@ -379,7 +379,7 @@ export default function ShopStorefront({
               Join the next release window.
             </h2>
             <p className="mt-2 max-w-2xl text-sm text-slate-600 md:text-base">
-              Get early notice on incoming inventory, certified slabs, and below-CMV opportunities.
+              Get early notice on incoming inventory, certified slabs, and below-market opportunities.
             </p>
           </div>
 
@@ -464,7 +464,7 @@ export default function ShopStorefront({
               <div>
                 <h2 className="text-2xl font-semibold text-slate-900">Curated inventory</h2>
                 <p className="mt-1 text-sm text-slate-600">
-                  Featured cards, discounts versus CMV, and premium picks.
+                  Featured cards, discounts versus Est. Market Value, and premium picks.
                 </p>
                 <p className="mt-2 text-sm text-slate-500">
                   Prices are benchmarked against CardzCheck Market Value. {" "}
@@ -472,7 +472,7 @@ export default function ShopStorefront({
                     href="/comps"
                     className="text-cyan-700 transition-colors hover:text-cyan-600"
                   >
-                    Learn how CMV works
+                    Learn how Est. Market Value works
                   </Link>
                   .
                 </p>
@@ -486,7 +486,7 @@ export default function ShopStorefront({
               />
 
               <ShopSectionCarousel
-                title="Below CMV deals"
+                title="Below market deals"
                 subtitle="Sorted by largest discount to market value."
                 listings={belowCmvDeals}
                 onSeeAll={() => applyMerchandisingPreset("below-cmv")}
@@ -511,7 +511,7 @@ export default function ShopStorefront({
                 {hasActiveFilters && (
                   <button
                     onClick={clearFilters}
-                    className="text-sm text-slate-600 transition-colors hover:text-cyan-700"
+                    className="text-sm text-slate-600 transition-colors hover:text-cyan-700 min-h-[44px] px-1"
                   >
                     Reset filters
                   </button>
@@ -560,13 +560,13 @@ export default function ShopStorefront({
                   <div className="mt-4 flex items-center justify-center gap-3">
                     <button
                       onClick={clearFilters}
-                      className="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-cyan-500"
+                      className="rounded-lg bg-cyan-600 px-4 py-2.5 min-h-[44px] text-sm font-medium text-white transition-colors hover:bg-cyan-500"
                     >
                       Clear filters
                     </button>
                     <button
                       onClick={() => applyMerchandisingPreset("featured")}
-                      className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:border-slate-400 hover:text-slate-900"
+                      className="rounded-lg border border-slate-300 px-4 py-2.5 min-h-[44px] text-sm font-medium text-slate-700 transition-colors hover:border-slate-400 hover:text-slate-900"
                     >
                       View featured
                     </button>
@@ -585,7 +585,7 @@ export default function ShopStorefront({
                       <button
                         onClick={() => setCatalogPage((page) => Math.max(1, page - 1))}
                         disabled={catalogPage <= 1}
-                        className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 transition-colors hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 min-h-[44px] text-sm text-slate-700 transition-colors hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         Previous
                       </button>
@@ -597,7 +597,7 @@ export default function ShopStorefront({
                           setCatalogPage((page) => Math.min(catalogPageCount, page + 1))
                         }
                         disabled={catalogPage >= catalogPageCount}
-                        className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 transition-colors hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 min-h-[44px] text-sm text-slate-700 transition-colors hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         Next
                       </button>

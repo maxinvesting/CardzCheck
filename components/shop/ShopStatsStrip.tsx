@@ -35,7 +35,7 @@ export default function ShopStatsStrip({
       valueClassName: "text-slate-900",
     },
     {
-      label: "Below CMV count",
+      label: "Below Est. MV count",
       value: isEmpty ? "-" : stats.belowCmvCount.toString(),
       valueClassName: "text-emerald-600",
     },

@@ -74,7 +74,7 @@ export default function TopPerformersSection({
         {items.length > 0 && (
           <Link
             href="/collection"
-            className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+            className="inline-flex items-center text-xs text-blue-400 hover:text-blue-300 transition-colors min-h-[44px] px-1"
           >
             View all
           </Link>
@@ -96,7 +96,7 @@ export default function TopPerformersSection({
               d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
             />
           </svg>
-          <p className="text-sm">Add cards with purchase price and CMV (Beta) to track performance</p>
+          <p className="text-sm">Add cards with purchase price and Est. Market Value to track performance</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -105,7 +105,7 @@ export default function TopPerformersSection({
             return (
               <div
                 key={item.id}
-                className="flex items-center justify-between p-3 bg-gray-800/50 hover:bg-gray-800 rounded-lg transition-colors"
+                className="flex items-center justify-between p-3 min-h-[52px] bg-gray-800/50 hover:bg-gray-800 rounded-lg transition-colors"
               >
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 flex items-center justify-center bg-gray-700 rounded-lg text-sm font-bold text-gray-400">

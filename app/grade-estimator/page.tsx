@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
-import CardUploader from "@/components/CardUploader";
+import DualCardUploader from "@/components/DualCardUploader";
 import GradeProbabilityPanel from "@/components/grading/GradeProbabilityPanel";
 import GradeEstimateProgressPanel from "@/components/grading/GradeEstimateProgressPanel";
 import GradeEstimatorValuePanel from "@/components/GradeEstimatorValuePanel";
@@ -775,9 +775,9 @@ export default function GradeEstimatorPage() {
         {!identifiedCard ? (
           <div className="space-y-8">
 
-            {/* ── Scanner Bay ─────────────────────────────────────── */}
+            {/* ── Scanner Bay (Dual Upload: Front + Back Required) ── */}
             <section>
-              <CardUploader
+              <DualCardUploader
                 onIdentified={(data: CardIdentificationResult) => {
                   setIdentifiedCard(data);
                 }}
@@ -800,7 +800,6 @@ export default function GradeEstimatorPage() {
                   setGradeJobId(null);
                 }}
                 disabled={false}
-                maxFiles={8}
               />
 
               {/* Scanner Tips — anchored beneath the dropzone */}

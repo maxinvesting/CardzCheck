@@ -61,7 +61,7 @@ export function getCmvDeltaPresentation(
   if (cmv == null || cmv <= 0) {
     return {
       cmvLabel: null,
-      deltaLabel: "CMV updating",
+      deltaLabel: "Est. Market Value updating",
       deltaClass: "text-slate-500",
     };
   }
@@ -70,7 +70,7 @@ export function getCmvDeltaPresentation(
 
   if (Math.abs(deltaPct) <= 1) {
     return {
-      cmvLabel: `CMV ${formatUsd(cmv, 0)}`,
+      cmvLabel: `Est. MV ${formatUsd(cmv, 0)}`,
       deltaLabel: "~ at market",
       deltaClass: "text-slate-600",
     };
@@ -78,14 +78,14 @@ export function getCmvDeltaPresentation(
 
   if (deltaPct < 0) {
     return {
-      cmvLabel: `CMV ${formatUsd(cmv, 0)}`,
+      cmvLabel: `Est. MV ${formatUsd(cmv, 0)}`,
       deltaLabel: `${Math.abs(deltaPct)}% below market`,
       deltaClass: "text-emerald-600",
     };
   }
 
   return {
-    cmvLabel: `CMV ${formatUsd(cmv, 0)}`,
+    cmvLabel: `Est. MV ${formatUsd(cmv, 0)}`,
     deltaLabel: `${deltaPct}% above market`,
     deltaClass: "text-amber-600",
   };

@@ -516,7 +516,7 @@ export default function CollectionPage() {
       if (!cmvRes.ok) {
         throw new Error(
           (cmvData && typeof cmvData.error === "string" && cmvData.error) ||
-            "Failed to fetch estimated CMV"
+            "Failed to fetch Est. Market Value"
         );
       }
 
@@ -568,7 +568,7 @@ export default function CollectionPage() {
       setShowCardPicker(false);
       setShowPickerConfirmModal(true);
     } catch (err) {
-      setCardPickerError(err instanceof Error ? err.message : "Failed to fetch estimated CMV");
+      setCardPickerError(err instanceof Error ? err.message : "Failed to fetch Est. Market Value");
     } finally {
       setCardPickerLoading(false);
     }
@@ -636,7 +636,7 @@ export default function CollectionPage() {
               </p>
               {collectionSummary.cardsWithCmv === 0 && collectionSummary.cardCount > 0 && (
                 <p className="text-xs text-blue-100/80 mt-1">
-                  Collection value is estimated CMV (Beta) only. Add comps (Beta) to get values.
+                  Collection value requires comps. Add comps to get estimated values.
                 </p>
               )}
               <p className="text-blue-100 text-sm mt-2">{collectionCount} cards in collection</p>
@@ -772,7 +772,7 @@ export default function CollectionPage() {
                 </div>
               ) : (
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                  CMV (Beta) unavailable. Add comps (Beta) to calculate top values.
+                  Est. Market Value unavailable. Add comps to calculate top values.
                 </p>
               )}
             </div>
@@ -818,7 +818,7 @@ export default function CollectionPage() {
                               {estCmv != null && estCmv > 0 ? (
                                 <>
                                   <span className="font-medium">
-                                    CMV (Beta): {formatPrice(estCmv)}
+                                    Est. MV: {formatPrice(estCmv)}
                                   </span>
                                   {item.purchase_price != null && (
                                     <span className="ml-1 text-[11px] text-gray-400">

@@ -16,18 +16,20 @@ function pluralize(count: number, singular: string, plural = `${singular}s`): st
 export default function BusinessAnalystPreviewCard({ items }: Props) {
   const insights = useMemo(() => generateBusinessAnalystInsights(items), [items]);
 
-  const riskSummary =
-    insights.summary.riskSignalCount > 0
-      ? `${insights.summary.riskSignalCount} risk ${pluralize(insights.summary.riskSignalCount, "signal")} detected`
-      : "No immediate risk signals detected";
+  const actionSummary =
+    insights.summary.actionCount > 0
+      ? `${insights.summary.actionCount} ${pluralize(insights.summary.actionCount, "action")} to review`
+      : "No actions right now";
 
   return (
     <section className="mb-3 rounded-lg border border-gray-800 bg-gray-900/70 px-3 py-2.5">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold text-white">AI Insights</h2>
+          <h2 className="text-sm font-semibold text-white">
+            Today&apos;s Actions
+          </h2>
           <p className="mt-0.5 text-xs text-gray-400">
-            Signals and recommendations from your inventory data
+            Actionable signals from your inventory data
           </p>
         </div>
         <span className="rounded border border-emerald-700/60 bg-emerald-900/30 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-emerald-300">
@@ -37,23 +39,33 @@ export default function BusinessAnalystPreviewCard({ items }: Props) {
 
       <div className="mt-2 grid gap-1.5 text-xs sm:grid-cols-3">
         <div className="rounded border border-gray-800 bg-gray-950/50 px-2 py-1.5 text-gray-200">
-          <span className="text-[10px] uppercase tracking-wider text-gray-500">UNLISTED</span>
+          <span className="text-[10px] uppercase tracking-wider text-gray-500">
+            ACTIONS
+          </span>
+          <p className="mt-0.5">{actionSummary}</p>
+          <p className="mt-0.5 text-[10px] text-gray-500">
+            List, reprice, and market movement signals
+          </p>
+        </div>
+        <div className="rounded border border-gray-800 bg-gray-950/50 px-2 py-1.5 text-gray-200">
+          <span className="text-[10px] uppercase tracking-wider text-gray-500">
+            UNLISTED
+          </span>
           <p className="mt-0.5">
             {insights.summary.unlistedActiveCount} active{" "}
             {pluralize(insights.summary.unlistedActiveCount, "item")}
           </p>
-          <p className="mt-0.5 text-[10px] text-gray-500">Items not currently listed</p>
-        </div>
-        <div className="rounded border border-gray-800 bg-gray-950/50 px-2 py-1.5 text-gray-200">
-          <span className="text-[10px] uppercase tracking-wider text-gray-500">RISK</span>
-          <p className="mt-0.5">{riskSummary}</p>
           <p className="mt-0.5 text-[10px] text-gray-500">
-            Flags based on age, liquidity, and pricing
+            Items not currently listed
           </p>
         </div>
         <div className="rounded border border-gray-800 bg-gray-950/50 px-2 py-1.5 text-gray-200">
-          <span className="text-[10px] uppercase tracking-wider text-gray-500">CMV COVERAGE</span>
-          <p className="mt-0.5">{insights.coverage.cmvCoveragePct}% of active inventory</p>
+          <span className="text-[10px] uppercase tracking-wider text-gray-500">
+            EST. MV COVERAGE
+          </span>
+          <p className="mt-0.5">
+            {insights.coverage.cmvCoveragePct}% of active inventory
+          </p>
           <p className="mt-0.5 text-[10px] text-gray-500">
             Share of inventory with comps (Beta)
           </p>
@@ -63,7 +75,7 @@ export default function BusinessAnalystPreviewCard({ items }: Props) {
       <div className="mt-2 flex justify-end">
         <Link
           href="/business/insights"
-          className="text-xs font-medium text-emerald-400 transition-colors hover:text-emerald-300"
+          className="inline-flex items-center text-xs font-medium text-emerald-400 transition-colors hover:text-emerald-300 min-h-[44px] px-1"
         >
           View insights →
         </Link>

@@ -55,6 +55,12 @@ export default function ShopListingCard({
   const cmv = getCmvDeltaPresentation(listing.price, listing.cmv);
   const shippingLine = `${getShippingLabel(listing.shipping_cost)} • Ships in 1-2 days`;
 
+  const normalizedGrade = (listing.grade ?? "").toLowerCase();
+  const isGraded =
+    normalizedGrade.length > 0 &&
+    !normalizedGrade.includes("raw") &&
+    !normalizedGrade.includes("ungraded");
+
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -85,7 +91,7 @@ export default function ShopListingCard({
 
       <div className="flex flex-1 flex-col gap-3 p-4">
         <div className="flex items-start justify-between gap-3">
-          <Link href={detailHref} className="min-w-0 flex-1">
+          <Link href={detailHref} className="min-w-0 flex-1 min-h-[44px] flex items-center">
             <h3 className="line-clamp-2 text-sm font-semibold leading-5 text-slate-900 transition-colors group-hover:text-cyan-700">
               {title}
             </h3>
@@ -99,6 +105,25 @@ export default function ShopListingCard({
           </span>
         </div>
 
+        {isGraded && (
+          <div className="flex items-center gap-1.5">
+            <svg
+              className="h-3.5 w-3.5 text-emerald-500"
+              fill="currentColor"
+              viewBox="0 0 20 20"
+            >
+              <path
+                fillRule="evenodd"
+                d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z"
+                clipRule="evenodd"
+              />
+            </svg>
+            <span className="text-[11px] font-medium text-emerald-600">
+              Verified slab
+            </span>
+          </div>
+        )}
+
         <div className="space-y-1">
           <div className="text-2xl font-semibold tracking-tight text-slate-900 tabular-nums">
             {formatUsd(Number(listing.price), 2)}
@@ -107,18 +132,24 @@ export default function ShopListingCard({
             {cmv.cmvLabel ? (
               <span className="text-slate-600">{cmv.cmvLabel}</span>
             ) : (
-              <span className="text-slate-500">CMV unavailable</span>
+              <span className="text-slate-500">Est. Market Value unavailable</span>
             )}
             <span className={cmv.deltaClass}>{cmv.deltaLabel}</span>
           </div>
         </div>
+
+        {listing.description && (
+          <p className="line-clamp-2 text-xs text-slate-500">
+            {listing.description}
+          </p>
+        )}
 
         <p className="text-xs text-slate-500">{shippingLine}</p>
 
         <button
           onClick={handleAddToCart}
           disabled={!canAdd}
-          className={`mt-auto rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+          className={`mt-auto rounded-lg px-3 py-2.5 min-h-[44px] text-sm font-medium transition-colors ${
             canAdd
               ? "bg-cyan-600 text-white hover:bg-cyan-500"
               : "cursor-not-allowed bg-slate-200 text-slate-500"

@@ -81,7 +81,7 @@ export default function CompsStats({
                     <button
                       onClick={onAddToCollection}
                       disabled={!canAddToCollection}
-                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors flex items-center gap-2"
+                      className="px-4 py-2.5 min-h-[44px] bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors flex items-center gap-2"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -93,7 +93,7 @@ export default function CompsStats({
                     <button
                       onClick={onWatch}
                       disabled={!canWatch}
-                      className="px-4 py-2 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors flex items-center gap-2"
+                      className="px-4 py-2.5 min-h-[44px] bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors flex items-center gap-2"
                       title={!canWatch ? "Watchlist is a Pro feature" : "Watch this card"}
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -126,16 +126,16 @@ export default function CompsStats({
       </div>
 
       <div className={`grid divide-x divide-y md:divide-y-0 divide-gray-200 dark:divide-gray-800 ${useRobust ? "grid-cols-2 md:grid-cols-5" : "grid-cols-2 md:grid-cols-3"}`}>
-        {/* CMV - highlighted */}
+        {/* Est. Market Value - highlighted */}
         <div className="p-4 bg-blue-50 dark:bg-blue-900/20 col-span-2 md:col-span-1">
-          <p className="text-xs font-medium text-blue-600 dark:text-blue-400 uppercase tracking-wider">
-            CMV (Beta)
+          <p className="text-xs font-medium text-blue-600 dark:text-blue-400 uppercase tracking-wider" title="Based on active eBay listings. Actual sold prices may differ.">
+            Est. Market Value
           </p>
           <p className="text-2xl font-bold text-blue-700 dark:text-blue-300 mt-1">
-            {stats.cmv !== null ? formatPrice(stats.cmv) : "CMV (Beta) unavailable"}
+            {stats.cmv !== null ? formatPrice(stats.cmv) : "Unavailable"}
           </p>
           <p className="text-xs text-blue-500 dark:text-blue-400 mt-0.5">
-            Current Market Value (Beta)
+            Based on active eBay listings
           </p>
         </div>
 
@@ -232,7 +232,7 @@ export default function CompsStats({
                 <button
                   onClick={onWatch}
                   disabled={!canWatch}
-                  className="px-4 py-2 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors flex items-center gap-2"
+                  className="px-4 py-2.5 min-h-[44px] bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors flex items-center gap-2"
                   title={!canWatch ? "Watchlist is a Pro feature" : "Watch this card"}
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

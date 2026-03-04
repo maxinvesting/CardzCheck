@@ -114,7 +114,7 @@ function FilterControls({
           onChange={(event) => onBelowCmvChange(event.target.checked)}
           className="h-4 w-4 rounded border-slate-300 text-cyan-500 focus:ring-cyan-500/30"
         />
-        <span>Below CMV</span>
+        <span>Below Est. MV</span>
       </label>
 
       <select
@@ -180,7 +180,7 @@ export default function ShopFilterBar({
       <div className="flex items-center justify-between gap-3 md:hidden">
         <button
           onClick={() => setMobileOpen(true)}
-          className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 transition-colors hover:border-slate-300 hover:text-slate-900"
+          className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 min-h-[44px] text-sm text-slate-700 transition-colors hover:border-slate-300 hover:text-slate-900"
         >
           <svg
             className="h-4 w-4"
@@ -216,7 +216,7 @@ export default function ShopFilterBar({
               <h3 className="text-lg font-semibold text-slate-900">Filters</h3>
               <button
                 onClick={() => setMobileOpen(false)}
-                className="rounded-lg p-2 text-slate-500 transition-colors hover:text-slate-900"
+                className="rounded-lg p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-500 transition-colors hover:text-slate-900"
                 aria-label="Close filters"
               >
                 <svg
@@ -241,13 +241,13 @@ export default function ShopFilterBar({
                 value={search}
                 onChange={(event) => onSearchChange(event.target.value)}
                 placeholder="Search player, set, year, tags..."
-                className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 placeholder:text-slate-500 focus:border-cyan-500 focus:outline-none"
+                className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 placeholder:text-slate-500 focus:border-cyan-500 focus:outline-none"
               />
 
               <select
                 value={sportFilter ?? ""}
                 onChange={(event) => onSportChange(event.target.value || null)}
-                className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:border-cyan-500 focus:outline-none"
+                className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:border-cyan-500 focus:outline-none"
               >
                 <option value="">Sport</option>
                 {sports.map((sport) => (
@@ -260,7 +260,7 @@ export default function ShopFilterBar({
               <select
                 value={gradeFilter ?? ""}
                 onChange={(event) => onGradeChange(event.target.value || null)}
-                className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:border-cyan-500 focus:outline-none"
+                className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:border-cyan-500 focus:outline-none"
               >
                 <option value="">Grade</option>
                 {grades.map((grade) => (
@@ -275,7 +275,7 @@ export default function ShopFilterBar({
                 onChange={(event) =>
                   onPriceRangeChange(event.target.value as PriceRangeValue)
                 }
-                className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:border-cyan-500 focus:outline-none"
+                className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:border-cyan-500 focus:outline-none"
               >
                 {PRICE_RANGES.map((range) => (
                   <option key={range.value || "all"} value={range.value}>
@@ -284,20 +284,20 @@ export default function ShopFilterBar({
                 ))}
               </select>
 
-              <label className="flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700">
+              <label className="flex h-11 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700">
                 <input
                   type="checkbox"
                   checked={belowCmvOnly}
                   onChange={(event) => onBelowCmvChange(event.target.checked)}
                   className="h-4 w-4 rounded border-slate-300 text-cyan-500 focus:ring-cyan-500/30"
                 />
-                <span>Below CMV</span>
+                <span>Below Est. MV</span>
               </label>
 
               <select
                 value={sort}
                 onChange={(event) => onSortChange(event.target.value as SortValue)}
-                className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:border-cyan-500 focus:outline-none"
+                className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:border-cyan-500 focus:outline-none"
               >
                 {SORTS.map((sortOption) => (
                   <option key={sortOption.value} value={sortOption.value}>
@@ -309,7 +309,7 @@ export default function ShopFilterBar({
 
             <button
               onClick={() => setMobileOpen(false)}
-              className="mt-6 w-full rounded-lg bg-cyan-600 py-3 text-sm font-medium text-white transition-colors hover:bg-cyan-500"
+              className="mt-6 w-full rounded-lg bg-cyan-600 py-3 min-h-[44px] text-sm font-medium text-white transition-colors hover:bg-cyan-500"
             >
               Apply filters
             </button>

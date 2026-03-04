@@ -12,6 +12,25 @@ import { isTestMode, getTestUser } from "@/lib/test-mode";
 
 const EBAY_STORE_URL_STORAGE_KEY = "cardzcheck_ebay_store_url";
 const EBAY_STORE_URL_UPDATED_EVENT = "cardzcheck:ebay-store-url-updated";
+const EBAY_FEE_RATE_STORAGE_KEY = "cardzcheck_ebay_fee_rate";
+const EBAY_FEE_RATE_UPDATED_EVENT = "cardzcheck:ebay-fee-rate-updated";
+
+type EbayFeeRateKey = "standard" | "top_rated_plus";
+
+function getStoredEbayFeeRate(): EbayFeeRateKey {
+  if (typeof window === "undefined") return "standard";
+  const stored = window.localStorage.getItem(EBAY_FEE_RATE_STORAGE_KEY);
+  if (stored === "top_rated_plus") return "top_rated_plus";
+  return "standard";
+}
+
+function persistEbayFeeRate(value: EbayFeeRateKey) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(EBAY_FEE_RATE_STORAGE_KEY, value);
+  window.dispatchEvent(
+    new CustomEvent(EBAY_FEE_RATE_UPDATED_EVENT, { detail: { value } })
+  );
+}
 
 function normalizeEbayStoreUrl(value: string | null | undefined): string {
   return typeof value === "string" ? value.trim() : "";
@@ -41,6 +60,7 @@ function SettingsContent() {
   const [businessNameLoading, setBusinessNameLoading] = useState(false);
   const [ebayStoreUrl, setEbayStoreUrl] = useState("");
   const [ebayStoreUrlLoading, setEbayStoreUrlLoading] = useState(false);
+  const [ebayFeeRate, setEbayFeeRate] = useState<EbayFeeRateKey>("standard");
   const [loading, setLoading] = useState(true);
   const [pricingOpen, setPricingOpen] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -65,6 +85,7 @@ function SettingsContent() {
         setName(testUser.name || "");
         setBusinessName(testUser.business_name || "");
         setEbayStoreUrl(testUser.ebay_store_url || "");
+        setEbayFeeRate(getStoredEbayFeeRate());
         setLoading(false);
         console.log("🧪 TEST MODE: Using mock user in Settings");
         return;
@@ -111,6 +132,7 @@ function SettingsContent() {
         setEbayStoreUrl(normalizeEbayStoreUrl(metadataEbayStoreUrl));
       }
       persistEbayStoreUrl(resolvedEbayStoreUrl);
+      setEbayFeeRate(getStoredEbayFeeRate());
 
       setLoading(false);
     }
@@ -402,6 +424,44 @@ function SettingsContent() {
                   </div>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     Opens from Business mode via the Open Store shortcut
+                  </p>
+                </div>
+
+                {/* eBay Fee Rate Setting */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    eBay Fee Rate
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        setEbayFeeRate("standard");
+                        persistEbayFeeRate("standard");
+                      }}
+                      className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium border transition-colors ${
+                        ebayFeeRate === "standard"
+                          ? "bg-blue-600 text-white border-blue-600"
+                          : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
+                      }`}
+                    >
+                      Standard — 13%
+                    </button>
+                    <button
+                      onClick={() => {
+                        setEbayFeeRate("top_rated_plus");
+                        persistEbayFeeRate("top_rated_plus");
+                      }}
+                      className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium border transition-colors ${
+                        ebayFeeRate === "top_rated_plus"
+                          ? "bg-blue-600 text-white border-blue-600"
+                          : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
+                      }`}
+                    >
+                      Top Rated Plus — 12%
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Used to calculate eBay Parity Price in your inventory and shop listings
                   </p>
                 </div>
               </div>
