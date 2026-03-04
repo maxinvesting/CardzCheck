@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo } from "react";
 import type { BusinessInventoryItem } from "@/types";
 import { generateBusinessAnalystInsights } from "@/lib/business/analyst-insights";
+import { Surface } from "@/components/ui/Surface";
 
 interface Props {
   items: BusinessInventoryItem[];
@@ -22,57 +23,50 @@ export default function BusinessAnalystPreviewCard({ items }: Props) {
       : "No actions right now";
 
   return (
-    <section className="mb-3 rounded-lg border border-gray-800 bg-gray-900/70 px-3 py-2.5">
+    <Surface className="mb-3 p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold text-white">
-            Today&apos;s Actions
-          </h2>
-          <p className="mt-0.5 text-xs text-gray-400">
+          <h2 className="text-sm font-semibold text-white">Today&apos;s Actions</h2>
+          <p className="mt-0.5 text-xs text-slate-400">
             Actionable signals from your inventory data
           </p>
         </div>
-        <span className="rounded border border-emerald-700/60 bg-emerald-900/30 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-emerald-300">
+        <span className="rounded border border-emerald-700/40 bg-emerald-900/20 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400 tracking-wide">
           AI
         </span>
       </div>
 
-      <div className="mt-2 grid gap-1.5 text-xs sm:grid-cols-3">
-        <div className="rounded border border-gray-800 bg-gray-950/50 px-2 py-1.5 text-gray-200">
-          <span className="text-[10px] uppercase tracking-wider text-gray-500">
-            ACTIONS
-          </span>
-          <p className="mt-0.5">{actionSummary}</p>
-          <p className="mt-0.5 text-[10px] text-gray-500">
-            List, reprice, and market movement signals
-          </p>
-        </div>
-        <div className="rounded border border-gray-800 bg-gray-950/50 px-2 py-1.5 text-gray-200">
-          <span className="text-[10px] uppercase tracking-wider text-gray-500">
-            UNLISTED
-          </span>
-          <p className="mt-0.5">
-            {insights.summary.unlistedActiveCount} active{" "}
-            {pluralize(insights.summary.unlistedActiveCount, "item")}
-          </p>
-          <p className="mt-0.5 text-[10px] text-gray-500">
-            Items not currently listed
-          </p>
-        </div>
-        <div className="rounded border border-gray-800 bg-gray-950/50 px-2 py-1.5 text-gray-200">
-          <span className="text-[10px] uppercase tracking-wider text-gray-500">
-            EST. MV COVERAGE
-          </span>
-          <p className="mt-0.5">
-            {insights.coverage.cmvCoveragePct}% of active inventory
-          </p>
-          <p className="mt-0.5 text-[10px] text-gray-500">
-            Share of inventory with comps (Beta)
-          </p>
-        </div>
+      <div className="mt-3 grid gap-2 text-xs sm:grid-cols-3">
+        {[
+          {
+            label: "Actions",
+            value: actionSummary,
+            sub: "List, reprice, and market signals",
+          },
+          {
+            label: "Unlisted",
+            value: `${insights.summary.unlistedActiveCount} active ${pluralize(insights.summary.unlistedActiveCount, "item")}`,
+            sub: "Items not currently listed",
+          },
+          {
+            label: "Est. MV Coverage",
+            value: `${insights.coverage.cmvCoveragePct}% of active inventory`,
+            sub: "Share of inventory with comps (Beta)",
+          },
+        ].map(({ label, value, sub }) => (
+          <div
+            key={label}
+            style={{ border: "1px solid var(--biz-border)" }}
+            className="rounded-lg bg-white/[0.03] px-3 py-2.5"
+          >
+            <p className="text-[10px] text-slate-500 mb-1">{label}</p>
+            <p className="text-slate-200">{value}</p>
+            <p className="mt-0.5 text-[10px] text-slate-500">{sub}</p>
+          </div>
+        ))}
       </div>
 
-      <div className="mt-2 flex justify-end">
+      <div className="mt-3 flex justify-end">
         <Link
           href="/business/insights"
           className="inline-flex items-center text-xs font-medium text-emerald-400 transition-colors hover:text-emerald-300 min-h-[44px] px-1"
@@ -80,6 +74,6 @@ export default function BusinessAnalystPreviewCard({ items }: Props) {
           View insights →
         </Link>
       </div>
-    </section>
+    </Surface>
   );
 }

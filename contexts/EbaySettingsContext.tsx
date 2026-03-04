@@ -77,8 +77,30 @@ export function EbaySettingsProvider({ children }: { children: ReactNode }) {
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    setFeeProfileState(loadProfile());
+    // 1. Immediately hydrate from localStorage so UI is never blank
+    const stored = loadProfile();
+    setFeeProfileState(stored);
     setHydrated(true);
+
+    // 2. Fetch account status and override if top_rated_seller is known from eBay
+    //    This upgrades the approximation to the real seller tier from the DB.
+    fetch("/api/business/ebay/account")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!data?.connected) return;
+        const serverProfile: EbayFeeProfile = data.top_rated_seller
+          ? "top_rated_plus"
+          : "standard";
+        // Only override localStorage if the server knows the seller is Top Rated Plus
+        // (avoids reverting manual overrides on disconnect)
+        if (data.top_rated_seller) {
+          setFeeProfileState(serverProfile);
+          saveProfile(serverProfile);
+        }
+      })
+      .catch(() => {
+        // Non-fatal — localStorage value remains
+      });
   }, []);
 
   const setFeeProfile = useCallback((profile: EbayFeeProfile) => {

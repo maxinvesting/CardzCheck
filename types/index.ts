@@ -707,3 +707,61 @@ export interface BusinessConsultation {
 export const ANALYST_LIMITS = {
   QUERIES_PER_USER: 100,
 } as const;
+
+// =============================================
+// eBay Integration Types
+// =============================================
+
+export interface EbayAccount {
+  id: string;
+  user_id: string;
+  ebay_user_id: string | null;
+  ebay_username: string | null;
+  access_token: string;
+  refresh_token: string;
+  access_token_expires_at: string;
+  refresh_token_expires_at: string;
+  scopes: string[];
+  is_active: boolean;
+  top_rated_seller: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EbayListingRecord {
+  id: string;
+  user_id: string;
+  inventory_source: "business_inventory_items" | "collection_items";
+  inventory_source_id: string;
+  ebay_listing_id: string;
+  ebay_sku: string | null;
+  title: string;
+  status: "active" | "ended" | "sold" | "error";
+  listed_price_cents: number;
+  ebay_category_id: string | null;
+  listing_url: string | null;
+  last_synced_at: string | null;
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EbayImportJob {
+  id: string;
+  user_id: string;
+  job_type: "listings" | "sales";
+  status: "pending" | "running" | "completed" | "failed";
+  total_count: number | null;
+  processed_count: number;
+  error_message: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+}
+
+export interface EbayAccountStatus {
+  connected: boolean;
+  ebay_username: string | null;
+  top_rated_seller: boolean;
+  access_token_expires_at: string | null;
+}

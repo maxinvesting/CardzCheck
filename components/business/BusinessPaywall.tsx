@@ -51,7 +51,7 @@ export default function BusinessPaywall() {
 
   return (
     <div className="flex items-center justify-center min-h-[70vh] px-4">
-      <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-lg shadow-2xl">
+      <div className="bg-[#111827] border border-white/[0.08] rounded-2xl w-full max-w-lg shadow-lg">
         <div className="p-6 border-b border-gray-800">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 rounded-xl bg-emerald-600 flex items-center justify-center">

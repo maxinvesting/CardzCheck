@@ -160,7 +160,7 @@ export default function SaleFormModal({
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className="w-full max-w-xl rounded-xl border border-gray-700 bg-gray-900 shadow-2xl">
+      <div className="w-full max-w-xl rounded-xl border border-white/[0.08] bg-[#111827] shadow-lg">
         <div className="flex items-center justify-between border-b border-gray-800 px-5 py-3">
           <h2 className="text-sm font-semibold text-white">{title}</h2>
           <button

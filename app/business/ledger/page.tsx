@@ -20,6 +20,7 @@ import InventoryTable from "@/components/business/InventoryTable";
 import ItemDetailDrawer from "@/components/business/ItemDetailDrawer";
 import SalesTable, { type SalesFilters } from "@/components/business/SalesTable";
 import SaleFormModal from "@/components/business/SaleFormModal";
+import EbayOrderSyncBanner from "@/components/business/EbayOrderSyncBanner";
 import AddInventoryModal from "@/components/business/AddInventoryModal";
 import AddWaxModal from "@/components/business/AddWaxModal";
 import AddCardToInventoryModal from "@/components/business/AddCardToInventoryModal";
@@ -1124,6 +1125,9 @@ function LedgerPageContent() {
           )}
 
           {/* Sales tab */}
+          {!needsMigration && activeTab === "sales" && (
+            <EbayOrderSyncBanner />
+          )}
           {!needsMigration && activeTab === "sales" && (
             <SalesTable
               sales={sales}

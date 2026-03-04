@@ -2,9 +2,31 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Design tokens ──────────────────────────────────────────────────────────
+   Single source of truth for the Business UI visual language.
+   Calm, flat, professional — inspired by PSA/Beckett registry tools.
+   Light-mode values are placeholders; override when light mode is built.
+   ─────────────────────────────────────────────────────────────────────────── */
 :root {
+  /* Legacy Next.js defaults */
   --foreground: #171717;
   --background: #ffffff;
+
+  /* App chrome */
+  --biz-app-bg: #0b1220;
+  /* Panel / card surface */
+  --biz-surface: #111827;
+  /* Subtle separator border (white at ~8 % on dark) */
+  --biz-border: rgba(255, 255, 255, 0.08);
+  /* Primary body text */
+  --biz-text: #e5e7eb;
+  /* Secondary / muted text */
+  --biz-text-muted: rgba(229, 231, 235, 0.55);
+  /* Accent colours — flat, no gradient, no glow */
+  --biz-accent: #10b981;
+  --biz-accent-amber: #f59e0b;
+  /* Radius */
+  --biz-radius: 12px;
 }
 
 @media (prefers-color-scheme: dark) {

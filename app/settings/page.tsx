@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import PricingModal from "@/components/PricingModal";
+import EbayConnectSection from "@/components/business/settings/EbayConnectSection";
 import { createClient } from "@/lib/supabase/client";
 import type { User } from "@/types";
 import { LIMITS } from "@/types";
@@ -465,6 +466,15 @@ function SettingsContent() {
                   </p>
                 </div>
               </div>
+            </div>
+          )}
+
+          {isBusinessSettings && (
+            <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                eBay Integration
+              </h2>
+              <EbayConnectSection />
             </div>
           )}
 

@@ -308,7 +308,7 @@ export default function ItemDetailDrawer({
       />
 
       {/* Drawer */}
-      <div className="fixed right-0 top-0 h-full w-full max-w-lg bg-[#0f1419] border-l border-gray-800 z-50 overflow-y-auto">
+      <div className="fixed right-0 top-0 h-full w-full max-w-lg bg-[#111827] border-l border-white/[0.08] z-50 overflow-y-auto">
         <div className="p-6">
           {/* Header */}
           <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
