@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { normalizeHttpUrl, resolveStoredImagePath } from "@/lib/collection-images";
-import { appendFileSync } from "fs";
-import { join } from "path";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -77,26 +75,6 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ itemId: string }> }
 ) {
-  const LOG_PATH = join(process.cwd(), ".cursor", "debug-0cd298.log");
-  const DEBUG_LOG = (message: string, data: Record<string, unknown>, hypothesisId: string) => {
-    const payload = { sessionId: "0cd298", location: "app/api/card-profile/[itemId]/route.ts", message, data, timestamp: Date.now(), hypothesisId };
-    if (process.env.NODE_ENV !== "production") {
-      console.error("[DEBUG 0cd298]", message, JSON.stringify(data));
-    }
-    try {
-      appendFileSync(LOG_PATH, JSON.stringify(payload) + "\n");
-    } catch (_) {
-      try {
-        appendFileSync(join(process.cwd(), "debug-0cd298.log"), JSON.stringify(payload) + "\n");
-      } catch (_2) {}
-    }
-    fetch("http://127.0.0.1:7756/ingest/04790cae-4707-4277-87a7-63a499fa61d1", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "0cd298" },
-      body: JSON.stringify(payload),
-    }).catch(() => {});
-  };
-
   try {
     const userId = await getAuthUserId();
     if (!userId)
@@ -104,10 +82,6 @@ export async function GET(
 
     const { itemId } = await params;
     const from = request.nextUrl.searchParams.get("from") || "collection";
-
-    // #region agent log
-    DEBUG_LOG("card-profile GET start", { itemId, from }, "H4");
-    // #endregion
 
     const supabase = await createClient();
 
@@ -204,18 +178,15 @@ export async function GET(
 
       // Load sales for this item (use business_id to match RLS; order by sold_at)
       let sales: unknown[] = [];
-      try {
-        const { data: salesData } = await supabase
-          .from("business_sales")
-          .select("*")
-          .eq("inventory_item_id", item.id)
-          .eq("business_id", userId)
-          .eq("is_deleted", false)
-          .order("sold_at", { ascending: false });
-        sales = salesData ?? [];
-      } catch {
-        // If sales query fails (e.g. schema mismatch), still return profile with empty sales
-      }
+      const salesRes = await supabase
+        .from("business_sales")
+        .select("*")
+        .eq("inventory_item_id", item.id)
+        .eq("business_id", userId)
+        .eq("is_deleted", false)
+        .order("sold_at", { ascending: false });
+      if (!salesRes.error) sales = salesRes.data ?? [];
+      // If sales query errors (e.g. schema/RLS), still return profile with empty sales
 
       return NextResponse.json({
         item: hydratedItem,
@@ -246,9 +217,6 @@ export async function GET(
       mode: "collection",
     });
   } catch (err: any) {
-    // #region agent log
-    DEBUG_LOG("card-profile catch", { message: err?.message, code: err?.code }, "H4");
-    // #endregion
     console.error("Card profile GET error:", err);
     return NextResponse.json(
       { error: "Failed to load card profile" },

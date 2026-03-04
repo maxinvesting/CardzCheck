@@ -939,29 +939,6 @@ export async function getBusinessMetrics(userId: string): Promise<BusinessMetric
     }),
   ]);
 
-  // #region agent log
-  const rpcLog = {
-    sessionId: "0cd298",
-    location: "lib/business/actions.ts:getBusinessMetrics",
-    message: "RPCs done",
-    data: { mtdError: mtdAgg.error?.message ?? null, ytdError: ytdAgg.error?.message ?? null },
-    timestamp: Date.now(),
-    hypothesisId: "H2",
-  };
-  if (typeof fetch !== "undefined") {
-    fetch("http://127.0.0.1:7756/ingest/04790cae-4707-4277-87a7-63a499fa61d1", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "0cd298" },
-      body: JSON.stringify(rpcLog),
-    }).catch(() => {});
-  }
-  try {
-    const { appendFileSync } = await import("fs");
-    const { join } = await import("path");
-    appendFileSync(join(process.cwd(), ".cursor", "debug-0cd298.log"), JSON.stringify(rpcLog) + "\n");
-  } catch (_) {}
-  // #endregion
-
   // If RPC is missing or fails (e.g. migration not run), use zeros so active inventory still loads
   const mtd =
     mtdAgg.error || !mtdAgg.data?.[0]
@@ -978,29 +955,6 @@ export async function getBusinessMetrics(userId: string): Promise<BusinessMetric
     .select("id", { count: "exact", head: true })
     .eq("user_id", userId)
     .neq("status", "sold");
-
-  // #region agent log
-  const countLog = {
-    sessionId: "0cd298",
-    location: "lib/business/actions.ts:getBusinessMetrics",
-    message: "active count done",
-    data: { activeCount: activeCount ?? null },
-    timestamp: Date.now(),
-    hypothesisId: "H2",
-  };
-  if (typeof fetch !== "undefined") {
-    fetch("http://127.0.0.1:7756/ingest/04790cae-4707-4277-87a7-63a499fa61d1", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "0cd298" },
-      body: JSON.stringify(countLog),
-    }).catch(() => {});
-  }
-  try {
-    const { appendFileSync } = await import("fs");
-    const { join } = await import("path");
-    appendFileSync(join(process.cwd(), ".cursor", "debug-0cd298.log"), JSON.stringify(countLog) + "\n");
-  } catch (_) {}
-  // #endregion
 
   return {
     revenueMtd: toInt(mtd.revenue_cents),
