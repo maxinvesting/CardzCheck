@@ -449,6 +449,49 @@ type SaleWriteInput = {
   external_order_id?: string | null;
 };
 
+/**
+ * Map known Supabase/Postgres errors from sale creation into structured errors
+ * with .status 400/403 so the API can return user-friendly messages.
+ */
+function normalizeBusinessSaleError(error: unknown): never {
+  const code = typeof (error as { code?: string })?.code === "string" ? (error as { code: string }).code : "";
+  const message = String((error as { message?: string })?.message ?? "");
+  const details = (error as { details?: string })?.details ?? "";
+
+  // Unique constraint violation (e.g. duplicate external_order_id per business)
+  if (code === "23505") {
+    const isExternalOrder =
+      /idx_business_sales_business_external_order|external_order_id|unique.*external_order/i.test(message) ||
+      /idx_business_sales_business_external_order|external_order_id/i.test(details);
+    if (isExternalOrder) {
+      const err = new Error("External order ID is already used for another sale in this business");
+      (err as any).status = 400;
+      throw err;
+    }
+    const err = new Error("A sale with these details already exists");
+    (err as any).status = 400;
+    throw err;
+  }
+
+  // RLS / permission denied
+  if (code === "42501" || /permission denied|row-level security/i.test(message)) {
+    const err = new Error("You don't have permission to record sales for this business");
+    (err as any).status = 403;
+    throw err;
+  }
+
+  // Not-null or check constraint (e.g. channel, required columns)
+  if (code === "23502" || code === "23514") {
+    const err = new Error(
+      message && message.length < 200 ? message : "Invalid sale data: check required fields and channel."
+    );
+    (err as any).status = 400;
+    throw err;
+  }
+
+  throw error;
+}
+
 function toInt(value: number | null | undefined): number {
   if (typeof value !== "number" || !Number.isFinite(value)) return 0;
   return Math.round(value);
@@ -749,29 +792,34 @@ export async function createSale(
     inventoryContext,
   });
 
-  const { data, error } = await supabase
-    .from("business_sales")
-    .insert(insertPayload)
-    .select(
-      "id,user_id,business_id,inventory_item_id,channel,sold_at,sold_price_cents,shipping_charged_cents,platform_fees_cents,shipping_cost_cents,tax_cents,net_payout_cents,cogs_cents,profit_cents,notes,external_order_id,is_deleted,created_at,updated_at"
-    )
-    .single();
+  try {
+    const { data, error } = await supabase
+      .from("business_sales")
+      .insert(insertPayload)
+      .select(
+        "id,user_id,business_id,inventory_item_id,channel,sold_at,sold_price_cents,shipping_charged_cents,platform_fees_cents,shipping_cost_cents,tax_cents,net_payout_cents,cogs_cents,profit_cents,notes,external_order_id,is_deleted,created_at,updated_at"
+      )
+      .single();
 
-  if (error) throw error;
+    if (error) normalizeBusinessSaleError(error);
 
-  // Mark the linked inventory row as sold if present.
-  if (insertPayload.inventory_item_id) {
-    await supabase
-      .from(BUSINESS_TABLE)
-      .update({ status: "sold" })
-      .eq("id", insertPayload.inventory_item_id)
-      .eq("user_id", userId);
+    // Mark the linked inventory row as sold if present.
+    if (insertPayload.inventory_item_id) {
+      const { error: updateError } = await supabase
+        .from(BUSINESS_TABLE)
+        .update({ status: "sold" })
+        .eq("id", insertPayload.inventory_item_id)
+        .eq("user_id", userId);
+      if (updateError) normalizeBusinessSaleError(updateError);
+    }
+
+    const [withTitles] = await attachInventoryTitles(userId, [
+      toBusinessSale(data as BusinessSaleRow),
+    ]);
+    return withTitles;
+  } catch (e) {
+    normalizeBusinessSaleError(e);
   }
-
-  const [withTitles] = await attachInventoryTitles(userId, [
-    toBusinessSale(data as BusinessSaleRow),
-  ]);
-  return withTitles;
 }
 
 export async function updateSale(
@@ -891,19 +939,38 @@ export async function getBusinessMetrics(userId: string): Promise<BusinessMetric
     }),
   ]);
 
-  if (mtdAgg.error) throw mtdAgg.error;
-  if (ytdAgg.error) throw ytdAgg.error;
+  // #region agent log
+  const rpcLog = {
+    sessionId: "0cd298",
+    location: "lib/business/actions.ts:getBusinessMetrics",
+    message: "RPCs done",
+    data: { mtdError: mtdAgg.error?.message ?? null, ytdError: ytdAgg.error?.message ?? null },
+    timestamp: Date.now(),
+    hypothesisId: "H2",
+  };
+  if (typeof fetch !== "undefined") {
+    fetch("http://127.0.0.1:7756/ingest/04790cae-4707-4277-87a7-63a499fa61d1", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "0cd298" },
+      body: JSON.stringify(rpcLog),
+    }).catch(() => {});
+  }
+  try {
+    const { appendFileSync } = await import("fs");
+    const { join } = await import("path");
+    appendFileSync(join(process.cwd(), ".cursor", "debug-0cd298.log"), JSON.stringify(rpcLog) + "\n");
+  } catch (_) {}
+  // #endregion
 
-  const mtd = (mtdAgg.data?.[0] ?? {
-    revenue_cents: 0,
-    profit_cents: 0,
-    sales_count: 0,
-  }) as { revenue_cents: number; profit_cents: number; sales_count: number };
-  const ytd = (ytdAgg.data?.[0] ?? {
-    revenue_cents: 0,
-    profit_cents: 0,
-    sales_count: 0,
-  }) as { revenue_cents: number; profit_cents: number; sales_count: number };
+  // If RPC is missing or fails (e.g. migration not run), use zeros so active inventory still loads
+  const mtd =
+    mtdAgg.error || !mtdAgg.data?.[0]
+      ? ({ revenue_cents: 0, profit_cents: 0, sales_count: 0 } as { revenue_cents: number; profit_cents: number; sales_count: number })
+      : (mtdAgg.data[0] as { revenue_cents: number; profit_cents: number; sales_count: number });
+  const ytd =
+    ytdAgg.error || !ytdAgg.data?.[0]
+      ? ({ revenue_cents: 0, profit_cents: 0, sales_count: 0 } as { revenue_cents: number; profit_cents: number; sales_count: number })
+      : (ytdAgg.data[0] as { revenue_cents: number; profit_cents: number; sales_count: number });
 
   // Active inventory count
   const { count: activeCount } = await supabase
@@ -911,6 +978,29 @@ export async function getBusinessMetrics(userId: string): Promise<BusinessMetric
     .select("id", { count: "exact", head: true })
     .eq("user_id", userId)
     .neq("status", "sold");
+
+  // #region agent log
+  const countLog = {
+    sessionId: "0cd298",
+    location: "lib/business/actions.ts:getBusinessMetrics",
+    message: "active count done",
+    data: { activeCount: activeCount ?? null },
+    timestamp: Date.now(),
+    hypothesisId: "H2",
+  };
+  if (typeof fetch !== "undefined") {
+    fetch("http://127.0.0.1:7756/ingest/04790cae-4707-4277-87a7-63a499fa61d1", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "0cd298" },
+      body: JSON.stringify(countLog),
+    }).catch(() => {});
+  }
+  try {
+    const { appendFileSync } = await import("fs");
+    const { join } = await import("path");
+    appendFileSync(join(process.cwd(), ".cursor", "debug-0cd298.log"), JSON.stringify(countLog) + "\n");
+  } catch (_) {}
+  // #endregion
 
   return {
     revenueMtd: toInt(mtd.revenue_cents),

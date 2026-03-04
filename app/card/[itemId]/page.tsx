@@ -251,7 +251,14 @@ export default function CardProfilePage() {
         return { status: "not_found" as const };
       }
       if (!res.ok) {
-        return { status: "error" as const };
+        let message = "Failed to load profile";
+        try {
+          const body = await res.json();
+          if (typeof body?.error === "string" && body.error.trim()) message = body.error;
+        } catch {
+          // ignore
+        }
+        return { status: "error" as const, message };
       }
       const data = await res.json();
       return { status: "ok" as const, data };
@@ -306,11 +313,11 @@ export default function CardProfilePage() {
           return;
         }
 
-        setError("Failed to load profile");
+        setError(fallback.status === "error" ? fallback.message : "Failed to load profile");
         return;
       }
 
-      setError("Failed to load profile");
+      setError(primary.status === "error" ? primary.message : "Failed to load profile");
     } catch {
       setError("Failed to load profile");
     } finally {

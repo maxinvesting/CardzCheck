@@ -302,6 +302,9 @@ export default function SaleFormModal({
                 onChange={(event) => setExternalOrderId(event.target.value)}
                 className="mt-1 w-full rounded border border-gray-700 bg-gray-800 px-2 py-1.5 text-sm text-white"
               />
+              <p className="mt-0.5 text-[11px] text-gray-500">
+                Must be unique per business. Leave blank if not tracking an order ID.
+              </p>
             </label>
             <label className="text-xs text-gray-400">
               Notes

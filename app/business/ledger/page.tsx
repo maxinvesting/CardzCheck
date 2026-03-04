@@ -154,7 +154,15 @@ function LedgerPageContent() {
     readStoredEbayStoreUrl()
   );
   const [items, setItems] = useState<BusinessInventoryItem[]>([]);
-  const [metrics, setMetrics] = useState<MetricsType | null>(null);
+  const [metrics, setMetrics] = useState<MetricsType | null>(() => ({
+    revenueMtd: 0,
+    revenueYtd: 0,
+    profitMtd: 0,
+    profitYtd: 0,
+    salesCountMtd: 0,
+    salesCountYtd: 0,
+    activeInventoryCount: 0,
+  }));
   const [metricsLoading, setMetricsLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState<BusinessInventoryItem | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -381,6 +389,15 @@ function LedgerPageContent() {
       return;
     }
     setMetricsLoading(true);
+    const defaultMetrics = {
+      revenueMtd: 0,
+      revenueYtd: 0,
+      profitMtd: 0,
+      profitYtd: 0,
+      salesCountMtd: 0,
+      salesCountYtd: 0,
+      activeInventoryCount: 0,
+    };
     try {
       const res = await fetch("/api/business/kpis?range=mtd", { cache: "no-store" });
       if (res.ok) {
@@ -394,9 +411,11 @@ function LedgerPageContent() {
           salesCountYtd: data.sales_count_ytd ?? 0,
           activeInventoryCount: data.active_inventory_count ?? 0,
         });
+      } else {
+        setMetrics(defaultMetrics);
       }
     } catch {
-      // ignore
+      setMetrics(defaultMetrics);
     } finally {
       setMetricsLoading(false);
     }
