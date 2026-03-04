@@ -14,6 +14,7 @@ vi.mock("@/lib/access", () => ({
 function buildSupabaseMock() {
   const insertedPayloads: Record<string, unknown>[] = [];
   const updates: Array<{ table: string; payload: Record<string, unknown> }> = [];
+  const upserts: Array<{ table: string; payload: Record<string, unknown> }> = [];
   /** Set to a Supabase-style error to simulate insert failure (used by tests). */
   const nextInsertError = { current: null as { code: string; message: string; details?: string } | null };
   /** When true, inventory lookup returns null (inventory item not found). */
@@ -52,6 +53,10 @@ function buildSupabaseMock() {
         state.updatePayload = payload;
         updates.push({ table, payload });
         return builder;
+      }),
+      upsert: vi.fn(async (payload: Record<string, unknown>) => {
+        upserts.push({ table, payload });
+        return { data: null, error: null };
       }),
       single: vi.fn(async () => {
         if (table === "business_sales") {
@@ -97,6 +102,7 @@ function buildSupabaseMock() {
     client,
     insertedPayloads,
     updates,
+    upserts,
   };
 }
 
@@ -130,7 +136,7 @@ describe("POST /api/business/sales", () => {
   });
 
   it("computes net payout/profit and defaults cogs from inventory item", async () => {
-    const { client, insertedPayloads, updates } = buildSupabaseMock();
+    const { client, insertedPayloads, updates, upserts } = buildSupabaseMock();
     createClientMock.mockResolvedValue(client);
 
     const response = await callPost(
@@ -162,6 +168,15 @@ describe("POST /api/business/sales", () => {
       profit_cents: 5000,
     });
 
+    expect(upserts).toContainEqual(
+      expect.objectContaining({
+        table: "collection_items",
+        payload: expect.objectContaining({
+          id: "inv-1",
+          user_id: "user-1",
+        }),
+      })
+    );
     expect(updates.some((entry) => entry.table === "business_inventory_items")).toBe(true);
 
     const body = await response.json();
@@ -262,6 +277,33 @@ describe("POST /api/business/sales", () => {
     expect(response.status).toBe(403);
     const body = await response.json();
     expect(body.error).toContain("permission");
+  });
+
+  it("returns 400 with clear message on inventory FK mismatch (23503)", async () => {
+    const { client } = buildSupabaseMock();
+    createClientMock.mockResolvedValue(client);
+    client.nextInsertError.current = {
+      code: "23503",
+      message:
+        'insert or update on table "business_sales" violates foreign key constraint "business_sales_inventory_item_id_fkey"',
+      details: "Key (inventory_item_id)=(inv-1) is not present in table \"collection_items\".",
+    };
+
+    const response = await callPost(
+      new Request("http://localhost/api/business/sales", {
+        method: "POST",
+        body: JSON.stringify({
+          inventory_item_id: "11111111-1111-1111-1111-111111111111",
+          sold_price_cents: 15000,
+          channel: "ebay",
+        }),
+        headers: { "Content-Type": "application/json" },
+      }) as any
+    );
+
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(body.error).toContain("Inventory item link is invalid");
   });
 
   it("returns 500 and generic message for unmapped DB errors", async () => {

@@ -489,6 +489,20 @@ function normalizeBusinessSaleError(error: unknown): never {
     throw err;
   }
 
+  // Foreign-key mismatch (commonly inventory_item_id when FK points to collection_items).
+  if (code === "23503") {
+    const isInventoryLink =
+      /business_sales_inventory_item_id_fkey|inventory_item_id|foreign key/i.test(message) ||
+      /business_sales_inventory_item_id_fkey|inventory_item_id|foreign key/i.test(details);
+    const err = new Error(
+      isInventoryLink
+        ? "Inventory item link is invalid for sales. Please reopen the item and try again."
+        : "Referenced record was not found for this sale."
+    );
+    (err as any).status = 400;
+    throw err;
+  }
+
   throw error;
 }
 
@@ -600,12 +614,12 @@ async function attachInventoryTitles(
 async function getInventoryContextForSale(
   userId: string,
   inventoryItemId?: string | null
-): Promise<{ id: string; channel: string | null; cost_basis_total_cents: number | null } | null> {
+): Promise<{ id: string; title: string | null; channel: string | null; cost_basis_total_cents: number | null } | null> {
   if (!inventoryItemId) return null;
   const supabase = await createClient();
   const { data, error } = await supabase
     .from(BUSINESS_TABLE)
-    .select("id, channel, cost_basis_total_cents")
+    .select("id, title, channel, cost_basis_total_cents")
     .eq("id", inventoryItemId)
     .eq("user_id", userId)
     .maybeSingle();
@@ -615,9 +629,56 @@ async function getInventoryContextForSale(
 
   return {
     id: data.id,
+    title: data.title ?? null,
     channel: data.channel ?? null,
     cost_basis_total_cents: data.cost_basis_total_cents ?? 0,
   };
+}
+
+/**
+ * Ensure a minimal collection_items mirror row exists for inventory-backed sales.
+ * This supports deployments where business_sales.inventory_item_id references collection_items(id).
+ */
+async function ensureCollectionItemMirrorForSale(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  inventoryContext: { id: string; title: string | null } | null
+): Promise<void> {
+  if (!inventoryContext) return;
+
+  const label = inventoryContext.title?.trim() || "Inventory Item";
+  const { error } = await supabase
+    .from("collection_items")
+    .upsert(
+      {
+        id: inventoryContext.id,
+        user_id: userId,
+        player_name: label,
+        notes: "Auto-linked from business inventory for sale record consistency",
+      },
+      { onConflict: "id", ignoreDuplicates: true }
+    );
+
+  if (!error) return;
+
+  const code = String((error as { code?: string })?.code ?? "");
+  const message = String((error as { message?: string })?.message ?? "");
+  const details = String((error as { details?: string })?.details ?? "");
+  const combined = `${message} ${details}`.toLowerCase();
+
+  // Older deployments may not have collection_items; in those schemas this mirror is unnecessary.
+  if (
+    code === "PGRST205" ||
+    (combined.includes("collection_items") &&
+      (combined.includes("not exist") || combined.includes("could not find")))
+  ) {
+    return;
+  }
+
+  // Mirror row already exists.
+  if (code === "23505") return;
+
+  throw error;
 }
 
 function buildComputedSalePayload(args: {
@@ -786,6 +847,8 @@ export async function createSale(
   });
 
   try {
+    await ensureCollectionItemMirrorForSale(supabase, userId, inventoryContext);
+
     const { data, error } = await supabase
       .from("business_sales")
       .insert(insertPayload)
@@ -865,6 +928,8 @@ export async function updateSale(
     base: mergedBase,
     inventoryContext,
   });
+
+  await ensureCollectionItemMirrorForSale(supabase, userId, inventoryContext);
 
   const { data, error } = await supabase
     .from("business_sales")
