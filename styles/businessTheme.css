@@ -1,0 +1,53 @@
+.business-theme {
+  --biz-bg: #f7f8fa;
+  --biz-surface: #ffffff;
+  --biz-border: #e5e7eb;
+  --biz-text: #111827;
+  --biz-muted: #6b7280;
+  --biz-primary: #0b7a4b;
+  --biz-warning: #b45309;
+  --biz-surface-soft: #f9fafb;
+  --biz-hover: #f3f4f6;
+  --biz-skeleton: #e5e7eb;
+
+  /* Compatibility aliases for existing components */
+  --app-bg: var(--biz-bg);
+  --surface: var(--biz-surface);
+  --surface-2: var(--biz-surface);
+  --border: var(--biz-border);
+  --text: var(--biz-text);
+  --muted: var(--biz-muted);
+  --accent: var(--biz-primary);
+  --warning: var(--biz-warning);
+
+  background: var(--biz-bg);
+  color: var(--biz-text);
+}
+
+.business-theme .cc-surface {
+  background: var(--biz-surface);
+  border: 1px solid var(--biz-border);
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.business-theme .cc-btn-primary {
+  border: 1px solid transparent;
+  background: var(--biz-primary);
+  color: #ffffff;
+}
+
+.business-theme .cc-btn-primary:hover {
+  background: #09643e;
+}
+
+.business-theme .cc-btn-secondary {
+  border: 1px solid var(--biz-border);
+  background: #ffffff;
+  color: var(--biz-text);
+}
+
+.business-theme .cc-btn-secondary:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+}

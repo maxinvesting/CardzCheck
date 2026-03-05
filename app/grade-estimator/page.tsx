@@ -195,7 +195,7 @@ function ScannerTips() {
       <div className="flex-1 min-w-0">
         <button
           onClick={() => setOpen((prev) => !prev)}
-          className="group flex items-center gap-1.5 text-xs text-[var(--muted)] transition-colors hover:text-white"
+          className="group flex items-center gap-1.5 text-xs text-[var(--muted)] transition-colors hover:text-[var(--biz-text)]"
         >
           <span className="font-medium">Scanner tips</span>
           <svg
@@ -765,7 +765,7 @@ export default function GradeEstimatorPage() {
 
         {/* ── Page header ───────────────────────────────────────────── */}
         <div className="mb-10">
-          <h1 className="text-2xl font-semibold text-[#e2eaf3]">
+          <h1 className="text-2xl font-semibold text-[var(--biz-text)]">
             {gradingCopy.page.title}
           </h1>
           <p className="mt-2 text-sm leading-relaxed text-[var(--muted)]">
@@ -821,7 +821,7 @@ export default function GradeEstimatorPage() {
             <Surface className="p-5">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-sm font-medium text-[#e2eaf3]">Submission Builder</h3>
+                  <h3 className="text-sm font-medium text-[var(--biz-text)]">Submission Builder</h3>
                   <p className="mt-1 text-xs text-[var(--muted)]">
                     Plan PSA submissions after your grade analysis.
                   </p>
@@ -877,7 +877,7 @@ export default function GradeEstimatorPage() {
                         </div>
                       ) : null}
                       {identifiedCard.imageUrls && identifiedCard.imageUrls.length > 1 ? (
-                        <p className="text-[10px] text-[#3a5068]">
+                        <p className="text-[10px] text-[var(--biz-muted)]">
                           {identifiedCard.imageUrls.length} photos
                         </p>
                       ) : null}
@@ -885,7 +885,7 @@ export default function GradeEstimatorPage() {
                   ) : null}
 
                   <div className="flex-1 min-w-0">
-                    <h2 className="text-xl font-semibold text-[#e2eaf3] leading-tight">
+                    <h2 className="text-xl font-semibold text-[var(--biz-text)] leading-tight">
                       {identifiedCard.player_name ?? ""}
                     </h2>
                     <div className="mt-1">
@@ -960,7 +960,7 @@ export default function GradeEstimatorPage() {
                       </button>
                       <button
                         onClick={handleReset}
-                        className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-[var(--muted)] transition-colors hover:text-white"
+                        className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-[var(--muted)] transition-colors hover:text-[var(--biz-text)]"
                       >
                         {gradingCopy.actions.uploadNewCard}
                       </button>
@@ -1027,12 +1027,12 @@ export default function GradeEstimatorPage() {
                         {gradeEstimate && (valueLoading || valueResult || valueError) ? (
                           <div className="space-y-2">
                             <div className="flex flex-wrap items-center justify-between gap-2">
-                              <span className="text-[10px] font-medium text-[#3a5068] uppercase tracking-wider">
+                              <span className="text-[10px] font-medium text-[var(--biz-muted)] uppercase tracking-normal">
                                 {gradingCopy.valuePanel.marketAnalysisLabel}
                               </span>
                               <button
                                 onClick={() => setShowMarketAnalysis((prev) => !prev)}
-                                className="text-xs font-medium text-blue-400 hover:text-blue-300 transition-colors"
+                                className="text-xs font-medium text-[var(--biz-primary)] hover:underline"
                               >
                                 {showMarketAnalysis
                                   ? gradingCopy.valuePanel.hideMarketImpact
@@ -1046,7 +1046,7 @@ export default function GradeEstimatorPage() {
                                     <p>{valueError}</p>
                                     <button
                                       onClick={fetchValue}
-                                      className="mt-2 px-3 py-1.5 text-xs font-medium bg-amber-500/10 text-amber-300 rounded-lg hover:bg-amber-500/15 transition-colors"
+                                      className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 transition-colors hover:bg-amber-100"
                                     >
                                       Retry
                                     </button>
@@ -1087,16 +1087,16 @@ export default function GradeEstimatorPage() {
                         ) : null}
 
                         {gradeJob?.status === "error" && !gradeEstimate ? (
-                          <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 p-5">
+                          <div className="rounded-xl border border-amber-200 bg-amber-50 p-5">
                             <div className="flex items-start gap-3">
-                              <svg className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <svg className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                               </svg>
                               <div>
-                                <p className="text-sm font-medium text-amber-300">
+                                <p className="text-sm font-medium text-amber-700">
                                   {gradingCopy.status.estimateUnavailableTitle}
                                 </p>
-                                <p className="text-xs text-amber-400/70 mt-0.5">
+                                <p className="text-xs text-amber-600 mt-0.5">
                                   {estimateError || gradingCopy.status.estimateUnavailableBody}
                                 </p>
                               </div>
@@ -1114,26 +1114,26 @@ export default function GradeEstimatorPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     <div>
-                      <p className="text-sm font-medium text-[#e2eaf3]">
+                      <p className="text-sm font-medium text-[var(--biz-text)]">
                         {gradingCopy.status.alreadyGradedTitle}
                       </p>
-                      <p className="text-xs text-[#7a91a8] mt-0.5">
+                      <p className="text-xs text-[var(--biz-muted)] mt-0.5">
                         {gradingCopy.status.alreadyGradedBody(identifiedCard.grade)}
                       </p>
                     </div>
                   </div>
                 </Surface>
               ) : estimateAttempted && !estimatingGrade && !gradeJob ? (
-                <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 p-5">
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-5">
                   <div className="flex items-start gap-3">
-                    <svg className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                     </svg>
                     <div>
-                      <p className="text-sm font-medium text-amber-300">
+                      <p className="text-sm font-medium text-amber-700">
                         {gradingCopy.status.estimateUnavailableTitle}
                       </p>
-                      <p className="text-xs text-amber-400/70 mt-0.5">
+                      <p className="text-xs text-amber-600 mt-0.5">
                         {estimateError || gradingCopy.status.estimateUnavailableBody}
                       </p>
                     </div>
@@ -1145,7 +1145,7 @@ export default function GradeEstimatorPage() {
               <Surface className="p-5">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <h3 className="text-sm font-medium text-[#e2eaf3]">Submission Builder</h3>
+                    <h3 className="text-sm font-medium text-[var(--biz-text)]">Submission Builder</h3>
                     <p className="mt-1 text-xs text-[var(--muted)]">
                       Plan a PSA submission using this analysis.
                     </p>
@@ -1203,14 +1203,14 @@ export default function GradeEstimatorPage() {
 
         {/* ── Toast ─────────────────────────────────────────────────── */}
         {toast ? (
-          <div className="fixed bottom-5 right-5 z-50 flex items-center gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/15 px-4 py-3 text-emerald-200">
-            <svg className="w-4 h-4 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="fixed bottom-5 right-5 z-50 flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-700">
+            <svg className="w-4 h-4 text-emerald-700 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
             <span className="text-sm">{toast.message}</span>
             <button
               onClick={() => setToast(null)}
-              className="ml-1 text-[#3a5068] hover:text-[#7a91a8] transition-colors"
+              className="ml-1 text-[var(--biz-muted)] transition-colors hover:text-[var(--biz-text)]"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

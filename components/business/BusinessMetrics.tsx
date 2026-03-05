@@ -23,8 +23,8 @@ interface Props {
 }
 
 const KPI_CARD_STYLE: React.CSSProperties = {
-  background: "var(--surface)",
-  border: "1px solid var(--border)",
+  background: "var(--biz-surface)",
+  border: "1px solid var(--biz-border)",
   borderRadius: "12px",
 };
 
@@ -39,68 +39,68 @@ export default function BusinessMetrics({
     {
       label: "Revenue MTD",
       value: metrics ? fmt(metrics.revenueMtd) : "—",
-      valueClass: "text-white",
+      valueClass: "text-[var(--biz-text)]",
     },
     {
       label: "Revenue YTD",
       value: metrics ? fmt(metrics.revenueYtd) : "—",
-      valueClass: "text-white",
+      valueClass: "text-[var(--biz-text)]",
     },
     {
       label: "Profit MTD",
       value: metrics ? fmt(metrics.profitMtd) : "—",
-      valueClass: metrics && metrics.profitMtd >= 0 ? "text-emerald-400" : "text-red-400",
+      valueClass: metrics && metrics.profitMtd >= 0 ? "text-emerald-700" : "text-red-600",
     },
     {
       label: "Profit YTD",
       value: metrics ? fmt(metrics.profitYtd) : "—",
-      valueClass: metrics && metrics.profitYtd >= 0 ? "text-emerald-400" : "text-red-400",
+      valueClass: metrics && metrics.profitYtd >= 0 ? "text-emerald-700" : "text-red-600",
     },
     {
       label: "Sales MTD",
       value: metrics ? String(metrics.salesCountMtd) : "—",
-      valueClass: "text-white",
+      valueClass: "text-[var(--biz-text)]",
     },
     {
       label: "Sales YTD",
       value: metrics ? String(metrics.salesCountYtd) : "—",
-      valueClass: "text-white",
+      valueClass: "text-[var(--biz-text)]",
     },
     {
       label: "Active Inventory",
       value: metrics ? String(metrics.activeInventoryCount) : "—",
-      valueClass: "text-white",
+      valueClass: "text-[var(--biz-text)]",
     },
   ];
 
   const inventoryValueCard = inventorySummary ? (
     <div style={KPI_CARD_STYLE} className={compact ? "p-4" : "p-5"}>
-      <p className="mb-2 text-xs text-[var(--muted)] leading-none">
+      <p className="mb-2 text-xs uppercase tracking-normal text-[var(--biz-muted)] leading-none">
         Inventory Value
         {totalItemCount != null &&
           inventorySummary.itemCount !== totalItemCount && (
-            <span className="ml-1 text-[var(--muted)]">(filtered)</span>
+            <span className="ml-1 text-[var(--biz-muted)]">(filtered)</span>
           )}
       </p>
       {loading ? (
-        <div className="h-8 w-24 animate-pulse rounded bg-white/5" />
+        <div className="h-8 w-24 animate-pulse rounded bg-slate-100" />
       ) : (
         <>
-          <p className="text-2xl font-semibold tabular-nums text-emerald-400">
+          <p className="text-2xl font-semibold tabular-nums text-[var(--biz-text)]">
             {inventorySummary.itemCount === 0
               ? fmt(0)
               : inventorySummary.itemsWithCmv > 0
               ? fmt(inventorySummary.totalCmvCents)
               : fmt(inventorySummary.totalCostCents)}
           </p>
-          <p className="mt-1 text-xs text-[var(--muted)] leading-tight">
+          <p className="mt-1 text-xs text-[var(--biz-muted)] leading-tight">
             {inventorySummary.itemsWithCmv > 0
               ? `Est. Market Value · ${inventorySummary.itemCount} item${inventorySummary.itemCount !== 1 ? "s" : ""}`
               : `Cost basis · ${inventorySummary.itemCount} item${inventorySummary.itemCount !== 1 ? "s" : ""}`}
           </p>
           {inventorySummary.itemsWithCmv > 0 &&
             inventorySummary.itemsWithCmv < inventorySummary.itemCount && (
-              <p className="text-xs text-[var(--muted)]">
+              <p className="text-xs text-[var(--biz-muted)]">
                 Cost: {fmt(inventorySummary.totalCostCents)}
               </p>
             )}
@@ -117,9 +117,9 @@ export default function BusinessMetrics({
     >
       {cards.map((c) => (
         <div key={c.label} style={KPI_CARD_STYLE} className={compact ? "p-4" : "p-5"}>
-          <p className="mb-2 text-xs text-[var(--muted)] leading-none">{c.label}</p>
+          <p className="mb-2 text-xs uppercase tracking-normal text-[var(--biz-muted)] leading-none">{c.label}</p>
           {loading ? (
-            <div className="h-8 w-24 animate-pulse rounded bg-white/5" />
+            <div className="h-8 w-24 animate-pulse rounded bg-slate-100" />
           ) : (
             <p className={`text-2xl font-semibold tabular-nums ${c.valueClass}`}>
               {c.value}

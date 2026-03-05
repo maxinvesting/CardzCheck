@@ -1035,13 +1035,13 @@ function LedgerPageContent() {
       <AuthenticatedLayout>
         <main className="max-w-7xl mx-auto px-4 py-4">
           <div className="animate-pulse space-y-4">
-            <div className="h-8 w-48 bg-gray-800 rounded" />
+            <div className="h-8 w-48 rounded bg-[#E5E7EB]" />
             <div className="grid grid-cols-5 gap-4">
               {[...Array(5)].map((_, i) => (
-                <div key={i} className="h-20 bg-gray-800 rounded-xl" />
+                <div key={i} className="h-20 rounded-xl bg-[#E5E7EB]" />
               ))}
             </div>
-            <div className="h-64 bg-gray-800 rounded-xl" />
+            <div className="h-64 rounded-xl bg-[#E5E7EB]" />
           </div>
         </main>
       </AuthenticatedLayout>
@@ -1234,8 +1234,8 @@ function LedgerPageContent() {
           <div
             className={`fixed bottom-4 right-4 z-50 flex items-center gap-3 rounded-lg border p-4 ${
               toast.type === "success"
-                ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-200"
-                : "border-red-500/30 bg-red-500/15 text-red-200"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                : "border-red-200 bg-red-50 text-red-700"
             }`}
           >
             <span>{toast.message}</span>
@@ -1258,13 +1258,13 @@ export default function LedgerPage() {
         <AuthenticatedLayout>
           <main className="max-w-7xl mx-auto px-4 py-4">
             <div className="animate-pulse space-y-4">
-              <div className="h-8 w-48 bg-gray-800 rounded" />
+              <div className="h-8 w-48 rounded bg-[#E5E7EB]" />
               <div className="grid grid-cols-5 gap-4">
                 {[...Array(5)].map((_, i) => (
-                  <div key={i} className="h-20 bg-gray-800 rounded-xl" />
+                  <div key={i} className="h-20 rounded-xl bg-[#E5E7EB]" />
                 ))}
               </div>
-              <div className="h-64 bg-gray-800 rounded-xl" />
+              <div className="h-64 rounded-xl bg-[#E5E7EB]" />
             </div>
           </main>
         </AuthenticatedLayout>

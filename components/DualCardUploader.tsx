@@ -146,8 +146,8 @@ function UploadZone({
       className={`
         relative min-h-[180px] flex-1 rounded-xl border transition-colors duration-150
         ${isDragging
-          ? "bg-[var(--surface-2)] border-emerald-500/40"
-          : "bg-[var(--surface)] border-[color:var(--border)] hover:border-emerald-500/30"
+          ? "bg-[color:var(--biz-surface-soft)] border-emerald-400/60"
+          : "bg-[var(--surface)] border-dashed border-[color:var(--border)] hover:border-emerald-500/50"
         }
         ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
       `}
@@ -164,7 +164,7 @@ function UploadZone({
             alt={label}
             className="max-h-28 rounded-lg border border-[color:var(--border)] object-contain"
           />
-          <span className="text-[10px] font-medium text-emerald-300">
+          <span className="text-[10px] font-medium text-emerald-700">
             {label} ready
           </span>
           <button
@@ -172,7 +172,7 @@ function UploadZone({
               e.stopPropagation();
               onRemove();
             }}
-            className="text-[10px] text-[var(--muted)] transition-colors hover:text-white"
+            className="text-[10px] text-[var(--muted)] transition-colors hover:text-[var(--biz-text)]"
           >
             Remove
           </button>
@@ -185,7 +185,7 @@ function UploadZone({
         >
           {icon}
           <div className="text-center space-y-0.5">
-            <p className="text-sm font-medium text-[#e2eaf3]">
+            <p className="text-sm font-medium text-[var(--biz-text)]">
               {isDragging ? "Release to add" : label}
             </p>
             <p className="text-[11px] text-[var(--muted)]">{sublabel}</p>
@@ -495,7 +495,7 @@ export default function DualCardUploader({
         {(frontFile || backFile) && (
           <button
             onClick={handleReset}
-            className="text-[10px] text-[var(--muted)] transition-colors hover:text-white"
+            className="text-[10px] text-[var(--muted)] transition-colors hover:text-[var(--biz-text)]"
           >
             Clear all
           </button>
@@ -510,7 +510,7 @@ export default function DualCardUploader({
           w-full rounded-xl border py-3 text-sm font-medium transition-colors
           ${bothReady && !disabled
             ? "cc-btn-primary border-transparent text-white"
-            : "cursor-not-allowed border-[color:var(--border)] bg-[var(--surface-2)] text-[var(--muted)]"
+            : "cursor-not-allowed border-[color:var(--border)] bg-[color:var(--biz-hover)] text-[var(--muted)]"
           }
         `}
       >
@@ -535,8 +535,8 @@ export default function DualCardUploader({
 
       {/* Error */}
       {error && (
-        <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 p-3">
-          <p className="text-xs text-amber-300">{error}</p>
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+          <p className="text-xs text-amber-700">{error}</p>
         </div>
       )}
     </div>

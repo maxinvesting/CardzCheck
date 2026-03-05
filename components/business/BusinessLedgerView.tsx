@@ -48,8 +48,8 @@ export default function BusinessLedgerView({
       {/* Page header */}
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-xl font-semibold text-white leading-snug">Ledger</h1>
-          <p className="mt-1 text-sm text-[var(--muted)]">
+          <h1 className="text-xl font-semibold text-[var(--biz-text)] leading-snug">Ledger</h1>
+          <p className="mt-1 text-sm text-[var(--biz-muted)]">
             Track inventory, listings, and realized sales
           </p>
         </div>
@@ -67,7 +67,7 @@ export default function BusinessLedgerView({
           ) : (
             <Link
               href="/business/settings"
-              className="cc-btn-secondary whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium text-[var(--muted)]"
+              className="cc-btn-secondary whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium text-[var(--biz-muted)]"
             >
               Add eBay Storefront
             </Link>
@@ -86,7 +86,7 @@ export default function BusinessLedgerView({
               <button
                 type="button"
                 onClick={onAddInventory}
-                className="cc-btn-primary flex items-center gap-1.5 rounded-l-md border-r border-emerald-500/50 px-3 py-1.5 text-xs font-medium"
+                className="cc-btn-primary flex items-center gap-1.5 rounded-l-md border-r border-emerald-700/30 px-3 py-1.5 text-xs font-medium"
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -112,7 +112,7 @@ export default function BusinessLedgerView({
                 <button
                   type="button"
                   onClick={() => { onToggleAddDropdown(); onAddInventory(); }}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-300 hover:bg-white/[0.05] transition-colors"
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-[var(--biz-text)] transition-colors hover:bg-[#F3F4F6]"
                 >
                   <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
@@ -122,7 +122,7 @@ export default function BusinessLedgerView({
                 <button
                   type="button"
                   onClick={() => { onToggleAddDropdown(); onAddWax(); }}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-300 hover:bg-white/[0.05] transition-colors"
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-[var(--biz-text)] transition-colors hover:bg-[#F3F4F6]"
                 >
                   <svg className="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
@@ -132,7 +132,7 @@ export default function BusinessLedgerView({
                 <button
                   type="button"
                   onClick={() => { onToggleAddDropdown(); onManualAdd(); }}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-300 hover:bg-white/[0.05] transition-colors"
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-[var(--biz-text)] transition-colors hover:bg-[#F3F4F6]"
                 >
                   <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -167,8 +167,8 @@ export default function BusinessLedgerView({
             onClick={() => onTabChange("inventory")}
             className={`border-b-2 px-3 py-1.5 text-xs font-medium transition-colors ${
               activeTab === "inventory"
-                ? "border-emerald-500 text-emerald-300"
-                : "border-transparent text-[var(--muted)] hover:text-white"
+                ? "border-emerald-600 text-emerald-700"
+                : "border-transparent text-[var(--biz-muted)] hover:text-[var(--biz-text)]"
             }`}
           >
             Inventory
@@ -178,8 +178,8 @@ export default function BusinessLedgerView({
             onClick={() => onTabChange("sales")}
             className={`border-b-2 px-3 py-1.5 text-xs font-medium transition-colors ${
               activeTab === "sales"
-                ? "border-emerald-500 text-emerald-300"
-                : "border-transparent text-[var(--muted)] hover:text-white"
+                ? "border-emerald-600 text-emerald-700"
+                : "border-transparent text-[var(--biz-muted)] hover:text-[var(--biz-text)]"
             }`}
           >
             Sales

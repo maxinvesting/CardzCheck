@@ -63,7 +63,7 @@ export default function SalesTable({
   return (
     <div>
       <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-5">
-        <label className="text-[11px] text-gray-400">
+        <label className="text-[11px] text-[var(--biz-muted)]">
           From
           <input
             type="date"
@@ -71,10 +71,10 @@ export default function SalesTable({
             onChange={(event) =>
               onFiltersChange({ ...filters, from: event.target.value })
             }
-            className="mt-1 w-full rounded border border-gray-800 bg-gray-900 px-2 py-1.5 text-xs text-white"
+            className="mt-1 w-full rounded border border-[var(--biz-border)] bg-white px-3 py-2 text-xs text-[var(--biz-text)]"
           />
         </label>
-        <label className="text-[11px] text-gray-400">
+        <label className="text-[11px] text-[var(--biz-muted)]">
           To
           <input
             type="date"
@@ -82,17 +82,17 @@ export default function SalesTable({
             onChange={(event) =>
               onFiltersChange({ ...filters, to: event.target.value })
             }
-            className="mt-1 w-full rounded border border-gray-800 bg-gray-900 px-2 py-1.5 text-xs text-white"
+            className="mt-1 w-full rounded border border-[var(--biz-border)] bg-white px-3 py-2 text-xs text-[var(--biz-text)]"
           />
         </label>
-        <label className="text-[11px] text-gray-400">
+        <label className="text-[11px] text-[var(--biz-muted)]">
           Channel
           <select
             value={filters.channel}
             onChange={(event) =>
               onFiltersChange({ ...filters, channel: event.target.value })
             }
-            className="mt-1 w-full rounded border border-gray-800 bg-gray-900 px-2 py-1.5 text-xs text-white"
+            className="mt-1 w-full rounded border border-[var(--biz-border)] bg-white px-3 py-2 text-xs text-[var(--biz-text)]"
           >
             {CHANNEL_OPTIONS.map((option) => (
               <option key={option || "all"} value={option}>
@@ -101,7 +101,7 @@ export default function SalesTable({
             ))}
           </select>
         </label>
-        <label className="sm:col-span-2 text-[11px] text-gray-400">
+        <label className="sm:col-span-2 text-[11px] text-[var(--biz-muted)]">
           Search
           <input
             type="text"
@@ -110,74 +110,74 @@ export default function SalesTable({
               onFiltersChange({ ...filters, search: event.target.value })
             }
             placeholder="Search notes/order id"
-            className="mt-1 w-full rounded border border-gray-800 bg-gray-900 px-2 py-1.5 text-xs text-white"
+            className="mt-1 w-full rounded border border-[var(--biz-border)] bg-white px-3 py-2 text-xs text-[var(--biz-text)] placeholder:text-[var(--biz-muted)]"
           />
         </label>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-gray-800">
-        <table className="w-full text-left text-xs">
-          <thead className="border-b border-gray-800 bg-gray-900">
+      <div className="overflow-x-auto rounded-lg border border-[var(--biz-border)] bg-white">
+        <table className="w-full text-left text-xs text-[var(--biz-text)]">
+          <thead className="sticky top-0 z-10 border-b border-[var(--biz-border)] bg-[#F9FAFB]">
             <tr>
-              <th className="px-2 py-1 text-[10px] uppercase tracking-wider text-gray-500">Sold</th>
-              <th className="px-2 py-1 text-[10px] uppercase tracking-wider text-gray-500">Title</th>
-              <th className="px-2 py-1 text-[10px] uppercase tracking-wider text-gray-500">Channel</th>
-              <th className="px-2 py-1 text-right text-[10px] uppercase tracking-wider text-gray-500">Gross</th>
-              <th className="px-2 py-1 text-right text-[10px] uppercase tracking-wider text-gray-500">Fees</th>
-              <th className="px-2 py-1 text-right text-[10px] uppercase tracking-wider text-gray-500">Net</th>
-              <th className="px-2 py-1 text-right text-[10px] uppercase tracking-wider text-gray-500">COGS</th>
-              <th className="px-2 py-1 text-right text-[10px] uppercase tracking-wider text-gray-500">Profit</th>
-              <th className="px-2 py-1 text-[10px] uppercase tracking-wider text-gray-500">Actions</th>
+              <th className="px-3 py-2 text-[11px] font-semibold uppercase tracking-normal text-[var(--biz-muted)]">Sold</th>
+              <th className="border-l border-[var(--biz-border)] px-3 py-2 text-[11px] font-semibold uppercase tracking-normal text-[var(--biz-muted)]">Title</th>
+              <th className="border-l border-[var(--biz-border)] px-3 py-2 text-[11px] font-semibold uppercase tracking-normal text-[var(--biz-muted)]">Channel</th>
+              <th className="border-l border-[var(--biz-border)] px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-normal text-[var(--biz-muted)]">Gross</th>
+              <th className="border-l border-[var(--biz-border)] px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-normal text-[var(--biz-muted)]">Fees</th>
+              <th className="border-l border-[var(--biz-border)] px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-normal text-[var(--biz-muted)]">Net</th>
+              <th className="border-l border-[var(--biz-border)] px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-normal text-[var(--biz-muted)]">COGS</th>
+              <th className="border-l border-[var(--biz-border)] px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-normal text-[var(--biz-muted)]">Profit</th>
+              <th className="border-l border-[var(--biz-border)] px-3 py-2 text-[11px] font-semibold uppercase tracking-normal text-[var(--biz-muted)]">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-800/70">
+          <tbody className="divide-y divide-[var(--biz-border)]">
             {loading && (
               <tr>
-                <td colSpan={9} className="px-3 py-6 text-center text-gray-500">
+                <td colSpan={9} className="px-3 py-6 text-center text-[var(--biz-muted)]">
                   Loading sales...
                 </td>
               </tr>
             )}
             {!loading && rows.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-3 py-6 text-center text-gray-500">
+                <td colSpan={9} className="px-3 py-6 text-center text-[var(--biz-muted)]">
                   No sales found for this range.
                 </td>
               </tr>
             )}
             {!loading &&
               rows.map((sale) => (
-                <tr key={sale.id} className="hover:bg-gray-800/40">
-                  <td className="px-2 py-1.5 text-gray-300">
+                <tr key={sale.id} className="hover:bg-[#F3F4F6]">
+                  <td className="px-3 py-2 text-[var(--biz-text)]">
                     {new Date(sale.sold_at).toISOString().slice(0, 10)}
                   </td>
-                  <td className="px-2 py-1.5 text-gray-300">{sale.title}</td>
-                  <td className="px-2 py-1.5 text-gray-300">{sale.channel}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums text-gray-200">
+                  <td className="border-l border-[var(--biz-border)] px-3 py-2 text-[var(--biz-text)]">{sale.title}</td>
+                  <td className="border-l border-[var(--biz-border)] px-3 py-2 text-[var(--biz-text)]">{sale.channel}</td>
+                  <td className="border-l border-[var(--biz-border)] px-3 py-2 text-right tabular-nums text-[var(--biz-text)]">
                     {formatMoney(sale.gross)}
                   </td>
-                  <td className="px-2 py-1.5 text-right tabular-nums text-gray-300">
+                  <td className="border-l border-[var(--biz-border)] px-3 py-2 text-right tabular-nums text-[var(--biz-text)]">
                     {formatMoney(sale.totalFees)}
                   </td>
-                  <td className="px-2 py-1.5 text-right tabular-nums text-gray-200">
+                  <td className="border-l border-[var(--biz-border)] px-3 py-2 text-right tabular-nums text-[var(--biz-text)]">
                     {formatMoney(sale.net_payout_cents)}
                   </td>
-                  <td className="px-2 py-1.5 text-right tabular-nums text-gray-300">
+                  <td className="border-l border-[var(--biz-border)] px-3 py-2 text-right tabular-nums text-[var(--biz-text)]">
                     {formatMoney(sale.cogs_cents)}
                   </td>
                   <td
-                    className={`px-2 py-1.5 text-right tabular-nums font-medium ${
-                      sale.profit_cents >= 0 ? "text-emerald-400" : "text-red-400"
+                    className={`border-l border-[var(--biz-border)] px-3 py-2 text-right tabular-nums font-medium ${
+                      sale.profit_cents >= 0 ? "text-emerald-700" : "text-red-600"
                     }`}
                   >
                     {formatMoney(sale.profit_cents)}
                   </td>
-                  <td className="px-2 py-1.5">
+                  <td className="border-l border-[var(--biz-border)] px-3 py-2">
                     <div className="flex items-center gap-1">
                       <button
                         type="button"
                         onClick={() => setEditingSale(sale)}
-                        className="rounded bg-gray-800 px-2 py-1 text-[10px] font-medium text-gray-200 hover:bg-gray-700"
+                        className="cc-btn-secondary rounded px-2 py-1 text-[10px] font-medium"
                       >
                         Edit
                       </button>
@@ -190,12 +190,12 @@ export default function SalesTable({
                             await onDeleteSale(sale.id);
                           } catch {
                             // Toast is handled by the parent.
-                          } finally {
-                            setDeletingId(null);
-                          }
+                        } finally {
+                          setDeletingId(null);
+                        }
                         }}
                         disabled={deletingId === sale.id}
-                        className="rounded bg-red-900/50 px-2 py-1 text-[10px] font-medium text-red-300 hover:bg-red-800/60 disabled:opacity-60"
+                        className="rounded border border-red-200 bg-red-50 px-2 py-1 text-[10px] font-medium text-red-700 hover:bg-red-100 disabled:opacity-60"
                       >
                         {deletingId === sale.id ? "..." : "Delete"}
                       </button>
@@ -207,7 +207,7 @@ export default function SalesTable({
         </table>
       </div>
 
-      <div className="mt-2 flex items-center justify-between text-[11px] text-gray-500">
+      <div className="mt-2 flex items-center justify-between text-[11px] text-[var(--biz-muted)]">
         <span>
           Showing {(page - 1) * pageSize + (rows.length > 0 ? 1 : 0)}-
           {(page - 1) * pageSize + rows.length} of {total}
@@ -217,7 +217,7 @@ export default function SalesTable({
             type="button"
             onClick={() => onPageChange(page - 1)}
             disabled={page <= 1}
-            className="rounded border border-gray-700 px-2 py-1 text-xs text-gray-300 hover:bg-gray-800 disabled:opacity-50"
+            className="cc-btn-secondary rounded px-2 py-1 text-xs disabled:opacity-50"
           >
             Prev
           </button>
@@ -228,7 +228,7 @@ export default function SalesTable({
             type="button"
             onClick={() => onPageChange(page + 1)}
             disabled={page >= totalPages}
-            className="rounded border border-gray-700 px-2 py-1 text-xs text-gray-300 hover:bg-gray-800 disabled:opacity-50"
+            className="cc-btn-secondary rounded px-2 py-1 text-xs disabled:opacity-50"
           >
             Next
           </button>

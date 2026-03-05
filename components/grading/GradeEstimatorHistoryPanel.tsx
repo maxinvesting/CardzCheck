@@ -118,7 +118,7 @@ export default function GradeEstimatorHistoryPanel({
       {/* Section toggle */}
       <button
         onClick={() => setIsExpanded((prev) => !prev)}
-        className="flex w-full items-center gap-2 text-xs font-medium text-[var(--muted)] transition-colors hover:text-white"
+        className="flex w-full items-center gap-2 text-xs font-medium text-[var(--muted)] transition-colors hover:text-[var(--biz-text)]"
       >
         <svg
           className="w-3.5 h-3.5"
@@ -159,21 +159,21 @@ export default function GradeEstimatorHistoryPanel({
           {loading ? (
             <div className={`space-y-2 ${compact ? "" : "py-1"}`}>
               {[1, 2, 3].map((i) => (
-                <div key={i} className="h-14 bg-white/[0.03] rounded-lg animate-pulse" />
+                <div key={i} className="h-14 rounded-lg bg-[color:var(--biz-hover)] animate-pulse" />
               ))}
             </div>
           ) : runs.length === 0 ? (
             <div className="py-2">
-              <p className="text-sm text-white">No scans yet.</p>
+              <p className="text-sm text-[var(--biz-text)]">No scans yet.</p>
               <p className="mt-1 text-xs text-[var(--muted)]">
                 Upload a card photo to run your first analysis.
               </p>
               {error ? (
                 <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <p className="text-xs text-amber-400">{error}</p>
+                  <p className="text-xs text-amber-700">{error}</p>
                   <button
                     onClick={() => void loadRuns()}
-                    className="text-xs font-medium text-blue-400 hover:text-blue-300 transition-colors"
+                    className="text-xs font-medium text-[var(--biz-primary)] hover:underline"
                   >
                     Retry
                   </button>
@@ -209,7 +209,7 @@ export default function GradeEstimatorHistoryPanel({
                         onSelect(run);
                       }
                     }}
-                    className="group flex items-center gap-3 w-full text-left px-3 py-3 rounded-lg hover:bg-white/[0.04] transition-colors"
+                    className="group flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors hover:bg-[color:var(--biz-hover)]"
                   >
                     {/* Card thumbnail */}
                     {imageUrl ? (
@@ -219,12 +219,12 @@ export default function GradeEstimatorHistoryPanel({
                         className="h-12 w-9 shrink-0 rounded-md border border-[color:var(--border)] object-cover"
                       />
                     ) : (
-                      <div className="h-12 w-9 shrink-0 rounded-md border border-[color:var(--border)] bg-white/[0.03]" />
+                      <div className="h-12 w-9 shrink-0 rounded-md border border-[color:var(--border)] bg-[color:var(--biz-surface-soft)]" />
                     )}
 
                     {/* Content */}
                     <div className="flex-1 min-w-0">
-                      <p className="truncate text-sm font-medium leading-snug text-white">{title}</p>
+                      <p className="truncate text-sm font-medium leading-snug text-[var(--biz-text)]">{title}</p>
                       {meta ? (
                         <p className="mt-0.5 truncate text-xs text-[var(--muted)]">{meta}</p>
                       ) : null}
@@ -256,7 +256,7 @@ export default function GradeEstimatorHistoryPanel({
                         </svg>
                       </button>
                       <svg
-                        className="h-4 w-4 text-[var(--muted)] transition-colors group-hover:text-white"
+                        className="h-4 w-4 text-[var(--muted)] transition-colors group-hover:text-[var(--biz-text)]"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"

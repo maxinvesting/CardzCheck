@@ -174,7 +174,7 @@ export default function Sidebar() {
 
   const isBusinessWorkspace = pathname.startsWith("/business");
   const navItems = isBusinessWorkspace ? BUSINESS_NAV_ITEMS() : PERSONAL_NAV_ITEMS();
-  const businessSurfaceClass = "bg-[var(--surface-2)] border-[color:var(--border)]";
+  const businessSurfaceClass = "bg-[var(--biz-surface)] border-[color:var(--biz-border)]";
 
   useEffect(() => {
     async function loadUser() {
@@ -221,7 +221,7 @@ export default function Sidebar() {
         onClick={() => setIsOpen(!isOpen)}
         className={`lg:hidden fixed top-4 left-4 z-50 rounded-lg border p-2 transition-colors ${
           isBusinessWorkspace
-            ? `${businessSurfaceClass} text-[var(--muted)] hover:text-[var(--text)]`
+            ? `${businessSurfaceClass} text-[var(--biz-muted)] hover:text-[var(--biz-text)]`
             : "bg-gray-900 border-gray-800 text-gray-400 hover:text-white"
         }`}
       >
@@ -253,13 +253,15 @@ export default function Sidebar() {
         <Link
           href={isBusinessWorkspace ? "/business" : "/dashboard"}
           className={`flex cursor-pointer flex-col items-center justify-center border-b p-6 transition-opacity hover:opacity-90 ${
-            isBusinessWorkspace ? "border-[color:var(--border)]" : "border-gray-800"
+            isBusinessWorkspace ? "border-[color:var(--biz-border)]" : "border-gray-800"
           }`}
           onClick={() => setIsOpen(false)}
         >
-          <span className="text-2xl font-bold text-white tracking-tight">CardzCheck</span>
+          <span className={`text-2xl font-bold tracking-tight ${isBusinessWorkspace ? "text-[var(--biz-text)]" : "text-white"}`}>
+            CardzCheck
+          </span>
           {isBusinessWorkspace && (
-            <span className="mt-1 rounded border border-emerald-400/35 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
+            <span className="mt-1 rounded border border-[color:var(--biz-border)] bg-[#F3F4F6] px-2 py-0.5 text-[10px] font-semibold text-[var(--biz-primary)]">
               Business
             </span>
           )}
@@ -278,10 +280,10 @@ export default function Sidebar() {
                     ? item.href.includes("/shop")
                       ? "bg-cyan-600 text-white"
                       : isBusinessWorkspace
-                      ? "bg-[var(--surface)] border border-[color:var(--border)] text-[var(--text)]"
+                      ? "border border-[color:var(--biz-border)] border-l-2 border-l-[var(--biz-primary)] bg-[#F3F4F6] text-[var(--biz-text)]"
                       : "bg-blue-600 text-white"
                     : isBusinessWorkspace
-                      ? "text-[var(--muted)] hover:text-[var(--text)] hover:bg-white/[0.03]"
+                      ? "text-[var(--biz-muted)] hover:bg-[#F9FAFB] hover:text-[var(--biz-text)]"
                       : "text-gray-400 hover:text-white hover:bg-gray-800"
                 }`}
               >
@@ -290,9 +292,11 @@ export default function Sidebar() {
                 {item.badge && !isProFeature && (
                   <span className={`ml-auto px-1.5 py-0.5 text-xs font-medium rounded ${
                     item.badge === "Featured"
-                      ? "bg-amber-500/15 text-amber-300"
+                      ? isBusinessWorkspace
+                        ? "border border-amber-200 bg-amber-50 text-[var(--biz-warning)]"
+                        : "bg-blue-500/20 text-blue-400"
                       : isBusinessWorkspace
-                        ? "border border-[color:var(--border)] text-[var(--muted)]"
+                        ? "border border-[color:var(--biz-border)] text-[var(--biz-muted)]"
                         : "bg-blue-500/20 text-blue-400"
                   }`}>
                     {item.badge}
@@ -314,13 +318,13 @@ export default function Sidebar() {
 
         <div
           className={`space-y-4 border-t p-4 ${
-            isBusinessWorkspace ? "border-[color:var(--border)]" : "border-gray-800"
+            isBusinessWorkspace ? "border-[color:var(--biz-border)]" : "border-gray-800"
           }`}
         >
           {user && !user.is_paid && remainingSearches !== null && (
             <div className={`rounded-lg px-4 py-3 ${isBusinessWorkspace ? "cc-surface" : "bg-gray-800"}`}>
-              <div className="mb-1 text-xs text-[var(--muted)]">Free Plan</div>
-              <div className="text-sm font-medium text-white">
+              <div className="mb-1 text-xs text-[var(--biz-muted)]">Free Plan</div>
+              <div className={`text-sm font-medium ${isBusinessWorkspace ? "text-[var(--biz-text)]" : "text-white"}`}>
                 {remainingSearches} / 3 searches remaining
               </div>
             </div>
@@ -328,13 +332,15 @@ export default function Sidebar() {
 
           {user && (
             <div className={`rounded-lg px-4 py-3 ${isBusinessWorkspace ? "cc-surface" : "bg-gray-800"}`}>
-              <div className="mb-1 text-xs text-[var(--muted)]">Signed in as</div>
-              <div className="text-sm font-medium text-white truncate">{user.email}</div>
+              <div className="mb-1 text-xs text-[var(--biz-muted)]">Signed in as</div>
+              <div className={`truncate text-sm font-medium ${isBusinessWorkspace ? "text-[var(--biz-text)]" : "text-white"}`}>
+                {user.email}
+              </div>
               {user.is_paid && (
                 <div
                   className={`mt-2 inline-flex items-center rounded px-2 py-1 text-xs font-medium ${
                     isBusinessWorkspace
-                      ? "border border-emerald-500/35 bg-emerald-500/15 text-emerald-300"
+                      ? "border border-[color:var(--biz-border)] bg-[#F0FDF4] text-[var(--biz-primary)]"
                       : "bg-blue-600 text-white"
                   }`}
                 >
@@ -358,11 +364,11 @@ export default function Sidebar() {
             </button>
           )}
 
-          <div className="flex items-center justify-center gap-4 pt-2 text-xs text-[var(--muted)]">
+          <div className={`flex items-center justify-center gap-4 pt-2 text-xs ${isBusinessWorkspace ? "text-[var(--biz-muted)]" : "text-gray-500"}`}>
             <Link
               href="/terms"
               onClick={() => setIsOpen(false)}
-              className="transition-colors hover:text-white"
+              className={`transition-colors ${isBusinessWorkspace ? "hover:text-[var(--biz-text)]" : "hover:text-gray-300"}`}
             >
               Terms
             </Link>
@@ -370,7 +376,7 @@ export default function Sidebar() {
             <Link
               href="/privacy"
               onClick={() => setIsOpen(false)}
-              className="transition-colors hover:text-white"
+              className={`transition-colors ${isBusinessWorkspace ? "hover:text-[var(--biz-text)]" : "hover:text-gray-300"}`}
             >
               Privacy
             </Link>

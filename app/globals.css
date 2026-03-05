@@ -12,24 +12,31 @@
   --foreground: #171717;
   --background: #ffffff;
 
-  /* Business app tokens */
-  --app-bg: #0b1220;
-  --surface: #101827;
-  --surface-2: #0f172a;
-  --border: rgba(148, 163, 184, 0.14);
-  --text: #e5e7eb;
-  --muted: rgba(229, 231, 235, 0.65);
-  --accent: #10b981;
-  --warning: #f59e0b;
+  /* Business fallback tokens (overridden by .business-theme) */
+  --biz-bg: #0b1220;
+  --biz-surface: #101827;
+  --biz-border: rgba(148, 163, 184, 0.14);
+  --biz-text: #e5e7eb;
+  --biz-muted: rgba(229, 231, 235, 0.65);
+  --biz-primary: #10b981;
+  --biz-warning: #f59e0b;
+  --biz-surface-soft: #0f172a;
+  --biz-hover: rgba(148, 163, 184, 0.16);
+  --biz-skeleton: rgba(148, 163, 184, 0.24);
 
   /* Backward-compatible aliases */
-  --biz-app-bg: var(--app-bg);
-  --biz-surface: var(--surface);
-  --biz-border: var(--border);
-  --biz-text: var(--text);
-  --biz-text-muted: var(--muted);
-  --biz-accent: var(--accent);
-  --biz-accent-amber: var(--warning);
+  --app-bg: var(--biz-bg);
+  --surface: var(--biz-surface);
+  --surface-2: var(--biz-surface);
+  --border: var(--biz-border);
+  --text: var(--biz-text);
+  --muted: var(--biz-muted);
+  --accent: var(--biz-primary);
+  --warning: var(--biz-warning);
+  --biz-app-bg: var(--biz-bg);
+  --biz-text-muted: var(--biz-muted);
+  --biz-accent: var(--biz-primary);
+  --biz-accent-amber: var(--biz-warning);
   --biz-radius: 12px;
 }
 
@@ -54,15 +61,15 @@ body {
 
 @layer components {
   .cc-surface {
-    background: var(--surface);
-    border: 1px solid var(--border);
+    background: var(--biz-surface);
+    border: 1px solid var(--biz-border);
     border-radius: 12px;
     box-shadow: none;
   }
 
   .cc-btn-primary {
     border: 1px solid transparent;
-    background: var(--accent);
+    background: var(--biz-primary);
     color: #ffffff;
     transition: background-color 160ms ease;
   }
@@ -72,9 +79,9 @@ body {
   }
 
   .cc-btn-secondary {
-    border: 1px solid var(--border);
+    border: 1px solid var(--biz-border);
     background: transparent;
-    color: var(--text);
+    color: var(--biz-text);
     transition: background-color 160ms ease, border-color 160ms ease;
   }
 

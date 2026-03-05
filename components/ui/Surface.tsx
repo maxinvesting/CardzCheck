@@ -3,9 +3,9 @@ import { type HTMLAttributes, forwardRef } from "react";
 /**
  * Surface — canonical panel / card wrapper for the Business UI.
  *
- * Visual contract (PSA/Beckett-style calm SaaS):
- *   • Flat dark background  (--surface  #101827)
- *   • Subtle slate border   (--border   rgba(148,163,184,0.14))
+ * Visual contract (calm, spreadsheet-like SaaS):
+ *   • Flat surface background  (--surface)
+ *   • Subtle border            (--border)
  *   • 12 px corner radius
  *   • 20 px internal padding (overridable via className)
  *   • No shadow, no glow
@@ -30,7 +30,7 @@ const Surface = forwardRef<HTMLDivElement, SurfaceProps>(
       {...rest}
     >
       {title && (
-        <h3 className="mb-4 text-sm font-semibold text-[var(--muted)]">
+        <h3 className="mb-4 text-xs font-semibold uppercase tracking-normal text-[var(--biz-muted)]">
           {title}
         </h3>
       )}

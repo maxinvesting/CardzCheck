@@ -30,11 +30,11 @@ function roiLevel(rating: WorthGradingResult["rating"]): RoiLevel {
 function roiBadge(level: RoiLevel): string {
   switch (level) {
     case "High":
-      return "bg-green-600/20 text-green-300 border-green-500/40";
+      return "bg-green-50 text-green-700 border-green-200";
     case "Medium":
-      return "bg-amber-600/20 text-amber-300 border-amber-500/40";
+      return "bg-amber-50 text-amber-700 border-amber-200";
     default:
-      return "bg-slate-700/30 text-slate-300 border-slate-600/40";
+      return "bg-[color:var(--biz-surface-soft)] text-[var(--biz-muted)] border-[var(--biz-border)]";
   }
 }
 
@@ -50,23 +50,23 @@ export default function GradeEstimatorValuePanel({
 
   if (loading) {
     return (
-      <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5 animate-pulse">
-        <div className="h-4 w-32 bg-gray-700 rounded mb-3" />
-        <div className="h-6 w-48 bg-gray-700 rounded mb-2" />
-        <div className="h-24 w-full bg-gray-700 rounded" />
+      <div className="cc-surface rounded-xl p-5 animate-pulse">
+        <div className="mb-3 h-4 w-32 rounded bg-[color:var(--biz-skeleton)]" />
+        <div className="mb-2 h-6 w-48 rounded bg-[color:var(--biz-skeleton)]" />
+        <div className="h-24 w-full rounded bg-[color:var(--biz-skeleton)]" />
       </div>
     );
   }
 
   return (
-    <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5">
+    <div className="cc-surface rounded-xl p-5">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wider">
+        <h3 className="text-sm font-semibold text-[var(--biz-muted)] uppercase tracking-normal">
           {gradingCopy.valuePanel.title}
         </h3>
         <div className="flex items-center gap-2">
           {result.bestOption !== "none" && (
-            <span className="text-xs text-gray-400">
+            <span className="text-xs text-[var(--biz-muted)]">
               {gradingCopy.valuePanel.bestLabel}: {result.bestOption.toUpperCase()}
             </span>
           )}
@@ -79,44 +79,44 @@ export default function GradeEstimatorValuePanel({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-        <div className="bg-gray-900/50 rounded-lg p-3">
-          <p className="text-gray-400 font-medium mb-2">{gradingCopy.valuePanel.rawTitle}</p>
-          <p className="text-lg text-white font-semibold">{formatPrice(result.raw)}</p>
-          <p className="text-xs text-gray-500 mt-1">{result.raw.n} {gradingCopy.valuePanel.compsSuffix}</p>
+        <div className="rounded-lg border border-[var(--biz-border)] bg-[color:var(--biz-surface-soft)] p-3">
+          <p className="mb-2 font-medium text-[var(--biz-muted)]">{gradingCopy.valuePanel.rawTitle}</p>
+          <p className="text-lg font-semibold text-[var(--biz-text)]">{formatPrice(result.raw)}</p>
+          <p className="mt-1 text-xs text-[var(--biz-muted)]">{result.raw.n} {gradingCopy.valuePanel.compsSuffix}</p>
         </div>
 
-        <div className="bg-gray-900/50 rounded-lg p-3">
-          <p className="text-gray-400 font-medium mb-2">{gradingCopy.valuePanel.psaTitle}</p>
-          <ul className="space-y-1 text-gray-300">
+        <div className="rounded-lg border border-[var(--biz-border)] bg-[color:var(--biz-surface-soft)] p-3">
+          <p className="mb-2 font-medium text-[var(--biz-muted)]">{gradingCopy.valuePanel.psaTitle}</p>
+          <ul className="space-y-1 text-[var(--biz-text)]">
             <li>PSA 10: {formatPrice(result.psa["10"])}</li>
             <li>PSA 9: {formatPrice(result.psa["9"])}</li>
             <li>PSA 8: {formatPrice(result.psa["8"])}</li>
           </ul>
-          <p className="text-xs text-gray-500 mt-2">
+          <p className="mt-2 text-xs text-[var(--biz-muted)]">
             {gradingCopy.valuePanel.evLabel} ${result.psa.ev.toFixed(0)} · {gradingCopy.valuePanel.netLabel} ${result.psa.netGain.toFixed(0)} · {gradingCopy.valuePanel.roiLabel}{" "}
             {formatRoi(result.psa.roi)}
           </p>
         </div>
 
-        <div className="bg-gray-900/50 rounded-lg p-3">
-          <p className="text-gray-400 font-medium mb-2">{gradingCopy.valuePanel.bgsTitle}</p>
-          <ul className="space-y-1 text-gray-300">
+        <div className="rounded-lg border border-[var(--biz-border)] bg-[color:var(--biz-surface-soft)] p-3">
+          <p className="mb-2 font-medium text-[var(--biz-muted)]">{gradingCopy.valuePanel.bgsTitle}</p>
+          <ul className="space-y-1 text-[var(--biz-text)]">
             <li>BGS 9.5: {formatPrice(result.bgs["9.5"])}</li>
             <li>BGS 9: {formatPrice(result.bgs["9"])}</li>
             <li>BGS 8.5: {formatPrice(result.bgs["8.5"])}</li>
           </ul>
-          <p className="text-xs text-gray-500 mt-2">
+          <p className="mt-2 text-xs text-[var(--biz-muted)]">
             {gradingCopy.valuePanel.evLabel} ${result.bgs.ev.toFixed(0)} · {gradingCopy.valuePanel.netLabel} ${result.bgs.netGain.toFixed(0)} · {gradingCopy.valuePanel.roiLabel}{" "}
             {formatRoi(result.bgs.roi)}
           </p>
         </div>
       </div>
 
-      <div className="mt-4 p-3 bg-blue-900/20 border border-blue-800/30 rounded-lg">
-        <p className="text-sm text-blue-200">{result.explanation}</p>
+      <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-3">
+        <p className="text-sm text-blue-700">{result.explanation}</p>
       </div>
 
-      <p className="mt-3 text-xs text-gray-500">
+      <p className="mt-3 text-xs text-[var(--biz-muted)]">
         {gradingCopy.valuePanel.confidenceNote}
       </p>
     </div>

@@ -52,7 +52,7 @@ interface Props {
 }
 
 function SkeletonLine({ w = "w-full" }: { w?: string }) {
-  return <div className={`h-4 ${w} bg-white/5 rounded animate-pulse`} />;
+  return <div className={`h-4 ${w} rounded bg-slate-100 animate-pulse`} />;
 }
 
 export default function BusinessDashboardView({
@@ -129,7 +129,7 @@ export default function BusinessDashboardView({
       {/* ── Page header ─────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-xl font-semibold text-white leading-snug">
+          <h1 className="text-xl font-semibold text-[var(--biz-text)] leading-snug">
             {businessName ?? "CardzCheck Business"}
           </h1>
           <p className="mt-1 text-sm text-[var(--muted)]">
@@ -185,10 +185,10 @@ export default function BusinessDashboardView({
       {needsMigration && (
         <div
           style={{ border: "1px solid var(--biz-border)" }}
-          className="rounded-xl bg-amber-900/10 p-4 text-sm text-amber-300"
+          className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-[var(--biz-warning)]"
         >
           Database setup required.{" "}
-          <Link href="/business/ledger" className="underline hover:text-amber-200">
+          <Link href="/business/ledger" className="underline hover:text-amber-700">
             Go to Ledger
           </Link>{" "}
           to complete setup.
@@ -212,7 +212,7 @@ export default function BusinessDashboardView({
                   : "Not connected"}
               </span>
               {ebayAccount?.top_rated_seller && (
-                <span className="rounded-full border border-amber-600/30 bg-amber-900/20 px-2 py-0.5 text-[10px] font-medium text-amber-400">
+                <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-[var(--biz-warning)]">
                   Top Rated Plus
                 </span>
               )}
@@ -254,15 +254,15 @@ export default function BusinessDashboardView({
                 <div
                   key={label}
                   style={{ border: "1px solid var(--biz-border)" }}
-                  className="rounded-lg bg-white/[0.03] px-3 py-2.5"
+                  className="rounded-lg border border-[var(--biz-border)] bg-[#F9FAFB] px-3 py-2.5"
                 >
-                  <p className="mb-1 text-xs text-[var(--muted)]">{label}</p>
-                  <p className="text-xl font-semibold tabular-nums text-white">{value}</p>
+                  <p className="mb-1 text-xs uppercase tracking-normal text-[var(--biz-muted)]">{label}</p>
+                  <p className="text-xl font-semibold tabular-nums text-[var(--biz-text)]">{value}</p>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-[var(--biz-muted)]">
               Connect your eBay account to sync orders automatically, list cards directly from inventory, and track eBay-specific profit metrics.
             </p>
           )}
@@ -277,26 +277,26 @@ export default function BusinessDashboardView({
       {!needsMigration && (
         <div
           style={{ border: "1px solid var(--biz-border)", borderLeft: "3px solid var(--biz-accent-amber)" }}
-          className="flex flex-col gap-3 rounded-xl bg-[var(--surface)] p-5 sm:flex-row sm:items-center sm:justify-between"
+          className="flex flex-col gap-3 rounded-xl bg-[var(--biz-surface)] p-5 sm:flex-row sm:items-center sm:justify-between"
         >
           <div className="flex items-start gap-3">
             <div className="shrink-0 w-7 h-7 rounded-md bg-amber-500/15 flex items-center justify-center mt-0.5">
-              <svg className="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-3.5 h-3.5 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
               </svg>
             </div>
             <div>
-              <p className="text-sm font-semibold text-slate-200">
+              <p className="text-sm font-semibold text-[var(--biz-text)]">
                 Grade your cards before you sell
               </p>
-              <p className="mt-1 text-xs text-[var(--muted)]">
+              <p className="mt-1 text-xs text-[var(--biz-muted)]">
                 Estimate grade probability and assess whether submitting to PSA/BGS is worth it — before you pay.
               </p>
             </div>
           </div>
           <Link
             href="/business/grade-probability"
-            className="cc-btn-secondary shrink-0 whitespace-nowrap rounded-md border-amber-500/30 px-3 py-1.5 text-xs font-medium text-amber-300"
+            className="cc-btn-secondary shrink-0 whitespace-nowrap rounded-md border-amber-200 px-3 py-1.5 text-xs font-medium text-[var(--biz-warning)]"
           >
             Try Grade Probability →
           </Link>
@@ -310,15 +310,15 @@ export default function BusinessDashboardView({
           <div className="space-y-6">
             <Surface title="Top Movers · Est. Market Value">
               {itemsEmpty ? (
-                <p className="text-slate-500 text-xs">
+                <p className="text-[var(--biz-muted)] text-xs">
                   No inventory yet.{" "}
-                  <Link href="/business/ledger" className="text-emerald-400 hover:text-emerald-300">
+                  <Link href="/business/ledger" className="text-[var(--biz-primary)] hover:underline">
                     Add items
                   </Link>{" "}
                   to see top performers.
                 </p>
               ) : dashboardData.topMovers.length === 0 ? (
-                <p className="text-slate-500 text-xs">
+                <p className="text-[var(--biz-muted)] text-xs">
                   Add Est. Market Values to your items to see top movers.
                 </p>
               ) : (
@@ -327,12 +327,12 @@ export default function BusinessDashboardView({
                     <li key={item.id} className="flex items-center justify-between">
                       <Link
                         href="/business/ledger"
-                        className="text-xs text-slate-300 hover:text-white truncate max-w-[200px] transition-colors"
+                        className="max-w-[200px] truncate text-xs text-[var(--biz-text)] transition-colors hover:underline"
                         title={item.title}
                       >
                         {item.title}
                       </Link>
-                      <span className="text-xs font-semibold tabular-nums text-emerald-400 ml-2 shrink-0">
+                      <span className="ml-2 shrink-0 text-xs font-semibold tabular-nums text-[var(--biz-primary)]">
                         {fmt(item.current_market_value_cents!)}
                       </span>
                     </li>
@@ -343,34 +343,34 @@ export default function BusinessDashboardView({
 
             <Surface title="Risk Signals">
               {itemsEmpty ? (
-                <p className="text-slate-500 text-xs">No active inventory to analyze.</p>
+                <p className="text-[var(--biz-muted)] text-xs">No active inventory to analyze.</p>
               ) : (
                 <ul className="space-y-2.5">
                   <li className="flex items-center justify-between">
-                    <span className="text-xs text-slate-400">Unlisted items</span>
+                    <span className="text-xs text-[var(--biz-muted)]">Unlisted items</span>
                     <span
                       className={`text-xs font-semibold tabular-nums ${
-                        dashboardData.unlisted.length > 0 ? "text-amber-400" : "text-slate-500"
+                        dashboardData.unlisted.length > 0 ? "text-[var(--biz-warning)]" : "text-[var(--biz-muted)]"
                       }`}
                     >
                       {dashboardData.unlisted.length}
                     </span>
                   </li>
                   <li className="flex items-center justify-between">
-                    <span className="text-xs text-slate-400">Items held &gt; 60 days</span>
+                    <span className="text-xs text-[var(--biz-muted)]">Items held &gt; 60 days</span>
                     <span
                       className={`text-xs font-semibold tabular-nums ${
-                        dashboardData.aged.length > 0 ? "text-red-400" : "text-slate-500"
+                        dashboardData.aged.length > 0 ? "text-red-600" : "text-[var(--biz-muted)]"
                       }`}
                     >
                       {dashboardData.aged.length}
                     </span>
                   </li>
                   <li className="flex items-center justify-between">
-                    <span className="text-xs text-slate-400">Missing Est. Market Value</span>
+                    <span className="text-xs text-[var(--biz-muted)]">Missing Est. Market Value</span>
                     <span
                       className={`text-xs font-semibold tabular-nums ${
-                        dashboardData.noCmv.length > 0 ? "text-slate-300" : "text-slate-500"
+                        dashboardData.noCmv.length > 0 ? "text-[var(--biz-text)]" : "text-[var(--biz-muted)]"
                       }`}
                     >
                       {dashboardData.noCmv.length}
@@ -381,7 +381,7 @@ export default function BusinessDashboardView({
               {(dashboardData.unlisted.length > 0 || dashboardData.aged.length > 0) && (
                 <Link
                   href="/business/ledger"
-                  className="mt-4 inline-block text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+                  className="mt-4 inline-block text-xs text-[var(--biz-primary)] transition-colors hover:underline"
                 >
                   Review in Ledger →
                 </Link>
@@ -393,26 +393,26 @@ export default function BusinessDashboardView({
           <div className="space-y-6">
             <Surface title="Inventory Funnel">
               {itemsEmpty ? (
-                <p className="text-slate-500 text-xs">No inventory data yet.</p>
+                <p className="text-[var(--biz-muted)] text-xs">No inventory data yet.</p>
               ) : (
                 <div className="grid grid-cols-3 gap-4">
                   <div className="text-center">
-                    <p className="text-2xl font-bold tabular-nums text-amber-400 tracking-tight">
+                    <p className="text-2xl font-semibold tabular-nums text-[var(--biz-warning)]">
                       {dashboardData.unlisted.length}
                     </p>
-                    <p className="text-[10px] text-slate-500 mt-1">Unlisted</p>
+                    <p className="mt-1 text-[10px] text-[var(--biz-muted)]">Unlisted</p>
                   </div>
                   <div className="text-center">
-                    <p className="text-2xl font-bold tabular-nums text-blue-400 tracking-tight">
+                    <p className="text-2xl font-semibold tabular-nums text-[var(--biz-text)]">
                       {dashboardData.listedCount}
                     </p>
-                    <p className="text-[10px] text-slate-500 mt-1">Listed</p>
+                    <p className="mt-1 text-[10px] text-[var(--biz-muted)]">Listed</p>
                   </div>
                   <div className="text-center">
-                    <p className="text-2xl font-bold tabular-nums text-emerald-400 tracking-tight">
+                    <p className="text-2xl font-semibold tabular-nums text-[var(--biz-primary)]">
                       {recentSalesLoading ? "—" : soldLast30Count}
                     </p>
-                    <p className="text-[10px] text-slate-500 mt-1">Sold (30d)</p>
+                    <p className="mt-1 text-[10px] text-[var(--biz-muted)]">Sold (30d)</p>
                   </div>
                 </div>
               )}
@@ -421,7 +421,7 @@ export default function BusinessDashboardView({
                   style={{ borderTop: "1px solid var(--biz-border)" }}
                   className="mt-4 pt-3"
                 >
-                  <p className="text-[10px] text-slate-500">
+                  <p className="text-[10px] text-[var(--biz-muted)]">
                     {dashboardData.activeCount} active item
                     {dashboardData.activeCount !== 1 ? "s" : ""} in inventory
                   </p>
@@ -474,7 +474,7 @@ export default function BusinessDashboardView({
                 )}
                 <Link
                   href="/business/grade-probability"
-                  className="cc-btn-secondary flex items-center gap-2 rounded-md border-amber-500/30 px-3 py-2.5 text-xs font-medium text-amber-300"
+                  className="cc-btn-secondary flex items-center gap-2 rounded-md border-amber-200 px-3 py-2.5 text-xs font-medium text-[var(--biz-warning)]"
                 >
                   <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
@@ -492,9 +492,9 @@ export default function BusinessDashboardView({
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <Surface title="Recently Added">
             {itemsEmpty ? (
-              <p className="text-slate-500 text-xs">
+              <p className="text-[var(--biz-muted)] text-xs">
                 No items yet.{" "}
-                <Link href="/business/ledger" className="text-emerald-400 hover:text-emerald-300">
+                <Link href="/business/ledger" className="text-[var(--biz-primary)] hover:underline">
                   Add your first item
                 </Link>
                 .
@@ -510,18 +510,18 @@ export default function BusinessDashboardView({
                             ? "bg-blue-400"
                             : item.status === "sold"
                             ? "bg-emerald-400"
-                            : "bg-slate-600"
+                            : "bg-slate-300"
                         }`}
                       />
                       <Link
                         href="/business/ledger"
-                        className="text-xs text-slate-300 hover:text-white truncate transition-colors"
+                        className="truncate text-xs text-[var(--biz-text)] transition-colors hover:underline"
                         title={item.title}
                       >
                         {item.title}
                       </Link>
                     </div>
-                    <span className="text-[10px] text-slate-500 shrink-0 tabular-nums">
+                    <span className="shrink-0 text-[10px] text-[var(--biz-muted)] tabular-nums">
                       {fmtDate(item.created_at)}
                     </span>
                   </li>
@@ -531,7 +531,7 @@ export default function BusinessDashboardView({
             {items.length > 8 && (
               <Link
                 href="/business/ledger"
-                className="mt-4 inline-block text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+                className="mt-4 inline-block text-xs text-[var(--biz-primary)] transition-colors hover:underline"
               >
                 View all {items.length} items →
               </Link>
@@ -546,11 +546,11 @@ export default function BusinessDashboardView({
                 ))}
               </div>
             ) : recentSales.length === 0 ? (
-              <p className="text-slate-500 text-xs">
+              <p className="text-[var(--biz-muted)] text-xs">
                 No sales recorded yet.{" "}
                 <Link
                   href="/business/ledger?tab=sales"
-                  className="text-emerald-400 hover:text-emerald-300"
+                  className="text-[var(--biz-primary)] hover:underline"
                 >
                   Go to Sales tab
                 </Link>{" "}
@@ -562,23 +562,23 @@ export default function BusinessDashboardView({
                   <li key={sale.id} className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
                       <p
-                        className="text-xs text-slate-300 truncate"
+                        className="truncate text-xs text-[var(--biz-text)]"
                         title={sale.inventory_item?.title ?? "Sale"}
                       >
                         {sale.inventory_item?.title ?? "Sale"}
                       </p>
-                      <p className="text-[10px] text-slate-500">
+                      <p className="text-[10px] text-[var(--biz-muted)]">
                         {CHANNEL_LABELS[sale.channel] ?? sale.channel} ·{" "}
                         {fmtDate(sale.sold_at)}
                       </p>
                     </div>
                     <div className="text-right shrink-0">
-                      <p className="text-xs font-semibold tabular-nums text-emerald-400">
+                      <p className="text-xs font-semibold tabular-nums text-[var(--biz-primary)]">
                         {fmt(sale.gross_revenue_cents)}
                       </p>
                       <p
                         className={`text-[10px] tabular-nums ${
-                          sale.profit_cents >= 0 ? "text-slate-500" : "text-red-400"
+                          sale.profit_cents >= 0 ? "text-[var(--biz-muted)]" : "text-red-600"
                         }`}
                       >
                         {sale.profit_cents >= 0 ? "+" : ""}
@@ -592,7 +592,7 @@ export default function BusinessDashboardView({
             {recentSales.length > 0 && (
               <Link
                 href="/business/ledger?tab=sales"
-                className="mt-4 inline-block text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+                className="mt-4 inline-block text-xs text-[var(--biz-primary)] transition-colors hover:underline"
               >
                 View all sales →
               </Link>

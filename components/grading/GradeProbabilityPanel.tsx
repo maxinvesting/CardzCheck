@@ -229,14 +229,14 @@ function ProbabilityBar({
   return (
     <div className={`transition-opacity ${percent === 0 ? "opacity-40" : ""}`}>
       <div className="flex items-center justify-between mb-1">
-        <span className={`text-xs ${isHighlighted ? "text-[#e2eaf3] font-medium" : "text-[#7a91a8]"}`}>
+        <span className={`text-xs ${isHighlighted ? "text-[var(--biz-text)] font-medium" : "text-[var(--biz-muted)]"}`}>
           {label}
         </span>
-        <span className={`text-xs font-mono ${isHighlighted ? "text-[#e2eaf3]" : "text-[#3a5068]"}`}>
+        <span className={`text-xs font-mono ${isHighlighted ? "text-[var(--biz-text)]" : "text-[var(--biz-muted)]"}`}>
           {percent}%
         </span>
       </div>
-      <div className="h-1.5 rounded-full bg-white/[0.05] overflow-hidden">
+      <div className="h-1.5 rounded-full bg-[color:var(--biz-hover)] overflow-hidden">
         <div
           className={`h-full rounded-full transition-all ${isHighlighted ? barColor : barColorDim}`}
           style={{ width: `${percent}%` }}
@@ -263,23 +263,23 @@ function EvidenceBlock({
   const displayText = truncated && !expanded ? `${text!.slice(0, 80)}…` : text;
 
   return (
-    <div className="rounded-lg border border-white/[0.06] bg-[#07111d] p-3">
+    <div className="rounded-lg border border-[var(--biz-border)] bg-[var(--biz-surface)] p-3">
       <div className="flex items-center gap-1.5 mb-2">
-        <span className="text-[#3a5068]">{icon}</span>
-        <span className="text-[10px] font-semibold uppercase tracking-widest text-[#3a5068]">
+        <span className="text-[var(--biz-muted)]">{icon}</span>
+        <span className="text-[10px] font-semibold uppercase tracking-normal text-[var(--biz-muted)]">
           {label}
         </span>
       </div>
-      <p className="text-xs text-[#7a91a8] leading-relaxed">
-        {displayText || <span className="text-[#3a5068] italic">No data</span>}
+      <p className="text-xs text-[var(--biz-muted)] leading-relaxed">
+        {displayText || <span className="text-[var(--biz-muted)] italic">No data</span>}
       </p>
       {detail ? (
-        <p className="text-[10px] text-[#3a5068] mt-1 leading-snug">{detail}</p>
+        <p className="text-[10px] text-[var(--biz-muted)] mt-1 leading-snug">{detail}</p>
       ) : null}
       {truncated ? (
         <button
           onClick={() => setExpanded((p) => !p)}
-          className="mt-1 text-[10px] text-[#3a5068] hover:text-[#7a91a8] transition-colors"
+          className="mt-1 text-[10px] text-[var(--biz-muted)] transition-colors hover:text-[var(--biz-text)]"
         >
           {expanded ? "Show less" : "Show more"}
         </button>
@@ -369,25 +369,25 @@ export default function GradeProbabilityPanel({
   };
 
   return (
-    <div ref={panelRef} className="bg-[#07111d] border border-white/[0.06] rounded-xl overflow-hidden">
+    <div ref={panelRef} className="bg-[var(--biz-surface)] border border-[var(--biz-border)] rounded-xl overflow-hidden">
 
       {/* ── Analysis warning ──────────────────────────────────────── */}
       {warningMessage ? (
         <div className="px-5 pt-4">
-          <div className="rounded-lg border border-amber-500/15 bg-amber-500/5 px-3 py-2 text-xs text-amber-300">
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
             {warningMessage}
           </div>
         </div>
       ) : null}
 
       {/* ── Primary result ─────────────────────────────────────────── */}
-      <div className="px-5 pt-6 pb-5 border-b border-white/[0.06]">
+      <div className="px-5 pt-6 pb-5 border-b border-[var(--biz-border)]">
         <div className="flex flex-col lg:flex-row lg:items-start gap-5">
 
           {/* Card image */}
           {urls.length > 0 ? (
             <div className="shrink-0">
-              <div className={`rounded-xl overflow-hidden ring-1 ring-white/[0.08] ${showStacked ? "flex flex-col gap-1.5 w-[100px]" : "w-[100px] h-[140px]"}`}>
+              <div className={`rounded-xl overflow-hidden ring-1 ring-[color:var(--biz-border)] ${showStacked ? "flex flex-col gap-1.5 w-[100px]" : "w-[100px] h-[140px]"}`}>
                 {showStacked ? (
                   urls.map((url, i) => (
                     <div key={url} className="w-full aspect-[3/4]">
@@ -413,36 +413,36 @@ export default function GradeProbabilityPanel({
           <div className="flex-1 min-w-0">
             {/* Panel title */}
             <div className="flex flex-wrap items-center gap-2 mb-4">
-              <span className="text-[10px] font-semibold uppercase tracking-widest text-[#3a5068]">
+              <span className="text-[10px] font-semibold uppercase tracking-normal text-[var(--biz-muted)]">
                 {gradingCopy.panel.title}
               </span>
               {showPreliminaryBadge ? (
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-semibold uppercase tracking-wide bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-700">
                   Preliminary
                 </span>
               ) : null}
               {cardLabel ? (
-                <span className="text-xs text-[#7a91a8] truncate max-w-[280px]">{cardLabel}</span>
+                <span className="text-xs text-[var(--biz-muted)] truncate max-w-[280px]">{cardLabel}</span>
               ) : null}
             </div>
 
             {/* Most likely outcome — the "money moment" */}
             <div className="flex flex-wrap items-end gap-4 mb-3">
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-[#3a5068] mb-1">
+                <p className="text-[10px] font-semibold uppercase tracking-normal text-[var(--biz-muted)] mb-1">
                   {gradingCopy.panel.mostLikelyLabel}
                 </p>
                 {psaTotal > 0 && likely ? (
                   <div className="flex items-baseline gap-3">
-                    <span className="text-4xl font-bold tracking-tight text-[#e2eaf3]">
+                    <span className="text-4xl font-bold tracking-tight text-[var(--biz-text)]">
                       {likely.label}
                     </span>
-                    <span className="text-2xl font-semibold text-blue-400">
+                    <span className="text-2xl font-semibold text-blue-700">
                       {formatPercent(likely.probability)}
                     </span>
                   </div>
                 ) : (
-                  <span className="text-4xl font-bold text-[#3a5068]">--</span>
+                  <span className="text-4xl font-bold text-[var(--biz-muted)]">--</span>
                 )}
               </div>
             </div>
@@ -450,10 +450,10 @@ export default function GradeProbabilityPanel({
             {/* Secondary metrics row */}
             <div className="flex flex-wrap items-center gap-4">
               <div className="flex items-baseline gap-1.5">
-                <span className="text-[10px] font-medium uppercase tracking-wider text-[#3a5068]">
+                <span className="text-[10px] font-medium uppercase tracking-normal text-[var(--biz-muted)]">
                   {gradingCopy.panel.expectedValueLabel}
                 </span>
-                <span className="text-sm font-semibold text-[#7a91a8]">{evLabel}</span>
+                <span className="text-sm font-semibold text-[var(--biz-muted)]">{evLabel}</span>
               </div>
 
               {confidence && confidencePillClass ? (
@@ -463,7 +463,7 @@ export default function GradeProbabilityPanel({
               ) : null}
 
               {showPhotoQualityWarning ? (
-                <span className="text-[10px] text-amber-400">
+                <span className="text-[10px] text-amber-700">
                   {gradingCopy.panel.confidenceReduced}
                 </span>
               ) : null}
@@ -473,13 +473,13 @@ export default function GradeProbabilityPanel({
       </div>
 
       {/* ── Body: distribution + evidence ──────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 divide-y lg:divide-y-0 lg:divide-x divide-white/[0.06]">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 divide-y lg:divide-y-0 lg:divide-x divide-[var(--biz-border)]">
 
         {/* Distribution column */}
         <div className="px-5 py-5 space-y-5">
           <div>
             <div className="flex items-center justify-between mb-3">
-              <h4 className="text-[10px] font-semibold uppercase tracking-widest text-[#3a5068]">
+              <h4 className="text-[10px] font-semibold uppercase tracking-normal text-[var(--biz-muted)]">
                 {gradingCopy.panel.distributionTitle} — PSA
               </h4>
             </div>
@@ -502,7 +502,7 @@ export default function GradeProbabilityPanel({
               <button
                 type="button"
                 onClick={() => setShowBgsDistribution((p) => !p)}
-                className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-[#3a5068] hover:text-[#7a91a8] transition-colors"
+                className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-normal text-[var(--biz-muted)] transition-colors hover:text-[var(--biz-text)]"
               >
                 <svg
                   className={`w-3 h-3 transition-transform duration-200 ${showBgsDistribution ? "rotate-180" : ""}`}
@@ -535,10 +535,10 @@ export default function GradeProbabilityPanel({
         {/* Evidence column */}
         <div className="px-5 py-5">
           <div className="flex items-center justify-between mb-3">
-            <h4 className="text-[10px] font-semibold uppercase tracking-widest text-[#3a5068]">
+            <h4 className="text-[10px] font-semibold uppercase tracking-normal text-[var(--biz-muted)]">
               {gradingCopy.panel.evidenceTitle}
             </h4>
-            <p className="text-[10px] text-[#3a5068] max-w-[180px] text-right leading-snug">
+            <p className="text-[10px] text-[var(--biz-muted)] max-w-[180px] text-right leading-snug">
               {gradingCopy.panel.evidenceNote}
             </p>
           </div>
@@ -598,9 +598,9 @@ export default function GradeProbabilityPanel({
           </div>
 
           {estimate.grade_notes ? (
-            <div className="mt-3 px-3 py-2 rounded-lg border border-white/[0.06] bg-[#07111d]">
-              <p className="text-[11px] text-[#7a91a8] leading-relaxed">
-                <span className="font-medium text-[#e2eaf3]">{gradingCopy.panel.notesLabel}:</span>{" "}
+            <div className="mt-3 rounded-lg border border-[var(--biz-border)] bg-[color:var(--biz-surface-soft)] px-3 py-2">
+              <p className="text-[11px] text-[var(--biz-muted)] leading-relaxed">
+                <span className="font-medium text-[var(--biz-text)]">{gradingCopy.panel.notesLabel}:</span>{" "}
                 {estimate.grade_notes}
               </p>
             </div>
@@ -609,11 +609,11 @@ export default function GradeProbabilityPanel({
       </div>
 
       {/* ── Analysis details (collapsible) ─────────────────────────── */}
-      <div className="border-t border-white/[0.06] px-5 py-4">
+      <div className="border-t border-[var(--biz-border)] px-5 py-4">
         <button
           type="button"
           onClick={() => setShowAnalysisDetails((p) => !p)}
-          className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-[#3a5068] hover:text-[#7a91a8] transition-colors"
+          className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-normal text-[var(--biz-muted)] transition-colors hover:text-[var(--biz-text)]"
         >
           <svg
             className={`w-3 h-3 transition-transform duration-200 ${showAnalysisDetails ? "rotate-180" : ""}`}
@@ -627,14 +627,14 @@ export default function GradeProbabilityPanel({
         {showAnalysisDetails ? (
           <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
             {/* Image Quality */}
-            <div className="rounded-lg border border-white/[0.06] bg-[#07111d] p-3">
-              <p className="text-[10px] uppercase tracking-widest text-[#3a5068] mb-2">Image Quality</p>
-              <p className="text-lg font-semibold text-[#e2eaf3]">
+            <div className="rounded-lg border border-[var(--biz-border)] bg-[color:var(--biz-surface-soft)] p-3">
+              <p className="text-[10px] uppercase tracking-normal text-[var(--biz-muted)] mb-2">Image Quality</p>
+              <p className="text-lg font-semibold text-[var(--biz-text)]">
                 {imageQuality?.overall_image_score ?? "—"}
-                <span className="text-sm font-normal text-[#3a5068]">/100</span>
+                <span className="text-sm font-normal text-[var(--biz-muted)]">/100</span>
               </p>
               {imageQuality?.subscores ? (
-                <div className="mt-2 space-y-0.5 text-xs text-[#7a91a8]">
+                <div className="mt-2 space-y-0.5 text-xs text-[var(--biz-muted)]">
                   <p>Focus: {imageQuality.subscores.focus_sharpness}/25</p>
                   <p>Glare control: {imageQuality.subscores.lighting_glare_control}/25</p>
                   <p>Coverage: {imageQuality.subscores.coverage_angles}/25</p>
@@ -642,7 +642,7 @@ export default function GradeProbabilityPanel({
                 </div>
               ) : null}
               {(imageQuality?.retake_tips?.length ?? 0) > 0 ? (
-                <ul className="mt-2 space-y-1 text-xs text-[#7a91a8] list-disc list-inside">
+                <ul className="mt-2 space-y-1 text-xs text-[var(--biz-muted)] list-disc list-inside">
                   {imageQuality!.retake_tips.slice(0, 4).map((tip, idx) => (
                     <li key={`${tip}-${idx}`}>{tip}</li>
                   ))}
@@ -651,28 +651,28 @@ export default function GradeProbabilityPanel({
             </div>
 
             {/* Confidence */}
-            <div className="rounded-lg border border-white/[0.06] bg-[#07111d] p-3">
-              <p className="text-[10px] uppercase tracking-widest text-[#3a5068] mb-2">Model Confidence</p>
+            <div className="rounded-lg border border-[var(--biz-border)] bg-[color:var(--biz-surface-soft)] p-3">
+              <p className="text-[10px] uppercase tracking-normal text-[var(--biz-muted)] mb-2">Model Confidence</p>
               <div className="flex items-baseline gap-2">
-                <p className="text-lg font-semibold text-[#e2eaf3]">
+                <p className="text-lg font-semibold text-[var(--biz-text)]">
                   {confidenceMeta?.overall_confidence_score ?? "—"}
-                  <span className="text-sm font-normal text-[#3a5068]">/100</span>
+                  <span className="text-sm font-normal text-[var(--biz-muted)]">/100</span>
                 </p>
                 {confidenceMeta?.confidence_label ? (
-                  <span className="text-xs font-medium text-[#7a91a8] uppercase">
+                  <span className="text-xs font-medium text-[var(--biz-muted)] uppercase">
                     {confidenceMeta.confidence_label}
                   </span>
                 ) : null}
               </div>
               {(confidenceMeta?.limiting_factors?.length ?? 0) > 0 ? (
-                <ul className="mt-2 space-y-1 text-xs text-[#7a91a8] list-disc list-inside">
+                <ul className="mt-2 space-y-1 text-xs text-[var(--biz-muted)] list-disc list-inside">
                   {confidenceMeta!.limiting_factors.slice(0, 4).map((factor, idx) => (
                     <li key={`${factor}-${idx}`}>{factor}</li>
                   ))}
                 </ul>
               ) : null}
               {(confidenceMeta?.what_was_clear?.length ?? 0) > 0 ? (
-                <ul className="mt-2 space-y-1 text-xs text-emerald-400/70 list-disc list-inside">
+                <ul className="mt-2 list-inside list-disc space-y-1 text-xs text-emerald-700">
                   {confidenceMeta!.what_was_clear.slice(0, 4).map((fact, idx) => (
                     <li key={`${fact}-${idx}`}>{fact}</li>
                   ))}
@@ -682,24 +682,24 @@ export default function GradeProbabilityPanel({
 
             {/* Centering detail */}
             {centeringMeta ? (
-              <div className="rounded-lg border border-white/[0.06] bg-[#07111d] p-3">
-                <p className="text-[10px] uppercase tracking-widest text-[#3a5068] mb-2">Centering Detail</p>
-                <div className="space-y-0.5 text-xs text-[#7a91a8]">
+              <div className="rounded-lg border border-[var(--biz-border)] bg-[color:var(--biz-surface-soft)] p-3">
+                <p className="text-[10px] uppercase tracking-normal text-[var(--biz-muted)] mb-2">Centering Detail</p>
+                <div className="space-y-0.5 text-xs text-[var(--biz-muted)]">
                   <p>L/R: {centeringMeta.left_right_ratio ?? "—"}</p>
                   <p>T/B: {centeringMeta.top_bottom_ratio ?? "—"}</p>
                   <p>Score: {centeringMeta.centering_confidence_score ?? "—"}/100 · Severity: {centeringMeta.centering_severity_0_3 ?? "—"}/3</p>
                 </div>
                 {centeringMeta.centering_notes ? (
-                  <p className="text-[10px] text-[#3a5068] mt-2 leading-snug">{centeringMeta.centering_notes}</p>
+                  <p className="text-[10px] text-[var(--biz-muted)] mt-2 leading-snug">{centeringMeta.centering_notes}</p>
                 ) : null}
               </div>
             ) : null}
 
             {/* Corner findings */}
             {(estimate.corners_findings?.length ?? 0) > 0 ? (
-              <div className="rounded-lg border border-white/[0.06] bg-[#07111d] p-3">
-                <p className="text-[10px] uppercase tracking-widest text-[#3a5068] mb-2">Corner Findings</p>
-                <ul className="space-y-1 text-xs text-[#7a91a8]">
+              <div className="rounded-lg border border-[var(--biz-border)] bg-[color:var(--biz-surface-soft)] p-3">
+                <p className="text-[10px] uppercase tracking-normal text-[var(--biz-muted)] mb-2">Corner Findings</p>
+                <ul className="space-y-1 text-xs text-[var(--biz-muted)]">
                   {estimate.corners_findings!.slice(0, 3).map((finding, idx) => (
                     <li key={`corner-${idx}`}>
                       {finding.issue_type.replace(/_/g, " ")} · {finding.location} · sev {finding.severity_0_3}/3
@@ -711,9 +711,9 @@ export default function GradeProbabilityPanel({
 
             {/* Edge findings */}
             {(estimate.edges_findings?.length ?? 0) > 0 ? (
-              <div className="rounded-lg border border-white/[0.06] bg-[#07111d] p-3">
-                <p className="text-[10px] uppercase tracking-widest text-[#3a5068] mb-2">Edge Findings</p>
-                <ul className="space-y-1 text-xs text-[#7a91a8]">
+              <div className="rounded-lg border border-[var(--biz-border)] bg-[color:var(--biz-surface-soft)] p-3">
+                <p className="text-[10px] uppercase tracking-normal text-[var(--biz-muted)] mb-2">Edge Findings</p>
+                <ul className="space-y-1 text-xs text-[var(--biz-muted)]">
                   {estimate.edges_findings!.slice(0, 3).map((finding, idx) => (
                     <li key={`edge-${idx}`}>
                       {finding.issue_type.replace(/_/g, " ")} · {finding.location} · sev {finding.severity_0_3}/3
@@ -727,8 +727,8 @@ export default function GradeProbabilityPanel({
       </div>
 
       {/* ── Footer ─────────────────────────────────────────────────── */}
-      <div className="border-t border-white/[0.06] px-5 py-4 flex flex-wrap items-center justify-between gap-3">
-        <p className="text-[10px] text-[#3a5068] leading-relaxed max-w-prose" data-export-disclaimer="true">
+      <div className="border-t border-[var(--biz-border)] px-5 py-4 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-[10px] text-[var(--biz-muted)] leading-relaxed max-w-prose" data-export-disclaimer="true">
           {gradingCopy.panel.disclaimer}
         </p>
 
@@ -737,7 +737,7 @@ export default function GradeProbabilityPanel({
             type="button"
             onClick={handleExportImage}
             disabled={exporting}
-            className="inline-flex items-center gap-1.5 text-xs text-[#3a5068] hover:text-[#7a91a8] transition-colors disabled:opacity-40"
+            className="inline-flex items-center gap-1.5 text-xs text-[var(--biz-primary)] transition-colors hover:underline disabled:opacity-40"
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -749,15 +749,15 @@ export default function GradeProbabilityPanel({
 
       {exportError ? (
         <div className="px-5 pb-4">
-          <p className="text-xs text-rose-400">{exportError}</p>
+          <p className="text-xs text-rose-600">{exportError}</p>
         </div>
       ) : null}
 
       {/* Mobile-only thumbnail strip (when image available, small viewport) */}
       {urls.length > 0 ? (
-        <div className="lg:hidden border-t border-white/[0.06] px-5 py-3 flex items-center gap-2" data-export-ignore="true">
+        <div className="lg:hidden border-t border-[var(--biz-border)] px-5 py-3 flex items-center gap-2" data-export-ignore="true">
           {urls.map((url, i) => (
-            <div key={url} className={`${THUMBNAIL_SIZE_CLASS} rounded-md overflow-hidden ring-1 ring-white/[0.08] shrink-0`}>
+            <div key={url} className={`${THUMBNAIL_SIZE_CLASS} rounded-md overflow-hidden ring-1 ring-[color:var(--biz-border)] shrink-0`}>
               <img
                 src={url}
                 alt={i === 0 ? "Card front" : "Card back"}
@@ -766,7 +766,7 @@ export default function GradeProbabilityPanel({
             </div>
           ))}
           {cardLabel ? (
-            <p className="text-xs text-[#7a91a8] truncate">{cardLabel}</p>
+            <p className="text-xs text-[var(--biz-muted)] truncate">{cardLabel}</p>
           ) : null}
         </div>
       ) : null}

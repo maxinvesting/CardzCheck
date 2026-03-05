@@ -16,7 +16,9 @@ export default function AuthenticatedLayout({
   return (
     <div
       className={`relative flex min-h-screen overflow-hidden ${
-        isBusinessRoute ? "bg-[var(--app-bg)] text-[var(--text)]" : "bg-[#0f1419]"
+        isBusinessRoute
+          ? "business-theme bg-[var(--biz-bg)] text-[var(--biz-text)]"
+          : "bg-[#0f1419]"
       }`}
     >
       {!isBusinessRoute && (
