@@ -5,6 +5,10 @@
   "scripts": {
     "dev": "next dev --webpack",
     "dev:turbo": "next dev",
+    "dev:web": "pnpm --filter @cardzcheck/web dev",
+    "oracle:sign": "pnpm --filter @cardzcheck/oracle oracle:sign",
+    "contracts:test": "cd contracts && forge test",
+    "contracts:deploy": "cd contracts && forge script script/Deploy.s.sol:Deploy --rpc-url $RPC_URL --broadcast",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
