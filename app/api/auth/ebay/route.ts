@@ -46,7 +46,11 @@ export async function GET(): Promise<NextResponse> {
     return response;
   } catch (err) {
     console.error("[ebay/oauth] initiate error:", err);
-    const message = err instanceof Error ? err.message : "Failed to initiate eBay connection";
+    const rawMessage = err instanceof Error ? err.message : "Failed to initiate eBay connection";
+    const message =
+      rawMessage.includes("must be set") || rawMessage.includes("EBAY_CLIENT_ID")
+        ? "eBay integration is not configured. Set EBAY_CLIENT_ID, EBAY_CLIENT_SECRET, and EBAY_REDIRECT_URI in the server environment (see .env.example)."
+        : rawMessage;
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

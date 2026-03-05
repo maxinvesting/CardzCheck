@@ -222,9 +222,18 @@ export default function Header() {
                       </button>
                     )}
 
-                    {/* Settings */}
+                    {/* Account (plan, email, logout) */}
                     <Link
                       href="/account"
+                      onClick={() => setShowDropdown(false)}
+                      className="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-800"
+                    >
+                      Account
+                    </Link>
+
+                    {/* Settings (personal or business by pathname) */}
+                    <Link
+                      href={pathname.startsWith("/business") ? "/business/settings" : "/settings"}
                       onClick={() => setShowDropdown(false)}
                       className="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-800"
                     >
