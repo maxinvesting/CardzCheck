@@ -113,7 +113,7 @@ export default function EbayListingModal({ item, isTopRated = false, onClose, on
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg rounded-2xl border border-white/[0.08] bg-[#111827] shadow-lg"
+        className="w-full max-w-lg rounded-2xl border border-white/[0.08] bg-[#111827] shadow-none"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

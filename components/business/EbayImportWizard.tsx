@@ -91,7 +91,7 @@ export default function EbayImportWizard({ onClose, onComplete }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div
-        className="w-full max-w-md rounded-2xl border border-white/[0.08] bg-[#111827] p-6 shadow-lg"
+        className="w-full max-w-md rounded-2xl border border-white/[0.08] bg-[#111827] p-6 shadow-none"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

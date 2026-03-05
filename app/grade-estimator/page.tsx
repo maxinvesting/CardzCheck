@@ -21,6 +21,7 @@ import {
   NeedsConfirmationPill,
   InlineNotice,
 } from "@/components/ui";
+import { Surface } from "@/components/ui/Surface";
 import { needsYearConfirmation } from "@/lib/card-identity/ui";
 import type {
   CardIdentificationResult,
@@ -177,7 +178,7 @@ function ScannerTips() {
     <div className="flex items-start gap-3">
       {/* Icon */}
       <svg
-        className="w-3.5 h-3.5 mt-0.5 text-[#3a5068] shrink-0"
+        className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--muted)]"
         fill="none"
         stroke="currentColor"
         viewBox="0 0 24 24"
@@ -194,9 +195,9 @@ function ScannerTips() {
       <div className="flex-1 min-w-0">
         <button
           onClick={() => setOpen((prev) => !prev)}
-          className="flex items-center gap-1.5 text-xs text-[#3a5068] hover:text-[#7a91a8] transition-colors group"
+          className="group flex items-center gap-1.5 text-xs text-[var(--muted)] transition-colors hover:text-white"
         >
-          <span className="font-medium uppercase tracking-wider">Scanner tips</span>
+          <span className="font-medium">Scanner tips</span>
           <svg
             className={`w-3 h-3 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
             fill="none"
@@ -211,8 +212,8 @@ function ScannerTips() {
         {open ? (
           <ul className="mt-2 space-y-1.5">
             {SCANNER_TIPS.map((tip, i) => (
-              <li key={i} className="flex items-start gap-2 text-xs text-[#7a91a8]">
-                <span className="mt-px text-[#3a5068] shrink-0 font-mono text-[10px]">
+              <li key={i} className="flex items-start gap-2 text-xs text-[var(--muted)]">
+                <span className="mt-px shrink-0 font-mono text-[10px] text-[var(--muted)]">
                   {String(i + 1).padStart(2, "0")}
                 </span>
                 {tip}
@@ -760,14 +761,14 @@ export default function GradeEstimatorPage() {
 
   return (
     <AuthenticatedLayout>
-      <main className="max-w-3xl lg:max-w-5xl mx-auto px-4 py-10">
+      <main className="mx-auto max-w-3xl px-4 py-8 lg:max-w-5xl">
 
         {/* ── Page header ───────────────────────────────────────────── */}
         <div className="mb-10">
-          <h1 className="text-2xl font-semibold tracking-tight text-[#e2eaf3]">
+          <h1 className="text-2xl font-semibold text-[#e2eaf3]">
             {gradingCopy.page.title}
           </h1>
-          <p className="text-sm text-[#3a5068] mt-1.5 leading-relaxed">
+          <p className="mt-2 text-sm leading-relaxed text-[var(--muted)]">
             {gradingCopy.page.subtitle}
           </p>
         </div>
@@ -777,35 +778,37 @@ export default function GradeEstimatorPage() {
 
             {/* ── Scanner Bay (Dual Upload: Front + Back Required) ── */}
             <section>
-              <DualCardUploader
-                onIdentified={(data: CardIdentificationResult) => {
-                  setIdentifiedCard(data);
-                }}
-                onStart={() => {
-                  setIdentifiedCard(null);
-                  setGradeEstimate(null);
-                  setValueResult(null);
-                  setValueError(null);
-                  setEstimateError(null);
-                  setEstimateAttempted(false);
-                  setGradeJob(null);
-                  setGradeJobId(null);
-                }}
-                onReset={() => {
-                  setIdentifiedCard(null);
-                  setGradeEstimate(null);
-                  setValueResult(null);
-                  setValueError(null);
-                  setGradeJob(null);
-                  setGradeJobId(null);
-                }}
-                disabled={false}
-              />
+              <Surface className="p-6">
+                <DualCardUploader
+                  onIdentified={(data: CardIdentificationResult) => {
+                    setIdentifiedCard(data);
+                  }}
+                  onStart={() => {
+                    setIdentifiedCard(null);
+                    setGradeEstimate(null);
+                    setValueResult(null);
+                    setValueError(null);
+                    setEstimateError(null);
+                    setEstimateAttempted(false);
+                    setGradeJob(null);
+                    setGradeJobId(null);
+                  }}
+                  onReset={() => {
+                    setIdentifiedCard(null);
+                    setGradeEstimate(null);
+                    setValueResult(null);
+                    setValueError(null);
+                    setGradeJob(null);
+                    setGradeJobId(null);
+                  }}
+                  disabled={false}
+                />
 
-              {/* Scanner Tips — anchored beneath the dropzone */}
-              <div className="mt-4 px-1">
-                <ScannerTips />
-              </div>
+                {/* Scanner Tips — anchored beneath the dropzone */}
+                <div className="mt-4 px-1">
+                  <ScannerTips />
+                </div>
+              </Surface>
             </section>
 
             {/* ── Recent Scans ─────────────────────────────────────── */}
@@ -815,30 +818,30 @@ export default function GradeEstimatorPage() {
             />
 
             {/* ── Submission Builder (collapsed by default) ─────────── */}
-            <div className="rounded-xl border border-white/[0.06] bg-[#07111d] p-4">
+            <Surface className="p-5">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h3 className="text-sm font-medium text-[#e2eaf3]">Submission Builder</h3>
-                  <p className="text-xs text-[#3a5068] mt-0.5">
+                  <p className="mt-1 text-xs text-[var(--muted)]">
                     Plan PSA submissions after your grade analysis.
                   </p>
                 </div>
                 <button
                   onClick={() => setShowSubmissionBuilder((prev) => !prev)}
-                  className="rounded-lg border border-white/[0.08] px-3 py-1.5 text-xs text-[#7a91a8] hover:bg-white/[0.04] hover:text-[#e2eaf3] transition-colors"
+                  className="cc-btn-secondary rounded-lg px-3 py-1.5 text-xs"
                 >
                   {showSubmissionBuilder ? "Hide" : "Show"}
                 </button>
               </div>
               {showSubmissionBuilder ? (
-                <div className="mt-4 pt-4 border-t border-white/[0.06]">
+                <div className="mt-4 border-t border-[color:var(--border)] pt-4">
                   <SubmissionBuilderPanel
                     identifiedCard={identifiedCard}
                     gradeEstimate={gradeEstimate}
                   />
                 </div>
               ) : null}
-            </div>
+            </Surface>
           </div>
         ) : (
           <>
@@ -850,16 +853,16 @@ export default function GradeEstimatorPage() {
               />
             </div>
 
-            <div className="space-y-6">
+            <div className="space-y-8">
               {/* ── Identified Card Preview ───────────────────────── */}
-              <div className="rounded-xl border border-white/[0.06] bg-[#07111d] p-6">
+              <Surface className="p-6">
                 <div className="flex items-start gap-5">
                   {identifiedCard.imageUrl ? (
                     <div className="shrink-0 flex flex-col items-start gap-2">
                       <img
                         src={identifiedCard.imageUrl}
                         alt={identifiedCard.player_name}
-                        className="w-28 h-40 object-cover rounded-lg ring-1 ring-white/10 shadow-lg"
+                        className="h-40 w-28 rounded-lg border border-[color:var(--border)] object-cover"
                       />
                       {identifiedCard.imageUrls && identifiedCard.imageUrls.length > 1 ? (
                         <div className="flex flex-wrap gap-1.5 max-w-[112px]">
@@ -868,7 +871,7 @@ export default function GradeEstimatorPage() {
                               key={`${url}-${index}`}
                               src={url}
                               alt={`${identifiedCard.player_name} ${index + 2}`}
-                              className="w-8 h-11 object-cover rounded ring-1 ring-white/[0.08]"
+                              className="h-11 w-8 rounded border border-[color:var(--border)] object-cover"
                             />
                           ))}
                         </div>
@@ -898,7 +901,7 @@ export default function GradeEstimatorPage() {
                               }
                             : null)
                         }
-                        className="text-sm text-[#7a91a8]"
+                        className="text-sm text-[var(--muted)]"
                       />
                     </div>
 
@@ -930,7 +933,7 @@ export default function GradeEstimatorPage() {
                       <button
                         onClick={handleEstimateGrade}
                         disabled={estimatingGrade || !!gradeEstimate || !!identifiedCard.grade}
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="cc-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         {estimatingGrade ? (
                           <>
@@ -951,20 +954,20 @@ export default function GradeEstimatorPage() {
                       </button>
                       <button
                         onClick={() => setShowConfirmModal(true)}
-                        className="inline-flex items-center gap-2 px-4 py-2 border border-white/[0.10] text-[#e2eaf3] text-sm font-medium rounded-lg hover:bg-white/[0.04] transition-colors"
+                        className="cc-btn-secondary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium"
                       >
                         {gradingCopy.actions.addToCollection}
                       </button>
                       <button
                         onClick={handleReset}
-                        className="inline-flex items-center gap-2 px-4 py-2 text-[#3a5068] text-sm font-medium rounded-lg hover:text-[#7a91a8] transition-colors"
+                        className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-[var(--muted)] transition-colors hover:text-white"
                       >
                         {gradingCopy.actions.uploadNewCard}
                       </button>
                     </div>
                   </div>
                 </div>
-              </div>
+              </Surface>
 
               {/* ── Grade Estimate ────────────────────────────────── */}
               {gradeEstimate || gradeJob ? (
@@ -1084,7 +1087,7 @@ export default function GradeEstimatorPage() {
                         ) : null}
 
                         {gradeJob?.status === "error" && !gradeEstimate ? (
-                          <div className="rounded-xl border border-amber-500/15 bg-amber-500/5 p-5">
+                          <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 p-5">
                             <div className="flex items-start gap-3">
                               <svg className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -1105,7 +1108,7 @@ export default function GradeEstimatorPage() {
                   </AnimatePresence>
                 </div>
               ) : identifiedCard.grade ? (
-                <div className="rounded-xl border border-white/[0.06] bg-[#07111d] p-5">
+                <Surface className="p-5">
                   <div className="flex items-start gap-3">
                     <svg className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -1119,9 +1122,9 @@ export default function GradeEstimatorPage() {
                       </p>
                     </div>
                   </div>
-                </div>
+                </Surface>
               ) : estimateAttempted && !estimatingGrade && !gradeJob ? (
-                <div className="rounded-xl border border-amber-500/15 bg-amber-500/5 p-5">
+                <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 p-5">
                   <div className="flex items-start gap-3">
                     <svg className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -1139,30 +1142,30 @@ export default function GradeEstimatorPage() {
               ) : null}
 
               {/* ── Submission Builder ────────────────────────────── */}
-              <div className="rounded-xl border border-white/[0.06] bg-[#07111d] p-4">
+              <Surface className="p-5">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <h3 className="text-sm font-medium text-[#e2eaf3]">Submission Builder</h3>
-                    <p className="text-xs text-[#3a5068] mt-0.5">
+                    <p className="mt-1 text-xs text-[var(--muted)]">
                       Plan a PSA submission using this analysis.
                     </p>
                   </div>
                   <button
                     onClick={() => setShowSubmissionBuilder((prev) => !prev)}
-                    className="rounded-lg border border-white/[0.08] px-3 py-1.5 text-xs text-[#7a91a8] hover:bg-white/[0.04] hover:text-[#e2eaf3] transition-colors"
+                    className="cc-btn-secondary rounded-lg px-3 py-1.5 text-xs"
                   >
                     {showSubmissionBuilder ? "Hide" : "Show"}
                   </button>
                 </div>
                 {showSubmissionBuilder ? (
-                  <div className="mt-4 pt-4 border-t border-white/[0.06]">
+                  <div className="mt-4 border-t border-[color:var(--border)] pt-4">
                     <SubmissionBuilderPanel
                       identifiedCard={identifiedCard}
                       gradeEstimate={gradeEstimate}
                     />
                   </div>
                 ) : null}
-              </div>
+              </Surface>
             </div>
           </>
         )}
@@ -1200,7 +1203,7 @@ export default function GradeEstimatorPage() {
 
         {/* ── Toast ─────────────────────────────────────────────────── */}
         {toast ? (
-          <div className="fixed bottom-5 right-5 flex items-center gap-3 px-4 py-3 rounded-xl shadow-xl bg-[#0f1f35] border border-emerald-500/20 text-[#e2eaf3] z-50">
+          <div className="fixed bottom-5 right-5 z-50 flex items-center gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/15 px-4 py-3 text-emerald-200">
             <svg className="w-4 h-4 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>

@@ -93,7 +93,7 @@ function CornerBracket({
   return (
     <svg
       className={`absolute ${pos[corner]} w-5 h-5 transition-colors duration-200 ${
-        active ? "text-blue-400" : "text-white/15"
+        active ? "text-emerald-400/70" : "text-[var(--border)]"
       }`}
       viewBox="0 0 24 24"
       fill="none"
@@ -144,10 +144,10 @@ function UploadZone({
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       className={`
-        relative min-h-[180px] rounded-xl transition-all duration-200 flex-1
+        relative min-h-[180px] flex-1 rounded-xl border transition-colors duration-150
         ${isDragging
-          ? "bg-blue-500/5 ring-1 ring-blue-400/30"
-          : "bg-[#07111d] hover:bg-[#091529]"
+          ? "bg-[var(--surface-2)] border-emerald-500/40"
+          : "bg-[var(--surface)] border-[color:var(--border)] hover:border-emerald-500/30"
         }
         ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
       `}
@@ -162,9 +162,9 @@ function UploadZone({
           <img
             src={preview}
             alt={label}
-            className="max-h-28 rounded-lg shadow-lg ring-1 ring-white/10 object-contain"
+            className="max-h-28 rounded-lg border border-[color:var(--border)] object-contain"
           />
-          <span className="text-[10px] font-medium uppercase tracking-wider text-emerald-400">
+          <span className="text-[10px] font-medium text-emerald-300">
             {label} ready
           </span>
           <button
@@ -172,7 +172,7 @@ function UploadZone({
               e.stopPropagation();
               onRemove();
             }}
-            className="text-[10px] text-[#3a5068] hover:text-[#7a91a8] transition-colors"
+            className="text-[10px] text-[var(--muted)] transition-colors hover:text-white"
           >
             Remove
           </button>
@@ -188,9 +188,9 @@ function UploadZone({
             <p className="text-sm font-medium text-[#e2eaf3]">
               {isDragging ? "Release to add" : label}
             </p>
-            <p className="text-[11px] text-[#3a5068]">{sublabel}</p>
+            <p className="text-[11px] text-[var(--muted)]">{sublabel}</p>
           </div>
-          <p className="text-[9px] text-[#3a5068] uppercase tracking-wider">
+          <p className="text-[10px] text-[var(--muted)]">
             JPG · PNG · WebP · up to 8 MB
           </p>
           <input
@@ -392,7 +392,7 @@ export default function DualCardUploader({
 
   const frontIcon = (
     <svg
-      className="w-8 h-8 text-white/15"
+      className="h-8 w-8 text-[var(--muted)]"
       fill="none"
       stroke="currentColor"
       viewBox="0 0 24 24"
@@ -409,7 +409,7 @@ export default function DualCardUploader({
 
   const backIcon = (
     <svg
-      className="w-8 h-8 text-white/15"
+      className="h-8 w-8 text-[var(--muted)]"
       fill="none"
       stroke="currentColor"
       viewBox="0 0 24 24"
@@ -427,15 +427,15 @@ export default function DualCardUploader({
   if (loading) {
     return (
       <div className="w-full">
-        <div className="relative min-h-[200px] rounded-xl bg-[#07111d] flex flex-col items-center justify-center gap-3">
+        <div className="relative flex min-h-[200px] flex-col items-center justify-center gap-3 rounded-xl border border-[color:var(--border)] bg-[var(--surface)]">
           <div className="relative">
-            <div className="w-10 h-10 rounded-full border border-white/10" />
-            <div className="absolute inset-0 w-10 h-10 rounded-full border-t-2 border-blue-500 animate-spin" />
+            <div className="h-10 w-10 rounded-full border border-[color:var(--border)]" />
+            <div className="absolute inset-0 h-10 w-10 animate-spin rounded-full border-t-2 border-emerald-500" />
           </div>
-          <p className="text-sm text-[#7a91a8]">
+          <p className="text-sm text-[var(--muted)]">
             Analyzing front &amp; back photos...
           </p>
-          <p className="text-[10px] text-[#3a5068]">
+          <p className="text-[10px] text-[var(--muted)]">
             Both images uploaded in parallel for faster results
           </p>
         </div>
@@ -480,22 +480,22 @@ export default function DualCardUploader({
         <div className="flex items-center gap-2">
           <div
             className={`w-1.5 h-1.5 rounded-full ${
-              frontFile ? "bg-emerald-400" : "bg-[#3a5068]"
+              frontFile ? "bg-emerald-400" : "bg-[var(--muted)]"
             }`}
           />
-          <span className="text-[10px] text-[#7a91a8]">Front</span>
+          <span className="text-[10px] text-[var(--muted)]">Front</span>
           <div
             className={`w-1.5 h-1.5 rounded-full ${
-              backFile ? "bg-emerald-400" : "bg-[#3a5068]"
+              backFile ? "bg-emerald-400" : "bg-[var(--muted)]"
             }`}
           />
-          <span className="text-[10px] text-[#7a91a8]">Back</span>
+          <span className="text-[10px] text-[var(--muted)]">Back</span>
         </div>
 
         {(frontFile || backFile) && (
           <button
             onClick={handleReset}
-            className="text-[10px] text-[#3a5068] hover:text-[#7a91a8] transition-colors"
+            className="text-[10px] text-[var(--muted)] transition-colors hover:text-white"
           >
             Clear all
           </button>
@@ -507,10 +507,10 @@ export default function DualCardUploader({
         onClick={handleAnalyze}
         disabled={!bothReady || !!disabled}
         className={`
-          w-full py-3 rounded-xl text-sm font-medium transition-all duration-200
+          w-full rounded-xl border py-3 text-sm font-medium transition-colors
           ${bothReady && !disabled
-            ? "bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/20"
-            : "bg-[#0f1f35] text-[#3a5068] cursor-not-allowed"
+            ? "cc-btn-primary border-transparent text-white"
+            : "cursor-not-allowed border-[color:var(--border)] bg-[var(--surface-2)] text-[var(--muted)]"
           }
         `}
       >
@@ -535,7 +535,7 @@ export default function DualCardUploader({
 
       {/* Error */}
       {error && (
-        <div className="p-3 bg-amber-500/5 border border-amber-500/15 rounded-lg">
+        <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 p-3">
           <p className="text-xs text-amber-300">{error}</p>
         </div>
       )}

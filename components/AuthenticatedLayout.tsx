@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import Sidebar from "./Sidebar";
 import SportsCardBackground from "./SportsCardBackground";
 import BottomTabBar from "./BottomTabBar";
@@ -9,10 +10,18 @@ export default function AuthenticatedLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
+  const isBusinessRoute = pathname?.startsWith("/business");
+
   return (
-    <div className="flex min-h-screen bg-[#0f1419] relative overflow-hidden">
-      {/* Global sports card background */}
-      <SportsCardBackground variant="default" />
+    <div
+      className={`relative flex min-h-screen overflow-hidden ${
+        isBusinessRoute ? "bg-[var(--app-bg)] text-[var(--text)]" : "bg-[#0f1419]"
+      }`}
+    >
+      {!isBusinessRoute && (
+        <SportsCardBackground variant="default" />
+      )}
 
       <Sidebar />
       {/* Main content area with padding for sidebar and bottom tab */}

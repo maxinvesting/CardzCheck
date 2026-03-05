@@ -12,20 +12,24 @@
   --foreground: #171717;
   --background: #ffffff;
 
-  /* App chrome */
-  --biz-app-bg: #0b1220;
-  /* Panel / card surface */
-  --biz-surface: #111827;
-  /* Subtle separator border (white at ~8 % on dark) */
-  --biz-border: rgba(255, 255, 255, 0.08);
-  /* Primary body text */
-  --biz-text: #e5e7eb;
-  /* Secondary / muted text */
-  --biz-text-muted: rgba(229, 231, 235, 0.55);
-  /* Accent colours — flat, no gradient, no glow */
-  --biz-accent: #10b981;
-  --biz-accent-amber: #f59e0b;
-  /* Radius */
+  /* Business app tokens */
+  --app-bg: #0b1220;
+  --surface: #101827;
+  --surface-2: #0f172a;
+  --border: rgba(148, 163, 184, 0.14);
+  --text: #e5e7eb;
+  --muted: rgba(229, 231, 235, 0.65);
+  --accent: #10b981;
+  --warning: #f59e0b;
+
+  /* Backward-compatible aliases */
+  --biz-app-bg: var(--app-bg);
+  --biz-surface: var(--surface);
+  --biz-border: var(--border);
+  --biz-text: var(--text);
+  --biz-text-muted: var(--muted);
+  --biz-accent: var(--accent);
+  --biz-accent-amber: var(--warning);
   --biz-radius: 12px;
 }
 
@@ -45,5 +49,37 @@ body {
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+}
+
+@layer components {
+  .cc-surface {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: none;
+  }
+
+  .cc-btn-primary {
+    border: 1px solid transparent;
+    background: var(--accent);
+    color: #ffffff;
+    transition: background-color 160ms ease;
+  }
+
+  .cc-btn-primary:hover {
+    background: #0ea56f;
+  }
+
+  .cc-btn-secondary {
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text);
+    transition: background-color 160ms ease, border-color 160ms ease;
+  }
+
+  .cc-btn-secondary:hover {
+    background: rgb(255 255 255 / 0.03);
+    border-color: rgb(148 163 184 / 0.28);
   }
 }

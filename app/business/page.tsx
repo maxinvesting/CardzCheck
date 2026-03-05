@@ -268,7 +268,7 @@ function BusinessDashboardContent() {
 
   return (
     <AuthenticatedLayout>
-      <main className="max-w-7xl mx-auto px-4 py-3">
+      <main className="mx-auto max-w-7xl px-4 py-4">
         <BusinessDashboardView
           businessName={businessName}
           metrics={metrics}

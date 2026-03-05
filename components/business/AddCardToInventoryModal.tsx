@@ -284,7 +284,7 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="bg-[#111827] border border-white/[0.08] rounded-2xl w-full max-w-lg shadow-lg max-h-[90vh] overflow-y-auto">
+      <div className="bg-[#111827] border border-white/[0.08] rounded-2xl w-full max-w-lg shadow-none max-h-[90vh] overflow-y-auto">
         <div className="p-6 border-b border-gray-800 flex items-start justify-between">
           <h2 className="text-lg font-bold text-white">Add Card to Inventory</h2>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-300">

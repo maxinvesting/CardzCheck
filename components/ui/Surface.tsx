@@ -4,12 +4,11 @@ import { type HTMLAttributes, forwardRef } from "react";
  * Surface — canonical panel / card wrapper for the Business UI.
  *
  * Visual contract (PSA/Beckett-style calm SaaS):
- *   • Flat dark background  (--biz-surface  #111827)
- *   • Subtle white border   (--biz-border   rgba(255,255,255,0.08))
- *   • 12 px corner radius   (--biz-radius)
+ *   • Flat dark background  (--surface  #101827)
+ *   • Subtle slate border   (--border   rgba(148,163,184,0.14))
+ *   • 12 px corner radius
  *   • 20 px internal padding (overridable via className)
  *   • No shadow, no glow
- *   • Hover: border brightens slightly — nothing more
  */
 interface SurfaceProps extends HTMLAttributes<HTMLDivElement> {
   /** Optional section title rendered above children in muted label style */
@@ -22,16 +21,16 @@ const Surface = forwardRef<HTMLDivElement, SurfaceProps>(
     <div
       ref={ref}
       style={{
-        background: "var(--biz-surface)",
-        border: "1px solid var(--biz-border)",
-        borderRadius: "var(--biz-radius)",
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
+        borderRadius: "12px",
         ...style,
       }}
-      className={`p-5 transition-colors hover:border-white/[0.13] ${className}`}
+      className={`cc-surface p-5 ${className}`}
       {...rest}
     >
       {title && (
-        <h3 className="mb-4 text-xs font-semibold text-slate-400 tracking-wide">
+        <h3 className="mb-4 text-sm font-semibold text-[var(--muted)]">
           {title}
         </h3>
       )}

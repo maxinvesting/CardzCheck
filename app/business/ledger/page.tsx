@@ -28,6 +28,7 @@ import type { PendingInventoryCard } from "@/components/business/AddCardToInvent
 import AddCardModalNew from "@/components/AddCardModalNew";
 import CardPickerModal from "@/components/CardPickerModal";
 import type { CardPickerSelection } from "@/components/CardPicker";
+import { Surface } from "@/components/ui/Surface";
 import { createClient } from "@/lib/supabase/client";
 import type {
   BusinessInventoryItem,
@@ -1059,7 +1060,7 @@ function LedgerPageContent() {
 
   return (
     <AuthenticatedLayout>
-      <main className="max-w-7xl mx-auto px-4 py-3 business-density">
+      <main className="mx-auto max-w-7xl px-4 py-4">
         <BusinessLedgerView
           businessName={businessName}
           ebayStoreHref={ebayStoreHref}
@@ -1091,11 +1092,26 @@ function LedgerPageContent() {
 
           {/* Inventory tab */}
           {!needsMigration && activeTab === "inventory" && (
-            perfEnabled ? (
-              <Profiler
-                id="BusinessInventoryTable"
-                onRender={handleInventoryProfilerRender}
-              >
+            <Surface className="p-5">
+              {perfEnabled ? (
+                <Profiler
+                  id="BusinessInventoryTable"
+                  onRender={handleInventoryProfilerRender}
+                >
+                  <InventoryTable
+                    items={items}
+                    selectedItemId={selectedItem?.id ?? null}
+                    onItemClick={setSelectedItem}
+                    onInlineUpdate={handleInlineUpdate}
+                    onBulkAction={handleBulkAction}
+                    onDelete={handleDelete}
+                    onMarkSold={handleMarkSold}
+                    onFilteredChange={handleFilteredChange}
+                    dense
+                    perfEnabled={perfEnabled}
+                  />
+                </Profiler>
+              ) : (
                 <InventoryTable
                   items={items}
                   selectedItemId={selectedItem?.id ?? null}
@@ -1106,22 +1122,9 @@ function LedgerPageContent() {
                   onMarkSold={handleMarkSold}
                   onFilteredChange={handleFilteredChange}
                   dense
-                  perfEnabled={perfEnabled}
                 />
-              </Profiler>
-            ) : (
-              <InventoryTable
-                items={items}
-                selectedItemId={selectedItem?.id ?? null}
-                onItemClick={setSelectedItem}
-                onInlineUpdate={handleInlineUpdate}
-                onBulkAction={handleBulkAction}
-                onDelete={handleDelete}
-                onMarkSold={handleMarkSold}
-                onFilteredChange={handleFilteredChange}
-                dense
-              />
-            )
+              )}
+            </Surface>
           )}
 
           {/* Sales tab */}
@@ -1129,21 +1132,23 @@ function LedgerPageContent() {
             <EbayOrderSyncBanner />
           )}
           {!needsMigration && activeTab === "sales" && (
-            <SalesTable
-              sales={sales}
-              loading={salesLoading}
-              filters={salesFilters}
-              onFiltersChange={(next) => {
-                setSalesFilters(next);
-                setSalesPage(1);
-              }}
-              onEditSale={handleUpdateSale}
-              onDeleteSale={handleDeleteSale}
-              page={salesPage}
-              pageSize={salesPageSize}
-              total={salesTotal}
-              onPageChange={(next) => setSalesPage(next)}
-            />
+            <Surface className="p-5">
+              <SalesTable
+                sales={sales}
+                loading={salesLoading}
+                filters={salesFilters}
+                onFiltersChange={(next) => {
+                  setSalesFilters(next);
+                  setSalesPage(1);
+                }}
+                onEditSale={handleUpdateSale}
+                onDeleteSale={handleDeleteSale}
+                page={salesPage}
+                pageSize={salesPageSize}
+                total={salesTotal}
+                onPageChange={(next) => setSalesPage(next)}
+              />
+            </Surface>
           )}
         </BusinessLedgerView>
 
@@ -1227,10 +1232,10 @@ function LedgerPageContent() {
         {/* Toast notification */}
         {toast && (
           <div
-            className={`fixed bottom-4 right-4 p-4 rounded-lg shadow-lg z-50 flex items-center gap-3 ${
+            className={`fixed bottom-4 right-4 z-50 flex items-center gap-3 rounded-lg border p-4 ${
               toast.type === "success"
-                ? "bg-emerald-600 text-white"
-                : "bg-red-600 text-white"
+                ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-200"
+                : "border-red-500/30 bg-red-500/15 text-red-200"
             }`}
           >
             <span>{toast.message}</span>
