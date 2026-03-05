@@ -1,17 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { canAccessFeature } from "@/lib/access";
-import { extractImageUrls } from "@/lib/grading/gradeEstimateImages";
+import { extractScanPhotos } from "@/lib/grading/gradeEstimateImages";
 import {
   createGradeEstimateJob,
 } from "@/lib/grading/gradeEstimateJobStore";
 import { runGradeEstimateJob } from "@/lib/grading/gradeEstimateJob";
 import { createGradeEstimateJobDependencies } from "@/lib/grading/gradeEstimateServer";
 import type { GradeEstimatorCardInput } from "@/lib/grade-estimator/value";
+import type { GradeScanPhoto } from "@/types";
+import {
+  GRADE_SCAN_MAX_CLOSEUPS,
+  GRADE_SCAN_MAX_TOTAL_PHOTOS,
+} from "@/lib/grading/scanPhotos";
 
 type GradeEstimateStartPayload = {
   imageUrl?: string;
   imageUrls?: string[];
+  front_url?: string;
+  back_url?: string;
+  closeups?: Array<{ url?: string; kind?: string; sort_order?: number }>;
+  scanPhotos?: GradeScanPhoto[];
   card?: GradeEstimatorCardInput;
 };
 
@@ -41,18 +50,42 @@ export async function POST(request: NextRequest) {
     }
 
     const body = (await request.json()) as GradeEstimateStartPayload;
-    const imageUrls = extractImageUrls(body);
+    const scanPhotos = extractScanPhotos(body);
 
-    if (imageUrls.length === 0) {
+    if (scanPhotos.length === 0) {
       return NextResponse.json(
-        { error: "Missing image URL" },
+        { error: "Missing card images" },
         { status: 400 }
       );
     }
 
-    if (imageUrls.length > 8) {
+    if (!scanPhotos.some((photo) => photo.kind === "front") || !scanPhotos.some((photo) => photo.kind === "back")) {
       return NextResponse.json(
-        { error: "Too many images", reason: "Maximum 8 images allowed" },
+        { error: "Front and back photos are required." },
+        { status: 400 }
+      );
+    }
+
+    const closeupCount = scanPhotos.filter(
+      (photo) => photo.kind !== "front" && photo.kind !== "back"
+    ).length;
+
+    if (scanPhotos.length > GRADE_SCAN_MAX_TOTAL_PHOTOS) {
+      return NextResponse.json(
+        {
+          error: "Too many images",
+          reason: `Maximum ${GRADE_SCAN_MAX_TOTAL_PHOTOS} images allowed`,
+        },
+        { status: 400 }
+      );
+    }
+
+    if (closeupCount > GRADE_SCAN_MAX_CLOSEUPS) {
+      return NextResponse.json(
+        {
+          error: "Too many close-up images",
+          reason: `Maximum ${GRADE_SCAN_MAX_CLOSEUPS} close-up images allowed`,
+        },
         { status: 400 }
       );
     }
@@ -63,7 +96,7 @@ export async function POST(request: NextRequest) {
     void runGradeEstimateJob(
       job,
       {
-        imageUrls,
+        scanPhotos,
         card: body.card ?? null,
       },
       deps

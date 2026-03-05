@@ -5,10 +5,15 @@ import {
   buildImageStats,
 } from "@/lib/grading/fallbackEstimate";
 import {
-  extractImageUrls,
+  extractScanPhotos,
   resolveGradeEstimateImages,
 } from "@/lib/grading/gradeEstimateImages";
 import { parseGradeEstimateModelOutput } from "@/lib/grading/gradeEstimateModel";
+import {
+  GRADE_SCAN_MAX_CLOSEUPS,
+  GRADE_SCAN_MAX_TOTAL_PHOTOS,
+  isCloseupKind,
+} from "@/lib/grading/scanPhotos";
 
 function getAnthropicClient() {
   return new Anthropic({
@@ -125,18 +130,39 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const imageUrls = extractImageUrls(body);
+    const scanPhotos = extractScanPhotos(body);
 
-    if (imageUrls.length === 0) {
+    if (scanPhotos.length === 0) {
       return NextResponse.json(
-        { error: "Missing image URL" },
+        { error: "Missing card images" },
         { status: 400 }
       );
     }
 
-    if (imageUrls.length > 8) {
+    if (!scanPhotos.some((photo) => photo.kind === "front") || !scanPhotos.some((photo) => photo.kind === "back")) {
       return NextResponse.json(
-        { error: "Too many images", reason: "Maximum 8 images allowed" },
+        { error: "Front and back photos are required." },
+        { status: 400 }
+      );
+    }
+
+    const closeupCount = scanPhotos.filter((photo) => isCloseupKind(photo.kind)).length;
+    if (scanPhotos.length > GRADE_SCAN_MAX_TOTAL_PHOTOS) {
+      return NextResponse.json(
+        {
+          error: "Too many images",
+          reason: `Maximum ${GRADE_SCAN_MAX_TOTAL_PHOTOS} images allowed`,
+        },
+        { status: 400 }
+      );
+    }
+
+    if (closeupCount > GRADE_SCAN_MAX_CLOSEUPS) {
+      return NextResponse.json(
+        {
+          error: "Too many close-up images",
+          reason: `Maximum ${GRADE_SCAN_MAX_CLOSEUPS} close-up images allowed`,
+        },
         { status: 400 }
       );
     }
@@ -148,7 +174,7 @@ export async function POST(request: NextRequest) {
     }> = [];
 
     try {
-      const resolved = await resolveGradeEstimateImages(imageUrls);
+      const resolved = await resolveGradeEstimateImages(scanPhotos);
       resolvedImages = resolved.resolvedImages;
       imageStats = resolved.imageStats;
     } catch (error) {
@@ -161,6 +187,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const rolePrompt = `Photo role map:\n${scanPhotos
+      .map((photo, index) => `${index + 1}. ${photo.kind.replace(/_/g, " ")}`)
+      .join("\n")}\n${
+      closeupCount === 0
+        ? "\nNo close-up photos were provided. Treat corners/edges/surface visibility as limited and avoid high confidence."
+        : "\nUse matching close-up types as primary evidence for corners, edges, and surface."
+    }`;
+
     // Process card image for grade estimation
     const anthropic = getAnthropicClient();
     const message = await anthropic.messages.create({
@@ -170,6 +204,10 @@ export async function POST(request: NextRequest) {
         {
           role: "user",
           content: [
+            {
+              type: "text",
+              text: rolePrompt,
+            },
             ...resolvedImages.map((image) => ({
               type: "image" as const,
               source: {
@@ -192,7 +230,11 @@ export async function POST(request: NextRequest) {
     const textContent = message.content.find((c) => c.type === "text");
     const modelText =
       textContent && textContent.type === "text" ? textContent.text : null;
-    const parsed = parseGradeEstimateModelOutput({ modelText, imageStats });
+    const parsed = parseGradeEstimateModelOutput({
+      modelText,
+      imageStats,
+      scanPhotoKinds: scanPhotos.map((photo) => photo.kind),
+    });
     return NextResponse.json(parsed.estimate);
   } catch (error) {
     console.error("Grade estimation error:", error);

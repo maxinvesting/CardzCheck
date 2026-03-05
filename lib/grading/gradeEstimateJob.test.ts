@@ -5,7 +5,12 @@ import {
   type GradeEstimateJobDependencies,
 } from "./gradeEstimateJob";
 import type { CardIdentity } from "@/lib/card-identity/types";
-import type { GradeEstimate, WorthGradingResult } from "@/types";
+import type { GradeEstimate, GradeScanPhoto, WorthGradingResult } from "@/types";
+
+const baseScanPhotos: GradeScanPhoto[] = [
+  { url: "data:image/jpeg;base64,front", kind: "front", sort_order: 0 },
+  { url: "data:image/jpeg;base64,back", kind: "back", sort_order: 1 },
+];
 
 const baseIdentity: CardIdentity = {
   player: "Test Player",
@@ -75,6 +80,8 @@ function buildDeps(overrides?: Partial<GradeEstimateJobDependencies>): GradeEsti
           mediaType: "image/jpeg",
           bytes: 10,
           source: "base64",
+          kind: "front",
+          originalUrl: "data:image/jpeg;base64,front",
         },
       ],
       imageStats: { count: 1, avgBytes: 10, maxBytes: 10, minBytes: 10 },
@@ -108,7 +115,7 @@ describe("grade estimate job", () => {
 
     expect(job.status).toBe("queued");
 
-    await runGradeEstimateJob(job, { imageUrls: ["data:image/jpeg;base64,abc"] }, deps);
+    await runGradeEstimateJob(job, { scanPhotos: baseScanPhotos }, deps);
 
     expect(job.status).toBe("done");
     expect(job.steps.ocr_identity.status).toBe("done");
@@ -127,7 +134,7 @@ describe("grade estimate job", () => {
       runGradeModel: async () => modelPromise,
     });
 
-    const runPromise = runGradeEstimateJob(job, { imageUrls: ["data:image/jpeg;base64,abc"] }, deps);
+    const runPromise = runGradeEstimateJob(job, { scanPhotos: baseScanPhotos }, deps);
 
     await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -148,7 +155,7 @@ describe("grade estimate job", () => {
       },
     });
 
-    await runGradeEstimateJob(job, { imageUrls: ["data:image/jpeg;base64,abc"] }, deps);
+    await runGradeEstimateJob(job, { scanPhotos: baseScanPhotos }, deps);
 
     expect(job.status).toBe("done");
     expect(job.steps.post_grading_value.status).toBe("error");

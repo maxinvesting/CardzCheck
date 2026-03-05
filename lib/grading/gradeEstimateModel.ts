@@ -5,6 +5,8 @@ import type {
   GradeEstimateConfidence,
   GradeEstimateCenteringDetail,
   GradeImageQuality,
+  GradeEvidencePhotoSources,
+  GradeScanPhotoKind,
 } from "@/types";
 import {
   buildFallbackGradeEstimate,
@@ -58,6 +60,25 @@ const EDGE_ISSUE_TYPES = new Set([
   "whitening",
   "other",
 ]);
+const SCAN_PHOTO_KINDS: GradeScanPhotoKind[] = [
+  "front",
+  "back",
+  "corner_tl",
+  "corner_tr",
+  "corner_bl",
+  "corner_br",
+  "edges",
+  "surface",
+  "other",
+];
+const CORNER_CLOSEUP_KINDS: GradeScanPhotoKind[] = [
+  "corner_tl",
+  "corner_tr",
+  "corner_bl",
+  "corner_br",
+];
+const LIMITED_VISIBILITY_NOTE =
+  "Limited visibility: no close-up photos provided for corners, edges, and surface.";
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -203,6 +224,119 @@ function normalizeProbabilityMap<T extends Record<string, number>>(map: T): T {
     Object.entries(map).map(([key, value]) => [key, value / total])
   ) as T;
   return normalized;
+}
+
+function normalizeEvidenceKinds(value: unknown): GradeScanPhotoKind[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(
+    (item): item is GradeScanPhotoKind =>
+      typeof item === "string" && SCAN_PHOTO_KINDS.includes(item as GradeScanPhotoKind)
+  );
+}
+
+function hasCloseupKinds(scanPhotoKinds: GradeScanPhotoKind[]): boolean {
+  return scanPhotoKinds.some(
+    (kind) => kind !== "front" && kind !== "back"
+  );
+}
+
+function buildDefaultEvidenceSources(
+  scanPhotoKinds: GradeScanPhotoKind[]
+): GradeEvidencePhotoSources {
+  const available = new Set(scanPhotoKinds);
+  const fallback: GradeScanPhotoKind[] = [];
+  if (available.has("front")) fallback.push("front");
+  if (available.has("back")) fallback.push("back");
+  if (fallback.length === 0) fallback.push("front");
+
+  const corners = CORNER_CLOSEUP_KINDS.filter((kind) => available.has(kind));
+  const edges = available.has("edges") ? (["edges"] as GradeScanPhotoKind[]) : [];
+  const surface = available.has("surface") ? (["surface"] as GradeScanPhotoKind[]) : [];
+
+  return {
+    corners: corners.length > 0 ? corners : fallback,
+    edges: edges.length > 0 ? edges : fallback,
+    surface: surface.length > 0 ? surface : fallback,
+  };
+}
+
+function parseEvidenceSources(
+  value: unknown,
+  fallback: GradeEvidencePhotoSources
+): GradeEvidencePhotoSources {
+  if (!value || typeof value !== "object") return fallback;
+  const row = value as Record<string, unknown>;
+  const corners = normalizeEvidenceKinds(row.corners);
+  const edges = normalizeEvidenceKinds(row.edges);
+  const surface = normalizeEvidenceKinds(row.surface);
+  return {
+    corners: corners.length > 0 ? corners : fallback.corners,
+    edges: edges.length > 0 ? edges : fallback.edges,
+    surface: surface.length > 0 ? surface : fallback.surface,
+  };
+}
+
+function applyLimitedVisibilityAdjustments(
+  estimate: GradeEstimate,
+  scanPhotoKinds: GradeScanPhotoKind[]
+): GradeEstimate {
+  if (hasCloseupKinds(scanPhotoKinds)) return estimate;
+
+  const limitedVisibilityNotes = Array.from(
+    new Set([...(estimate.visibility_notes ?? []), LIMITED_VISIBILITY_NOTE])
+  );
+  const confidenceScore = Math.min(
+    estimate.confidence?.overall_confidence_score ?? 65,
+    65
+  );
+  const confidenceLabel: GradeEstimateConfidence["confidence_label"] =
+    confidenceScore >= 45 ? "medium" : "low";
+  const confidence: GradeEstimateConfidence = {
+    overall_confidence_score: confidenceScore,
+    confidence_label: confidenceLabel,
+    limiting_factors: Array.from(
+      new Set([
+        ...(estimate.confidence?.limiting_factors ?? []),
+        "No category-specific close-up photos supplied.",
+      ])
+    ),
+    what_was_clear: estimate.confidence?.what_was_clear ?? [],
+  };
+
+  const adjusted: GradeEstimate = {
+    ...estimate,
+    confidence,
+    analysis_status:
+      estimate.analysis_status === "unable" ? "unable" : "low_confidence",
+    analysis_warning_code:
+      estimate.analysis_status === "unable" ? "unable" : "low_confidence",
+    grade_notes: `${estimate.grade_notes} ${LIMITED_VISIBILITY_NOTE}`,
+    visibility_notes: limitedVisibilityNotes,
+  };
+
+  if (adjusted.grade_probabilities?.psa) {
+    const psa = { ...adjusted.grade_probabilities.psa };
+    const from10 = Math.min(psa["10"], 0.05);
+    const from9 = Math.min(psa["9"], 0.05);
+    psa["10"] -= from10;
+    psa["9"] -= from9;
+    psa["8"] += (from10 + from9) * 0.4;
+    psa["7_or_lower"] += (from10 + from9) * 0.6;
+    const normalizedPsa = normalizeProbabilityMap(psa);
+    adjusted.grade_probabilities = {
+      ...adjusted.grade_probabilities,
+      psa: normalizedPsa,
+      bgs: normalizeProbabilityMap({
+        "9.5": normalizedPsa["10"],
+        "9": normalizedPsa["9"],
+        "8.5": normalizedPsa["8"],
+        "8_or_lower": normalizedPsa["7_or_lower"],
+      }),
+      confidence: confidenceLabel,
+    };
+  }
+
+  return adjusted;
 }
 
 function mapOutcomesToPsa(outcomes: GradeOutcome[]): GradeProbabilities["psa"] {
@@ -412,7 +546,8 @@ function applyConfidencePenalty(
 function buildEstimateFromParsed(
   result: Record<string, unknown>,
   imageStats: ImageStats,
-  parsedWarning: boolean
+  parsedWarning: boolean,
+  scanPhotoKinds: GradeScanPhotoKind[]
 ): GradeEstimate {
   const fallback = buildFallbackGradeEstimate({
     imageStats,
@@ -598,6 +733,13 @@ function buildEstimateFromParsed(
   const finalLow = Math.min(normalizedLow, mappedRange.low);
   const finalHigh = Math.max(normalizedHigh, mappedRange.high);
 
+  const defaultEvidenceSources = buildDefaultEvidenceSources(scanPhotoKinds);
+  const evidencePhotoSources = parseEvidenceSources(
+    result.evidence_sources,
+    defaultEvidenceSources
+  );
+  const visibilityNotes = toStringArray(result.visibility_notes, []);
+
   const estimate: GradeEstimate = {
     estimated_grade_low: finalLow,
     estimated_grade_high: finalHigh,
@@ -632,6 +774,8 @@ function buildEstimateFromParsed(
       : analysisStatus === "low_confidence"
       ? "low_confidence"
       : undefined) as GradeEstimateWarningCode | undefined,
+    evidence_photo_sources: evidencePhotoSources,
+    visibility_notes: visibilityNotes,
   };
 
   const psaOutcomesRaw = normalizeOutcomeArray(result.probabilities);
@@ -669,13 +813,15 @@ function buildEstimateFromParsed(
     confidence: confidence.confidence_label,
   };
 
-  return estimate;
+  return applyLimitedVisibilityAdjustments(estimate, scanPhotoKinds);
 }
 
 export function parseGradeEstimateModelOutput(options: {
   modelText: string | null;
   imageStats: ImageStats;
+  scanPhotoKinds?: GradeScanPhotoKind[];
 }): GradeEstimateModelParseResult {
+  const scanPhotoKinds = options.scanPhotoKinds ?? ["front", "back"];
   const noResponseFallback = buildFallbackGradeEstimate({
     imageStats: options.imageStats,
     status: "unable",
@@ -684,19 +830,23 @@ export function parseGradeEstimateModelOutput(options: {
   });
 
   if (!options.modelText) {
+    const estimate = applyLimitedVisibilityAdjustments(
+      noResponseFallback,
+      scanPhotoKinds
+    );
     return {
-      estimate: noResponseFallback,
-      probabilities: mapPsaToOutcomes(noResponseFallback.grade_probabilities!.psa),
+      estimate,
+      probabilities: mapPsaToOutcomes(estimate.grade_probabilities!.psa),
       evidence: {
-        centering: noResponseFallback.centering,
-        corners: noResponseFallback.corners,
-        surface: noResponseFallback.surface,
-        edges: noResponseFallback.edges,
-        grade_notes: noResponseFallback.grade_notes,
+        centering: estimate.centering,
+        corners: estimate.corners,
+        surface: estimate.surface,
+        edges: estimate.edges,
+        grade_notes: estimate.grade_notes,
       },
       preliminaryRange: buildRangeLabel(
-        noResponseFallback.estimated_grade_low,
-        noResponseFallback.estimated_grade_high
+        estimate.estimated_grade_low,
+        estimate.estimated_grade_high
       ),
     };
   }
@@ -709,19 +859,20 @@ export function parseGradeEstimateModelOutput(options: {
       reason: "Unable to parse AI response.",
       warningCode: "parse_error",
     });
+    const estimate = applyLimitedVisibilityAdjustments(fallback, scanPhotoKinds);
     return {
-      estimate: fallback,
-      probabilities: mapPsaToOutcomes(fallback.grade_probabilities!.psa),
+      estimate,
+      probabilities: mapPsaToOutcomes(estimate.grade_probabilities!.psa),
       evidence: {
-        centering: fallback.centering,
-        corners: fallback.corners,
-        surface: fallback.surface,
-        edges: fallback.edges,
-        grade_notes: fallback.grade_notes,
+        centering: estimate.centering,
+        corners: estimate.corners,
+        surface: estimate.surface,
+        edges: estimate.edges,
+        grade_notes: estimate.grade_notes,
       },
       preliminaryRange: buildRangeLabel(
-        fallback.estimated_grade_low,
-        fallback.estimated_grade_high
+        estimate.estimated_grade_low,
+        estimate.estimated_grade_high
       ),
     };
   }
@@ -729,7 +880,8 @@ export function parseGradeEstimateModelOutput(options: {
   const estimate = buildEstimateFromParsed(
     parsed.value ?? {},
     options.imageStats,
-    Boolean(parsed.warning)
+    Boolean(parsed.warning),
+    scanPhotoKinds
   );
   const probabilities = estimate.grade_probabilities?.psa
     ? mapPsaToOutcomes(estimate.grade_probabilities.psa)

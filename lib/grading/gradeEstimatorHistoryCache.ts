@@ -1,4 +1,5 @@
 import type { GradeEstimatorHistoryCardSnapshot, GradeEstimatorHistoryRun } from "@/types";
+import { normalizeGradeScanPhotos } from "@/lib/grading/scanPhotos";
 
 const HISTORY_CACHE_KEY = "gradeEstimatorHistoryRuns";
 const HISTORY_CACHE_LIMIT = 25;
@@ -64,6 +65,8 @@ function sanitizeHistoryCard(
     delete sanitized.imageUrl;
   }
   sanitized.imageUrls = imageUrls.length > 0 ? imageUrls : undefined;
+  const scanPhotos = normalizeGradeScanPhotos(card.scanPhotos);
+  sanitized.scanPhotos = scanPhotos.length > 0 ? scanPhotos : undefined;
   return sanitized;
 }
 
@@ -72,7 +75,12 @@ function stripImagesFromRuns(
 ): GradeEstimatorHistoryRun[] {
   return runs.map((run) => ({
     ...run,
-    card: { ...run.card, imageUrl: undefined, imageUrls: undefined },
+    card: {
+      ...run.card,
+      imageUrl: undefined,
+      imageUrls: undefined,
+      scanPhotos: undefined,
+    },
   }));
 }
 
@@ -149,7 +157,14 @@ export function mergeHistoryRuns(
     if (!remoteImage && localImage) {
       byJob.set(run.job_id, {
         ...existing,
-        card: { ...existing.card, imageUrl: localImage },
+        card: {
+          ...existing.card,
+          imageUrl: localImage,
+          scanPhotos:
+            existing.card.scanPhotos && existing.card.scanPhotos.length > 0
+              ? existing.card.scanPhotos
+              : run.card.scanPhotos,
+        },
       });
     }
   });

@@ -534,7 +534,7 @@ function CompsPageContent() {
             </span>
           </div>
           <p className="text-gray-400">
-            Find comparable sales and market values for any sports card
+            Find comparable listings and market values for any sports card
           </p>
         </div>
 

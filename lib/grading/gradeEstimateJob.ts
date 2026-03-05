@@ -1,6 +1,6 @@
 import type { CardIdentity } from "@/lib/card-identity/types";
 import type { GradeOutcome } from "@/lib/grading/gradeProbability";
-import type { GradeEstimate, WorthGradingResult } from "@/types";
+import type { GradeEstimate, GradeScanPhoto, WorthGradingResult } from "@/types";
 import type { GradeEstimatorCardInput } from "@/lib/grade-estimator/value";
 import type { ImageStats } from "@/lib/grading/fallbackEstimate";
 
@@ -64,16 +64,18 @@ export type ResolvedGradeEstimateImage = {
   mediaType: "image/jpeg" | "image/png" | "image/gif" | "image/webp";
   bytes: number;
   source: "url" | "base64";
+  kind: GradeScanPhoto["kind"];
+  originalUrl: string;
 };
 
 export type GradeEstimateJobInput = {
-  imageUrls: string[];
+  scanPhotos: GradeScanPhoto[];
   card?: GradeEstimatorCardInput | null;
 };
 
 export type GradeEstimateJobDependencies = {
   resolveImages: (
-    imageUrls: string[]
+    scanPhotos: GradeScanPhoto[]
   ) => Promise<{
     resolvedImages: ResolvedGradeEstimateImage[];
     imageStats: ImageStats;
@@ -83,6 +85,7 @@ export type GradeEstimateJobDependencies = {
   parseModelOutput: (options: {
     modelText: string | null;
     imageStats: ImageStats;
+    scanPhotoKinds: GradeScanPhoto["kind"][];
   }) => Promise<{
     estimate: GradeEstimate;
     probabilities: GradeOutcome[] | null;
@@ -203,7 +206,7 @@ export async function runGradeEstimateJob(
   // Step 1: OCR identity + image prep
   const ocrStart = startStep(job, "ocr_identity");
   try {
-    const { resolvedImages, imageStats } = await deps.resolveImages(input.imageUrls);
+    const { resolvedImages, imageStats } = await deps.resolveImages(input.scanPhotos);
     job.internal.resolvedImages = resolvedImages;
     job.internal.imageStats = imageStats;
 
@@ -243,6 +246,7 @@ export async function runGradeEstimateJob(
     const parsed = await deps.parseModelOutput({
       modelText: job.internal.modelText ?? null,
       imageStats,
+      scanPhotoKinds: input.scanPhotos.map((photo) => photo.kind),
     });
     job.partial.preliminaryRange = parsed.preliminaryRange;
     job.partial.probabilities = parsed.probabilities;

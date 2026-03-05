@@ -1,11 +1,18 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useMemo, useRef, type ReactNode } from "react";
 import { createClient } from "@/lib/supabase/client";
-import type { CardIdentificationResult } from "@/types";
+import type { CardIdentificationResult, GradeScanPhoto, GradeScanPhotoKind } from "@/types";
 import { normalizeIdentificationResult } from "@/lib/card-identity/result";
 import { identifyCardFromImages } from "@/lib/identify-card/client";
 import { normalizeHttpUrl, uniqueHttpUrls } from "@/lib/collection-images";
+import {
+  GRADE_SCAN_CLOSEUP_KINDS,
+  GRADE_SCAN_KIND_LABELS,
+  GRADE_SCAN_MAX_CLOSEUPS,
+  GRADE_SCAN_MAX_TOTAL_PHOTOS,
+  normalizeGradeScanPhotos,
+} from "@/lib/grading/scanPhotos";
 
 interface DualCardUploaderProps {
   onIdentified: (data: CardIdentificationResult) => void;
@@ -16,6 +23,22 @@ interface DualCardUploaderProps {
 
 const MAX_IDENTIFY_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_FALLBACK_DATA_URL_BYTES = 350 * 1024;
+
+const QUICK_TAG_CHIPS: Array<{ label: string; kind: GradeScanPhotoKind }> = [
+  { label: "Add Top Left Corner", kind: "corner_tl" },
+  { label: "Add Top Right Corner", kind: "corner_tr" },
+  { label: "Add Bottom Left Corner", kind: "corner_bl" },
+  { label: "Add Bottom Right Corner", kind: "corner_br" },
+  { label: "Add Edges", kind: "edges" },
+  { label: "Add Surface", kind: "surface" },
+];
+
+type CloseupDraft = {
+  id: string;
+  file: File;
+  preview: string;
+  kind: GradeScanPhotoKind;
+};
 
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -30,8 +53,7 @@ function estimateDataUrlByteLength(dataUrl: string): number {
   const commaIndex = dataUrl.indexOf(",");
   if (commaIndex === -1) return 0;
   const base64 = dataUrl.slice(commaIndex + 1);
-  const padding =
-    base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
+  const padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
   return Math.max(0, Math.floor((base64.length * 3) / 4) - padding);
 }
 
@@ -70,54 +92,13 @@ async function compressDataUrl(
   });
 }
 
-// ── Corner bracket decoration ──────────────────────────────────────────────
-function CornerBracket({
-  corner,
-  active,
-}: {
-  corner: "tl" | "tr" | "bl" | "br";
-  active: boolean;
-}) {
-  const paths: Record<string, string> = {
-    tl: "M3 14 L3 3 L14 3",
-    tr: "M10 3 L21 3 L21 14",
-    bl: "M3 10 L3 21 L14 21",
-    br: "M10 21 L21 21 L21 10",
-  };
-  const pos: Record<string, string> = {
-    tl: "top-2 left-2",
-    tr: "top-2 right-2",
-    bl: "bottom-2 left-2",
-    br: "bottom-2 right-2",
-  };
-  return (
-    <svg
-      className={`absolute ${pos[corner]} w-5 h-5 transition-colors duration-200 ${
-        active ? "text-emerald-400/70" : "text-[var(--border)]"
-      }`}
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-    >
-      <path
-        d={paths[corner]}
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-// ── Single upload zone ─────────────────────────────────────────────────────
 function UploadZone({
   label,
   sublabel,
-  icon,
   preview,
-  isDragging,
   disabled,
+  dragging,
+  icon,
   onDrop,
   onDragOver,
   onDragLeave,
@@ -126,13 +107,13 @@ function UploadZone({
 }: {
   label: string;
   sublabel: string;
-  icon: React.ReactNode;
   preview: string | null;
-  isDragging: boolean;
   disabled: boolean;
-  onDrop: (e: React.DragEvent) => void;
-  onDragOver: (e: React.DragEvent) => void;
-  onDragLeave: (e: React.DragEvent) => void;
+  dragging: boolean;
+  icon: ReactNode;
+  onDrop: (event: React.DragEvent) => void;
+  onDragOver: (event: React.DragEvent) => void;
+  onDragLeave: (event: React.DragEvent) => void;
   onFileSelect: (file: File) => void;
   onRemove: () => void;
 }) {
@@ -143,68 +124,45 @@ function UploadZone({
       onDrop={onDrop}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
-      className={`
-        relative min-h-[180px] flex-1 rounded-xl border transition-colors duration-150
-        ${isDragging
-          ? "bg-[color:var(--biz-surface-soft)] border-emerald-400/60"
-          : "bg-[var(--surface)] border-dashed border-[color:var(--border)] hover:border-emerald-500/50"
-        }
-        ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
-      `}
+      className={`relative min-h-[190px] rounded-xl border border-dashed p-3 transition-colors ${
+        dragging
+          ? "border-slate-500 bg-slate-50"
+          : "border-slate-300 bg-white hover:border-slate-400"
+      } ${disabled ? "opacity-60" : ""}`}
     >
-      <CornerBracket corner="tl" active={isDragging || !!preview} />
-      <CornerBracket corner="tr" active={isDragging || !!preview} />
-      <CornerBracket corner="bl" active={isDragging || !!preview} />
-      <CornerBracket corner="br" active={isDragging || !!preview} />
-
       {preview ? (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-4">
-          <img
-            src={preview}
-            alt={label}
-            className="max-h-28 rounded-lg border border-[color:var(--border)] object-contain"
-          />
-          <span className="text-[10px] font-medium text-emerald-700">
-            {label} ready
-          </span>
+        <div className="flex h-full flex-col items-center justify-center gap-2.5 rounded-lg border border-slate-200 bg-white p-3">
+          <img src={preview} alt={label} className="max-h-28 rounded-md object-contain" />
+          <p className="text-xs font-medium text-slate-700">{label} ready</p>
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onRemove();
-            }}
-            className="text-[10px] text-[var(--muted)] transition-colors hover:text-[var(--biz-text)]"
+            type="button"
+            onClick={onRemove}
+            className="text-xs text-slate-500 underline-offset-2 transition-colors hover:text-slate-700 hover:underline"
           >
             Remove
           </button>
         </div>
       ) : (
         <label
-          className={`absolute inset-0 flex flex-col items-center justify-center gap-2.5 p-5 ${
-            disabled ? "" : "cursor-pointer"
+          className={`flex h-full cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white p-4 text-center ${
+            disabled ? "pointer-events-none cursor-not-allowed" : ""
           }`}
         >
-          {icon}
-          <div className="text-center space-y-0.5">
-            <p className="text-sm font-medium text-[var(--biz-text)]">
-              {isDragging ? "Release to add" : label}
-            </p>
-            <p className="text-[11px] text-[var(--muted)]">{sublabel}</p>
-          </div>
-          <p className="text-[10px] text-[var(--muted)]">
-            JPG · PNG · WebP · up to 8 MB
-          </p>
+          <div className="text-slate-500">{icon}</div>
+          <p className="text-base font-semibold text-slate-900">{dragging ? "Drop photo" : label}</p>
+          <p className="text-xs text-slate-500">{sublabel}</p>
+          <p className="text-[11px] text-slate-400">JPG · PNG · WebP · up to 8 MB</p>
           <input
             ref={inputRef}
             type="file"
             accept="image/*"
             disabled={disabled}
-            onChange={(e) => {
-              const file = e.target.files?.[0];
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
               if (file) onFileSelect(file);
-              // Reset so re-selecting the same file fires onChange again
               if (inputRef.current) inputRef.current.value = "";
             }}
-            className="hidden"
           />
         </label>
       )}
@@ -222,75 +180,144 @@ export default function DualCardUploader({
   const [backPreview, setBackPreview] = useState<string | null>(null);
   const [frontFile, setFrontFile] = useState<File | null>(null);
   const [backFile, setBackFile] = useState<File | null>(null);
+  const [closeups, setCloseups] = useState<CloseupDraft[]>([]);
   const [frontDragging, setFrontDragging] = useState(false);
   const [backDragging, setBackDragging] = useState(false);
+  const [closeupDragging, setCloseupDragging] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [quickAddKind, setQuickAddKind] = useState<GradeScanPhotoKind>("other");
 
-  const bothReady = !!frontFile && !!backFile;
+  const closeupInputRef = useRef<HTMLInputElement>(null);
+  const quickAddInputRef = useRef<HTMLInputElement>(null);
 
-  const uploadFile = useCallback(
-    async (file: File, fallbackDataUrl: string): Promise<string> => {
-      try {
-        const supabase = createClient();
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
+  const totalPhotos = (frontFile ? 1 : 0) + (backFile ? 1 : 0) + closeups.length;
+  const closeupSlotsRemaining = Math.max(0, GRADE_SCAN_MAX_CLOSEUPS - closeups.length);
+  const canAnalyze = Boolean(frontFile && backFile);
 
-        if (!user) {
-          throw new Error("Authentication required for storage uploads");
-        }
+  const uploadFile = useCallback(async (file: File, fallbackDataUrl: string): Promise<string> => {
+    try {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
-        const fileName = `${user.id}/${Date.now()}-${file.name}`;
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from("card-images")
-          .upload(fileName, file);
-
-        if (uploadError) throw new Error(uploadError.message);
-
-        const {
-          data: { publicUrl },
-        } = supabase.storage.from("card-images").getPublicUrl(uploadData.path);
-        return publicUrl;
-      } catch {
-        const fallbackBytes = estimateDataUrlByteLength(fallbackDataUrl);
-        if (fallbackBytes <= MAX_FALLBACK_DATA_URL_BYTES) {
-          return fallbackDataUrl;
-        }
-        const compressed = await compressDataUrl(fallbackDataUrl, {
-          maxWidth: 1200,
-          maxHeight: 1200,
-          quality: 0.72,
-        });
-        return compressed || fallbackDataUrl;
+      if (!user) {
+        throw new Error("Authentication required for storage uploads");
       }
+
+      const fileName = `${user.id}/${Date.now()}-${file.name}`;
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from("card-images")
+        .upload(fileName, file);
+
+      if (uploadError) throw new Error(uploadError.message);
+
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("card-images").getPublicUrl(uploadData.path);
+      return publicUrl;
+    } catch {
+      const fallbackBytes = estimateDataUrlByteLength(fallbackDataUrl);
+      if (fallbackBytes <= MAX_FALLBACK_DATA_URL_BYTES) {
+        return fallbackDataUrl;
+      }
+      const compressed = await compressDataUrl(fallbackDataUrl, {
+        maxWidth: 1200,
+        maxHeight: 1200,
+        quality: 0.72,
+      });
+      return compressed || fallbackDataUrl;
+    }
+  }, []);
+
+  const validateFile = useCallback((file: File): string | null => {
+    if (!file.type.startsWith("image/")) return "Please upload image files only.";
+    if (file.size > MAX_IDENTIFY_IMAGE_BYTES) return "Each image must be less than 8MB.";
+    return null;
+  }, []);
+
+  const handleFrontFile = useCallback(
+    async (file: File) => {
+      const validationError = validateFile(file);
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
+      const dataUrl = await readFileAsDataUrl(file);
+      setFrontFile(file);
+      setFrontPreview(dataUrl);
+      setError(null);
     },
-    []
+    [validateFile]
   );
 
-  const validateFile = (file: File): string | null => {
-    if (!file.type.startsWith("image/")) return "Please upload image files only";
-    if (file.size > MAX_IDENTIFY_IMAGE_BYTES) return "Each image must be less than 8MB";
-    return null;
-  };
+  const handleBackFile = useCallback(
+    async (file: File) => {
+      const validationError = validateFile(file);
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
+      const dataUrl = await readFileAsDataUrl(file);
+      setBackFile(file);
+      setBackPreview(dataUrl);
+      setError(null);
+    },
+    [validateFile]
+  );
 
-  const handleFrontFile = useCallback(async (file: File) => {
-    const err = validateFile(file);
-    if (err) { setError(err); return; }
-    setError(null);
-    const dataUrl = await readFileAsDataUrl(file);
-    setFrontFile(file);
-    setFrontPreview(dataUrl);
-  }, []);
+  const addCloseupFiles = useCallback(
+    async (files: File[], defaultKind: GradeScanPhotoKind) => {
+      if (files.length === 0) return;
+      const validated: File[] = [];
+      for (const file of files) {
+        const validationError = validateFile(file);
+        if (validationError) {
+          setError(validationError);
+          return;
+        }
+        validated.push(file);
+      }
 
-  const handleBackFile = useCallback(async (file: File) => {
-    const err = validateFile(file);
-    if (err) { setError(err); return; }
-    setError(null);
-    const dataUrl = await readFileAsDataUrl(file);
-    setBackFile(file);
-    setBackPreview(dataUrl);
-  }, []);
+      const allowedByCloseups = Math.max(0, GRADE_SCAN_MAX_CLOSEUPS - closeups.length);
+      const allowedByTotal = Math.max(0, GRADE_SCAN_MAX_TOTAL_PHOTOS - (frontFile ? 1 : 0) - (backFile ? 1 : 0) - closeups.length);
+      const allowed = Math.min(allowedByCloseups, allowedByTotal);
+
+      if (allowed <= 0) {
+        setError(`You can upload up to ${GRADE_SCAN_MAX_TOTAL_PHOTOS} total photos.`);
+        return;
+      }
+
+      const accepted = validated.slice(0, allowed);
+      if (accepted.length < validated.length) {
+        setError(`Only ${allowed} close-up photo${allowed === 1 ? "" : "s"} could be added. Maximum is ${GRADE_SCAN_MAX_CLOSEUPS} close-ups (${GRADE_SCAN_MAX_TOTAL_PHOTOS} total).`);
+      } else {
+        setError(null);
+      }
+
+      const previews = await Promise.all(accepted.map((file) => readFileAsDataUrl(file)));
+      const nextItems = accepted.map((file, index): CloseupDraft => ({
+        id: `${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`,
+        file,
+        preview: previews[index],
+        kind: defaultKind,
+      }));
+
+      setCloseups((prev) => [...prev, ...nextItems]);
+    },
+    [backFile, closeups.length, frontFile, validateFile]
+  );
+
+  const handleCloseupDrop = useCallback(
+    (event: React.DragEvent) => {
+      event.preventDefault();
+      setCloseupDragging(false);
+      const files = Array.from(event.dataTransfer.files ?? []);
+      void addCloseupFiles(files, "other");
+    },
+    [addCloseupFiles]
+  );
 
   const handleAnalyze = useCallback(async () => {
     if (!frontFile || !backFile || !frontPreview || !backPreview) return;
@@ -300,43 +327,56 @@ export default function DualCardUploader({
     setLoading(true);
 
     try {
-      // Upload both images in parallel
-      const [frontUrl, backUrl] = await Promise.all([
+      const uploads = [
         uploadFile(frontFile, frontPreview),
         uploadFile(backFile, backPreview),
+        ...closeups.map((closeup) => uploadFile(closeup.file, closeup.preview)),
+      ];
+      const uploadedUrls = await Promise.all(uploads);
+
+      const frontUrl = uploadedUrls[0];
+      const backUrl = uploadedUrls[1];
+      const closeupUrls = uploadedUrls.slice(2);
+
+      const scanPhotos = normalizeGradeScanPhotos([
+        { url: frontUrl, kind: "front", sort_order: 0 },
+        { url: backUrl, kind: "back", sort_order: 1 },
+        ...closeups.map((closeup, index) => ({
+          url: closeupUrls[index],
+          kind: closeup.kind,
+          sort_order: index + 2,
+        })),
       ]);
 
-      const imageUrls = [frontUrl, backUrl];
-      const hasFallbackDataUrls = imageUrls.some(isDataUrl);
-      const identifyInput =
-        !hasFallbackDataUrls
-          ? { imageUrls }
-          : { imageUrl: frontUrl };
+      const identifyInput = [frontUrl, backUrl].some(isDataUrl)
+        ? { imageUrl: frontUrl }
+        : { imageUrls: [frontUrl, backUrl] };
 
       const identify = await identifyCardFromImages(identifyInput);
       if (!identify.ok || !identify.data || "error" in identify.data) {
-        setError(identify.errorMessage || "Failed to process image");
+        setError(identify.errorMessage || "Failed to process image.");
         setLoading(false);
         onReset?.();
         return;
       }
 
       const result = identify.data;
-      const sanitizedImageUrls = uniqueHttpUrls(imageUrls);
-      const userImageUrl = normalizeHttpUrl(sanitizedImageUrls[0] || null);
+      const allImageUrls = scanPhotos
+        .map((photo) => photo.url)
+        .filter((url) => typeof url === "string" && url.trim().length > 0);
+      const sanitizedImageUrls = uniqueHttpUrls(allImageUrls);
+      const userImageUrl = normalizeHttpUrl(frontUrl) || normalizeHttpUrl(sanitizedImageUrls[0] || null);
       const stockImageUrl = normalizeHttpUrl(result.stock_image_url || null);
       const ebayImageUrl = normalizeHttpUrl(result.ebay_image_url || null);
       const displayImageUrl =
         userImageUrl ||
         stockImageUrl ||
         ebayImageUrl ||
-        imageUrls.find((url) => typeof url === "string" && url.trim().length > 0) ||
+        allImageUrls.find((url) => typeof url === "string" && url.trim().length > 0) ||
         "";
 
       if (result.card_identity?.warnings?.includes("parse_error")) {
-        setError(
-          "We couldn't read the card details clearly. Please confirm the year and set."
-        );
+        setError("We couldn't read the card details clearly. Please confirm the year and set.");
       } else if (result.confidence === "low") {
         setError(
           `Card identified with low confidence. Player: ${result.player_name || "Unknown"}. Please verify the details manually.`
@@ -351,11 +391,10 @@ export default function DualCardUploader({
           set_name: result.set_name || undefined,
           insert: result.insert || undefined,
           grade: result.grade || undefined,
-          parallel_type:
-            (result.card_identity?.parallel ?? result.variant) || undefined,
+          parallel_type: (result.card_identity?.parallel ?? result.variant) || undefined,
           imageUrl: displayImageUrl,
-          imageUrls:
-            sanitizedImageUrls.length > 0 ? sanitizedImageUrls : undefined,
+          imageUrls: allImageUrls,
+          scanPhotos,
           userImageUrl: userImageUrl || undefined,
           stockImageUrl: stockImageUrl || undefined,
           ebayImageUrl: ebayImageUrl || undefined,
@@ -363,80 +402,92 @@ export default function DualCardUploader({
           cardIdentity: result.card_identity,
         })
       );
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to process image"
-      );
+    } catch (analyzeError) {
+      setError(analyzeError instanceof Error ? analyzeError.message : "Failed to process image.");
       onReset?.();
     } finally {
       setLoading(false);
     }
-  }, [frontFile, backFile, frontPreview, backPreview, onIdentified, onReset, onStart, uploadFile]);
+  }, [backFile, backPreview, closeups, frontFile, frontPreview, onIdentified, onReset, onStart, uploadFile]);
 
-  const handleReset = () => {
+  const handleReset = useCallback(() => {
     setFrontFile(null);
     setBackFile(null);
     setFrontPreview(null);
     setBackPreview(null);
+    setCloseups([]);
     setError(null);
-  };
+  }, []);
 
-  const makeDrop =
-    (handler: (file: File) => void, setDrag: (v: boolean) => void) =>
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setDrag(false);
-      const file = e.dataTransfer.files?.[0];
-      if (file) handler(file);
-    };
+  const allTiles = useMemo(() => {
+    const items: Array<
+      | { id: string; kind: "required"; label: string; preview: string; remove: () => void }
+      | {
+          id: string;
+          kind: "closeup";
+          label: string;
+          preview: string;
+          closeupKind: GradeScanPhotoKind;
+          remove: () => void;
+          updateKind: (kind: GradeScanPhotoKind) => void;
+        }
+    > = [];
 
-  const frontIcon = (
-    <svg
-      className="h-8 w-8 text-[var(--muted)]"
-      fill="none"
-      stroke="currentColor"
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={1.25}
-        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-      />
-    </svg>
-  );
+    if (frontPreview) {
+      items.push({
+        id: "front",
+        kind: "required",
+        label: "Front",
+        preview: frontPreview,
+        remove: () => {
+          setFrontFile(null);
+          setFrontPreview(null);
+        },
+      });
+    }
 
-  const backIcon = (
-    <svg
-      className="h-8 w-8 text-[var(--muted)]"
-      fill="none"
-      stroke="currentColor"
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={1.25}
-        d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
-      />
-    </svg>
-  );
+    if (backPreview) {
+      items.push({
+        id: "back",
+        kind: "required",
+        label: "Back",
+        preview: backPreview,
+        remove: () => {
+          setBackFile(null);
+          setBackPreview(null);
+        },
+      });
+    }
+
+    closeups.forEach((closeup) => {
+      items.push({
+        id: closeup.id,
+        kind: "closeup",
+        label: "Close-up",
+        preview: closeup.preview,
+        closeupKind: closeup.kind,
+        remove: () => {
+          setCloseups((prev) => prev.filter((item) => item.id !== closeup.id));
+        },
+        updateKind: (kind) => {
+          setCloseups((prev) =>
+            prev.map((item) => (item.id === closeup.id ? { ...item, kind } : item))
+          );
+        },
+      });
+    });
+
+    return items;
+  }, [backPreview, closeups, frontPreview]);
 
   if (loading) {
     return (
       <div className="w-full">
-        <div className="relative flex min-h-[200px] flex-col items-center justify-center gap-3 rounded-xl border border-[color:var(--border)] bg-[var(--surface)]">
-          <div className="relative">
-            <div className="h-10 w-10 rounded-full border border-[color:var(--border)]" />
-            <div className="absolute inset-0 h-10 w-10 animate-spin rounded-full border-t-2 border-emerald-500" />
-          </div>
-          <p className="text-sm text-[var(--muted)]">
-            Analyzing front &amp; back photos...
-          </p>
-          <p className="text-[10px] text-[var(--muted)]">
-            Both images uploaded in parallel for faster results
+        <div className="flex min-h-[220px] flex-col items-center justify-center gap-3 rounded-xl border border-slate-300 bg-white">
+          <div className="h-10 w-10 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700" />
+          <p className="text-sm text-slate-600">Uploading and analyzing photos...</p>
+          <p className="text-xs text-slate-500">
+            Front, back, and {closeups.length} close-up photo{closeups.length === 1 ? "" : "s"}
           </p>
         </div>
       </div>
@@ -444,101 +495,250 @@ export default function DualCardUploader({
   }
 
   return (
-    <div className="w-full space-y-3">
-      {/* Two upload zones side by side */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+    <div className="w-full space-y-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <UploadZone
           label="Front of Card"
-          sublabel="Required — drop or click to upload"
-          icon={frontIcon}
+          sublabel="Required - drop or click to upload"
           preview={frontPreview}
-          isDragging={frontDragging}
-          disabled={!!disabled}
-          onDrop={makeDrop(handleFrontFile, setFrontDragging)}
-          onDragOver={(e) => { e.preventDefault(); setFrontDragging(true); }}
-          onDragLeave={(e) => { e.preventDefault(); setFrontDragging(false); }}
-          onFileSelect={handleFrontFile}
-          onRemove={() => { setFrontFile(null); setFrontPreview(null); }}
-        />
-        <UploadZone
-          label="Back of Card"
-          sublabel="Required — drop or click to upload"
-          icon={backIcon}
-          preview={backPreview}
-          isDragging={backDragging}
-          disabled={!!disabled}
-          onDrop={makeDrop(handleBackFile, setBackDragging)}
-          onDragOver={(e) => { e.preventDefault(); setBackDragging(true); }}
-          onDragLeave={(e) => { e.preventDefault(); setBackDragging(false); }}
-          onFileSelect={handleBackFile}
-          onRemove={() => { setBackFile(null); setBackPreview(null); }}
-        />
-      </div>
-
-      {/* Status bar */}
-      <div className="flex items-center justify-between gap-3 px-1">
-        <div className="flex items-center gap-2">
-          <div
-            className={`w-1.5 h-1.5 rounded-full ${
-              frontFile ? "bg-emerald-400" : "bg-[var(--muted)]"
-            }`}
-          />
-          <span className="text-[10px] text-[var(--muted)]">Front</span>
-          <div
-            className={`w-1.5 h-1.5 rounded-full ${
-              backFile ? "bg-emerald-400" : "bg-[var(--muted)]"
-            }`}
-          />
-          <span className="text-[10px] text-[var(--muted)]">Back</span>
-        </div>
-
-        {(frontFile || backFile) && (
-          <button
-            onClick={handleReset}
-            className="text-[10px] text-[var(--muted)] transition-colors hover:text-[var(--biz-text)]"
-          >
-            Clear all
-          </button>
-        )}
-      </div>
-
-      {/* Analyze button */}
-      <button
-        onClick={handleAnalyze}
-        disabled={!bothReady || !!disabled}
-        className={`
-          w-full rounded-xl border py-3 text-sm font-medium transition-colors
-          ${bothReady && !disabled
-            ? "cc-btn-primary border-transparent text-white"
-            : "cursor-not-allowed border-[color:var(--border)] bg-[color:var(--biz-hover)] text-[var(--muted)]"
-          }
-        `}
-      >
-        {bothReady ? (
-          <span className="flex items-center justify-center gap-2">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          dragging={frontDragging}
+          disabled={Boolean(disabled)}
+          icon={
+            <svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                strokeWidth={1.5}
+                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
               />
             </svg>
-            Scan &amp; Identify Card
-          </span>
-        ) : (
-          <span>
-            Upload both photos to scan ({frontFile ? "1" : "0"}/2)
-          </span>
-        )}
+          }
+          onDrop={(event) => {
+            event.preventDefault();
+            setFrontDragging(false);
+            const file = event.dataTransfer.files?.[0];
+            if (file) void handleFrontFile(file);
+          }}
+          onDragOver={(event) => {
+            event.preventDefault();
+            setFrontDragging(true);
+          }}
+          onDragLeave={(event) => {
+            event.preventDefault();
+            setFrontDragging(false);
+          }}
+          onFileSelect={(file) => {
+            void handleFrontFile(file);
+          }}
+          onRemove={() => {
+            setFrontFile(null);
+            setFrontPreview(null);
+          }}
+        />
+
+        <UploadZone
+          label="Back of Card"
+          sublabel="Required - drop or click to upload"
+          preview={backPreview}
+          dragging={backDragging}
+          disabled={Boolean(disabled)}
+          icon={
+            <svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
+              />
+            </svg>
+          }
+          onDrop={(event) => {
+            event.preventDefault();
+            setBackDragging(false);
+            const file = event.dataTransfer.files?.[0];
+            if (file) void handleBackFile(file);
+          }}
+          onDragOver={(event) => {
+            event.preventDefault();
+            setBackDragging(true);
+          }}
+          onDragLeave={(event) => {
+            event.preventDefault();
+            setBackDragging(false);
+          }}
+          onFileSelect={(file) => {
+            void handleBackFile(file);
+          }}
+          onRemove={() => {
+            setBackFile(null);
+            setBackPreview(null);
+          }}
+        />
+      </div>
+
+      <section className="rounded-xl border border-slate-300 bg-white p-4">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-slate-900">
+            Optional close-ups ({closeups.length}/{GRADE_SCAN_MAX_CLOSEUPS})
+          </h3>
+          <p className="text-xs text-slate-500">Total photos: {totalPhotos}/{GRADE_SCAN_MAX_TOTAL_PHOTOS}</p>
+        </div>
+
+        <div className="mb-3 flex flex-wrap gap-2">
+          {QUICK_TAG_CHIPS.map((chip) => (
+            <button
+              key={chip.kind}
+              type="button"
+              disabled={Boolean(disabled) || closeupSlotsRemaining <= 0}
+              className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-700 transition-colors hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={() => {
+                setQuickAddKind(chip.kind);
+                quickAddInputRef.current?.click();
+              }}
+            >
+              {chip.label}
+            </button>
+          ))}
+          <input
+            ref={quickAddInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(event) => {
+              const files = Array.from(event.target.files ?? []);
+              void addCloseupFiles(files, quickAddKind);
+              event.currentTarget.value = "";
+            }}
+          />
+        </div>
+
+        <div
+          onDrop={handleCloseupDrop}
+          onDragOver={(event) => {
+            event.preventDefault();
+            setCloseupDragging(true);
+          }}
+          onDragLeave={(event) => {
+            event.preventDefault();
+            setCloseupDragging(false);
+          }}
+          className={`rounded-lg border border-dashed p-4 text-center transition-colors ${
+            closeupDragging
+              ? "border-slate-500 bg-slate-50"
+              : "border-slate-300 bg-slate-50/60"
+          }`}
+        >
+          <p className="text-sm font-medium text-slate-800">
+            Drag and drop close-up photos, or click to select
+          </p>
+          <p className="mt-1 text-xs text-slate-500">Tag each close-up as corners, edges, surface, or other.</p>
+          <button
+            type="button"
+            disabled={Boolean(disabled) || closeupSlotsRemaining <= 0}
+            onClick={() => closeupInputRef.current?.click()}
+            className="mt-3 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Add close-up photos
+          </button>
+          <input
+            ref={closeupInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(event) => {
+              const files = Array.from(event.target.files ?? []);
+              void addCloseupFiles(files, "other");
+              event.currentTarget.value = "";
+            }}
+          />
+        </div>
+      </section>
+
+      {allTiles.length > 0 ? (
+        <section className="rounded-xl border border-slate-300 bg-white p-4">
+          <h3 className="mb-3 text-sm font-semibold text-slate-900">Uploaded Photos</h3>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            {allTiles.map((tile) => (
+              <div key={tile.id} className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+                <img src={tile.preview} alt={tile.label} className="h-28 w-full rounded-md object-cover" />
+                <div className="mt-2 space-y-1">
+                  <p className="truncate text-[11px] font-medium text-slate-700">{tile.label}</p>
+                  {tile.kind === "closeup" ? (
+                    <select
+                      value={tile.closeupKind}
+                      className="w-full rounded border border-slate-300 bg-white px-2 py-1 text-[11px] text-slate-700"
+                      onChange={(event) => {
+                        tile.updateKind(event.target.value as GradeScanPhotoKind);
+                      }}
+                    >
+                      {GRADE_SCAN_CLOSEUP_KINDS.map((kind) => (
+                        <option key={kind} value={kind}>
+                          {GRADE_SCAN_KIND_LABELS[kind]}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <p className="text-[11px] text-slate-500">Required</p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={tile.remove}
+                    className="text-[11px] text-slate-500 underline-offset-2 transition-colors hover:text-slate-700 hover:underline"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      <div className="flex items-center justify-between px-1">
+        <div className="flex items-center gap-2 text-xs text-slate-500">
+          <span className={`h-2 w-2 rounded-full ${frontFile ? "bg-emerald-500" : "bg-slate-300"}`} />
+          Front
+          <span className={`h-2 w-2 rounded-full ${backFile ? "bg-emerald-500" : "bg-slate-300"}`} />
+          Back
+          <span className={`h-2 w-2 rounded-full ${closeups.length > 0 ? "bg-emerald-500" : "bg-slate-300"}`} />
+          Close-ups ({closeups.length})
+        </div>
+
+        {totalPhotos > 0 ? (
+          <button
+            type="button"
+            onClick={handleReset}
+            className="text-xs text-slate-500 underline-offset-2 transition-colors hover:text-slate-700 hover:underline"
+          >
+            Clear all
+          </button>
+        ) : null}
+      </div>
+
+      <button
+        type="button"
+        onClick={() => {
+          void handleAnalyze();
+        }}
+        disabled={!canAnalyze || Boolean(disabled)}
+        className={`w-full rounded-xl border py-3 text-sm font-semibold transition-colors ${
+          canAnalyze && !disabled
+            ? "border-slate-900 bg-slate-900 text-white hover:bg-slate-800"
+            : "cursor-not-allowed border-slate-300 bg-slate-100 text-slate-500"
+        }`}
+      >
+        {canAnalyze
+          ? `Scan and Identify (${totalPhotos}/${GRADE_SCAN_MAX_TOTAL_PHOTOS} photos)`
+          : "Upload front + back photos to continue"}
       </button>
 
-      {/* Error */}
-      {error && (
+      {error ? (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
           <p className="text-xs text-amber-700">{error}</p>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

@@ -29,12 +29,14 @@ import type {
   WorthGradingResult,
   GradeEstimatorHistoryRun,
   GradeEstimatorHistoryCardSnapshot,
+  GradeScanPhoto,
 } from "@/types";
 import type {
   GradeEstimateJobStatusResponse,
   GradeEstimateJobSteps,
 } from "@/lib/grading/gradeEstimateJob";
 import { confidencePillClasses } from "@/theme/tokens";
+import { normalizeGradeScanPhotos } from "@/lib/grading/scanPhotos";
 
 const HISTORY_CARD_STORAGE_KEY = "gradeEstimateHistoryCard";
 
@@ -46,6 +48,25 @@ type StoredHistoryCard = {
 function isDataUrl(value?: string | null): boolean {
   if (!value) return false;
   return value.trim().startsWith("data:");
+}
+
+function sanitizeScanPhotosForHistory(
+  photos?: GradeScanPhoto[],
+  options?: { allowDataUrls?: boolean }
+): GradeScanPhoto[] | undefined {
+  const allowDataUrls = options?.allowDataUrls ?? false;
+  const sanitized = normalizeGradeScanPhotos(photos)
+    .filter((photo) => {
+      if (!photo.url?.trim()) return false;
+      if (allowDataUrls) return true;
+      return !isDataUrl(photo.url);
+    })
+    .map((photo, index) => ({
+      url: photo.url.trim(),
+      kind: photo.kind,
+      sort_order: index,
+    }));
+  return sanitized.length > 0 ? sanitized : undefined;
 }
 
 async function downscaleDataUrl(
@@ -91,10 +112,20 @@ async function buildHistoryCacheCardSnapshot(
     const sanitized = { ...card };
     delete sanitized.imageUrl;
     delete sanitized.imageUrls;
+    sanitized.scanPhotos = sanitizeScanPhotosForHistory(card.scanPhotos, {
+      allowDataUrls: false,
+    });
     return sanitized;
   }
   if (!isDataUrl(source)) {
-    return { ...card, imageUrl: source, imageUrls: undefined };
+    return {
+      ...card,
+      imageUrl: source,
+      imageUrls: undefined,
+      scanPhotos: sanitizeScanPhotosForHistory(card.scanPhotos, {
+        allowDataUrls: false,
+      }),
+    };
   }
   const thumbnail = await downscaleDataUrl(source, {
     maxWidth: 120,
@@ -105,9 +136,19 @@ async function buildHistoryCacheCardSnapshot(
     const sanitized = { ...card };
     delete sanitized.imageUrl;
     delete sanitized.imageUrls;
+    sanitized.scanPhotos = sanitizeScanPhotosForHistory(card.scanPhotos, {
+      allowDataUrls: false,
+    });
     return sanitized;
   }
-  return { ...card, imageUrl: thumbnail, imageUrls: undefined };
+  return {
+    ...card,
+    imageUrl: thumbnail,
+    imageUrls: undefined,
+    scanPhotos: sanitizeScanPhotosForHistory(card.scanPhotos, {
+      allowDataUrls: false,
+    }),
+  };
 }
 
 function sanitizeHistoryCardSnapshot(
@@ -123,6 +164,9 @@ function sanitizeHistoryCardSnapshot(
   } else {
     delete sanitized.imageUrl;
   }
+  sanitized.scanPhotos = sanitizeScanPhotosForHistory(card.scanPhotos, {
+    allowDataUrls: false,
+  });
   delete sanitized.imageUrls;
   return sanitized;
 }
@@ -167,6 +211,7 @@ function clearStoredHistoryCard(jobId?: string | null) {
 const SCANNER_TIPS = [
   "Use flat, even lighting — avoid glare, shadows, or direct flash.",
   "Include both front and back for the most accurate analysis.",
+  "Add close-ups for corners, edges, and surface to improve confidence.",
   "Fill the frame and keep the card sharp — blurry edges reduce confidence.",
 ];
 
@@ -268,6 +313,7 @@ export default function GradeEstimatorPage() {
       grade: card.grade,
       imageUrl: card.imageUrl,
       imageUrls: card.imageUrls,
+      scanPhotos: card.scanPhotos,
       confidence: card.confidence,
     }),
     []
@@ -378,7 +424,11 @@ export default function GradeEstimatorPage() {
   );
 
   const handleHistorySelect = useCallback((run: GradeEstimatorHistoryRun) => {
-    const imageUrl = run.card.imageUrl || run.card.imageUrls?.[0] || "";
+    const fallbackImageUrls =
+      run.card.imageUrls && run.card.imageUrls.length > 0
+        ? run.card.imageUrls
+        : run.card.scanPhotos?.map((photo) => photo.url) ?? [];
+    const imageUrl = run.card.imageUrl || fallbackImageUrls[0] || "";
     setIdentifiedCard({
       player_name: run.card.player_name,
       year: run.card.year,
@@ -389,7 +439,8 @@ export default function GradeEstimatorPage() {
       insert: run.card.insert,
       grade: run.card.grade,
       imageUrl,
-      imageUrls: run.card.imageUrls,
+      imageUrls: fallbackImageUrls.length > 0 ? fallbackImageUrls : undefined,
+      scanPhotos: run.card.scanPhotos,
       confidence: run.card.confidence ?? "medium",
     });
     setGradeEstimate(run.estimate);
@@ -412,12 +463,30 @@ export default function GradeEstimatorPage() {
   }, []);
 
   const handleEstimateGrade = async () => {
-    const imageUrls = identifiedCard?.imageUrls?.length
+    const fallbackImageUrls = identifiedCard?.imageUrls?.length
       ? identifiedCard.imageUrls
       : identifiedCard?.imageUrl
       ? [identifiedCard.imageUrl]
       : [];
-    if (imageUrls.length === 0) return;
+    const fallbackScanPhotos = fallbackImageUrls.map((url, index): GradeScanPhoto => ({
+      url,
+      kind: index === 0 ? "front" : index === 1 ? "back" : "other",
+      sort_order: index,
+    }));
+    const scanPhotos = normalizeGradeScanPhotos(
+      identifiedCard?.scanPhotos?.length
+        ? identifiedCard.scanPhotos
+        : fallbackScanPhotos
+    );
+    const frontPhoto = scanPhotos.find((photo) => photo.kind === "front");
+    const backPhoto = scanPhotos.find((photo) => photo.kind === "back");
+    const closeups = scanPhotos.filter(
+      (photo) => photo.kind !== "front" && photo.kind !== "back"
+    );
+    if (!frontPhoto || !backPhoto) {
+      setEstimateError("Front and back photos are required before analysis.");
+      return;
+    }
 
     setEstimatingGrade(true);
     setEstimateAttempted(true);
@@ -436,37 +505,30 @@ export default function GradeEstimatorPage() {
       const response = await fetch("/api/grade-estimate/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          imageUrls.length > 1
+        body: JSON.stringify({
+          front_url: frontPhoto.url,
+          back_url: backPhoto.url,
+          closeups: closeups.map((photo, index) => ({
+            url: photo.url,
+            kind: photo.kind,
+            sort_order: index,
+          })),
+          scanPhotos: scanPhotos.map((photo, index) => ({
+            ...photo,
+            sort_order: index,
+          })),
+          card: identifiedCard
             ? {
-                imageUrls,
-                card: identifiedCard
-                  ? {
-                      player_name: identifiedCard.player_name,
-                      year: identifiedCard.year,
-                      set_name: identifiedCard.set_name,
-                      card_number: identifiedCard.card_number,
-                      parallel_type: identifiedCard.parallel_type,
-                      variation: identifiedCard.variation,
-                      insert: identifiedCard.insert,
-                    }
-                  : undefined,
+                player_name: identifiedCard.player_name,
+                year: identifiedCard.year,
+                set_name: identifiedCard.set_name,
+                card_number: identifiedCard.card_number,
+                parallel_type: identifiedCard.parallel_type,
+                variation: identifiedCard.variation,
+                insert: identifiedCard.insert,
               }
-            : {
-                imageUrl: imageUrls[0],
-                card: identifiedCard
-                  ? {
-                      player_name: identifiedCard.player_name,
-                      year: identifiedCard.year,
-                      set_name: identifiedCard.set_name,
-                      card_number: identifiedCard.card_number,
-                      parallel_type: identifiedCard.parallel_type,
-                      variation: identifiedCard.variation,
-                      insert: identifiedCard.insert,
-                    }
-                  : undefined,
-              }
-        ),
+            : undefined,
+        }),
       });
 
       if (!response.ok) {
@@ -684,6 +746,11 @@ export default function GradeEstimatorPage() {
     const storedCard = readStoredHistoryCard(gradeJobId);
     if (!storedCard) return;
     setIdentifiedCard({
+      imageUrl:
+        storedCard.imageUrl ||
+        storedCard.imageUrls?.[0] ||
+        storedCard.scanPhotos?.[0]?.url ||
+        "",
       player_name: storedCard.player_name,
       year: storedCard.year,
       set_name: storedCard.set_name,
@@ -692,8 +759,11 @@ export default function GradeEstimatorPage() {
       variation: storedCard.variation,
       insert: storedCard.insert,
       grade: storedCard.grade,
-      imageUrl: storedCard.imageUrl || storedCard.imageUrls?.[0] || "",
-      imageUrls: storedCard.imageUrls,
+      imageUrls:
+        storedCard.imageUrls && storedCard.imageUrls.length > 0
+          ? storedCard.imageUrls
+          : storedCard.scanPhotos?.map((photo) => photo.url),
+      scanPhotos: storedCard.scanPhotos,
       confidence: storedCard.confidence ?? "medium",
     });
   }, [gradeJobId, identifiedCard]);
@@ -1020,6 +1090,7 @@ export default function GradeEstimatorPage() {
                               identifiedCard?.imageUrl || identifiedCard?.imageUrls?.[0] || null
                             }
                             imageUrls={identifiedCard?.imageUrls ?? null}
+                            scanPhotos={identifiedCard?.scanPhotos ?? null}
                             showPreliminaryBadge={showPreliminaryBadge}
                           />
                         ) : null}

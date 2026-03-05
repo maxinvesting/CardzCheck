@@ -1,13 +1,22 @@
 /**
- * Export Grade Probability panel as PNG.
+ * Export Grade Probability panel as PNG, or open the print page for PDF.
  *
- * The export captures the live GradeProbabilityPanel DOM node.  A branded
- * report header is injected into the cloned DOM (not visible in the live
- * UI) and an optional attribution line is appended at the bottom.
+ * Two export paths:
+ *   • PNG  — captures the GradeReportPrint layout (white background, scale 3).
+ *   • PDF  — stores report data in sessionStorage and opens /grade-report/print
+ *            in a new window; the browser's native print dialog produces a
+ *            vector-text PDF with zero extra dependencies.
+ *
+ * The legacy exportGradeProbabilityImage / downloadGradeProbabilityImage
+ * functions are kept for backward compatibility.
  */
 
 import html2canvas from "html2canvas";
 import { preTokens } from "@/theme/tokens";
+import type { GradeReportPrintProps } from "@/components/grading/GradeReportPrint";
+
+export const GRADE_REPORT_SESSION_KEY = "cc_grade_report_data";
+const PRINT_PAGE_PATH = "/grade-report/print";
 
 const ATTRIBUTION_TEXT =
   "AI condition estimate by CardzCheck · Not affiliated with PSA or BGS";
@@ -319,4 +328,64 @@ export async function downloadGradeProbabilityImage(
   a.download = `${filenamePrefix}-${Date.now()}.png`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+// ── New high-resolution print-layout exports ──────────────────────────────
+
+/**
+ * Captures an already-rendered GradeReportPrint DOM element as a hi-res PNG.
+ *
+ * The element should be the root of the white print layout (794px wide).
+ * Uses scale 3 and white background for a crisp, professional result.
+ */
+export async function downloadGradeReportPng(
+  element: HTMLElement,
+  filenamePrefix = "cardzcheck-grade-report"
+): Promise<void> {
+  const canvas = await html2canvas(element, {
+    backgroundColor: "#ffffff",
+    scale: 3,
+    useCORS: true,
+    logging: false,
+  });
+
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          reject(new Error("toBlob failed"));
+          return;
+        }
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${filenamePrefix}-${Date.now()}.png`;
+        a.click();
+        URL.revokeObjectURL(url);
+        resolve();
+      },
+      "image/png",
+      1.0
+    );
+  });
+}
+
+/**
+ * Opens the /grade-report/print page in a new window for browser PDF export.
+ *
+ * Serializes all report data into sessionStorage before opening so the print
+ * page can read it without URL query-string length limits.
+ *
+ * The print page auto-calls window.print() after a short hydration delay,
+ * giving the user the browser's native "Save as PDF" dialog.
+ */
+export function openGradeReportPdf(
+  data: GradeReportPrintProps & { slabId?: string }
+): void {
+  try {
+    sessionStorage.setItem(GRADE_REPORT_SESSION_KEY, JSON.stringify(data));
+  } catch {
+    // sessionStorage full or blocked — proceed anyway; print page will show an error
+  }
+  window.open(PRINT_PAGE_PATH, "_blank", "width=960,height=1200,menubar=0,toolbar=0");
 }

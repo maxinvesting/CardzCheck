@@ -335,6 +335,29 @@ export interface GradeEstimateCenteringDetail {
   centering_notes: string;
 }
 
+export type GradeScanPhotoKind =
+  | "front"
+  | "back"
+  | "corner_tl"
+  | "corner_tr"
+  | "corner_bl"
+  | "corner_br"
+  | "edges"
+  | "surface"
+  | "other";
+
+export interface GradeScanPhoto {
+  url: string;
+  kind: GradeScanPhotoKind;
+  sort_order?: number;
+}
+
+export interface GradeEvidencePhotoSources {
+  corners: GradeScanPhotoKind[];
+  edges: GradeScanPhotoKind[];
+  surface: GradeScanPhotoKind[];
+}
+
 export interface GradeEstimate {
   estimated_grade_low: number;
   estimated_grade_high: number;
@@ -353,6 +376,8 @@ export interface GradeEstimate {
   analysis_status?: "ok" | "low_confidence" | "unable";
   analysis_reason?: string;
   analysis_warning_code?: "parse_error" | "low_confidence" | "unable";
+  evidence_photo_sources?: GradeEvidencePhotoSources;
+  visibility_notes?: string[];
 }
 
 export interface GradeProbabilities {
@@ -413,6 +438,7 @@ export interface GradeEstimatorHistoryCardSnapshot {
   grade?: string;
   imageUrl?: string;
   imageUrls?: string[];
+  scanPhotos?: GradeScanPhoto[];
   confidence?: "high" | "medium" | "low";
 }
 
@@ -554,6 +580,7 @@ export interface SearchFormData {
 export interface CardIdentificationResult extends SearchFormData {
   imageUrl: string;
   imageUrls?: string[];
+  scanPhotos?: GradeScanPhoto[];
   userImageUrl?: string;
   stockImageUrl?: string;
   ebayImageUrl?: string;

@@ -9,6 +9,7 @@ import {
 import { parseGradeEstimateModelOutput } from "@/lib/grading/gradeEstimateModel";
 import type { GradeEstimateJobDependencies } from "@/lib/grading/gradeEstimateJob";
 import type { GradeEstimate } from "@/types";
+import { isCloseupKind } from "@/lib/grading/scanPhotos";
 import {
   fetchGradeCmv,
   computeWorthGrading,
@@ -37,6 +38,12 @@ Centering gate rules (must enforce):
 Surface rules (must enforce):
 - Extract explicit surface defects with location + severity.
 - If glare/blur blocks surface reading, say that clearly, lower confidence, and shift probabilities downward.
+
+Close-up priority rules (must enforce when close-ups are available):
+- Corners evidence must prioritize corner_tl/corner_tr/corner_bl/corner_br close-ups.
+- Edges evidence must prioritize edges close-ups.
+- Surface evidence must prioritize surface close-ups.
+- If the relevant close-up kind is missing, fall back to front/back and explicitly mention that fallback.
 
 Output ONLY valid JSON (no markdown, no prose) with this exact schema:
 {
@@ -110,7 +117,13 @@ Output ONLY valid JSON (no markdown, no prose) with this exact schema:
     { "label": "BGS 9", "probability": 0.0 },
     { "label": "BGS 8.5", "probability": 0.0 },
     { "label": "BGS 8 or lower", "probability": 0.0 }
-  ]
+  ],
+  "evidence_sources": {
+    "corners": ["corner_tl|corner_tr|corner_bl|corner_br|front|back|other"],
+    "edges": ["edges|front|back|other"],
+    "surface": ["surface|front|back|other"]
+  },
+  "visibility_notes": ["..."]
 }
 
 Hard requirements:
@@ -129,6 +142,23 @@ function getAnthropicClient() {
 async function runGradeModel(
   images: ResolvedGradeEstimateImage[]
 ): Promise<string | null> {
+  const closeupCount = images.filter((image) => isCloseupKind(image.kind)).length;
+  const photoRoles = images
+    .map(
+      (image, index) =>
+        `Photo ${index + 1}: ${image.kind.replace(/_/g, " ")}${
+          image.kind === "front" || image.kind === "back"
+            ? " (required base view)"
+            : " (close-up)"
+        }`
+    )
+    .join("\n");
+  const photoRolePrompt = `Photo role map (use this for evidence attribution):\n${photoRoles}\n\nClose-up count: ${closeupCount}.\n${
+    closeupCount === 0
+      ? "No close-up photos were provided. Treat corners/edges/surface visibility as limited, include a limited visibility note, and avoid high confidence."
+      : "Use close-up photos as primary evidence for the matching categories."
+  }`;
+
   const anthropic = getAnthropicClient();
   const message = await anthropic.messages.create({
     model: "claude-sonnet-4-20250514",
@@ -137,6 +167,10 @@ async function runGradeModel(
       {
         role: "user",
         content: [
+          {
+            type: "text",
+            text: photoRolePrompt,
+          },
           ...images.map((image) => ({
             type: "image" as const,
             source: {

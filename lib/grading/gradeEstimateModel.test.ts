@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { parseGradeEstimateModelOutput } from "./gradeEstimateModel";
 import { buildImageStats } from "./fallbackEstimate";
+import type { GradeScanPhotoKind } from "@/types";
 
-function runParse(payload: unknown) {
+function runParse(payload: unknown, options?: { scanPhotoKinds?: GradeScanPhotoKind[] }) {
   return parseGradeEstimateModelOutput({
     modelText: JSON.stringify(payload),
     imageStats: buildImageStats([250_000, 320_000, 410_000]),
+    scanPhotoKinds: options?.scanPhotoKinds ?? ["front", "back", "surface"],
   });
 }
 
@@ -361,5 +363,55 @@ describe("parseGradeEstimateModelOutput", () => {
     expect(highDist["10"]).toBeGreaterThan(lowDist["10"]);
     expect(highDist["9"]).toBeGreaterThan(lowDist["9"]);
     expect(lowDist["7_or_lower"]).toBeGreaterThan(highDist["7_or_lower"]);
+  });
+
+  it("caps confidence when no close-up photos are provided", () => {
+    const parsed = runParse(
+      {
+        status: "ok",
+        reason: "Clear base photos",
+        estimated_grade_low: 8,
+        estimated_grade_high: 10,
+        grade_notes: "Clean card.",
+        image_quality: {
+          overall_image_score: 86,
+          subscores: {
+            focus_sharpness: 22,
+            lighting_glare_control: 21,
+            coverage_angles: 22,
+            resolution_distance: 21,
+          },
+          key_issues: [],
+          retake_tips: ["Better photos = more accurate grading."],
+        },
+        confidence: {
+          overall_confidence_score: 88,
+          confidence_label: "high",
+          limiting_factors: [],
+          what_was_clear: ["Centering", "General condition"],
+        },
+        centering: {
+          left_right_ratio: "51/49",
+          top_bottom_ratio: "52/48",
+          centering_confidence_score: 90,
+          centering_severity_0_3: 0,
+          centering_notes: "Strong centering.",
+        },
+        surface: "Looks clean.",
+        corners: "Looks sharp.",
+        edges: "Looks clean.",
+        probabilities: [
+          { label: "PSA 10", probability: 0.3 },
+          { label: "PSA 9", probability: 0.45 },
+          { label: "PSA 8", probability: 0.18 },
+          { label: "PSA 7 or lower", probability: 0.07 },
+        ],
+      },
+      { scanPhotoKinds: ["front", "back"] }
+    );
+
+    expect(parsed.estimate.confidence?.overall_confidence_score).toBeLessThanOrEqual(65);
+    expect(parsed.estimate.grade_probabilities?.confidence).not.toBe("high");
+    expect(parsed.estimate.visibility_notes?.join(" ")).toContain("Limited visibility");
   });
 });
