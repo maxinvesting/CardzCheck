@@ -335,6 +335,19 @@ export interface GradeEstimateCenteringDetail {
   centering_notes: string;
 }
 
+export interface GradeEstimateAnalysisMetadata {
+  feature_version?: string;
+  centering_score?: number;
+  surface_score?: number;
+  corners_score?: number;
+  edges_score?: number;
+  weighted_evidence_score?: number;
+  calibrated_score?: number;
+  worst_axis_deviation?: number;
+  parse_incomplete_flag?: boolean;
+  limited_visibility_flag?: boolean;
+}
+
 export type GradeScanPhotoKind =
   | "front"
   | "back"
@@ -378,6 +391,9 @@ export interface GradeEstimate {
   analysis_warning_code?: "parse_error" | "low_confidence" | "unable";
   evidence_photo_sources?: GradeEvidencePhotoSources;
   visibility_notes?: string[];
+  model_version_used?: string;
+  feature_version_used?: string;
+  analysis_metadata?: GradeEstimateAnalysisMetadata;
 }
 
 export interface GradeProbabilities {
@@ -449,6 +465,23 @@ export interface GradeEstimatorHistoryRun {
   card: GradeEstimatorHistoryCardSnapshot;
   estimate: GradeEstimate;
   post_grading_value?: WorthGradingResult | null;
+  labels?: GradeScanLabel[];
+  actual_grade_psa?: string | null;
+  model_version_used?: string | null;
+  feature_version_used?: string | null;
+  created_at: string;
+}
+
+export type GradeScanLabelGrader = "psa" | "bgs" | "sgc" | "tag" | "other";
+
+export interface GradeScanLabel {
+  id: string;
+  scan_id: string;
+  user_id: string;
+  grader: GradeScanLabelGrader;
+  label_text: string;
+  label_grade_numeric?: number | null;
+  evidence_url?: string | null;
   created_at: string;
 }
 

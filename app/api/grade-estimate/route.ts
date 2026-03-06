@@ -230,7 +230,7 @@ export async function POST(request: NextRequest) {
     const textContent = message.content.find((c) => c.type === "text");
     const modelText =
       textContent && textContent.type === "text" ? textContent.text : null;
-    const parsed = parseGradeEstimateModelOutput({
+    const parsed = await parseGradeEstimateModelOutput({
       modelText,
       imageStats,
       scanPhotoKinds: scanPhotos.map((photo) => photo.kind),

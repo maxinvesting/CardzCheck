@@ -8,6 +8,7 @@ import GradeProbabilityPanel from "@/components/grading/GradeProbabilityPanel";
 import GradeEstimateProgressPanel from "@/components/grading/GradeEstimateProgressPanel";
 import GradeEstimatorValuePanel from "@/components/GradeEstimatorValuePanel";
 import GradeEstimatorHistoryPanel from "@/components/grading/GradeEstimatorHistoryPanel";
+import { GradeScanLabelPanel } from "@/components/grading/GradeScanLabelPanel";
 import SubmissionBuilderPanel from "@/components/grading/SubmissionBuilderPanel";
 import GradeAnalysisAnimation from "@/components/grading/GradeAnalysisAnimation";
 import ConfirmAddCardModal from "@/components/ConfirmAddCardModal";
@@ -293,6 +294,11 @@ export default function GradeEstimatorPage() {
   const [toast, setToast] = useState<{ type: "success"; message: string } | null>(null);
   const [historyRefreshToken, setHistoryRefreshToken] = useState(0);
   const [lastSavedJobId, setLastSavedJobId] = useState<string | null>(null);
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const [labelsEnabledByRole, setLabelsEnabledByRole] = useState(false);
+  const labelsEnabledByEnv =
+    process.env.NEXT_PUBLIC_ENABLE_GRADING_LABELS === "true";
+  const gradingLabelsEnabled = labelsEnabledByEnv || labelsEnabledByRole;
 
   const buildQueuedSteps = (): GradeEstimateJobSteps => ({
     ocr_identity: { status: "queued" },
@@ -334,6 +340,7 @@ export default function GradeEstimatorPage() {
     setElapsedLabel(null);
     setShowMarketAnalysis(false);
     setShowAnimation(false);
+    setActiveRunId(null);
     if (typeof window !== "undefined") {
       sessionStorage.removeItem("gradeEstimateJobId");
       sessionStorage.removeItem("gradeEstimateJobStart");
@@ -362,6 +369,7 @@ export default function GradeEstimatorPage() {
         };
         upsertCachedHistoryRun(fallbackRun);
         setLastSavedJobId(options.jobId);
+        setActiveRunId(fallbackRun.id);
         setHistoryRefreshToken((prev) => prev + 1);
         return true;
       }
@@ -401,6 +409,7 @@ export default function GradeEstimatorPage() {
 
         upsertCachedHistoryRun(fallbackRun);
         setLastSavedJobId(options.jobId);
+        setActiveRunId(fallbackRun.id);
         setHistoryRefreshToken((prev) => prev + 1);
         return true;
       } catch (error) {
@@ -416,6 +425,7 @@ export default function GradeEstimatorPage() {
         };
         upsertCachedHistoryRun(fallbackRun);
         setLastSavedJobId(options.jobId);
+        setActiveRunId(fallbackRun.id);
         setHistoryRefreshToken((prev) => prev + 1);
         return true;
       }
@@ -456,6 +466,7 @@ export default function GradeEstimatorPage() {
     setElapsedLabel(null);
     setShowMarketAnalysis(false);
     setShowAnimation(false);
+    setActiveRunId(run.id);
     if (typeof window !== "undefined") {
       sessionStorage.removeItem("gradeEstimateJobId");
       sessionStorage.removeItem("gradeEstimateJobStart");
@@ -501,6 +512,7 @@ export default function GradeEstimatorPage() {
     setElapsedLabel(null);
     setShowMarketAnalysis(false);
     setShowAnimation(true);
+    setActiveRunId(null);
     try {
       const response = await fetch("/api/grade-estimate/start", {
         method: "POST",
@@ -621,6 +633,37 @@ export default function GradeEstimatorPage() {
       }
     }
   }, [gradeJobId]);
+
+  useEffect(() => {
+    if (labelsEnabledByEnv) {
+      setLabelsEnabledByRole(false);
+      return;
+    }
+    if (!authUser || authLoading) {
+      setLabelsEnabledByRole(false);
+      return;
+    }
+
+    let cancelled = false;
+    const loadRole = async () => {
+      try {
+        const response = await fetch("/api/user/name", { cache: "no-store" });
+        const payload = await response.json().catch(() => null);
+        if (cancelled) return;
+        const role = typeof payload?.app_role === "string" ? payload.app_role : null;
+        setLabelsEnabledByRole(role === "admin" || role === "owner");
+      } catch {
+        if (!cancelled) {
+          setLabelsEnabledByRole(false);
+        }
+      }
+    };
+
+    void loadRole();
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, authUser, labelsEnabledByEnv]);
 
   useEffect(() => {
     if (!gradeJobId) return;
@@ -862,6 +905,7 @@ export default function GradeEstimatorPage() {
                     setEstimateAttempted(false);
                     setGradeJob(null);
                     setGradeJobId(null);
+                    setActiveRunId(null);
                   }}
                   onReset={() => {
                     setIdentifiedCard(null);
@@ -870,6 +914,7 @@ export default function GradeEstimatorPage() {
                     setValueError(null);
                     setGradeJob(null);
                     setGradeJobId(null);
+                    setActiveRunId(null);
                   }}
                   disabled={false}
                 />
@@ -1094,6 +1139,11 @@ export default function GradeEstimatorPage() {
                             showPreliminaryBadge={showPreliminaryBadge}
                           />
                         ) : null}
+
+                        <GradeScanLabelPanel
+                          enabled={gradingLabelsEnabled}
+                          scanId={activeRunId}
+                        />
 
                         {gradeEstimate && (valueLoading || valueResult || valueError) ? (
                           <div className="space-y-2">

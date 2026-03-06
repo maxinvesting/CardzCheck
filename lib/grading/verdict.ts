@@ -16,13 +16,15 @@ export type VerdictGrader = "PSA" | "BGS" | "SGC" | "TAG";
 export interface GradeVerdict {
   recommendation: VerdictRecommendation;
   suggestedGrader: VerdictGrader;
+  suggested_grader: VerdictGrader;
   reasoning: string;
+  disclaimer: string;
   expectedOutcome: string;
   strategyTip: string;
 }
 
 export const VERDICT_DISCLAIMER =
-  "AI Estimate Disclaimer:\nCardzCheck provides AI-generated grading estimates based on submitted images.\nThis is not a professional grade. Final grades are determined by official grading companies such as PSA, BGS, SGC, or TAG.";
+  "AI estimate only. Not a professional grade. Final grades are determined by official grading companies such as PSA, BGS, SGC, or TAG.";
 
 type VerdictCardIdentity = {
   year?: string;
@@ -121,22 +123,21 @@ function getMostLikely(outcomes: GradeOutcome[]): GradeOutcome | null {
 
 function getSuggestedGrader(options: {
   year: number | null;
+  vintageOverride?: boolean | null;
+  preferTag?: boolean;
   p10: number;
   confidence: "high" | "medium" | "low";
   recommendation: VerdictRecommendation;
-  imageScore: number;
 }): VerdictGrader {
-  const isVintage = options.year !== null && options.year <= 1989;
+  const isVintage =
+    options.vintageOverride === true ||
+    (options.vintageOverride !== false && options.year !== null && options.year <= 1989);
   if (isVintage) return "SGC";
 
   if (options.p10 >= 0.3 && options.confidence !== "low") return "BGS";
 
   const isModern = options.year !== null && options.year >= 2018;
-  if (
-    isModern &&
-    options.imageScore >= 78 &&
-    options.recommendation !== "Rescan Needed"
-  ) {
+  if (options.preferTag && isModern && options.recommendation !== "Rescan Needed") {
     return "TAG";
   }
 
@@ -184,7 +185,11 @@ function buildStrategyTip(
 
 export function buildGradeVerdict(
   estimate: GradeEstimate,
-  cardIdentity?: VerdictCardIdentity
+  cardIdentity?: VerdictCardIdentity,
+  options?: {
+    preferTag?: boolean;
+    vintageOverride?: boolean | null;
+  }
 ): GradeVerdict {
   const outcomes = getPsaOutcomes(estimate);
   const p10 = getOutcomeProbability(outcomes, "PSA 10");
@@ -202,14 +207,19 @@ export function buildGradeVerdict(
   const confidenceScore =
     estimate.confidence?.overall_confidence_score ??
     (confidence === "high" ? 82 : confidence === "low" ? 38 : 60);
-  const imageScore = estimate.image_quality?.overall_image_score ?? 60;
   const photoFlags = hasPhotoQualityFlags(estimate);
+  const limitedVisibilityFlag =
+    estimate.analysis_metadata?.limited_visibility_flag === true ||
+    (estimate.visibility_notes ?? []).some((note) =>
+      note.toLowerCase().includes("limited visibility")
+    );
 
   let recommendation: VerdictRecommendation;
   if (
     confidence === "low" ||
     confidenceScore < 50 ||
     photoFlags ||
+    limitedVisibilityFlag ||
     estimate.analysis_status === "unable"
   ) {
     recommendation = "Rescan Needed";
@@ -224,10 +234,11 @@ export function buildGradeVerdict(
   const year = parseYear(cardIdentity);
   const suggestedGrader = getSuggestedGrader({
     year,
+    vintageOverride: options?.vintageOverride ?? null,
+    preferTag: options?.preferTag ?? false,
     p10,
     confidence,
     recommendation,
-    imageScore,
   });
 
   const ev =
@@ -255,7 +266,9 @@ export function buildGradeVerdict(
   return {
     recommendation,
     suggestedGrader,
+    suggested_grader: suggestedGrader,
     reasoning,
+    disclaimer: VERDICT_DISCLAIMER,
     expectedOutcome: `${likelyLabel} (${formatPercent(likelyProb)})`,
     strategyTip: buildStrategyTip(recommendation, suggestedGrader),
   };

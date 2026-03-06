@@ -10,9 +10,12 @@ import {
 import { buildBusinessConsultantContext } from "@/lib/business/consultant-context";
 import { BUSINESS_CONSULTANT_MASTER_PROMPT } from "@/lib/ai/business-consultant-prompt";
 import type { BusinessConsultation } from "@/types";
+import { parseBusinessConsultantReport } from "@/lib/business/consultant-report";
 
 interface ConsultantRequest {
   prompt: string;
+  context?: string | null;
+  template_key?: string | null;
 }
 
 const CONSULTATION_HISTORY_LIMIT = 25;
@@ -85,6 +88,8 @@ export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as ConsultantRequest;
     const prompt = body?.prompt?.trim();
+    const context = body?.context?.trim() || "";
+    const templateKey = body?.template_key?.trim() || null;
 
     if (!prompt) {
       return NextResponse.json(
@@ -152,13 +157,33 @@ ADDITIONAL EXECUTION RULES:
 - Use only the provided BUSINESS DATA JSON.
 - If a requested metric is not present in the JSON, explicitly mark it as a Constraint.
 - Distinguish deterministic values from directional estimates.
-- Use readable markdown headings and bullets with short paragraphs.
-- Do not use separator lines (-----), boxed labels, or the term "AI" in user-facing output.`,
+
+OUTPUT FORMAT (STRICT):
+- Respond with a single JSON object ONLY (no markdown, no code fences, no commentary).
+- The JSON MUST conform to this schema:
+{
+  "report_title": string,
+  "timestamp": string,
+  "data_coverage": { "inventory_count": number, "sales_count": number, "missing": string[] },
+  "kpis": [{ "label": string, "value": string, "hint": string }],
+  "high_risk_positions": [{ "item": string, "cost_basis": number, "cmv": number, "delta_pct": number, "reason": string }],
+  "recommended_actions": [{ "action": string, "impact": string, "effort": "low"|"medium"|"high" }],
+  "notes": string[]
+}
+- Arrays may be empty, but all keys must be present.
+- All numeric fields must be numbers (not strings).
+- The JSON must be parseable with a standard JSON parser without any preprocessing.`,
       messages: [
         {
           role: "user",
-          content: `BUSINESS QUESTION:
+          content: `BUSINESS QUESTION (PRIMARY DECISION TO ANALYZE):
 ${prompt}
+
+TEMPLATE CATEGORY:
+${templateKey ?? "custom"}
+
+ADDITIONAL CONTEXT / CONSTRAINTS (OPTIONAL, PROVIDED BY USER):
+${context || "None provided."}
 
 BUSINESS DATA JSON (SOURCE OF TRUTH):
 ${JSON.stringify(businessContext, null, 2)}`,
@@ -167,12 +192,18 @@ ${JSON.stringify(businessContext, null, 2)}`,
     });
 
     const textBlocks = response.content.filter((block) => block.type === "text");
-    const consultantResponse =
+    const modelText =
       textBlocks.length > 0
         ? textBlocks
             .map((block) => (block.type === "text" ? block.text : ""))
             .join("\n")
             .trim()
+        : null;
+
+    const { report, rawText } = parseBusinessConsultantReport(modelText);
+    const consultantResponse =
+      rawText && rawText.length > 0
+        ? rawText
         : "Constraint: Response unavailable for this request.";
 
     const contextSummary = {
@@ -257,6 +288,7 @@ ${JSON.stringify(businessContext, null, 2)}`,
     return NextResponse.json({
       ok: true,
       response: consultantResponse,
+      report,
       consultation: savedConsultation,
       saved: Boolean(savedConsultation),
       saveWarning,

@@ -20,6 +20,18 @@ import {
   normalizeDistribution,
   type GradeOutcome,
 } from "@/lib/grading/gradeProbability";
+import {
+  GRADE_FEATURE_VERSION,
+  getGradeScanFeatureVector,
+  ratioDeviation,
+  scoreCentering,
+  scoreFromFindings,
+} from "@/lib/grading/gradeFeatures";
+import {
+  loadActiveModel,
+  predictPsaProbabilities,
+  PSA_CALIBRATOR_MODEL_KEY,
+} from "@/lib/grading/calibrator";
 
 type GradeEstimateEvidence = {
   centering: string;
@@ -138,25 +150,6 @@ function normalizeConfidenceLabel(
   return "low";
 }
 
-function parseRatioPart(value: string): number | null {
-  const parsed = Number(value.trim());
-  if (!Number.isFinite(parsed)) return null;
-  if (parsed < 0 || parsed > 100) return null;
-  return parsed;
-}
-
-function ratioDeviation(ratio: string): number | null {
-  const match = ratio.match(/^\s*(\d{1,2}(?:\.\d+)?)\s*\/\s*(\d{1,2}(?:\.\d+)?)\s*$/);
-  if (!match) return null;
-  const left = parseRatioPart(match[1]);
-  const right = parseRatioPart(match[2]);
-  if (left === null || right === null) return null;
-  const total = left + right;
-  if (total <= 0) return null;
-  const normalizedLeft = (left / total) * 100;
-  const normalizedRight = (right / total) * 100;
-  return Math.max(normalizedLeft, normalizedRight);
-}
 
 function parseFinding(
   raw: unknown,
@@ -312,6 +305,10 @@ function applyLimitedVisibilityAdjustments(
       estimate.analysis_status === "unable" ? "unable" : "low_confidence",
     grade_notes: `${estimate.grade_notes} ${LIMITED_VISIBILITY_NOTE}`,
     visibility_notes: limitedVisibilityNotes,
+    analysis_metadata: {
+      ...(estimate.analysis_metadata ?? {}),
+      limited_visibility_flag: true,
+    },
   };
 
   if (adjusted.grade_probabilities?.psa) {
@@ -405,46 +402,6 @@ function mapWeightedScoreToRange(weightedScore: number): { low: number; high: nu
   return { low: 5, high: 7 };
 }
 
-function hasAssessmentBlockedLanguage(text: string): boolean {
-  const lower = text.toLowerCase();
-  return (
-    lower.includes("unable") ||
-    lower.includes("unassessable") ||
-    lower.includes("cannot assess") ||
-    lower.includes("difficult to assess") ||
-    lower.includes("blocked by glare") ||
-    lower.includes("blur")
-  );
-}
-
-function scoreFromFindings(
-  findings: GradeFinding[],
-  summaryText: string,
-  baselineScore: number
-): number {
-  if (findings.length === 0) {
-    return hasAssessmentBlockedLanguage(summaryText) ? baselineScore - 20 : baselineScore;
-  }
-
-  const weightedPenalty =
-    findings.reduce((sum, finding) => {
-      const confidenceFactor = clamp(finding.confidence_0_100 / 100, 0.2, 1);
-      return sum + finding.severity_0_3 * 20 * confidenceFactor;
-    }, 0) / findings.length;
-
-  return clamp(100 - weightedPenalty, 5, 100);
-}
-
-function scoreCentering(centering: GradeEstimateCenteringDetail): number {
-  const worstAxis = Math.max(
-    ratioDeviation(centering.left_right_ratio) ?? 50,
-    ratioDeviation(centering.top_bottom_ratio) ?? 50
-  );
-  const axisPenalty = clamp((worstAxis - 50) * 6, 0, 70);
-  const severityPenalty = centering.centering_severity_0_3 * 9;
-  const confidenceBoost = (centering.centering_confidence_score - 50) * 0.25;
-  return clamp(100 - axisPenalty - severityPenalty + confidenceBoost, 5, 100);
-}
 
 function buildDeterministicPsaFromWeightedScore(
   weightedScore: number
@@ -529,11 +486,13 @@ function applyCenteringGate(
 
 function applyConfidencePenalty(
   psa: GradeProbabilities["psa"],
-  confidence: GradeEstimateConfidence["confidence_label"]
+  confidence: GradeEstimateConfidence["confidence_label"],
+  options?: { strengthMultiplier?: number }
 ): GradeProbabilities["psa"] {
   if (confidence === "high") return psa;
   const adjusted = { ...psa };
-  const shift = confidence === "medium" ? 0.08 : 0.16;
+  const strengthMultiplier = clamp(options?.strengthMultiplier ?? 1, 0, 1.25);
+  const shift = (confidence === "medium" ? 0.08 : 0.16) * strengthMultiplier;
   const from10 = Math.min(adjusted["10"], shift * 0.6);
   const from9 = Math.min(adjusted["9"], shift * 0.4);
   adjusted["10"] -= from10;
@@ -543,12 +502,12 @@ function applyConfidencePenalty(
   return normalizeProbabilityMap(adjusted);
 }
 
-function buildEstimateFromParsed(
+async function buildEstimateFromParsed(
   result: Record<string, unknown>,
   imageStats: ImageStats,
   parsedWarning: boolean,
   scanPhotoKinds: GradeScanPhotoKind[]
-): GradeEstimate {
+): Promise<GradeEstimate> {
   const fallback = buildFallbackGradeEstimate({
     imageStats,
     status: "unable",
@@ -701,7 +660,11 @@ function buildEstimateFromParsed(
       ? "low_confidence"
       : status;
 
-  const centeringScore = scoreCentering(centeringDetail);
+  const worstAxisDeviation = Math.max(
+    ratioDeviation(centeringDetail.left_right_ratio) ?? 50,
+    ratioDeviation(centeringDetail.top_bottom_ratio) ?? 50
+  );
+  const centeringScore = scoreCentering(centeringDetail, worstAxisDeviation);
   const surfaceScore = scoreFromFindings(
     surfaceFindings,
     toText(result.surface, ""),
@@ -732,6 +695,7 @@ function buildEstimateFromParsed(
   const mappedRange = mapWeightedScoreToRange(calibratedScore);
   const finalLow = Math.min(normalizedLow, mappedRange.low);
   const finalHigh = Math.max(normalizedHigh, mappedRange.high);
+  const limitedVisibilityFlag = !hasCloseupKinds(scanPhotoKinds);
 
   const defaultEvidenceSources = buildDefaultEvidenceSources(scanPhotoKinds);
   const evidencePhotoSources = parseEvidenceSources(
@@ -776,31 +740,88 @@ function buildEstimateFromParsed(
       : undefined) as GradeEstimateWarningCode | undefined,
     evidence_photo_sources: evidencePhotoSources,
     visibility_notes: visibilityNotes,
+    feature_version_used: GRADE_FEATURE_VERSION,
+    analysis_metadata: {
+      feature_version: GRADE_FEATURE_VERSION,
+      centering_score: centeringScore,
+      surface_score: surfaceScore,
+      corners_score: cornersScore,
+      edges_score: edgesScore,
+      weighted_evidence_score: weightedEvidenceScore,
+      calibrated_score: calibratedScore,
+      worst_axis_deviation: worstAxisDeviation,
+      parse_incomplete_flag: parseWasIncomplete,
+      limited_visibility_flag: limitedVisibilityFlag,
+    },
   };
+
+  const featureVector = getGradeScanFeatureVector({
+    estimate,
+    imageQuality,
+    centeringDetail,
+    findings: {
+      surface: estimate.surface_findings,
+      corners: estimate.corners_findings,
+      edges: estimate.edges_findings,
+    },
+    scanPhotoKinds,
+    imageStats,
+    parseIncompleteFlag: parseWasIncomplete,
+    limitedVisibilityFlag,
+    analysisStatus,
+    scoreSnapshot: {
+      centering_score: centeringScore,
+      surface_score: surfaceScore,
+      corners_score: cornersScore,
+      edges_score: edgesScore,
+      weighted_evidence_score: weightedEvidenceScore,
+      calibrated_score: calibratedScore,
+      worst_axis_deviation: worstAxisDeviation,
+    },
+    featureVersion: GRADE_FEATURE_VERSION,
+  });
 
   const psaOutcomesRaw = normalizeOutcomeArray(result.probabilities);
   const bgsOutcomesRaw = normalizeOutcomeArray(result.bgs_probabilities);
   const rangeLabel = buildRangeLabel(finalLow, finalHigh) ?? "PSA 6-8";
+  const activeCalibrator = await loadActiveModel(PSA_CALIBRATOR_MODEL_KEY);
+  const calibratorPsa =
+    activeCalibrator &&
+    activeCalibrator.feature_version === GRADE_FEATURE_VERSION
+      ? predictPsaProbabilities({
+          modelRecord: activeCalibrator,
+          features: featureVector,
+        })
+      : null;
+
   const modelPsa = psaOutcomesRaw
     ? mapOutcomesToPsa(psaOutcomesRaw)
     : mapOutcomesToPsa(
         distributionFromRange(rangeLabel, confidence.confidence_label)
       );
   const deterministicPsa = buildDeterministicPsaFromWeightedScore(calibratedScore);
-  let psa = blendPsaDistributions(
-    deterministicPsa,
-    modelPsa,
-    confidence.confidence_label,
-    analysisStatus
-  );
+  let psa = calibratorPsa
+    ? calibratorPsa
+    : blendPsaDistributions(
+        deterministicPsa,
+        modelPsa,
+        confidence.confidence_label,
+        analysisStatus
+      );
   psa = applyCenteringGate(psa, centeringDetail, analysisStatus);
-  psa = applyConfidencePenalty(psa, confidence.confidence_label);
+  psa = applyConfidencePenalty(psa, confidence.confidence_label, {
+    strengthMultiplier: calibratorPsa ? 0.35 : 1,
+  });
   maybeWarnProbabilitySum(
     "PSA",
     Object.values(psa).reduce((sum, value) => sum + value, 0)
   );
 
-  let bgs = bgsOutcomesRaw ? mapOutcomesToBgs(bgsOutcomesRaw) : mapPsaToBgs(psa);
+  let bgs = calibratorPsa
+    ? mapPsaToBgs(psa)
+    : bgsOutcomesRaw
+    ? mapOutcomesToBgs(bgsOutcomesRaw)
+    : mapPsaToBgs(psa);
   maybeWarnProbabilitySum(
     "BGS",
     Object.values(bgs).reduce((sum, value) => sum + value, 0)
@@ -812,15 +833,19 @@ function buildEstimateFromParsed(
     bgs,
     confidence: confidence.confidence_label,
   };
+  if (calibratorPsa && activeCalibrator) {
+    estimate.model_version_used = activeCalibrator.version;
+    estimate.feature_version_used = activeCalibrator.feature_version;
+  }
 
   return applyLimitedVisibilityAdjustments(estimate, scanPhotoKinds);
 }
 
-export function parseGradeEstimateModelOutput(options: {
+export async function parseGradeEstimateModelOutput(options: {
   modelText: string | null;
   imageStats: ImageStats;
   scanPhotoKinds?: GradeScanPhotoKind[];
-}): GradeEstimateModelParseResult {
+}): Promise<GradeEstimateModelParseResult> {
   const scanPhotoKinds = options.scanPhotoKinds ?? ["front", "back"];
   const noResponseFallback = buildFallbackGradeEstimate({
     imageStats: options.imageStats,
@@ -834,6 +859,13 @@ export function parseGradeEstimateModelOutput(options: {
       noResponseFallback,
       scanPhotoKinds
     );
+    estimate.feature_version_used = GRADE_FEATURE_VERSION;
+    estimate.analysis_metadata = {
+      ...(estimate.analysis_metadata ?? {}),
+      feature_version: GRADE_FEATURE_VERSION,
+      parse_incomplete_flag: true,
+      limited_visibility_flag: !hasCloseupKinds(scanPhotoKinds),
+    };
     return {
       estimate,
       probabilities: mapPsaToOutcomes(estimate.grade_probabilities!.psa),
@@ -860,6 +892,13 @@ export function parseGradeEstimateModelOutput(options: {
       warningCode: "parse_error",
     });
     const estimate = applyLimitedVisibilityAdjustments(fallback, scanPhotoKinds);
+    estimate.feature_version_used = GRADE_FEATURE_VERSION;
+    estimate.analysis_metadata = {
+      ...(estimate.analysis_metadata ?? {}),
+      feature_version: GRADE_FEATURE_VERSION,
+      parse_incomplete_flag: true,
+      limited_visibility_flag: !hasCloseupKinds(scanPhotoKinds),
+    };
     return {
       estimate,
       probabilities: mapPsaToOutcomes(estimate.grade_probabilities!.psa),
@@ -877,7 +916,7 @@ export function parseGradeEstimateModelOutput(options: {
     };
   }
 
-  const estimate = buildEstimateFromParsed(
+  const estimate = await buildEstimateFromParsed(
     parsed.value ?? {},
     options.imageStats,
     Boolean(parsed.warning),

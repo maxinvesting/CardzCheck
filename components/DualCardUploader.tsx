@@ -696,7 +696,7 @@ export default function DualCardUploader({
         </section>
       ) : null}
 
-      <div className="flex items-center justify-between px-1">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-1">
         <div className="flex items-center gap-2 text-xs text-slate-500">
           <span className={`h-2 w-2 rounded-full ${frontFile ? "bg-emerald-500" : "bg-slate-300"}`} />
           Front
@@ -706,16 +706,33 @@ export default function DualCardUploader({
           Close-ups ({closeups.length})
         </div>
 
-        {totalPhotos > 0 ? (
+        <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={handleReset}
-            className="text-xs text-slate-500 underline-offset-2 transition-colors hover:text-slate-700 hover:underline"
+            disabled={Boolean(disabled) || closeupSlotsRemaining <= 0}
+            onClick={() => closeupInputRef.current?.click()}
+            className="text-xs font-medium text-slate-600 underline-offset-2 transition-colors hover:text-slate-800 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Clear all
+            Add close-up photos
           </button>
-        ) : null}
+
+          {totalPhotos > 0 ? (
+            <button
+              type="button"
+              onClick={handleReset}
+              className="text-xs text-slate-500 underline-offset-2 transition-colors hover:text-slate-700 hover:underline"
+            >
+              Clear all
+            </button>
+          ) : null}
+        </div>
       </div>
+
+      {canAnalyze && closeups.length === 0 ? (
+        <p className="px-1 text-xs text-slate-500">
+          Optional: add close-up photos for corners, edges, and surface before scanning.
+        </p>
+      ) : null}
 
       <button
         type="button"

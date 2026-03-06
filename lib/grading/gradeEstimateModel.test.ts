@@ -3,7 +3,10 @@ import { parseGradeEstimateModelOutput } from "./gradeEstimateModel";
 import { buildImageStats } from "./fallbackEstimate";
 import type { GradeScanPhotoKind } from "@/types";
 
-function runParse(payload: unknown, options?: { scanPhotoKinds?: GradeScanPhotoKind[] }) {
+async function runParse(
+  payload: unknown,
+  options?: { scanPhotoKinds?: GradeScanPhotoKind[] }
+) {
   return parseGradeEstimateModelOutput({
     modelText: JSON.stringify(payload),
     imageStats: buildImageStats([250_000, 320_000, 410_000]),
@@ -12,8 +15,8 @@ function runParse(payload: unknown, options?: { scanPhotoKinds?: GradeScanPhotoK
 }
 
 describe("parseGradeEstimateModelOutput", () => {
-  it("accepts the enhanced schema and extracts new fields", () => {
-    const parsed = runParse({
+  it("accepts the enhanced schema and extracts new fields", async () => {
+    const parsed = await runParse({
       status: "ok",
       reason: "Clear front/back with moderate glare",
       estimated_grade_low: 8,
@@ -77,8 +80,8 @@ describe("parseGradeEstimateModelOutput", () => {
     expect(parsed.estimate.surface_findings?.[0]?.issue_type).toBe("print_line");
   });
 
-  it("falls back to low_confidence defaults when schema is missing", () => {
-    const parsed = runParse({
+  it("falls back to low_confidence defaults when schema is missing", async () => {
+    const parsed = await runParse({
       status: "ok",
       reason: "Minimal output",
       estimated_grade_low: 8,
@@ -98,8 +101,8 @@ describe("parseGradeEstimateModelOutput", () => {
     expect(parsed.estimate.centering_detail).toBeTruthy();
   });
 
-  it("normalizes probabilities to sum to ~1.0", () => {
-    const parsed = runParse({
+  it("normalizes probabilities to sum to ~1.0", async () => {
+    const parsed = await runParse({
       status: "ok",
       reason: "Provided percentages",
       estimated_grade_low: 7,
@@ -158,8 +161,8 @@ describe("parseGradeEstimateModelOutput", () => {
     expect(bgsTotal).toBeLessThan(1.01);
   });
 
-  it("enforces centering gates for poor centering ratios", () => {
-    const parsed = runParse({
+  it("enforces centering gates for poor centering ratios", async () => {
+    const parsed = await runParse({
       status: "ok",
       reason: "Poor centering but otherwise clean",
       estimated_grade_low: 8,
@@ -207,8 +210,8 @@ describe("parseGradeEstimateModelOutput", () => {
     expect(parsed.estimate.grade_probabilities!.psa["9"]).toBeLessThanOrEqual(0.25);
   });
 
-  it("clamps image/confidence score bounds", () => {
-    const parsed = runParse({
+  it("clamps image/confidence score bounds", async () => {
+    const parsed = await runParse({
       status: "ok",
       reason: "Out-of-range scores",
       estimated_grade_low: 7,
@@ -260,8 +263,8 @@ describe("parseGradeEstimateModelOutput", () => {
     expect(parsed.estimate.centering_detail?.centering_severity_0_3).toBe(3);
   });
 
-  it("produces distinct probabilities for cards with different evidence profiles", () => {
-    const highQuality = runParse({
+  it("produces distinct probabilities for cards with different evidence profiles", async () => {
+    const highQuality = await runParse({
       status: "ok",
       reason: "Strong photos and clean card",
       estimated_grade_low: 8,
@@ -305,7 +308,7 @@ describe("parseGradeEstimateModelOutput", () => {
       ],
     });
 
-    const lowQuality = runParse({
+    const lowQuality = await runParse({
       status: "low_confidence",
       reason: "Blur and glare",
       estimated_grade_low: 7,
@@ -365,8 +368,8 @@ describe("parseGradeEstimateModelOutput", () => {
     expect(lowDist["7_or_lower"]).toBeGreaterThan(highDist["7_or_lower"]);
   });
 
-  it("caps confidence when no close-up photos are provided", () => {
-    const parsed = runParse(
+  it("caps confidence when no close-up photos are provided", async () => {
+    const parsed = await runParse(
       {
         status: "ok",
         reason: "Clear base photos",

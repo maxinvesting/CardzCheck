@@ -1,7 +1,10 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
+import { Surface } from "@/components/ui/Surface";
 import type { BusinessConsultation } from "@/types";
+import type { BusinessConsultantReport } from "@/lib/business/consultant-report";
+import { parseBusinessConsultantReport } from "@/lib/business/consultant-report";
 
 const CONSULTANT_COPY = {
   title: "CardzCheck Business Consultant",
@@ -20,9 +23,33 @@ const CONSULTANT_COPY = {
     "Optimize my channel mix (eBay, shows, Whatnot)",
   ],
   placeholder:
-    "Describe the decision you’re trying to make (pricing, grading submissions, inventory turnover, liquidity, risk exposure, channel strategy…)",
+    "Ask the Consultant… (pricing, grading submissions, inventory turnover, liquidity, risk exposure, channel strategy…)",
   submitButton: "Generate Analysis",
 } as const;
+
+const TEMPLATES = [
+  {
+    id: "inventory_strategy",
+    label: "Inventory Strategy",
+    example: "Identify dead capital in my inventory and propose a 30-day plan to redeploy it.",
+  },
+  {
+    id: "pricing_decisions",
+    label: "Pricing Decisions",
+    example: "Review my pricing and highlight items that look overpriced or underpriced versus CMV.",
+  },
+  {
+    id: "grading_analysis",
+    label: "Grading Analysis",
+    example: "Which raw cards in inventory look like good grading candidates versus selling raw?",
+  },
+  {
+    id: "liquidity_planning",
+    label: "Liquidity Planning",
+    example:
+      "Build a 30-day liquidity plan that raises cash while minimizing long-term profit sacrifice.",
+  },
+] as const;
 
 type Phase = "idle" | "acknowledge" | "working" | "deliverable";
 type StepStatus = "queued" | "working" | "completed";
