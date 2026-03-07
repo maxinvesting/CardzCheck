@@ -92,7 +92,7 @@ function renderInline(text: string, keyBase: string): ReactNode[] {
   return parts.map((part, i) => {
     if (part.startsWith("**") && part.endsWith("**")) {
       return (
-        <strong key={`${keyBase}-b-${i}`} className="font-semibold text-gray-100">
+        <strong key={`${keyBase}-b-${i}`} className="font-semibold text-[var(--biz-text)]">
           {part.slice(2, -2)}
         </strong>
       );
@@ -117,7 +117,10 @@ function ConsultantResponse({ text }: { text: string }) {
   const flushBullets = () => {
     if (bulletBuffer.length === 0) return;
     content.push(
-      <ul key={`ul-${key++}`} className="my-2 list-disc space-y-1 pl-5 text-gray-200">
+      <ul
+        key={`ul-${key++}`}
+        className="my-2 list-disc space-y-1 pl-5 text-[13px] leading-relaxed text-[var(--biz-text)]"
+      >
         {bulletBuffer.map((item, i) => (
           <li key={`li-${key}-${i}`}>{renderInline(item, `li-${key}-${i}`)}</li>
         ))}
@@ -152,7 +155,10 @@ function ConsultantResponse({ text }: { text: string }) {
 
     flushBullets();
     content.push(
-      <p key={`p-${key++}`} className="my-2 text-gray-200">
+      <p
+        key={`p-${key++}`}
+        className="my-1.5 text-[13px] leading-relaxed text-[var(--biz-text)]"
+      >
         {renderInline(line, `p-${key}`)}
       </p>
     );
@@ -161,11 +167,11 @@ function ConsultantResponse({ text }: { text: string }) {
   flushBullets();
 
   return (
-    <article className="rounded-lg border border-gray-800/80 bg-gray-950/55 px-4 py-3 text-[15px] leading-7">
+    <article className="rounded-md border border-[var(--biz-border)] bg-[var(--surface)] px-4 py-3 text-[13px] leading-relaxed">
       {content.length > 0 ? (
         content
       ) : (
-        <p className="text-sm text-gray-300">No analysis text returned.</p>
+        <p className="text-xs text-[var(--biz-muted)]">No analysis text returned.</p>
       )}
     </article>
   );
@@ -181,15 +187,15 @@ function ConsultantWorkingPanel({
   reducedMotion: boolean;
 }) {
   return (
-    <div className="rounded-md border border-gray-800 bg-gray-950/60 px-3 py-3">
+    <div className="rounded-md border border-[var(--biz-border)] bg-[var(--surface)] px-3 py-3">
       <div className="mb-3 flex items-center gap-2">
         <span
-          className={`h-2 w-2 shrink-0 rounded-full bg-emerald-500 ${
+          className={`h-2 w-2 shrink-0 rounded-full bg-[var(--biz-primary)] ${
             reducedMotion ? "" : "animate-pulse motion-reduce:animate-none"
           }`}
           aria-hidden
         />
-        <span className="text-xs text-gray-300">{statusLine}</span>
+        <span className="text-xs text-[var(--biz-muted)]">{statusLine}</span>
       </div>
       <ul className="space-y-1.5" role="list" aria-label="Analysis in progress">
         {steps.map((step, i) => (
@@ -197,28 +203,31 @@ function ConsultantWorkingPanel({
             key={step.label}
             className={`flex items-center gap-2 text-[11px] transition-opacity duration-200 ${
               step.status === "queued"
-                ? "text-gray-500"
+                ? "text-[var(--biz-muted)]"
                 : step.status === "working"
-                  ? "text-emerald-300"
-                  : "text-gray-400"
+                  ? "text-[var(--biz-primary)]"
+                  : "text-[var(--biz-muted)]"
             }`}
             style={{
               transitionDelay: reducedMotion ? "0ms" : `${i * 30}ms`,
             }}
           >
             {step.status === "completed" ? (
-              <span className="text-emerald-500" aria-hidden>
+              <span className="text-[var(--biz-primary)]" aria-hidden>
                 ✓
               </span>
             ) : step.status === "working" ? (
               <span
-                className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500 ${
+                className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--biz-primary)] ${
                   reducedMotion ? "" : "animate-pulse motion-reduce:animate-none"
                 }`}
                 aria-hidden
               />
             ) : (
-              <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-gray-600" aria-hidden />
+              <span
+                className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--biz-border)]"
+                aria-hidden
+              />
             )}
             <span>{step.label}</span>
           </li>
@@ -228,10 +237,199 @@ function ConsultantWorkingPanel({
   );
 }
 
+function formatReportTimestamp(value: string): string {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function ConsultantReportView({
+  report,
+  rawText,
+}: {
+  report: BusinessConsultantReport | null;
+  rawText: string;
+}) {
+  const trimmed = rawText.trim();
+
+  if (!report && !trimmed) {
+    return (
+      <p className="text-xs text-[var(--biz-muted)]">
+        Run an analysis to see a structured report based on your inventory and sales data.
+      </p>
+    );
+  }
+
+  if (!report) {
+    return (
+      <div className="space-y-3">
+        <p className="text-xs text-[var(--biz-muted)]">
+          Output could not be fully structured. Showing formatted text instead.
+        </p>
+        <ConsultantResponse text={trimmed} />
+      </div>
+    );
+  }
+
+  const hasHighRisk = report.high_risk_positions.length > 0;
+  const hasActions = report.recommended_actions.length > 0;
+  const hasNotes = report.notes.length > 0;
+
+  return (
+    <div className="space-y-5">
+      {/* Report header */}
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold text-[var(--biz-text)]">
+            {report.report_title || "Business Consultant Report"}
+          </h3>
+          <p className="mt-0.5 text-xs text-[var(--biz-muted)]">
+            {formatReportTimestamp(report.timestamp)}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-1.5 text-[10px]">
+          <span className="inline-flex items-center gap-1 rounded-full border border-[var(--biz-border)] bg-[var(--surface)] px-2 py-0.5 text-[var(--biz-muted)]">
+            <span className="h-1.5 w-1.5 rounded-full bg-[var(--biz-primary)]" />
+            Inventory {report.data_coverage.inventory_count.toLocaleString()}
+          </span>
+          <span className="inline-flex items-center gap-1 rounded-full border border-[var(--biz-border)] bg-[var(--surface)] px-2 py-0.5 text-[var(--biz-muted)]">
+            <span className="h-1.5 w-1.5 rounded-full bg-[var(--biz-primary)]" />
+            Sales {report.data_coverage.sales_count.toLocaleString()}
+          </span>
+          {report.data_coverage.missing.length > 0 && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-[var(--biz-warning)]">
+              Missing data: {report.data_coverage.missing.join(", ")}
+            </span>
+          )}
+        </div>
+      </header>
+
+      {/* KPI strip */}
+      {report.kpis.length > 0 && (
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {report.kpis.map((kpi) => (
+            <div
+              key={kpi.label}
+              className="rounded-md border border-[var(--biz-border)] bg-[var(--biz-surface)] px-3 py-2"
+            >
+              <p className="text-[10px] font-medium uppercase tracking-normal text-[var(--biz-muted)]">
+                {kpi.label}
+              </p>
+              <p className="mt-1 text-sm font-semibold tabular-nums text-[var(--biz-text)]">
+                {kpi.value}
+              </p>
+              {kpi.hint && (
+                <p className="mt-0.5 text-[10px] text-[var(--biz-muted)]">{kpi.hint}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* High risk positions */}
+      {hasHighRisk && (
+        <section>
+          <h4 className="mb-2 text-xs font-semibold uppercase tracking-normal text-[var(--biz-muted)]">
+            High-Risk Positions
+          </h4>
+          <div className="overflow-hidden rounded-md border border-[var(--biz-border)] bg-[var(--surface)]">
+            <div className="grid grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.9fr)] gap-x-3 border-b border-[var(--biz-border)] bg-[var(--biz-surface)] px-3 py-1.5 text-[10px] font-medium uppercase tracking-normal text-[var(--biz-muted)]">
+              <span>Item</span>
+              <span className="text-right">Cost Basis</span>
+              <span className="text-right">CMV</span>
+              <span className="text-right">Δ %</span>
+            </div>
+            <div className="divide-y divide-[var(--biz-border)] text-xs">
+              {report.high_risk_positions.map((pos) => (
+                <div
+                  key={`${pos.item}-${pos.reason}`}
+                  className="grid grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.9fr)] gap-x-3 px-3 py-1.5 align-middle"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-[var(--biz-text)]">{pos.item}</p>
+                    {pos.reason && (
+                      <p className="mt-0.5 text-[10px] text-[var(--biz-muted)]">{pos.reason}</p>
+                    )}
+                  </div>
+                  <div className="text-right tabular-nums text-[var(--biz-text)]">
+                    {pos.cost_basis.toLocaleString(undefined, {
+                      maximumFractionDigits: 0,
+                    })}
+                  </div>
+                  <div className="text-right tabular-nums text-[var(--biz-text)]">
+                    {pos.cmv.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                  </div>
+                  <div className="text-right tabular-nums text-[var(--biz-warning)]">
+                    {pos.delta_pct.toFixed(1)}%
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Recommended actions */}
+      {hasActions && (
+        <section>
+          <h4 className="mb-2 text-xs font-semibold uppercase tracking-normal text-[var(--biz-muted)]">
+            Recommended Actions
+          </h4>
+          <ul className="space-y-1.5 text-[13px] leading-relaxed text-[var(--biz-text)]">
+            {report.recommended_actions.map((act, idx) => (
+              <li
+                key={`${act.action}-${idx}`}
+                className="rounded-md border border-[var(--biz-border)] bg-[var(--surface)] px-3 py-2"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold text-[var(--biz-text)]">{act.action}</p>
+                    {act.impact && (
+                      <p className="mt-0.5 text-[11px] text-[var(--biz-muted)]">{act.impact}</p>
+                    )}
+                  </div>
+                  <span className="shrink-0 rounded-full border border-[var(--biz-border)] bg-[var(--biz-surface)] px-2 py-0.5 text-[10px] capitalize text-[var(--biz-muted)]">
+                    Effort: {act.effort}
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* Notes */}
+      {hasNotes && (
+        <section>
+          <h4 className="mb-2 text-xs font-semibold uppercase tracking-normal text-[var(--biz-muted)]">
+            Notes
+          </h4>
+          <ul className="list-disc space-y-1.5 pl-4 text-[13px] leading-relaxed text-[var(--biz-text)]">
+            {report.notes.map((note, idx) => (
+              <li key={idx}>{note}</li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </div>
+  );
+}
+
 export default function BusinessConsultantPanel() {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [prompt, setPrompt] = useState(""); // synced from DOM for button state; suggestion clicks also set this
-  const [response, setResponse] = useState("");
+  const [prompt, setPrompt] = useState("");
+  const [selectedTemplateId, setSelectedTemplateId] = useState<(typeof TEMPLATES)[number]["id"] | "custom">(
+    "inventory_strategy"
+  );
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [advancedContext, setAdvancedContext] = useState("");
+  const [report, setReport] = useState<BusinessConsultantReport | null>(null);
+  const [rawResponse, setRawResponse] = useState("");
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState<string | null>(null);
   const [historyNotice, setHistoryNotice] = useState<string | null>(null);
