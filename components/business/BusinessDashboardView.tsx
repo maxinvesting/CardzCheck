@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import QuickDealCheck from "@/components/business/QuickDealCheck";
 import BusinessMetrics from "@/components/business/BusinessMetrics";
 import EbayImportWizard from "@/components/business/EbayImportWizard";
 import { Surface } from "@/components/ui/Surface";
@@ -302,6 +303,9 @@ export default function BusinessDashboardView({
           </Link>
         </div>
       )}
+
+      {/* ── Quick Deal Check ─────────────────────────────────────────────── */}
+      {!needsMigration && <QuickDealCheck />}
 
       {/* ── At a Glance ─────────────────────────────────────────────────── */}
       {!needsMigration && (

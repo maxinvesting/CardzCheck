@@ -140,6 +140,19 @@ function LedgerIcon() {
   );
 }
 
+function CalculatorIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M9 7H7a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2V9a2 2 0 00-2-2h-2M9 7V5a2 2 0 012-2h2a2 2 0 012 2v2M9 7h6M9 12h.01M12 12h.01M15 12h.01M9 16h.01M12 16h.01M15 16h.01"
+      />
+    </svg>
+  );
+}
+
 function PERSONAL_NAV_ITEMS(): NavItem[] {
   return [
     { name: "Dashboard", href: "/dashboard", icon: <HomeIcon />, exact: true },
@@ -159,6 +172,7 @@ function BUSINESS_NAV_ITEMS(): NavItem[] {
     { name: "Ledger", href: "/business/ledger", icon: <LedgerIcon /> },
     { name: "Grade Probability Engine", href: "/business/grade-probability", icon: <BadgeIcon />, badge: "Featured" },
     { name: "Comps", href: "/business/comps", icon: <ChartIcon />, badge: "Beta" },
+    { name: "Deal Calculator", href: "/business/calculator", icon: <CalculatorIcon /> },
     { name: "Business Consultant", href: "/business/consultant", icon: <AnalystIcon /> },
     { name: "Marketplace", href: "/shop", icon: <ShopIcon /> },
     { name: "Settings", href: "/business/settings", icon: <SettingsIcon /> },
