@@ -9,7 +9,6 @@ import {
 } from "@/lib/grading/exportGradeProbabilityImage";
 import { confidencePillClasses } from "@/theme/tokens";
 import { GradeReportPrint } from "@/components/grading/GradeReportPrint";
-import { GradeVerdictCard } from "@/components/grading/GradeVerdictCard";
 import {
   distributionFromRange,
   normalizeDistribution,
@@ -20,7 +19,7 @@ import {
   GRADE_SCAN_KIND_LABELS,
   normalizeGradeScanPhotos,
 } from "@/lib/grading/scanPhotos";
-import { buildGradeVerdict } from "@/lib/grading/verdict";
+import { buildGradeVerdict, type GradeVerdict } from "@/lib/grading/verdict";
 
 interface GradeProbabilityPanelProps {
   estimate: GradeEstimate;
@@ -38,7 +37,17 @@ interface GradeProbabilityPanelProps {
 
 const PSA_ORDER = ["PSA 10", "PSA 9", "PSA 8", "PSA 7 or lower"];
 const BGS_ORDER = ["BGS 9.5", "BGS 9", "BGS 8.5", "BGS 8 or lower"];
-const THUMBNAIL_SIZE_CLASS = "w-12 h-[68px]";
+
+const RECOMMENDATION_CLASSES: Record<GradeVerdict["recommendation"], string> = {
+  Grade: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  Borderline: "border-amber-200 bg-amber-50 text-amber-700",
+  "Sell Raw": "border-slate-200 bg-slate-100 text-slate-700",
+  "Rescan Needed": "border-rose-200 bg-rose-50 text-rose-700",
+};
+
+// ─────────────────────────────────────────────────────────
+// Pure helpers (unchanged logic)
+// ─────────────────────────────────────────────────────────
 
 function formatPercent(probability: number): string {
   return `${Math.round(probability * 100)}%`;
@@ -254,6 +263,29 @@ function combineDetails(...details: Array<string | undefined>): string | undefin
   return parts.join(" · ");
 }
 
+// ─────────────────────────────────────────────────────────
+// Sub-components
+// ─────────────────────────────────────────────────────────
+
+function SectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <h4 className="text-[9px] font-semibold uppercase tracking-widest text-[var(--biz-muted)]">
+      {children}
+    </h4>
+  );
+}
+
+function VerdictStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-[var(--biz-border)] bg-[var(--biz-surface)] px-2.5 py-2">
+      <p className="text-[9px] font-semibold uppercase tracking-widest text-[var(--biz-muted)]">
+        {label}
+      </p>
+      <p className="mt-0.5 truncate text-xs font-semibold text-[var(--biz-text)]">{value}</p>
+    </div>
+  );
+}
+
 function ProbabilityBar({
   label,
   probability,
@@ -313,10 +345,10 @@ function EvidenceBlock({
   const displayText = truncated && !expanded ? `${text.slice(0, 80)}…` : text;
 
   return (
-    <div className="rounded-lg border border-[var(--biz-border)] bg-[var(--biz-surface)] p-3">
-      <div className="mb-2 flex items-center gap-1.5">
+    <div className="rounded-lg border border-[var(--biz-border)] bg-[var(--biz-surface)] p-2.5">
+      <div className="mb-1.5 flex items-center gap-1.5">
         <span className="text-[var(--biz-muted)]">{icon}</span>
-        <span className="text-[10px] font-semibold uppercase tracking-normal text-[var(--biz-muted)]">
+        <span className="text-[9px] font-semibold uppercase tracking-widest text-[var(--biz-muted)]">
           {label}
         </span>
       </div>
@@ -338,6 +370,10 @@ function EvidenceBlock({
   );
 }
 
+// ─────────────────────────────────────────────────────────
+// Main component
+// ─────────────────────────────────────────────────────────
+
 export default function GradeProbabilityPanel({
   estimate,
   cardIdentity,
@@ -346,8 +382,12 @@ export default function GradeProbabilityPanel({
   scanPhotos,
   showPreliminaryBadge,
 }: GradeProbabilityPanelProps) {
+  const confidence = estimate.grade_probabilities?.confidence;
+
   const [showBgsDistribution, setShowBgsDistribution] = useState(false);
-  const [showAnalysisDetails, setShowAnalysisDetails] = useState(false);
+  const [showAnalysisDetails, setShowAnalysisDetails] = useState(
+    () => confidence === "low"
+  );
   const [exportingPng, setExportingPng] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
 
@@ -373,6 +413,14 @@ export default function GradeProbabilityPanel({
     () => buildGradeVerdict(estimate, cardIdentity),
     [estimate, cardIdentity]
   );
+
+  const confidencePillClass = confidence
+    ? (confidencePillClasses[confidence] ?? confidencePillClasses.medium)
+    : null;
+
+  const cornerEvidenceSource = formatSourceKinds(estimate.evidence_photo_sources?.corners);
+  const edgeEvidenceSource = formatSourceKinds(estimate.evidence_photo_sources?.edges);
+  const surfaceEvidenceSource = formatSourceKinds(estimate.evidence_photo_sources?.surface);
 
   const normalizedScanPhotos = useMemo(() => {
     const fromProps = normalizeGradeScanPhotos(scanPhotos ?? undefined);
@@ -406,16 +454,6 @@ export default function GradeProbabilityPanel({
     () => normalizedScanPhotos.filter((photo) => photo.kind !== "front" && photo.kind !== "back"),
     [normalizedScanPhotos]
   );
-
-  const showStacked = frontBackUrls.length >= 2;
-  const confidence = estimate.grade_probabilities?.confidence;
-  const confidencePillClass = confidence
-    ? (confidencePillClasses[confidence] ?? confidencePillClasses.medium)
-    : null;
-
-  const cornerEvidenceSource = formatSourceKinds(estimate.evidence_photo_sources?.corners);
-  const edgeEvidenceSource = formatSourceKinds(estimate.evidence_photo_sources?.edges);
-  const surfaceEvidenceSource = formatSourceKinds(estimate.evidence_photo_sources?.surface);
 
   const panelRef = useRef<HTMLDivElement>(null);
   const printRef = useRef<HTMLDivElement>(null);
@@ -458,54 +496,50 @@ export default function GradeProbabilityPanel({
     }
   };
 
+  const warningBanner =
+    warningMessage ||
+    (showPhotoQualityWarning ? gradingCopy.panel.confidenceReduced : null);
+  const visibilityNote =
+    !warningBanner && (estimate.visibility_notes?.length ?? 0) > 0
+      ? estimate.visibility_notes![0]
+      : null;
+  const inlineBanner = warningBanner || visibilityNote;
+
   return (
     <>
-      <div ref={panelRef} className="overflow-hidden rounded-xl border border-[var(--biz-border)] bg-[var(--biz-surface)]">
-        {warningMessage ? (
-          <div className="px-5 pt-4">
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-              {warningMessage}
-            </div>
-          </div>
-        ) : null}
-
-        {(estimate.visibility_notes?.length ?? 0) > 0 ? (
-          <div className="px-5 pt-3">
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
-              {estimate.visibility_notes?.[0]}
-            </div>
-          </div>
-        ) : null}
-
-        <div className="border-b border-[var(--biz-border)] px-5 pb-5 pt-6">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
+      <div
+        ref={panelRef}
+        className="overflow-hidden rounded-xl border border-[var(--biz-border)] bg-[var(--biz-surface)]"
+      >
+        {/* ── HERO STRIP ─────────────────────────────────────────────── */}
+        <div className="border-b border-[var(--biz-border)] px-5 py-4">
+          <div className="flex items-center gap-4">
+            {/* Card thumbnails — front prominent, back dimmed */}
             {frontBackUrls.length > 0 ? (
-              <div className="shrink-0">
-                <div
-                  className={`overflow-hidden rounded-xl ring-1 ring-[color:var(--biz-border)] ${
-                    showStacked ? "flex w-[100px] flex-col gap-1.5" : "h-[140px] w-[100px]"
-                  }`}
-                >
-                  {showStacked ? (
-                    frontBackUrls.map((url, i) => (
-                      <div key={`${url}-${i}`} className="aspect-[3/4] w-full">
-                        <img
-                          src={url}
-                          alt={i === 0 ? "Card front" : "Card back"}
-                          className="h-full w-full object-cover"
-                        />
-                      </div>
-                    ))
-                  ) : (
-                    <img src={frontBackUrls[0]} alt="Card analyzed" className="h-full w-full object-cover" />
-                  )}
+              <div className="flex shrink-0 items-end gap-1.5">
+                <div className="h-[68px] w-[49px] overflow-hidden rounded-lg ring-1 ring-[color:var(--biz-border)]">
+                  <img
+                    src={frontBackUrls[0]}
+                    alt="Card front"
+                    className="h-full w-full object-cover"
+                  />
                 </div>
+                {frontBackUrls[1] ? (
+                  <div className="h-[52px] w-[37px] overflow-hidden rounded-md opacity-60 ring-1 ring-[color:var(--biz-border)]">
+                    <img
+                      src={frontBackUrls[1]}
+                      alt="Card back"
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                ) : null}
               </div>
             ) : null}
 
+            {/* Identity + headline grade */}
             <div className="min-w-0 flex-1">
-              <div className="mb-4 flex flex-wrap items-center gap-2">
-                <span className="text-[10px] font-semibold uppercase tracking-normal text-[var(--biz-muted)]">
+              <div className="mb-1 flex flex-wrap items-center gap-2">
+                <span className="text-[9px] font-semibold uppercase tracking-widest text-[var(--biz-muted)]">
                   {gradingCopy.panel.title}
                 </span>
                 {showPreliminaryBadge ? (
@@ -514,65 +548,80 @@ export default function GradeProbabilityPanel({
                   </span>
                 ) : null}
                 {cardLabel ? (
-                  <span className="max-w-[280px] truncate text-xs text-[var(--biz-muted)]">{cardLabel}</span>
+                  <span className="hidden max-w-[300px] truncate text-xs text-[var(--biz-muted)] sm:inline">
+                    {cardLabel}
+                  </span>
                 ) : null}
               </div>
 
-              <div className="mb-3 flex flex-wrap items-end gap-4">
-                <div>
-                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-normal text-[var(--biz-muted)]">
-                    {gradingCopy.panel.mostLikelyLabel}
-                  </p>
-                  {psaTotal > 0 && likely ? (
-                    <div className="flex items-baseline gap-3">
-                      <span className="text-4xl font-bold tracking-tight text-[var(--biz-text)]">
-                        {likely.label}
-                      </span>
-                      <span className="text-2xl font-semibold text-blue-700">
-                        {formatPercent(likely.probability)}
-                      </span>
-                    </div>
-                  ) : (
-                    <span className="text-4xl font-bold text-[var(--biz-muted)]">--</span>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-4">
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-[10px] font-medium uppercase tracking-normal text-[var(--biz-muted)]">
-                    {gradingCopy.panel.expectedValueLabel}
+              <div className="flex flex-wrap items-end gap-x-4 gap-y-0.5">
+                {psaTotal > 0 && likely ? (
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-[28px] font-bold leading-none tracking-tight text-[var(--biz-text)]">
+                      {likely.label}
+                    </span>
+                    <span className="text-lg font-semibold text-blue-600">
+                      {formatPercent(likely.probability)}
+                    </span>
+                  </div>
+                ) : (
+                  <span className="text-[28px] font-bold leading-none text-[var(--biz-muted)]">--</span>
+                )}
+                <div className="flex items-baseline gap-1">
+                  <span className="text-[9px] font-medium uppercase tracking-widest text-[var(--biz-muted)]">
+                    EV
                   </span>
                   <span className="text-sm font-semibold text-[var(--biz-muted)]">{evLabel}</span>
                 </div>
-
-                {confidence && confidencePillClass ? (
-                  <span
-                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${confidencePillClass}`}
-                  >
-                    {confidence} confidence
-                  </span>
-                ) : null}
-
-                {showPhotoQualityWarning ? (
-                  <span className="text-[10px] text-amber-700">{gradingCopy.panel.confidenceReduced}</span>
-                ) : null}
               </div>
+
+              {cardLabel ? (
+                <p className="mt-0.5 truncate text-xs text-[var(--biz-muted)] sm:hidden">
+                  {cardLabel}
+                </p>
+              ) : null}
+            </div>
+
+            {/* Badges column */}
+            <div className="flex shrink-0 flex-col items-end gap-1.5">
+              <span
+                className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${RECOMMENDATION_CLASSES[verdict.recommendation]}`}
+              >
+                {verdict.recommendation}
+              </span>
+              {confidence && confidencePillClass ? (
+                <span
+                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${confidencePillClass}`}
+                >
+                  {confidence} conf.
+                </span>
+              ) : null}
+              <span className="text-[10px] font-medium text-[var(--biz-muted)]">
+                → {verdict.suggestedGrader}
+              </span>
             </div>
           </div>
         </div>
 
-        <GradeVerdictCard verdict={verdict} />
+        {/* ── INLINE ALERT BANNER (warnings / low confidence / visibility notes) */}
+        {inlineBanner ? (
+          <div className="border-b border-amber-200/50 bg-amber-50/60 px-5 py-2">
+            <p className="text-[11px] leading-snug text-amber-700">{inlineBanner}</p>
+          </div>
+        ) : null}
 
+        {/* ── MAIN 2-COLUMN WORKSPACE ───────────────────────────────── */}
         <div className="grid grid-cols-1 divide-y divide-[var(--biz-border)] lg:grid-cols-2 lg:divide-x lg:divide-y-0">
-          <div className="space-y-5 px-5 py-5">
+
+          {/* LEFT: Probability distribution + Verdict */}
+          <div className="flex flex-col gap-5 px-5 py-5">
+
+            {/* PSA distribution */}
             <div>
-              <div className="mb-3 flex items-center justify-between">
-                <h4 className="text-[10px] font-semibold uppercase tracking-normal text-[var(--biz-muted)]">
-                  {gradingCopy.panel.distributionTitle} - PSA
-                </h4>
+              <div className="mb-3">
+                <SectionLabel>{gradingCopy.panel.distributionTitle} — PSA</SectionLabel>
               </div>
-              <div className="space-y-3">
+              <div className="space-y-2.5">
                 {psaOutcomes.map((outcome) => (
                   <ProbabilityBar
                     key={outcome.label}
@@ -585,12 +634,13 @@ export default function GradeProbabilityPanel({
               </div>
             </div>
 
+            {/* BGS toggle */}
             {bgsOutcomes ? (
               <div>
                 <button
                   type="button"
                   onClick={() => setShowBgsDistribution((prev) => !prev)}
-                  className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-normal text-[var(--biz-muted)] transition-colors hover:text-[var(--biz-text)]"
+                  className="flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-widest text-[var(--biz-muted)] transition-colors hover:text-[var(--biz-text)]"
                 >
                   <svg
                     className={`h-3 w-3 transition-transform duration-200 ${showBgsDistribution ? "rotate-180" : ""}`}
@@ -603,7 +653,7 @@ export default function GradeProbabilityPanel({
                   BGS Distribution
                 </button>
                 {showBgsDistribution ? (
-                  <div className="mt-3 space-y-3">
+                  <div className="mt-2.5 space-y-2.5">
                     {BGS_ORDER.map((label) => {
                       const outcome = bgsOutcomes.find((item) => item.label === label);
                       return (
@@ -620,19 +670,49 @@ export default function GradeProbabilityPanel({
                 ) : null}
               </div>
             ) : null}
+
+            {/* Divider before verdict */}
+            <div className="border-t border-[var(--biz-border)]" />
+
+            {/* Verdict 2×2 stat grid */}
+            <div>
+              <div className="mb-2.5">
+                <SectionLabel>The Verdict</SectionLabel>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                <VerdictStat label="Recommendation" value={verdict.recommendation} />
+                <VerdictStat label="Suggested Grader" value={verdict.suggestedGrader} />
+                <VerdictStat label="Expected Outcome" value={verdict.expectedOutcome} />
+                <VerdictStat label="Strategy" value={verdict.strategyTip} />
+              </div>
+            </div>
+
+            {/* Reasoning insight panel */}
+            {verdict.reasoning ? (
+              <div className="rounded-md border border-[var(--biz-border)] bg-[color:var(--biz-surface-soft)] px-3 py-2.5">
+                <p className="mb-1 text-[9px] font-semibold uppercase tracking-widest text-[var(--biz-muted)]">
+                  Reasoning
+                </p>
+                <p className="text-[11px] leading-relaxed text-[var(--biz-muted)]">
+                  {verdict.reasoning}
+                </p>
+              </div>
+            ) : null}
           </div>
 
-          <div className="px-5 py-5">
-            <div className="mb-3 flex items-center justify-between">
-              <h4 className="text-[10px] font-semibold uppercase tracking-normal text-[var(--biz-muted)]">
-                {gradingCopy.panel.evidenceTitle}
-              </h4>
-              <p className="max-w-[180px] text-right text-[10px] leading-snug text-[var(--biz-muted)]">
+          {/* RIGHT: Evidence + Notes + Close-ups */}
+          <div className="flex flex-col gap-4 px-5 py-5">
+
+            {/* Evidence header */}
+            <div className="flex items-center justify-between gap-2">
+              <SectionLabel>{gradingCopy.panel.evidenceTitle}</SectionLabel>
+              <p className="max-w-[160px] text-right text-[9px] leading-snug text-[var(--biz-muted)]">
                 {gradingCopy.panel.evidenceNote}
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-2.5">
+            {/* Evidence 2×2 grid */}
+            <div className="grid grid-cols-2 gap-2">
               <EvidenceBlock
                 icon={
                   <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -652,7 +732,6 @@ export default function GradeProbabilityPanel({
                     : undefined
                 }
               />
-
               <EvidenceBlock
                 icon={
                   <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -668,7 +747,6 @@ export default function GradeProbabilityPanel({
                 text={estimate.corners}
                 detail={cornerEvidenceSource ? `Source: ${cornerEvidenceSource}` : undefined}
               />
-
               <EvidenceBlock
                 icon={
                   <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -691,7 +769,6 @@ export default function GradeProbabilityPanel({
                   surfaceEvidenceSource ? `Source: ${surfaceEvidenceSource}` : undefined
                 )}
               />
-
               <EvidenceBlock
                 icon={
                   <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -709,169 +786,177 @@ export default function GradeProbabilityPanel({
               />
             </div>
 
+            {/* Grade notes */}
             {estimate.grade_notes ? (
-              <div className="mt-3 rounded-lg border border-[var(--biz-border)] bg-[color:var(--biz-surface-soft)] px-3 py-2">
+              <div className="rounded-md border border-[var(--biz-border)] bg-[color:var(--biz-surface-soft)] px-3 py-2.5">
+                <p className="mb-1 text-[9px] font-semibold uppercase tracking-widest text-[var(--biz-muted)]">
+                  {gradingCopy.panel.notesLabel}
+                </p>
                 <p className="text-[11px] leading-relaxed text-[var(--biz-muted)]">
-                  <span className="font-medium text-[var(--biz-text)]">{gradingCopy.panel.notesLabel}:</span>{" "}
                   {estimate.grade_notes}
                 </p>
+              </div>
+            ) : null}
+
+            {/* Close-up photo strip */}
+            {closeupPhotos.length > 0 ? (
+              <div>
+                <p className="mb-2 text-[9px] font-semibold uppercase tracking-widest text-[var(--biz-muted)]">
+                  Close-ups
+                </p>
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  {closeupPhotos.map((photo, index) => {
+                    const kind = photo.kind as GradeScanPhotoKind;
+                    return (
+                      <div key={`${photo.url}-${index}`} className="shrink-0 w-[68px]">
+                        <div className="h-[85px] overflow-hidden rounded-md border border-[var(--biz-border)]">
+                          <img
+                            src={photo.url}
+                            alt={GRADE_SCAN_KIND_LABELS[kind] ?? "Close-up"}
+                            className="h-full w-full object-cover"
+                          />
+                        </div>
+                        <p className="mt-0.5 truncate text-center text-[9px] text-[var(--biz-muted)]">
+                          {GRADE_SCAN_KIND_LABELS[kind] ?? kind}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             ) : null}
           </div>
         </div>
 
-        {closeupPhotos.length > 0 ? (
-          <div className="border-t border-[var(--biz-border)] px-5 py-4">
-            <h4 className="text-[10px] font-semibold uppercase tracking-normal text-[var(--biz-muted)]">
-              Close-up Photos
-            </h4>
-            <div className="mt-3 flex flex-wrap gap-3">
-	              {closeupPhotos.map((photo, index) => (
-                (() => {
-                  const kind = photo.kind as GradeScanPhotoKind;
-                  return (
-	                <div
-	                  key={`${photo.url}-${index}`}
-	                  className="w-[92px] overflow-hidden rounded-md border border-[var(--biz-border)] bg-[color:var(--biz-surface-soft)]"
-	                >
-	                  <img
-	                    src={photo.url}
-	                    alt={GRADE_SCAN_KIND_LABELS[kind] ?? "Close-up"}
-	                    className="h-[116px] w-full object-cover"
-	                  />
-	                  <p className="truncate px-2 py-1 text-[10px] font-medium text-[var(--biz-muted)]">
-	                    {GRADE_SCAN_KIND_LABELS[kind] ?? kind}
-	                  </p>
-	                </div>
-                  );
-                })()
-              ))}
+        {/* ── FOOTER ──────────────────────────────────────────────────── */}
+        <div className="border-t border-[var(--biz-border)]">
+
+          {/* Expandable: Image Quality & Confidence Analysis */}
+          <div className="px-5 py-3">
+            <button
+              type="button"
+              onClick={() => setShowAnalysisDetails((prev) => !prev)}
+              className="flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-widest text-[var(--biz-muted)] transition-colors hover:text-[var(--biz-text)]"
+            >
+              <svg
+                className={`h-3 w-3 transition-transform duration-200 ${showAnalysisDetails ? "rotate-180" : ""}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+              Image Quality &amp; Confidence Analysis
+              {confidence === "low" ? (
+                <span className="ml-1 font-normal normal-case text-amber-600">
+                  · Low confidence detected
+                </span>
+              ) : null}
+            </button>
+
+            {showAnalysisDetails ? (
+              <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-2">
+                <div className="rounded-md border border-[var(--biz-border)] bg-[color:var(--biz-surface-soft)] p-3">
+                  <p className="mb-1.5 text-[9px] uppercase tracking-widest text-[var(--biz-muted)]">
+                    Image Quality
+                  </p>
+                  <p className="text-base font-semibold text-[var(--biz-text)]">
+                    {imageQuality?.overall_image_score ?? "-"}
+                    <span className="text-xs font-normal text-[var(--biz-muted)]">/100</span>
+                  </p>
+                  {imageQuality?.subscores ? (
+                    <div className="mt-1.5 space-y-0.5 text-[11px] text-[var(--biz-muted)]">
+                      <p>Focus: {imageQuality.subscores.focus_sharpness}/25</p>
+                      <p>Glare: {imageQuality.subscores.lighting_glare_control}/25</p>
+                      <p>Coverage: {imageQuality.subscores.coverage_angles}/25</p>
+                      <p>Resolution: {imageQuality.subscores.resolution_distance}/25</p>
+                    </div>
+                  ) : null}
+                </div>
+                <div className="rounded-md border border-[var(--biz-border)] bg-[color:var(--biz-surface-soft)] p-3">
+                  <p className="mb-1.5 text-[9px] uppercase tracking-widest text-[var(--biz-muted)]">
+                    Model Confidence
+                  </p>
+                  <p className="text-base font-semibold text-[var(--biz-text)]">
+                    {confidenceMeta?.overall_confidence_score ?? "-"}
+                    <span className="text-xs font-normal text-[var(--biz-muted)]">/100</span>
+                  </p>
+                  {(confidenceMeta?.limiting_factors?.length ?? 0) > 0 ? (
+                    <ul className="mt-1.5 list-inside list-disc space-y-0.5 text-[11px] text-[var(--biz-muted)]">
+                      {confidenceMeta?.limiting_factors.slice(0, 4).map((factor, idx) => (
+                        <li key={`${factor}-${idx}`}>{factor}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          {/* Disclaimer + export actions */}
+          <div
+            className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--biz-border)] px-5 py-3"
+          >
+            <p
+              className="max-w-prose text-[10px] leading-relaxed text-[var(--biz-muted)]"
+              data-export-disclaimer="true"
+            >
+              {gradingCopy.panel.disclaimer}
+            </p>
+            <div className="flex items-center gap-2" data-export-ignore="true">
+              <button
+                type="button"
+                onClick={handleExportPdf}
+                className="inline-flex items-center gap-1.5 rounded-md border border-[var(--biz-border)] bg-[var(--biz-surface)] px-3 py-1.5 text-xs font-medium text-[var(--biz-text)] transition-colors hover:bg-[var(--biz-hover)]"
+              >
+                <svg
+                  className="h-3.5 w-3.5 shrink-0"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
+                  />
+                </svg>
+                PDF
+              </button>
+              <button
+                type="button"
+                onClick={handleExportPng}
+                disabled={exportingPng}
+                className="inline-flex items-center gap-1.5 rounded-md border border-[var(--biz-border)] bg-[var(--biz-surface)] px-3 py-1.5 text-xs font-medium text-[var(--biz-text)] transition-colors hover:bg-[var(--biz-hover)] disabled:opacity-40"
+              >
+                <svg
+                  className="h-3.5 w-3.5 shrink-0"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                  />
+                </svg>
+                {exportingPng ? "Exporting..." : "PNG"}
+              </button>
             </div>
           </div>
-        ) : null}
 
-        <div className="border-t border-[var(--biz-border)] px-5 py-4">
-          <button
-            type="button"
-            onClick={() => setShowAnalysisDetails((prev) => !prev)}
-            className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-normal text-[var(--biz-muted)] transition-colors hover:text-[var(--biz-text)]"
-          >
-            <svg
-              className={`h-3 w-3 transition-transform duration-200 ${showAnalysisDetails ? "rotate-180" : ""}`}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-            Image Quality and Confidence Analysis
-          </button>
-
-          {showAnalysisDetails ? (
-            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-              <div className="rounded-lg border border-[var(--biz-border)] bg-[color:var(--biz-surface-soft)] p-3">
-                <p className="mb-2 text-[10px] uppercase tracking-normal text-[var(--biz-muted)]">Image Quality</p>
-                <p className="text-lg font-semibold text-[var(--biz-text)]">
-                  {imageQuality?.overall_image_score ?? "-"}
-                  <span className="text-sm font-normal text-[var(--biz-muted)]">/100</span>
-                </p>
-                {imageQuality?.subscores ? (
-                  <div className="mt-2 space-y-0.5 text-xs text-[var(--biz-muted)]">
-                    <p>Focus: {imageQuality.subscores.focus_sharpness}/25</p>
-                    <p>Glare control: {imageQuality.subscores.lighting_glare_control}/25</p>
-                    <p>Coverage: {imageQuality.subscores.coverage_angles}/25</p>
-                    <p>Resolution: {imageQuality.subscores.resolution_distance}/25</p>
-                  </div>
-                ) : null}
-              </div>
-
-              <div className="rounded-lg border border-[var(--biz-border)] bg-[color:var(--biz-surface-soft)] p-3">
-                <p className="mb-2 text-[10px] uppercase tracking-normal text-[var(--biz-muted)]">Model Confidence</p>
-                <p className="text-lg font-semibold text-[var(--biz-text)]">
-                  {confidenceMeta?.overall_confidence_score ?? "-"}
-                  <span className="text-sm font-normal text-[var(--biz-muted)]">/100</span>
-                </p>
-                {(confidenceMeta?.limiting_factors?.length ?? 0) > 0 ? (
-                  <ul className="mt-2 list-inside list-disc space-y-1 text-xs text-[var(--biz-muted)]">
-                    {confidenceMeta?.limiting_factors.slice(0, 4).map((factor, idx) => (
-                      <li key={`${factor}-${idx}`}>{factor}</li>
-                    ))}
-                  </ul>
-                ) : null}
-              </div>
+          {exportError ? (
+            <div className="px-5 pb-3">
+              <p className="text-xs text-rose-600">{exportError}</p>
             </div>
           ) : null}
         </div>
-
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--biz-border)] px-5 py-4">
-          <p className="max-w-prose text-[10px] leading-relaxed text-[var(--biz-muted)]" data-export-disclaimer="true">
-            {gradingCopy.panel.disclaimer}
-          </p>
-
-          <div className="flex items-center gap-2" data-export-ignore="true">
-            <button
-              type="button"
-              onClick={handleExportPdf}
-              className="inline-flex items-center gap-1.5 rounded-md border border-[var(--biz-border)] bg-[var(--biz-surface)] px-3 py-1.5 text-xs font-medium text-[var(--biz-text)] transition-colors hover:bg-[var(--biz-hover)]"
-            >
-              <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
-                />
-              </svg>
-              Download PDF
-            </button>
-
-            <button
-              type="button"
-              onClick={handleExportPng}
-              disabled={exportingPng}
-              className="inline-flex items-center gap-1.5 rounded-md border border-[var(--biz-border)] bg-[var(--biz-surface)] px-3 py-1.5 text-xs font-medium text-[var(--biz-text)] transition-colors hover:bg-[var(--biz-hover)] disabled:opacity-40"
-            >
-              <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                />
-              </svg>
-              {exportingPng ? "Exporting..." : "Download PNG"}
-            </button>
-          </div>
-        </div>
-
-        {exportError ? (
-          <div className="px-5 pb-4">
-            <p className="text-xs text-rose-600">{exportError}</p>
-          </div>
-        ) : null}
-
-        {frontBackUrls.length > 0 ? (
-          <div
-            className="flex items-center gap-2 border-t border-[var(--biz-border)] px-5 py-3 lg:hidden"
-            data-export-ignore="true"
-          >
-            {frontBackUrls.map((url, i) => (
-              <div
-                key={`${url}-${i}`}
-                className={`${THUMBNAIL_SIZE_CLASS} shrink-0 overflow-hidden rounded-md ring-1 ring-[color:var(--biz-border)]`}
-              >
-                <img
-                  src={url}
-                  alt={i === 0 ? "Card front" : "Card back"}
-                  className="h-full w-full object-cover"
-                />
-              </div>
-            ))}
-            {cardLabel ? <p className="truncate text-xs text-[var(--biz-muted)]">{cardLabel}</p> : null}
-          </div>
-        ) : null}
       </div>
 
+      {/* Off-screen print target */}
       <div
         ref={printRef}
         aria-hidden="true"
