@@ -89,8 +89,11 @@ const CORNER_CLOSEUP_KINDS: GradeScanPhotoKind[] = [
   "corner_bl",
   "corner_br",
 ];
-const LIMITED_VISIBILITY_NOTE =
-  "Limited visibility: no close-up photos provided for corners, edges, and surface.";
+// Advisory note for missing close-ups — intentionally avoids "limited visibility" phrasing
+// so it does not trigger hasPhotoQualityFlags() in verdict.ts (which looks for that phrase
+// as a signal of genuinely bad photo quality, not just missing optional detail photos).
+const MISSING_CLOSEUPS_NOTE =
+  "No close-up photos provided. Estimate based on full-card images (front/back) only.";
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -269,18 +272,30 @@ function parseEvidenceSources(
   };
 }
 
+// Adjusts the estimate when no close-up photos were provided.
+//
+// Design intent:
+// - Missing close-ups are ADVISORY, not a failure condition.
+// - We cap confidence modestly (at 72) and add a mild probability penalty, but we do NOT
+//   downgrade analysis_status or force a "Rescan Needed" recommendation.
+// - "Rescan Needed" is reserved for genuinely bad photo quality (blur, glare, etc.)
+//   which is detected separately in verdict.ts via hasPhotoQualityFlags().
+//
+// To tune how aggressively missing close-ups affect output, adjust:
+//   - CLOSEUP_CONFIDENCE_CAP: maximum confidence score when no close-ups provided
+//   - from10 / from9 penalty amounts in the PSA probability block below
 function applyLimitedVisibilityAdjustments(
   estimate: GradeEstimate,
   scanPhotoKinds: GradeScanPhotoKind[]
 ): GradeEstimate {
   if (hasCloseupKinds(scanPhotoKinds)) return estimate;
 
-  const limitedVisibilityNotes = Array.from(
-    new Set([...(estimate.visibility_notes ?? []), LIMITED_VISIBILITY_NOTE])
-  );
+  // Soft cap: reduces confidence when close-ups are absent, but keeps it in the
+  // "medium" range (>= 45) so verdict.ts does not treat it as low confidence.
+  const CLOSEUP_CONFIDENCE_CAP = 72;
   const confidenceScore = Math.min(
     estimate.confidence?.overall_confidence_score ?? 65,
-    65
+    CLOSEUP_CONFIDENCE_CAP
   );
   const confidenceLabel: GradeEstimateConfidence["confidence_label"] =
     confidenceScore >= 45 ? "medium" : "low";
@@ -290,24 +305,30 @@ function applyLimitedVisibilityAdjustments(
     limiting_factors: Array.from(
       new Set([
         ...(estimate.confidence?.limiting_factors ?? []),
-        "No category-specific close-up photos supplied.",
+        "No close-up photos supplied for corners, edges, or surface.",
       ])
     ),
     what_was_clear: estimate.confidence?.what_was_clear ?? [],
   };
 
+  // Advisory note goes into visibility_notes only — NOT grade_notes.
+  // grade_notes is scanned by hasPhotoQualityFlags() in verdict.ts, and we don't
+  // want our own injected text to cause false "Rescan Needed" triggers.
+  const advisoryNotes = Array.from(
+    new Set([...(estimate.visibility_notes ?? []), MISSING_CLOSEUPS_NOTE])
+  );
+
   const adjusted: GradeEstimate = {
     ...estimate,
     confidence,
-    analysis_status:
-      estimate.analysis_status === "unable" ? "unable" : "low_confidence",
-    analysis_warning_code:
-      estimate.analysis_status === "unable" ? "unable" : "low_confidence",
-    grade_notes: `${estimate.grade_notes} ${LIMITED_VISIBILITY_NOTE}`,
-    visibility_notes: limitedVisibilityNotes,
+    // analysis_status is intentionally NOT downgraded here. Missing close-ups are
+    // optional; we keep whatever status the model computed from the available images.
+    visibility_notes: advisoryNotes,
     analysis_metadata: {
       ...(estimate.analysis_metadata ?? {}),
-      limited_visibility_flag: true,
+      // missing_closeups_flag: advisory signal used by verdict.ts for copy/tips only
+      missing_closeups_flag: true,
+      limited_visibility_flag: true, // kept for backwards compat
     },
   };
 
