@@ -4,6 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import crypto from "crypto";
 import { createClient } from "@/lib/supabase/server";
 import { exchangeCode, fetchEbayIdentity } from "@/lib/ebay/selling/oauth";
 import { hasBusinessAccess } from "@/lib/access";
@@ -31,9 +32,13 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     return NextResponse.redirect(`${SITE_URL}/business/settings?ebay=error&error=missing_params`);
   }
 
-  // Validate CSRF state
+  // Validate CSRF state using timing-safe comparison to prevent timing attacks
   const storedState = req.cookies.get("ebay_oauth_state")?.value;
-  if (!storedState || storedState !== state) {
+  const stateMatch =
+    storedState &&
+    storedState.length === state.length &&
+    crypto.timingSafeEqual(Buffer.from(storedState), Buffer.from(state));
+  if (!stateMatch) {
     console.warn("[ebay/callback] CSRF state mismatch");
     return NextResponse.redirect(`${SITE_URL}/business/settings?ebay=error&error=state_mismatch`);
   }

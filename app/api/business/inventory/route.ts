@@ -29,6 +29,11 @@ export async function GET(request: NextRequest) {
       const item = await getInventoryItem(userId, itemId);
       if (!item)
         return NextResponse.json({ error: "Not found" }, { status: 404 });
+      // Defence-in-depth: explicit ownership guard even if the service layer enforces it
+      if ((item as any).user_id && (item as any).user_id !== userId) {
+        console.warn("[inventory] Ownership mismatch detected", { itemId });
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
       return NextResponse.json(item);
     }
 

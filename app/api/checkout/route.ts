@@ -14,6 +14,13 @@ export async function POST(request: Request) {
       );
     }
 
+    if (!user.email) {
+      return NextResponse.json(
+        { error: "An email address is required for checkout. Please update your account." },
+        { status: 400 }
+      );
+    }
+
     if (!process.env.STRIPE_SECRET_KEY?.trim()) {
       console.error("Checkout: STRIPE_SECRET_KEY is not set");
       return NextResponse.json(
@@ -48,7 +55,7 @@ export async function POST(request: Request) {
 
       const session = await createBusinessSubscriptionCheckout(
         user.id,
-        user.email!,
+        user.email,
         `${appUrl}/business?success=true`,
         `${appUrl}/business?canceled=true`,
         billing
@@ -70,7 +77,7 @@ export async function POST(request: Request) {
 
     const session = await createProSubscriptionCheckout(
       user.id,
-      user.email!,
+      user.email,
       `${appUrl}/account?success=true`,
       `${appUrl}/comps?canceled=true`,
       billing

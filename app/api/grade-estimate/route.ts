@@ -16,9 +16,11 @@ import {
 } from "@/lib/grading/scanPhotos";
 
 function getAnthropicClient() {
-  return new Anthropic({
-    apiKey: process.env.ANTHROPIC_API_KEY,
-  });
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    throw new Error("ANTHROPIC_API_KEY is not configured");
+  }
+  return new Anthropic({ apiKey });
 }
 
 

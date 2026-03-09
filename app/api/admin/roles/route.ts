@@ -14,8 +14,7 @@ function isValidRole(value: unknown): value is AppRole {
 function isValidEmail(value: unknown): value is string {
   return (
     typeof value === "string" &&
-    value.includes("@") &&
-    value.trim().length > 3
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())
   );
 }
 

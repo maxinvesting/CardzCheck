@@ -10,22 +10,6 @@ const RATE_LIMITED_ENDPOINTS = [
   "/api/search",
 ];
 
-function getClientIP(request: NextRequest): string {
-  // Vercel/Cloudflare provide these headers
-  const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded) {
-    return forwarded.split(",")[0].trim();
-  }
-
-  const realIP = request.headers.get("x-real-ip");
-  if (realIP) {
-    return realIP;
-  }
-
-  // Fallback for local development
-  return "127.0.0.1";
-}
-
 type RateLimitConfig = {
   limit: number;
   windowMs: number;
