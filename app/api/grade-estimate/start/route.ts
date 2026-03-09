@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { canAccessFeature } from "@/lib/access";
+import { canAccessFeature, checkProAccess } from "@/lib/access";
 import { extractScanPhotos } from "@/lib/grading/gradeEstimateImages";
 import {
   createGradeEstimateJob,
 } from "@/lib/grading/gradeEstimateJobStore";
 import { runGradeEstimateJob } from "@/lib/grading/gradeEstimateJob";
 import { createGradeEstimateJobDependencies } from "@/lib/grading/gradeEstimateServer";
+import { checkGradeTokenBudget } from "@/lib/grading/tokenBudget";
+import { isTestMode } from "@/lib/test-mode";
 import type { GradeEstimatorCardInput } from "@/lib/grade-estimator/value";
 import type { GradeScanPhoto } from "@/types";
 import {
@@ -47,6 +49,23 @@ export async function POST(request: NextRequest) {
         },
         { status: 403 }
       );
+    }
+
+    // Token budget enforcement — skip in test mode to avoid blocking local dev.
+    if (!isTestMode()) {
+      const proAccess = await checkProAccess(user.id);
+      const budget = await checkGradeTokenBudget(user.id, proAccess.tier);
+      if (!budget.allowed) {
+        return NextResponse.json(
+          {
+            error: budget.reason ?? "Monthly scanning budget reached.",
+            code: "BUDGET_EXCEEDED",
+            budgetCents: budget.budgetCents,
+            spentCents: budget.spentCents,
+          },
+          { status: 429 }
+        );
+      }
     }
 
     const body = (await request.json()) as GradeEstimateStartPayload;
@@ -91,7 +110,7 @@ export async function POST(request: NextRequest) {
     }
 
     const job = createGradeEstimateJob();
-    const deps = createGradeEstimateJobDependencies();
+    const deps = createGradeEstimateJobDependencies(user.id);
 
     void runGradeEstimateJob(
       job,

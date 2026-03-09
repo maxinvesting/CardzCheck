@@ -361,11 +361,24 @@ function mapOutcomesToBgs(outcomes: GradeOutcome[]): GradeProbabilities["bgs"] {
 }
 
 function mapPsaToBgs(psa: GradeProbabilities["psa"]): GradeProbabilities["bgs"] {
+  // BGS 9.5 "Pristine" requires a perfect subgrade on all four categories and is
+  // roughly 3-4x harder than PSA 10. Real-world hit rates: PSA 10 ~5-8% of submissions,
+  // BGS 9.5 ~1-2%. A 1:1 remap would show wildly inflated BGS 9.5 numbers.
+  //
+  // Conversion model (coefficients sum to 1.0 per PSA input bucket):
+  //   PSA 10  → 30% BGS 9.5 | 65% BGS 9  | 5%  BGS 8.5 | 0%  BGS 8-
+  //   PSA 9   → 0%  BGS 9.5 | 78% BGS 9  | 17% BGS 8.5 | 5%  BGS 8-
+  //   PSA 8   → 0%  BGS 9.5 | 0%  BGS 9  | 72% BGS 8.5 | 28% BGS 8-
+  //   PSA 7-  → 0%  BGS 9.5 | 0%  BGS 9  | 0%  BGS 8.5 | 100% BGS 8-
+  const bgs95 = psa["10"] * 0.30;
+  const bgs9  = psa["10"] * 0.65 + psa["9"] * 0.78;
+  const bgs85 = psa["10"] * 0.05 + psa["9"] * 0.17 + psa["8"] * 0.72;
+  const bgs8orLower = psa["9"] * 0.05 + psa["8"] * 0.28 + psa["7_or_lower"];
   return normalizeProbabilityMap({
-    "9.5": psa["10"],
-    "9": psa["9"],
-    "8.5": psa["8"],
-    "8_or_lower": psa["7_or_lower"],
+    "9.5": bgs95,
+    "9": bgs9,
+    "8.5": bgs85,
+    "8_or_lower": bgs8orLower,
   });
 }
 
@@ -403,24 +416,53 @@ function mapWeightedScoreToRange(weightedScore: number): { low: number; high: nu
 }
 
 
+// Breakpoints in descending order. Scores between breakpoints are interpolated
+// linearly so the output changes gradually rather than jumping at hard thresholds.
+// This makes distributions meaningfully different across similar cards.
+const DETERMINISTIC_BREAKPOINTS: Array<{ threshold: number; dist: GradeProbabilities["psa"] }> = [
+  { threshold: 97, dist: { "10": 0.55, "9": 0.35, "8": 0.08, "7_or_lower": 0.02 } },
+  { threshold: 92, dist: { "10": 0.35, "9": 0.48, "8": 0.13, "7_or_lower": 0.04 } },
+  { threshold: 86, dist: { "10": 0.18, "9": 0.52, "8": 0.22, "7_or_lower": 0.08 } },
+  { threshold: 78, dist: { "10": 0.07, "9": 0.44, "8": 0.33, "7_or_lower": 0.16 } },
+  { threshold: 68, dist: { "10": 0.03, "9": 0.28, "8": 0.40, "7_or_lower": 0.29 } },
+  { threshold: 57, dist: { "10": 0.01, "9": 0.16, "8": 0.37, "7_or_lower": 0.46 } },
+  { threshold: 0,  dist: { "10": 0.00, "9": 0.08, "8": 0.27, "7_or_lower": 0.65 } },
+];
+
+function lerpPsa(
+  a: GradeProbabilities["psa"],
+  b: GradeProbabilities["psa"],
+  t: number
+): GradeProbabilities["psa"] {
+  return {
+    "10": a["10"] + (b["10"] - a["10"]) * t,
+    "9": a["9"] + (b["9"] - a["9"]) * t,
+    "8": a["8"] + (b["8"] - a["8"]) * t,
+    "7_or_lower": a["7_or_lower"] + (b["7_or_lower"] - a["7_or_lower"]) * t,
+  };
+}
+
 function buildDeterministicPsaFromWeightedScore(
   weightedScore: number
 ): GradeProbabilities["psa"] {
-  let dist: GradeProbabilities["psa"];
-  if (weightedScore >= 92) {
-    dist = { "10": 0.24, "9": 0.55, "8": 0.16, "7_or_lower": 0.05 };
-  } else if (weightedScore >= 84) {
-    dist = { "10": 0.12, "9": 0.52, "8": 0.25, "7_or_lower": 0.11 };
-  } else if (weightedScore >= 74) {
-    dist = { "10": 0.05, "9": 0.4, "8": 0.34, "7_or_lower": 0.21 };
-  } else if (weightedScore >= 64) {
-    dist = { "10": 0.02, "9": 0.25, "8": 0.39, "7_or_lower": 0.34 };
-  } else if (weightedScore >= 54) {
-    dist = { "10": 0.01, "9": 0.14, "8": 0.36, "7_or_lower": 0.49 };
-  } else {
-    dist = { "10": 0, "9": 0.07, "8": 0.27, "7_or_lower": 0.66 };
+  const score = clamp(weightedScore, 0, 100);
+  const bps = DETERMINISTIC_BREAKPOINTS;
+
+  // Above highest breakpoint
+  if (score >= bps[0].threshold) return normalizeProbabilityMap(bps[0].dist);
+
+  // Between breakpoints — interpolate so every score produces a unique distribution
+  for (let i = 0; i < bps.length - 1; i++) {
+    const upper = bps[i];
+    const lower = bps[i + 1];
+    if (score >= lower.threshold) {
+      const range = upper.threshold - lower.threshold;
+      const t = range > 0 ? (score - lower.threshold) / range : 1;
+      return normalizeProbabilityMap(lerpPsa(lower.dist, upper.dist, t));
+    }
   }
-  return normalizeProbabilityMap(dist);
+
+  return normalizeProbabilityMap(bps[bps.length - 1].dist);
 }
 
 function blendPsaDistributions(
@@ -431,10 +473,12 @@ function blendPsaDistributions(
 ): GradeProbabilities["psa"] {
   if (!modelBased) return deterministic;
 
-  let modelWeight = 0.4;
-  if (confidence === "high") modelWeight = 0.55;
-  if (confidence === "low") modelWeight = 0.2;
-  if (status !== "ok") modelWeight = Math.min(modelWeight, 0.25);
+  // Higher weights give Claude's card-specific read more influence,
+  // reducing the repetitive "same distribution on every card" problem.
+  let modelWeight = 0.55; // was 0.40
+  if (confidence === "high") modelWeight = 0.70; // was 0.55
+  if (confidence === "low") modelWeight = 0.30; // was 0.20
+  if (status !== "ok") modelWeight = Math.min(modelWeight, 0.30); // was 0.25
 
   const blended: GradeProbabilities["psa"] = {
     "10": deterministic["10"] * (1 - modelWeight) + modelBased["10"] * modelWeight,
@@ -459,9 +503,24 @@ function applyCenteringGate(
   );
   const severity = centering.centering_severity_0_3;
 
-  let maxPsa10 = 0.18;
-  if (status !== "ok") maxPsa10 = 0.08;
-  if (severity >= 2 || worstAxis > 60) maxPsa10 = Math.min(maxPsa10, 0.02);
+  // PSA 10 ceiling scales with actual centering quality.
+  // A near-perfect card should not be hard-capped at 18% — let the evidence speak.
+  let maxPsa10: number;
+  if (status !== "ok") {
+    maxPsa10 = 0.08;
+  } else if (severity === 0 && worstAxis <= 52) {
+    maxPsa10 = 0.85; // near-perfect centering — no meaningful ceiling
+  } else if (severity === 0 && worstAxis <= 55) {
+    maxPsa10 = 0.65;
+  } else if (severity <= 1 && worstAxis <= 58) {
+    maxPsa10 = 0.42;
+  } else if (severity <= 1 && worstAxis <= 60) {
+    maxPsa10 = 0.20;
+  } else {
+    maxPsa10 = 0.03;
+  }
+  // Hard overrides for genuinely bad centering — no matter what else looks good
+  if (severity >= 2 || worstAxis > 60) maxPsa10 = Math.min(maxPsa10, 0.03);
   if (worstAxis >= 65 || severity >= 3) maxPsa10 = 0.01;
 
   if (gated["10"] > maxPsa10) {
@@ -665,20 +724,23 @@ async function buildEstimateFromParsed(
     ratioDeviation(centeringDetail.top_bottom_ratio) ?? 50
   );
   const centeringScore = scoreCentering(centeringDetail, worstAxisDeviation);
+  // Baselines represent "no findings reported, no blocked language" — a genuinely
+  // clean card should start high, not mediocre. Old values (64/74/74) caused
+  // even flawless cards to land at mid-range calibrated scores.
   const surfaceScore = scoreFromFindings(
     surfaceFindings,
     toText(result.surface, ""),
-    64
+    82
   );
   const cornersScore = scoreFromFindings(
     cornersFindings,
     toText(result.corners, ""),
-    74
+    88
   );
   const edgesScore = scoreFromFindings(
     edgesFindings,
     toText(result.edges, ""),
-    74
+    88
   );
   const weightedEvidenceScore =
     centeringScore * 0.4 +

@@ -81,7 +81,7 @@ export type GradeEstimateJobDependencies = {
     imageStats: ImageStats;
   }>;
   runOcrIdentity: (images: ResolvedGradeEstimateImage[]) => Promise<CardIdentity>;
-  runGradeModel: (images: ResolvedGradeEstimateImage[]) => Promise<string | null>;
+  runGradeModel: (images: ResolvedGradeEstimateImage[], identity?: CardIdentity | null) => Promise<string | null>;
   parseModelOutput: (options: {
     modelText: string | null;
     imageStats: ImageStats;
@@ -226,7 +226,8 @@ export async function runGradeEstimateJob(
   const gradeStart = startStep(job, "grade_model");
   try {
     const resolvedImages = job.internal.resolvedImages ?? [];
-    const modelText = await deps.runGradeModel(resolvedImages);
+    // Pass identity from step 1 so the grade model can apply card-type context (chrome, vintage, etc.)
+    const modelText = await deps.runGradeModel(resolvedImages, job.partial.identity);
     job.internal.modelText = modelText;
     finishStep(job, "grade_model", gradeStart, "done");
   } catch (error) {

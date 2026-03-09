@@ -53,30 +53,45 @@ function buildRangeLabel(estimate: GradeEstimate): string | null {
 }
 
 function hasPhotoQualityFlags(estimate: GradeEstimate): boolean {
-  const noteText = [
-    estimate.grade_notes,
-    estimate.analysis_reason,
-    ...(estimate.visibility_notes ?? []),
+  // Only check explicitly-negative fields for ambiguous tokens like "lighting" and "glare".
+  // Claude freely mentions these words in positive context inside grade_notes / analysis_reason
+  // (e.g. "lighting was excellent", "no glare observed") — checking those fields caused
+  // false-positive "Rescan Needed" verdicts on well-photographed cards.
+  const negativeFieldsText = [
     ...(estimate.image_quality?.key_issues ?? []),
     ...(estimate.confidence?.limiting_factors ?? []),
+    ...(estimate.visibility_notes ?? []),
   ]
     .filter((text): text is string => typeof text === "string" && text.trim().length > 0)
     .join(" ")
     .toLowerCase();
 
-  const tokens = [
-    "blur",
-    "blurry",
-    "glare",
-    "lighting",
+  // All text — only used for unambiguously negative phrases that can't appear positively.
+  const allText = [
+    estimate.grade_notes,
+    estimate.analysis_reason,
+    negativeFieldsText,
+  ]
+    .filter((text): text is string => typeof text === "string" && text.trim().length > 0)
+    .join(" ")
+    .toLowerCase();
+
+  // Unambiguously negative — safe to check anywhere
+  const universalTokens = [
     "out of focus",
-    "resolution",
     "limited visibility",
-    "unclear",
     "obscured",
     "not fully assess",
+    "blurry",
   ];
-  return tokens.some((token) => noteText.includes(token));
+
+  // Ambiguous — only flag when appearing in explicitly-negative fields
+  const negativeFieldOnlyTokens = ["lighting", "glare", "resolution", "blur", "unclear"];
+
+  return (
+    universalTokens.some((token) => allText.includes(token)) ||
+    negativeFieldOnlyTokens.some((token) => negativeFieldsText.includes(token))
+  );
 }
 
 function getPsaOutcomes(estimate: GradeEstimate): GradeOutcome[] {
@@ -126,6 +141,7 @@ function getSuggestedGrader(options: {
   vintageOverride?: boolean | null;
   preferTag?: boolean;
   p10: number;
+  bgs95: number;
   confidence: "high" | "medium" | "low";
   recommendation: VerdictRecommendation;
 }): VerdictGrader {
@@ -134,7 +150,10 @@ function getSuggestedGrader(options: {
     (options.vintageOverride !== false && options.year !== null && options.year <= 1989);
   if (isVintage) return "SGC";
 
-  if (options.p10 >= 0.3 && options.confidence !== "low") return "BGS";
+  // Suggest BGS when PSA 10 probability is meaningful OR BGS 9.5 probability is non-trivial.
+  // Old threshold (p10 >= 0.30) never triggered because PSA 10 was hard-capped at 18%.
+  // Now that the cap is evidence-based, we lower the trigger and also key off BGS 9.5 directly.
+  if ((options.p10 >= 0.20 || options.bgs95 >= 0.08) && options.confidence !== "low") return "BGS";
 
   const isModern = options.year !== null && options.year >= 2018;
   if (options.preferTag && isModern && options.recommendation !== "Rescan Needed") {
@@ -215,13 +234,17 @@ export function buildGradeVerdict(
     );
 
   let recommendation: VerdictRecommendation;
-  if (
-    confidence === "low" ||
-    confidenceScore < 50 ||
-    photoFlags ||
-    limitedVisibilityFlag ||
-    estimate.analysis_status === "unable"
-  ) {
+  if (estimate.analysis_status === "unable" || confidence === "low" || confidenceScore < 40) {
+    // Hard gates: unable status, genuinely low confidence, or very low confidence score.
+    // Old threshold was < 50, which punted too many useful medium-confidence reads.
+    recommendation = "Rescan Needed";
+  } else if (photoFlags && confidenceScore < 58) {
+    // Photo quality issues (blur, glare in negative fields) only punt to Rescan when
+    // confidence is also genuinely low. Good front/back shots can still give a useful verdict.
+    recommendation = "Rescan Needed";
+  } else if (limitedVisibilityFlag && confidenceScore < 55) {
+    // No close-ups + medium-low confidence → ask for better photos.
+    // High-quality front/back alone can still support Borderline or Sell Raw verdicts.
     recommendation = "Rescan Needed";
   } else if (lowGradeProb >= 0.45 || (lowGradeProb + getOutcomeProbability(outcomes, "PSA 8")) >= 0.75) {
     recommendation = "Sell Raw";
@@ -232,11 +255,13 @@ export function buildGradeVerdict(
   }
 
   const year = parseYear(cardIdentity);
+  const bgs95 = estimate.grade_probabilities?.bgs?.["9.5"] ?? 0;
   const suggestedGrader = getSuggestedGrader({
     year,
     vintageOverride: options?.vintageOverride ?? null,
     preferTag: options?.preferTag ?? false,
     p10,
+    bgs95,
     confidence,
     recommendation,
   });
