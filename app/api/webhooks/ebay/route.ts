@@ -55,18 +55,24 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   // Read raw body for signature verification
   const rawBody = await req.text();
 
-  // Verify eBay HMAC signature
+  // Verify eBay HMAC-SHA256 signature.
+  // SECURITY: Both the presence and validity of the signature are required.
+  // Accepting requests without a signature would allow anyone to inject fake
+  // eBay events (e.g., fake order-sold or account-deletion notifications).
   const signatureHeader = req.headers.get("x-ebay-signature");
-  if (signatureHeader) {
-    const expectedSig = crypto
-      .createHmac("sha256", verificationToken)
-      .update(rawBody)
-      .digest("base64");
+  if (!signatureHeader) {
+    console.warn("[ebay/webhook] Request received without x-ebay-signature header — rejecting");
+    return NextResponse.json({ error: "Missing signature" }, { status: 401 });
+  }
 
-    if (signatureHeader !== expectedSig) {
-      console.warn("[ebay/webhook] Signature mismatch — possible replay attack");
-      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
-    }
+  const expectedSig = crypto
+    .createHmac("sha256", verificationToken)
+    .update(rawBody)
+    .digest("base64");
+
+  if (signatureHeader !== expectedSig) {
+    console.warn("[ebay/webhook] Signature mismatch — possible replay or spoofed request");
+    return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 
   let payload: Record<string, unknown>;

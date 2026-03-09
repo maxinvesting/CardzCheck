@@ -1,3 +1,22 @@
+/**
+ * Feature access and usage limit helpers — SERVER ONLY.
+ *
+ * Subscription tiers:
+ *  free     — 3 searches/mo, 3 AI messages/mo, 5 collection items, no watchlist
+ *  pro      — Unlimited search/AI/collection, watchlist, grade estimator
+ *  business — All Pro features + inventory, sales, eBay integration, analytics
+ *
+ * Usage pattern:
+ *   1. checkProAccess(userId) — get tier + status
+ *   2. canAccessFeature(userId, feature) — per-feature access gate
+ *   3. getUsage(userId) — read free-tier counters
+ *   4. incrementSearchUsage / incrementAIUsage — call after successful operations
+ *
+ * These checks are always enforced server-side. Client-side gating (PaywallModal)
+ * is UX only — API routes enforce access independently and must not trust client
+ * claims about subscription status.
+ */
+
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { isTestMode } from "@/lib/test-mode";
 import type { Subscription, Usage } from "@/types";
