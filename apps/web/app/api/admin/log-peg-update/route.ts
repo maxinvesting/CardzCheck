@@ -1,11 +1,17 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
+import { requireAdminUser } from "@/lib/auth";
 import { getAdminSupabase } from "@/lib/supabase";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   try {
+    const adminCheck = await requireAdminUser(request);
+    if (!adminCheck.ok) {
+      return adminCheck.response;
+    }
+
     const body = (await request.json()) as {
       skuId: string;
       pegPrice: string;
