@@ -8,10 +8,13 @@ import { Redis } from "@upstash/redis";
 // Limits are per-IP + per-user-id (anon if unauthenticated).
 // ---------------------------------------------------------------------------
 const RATE_LIMITS: Record<string, { limit: number; windowSec: number }> = {
-  "/api/search":          { limit: 60, windowSec: 60 },
-  "/api/identify-card":   { limit: 10, windowSec: 60 },
-  "/api/grade-estimate":  { limit: 10, windowSec: 60 },
-  "/api/analyst":         { limit: 20, windowSec: 60 },
+  "/api/search":               { limit: 60, windowSec: 60 },
+  "/api/identify-card":        { limit: 10, windowSec: 60 },
+  "/api/grade-estimate":       { limit: 10, windowSec: 60 },
+  "/api/analyst":              { limit: 20, windowSec: 60 },
+  // Bulk Mode — generous limits since processing is batched server-side
+  "/api/bulk/batches":         { limit: 30, windowSec: 60 },   // list + create
+  "/api/bulk/batches/process": { limit: 5,  windowSec: 60 },   // AI-heavy; tight limit
 };
 
 // ---------------------------------------------------------------------------

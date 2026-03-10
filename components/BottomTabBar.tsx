@@ -16,6 +16,7 @@ const MORE_LINKS = [
   { name: "Watchlist", href: "/watchlist" },
   { name: "Comps", href: "/comps" },
   { name: "Grade Engine", href: "/grade-probability" },
+  { name: "Bulk Mode", href: "/bulk" },
   { name: "Analyst", href: "/analyst" },
   { name: "Settings", href: "/settings" },
 ];
@@ -30,6 +31,7 @@ const TAB_BASE_PATHS = [
   "/grade-probability",
   "/grade-estimator",
   "/analyst",
+  "/bulk",
   "/settings",
 ];
 
