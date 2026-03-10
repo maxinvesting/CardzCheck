@@ -34,7 +34,9 @@ import type {
   BusinessInventoryItem,
   BusinessMetrics as MetricsType,
   BusinessSale,
+  EbayAccountStatus,
 } from "@/types";
+import type { StoreTier } from "@/lib/business/EbayProfitEngine";
 import {
   computeInventoryValueSummary,
   type InventoryValueSummary,
@@ -189,6 +191,7 @@ function LedgerPageContent() {
   const [salesPage, setSalesPage] = useState(1);
   const [salesPageSize] = useState(50);
   const [salesTotal, setSalesTotal] = useState(0);
+  const [storeTier, setStoreTier] = useState<StoreTier>("none");
   const perfEnabled = useMemo(() => isPerfEnabled(), []);
   const perfMockMode = useMemo(
     () => perfEnabled && searchParams.get("perfMock") === "1",
@@ -454,6 +457,17 @@ function LedgerPageContent() {
     }
   }, [perfMockMode, salesFilters, salesPage, salesPageSize]);
 
+  const loadEbayStoreTier = useCallback(async () => {
+    try {
+      const res = await fetch("/api/business/ebay/account", { cache: "no-store" });
+      if (!res.ok) return;
+      const data: EbayAccountStatus = await res.json();
+      setStoreTier(data.store_tier ?? "none");
+    } catch {
+      // Best-effort only; default "none" is still safe.
+    }
+  }, []);
+
   const loadUserProfile = useCallback(async () => {
     if (perfMockMode) {
       setBusinessName("Perf Mock Business");
@@ -529,10 +543,10 @@ function LedgerPageContent() {
         router.push("/login?redirect=/business");
         return;
       }
-      await Promise.all([loadInventory(), loadMetrics()]);
+      await Promise.all([loadInventory(), loadMetrics(), loadEbayStoreTier()]);
     }
     init();
-  }, [router, loadUserProfile, loadInventory, loadMetrics]);
+  }, [router, loadUserProfile, loadInventory, loadMetrics, loadEbayStoreTier]);
 
   useEffect(() => {
     if (activeTab !== "sales" || hasAccess === false || needsMigration) return;
@@ -1147,6 +1161,7 @@ function LedgerPageContent() {
                 pageSize={salesPageSize}
                 total={salesTotal}
                 onPageChange={(next) => setSalesPage(next)}
+                storeTier={storeTier}
               />
             </Surface>
           )}
@@ -1227,6 +1242,7 @@ function LedgerPageContent() {
             setMarkSoldItem(null);
           }}
           showCogsField={false}
+          storeTier={storeTier}
         />
 
         {/* Toast notification */}

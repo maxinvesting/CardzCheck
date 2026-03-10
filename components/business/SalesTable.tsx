@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import type { BusinessSale } from "@/types";
 import { formatMoney } from "@/lib/business/sales-utils";
 import SaleFormModal from "@/components/business/SaleFormModal";
+import type { StoreTier } from "@/lib/business/EbayProfitEngine";
 
 export interface SalesFilters {
   from: string;
@@ -23,6 +24,7 @@ interface Props {
   pageSize: number;
   total: number;
   onPageChange: (nextPage: number) => void;
+  storeTier?: StoreTier;
 }
 
 const CHANNEL_OPTIONS = ["", "ebay", "whatnot", "instagram", "show", "local", "other"] as const;
@@ -38,6 +40,7 @@ export default function SalesTable({
   pageSize,
   total,
   onPageChange,
+  storeTier = "none",
 }: Props) {
   const [editingSale, setEditingSale] = useState<BusinessSale | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -247,6 +250,7 @@ export default function SalesTable({
             setEditingSale(null);
           }}
           showCogsField
+          storeTier={storeTier}
         />
       )}
     </div>

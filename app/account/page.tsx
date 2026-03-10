@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import { createClient } from "@/lib/supabase/client";
+import { hasActiveBusinessTier } from "@/lib/subscription-tier";
 import type { User } from "@/types";
 import { LIMITS } from "@/types";
 import { isTestMode, getTestUser } from "@/lib/test-mode";
@@ -13,6 +14,11 @@ function AccountContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [user, setUser] = useState<User | null>(null);
+  const [subscription, setSubscription] = useState<{
+    tier?: string | null;
+    status?: string | null;
+    current_period_end?: string | null;
+  } | null>(null);
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(true);
   const [upgradeLoading, setUpgradeLoading] = useState(false);
@@ -30,6 +36,7 @@ function AccountContent() {
       if (isTestMode()) {
         const testUser = getTestUser();
         setUser(testUser);
+        setSubscription(testUser.subscription ?? null);
         setEmail(testUser.email);
         setLoading(false);
         console.log("🧪 TEST MODE: Using mock user in Account");
@@ -46,15 +53,19 @@ function AccountContent() {
 
       setEmail(authUser.email || "");
 
-      const { data: userData } = await supabase
-        .from("users")
-        .select("*")
-        .eq("id", authUser.id)
-        .single();
+      const [{ data: userData }, { data: subscriptionData }] = await Promise.all([
+        supabase.from("users").select("*").eq("id", authUser.id).single(),
+        supabase
+          .from("subscriptions")
+          .select("tier, status, current_period_end")
+          .eq("user_id", authUser.id)
+          .maybeSingle(),
+      ]);
 
       if (userData) {
         setUser(userData);
       }
+      setSubscription(subscriptionData ?? null);
 
       setLoading(false);
     }
@@ -97,6 +108,8 @@ function AccountContent() {
       </AuthenticatedLayout>
     );
   }
+
+  const isBusinessMember = Boolean(user?.is_paid) && hasActiveBusinessTier(subscription);
 
   return (
     <AuthenticatedLayout>
@@ -161,9 +174,13 @@ function AccountContent() {
                   </svg>
                 </div>
                 <div>
-                  <p className="font-medium text-gray-900 dark:text-white">Pro</p>
+                  <p className="font-medium text-gray-900 dark:text-white">
+                    {isBusinessMember ? "Business" : "Pro"}
+                  </p>
                   <p className="text-sm text-gray-500 dark:text-gray-400">
-                    Unlimited searches and collection
+                    {isBusinessMember
+                      ? "Inventory, sales analytics, and all Pro features"
+                      : "Unlimited searches and collection"}
                   </p>
                 </div>
               </div>

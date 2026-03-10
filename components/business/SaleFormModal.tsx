@@ -3,6 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { computeNetPayout, formatMoney } from "@/lib/business/sales-utils";
 import type { BusinessSale } from "@/types";
+import {
+  calculateNetProfit as calculateEseNetProfit,
+  ESE_MAX_ITEM_VALUE,
+  type ProfitBreakdown as EseProfitBreakdown,
+  type StoreTier,
+} from "@/lib/business/EbayProfitEngine";
 
 type SaleFormPayload = {
   inventory_item_id?: string | null;
@@ -31,6 +37,8 @@ interface Props {
   onClose: () => void;
   onSubmit: (payload: SaleFormPayload) => Promise<void> | void;
   showCogsField?: boolean;
+  /** Optional eBay store tier used for the ESE fee calculator when channel = "ebay". */
+  storeTier?: StoreTier;
 }
 
 const CHANNEL_OPTIONS = [
@@ -69,6 +77,7 @@ export default function SaleFormModal({
   onClose,
   onSubmit,
   showCogsField = true,
+  storeTier = "none",
 }: Props) {
   const [channel, setChannel] = useState<
     "ebay" | "whatnot" | "instagram" | "show" | "local" | "other"
@@ -85,6 +94,7 @@ export default function SaleFormModal({
   const [autoCalcNetPayout, setAutoCalcNetPayout] = useState(true);
   const [manualNetPayout, setManualNetPayout] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [eseWeightOz, setEseWeightOz] = useState<1 | 2 | 3>(1);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -120,6 +130,23 @@ export default function SaleFormModal({
       }),
     [platformFees, shippingCharged, shippingCost, soldPrice, tax]
   );
+
+  const eseEstimate: EseProfitBreakdown | null = useMemo(() => {
+    if (channel !== "ebay") return null;
+    const price = Number.parseFloat(soldPrice);
+    if (!Number.isFinite(price) || price <= 0 || price > ESE_MAX_ITEM_VALUE) {
+      return null;
+    }
+    try {
+      return calculateEseNetProfit({
+        itemPrice: price,
+        weightOz: eseWeightOz,
+        storeTier,
+      });
+    } catch {
+      return null;
+    }
+  }, [channel, soldPrice, eseWeightOz, storeTier]);
 
   if (!isOpen) return null;
 
@@ -280,6 +307,82 @@ export default function SaleFormModal({
                 className="mt-1 w-full rounded border border-gray-700 bg-gray-800 px-2 py-1.5 text-sm text-white"
               />
             </label>
+          )}
+
+          {channel === "ebay" && (
+            <div className="space-y-2 rounded border border-gray-700 bg-gray-900/60 px-3 py-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-xs text-gray-300">
+                  <span className="font-semibold">eBay Standard Envelope</span>
+                  <span className="ml-1 text-gray-500">(under ${ESE_MAX_ITEM_VALUE.toFixed(2)} item value)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-[11px] text-gray-400">
+                    Weight
+                    <select
+                      value={eseWeightOz}
+                      onChange={(e) =>
+                        setEseWeightOz(Number(e.target.value) as 1 | 2 | 3)
+                      }
+                      className="ml-1 rounded border border-gray-600 bg-gray-800 px-1.5 py-0.5 text-[11px] text-white"
+                    >
+                      <option value={1}>1 oz</option>
+                      <option value={2}>2 oz</option>
+                      <option value={3}>3 oz</option>
+                    </select>
+                  </label>
+                </div>
+              </div>
+
+              {eseEstimate ? (
+                <div className="grid grid-cols-2 gap-2 text-[11px] text-gray-300 sm:grid-cols-4">
+                  <div>
+                    <div className="text-gray-500">eBay fees</div>
+                    <div className="font-semibold">
+                      {`$${eseEstimate.totalEbayFees.toFixed(2)} `}
+                      <span className="text-gray-500">
+                        ({(eseEstimate.fvfRate * 100).toFixed(2)}% + $
+                        {eseEstimate.perOrderFee.toFixed(2)})
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Shipping + packaging</div>
+                    <div className="font-semibold">
+                      ${eseEstimate.shippingCost.toFixed(2)}{" "}
+                      <span className="text-gray-500">
+                        + ${eseEstimate.packagingTotal.toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Net profit (before COGS)</div>
+                    <div
+                      className={`font-semibold ${
+                        eseEstimate.isLoss ? "text-red-400" : "text-emerald-300"
+                      }`}
+                    >
+                      ${eseEstimate.netProfit.toFixed(2)}{" "}
+                      <span className="text-gray-500">
+                        ({eseEstimate.netMarginPct.toFixed(1)}% margin)
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Assumes ESE shipping</div>
+                    <div className="text-[10px] text-gray-500">
+                      FVFs include item price, ESE postage, and estimated tax; buyer pays
+                      shipping equal to postage.
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-[11px] text-gray-500">
+                  Enter a sale price under ${ESE_MAX_ITEM_VALUE.toFixed(2)} to preview
+                  your eBay Standard Envelope profit.
+                </p>
+              )}
+            </div>
           )}
 
           {showCogsField && (
