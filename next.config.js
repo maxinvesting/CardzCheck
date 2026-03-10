@@ -2,6 +2,28 @@ const { withSentryConfig } = require("@sentry/nextjs");
 
 const isProduction = process.env.NODE_ENV === "production";
 
+// Explicitly-whitelisted connect-src origins.
+// 'https:' was replaced with specific domains to reduce XSS exfiltration surface.
+// CSP is still in Report-Only mode — tighten further after verifying no violations.
+const connectSrcDomains = [
+  "'self'",
+  // Supabase REST, Auth, Storage
+  "https://*.supabase.co",
+  // Supabase Realtime (WebSocket)
+  "wss://*.supabase.co",
+  // Stripe checkout and API
+  "https://api.stripe.com",
+  "https://*.stripe.com",
+  // Anthropic API (AI features)
+  "https://api.anthropic.com",
+  // eBay APIs (selling, browse, fulfillment)
+  "https://api.ebay.com",
+  "https://svcs.ebay.com",
+  "https://open.api.ebay.com",
+  "https://api.sandbox.ebay.com",
+  // Sentry is tunnelled through /monitoring (Next.js rewrite) → covered by 'self'
+].join(" ");
+
 const cspDirectives = [
   "default-src 'self'",
   "base-uri 'self'",
@@ -12,7 +34,7 @@ const cspDirectives = [
   "style-src 'self' 'unsafe-inline' https:",
   "img-src 'self' data: https:",
   "font-src 'self' data: https:",
-  "connect-src 'self' https: wss:",
+  `connect-src ${connectSrcDomains}`,
 ].join("; ");
 
 /** @type {import('next').NextConfig} */

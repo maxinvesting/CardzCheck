@@ -4,8 +4,6 @@ import { isTestMode } from "@/lib/test-mode";
 
 export type AppRole = "member" | "admin" | "owner";
 
-const DEFAULT_OWNER_EMAIL = "maxwellmario97@gmail.com";
-
 export function isOwnerRole(role: AppRole | null | undefined): boolean {
   return role === "owner";
 }
@@ -23,11 +21,18 @@ export function isAdmin(user: { appRole?: AppRole | null } | null | undefined): 
 }
 
 function parseBootstrapAdminEmails(): Set<string> {
-  const raw = [
-    process.env.ADMIN_EMAILS ?? "",
-    process.env.OWNER_EMAIL ?? "",
-    DEFAULT_OWNER_EMAIL,
-  ].join(",");
+  const ownerEmail = process.env.OWNER_EMAIL ?? "";
+  const adminEmails = process.env.ADMIN_EMAILS ?? "";
+
+  if (!ownerEmail && !adminEmails) {
+    // Warn once — bootstrap access is disabled if neither var is set
+    console.warn(
+      "[admin] Neither OWNER_EMAIL nor ADMIN_EMAILS env vars are set. " +
+      "Bootstrap admin access is disabled. Set OWNER_EMAIL in your environment."
+    );
+  }
+
+  const raw = [adminEmails, ownerEmail].join(",");
 
   return new Set(
     raw
