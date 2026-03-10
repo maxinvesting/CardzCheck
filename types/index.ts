@@ -827,3 +827,135 @@ export interface EbayAccountStatus {
   /** eBay store subscription tier — drives the FVF rate in EbayProfitEngine. */
   store_tier: import("@/lib/business/EbayProfitEngine").StoreTier;
 }
+
+// =============================================
+// User Storefronts
+// =============================================
+
+export type StorefrontPlatform =
+  | "ebay"
+  | "whatnot"
+  | "website"
+  | "shopify"
+  | "mercari"
+  | "comc"
+  | "myslabs"
+  | "custom";
+
+export interface UserStorefront {
+  id: string;
+  user_id: string;
+  platform: StorefrontPlatform;
+  display_name: string;
+  store_url: string;
+  is_primary: boolean;
+  notes: string | null;
+  platform_settings: StorefrontPlatformSettings;
+  created_at: string;
+  updated_at: string;
+}
+
+// Platform-specific settings stored as JSONB.
+// Each platform type gets its own shape; unknown platforms fall back to base.
+
+export interface StorefrontSettingsBase {
+  fee_rate_percent?: number | null;
+  payment_processing_percent?: number | null;
+}
+
+export interface WhatnotStorefrontSettings extends StorefrontSettingsBase {
+  seller_fee_percent?: number | null;
+  shipping_fee_percent?: number | null;
+  buyer_premium_percent?: number | null;
+}
+
+export interface WebsiteStorefrontSettings extends StorefrontSettingsBase {
+  payment_processor?: string | null;
+  payment_flat_fee_cents?: number | null;
+  monthly_ad_spend_cents?: number | null;
+  ad_platforms?: string[] | null;
+  monthly_hosting_cents?: number | null;
+  monthly_other_costs_cents?: number | null;
+  other_costs_label?: string | null;
+}
+
+export interface ShopifyStorefrontSettings extends StorefrontSettingsBase {
+  monthly_plan_cents?: number | null;
+  transaction_fee_percent?: number | null;
+}
+
+export interface MercariStorefrontSettings extends StorefrontSettingsBase {
+  seller_fee_percent?: number | null;
+}
+
+export type StorefrontPlatformSettings =
+  | WhatnotStorefrontSettings
+  | WebsiteStorefrontSettings
+  | ShopifyStorefrontSettings
+  | MercariStorefrontSettings
+  | StorefrontSettingsBase;
+
+export const WHATNOT_DEFAULTS: WhatnotStorefrontSettings = {
+  seller_fee_percent: 9.5,
+  payment_processing_percent: 2.9,
+  shipping_fee_percent: 0,
+  buyer_premium_percent: 3,
+};
+
+export const WEBSITE_DEFAULTS: WebsiteStorefrontSettings = {
+  payment_processing_percent: 2.9,
+  payment_processor: "Stripe",
+  payment_flat_fee_cents: 30,
+  monthly_ad_spend_cents: 0,
+  ad_platforms: [],
+  monthly_hosting_cents: 0,
+  monthly_other_costs_cents: 0,
+  other_costs_label: null,
+};
+
+export const MERCARI_DEFAULTS: MercariStorefrontSettings = {
+  seller_fee_percent: 10,
+  payment_processing_percent: 2.9,
+};
+
+export const SHOPIFY_DEFAULTS: ShopifyStorefrontSettings = {
+  transaction_fee_percent: 0,
+  payment_processing_percent: 2.9,
+  monthly_plan_cents: 3900,
+};
+
+export function getDefaultPlatformSettings(platform: StorefrontPlatform): StorefrontPlatformSettings {
+  switch (platform) {
+    case "whatnot": return { ...WHATNOT_DEFAULTS };
+    case "website": return { ...WEBSITE_DEFAULTS };
+    case "mercari": return { ...MERCARI_DEFAULTS };
+    case "shopify": return { ...SHOPIFY_DEFAULTS };
+    default: return {};
+  }
+}
+
+export const AD_PLATFORM_OPTIONS = [
+  "Google Ads",
+  "Meta (Facebook/Instagram)",
+  "TikTok Ads",
+  "Twitter/X Ads",
+  "eBay Promoted Listings",
+  "Whatnot Promoted",
+  "Other",
+] as const;
+
+export const STOREFRONT_PLATFORMS: {
+  value: StorefrontPlatform;
+  label: string;
+  placeholder: string;
+  icon: string;
+}[] = [
+  { value: "ebay", label: "eBay", placeholder: "https://www.ebay.com/str/yourstore", icon: "ebay" },
+  { value: "whatnot", label: "Whatnot", placeholder: "https://www.whatnot.com/user/yourname", icon: "whatnot" },
+  { value: "website", label: "Website", placeholder: "https://yourstore.com", icon: "globe" },
+  { value: "shopify", label: "Shopify", placeholder: "https://yourstore.myshopify.com", icon: "shopify" },
+  { value: "mercari", label: "Mercari", placeholder: "https://www.mercari.com/u/yourname", icon: "mercari" },
+  { value: "comc", label: "COMC", placeholder: "https://www.comc.com/Users/yourname", icon: "comc" },
+  { value: "myslabs", label: "MySlabs", placeholder: "https://myslabs.com/shop/yourname", icon: "myslabs" },
+  { value: "custom", label: "Other Platform", placeholder: "https://your-storefront-url.com", icon: "custom" },
+];

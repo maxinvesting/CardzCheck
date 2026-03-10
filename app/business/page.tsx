@@ -10,6 +10,7 @@ import type {
   BusinessInventoryItem,
   BusinessMetrics as MetricsType,
   BusinessSale,
+  UserStorefront,
 } from "@/types";
 import {
   computeInventoryValueSummary,
@@ -50,6 +51,7 @@ function BusinessDashboardContent() {
   const [recentSales, setRecentSales] = useState<BusinessSale[]>([]);
   const [recentSalesLoading, setRecentSalesLoading] = useState(false);
   const [needsMigration, setNeedsMigration] = useState(false);
+  const [storefronts, setStorefronts] = useState<UserStorefront[]>([]);
 
   const ebayStoreHref = useMemo(
     () => buildEbayStoreHref(ebayStoreUrl),
@@ -105,6 +107,18 @@ function BusinessDashboardContent() {
       // ignore
     } finally {
       setMetricsLoading(false);
+    }
+  }, []);
+
+  const loadStorefronts = useCallback(async () => {
+    try {
+      const res = await fetch("/api/business/storefronts", { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        setStorefronts(data.storefronts ?? []);
+      }
+    } catch {
+      // storefronts are non-critical, fail silently
     }
   }, []);
 
@@ -202,10 +216,10 @@ function BusinessDashboardContent() {
         router.push("/login?redirect=/business");
         return;
       }
-      await Promise.all([loadInventory(), loadMetrics(), loadRecentSales()]);
+      await Promise.all([loadInventory(), loadMetrics(), loadRecentSales(), loadStorefronts()]);
     }
     init();
-  }, [router, loadUserProfile, loadInventory, loadMetrics, loadRecentSales]);
+  }, [router, loadUserProfile, loadInventory, loadMetrics, loadRecentSales, loadStorefronts]);
 
   // Refresh profile when returning to tab (e.g. after settings update)
   useEffect(() => {
@@ -279,6 +293,7 @@ function BusinessDashboardContent() {
           recentSalesLoading={recentSalesLoading}
           ebayStoreHref={ebayStoreHref}
           needsMigration={needsMigration}
+          storefronts={storefronts}
         />
       </main>
     </AuthenticatedLayout>

@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import PricingModal from "@/components/PricingModal";
 import EbayConnectSection from "@/components/business/settings/EbayConnectSection";
+import StorefrontsSection from "@/components/business/settings/StorefrontsSection";
 import { createClient } from "@/lib/supabase/client";
 import { hasActiveBusinessTier } from "@/lib/subscription-tier";
 import type { User } from "@/types";
@@ -66,7 +67,6 @@ function SettingsContent() {
   const [businessName, setBusinessName] = useState("");
   const [businessNameLoading, setBusinessNameLoading] = useState(false);
   const [ebayStoreUrl, setEbayStoreUrl] = useState("");
-  const [ebayStoreUrlLoading, setEbayStoreUrlLoading] = useState(false);
   const [ebayFeeRate, setEbayFeeRate] = useState<EbayFeeRateKey>("standard");
   const [loading, setLoading] = useState(true);
   const [pricingOpen, setPricingOpen] = useState(false);
@@ -206,44 +206,6 @@ function SettingsContent() {
       alert("Failed to update business name");
     } finally {
       setBusinessNameLoading(false);
-    }
-  };
-
-  const handleEbayStoreUrlUpdate = async () => {
-    setEbayStoreUrlLoading(true);
-    try {
-      const normalizedInput = normalizeEbayStoreUrl(ebayStoreUrl);
-      const response = await fetch("/api/user/name", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ebay_store_url: normalizedInput || null,
-        }),
-      });
-
-      const data = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        alert(data.error || "Failed to update eBay Store URL");
-        return;
-      }
-
-      const savedEbayStoreUrl = normalizeEbayStoreUrl(
-        data?.data?.ebay_store_url ?? normalizedInput
-      );
-      setEbayStoreUrl(savedEbayStoreUrl);
-      persistEbayStoreUrl(savedEbayStoreUrl);
-
-      if (user) {
-        setUser({ ...user, ebay_store_url: savedEbayStoreUrl || null });
-      }
-      setShowSuccess(true);
-      setTimeout(() => setShowSuccess(false), 5000);
-    } catch (error) {
-      console.error("Error updating eBay Store URL:", error);
-      alert("Failed to update eBay Store URL");
-    } finally {
-      setEbayStoreUrlLoading(false);
     }
   };
 
@@ -426,76 +388,9 @@ function SettingsContent() {
           {isBusinessSettings && (
             <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                Sales Channels
+                Storefronts
               </h2>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    eBay Store URL
-                  </label>
-                  <div className="flex gap-2 flex-wrap sm:flex-nowrap">
-                    <input
-                      type="url"
-                      value={ebayStoreUrl}
-                      onChange={(e) => setEbayStoreUrl(e.target.value)}
-                      placeholder="https://www.ebay.com/str/yourstore"
-                      maxLength={2048}
-                      className="flex-1 min-w-0 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                    <button
-                      onClick={handleEbayStoreUrlUpdate}
-                      disabled={
-                        ebayStoreUrlLoading ||
-                        ebayStoreUrl === (user?.ebay_store_url || "")
-                      }
-                      className="px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
-                    >
-                      {ebayStoreUrlLoading ? "Saving..." : "Save"}
-                    </button>
-                  </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Opens from Business mode via the Open Store shortcut
-                  </p>
-                </div>
-
-                {/* eBay Fee Rate Setting */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    eBay Fee Rate
-                  </label>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => {
-                        setEbayFeeRate("standard");
-                        persistEbayFeeRate("standard");
-                      }}
-                      className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium border transition-colors ${
-                        ebayFeeRate === "standard"
-                          ? "bg-blue-600 text-white border-blue-600"
-                          : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
-                      }`}
-                    >
-                      Standard — 13%
-                    </button>
-                    <button
-                      onClick={() => {
-                        setEbayFeeRate("top_rated_plus");
-                        persistEbayFeeRate("top_rated_plus");
-                      }}
-                      className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium border transition-colors ${
-                        ebayFeeRate === "top_rated_plus"
-                          ? "bg-blue-600 text-white border-blue-600"
-                          : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
-                      }`}
-                    >
-                      Top Rated Plus — 12%
-                    </button>
-                  </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Used to calculate eBay Parity Price in your inventory and shop listings
-                  </p>
-                </div>
-              </div>
+              <StorefrontsSection />
             </div>
           )}
 
@@ -505,6 +400,42 @@ function SettingsContent() {
                 eBay Integration
               </h2>
               <EbayConnectSection />
+              <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  eBay Fee Rate
+                </label>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      setEbayFeeRate("standard");
+                      persistEbayFeeRate("standard");
+                    }}
+                    className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium border transition-colors ${
+                      ebayFeeRate === "standard"
+                        ? "bg-blue-600 text-white border-blue-600"
+                        : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
+                    }`}
+                  >
+                    Standard — 13%
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEbayFeeRate("top_rated_plus");
+                      persistEbayFeeRate("top_rated_plus");
+                    }}
+                    className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium border transition-colors ${
+                      ebayFeeRate === "top_rated_plus"
+                        ? "bg-blue-600 text-white border-blue-600"
+                        : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
+                    }`}
+                  >
+                    Top Rated Plus — 12%
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Used to calculate eBay Parity Price in your inventory and shop listings
+                </p>
+              </div>
             </div>
           )}
 
