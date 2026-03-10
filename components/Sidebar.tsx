@@ -140,11 +140,25 @@ function LedgerIcon() {
   );
 }
 
+function BulkIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M19 11H5m14 0a2 2 0 012 2v2a2 2 0 01-2 2H5a2 2 0 01-2-2v-2a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+      />
+    </svg>
+  );
+}
+
 function PERSONAL_NAV_ITEMS(): NavItem[] {
   return [
     { name: "Dashboard", href: "/dashboard", icon: <HomeIcon />, exact: true },
     { name: "Collection", href: "/collection", icon: <CollectionIcon /> },
     { name: "Grade Probability Engine", href: "/grade-probability", icon: <BadgeIcon />, badge: "Featured" },
+    { name: "Bulk Mode", href: "/bulk", icon: <BulkIcon />, badge: "New" },
     { name: "Watchlist", href: "/watchlist", icon: <EyeIcon />, isPro: true, badge: "Pro" },
     { name: "Comps", href: "/comps", icon: <ChartIcon />, badge: "Beta" },
     { name: "CardzCheck Analyst", href: "/analyst", icon: <AnalystIcon />, isPro: true, badge: "Pro" },
