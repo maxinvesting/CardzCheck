@@ -231,6 +231,14 @@ export default function Header() {
                       Account
                     </Link>
 
+                    <Link
+                      href="/help"
+                      onClick={() => setShowDropdown(false)}
+                      className="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-800"
+                    >
+                      Help &amp; FAQ
+                    </Link>
+
                     {/* Settings (personal or business by pathname) */}
                     <Link
                       href={pathname.startsWith("/business") ? "/business/settings" : "/settings"}

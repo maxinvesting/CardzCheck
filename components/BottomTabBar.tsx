@@ -18,6 +18,7 @@ const MORE_LINKS = [
   { name: "Grade Engine", href: "/grade-probability" },
   { name: "Bulk Mode", href: "/bulk" },
   { name: "Analyst", href: "/analyst" },
+  { name: "Help & FAQ", href: "/help" },
   { name: "Settings", href: "/settings" },
 ];
 
@@ -32,6 +33,7 @@ const TAB_BASE_PATHS = [
   "/grade-estimator",
   "/analyst",
   "/bulk",
+  "/help",
   "/settings",
 ];
 
