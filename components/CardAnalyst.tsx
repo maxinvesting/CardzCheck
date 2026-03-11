@@ -3,6 +3,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import SportsCardBackground from "./SportsCardBackground";
 import type { AnalystThread, AnalystThreadMessage, CardContext } from "@/types";
+import { MicButton } from "@/components/ui/MicButton";
+import { SpeakButton } from "@/components/ui/SpeakButton";
 
 interface Message {
   id?: string;
@@ -577,6 +579,15 @@ export default function CardAnalyst({
                   }`}
                 >
                   <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                  {message.role === "assistant" && (
+                    <div className="mt-2 flex justify-end">
+                      <SpeakButton
+                        text={message.content}
+                        size="sm"
+                        className="bg-gray-700/60 hover:bg-gray-600 text-gray-400 hover:text-gray-200"
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -633,6 +644,7 @@ export default function CardAnalyst({
         className="p-4 border-t border-gray-800 relative z-10 bg-[#0f1419]/90 backdrop-blur-sm"
       >
         <div className="flex gap-2">
+          <MicButton onResult={(text) => setInput(text)} />
           <input
             type="text"
             value={input}

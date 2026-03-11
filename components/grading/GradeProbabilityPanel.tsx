@@ -20,6 +20,7 @@ import {
   normalizeGradeScanPhotos,
 } from "@/lib/grading/scanPhotos";
 import { buildGradeVerdict, type GradeVerdict } from "@/lib/grading/verdict";
+import { SpeakButton } from "@/components/ui/SpeakButton";
 
 interface GradeProbabilityPanelProps {
   estimate: GradeEstimate;
@@ -676,8 +677,27 @@ export default function GradeProbabilityPanel({
 
             {/* Verdict 2×2 stat grid */}
             <div>
-              <div className="mb-2.5">
+              <div className="mb-2.5 flex items-center justify-between gap-2">
                 <SectionLabel>The Verdict</SectionLabel>
+                <SpeakButton
+                  text={[
+                    likely
+                      ? `Most likely grade: ${likely.label} with ${Math.round(likely.probability * 100)} percent probability.`
+                      : "",
+                    `Recommendation: ${verdict.recommendation}.`,
+                    `Suggested grader: ${verdict.suggestedGrader}.`,
+                    `Expected outcome: ${verdict.expectedOutcome}.`,
+                    `Strategy: ${verdict.strategyTip}.`,
+                    verdict.reasoning ? `Reasoning: ${verdict.reasoning}.` : "",
+                    estimate.centering ? `Centering: ${estimate.centering}.` : "",
+                    estimate.corners ? `Corners: ${estimate.corners}.` : "",
+                    estimate.surface ? `Surface: ${estimate.surface}.` : "",
+                    estimate.edges ? `Edges: ${estimate.edges}.` : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                  size="sm"
+                />
               </div>
               <div className="grid grid-cols-2 gap-1.5">
                 <VerdictStat label="Recommendation" value={verdict.recommendation} />
