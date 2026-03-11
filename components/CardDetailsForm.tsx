@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { MicButton } from "@/components/ui/MicButton";
 import { CollectionItem, CONDITION_OPTIONS, type AcquisitionType } from "@/types";
 import { formatCurrency, formatPct, computeGainLoss } from "@/lib/formatters";
 import { getEstCmv } from "@/lib/values";
@@ -236,6 +237,7 @@ export default function CardDetailsForm({
           onChange={(notes) => onUpdate({ notes })}
           placeholder="Additional notes about this card..."
           rows={4}
+          onVoiceInput={(text) => onUpdate({ notes: text })}
         />
       </div>
 
@@ -353,18 +355,23 @@ function FormTextArea({
   onChange,
   placeholder = "",
   rows = 3,
+  onVoiceInput,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
   rows?: number;
+  onVoiceInput?: (text: string) => void;
 }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-        {label}
-      </label>
+      <div className="flex items-center justify-between mb-1">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+          {label}
+        </label>
+        {onVoiceInput && <MicButton onResult={onVoiceInput} size="sm" />}
+      </div>
       <textarea
         value={value}
         onChange={(e) => onChange(e.target.value)}

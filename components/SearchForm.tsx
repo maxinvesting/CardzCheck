@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import type { SearchFormData } from "@/types";
 import Autocomplete from "./Autocomplete";
 import { searchPlayers, searchCardSets, GRADING_OPTIONS } from "@/lib/card-data";
+import { MicButton } from "@/components/ui/MicButton";
 
 interface SearchFormProps {
   initialData?: SearchFormData;
@@ -82,16 +83,21 @@ export default function SearchForm({ initialData, onSearch, loading, disabled }:
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="md:col-span-2">
-          <Autocomplete
-            id="playerName"
-            value={playerName}
-            onChange={setPlayerName}
-            onSearch={handlePlayerSearch}
-            placeholder="e.g., Michael Jordan"
-            label="Player Name"
-            required
-            disabled={disabled}
-          />
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
+              <Autocomplete
+                id="playerName"
+                value={playerName}
+                onChange={setPlayerName}
+                onSearch={handlePlayerSearch}
+                placeholder="e.g., Michael Jordan"
+                label="Player Name"
+                required
+                disabled={disabled}
+              />
+            </div>
+            <MicButton onResult={setPlayerName} />
+          </div>
         </div>
 
         <div>

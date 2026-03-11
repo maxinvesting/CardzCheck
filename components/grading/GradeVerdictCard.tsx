@@ -1,5 +1,6 @@
 import type { GradeVerdict } from "@/lib/grading/verdict";
 import { VERDICT_DISCLAIMER } from "@/lib/grading/verdict";
+import { SpeakButton } from "@/components/ui/SpeakButton";
 
 interface GradeVerdictCardProps {
   verdict: GradeVerdict;
@@ -28,17 +29,34 @@ function VerdictField({ label, value }: { label: string; value: string }) {
 }
 
 export function GradeVerdictCard({ verdict }: GradeVerdictCardProps) {
+  const verdictSpeechText = [
+    `Recommendation: ${verdict.recommendation}.`,
+    `Suggested grader: ${verdict.suggestedGrader}.`,
+    `Expected outcome: ${verdict.expectedOutcome}.`,
+    `Strategy: ${verdict.strategyTip}.`,
+    verdict.reasoning ? `Reasoning: ${verdict.reasoning}.` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
     <section className="border-b border-[var(--biz-border)] bg-[color:var(--biz-surface-soft)] px-5 py-5">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h4 className="text-[10px] font-semibold uppercase tracking-normal text-[var(--biz-muted)]">
           THE VERDICT
         </h4>
-        <span
-          className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${RECOMMENDATION_CLASSES[verdict.recommendation]}`}
-        >
-          {verdict.recommendation}
-        </span>
+        <div className="flex items-center gap-2">
+          <SpeakButton
+            text={verdictSpeechText}
+            size="sm"
+            className="border border-[var(--biz-border)] bg-transparent text-[var(--biz-muted)] hover:bg-[var(--biz-surface)]"
+          />
+          <span
+            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${RECOMMENDATION_CLASSES[verdict.recommendation]}`}
+          >
+            {verdict.recommendation}
+          </span>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-2 md:grid-cols-2">

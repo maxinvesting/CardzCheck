@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { Surface } from "@/components/ui/Surface";
+import { MicButton } from "@/components/ui/MicButton";
+import { SpeakButton } from "@/components/ui/SpeakButton";
 import type { BusinessConsultation } from "@/types";
 import type { BusinessConsultantReport } from "@/lib/business/consultant-report";
 import { parseBusinessConsultantReport } from "@/lib/business/consultant-report";
@@ -429,7 +431,7 @@ export default function BusinessConsultantPanel() {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [advancedContext, setAdvancedContext] = useState("");
   const [report, setReport] = useState<BusinessConsultantReport | null>(null);
-  const [rawResponse, setRawResponse] = useState("");
+  const [response, setResponse] = useState("");
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState<string | null>(null);
   const [historyNotice, setHistoryNotice] = useState<string | null>(null);
@@ -441,6 +443,7 @@ export default function BusinessConsultantPanel() {
   const stepIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const statusIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const acknowledgeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const reducedMotion = useReducedMotion();
 
   const steps: { label: string; status: StepStatus }[] = CONSULTANT_STEPS.map((label, i) => {
@@ -682,9 +685,19 @@ export default function BusinessConsultantPanel() {
         />
 
         <div className="flex items-center justify-between gap-2">
-          <p className="text-[11px] text-gray-500">
-            Consultant output is structured for decision-making, not conversation.
-          </p>
+          <div className="flex items-center gap-2">
+            <MicButton
+              onResult={(text) => {
+                setActiveConsultationId(null);
+                setPrompt(text);
+                if (textareaRef.current) textareaRef.current.value = text;
+              }}
+              size="sm"
+            />
+            <p className="text-[11px] text-gray-500">
+              Consultant output is structured for decision-making, not conversation.
+            </p>
+          </div>
           <button
             onClick={handleRunConsultation}
             disabled={isWorking || !prompt.trim()}
@@ -718,7 +731,15 @@ export default function BusinessConsultantPanel() {
           </div>
         )}
 
-        {phase === "deliverable" && response.trim().length > 0 && <ConsultantResponse text={response} />}
+        {phase === "deliverable" && response.trim().length > 0 && (
+          <div>
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="text-[11px] text-gray-500">Analysis</span>
+              <SpeakButton text={response} size="sm" />
+            </div>
+            <ConsultantResponse text={response} />
+          </div>
+        )}
       </div>
     </section>
   );
