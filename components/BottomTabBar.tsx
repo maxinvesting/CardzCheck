@@ -13,9 +13,10 @@ const MAIN_TABS = [
 ] as const;
 
 const MORE_LINKS = [
+  { name: "News & Updates", href: "/news" },
   { name: "Watchlist", href: "/watchlist" },
   { name: "Comps", href: "/comps" },
-  { name: "Grade Engine", href: "/grade-probability" },
+  { name: "Grade Engine", href: "/grade-hub" },
   { name: "Bulk Mode", href: "/bulk" },
   { name: "Analyst", href: "/analyst" },
   { name: "Settings", href: "/settings" },
@@ -28,10 +29,12 @@ const TAB_BASE_PATHS = [
   "/shop",
   "/watchlist",
   "/comps",
+  "/grade-hub",
   "/grade-probability",
   "/grade-estimator",
   "/analyst",
   "/bulk",
+  "/news",
   "/settings",
 ];
 

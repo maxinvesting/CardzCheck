@@ -1,5 +1,6 @@
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { isTestMode } from "@/lib/test-mode";
+import { getScanCreditStatus } from "@/lib/grading/scanCredits";
 import type { Subscription, Usage } from "@/types";
 
 export interface AccessCheck {
@@ -276,12 +277,15 @@ export async function canAccessFeature(
       return { allowed: true };
 
     case "grade_estimator": {
-      const businessAccess = await hasBusinessAccess(userId);
-      if (businessAccess) return { allowed: true };
+      // Pro and Business subscribers have full access
+      if (isPro) return { allowed: true };
+      // Free users get 2 lifetime credits + 1/week — check remaining
+      const credits = await getScanCreditStatus(userId);
+      if (credits.remaining > 0) return { allowed: true };
       return {
         allowed: false,
         reason:
-          "Grade Probability Engine is a Pro feature. Upgrade to get AI-based grade probabilities (not guaranteed).",
+          "You've used all your free scans. Upgrade to Pro for unlimited grade analysis.",
         upgradeRequired: true,
       };
     }
