@@ -10,6 +10,7 @@ import type {
   BusinessInventoryItem,
   BusinessMetrics as MetricsType,
   BusinessSale,
+  EbayAccountStatus,
   UserStorefront,
 } from "@/types";
 import {
@@ -52,6 +53,7 @@ function BusinessDashboardContent() {
   const [recentSalesLoading, setRecentSalesLoading] = useState(false);
   const [needsMigration, setNeedsMigration] = useState(false);
   const [storefronts, setStorefronts] = useState<UserStorefront[]>([]);
+  const [ebayAccount, setEbayAccount] = useState<EbayAccountStatus | null>(null);
 
   const ebayStoreHref = useMemo(
     () => buildEbayStoreHref(ebayStoreUrl),
@@ -119,6 +121,18 @@ function BusinessDashboardContent() {
       }
     } catch {
       // storefronts are non-critical, fail silently
+    }
+  }, []);
+
+  const loadEbayAccount = useCallback(async () => {
+    try {
+      const res = await fetch("/api/business/ebay/account", { cache: "no-store" });
+      if (res.ok) {
+        const data: EbayAccountStatus = await res.json();
+        setEbayAccount(data);
+      }
+    } catch {
+      // eBay account status is non-critical, fail silently
     }
   }, []);
 
@@ -216,10 +230,10 @@ function BusinessDashboardContent() {
         router.push("/login?redirect=/business");
         return;
       }
-      await Promise.all([loadInventory(), loadMetrics(), loadRecentSales(), loadStorefronts()]);
+      await Promise.all([loadInventory(), loadMetrics(), loadRecentSales(), loadStorefronts(), loadEbayAccount()]);
     }
     init();
-  }, [router, loadUserProfile, loadInventory, loadMetrics, loadRecentSales, loadStorefronts]);
+  }, [router, loadUserProfile, loadInventory, loadMetrics, loadRecentSales, loadStorefronts, loadEbayAccount]);
 
   // Refresh profile when returning to tab (e.g. after settings update)
   useEffect(() => {
@@ -293,6 +307,7 @@ function BusinessDashboardContent() {
           recentSalesLoading={recentSalesLoading}
           ebayStoreHref={ebayStoreHref}
           needsMigration={needsMigration}
+          ebayAccount={ebayAccount}
           storefronts={storefronts}
         />
       </main>

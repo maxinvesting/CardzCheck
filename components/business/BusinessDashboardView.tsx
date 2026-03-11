@@ -10,6 +10,7 @@ import type {
   BusinessMetrics as MetricsType,
   BusinessSale,
   EbayAccountStatus,
+  StorefrontPlatform,
   UserStorefront,
 } from "@/types";
 import type { InventoryValueSummary } from "@/lib/business/inventory-value";
@@ -28,6 +29,71 @@ function fmtDate(iso: string): string {
     month: "short",
     day: "numeric",
   });
+}
+
+/** Map a storefront platform to the sale channel value used in BusinessSale */
+function platformToChannel(platform: StorefrontPlatform): BusinessSale["channel"] | null {
+  switch (platform) {
+    case "ebay": return "ebay";
+    case "whatnot": return "whatnot";
+    default: return "other";
+  }
+}
+
+function getStorefrontKpis(
+  platform: StorefrontPlatform,
+  sales: BusinessSale[],
+  items: BusinessInventoryItem[]
+): { salesCount: number; revenueCents: number; profitCents: number; activeListings: number } {
+  const ch = platformToChannel(platform);
+  if (!ch) return { salesCount: 0, revenueCents: 0, profitCents: 0, activeListings: 0 };
+  const filtered = sales.filter((s) => s.channel === ch);
+  const revenueCents = filtered.reduce(
+    (sum, s) => sum + (s.sold_price_cents ?? 0) + (s.shipping_charged_cents ?? 0),
+    0
+  );
+  const profitCents = filtered.reduce((sum, s) => sum + (s.profit_cents ?? 0), 0);
+  const activeListings = items.filter((it) => it.channel === ch && it.status === "listed").length;
+  return { salesCount: filtered.length, revenueCents, profitCents, activeListings };
+}
+
+interface PlatformAccent {
+  bar: string;   // left-border color class
+  bg: string;    // icon bg class
+}
+
+function getPlatformAccent(platform: StorefrontPlatform): PlatformAccent {
+  switch (platform) {
+    case "whatnot":  return { bar: "bg-orange-400",  bg: "bg-orange-50 dark:bg-orange-900/20" };
+    case "shopify":  return { bar: "bg-green-500",   bg: "bg-green-50 dark:bg-green-900/20" };
+    case "mercari":  return { bar: "bg-red-400",     bg: "bg-red-50 dark:bg-red-900/20" };
+    case "comc":     return { bar: "bg-blue-500",    bg: "bg-blue-50 dark:bg-blue-900/20" };
+    case "myslabs":  return { bar: "bg-violet-500",  bg: "bg-violet-50 dark:bg-violet-900/20" };
+    default:         return { bar: "bg-sky-400",     bg: "bg-sky-50 dark:bg-sky-900/20" };
+  }
+}
+
+function StorefrontPlatformIcon({ platform }: { platform: StorefrontPlatform }) {
+  switch (platform) {
+    case "whatnot":
+      return <span className="text-xs font-bold" style={{ color: "#fa5c00" }}>W</span>;
+    case "shopify":
+      return <span className="text-xs font-bold" style={{ color: "#5a8e3e" }}>S</span>;
+    case "mercari":
+      return <span className="text-xs font-bold" style={{ color: "#ef3e3e" }}>M</span>;
+    case "comc":
+      return <span className="text-xs font-bold" style={{ color: "#1d4ed8" }}>C</span>;
+    case "myslabs":
+      return <span className="text-[10px] font-bold" style={{ color: "#7c3aed" }}>MS</span>;
+    case "website":
+    case "custom":
+    default:
+      return (
+        <svg className="w-3.5 h-3.5 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+        </svg>
+      );
+  }
 }
 
 const CHANNEL_LABELS: Record<string, string> = {
@@ -266,77 +332,211 @@ export default function BusinessDashboardView({
         </div>
       )}
 
-      {/* ── eBay Integration Panel ──────────────────────────────────────── */}
+      {/* ── Selling Channels ─────────────────────────────────────────────── */}
       {!needsMigration && (
         <Surface className="p-6">
-          <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-            <div className="flex items-center gap-2.5">
-              <span className="text-sm font-extrabold tracking-tighter leading-none">
-                <span style={{ color: "#e43137" }}>e</span>
-                <span style={{ color: "#0064d3" }}>B</span>
-                <span style={{ color: "#f5af02" }}>a</span>
-                <span style={{ color: "#86b817" }}>y</span>
-              </span>
-              <span className="text-xs text-[var(--muted)]">
-                {ebayAccount?.connected
-                  ? `Connected · ${ebayAccount.ebay_username ?? ""}`
-                  : "Not connected"}
-              </span>
-              {ebayAccount?.top_rated_seller && (
-                <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-[var(--biz-warning)]">
-                  Top Rated Plus
-                </span>
-              )}
+          {/* Header */}
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <h2 className="text-sm font-semibold text-[var(--biz-text)]">Selling Channels</h2>
+              <p className="text-xs text-[var(--biz-muted)] mt-0.5">
+                {ebayAccount?.connected || storefronts.length > 0
+                  ? "Your active selling platforms"
+                  : "Connect a platform to get started"}
+              </p>
             </div>
-
-            {ebayAccount?.connected ? (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowImportWizard(true)}
-                  className="cc-btn-secondary rounded-md px-3 py-1.5 text-xs font-medium"
-                >
-                  Import
-                </button>
-                <Link
-                  href="/business/ledger"
-                  className="cc-btn-secondary rounded-md px-3 py-1.5 text-xs font-semibold"
-                >
-                  View Listings
-                </Link>
-              </div>
-            ) : (
-              <a
-                href="/api/auth/ebay"
-                className="cc-btn-primary rounded-md px-3 py-1.5 text-xs font-semibold"
-              >
-                Connect eBay
-              </a>
-            )}
+            <Link
+              href="/business/settings"
+              className="flex items-center gap-1 text-xs text-[var(--muted)] hover:text-[var(--biz-text)] transition-colors"
+            >
+              Manage
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </Link>
           </div>
 
-          {ebayAccount?.connected ? (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {[
-                { label: "Active Listings", value: String(ebayKpis.activeEbayListings) },
-                { label: "eBay Sales (30d)", value: String(ebayKpis.salesCount) },
-                { label: "eBay Revenue (30d)", value: fmt(ebayKpis.revenueCents) },
-                { label: "eBay Profit (30d)", value: fmt(ebayKpis.profitCents) },
-              ].map(({ label, value }) => (
-                <div
-                  key={label}
-                  style={{ border: "1px solid var(--biz-border)" }}
-                  className="rounded-lg border border-[var(--biz-border)] bg-[#F9FAFB] px-3 py-2.5"
-                >
-                  <p className="mb-1 text-xs uppercase tracking-normal text-[var(--biz-muted)]">{label}</p>
-                  <p className="text-xl font-semibold tabular-nums text-[var(--biz-text)]">{value}</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* ── eBay card ── */}
+            <div className="relative rounded-xl overflow-hidden border border-[var(--biz-border)] bg-[var(--biz-surface)]">
+              {/* Brand accent bar */}
+              <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-[#e43137] rounded-l-xl" />
+
+              <div className="px-4 pt-4 pb-4 pl-5">
+                {/* Top row: logo + status + actions */}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {/* eBay logo */}
+                      <span className="text-base font-extrabold tracking-tighter leading-none">
+                        <span style={{ color: "#e43137" }}>e</span>
+                        <span style={{ color: "#0064d3" }}>B</span>
+                        <span style={{ color: "#f5af02" }}>a</span>
+                        <span style={{ color: "#86b817" }}>y</span>
+                      </span>
+                      {/* Status pill */}
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                          ebayAccount?.connected
+                            ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-400"
+                            : "bg-[var(--biz-bg)] text-[var(--biz-muted)]"
+                        }`}
+                      >
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full ${
+                            ebayAccount?.connected ? "bg-emerald-500" : "bg-gray-400"
+                          }`}
+                        />
+                        {ebayAccount?.connected ? "Connected" : "Not connected"}
+                      </span>
+                      {ebayAccount?.top_rated_seller && (
+                        <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
+                          Top Rated+
+                        </span>
+                      )}
+                    </div>
+                    {ebayAccount?.connected && ebayAccount.ebay_username && (
+                      <p className="mt-1 text-[11px] text-[var(--biz-muted)] truncate">
+                        {ebayAccount.ebay_username}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Actions */}
+                  {ebayAccount?.connected ? (
+                    <div className="flex flex-col items-end gap-1.5 shrink-0">
+                      <button
+                        onClick={() => setShowImportWizard(true)}
+                        className="cc-btn-secondary rounded-md px-2.5 py-1 text-[11px] font-medium"
+                      >
+                        Import
+                      </button>
+                      <Link
+                        href="/business/ledger"
+                        className="cc-btn-secondary rounded-md px-2.5 py-1 text-[11px] font-medium"
+                      >
+                        Listings
+                      </Link>
+                    </div>
+                  ) : (
+                    <a
+                      href="/api/auth/ebay"
+                      className="cc-btn-primary shrink-0 rounded-lg px-3 py-1.5 text-[11px] font-semibold"
+                    >
+                      Connect →
+                    </a>
+                  )}
                 </div>
-              ))}
+
+                {/* Stats or description */}
+                {ebayAccount?.connected ? (
+                  <div className="mt-3.5 grid grid-cols-2 gap-x-4 gap-y-2.5 pt-3 border-t border-[var(--biz-border)]">
+                    {[
+                      { label: "Active listings", value: String(ebayKpis.activeEbayListings) },
+                      { label: "Sales (30d)",     value: String(ebayKpis.salesCount) },
+                      { label: "Revenue (30d)",   value: fmt(ebayKpis.revenueCents) },
+                      { label: "Profit (30d)",    value: fmt(ebayKpis.profitCents) },
+                    ].map(({ label, value }) => (
+                      <div key={label}>
+                        <p className="text-[10px] text-[var(--biz-muted)]">{label}</p>
+                        <p className="text-sm font-semibold tabular-nums text-[var(--biz-text)]">{value}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-3 text-[11px] leading-relaxed text-[var(--biz-muted)]">
+                    Sync orders automatically, list cards directly from inventory, and track eBay-specific profit metrics.
+                  </p>
+                )}
+              </div>
             </div>
-          ) : (
-            <p className="text-xs text-[var(--biz-muted)]">
-              Connect your eBay account to sync orders automatically, list cards directly from inventory, and track eBay-specific profit metrics.
-            </p>
-          )}
+
+            {/* ── Other storefront cards ── */}
+            {storefronts.map((sf) => {
+              const sfKpis  = getStorefrontKpis(sf.platform, recentSales, items);
+              const accent  = getPlatformAccent(sf.platform);
+              return (
+                <div
+                  key={sf.id}
+                  className="relative rounded-xl overflow-hidden border border-[var(--biz-border)] bg-[var(--biz-surface)]"
+                >
+                  <div className={`absolute left-0 top-0 bottom-0 w-[3px] rounded-l-xl ${accent.bar}`} />
+                  <div className="px-4 pt-4 pb-4 pl-5">
+                    {/* Top row */}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <div className={`flex h-6 w-6 items-center justify-center rounded-md ${accent.bg} shrink-0`}>
+                            <StorefrontPlatformIcon platform={sf.platform} />
+                          </div>
+                          <span className="text-xs font-semibold text-[var(--biz-text)] truncate">
+                            {sf.display_name}
+                          </span>
+                          {sf.is_primary && (
+                            <span className="rounded-full bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-blue-600 dark:text-blue-400">
+                              Primary
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-1 flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                          <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400">Active</span>
+                        </div>
+                      </div>
+                      <a
+                        href={sf.store_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="cc-btn-secondary shrink-0 rounded-md px-2.5 py-1 text-[11px] font-medium flex items-center gap-1"
+                      >
+                        Store
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                      </a>
+                    </div>
+
+                    {/* Stats */}
+                    <div className="mt-3.5 grid grid-cols-3 gap-x-4 gap-y-2.5 pt-3 border-t border-[var(--biz-border)]">
+                      {[
+                        { label: "Sales (30d)",   value: String(sfKpis.salesCount) },
+                        { label: "Revenue (30d)", value: fmt(sfKpis.revenueCents) },
+                        { label: "Profit (30d)",  value: fmt(sfKpis.profitCents) },
+                      ].map(({ label, value }) => (
+                        <div key={label}>
+                          <p className="text-[10px] text-[var(--biz-muted)]">{label}</p>
+                          <p className="text-sm font-semibold tabular-nums text-[var(--biz-text)]">{value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* ── Add Channel CTA — only when nothing is connected yet ── */}
+            {storefronts.length === 0 && !ebayAccount?.connected && (
+              <div
+                style={{ border: "1px dashed var(--biz-border)" }}
+                className="rounded-xl p-4 flex flex-col justify-between gap-4 bg-[var(--biz-surface)]"
+              >
+                <div>
+                  <p className="text-xs font-semibold text-[var(--biz-text)]">
+                    Sell on Whatnot, your website, or anywhere else?
+                  </p>
+                  <p className="text-xs text-[var(--biz-muted)] mt-1 leading-relaxed">
+                    Add a storefront to track all your channel performance in one place.
+                  </p>
+                </div>
+                <Link
+                  href="/business/settings"
+                  className="cc-btn-secondary self-start rounded-md px-3 py-1.5 text-xs font-medium"
+                >
+                  Add Channel
+                </Link>
+              </div>
+            )}
+          </div>
         </Surface>
       )}
 
