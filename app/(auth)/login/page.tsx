@@ -32,8 +32,6 @@ function LoginForm() {
       return;
     }
 
-    console.log("Login response:", { hasSession: !!data.session, hasUser: !!data.user });
-
     // Ensure we have a session before redirecting
     if (data.session) {
       let redirectTarget = redirectParam || "/dashboard";
@@ -52,7 +50,6 @@ function LoginForm() {
 
       // Small delay to ensure cookies are written
       setTimeout(() => {
-        console.log("Redirecting to:", redirectTarget);
         // Force a hard navigation to ensure cookies are set
         window.location.href = redirectTarget;
       }, 100);
@@ -63,78 +60,116 @@ function LoginForm() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0f1419] px-4 relative overflow-hidden">
-      <SportsCardBackground variant="default" />
-      <div className="max-w-md w-full space-y-8 relative z-10">
-        <div className="text-center">
-          <Link href="/" className="flex justify-center">
-            <span className="text-3xl font-bold text-white tracking-tight">
+    <div className="relative min-h-screen overflow-hidden bg-[#0f1419] px-4">
+      <SportsCardBackground variant="subtle" />
+      <div className="relative z-10 mx-auto flex min-h-screen max-w-5xl items-center py-10">
+        <div className="grid w-full gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+          <aside className="hidden rounded-2xl border border-gray-800 bg-gray-900/70 p-8 lg:block">
+            <Link href="/" className="inline-flex items-center text-2xl font-bold tracking-tight text-white">
               CardzCheck
-            </span>
-          </Link>
-          <h2 className="mt-6 text-2xl font-semibold text-white">
-            Sign in to your account
-          </h2>
-        </div>
-
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          {error && (
-            <div className="bg-red-900/20 border border-red-800 text-red-400 px-4 py-3 rounded-lg text-sm">
-              {error}
-            </div>
-          )}
-
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-300">
-                Email address
-              </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 block w-full px-4 py-3 border border-gray-700 rounded-lg shadow-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-800 text-white"
-                placeholder="you@example.com"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-300">
-                Password
-              </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="current-password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 block w-full px-4 py-3 border border-gray-700 rounded-lg shadow-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-800 text-white"
-                placeholder="Your password"
-              />
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {loading ? "Signing in..." : "Sign in"}
-          </button>
-
-          <p className="text-center text-sm text-gray-400">
-            Don&apos;t have an account?{" "}
-            <Link href="/signup" className="font-medium text-blue-400 hover:text-blue-300">
-              Sign up
             </Link>
-          </p>
-        </form>
+            <h1 className="mt-6 text-3xl font-semibold leading-tight text-white">
+              Welcome back.
+              <br />
+              Your dashboard is ready.
+            </h1>
+            <p className="mt-4 text-sm text-gray-400">
+              Sign in to continue tracking values, running comps, and managing your collection.
+            </p>
+            <ul className="mt-6 space-y-3 text-sm text-gray-300">
+              <li className="flex items-center gap-2 rounded-lg border border-gray-800 bg-gray-950/40 p-3">
+                <span className="inline-block h-2 w-2 rounded-full bg-blue-400" />
+                Real-time comps and value tracking
+              </li>
+              <li className="flex items-center gap-2 rounded-lg border border-gray-800 bg-gray-950/40 p-3">
+                <span className="inline-block h-2 w-2 rounded-full bg-blue-400" />
+                Photo-based card identification
+              </li>
+              <li className="flex items-center gap-2 rounded-lg border border-gray-800 bg-gray-950/40 p-3">
+                <span className="inline-block h-2 w-2 rounded-full bg-blue-400" />
+                Collection analytics and watchlists
+              </li>
+            </ul>
+          </aside>
+
+          <section className="w-full rounded-2xl border border-gray-800 bg-gray-900/85 p-6 shadow-2xl shadow-black/20 sm:p-8">
+            <div className="text-center lg:hidden">
+              <Link href="/" className="inline-flex items-center text-2xl font-bold tracking-tight text-white">
+                CardzCheck
+              </Link>
+            </div>
+
+            <h2 className="mt-4 text-center text-2xl font-semibold text-white lg:mt-0 lg:text-left">
+              Sign in to your account
+            </h2>
+            {redirectParam ? (
+              <p className="mt-2 text-center text-sm text-blue-300 lg:text-left">
+                Sign in to continue to your requested page.
+              </p>
+            ) : (
+              <p className="mt-2 text-center text-sm text-gray-400 lg:text-left">
+                Use the same account you use in the app dashboard.
+              </p>
+            )}
+
+            <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
+              {error ? (
+                <div className="rounded-lg border border-red-800 bg-red-900/20 px-4 py-3 text-sm text-red-300">
+                  {error}
+                </div>
+              ) : null}
+
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-gray-300">
+                  Email address
+                </label>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="mt-1 block w-full rounded-lg border border-gray-700 bg-gray-950/60 px-4 py-3 text-white placeholder-gray-500 shadow-sm transition-colors focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                  placeholder="you@example.com"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-gray-300">
+                  Password
+                </label>
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="mt-1 block w-full rounded-lg border border-gray-700 bg-gray-950/60 px-4 py-3 text-white placeholder-gray-500 shadow-sm transition-colors focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                  placeholder="Your password"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex w-full justify-center rounded-lg border border-transparent bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {loading ? "Signing in..." : "Sign in"}
+              </button>
+
+              <p className="text-center text-sm text-gray-400">
+                Don&apos;t have an account?{" "}
+                <Link href="/signup" className="font-medium text-blue-400 hover:text-blue-300">
+                  Sign up
+                </Link>
+              </p>
+            </form>
+          </section>
+        </div>
       </div>
     </div>
   );
@@ -142,11 +177,13 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-[#0f1419]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-[#0f1419]">
+          <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600" />
+        </div>
+      }
+    >
       <LoginForm />
     </Suspense>
   );

@@ -12,6 +12,11 @@ import crypto from "crypto";
 
 export const dynamic = "force-dynamic";
 
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL ??
+  process.env.NEXT_PUBLIC_APP_URL ??
+  "http://localhost:3000";
+
 export async function GET(): Promise<NextResponse> {
   try {
     const supabase = await createClient();
@@ -20,12 +25,22 @@ export async function GET(): Promise<NextResponse> {
     } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.redirect(new URL("/login", process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"));
+      return NextResponse.redirect(new URL("/login", SITE_URL));
     }
 
     const ok = await hasBusinessAccess(user.id);
     if (!ok) {
       return NextResponse.json({ error: "Business subscription required" }, { status: 403 });
+    }
+
+    // Fail fast with a user-friendly message if eBay env vars are missing,
+    // instead of throwing an unhandled error that results in a 500 page.
+    if (!process.env.EBAY_CLIENT_ID || !process.env.EBAY_CLIENT_SECRET || !process.env.EBAY_REDIRECT_URI) {
+      const message =
+        "eBay integration is not configured. Set EBAY_CLIENT_ID, EBAY_CLIENT_SECRET, and EBAY_REDIRECT_URI in the server environment.";
+      return NextResponse.redirect(
+        `${SITE_URL}/business/settings?ebay=error&error=${encodeURIComponent(message)}`
+      );
     }
 
     // Generate a CSRF state token
@@ -46,7 +61,8 @@ export async function GET(): Promise<NextResponse> {
     return response;
   } catch (err) {
     console.error("[ebay/oauth] initiate error:", err);
-    const rawMessage = err instanceof Error ? err.message : "Failed to initiate eBay connection";
+    const rawMessage =
+      err instanceof Error ? err.message : "Failed to initiate eBay connection";
     const message =
       rawMessage.includes("must be set") || rawMessage.includes("EBAY_CLIENT_ID")
         ? "eBay integration is not configured. Set EBAY_CLIENT_ID, EBAY_CLIENT_SECRET, and EBAY_REDIRECT_URI in the server environment (see .env.example)."
