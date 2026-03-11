@@ -26,8 +26,18 @@ export async function POST(request: NextRequest) {
     // Verify cron secret
     const authHeader = request.headers.get("authorization");
     const cronSecret = process.env.CRON_SECRET;
+    const isProduction = process.env.NODE_ENV === "production";
 
-    // In production, require CRON_SECRET
+    // Fail closed in production if secret is not configured.
+    if (isProduction && !cronSecret) {
+      console.error("CRON_SECRET is missing in production");
+      return NextResponse.json(
+        { error: "Cron endpoint is not configured" },
+        { status: 503 }
+      );
+    }
+
+    // Enforce bearer auth when a secret exists.
     if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
       console.error("Unauthorized cron request");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

@@ -3,6 +3,105 @@ import Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
 import { createServiceClient } from "@/lib/supabase/server";
 
+const MAX_STOCK_UPDATE_RETRIES = 3;
+
+type ShopListingRow = {
+  id: string;
+  player_name: string;
+  year: number;
+  set_brand: string;
+  grade: string;
+  price: number | string;
+  shipping_cost: number | string | null;
+  quantity: number | null;
+  quantity_sold: number | null;
+};
+
+type ShopOrderItem = {
+  listing_id: string;
+  quantity: number;
+  player_name: string;
+  year: number;
+  set_brand: string;
+  grade: string;
+  price: number;
+  shipping_cost: number;
+};
+
+function isUniqueViolation(error: { code?: string | null } | null): boolean {
+  return String(error?.code || "") === "23505";
+}
+
+async function reserveListingQuantity(
+  supabase: Awaited<ReturnType<typeof createServiceClient>>,
+  listingId: string,
+  requestedQty: number
+): Promise<ShopOrderItem | null> {
+  for (let attempt = 1; attempt <= MAX_STOCK_UPDATE_RETRIES; attempt++) {
+    const { data: listing, error: fetchErr } = await supabase
+      .from("shop_listings")
+      .select("id,player_name,year,set_brand,grade,price,shipping_cost,quantity,quantity_sold")
+      .eq("id", listingId)
+      .maybeSingle<ShopListingRow>();
+
+    if (fetchErr || !listing) {
+      if (fetchErr) {
+        console.error("Shop webhook: listing lookup failed", listingId, fetchErr);
+      } else {
+        console.error("Shop webhook: listing not found", listingId);
+      }
+      return null;
+    }
+
+    const quantity = Number(listing.quantity ?? 0);
+    const quantitySold = Number(listing.quantity_sold ?? 0);
+    const available = Math.max(0, quantity - quantitySold);
+    const toSell = Math.min(requestedQty, available);
+
+    if (toSell <= 0) {
+      return null;
+    }
+
+    const newQuantitySold = quantitySold + toSell;
+    const newStatus = newQuantitySold >= quantity ? "sold" : "active";
+
+    const { data: updated, error: updateErr } = await supabase
+      .from("shop_listings")
+      .update({
+        quantity_sold: newQuantitySold,
+        status: newStatus,
+      })
+      .eq("id", listingId)
+      .eq("quantity_sold", quantitySold)
+      .select("id")
+      .maybeSingle();
+
+    if (updateErr) {
+      console.error("Shop webhook: failed to update listing", listingId, updateErr);
+      return null;
+    }
+
+    // Optimistic-lock miss due to concurrent update; retry with fresh state.
+    if (!updated) {
+      continue;
+    }
+
+    return {
+      listing_id: listing.id,
+      quantity: toSell,
+      player_name: String(listing.player_name),
+      year: Number(listing.year),
+      set_brand: String(listing.set_brand),
+      grade: String(listing.grade),
+      price: Number(listing.price),
+      shipping_cost: Number(listing.shipping_cost ?? 4),
+    };
+  }
+
+  console.warn("Shop webhook: stock update contention exceeded retries", listingId);
+  return null;
+}
+
 export async function POST(request: NextRequest) {
   const body = await request.text();
   const signature = request.headers.get("stripe-signature");
@@ -75,6 +174,19 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  if (
+    !Array.isArray(listingIds) ||
+    !Array.isArray(quantities) ||
+    listingIds.some((id) => typeof id !== "string" || !id.trim()) ||
+    quantities.some((qty) => !Number.isInteger(qty) || qty < 1)
+  ) {
+    console.error("Shop webhook: metadata types are invalid");
+    return NextResponse.json(
+      { error: "Invalid session metadata" },
+      { status: 400 }
+    );
+  }
+
   const supabase = await createServiceClient();
 
   // Fetch full session with line items for buyer info
@@ -93,18 +205,41 @@ export async function POST(request: NextRequest) {
     string,
     unknown
   >;
+  const paymentIntentId =
+    typeof session.payment_intent === "string"
+      ? session.payment_intent
+      : session.payment_intent?.id ?? null;
+
+  // Claim this checkout session before any inventory mutation.
+  // Requires unique index on stripe_checkout_session_id for strict idempotency.
+  const { error: claimErr } = await supabase.from("shop_orders").insert({
+    buyer_email: buyerEmail,
+    buyer_name: buyerName,
+    shipping_address: shippingAddress,
+    items: [],
+    subtotal: 0,
+    shipping_total: 0,
+    total: 0,
+    stripe_checkout_session_id: session.id,
+    stripe_payment_intent_id: paymentIntentId,
+    payment_status: "pending",
+    fulfillment_status: "unfulfilled",
+  });
+
+  if (claimErr) {
+    if (isUniqueViolation(claimErr)) {
+      return NextResponse.json({ received: true, idempotent: true });
+    }
+
+    console.error("Shop webhook: failed to claim order session", claimErr);
+    return NextResponse.json(
+      { error: "Failed to claim order session" },
+      { status: 500 }
+    );
+  }
 
   // Build order items
-  const orderItems: Array<{
-    listing_id: string;
-    quantity: number;
-    player_name: string;
-    year: number;
-    set_brand: string;
-    grade: string;
-    price: number;
-    shipping_cost: number;
-  }> = [];
+  const orderItems: ShopOrderItem[] = [];
 
   let subtotal = 0;
   let shippingTotal = 0;
@@ -112,87 +247,37 @@ export async function POST(request: NextRequest) {
   for (let i = 0; i < listingIds.length; i++) {
     const listingId = listingIds[i];
     const qty = quantities[i] ?? 0;
+    const item = await reserveListingQuantity(supabase, listingId, qty);
 
-    const { data: listing, error: fetchErr } = await supabase
-      .from("shop_listings")
-      .select("id,player_name,year,set_brand,grade,price,shipping_cost,quantity,quantity_sold")
-      .eq("id", listingId)
-      .single();
-
-    if (fetchErr || !listing) {
-      console.error("Shop webhook: listing not found", listingId);
-      continue;
-    }
-
-    const available = Math.max(
-      0,
-      (listing.quantity ?? 0) - (listing.quantity_sold ?? 0)
-    );
-    const toSell = Math.min(qty, available);
-
-    if (toSell <= 0) {
+    if (!item) {
       console.warn(`Shop webhook: insufficient stock for ${listingId}, skipping`);
       continue;
     }
 
-    const price = Number(listing.price);
-    const shipCost = Number(listing.shipping_cost ?? 4);
-
-    orderItems.push({
-      listing_id: listing.id,
-      quantity: toSell,
-      player_name: String(listing.player_name),
-      year: Number(listing.year),
-      set_brand: String(listing.set_brand),
-      grade: String(listing.grade),
-      price,
-      shipping_cost: shipCost,
-    });
-
-    subtotal += price * toSell;
-    shippingTotal += shipCost * toSell;
-
-    // Atomically increment quantity_sold and set status='sold' when sold out
-    const newQuantitySold = (listing.quantity_sold ?? 0) + toSell;
-    const newStatus =
-      newQuantitySold >= (listing.quantity ?? 0) ? "sold" : "active";
-
-    const { error: updateErr } = await supabase
-      .from("shop_listings")
-      .update({
-        quantity_sold: newQuantitySold,
-        status: newStatus,
-      })
-      .eq("id", listingId);
-
-    if (updateErr) {
-      console.error("Shop webhook: failed to update listing", listingId, updateErr);
-    }
+    orderItems.push(item);
+    subtotal += item.price * item.quantity;
+    shippingTotal += item.shipping_cost * item.quantity;
   }
 
   const total = subtotal + shippingTotal;
 
-  const { error: insertErr } = await supabase.from("shop_orders").insert({
-    buyer_email: buyerEmail,
-    buyer_name: buyerName,
-    shipping_address: shippingAddress,
-    items: orderItems,
-    subtotal,
-    shipping_total: shippingTotal,
-    total,
-    stripe_checkout_session_id: session.id,
-    stripe_payment_intent_id:
-      typeof session.payment_intent === "string"
-        ? session.payment_intent
-        : session.payment_intent?.id ?? null,
-    payment_status: "paid",
-    fulfillment_status: "unfulfilled",
-  });
+  const { data: finalizedOrder, error: finalizeErr } = await supabase
+    .from("shop_orders")
+    .update({
+      items: orderItems,
+      subtotal,
+      shipping_total: shippingTotal,
+      total,
+      payment_status: "paid",
+    })
+    .eq("stripe_checkout_session_id", session.id)
+    .select("id")
+    .maybeSingle();
 
-  if (insertErr) {
-    console.error("Shop webhook: failed to insert order", insertErr);
+  if (finalizeErr || !finalizedOrder) {
+    console.error("Shop webhook: failed to finalize order", finalizeErr);
     return NextResponse.json(
-      { error: "Failed to create order" },
+      { error: "Failed to finalize order" },
       { status: 500 }
     );
   }
