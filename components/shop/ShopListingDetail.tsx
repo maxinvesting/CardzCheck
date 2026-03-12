@@ -81,18 +81,18 @@ export default function ShopListingDetail({
 
   const pricingTransparencyText = (() => {
     if (listing.cmv == null || listing.cmv <= 0) {
-      return "Est. Market Value is generated from active eBay listings and updates as new market data arrives. Actual sold prices may differ.";
+      return "Estimated market value is currently unavailable for this listing.";
     }
 
     if (cmv.deltaLabel.includes("below market")) {
-      return "This price is set below current comps to move inventory while keeping full market context visible.";
+      return "Current price is below the estimated market value.";
     }
 
     if (cmv.deltaLabel.includes("above market")) {
-      return "This card carries a premium versus comps, usually driven by scarcity, eye appeal, or stronger sub-grades.";
+      return "Current price is above the estimated market value.";
     }
 
-    return "Price is aligned to current Est. Market Value using recent comparable listings.";
+    return "Current price is aligned with the estimated market value.";
   })();
 
   const handleAddToCart = () => {
@@ -162,7 +162,7 @@ export default function ShopListingDetail({
             <div className="mt-2 flex flex-wrap items-center gap-3">
               <p className="text-sm text-slate-600">
                 {listing.card_number ? `Card #${listing.card_number} • ` : ""}
-                {listing.sport}
+                {listing.sport || "Trading Cards"}
               </p>
               {isGraded && (
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
@@ -301,7 +301,7 @@ export default function ShopListingDetail({
             <div>
               <h2 className="text-xl font-semibold text-slate-900">Related items</h2>
               <p className="mt-1 text-sm text-slate-600">
-                Similar picks by sport and price point.
+                Similar picks by category and price point.
               </p>
             </div>
             <Link

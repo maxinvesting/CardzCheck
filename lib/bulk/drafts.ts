@@ -18,6 +18,7 @@ import type {
   StrategyResult,
   BulkStrategy,
 } from "@/types/bulk";
+import { inferCardMarketDomain } from "@/lib/cards/market-category";
 
 // ----------------------------------------------------------------
 // Internal: build item specifics for the eBay listing
@@ -25,24 +26,38 @@ import type {
 
 function buildItemSpecifics(id: IdentificationResult): Record<string, string> {
   const specifics: Record<string, string> = {};
+  const domain = inferCardMarketDomain({
+    title: id.titleCandidate,
+    set: id.setName,
+    player: id.player,
+  });
 
-  if (id.player)    specifics["Player"] = id.player;
+  if (id.player) {
+    specifics[domain === "sports" ? "Player" : "Card Name"] = id.player;
+  }
   if (id.brand)     specifics["Manufacturer"] = id.brand;
   if (id.setName)   specifics["Set"] = id.setName;
-  if (id.year)      specifics["Season"] = id.year;
+  if (id.year) {
+    specifics[domain === "sports" ? "Season" : "Year Manufactured"] = id.year;
+  }
   if (id.cardNumber) specifics["Card Number"] = id.cardNumber;
 
-  if (id.rookieFlag) {
+  if (id.rookieFlag && domain === "sports") {
     specifics["Rookie"] = "Yes";
   }
 
   if (id.insertParallelNotes) {
-    specifics["Parallel/Variety"] = id.insertParallelNotes;
+    specifics[domain === "sports" ? "Parallel/Variety" : "Card Variant"] =
+      id.insertParallelNotes;
   }
 
-  // Sports cards are almost always raw (ungraded) in bulk mode
+  // Bulk mode defaults to raw/ungraded unless changed in review.
   specifics["Grade"] = "Ungraded";
-  specifics["Sport"] = "Sports Cards"; // TODO: get from identification when available
+
+  if (domain === "sports") specifics["Sport"] = "Sports Cards";
+  if (domain === "pokemon") specifics["Game"] = "Pokemon TCG";
+  if (domain === "one_piece") specifics["Game"] = "One Piece Card Game";
+  if (domain === "other_tcg") specifics["Game"] = "Trading Card Game";
 
   return specifics;
 }
@@ -119,15 +134,27 @@ export function buildListingDraft(
 // ----------------------------------------------------------------
 
 function buildFallbackTitle(id: IdentificationResult): string {
-  if (id.player) return `${id.player} Sports Card`;
-  return "Sports Trading Card";
+  if (id.player) return `${id.player} Trading Card`;
+  return "Trading Card";
 }
 
 function detectCategoryHint(id: IdentificationResult): string | null {
-  // TODO: Map to real eBay category IDs once category lookup is wired up
-  if (id.rookieFlag) return "Sports Trading Cards > Rookie Cards";
-  if (id.insertParallelNotes) return "Sports Trading Cards > Inserts & Parallels";
-  return "Sports Trading Cards";
+  const domain = inferCardMarketDomain({
+    title: id.titleCandidate,
+    set: id.setName,
+    player: id.player,
+  });
+
+  if (domain === "sports") {
+    if (id.rookieFlag) return "Sports Trading Cards > Rookie Cards";
+    if (id.insertParallelNotes) return "Sports Trading Cards > Inserts & Parallels";
+    return "Sports Trading Cards";
+  }
+
+  if (domain === "pokemon") return "Collectible Card Games > Pokemon > Individual Cards";
+  if (domain === "one_piece") return "Collectible Card Games > One Piece > Individual Cards";
+  if (domain === "other_tcg") return "Collectible Card Games > Individual Cards";
+  return "Non-Sport Trading Cards";
 }
 
 function buildInternalNotes(

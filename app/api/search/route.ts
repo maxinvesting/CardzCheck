@@ -12,6 +12,8 @@ export async function GET(request: NextRequest) {
   const player = searchParams.get("player");
   const year = searchParams.get("year") || undefined;
   const set = searchParams.get("set") || undefined;
+  const game = searchParams.get("game") || undefined;
+  const sport = searchParams.get("sport") || undefined;
   const grade = searchParams.get("grade") || undefined;
   const cardNumber = searchParams.get("card_number") || undefined;
   const parallelType = searchParams.get("parallel_type") || undefined;
@@ -35,6 +37,8 @@ export async function GET(request: NextRequest) {
   // Build search params object outside try block so it's accessible in catch for fallback URL
   const searchParamsObj = {
     player,
+    game,
+    sport,
     year,
     set,
     grade,

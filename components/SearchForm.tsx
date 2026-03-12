@@ -47,10 +47,17 @@ export default function SearchForm({ initialData, onSearch, loading, disabled }:
   // Memoize search callbacks to prevent infinite loops
   const handlePlayerSearch = useCallback((query: string) => {
     const players = searchPlayers(query);
+    const formatCategory = (value: string) =>
+      value
+        .replace(/[_-]+/g, " ")
+        .split(/\s+/)
+        .filter(Boolean)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(" ");
     return players.map(p => ({
       value: p.name,
       label: p.name,
-      metadata: p.sport.charAt(0).toUpperCase() + p.sport.slice(1)
+      metadata: formatCategory(p.sport)
     }));
   }, []);
 
@@ -90,8 +97,8 @@ export default function SearchForm({ initialData, onSearch, loading, disabled }:
                 value={playerName}
                 onChange={setPlayerName}
                 onSearch={handlePlayerSearch}
-                placeholder="e.g., Michael Jordan"
-                label="Player Name"
+                placeholder="e.g., Michael Jordan, Pikachu, Monkey D. Luffy"
+                label="Card / Player Name"
                 required
                 disabled={disabled}
               />
@@ -124,7 +131,7 @@ export default function SearchForm({ initialData, onSearch, loading, disabled }:
             value={setName}
             onChange={setSetName}
             onSearch={handleSetSearch}
-            placeholder="e.g., Panini Prizm"
+            placeholder="e.g., Panini Prizm, Pokemon 151, OP-01"
             label="Set / Brand"
             disabled={disabled}
           />

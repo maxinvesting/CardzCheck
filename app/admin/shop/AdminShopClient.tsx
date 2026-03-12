@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { ShopListing } from "@/types/shop";
+import {
+  SHOP_CATEGORY_OPTIONS,
+  type ShopCategoryLabel,
+} from "@/lib/cards/market-category";
 
 type ListingStatus = "active" | "delisted" | "sold";
 type GradeOption =
@@ -35,7 +39,7 @@ interface ListingFormState {
   grade_choice: GradeOption;
   grade_other: string;
   cert_number: string;
-  sport: "Football" | "Basketball" | "Baseball" | "Other";
+  sport: ShopCategoryLabel;
   price: string;
   cmv: string;
   shipping_cost: string;
@@ -55,12 +59,7 @@ const GRADE_OPTIONS: GradeOption[] = [
   "Other",
 ];
 
-const SPORT_OPTIONS: ListingFormState["sport"][] = [
-  "Football",
-  "Basketball",
-  "Baseball",
-  "Other",
-];
+const SPORT_OPTIONS: ListingFormState["sport"][] = [...SHOP_CATEGORY_OPTIONS];
 
 const STATUS_OPTIONS: ListingStatus[] = ["active", "delisted", "sold"];
 
@@ -411,7 +410,7 @@ function ListingFields({
   return (
     <div className="grid gap-3 md:grid-cols-2">
       <label className="space-y-1 text-sm">
-        <span className="text-gray-300">Player name *</span>
+        <span className="text-gray-300">Card / player name *</span>
         <input
           value={form.player_name}
           onChange={(event) =>
@@ -515,7 +514,7 @@ function ListingFields({
       </label>
 
       <div className="space-y-1 text-sm">
-        <span className="text-gray-300">Sport *</span>
+        <span className="text-gray-300">Category / game *</span>
         <select
           value={form.sport}
           onChange={(event) =>
@@ -1039,7 +1038,7 @@ export default function AdminShopClient() {
               <thead>
                 <tr className="border-b border-gray-800 text-gray-400">
                   <th className="px-3 py-2 font-medium">Thumbnail</th>
-                  <th className="px-3 py-2 font-medium">Player / Year / Set</th>
+                  <th className="px-3 py-2 font-medium">Card / Year / Set</th>
                   <th className="px-3 py-2 font-medium">Grade</th>
                   <th className="px-3 py-2 font-medium">Price</th>
                   <th className="px-3 py-2 font-medium">Shipping</th>

@@ -12,16 +12,17 @@ export default function AuthenticatedLayout({
 }) {
   const pathname = usePathname();
   const isBusinessRoute = pathname?.startsWith("/business");
+  const isBusinessShell = isBusinessRoute || pathname === "/dashboard";
 
   return (
     <div
       className={`relative flex min-h-screen overflow-hidden ${
-        isBusinessRoute
+        isBusinessShell
           ? "business-theme bg-[var(--biz-bg)] text-[var(--biz-text)]"
           : "bg-[#0f1419]"
       }`}
     >
-      {!isBusinessRoute && (
+      {!isBusinessShell && (
         <SportsCardBackground variant="default" />
       )}
 

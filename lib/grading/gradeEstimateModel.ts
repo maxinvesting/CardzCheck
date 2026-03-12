@@ -26,12 +26,17 @@ import {
   ratioDeviation,
   scoreCentering,
   scoreFromFindings,
+  type GradeScanCardMeta,
 } from "@/lib/grading/gradeFeatures";
 import {
   loadActiveModel,
   predictPsaProbabilities,
   PSA_CALIBRATOR_MODEL_KEY,
 } from "@/lib/grading/calibrator";
+import {
+  resolveGradingProfile,
+  type GradingCardCategory,
+} from "@/lib/grading/grading-profile";
 
 type GradeEstimateEvidence = {
   centering: string;
@@ -494,7 +499,8 @@ function blendPsaDistributions(
 function applyCenteringGate(
   psa: GradeProbabilities["psa"],
   centering: GradeEstimateCenteringDetail,
-  status: GradeEstimateStatus
+  status: GradeEstimateStatus,
+  category: GradingCardCategory
 ): GradeProbabilities["psa"] {
   const gated = { ...psa };
   const worstAxis = Math.max(
@@ -505,17 +511,18 @@ function applyCenteringGate(
 
   // PSA 10 ceiling scales with actual centering quality.
   // A near-perfect card should not be hard-capped at 18% — let the evidence speak.
+  const tcgStrict = category !== "sports";
   let maxPsa10: number;
   if (status !== "ok") {
     maxPsa10 = 0.08;
   } else if (severity === 0 && worstAxis <= 52) {
-    maxPsa10 = 0.85; // near-perfect centering — no meaningful ceiling
+    maxPsa10 = tcgStrict ? 0.68 : 0.85; // near-perfect centering
   } else if (severity === 0 && worstAxis <= 55) {
-    maxPsa10 = 0.65;
+    maxPsa10 = tcgStrict ? 0.4 : 0.65;
   } else if (severity <= 1 && worstAxis <= 58) {
-    maxPsa10 = 0.42;
+    maxPsa10 = tcgStrict ? 0.2 : 0.42;
   } else if (severity <= 1 && worstAxis <= 60) {
-    maxPsa10 = 0.20;
+    maxPsa10 = tcgStrict ? 0.08 : 0.2;
   } else {
     maxPsa10 = 0.03;
   }
@@ -543,6 +550,101 @@ function applyCenteringGate(
   return normalizeProbabilityMap(gated);
 }
 
+function summarizeIssueSeverities(
+  findings: GradeFinding[],
+  issueTypes: Set<string>
+): { moderateOrWorse: number; severe: number } {
+  let moderateOrWorse = 0;
+  let severe = 0;
+  for (const finding of findings) {
+    if (!issueTypes.has(finding.issue_type)) continue;
+    if (finding.severity_0_3 >= 1) moderateOrWorse += 1;
+    if (finding.severity_0_3 >= 2) severe += 1;
+  }
+  return { moderateOrWorse, severe };
+}
+
+function applyTcgDefectPenalty(
+  psa: GradeProbabilities["psa"],
+  category: GradingCardCategory,
+  findings: {
+    surface: GradeFinding[];
+    corners: GradeFinding[];
+    edges: GradeFinding[];
+  },
+  status: GradeEstimateStatus
+): GradeProbabilities["psa"] {
+  if (category === "sports") return psa;
+
+  const adjusted = { ...psa };
+
+  const whiteningIssues = new Set<string>(["whitening", "corner_wear", "edge_wear", "chipping"]);
+  const printSurfaceIssues = new Set<string>(["print_line", "scratch", "scuff", "foil_roll"]);
+  const roughCutIssues = new Set<string>(["rough_cut", "chipping"]);
+
+  const whitenCorners = summarizeIssueSeverities(findings.corners, whiteningIssues);
+  const whitenEdges = summarizeIssueSeverities(findings.edges, whiteningIssues);
+  const printSurface = summarizeIssueSeverities(findings.surface, printSurfaceIssues);
+  const roughCuts = summarizeIssueSeverities(findings.edges, roughCutIssues);
+
+  let maxPsa10 = 0.6;
+  if (status !== "ok") maxPsa10 = 0.2;
+
+  if (category === "pokemon") {
+    if (whitenCorners.moderateOrWorse + whitenEdges.moderateOrWorse >= 2) {
+      maxPsa10 = Math.min(maxPsa10, 0.12);
+    }
+    if (whitenCorners.severe + whitenEdges.severe >= 1) {
+      maxPsa10 = Math.min(maxPsa10, 0.05);
+    }
+    if (printSurface.moderateOrWorse >= 1) {
+      maxPsa10 = Math.min(maxPsa10, 0.14);
+    }
+  } else {
+    // One Piece / other TCG
+    if (roughCuts.moderateOrWorse >= 1) {
+      maxPsa10 = Math.min(maxPsa10, 0.08);
+    }
+    if (printSurface.moderateOrWorse >= 1) {
+      maxPsa10 = Math.min(maxPsa10, 0.16);
+    }
+    if (whitenCorners.severe + whitenEdges.severe >= 1) {
+      maxPsa10 = Math.min(maxPsa10, 0.06);
+    }
+  }
+
+  if (adjusted["10"] > maxPsa10) {
+    const excess = adjusted["10"] - maxPsa10;
+    adjusted["10"] = maxPsa10;
+    adjusted["8"] += excess * 0.45;
+    adjusted["7_or_lower"] += excess * 0.55;
+  }
+
+  // If multiple moderate/severe defects exist, cap PSA 9 as well.
+  const aggregateModerate =
+    whitenCorners.moderateOrWorse +
+    whitenEdges.moderateOrWorse +
+    printSurface.moderateOrWorse +
+    roughCuts.moderateOrWorse;
+  const aggregateSevere =
+    whitenCorners.severe +
+    whitenEdges.severe +
+    printSurface.severe +
+    roughCuts.severe;
+
+  if (aggregateModerate >= 3 || aggregateSevere >= 1) {
+    const maxPsa9 = aggregateSevere >= 2 ? 0.28 : 0.4;
+    if (adjusted["9"] > maxPsa9) {
+      const excess = adjusted["9"] - maxPsa9;
+      adjusted["9"] = maxPsa9;
+      adjusted["8"] += excess * 0.48;
+      adjusted["7_or_lower"] += excess * 0.52;
+    }
+  }
+
+  return normalizeProbabilityMap(adjusted);
+}
+
 function applyConfidencePenalty(
   psa: GradeProbabilities["psa"],
   confidence: GradeEstimateConfidence["confidence_label"],
@@ -565,7 +667,8 @@ async function buildEstimateFromParsed(
   result: Record<string, unknown>,
   imageStats: ImageStats,
   parsedWarning: boolean,
-  scanPhotoKinds: GradeScanPhotoKind[]
+  scanPhotoKinds: GradeScanPhotoKind[],
+  cardMeta?: GradeScanCardMeta | null
 ): Promise<GradeEstimate> {
   const fallback = buildFallbackGradeEstimate({
     imageStats,
@@ -719,6 +822,16 @@ async function buildEstimateFromParsed(
       ? "low_confidence"
       : status;
 
+  const gradingProfile = resolveGradingProfile(cardMeta ?? null);
+  const cardCategory = gradingProfile.category;
+  const gradingWeights = gradingProfile.weights;
+  const scoreBaselines =
+    cardCategory === "sports"
+      ? { surface: 82, corners: 88, edges: 88 }
+      : cardCategory === "pokemon"
+      ? { surface: 80, corners: 84, edges: 82 }
+      : { surface: 79, corners: 83, edges: 82 };
+
   const worstAxisDeviation = Math.max(
     ratioDeviation(centeringDetail.left_right_ratio) ?? 50,
     ratioDeviation(centeringDetail.top_bottom_ratio) ?? 50
@@ -730,23 +843,23 @@ async function buildEstimateFromParsed(
   const surfaceScore = scoreFromFindings(
     surfaceFindings,
     toText(result.surface, ""),
-    82
+    scoreBaselines.surface
   );
   const cornersScore = scoreFromFindings(
     cornersFindings,
     toText(result.corners, ""),
-    88
+    scoreBaselines.corners
   );
   const edgesScore = scoreFromFindings(
     edgesFindings,
     toText(result.edges, ""),
-    88
+    scoreBaselines.edges
   );
   const weightedEvidenceScore =
-    centeringScore * 0.4 +
-    surfaceScore * 0.3 +
-    cornersScore * 0.15 +
-    edgesScore * 0.15;
+    centeringScore * gradingWeights.centering +
+    surfaceScore * gradingWeights.surface +
+    cornersScore * gradingWeights.corners +
+    edgesScore * gradingWeights.edges;
   const imageInfluence = (imageQuality.overall_image_score - 50) * 0.12;
   const confidenceInfluence = (confidence.overall_confidence_score - 50) * 0.12;
   const calibratedScore = clamp(
@@ -775,7 +888,11 @@ async function buildEstimateFromParsed(
     edges: toText(result.edges, fallback.edges),
     grade_notes: `${toText(result.grade_notes, fallback.grade_notes)} Weighted evidence score ${Math.round(
       calibratedScore
-    )}/100 (C 40% / S 30% / Co 15% / E 15%).`,
+    )}/100 (${gradingProfile.label}; C ${Math.round(
+      gradingWeights.centering * 100
+    )}% / S ${Math.round(gradingWeights.surface * 100)}% / Co ${Math.round(
+      gradingWeights.corners * 100
+    )}% / E ${Math.round(gradingWeights.edges * 100)}%).`,
     image_quality: imageQuality,
     confidence,
     centering_detail: centeringDetail,
@@ -805,6 +922,8 @@ async function buildEstimateFromParsed(
     feature_version_used: GRADE_FEATURE_VERSION,
     analysis_metadata: {
       feature_version: GRADE_FEATURE_VERSION,
+      grading_profile: gradingProfile.label,
+      card_category: cardCategory,
       centering_score: centeringScore,
       surface_score: surfaceScore,
       corners_score: cornersScore,
@@ -828,6 +947,7 @@ async function buildEstimateFromParsed(
     },
     scanPhotoKinds,
     imageStats,
+    cardMeta: cardMeta ?? null,
     parseIncompleteFlag: parseWasIncomplete,
     limitedVisibilityFlag,
     analysisStatus,
@@ -847,7 +967,9 @@ async function buildEstimateFromParsed(
   const bgsOutcomesRaw = normalizeOutcomeArray(result.bgs_probabilities);
   const rangeLabel = buildRangeLabel(finalLow, finalHigh) ?? "PSA 6-8";
   const activeCalibrator = await loadActiveModel(PSA_CALIBRATOR_MODEL_KEY);
+  const useSportsCalibrator = cardCategory === "sports";
   const calibratorPsa =
+    useSportsCalibrator &&
     activeCalibrator &&
     activeCalibrator.feature_version === GRADE_FEATURE_VERSION
       ? predictPsaProbabilities({
@@ -870,20 +992,31 @@ async function buildEstimateFromParsed(
         confidence.confidence_label,
         analysisStatus
       );
-  psa = applyCenteringGate(psa, centeringDetail, analysisStatus);
+  psa = applyCenteringGate(psa, centeringDetail, analysisStatus, cardCategory);
+  psa = applyTcgDefectPenalty(
+    psa,
+    cardCategory,
+    {
+      surface: surfaceFindings,
+      corners: cornersFindings,
+      edges: edgesFindings,
+    },
+    analysisStatus
+  );
   psa = applyConfidencePenalty(psa, confidence.confidence_label, {
-    strengthMultiplier: calibratorPsa ? 0.35 : 1,
+    strengthMultiplier: calibratorPsa ? 0.35 : gradingProfile.strictTcgDefects ? 1.1 : 1,
   });
   maybeWarnProbabilitySum(
     "PSA",
     Object.values(psa).reduce((sum, value) => sum + value, 0)
   );
 
-  let bgs = calibratorPsa
-    ? mapPsaToBgs(psa)
-    : bgsOutcomesRaw
-    ? mapOutcomesToBgs(bgsOutcomesRaw)
-    : mapPsaToBgs(psa);
+  let bgs =
+    cardCategory !== "sports" || calibratorPsa
+      ? mapPsaToBgs(psa)
+      : bgsOutcomesRaw
+      ? mapOutcomesToBgs(bgsOutcomesRaw)
+      : mapPsaToBgs(psa);
   maybeWarnProbabilitySum(
     "BGS",
     Object.values(bgs).reduce((sum, value) => sum + value, 0)
@@ -898,6 +1031,8 @@ async function buildEstimateFromParsed(
   if (calibratorPsa && activeCalibrator) {
     estimate.model_version_used = activeCalibrator.version;
     estimate.feature_version_used = activeCalibrator.feature_version;
+  } else if (cardCategory !== "sports") {
+    estimate.model_version_used = `rules:${gradingProfile.label}`;
   }
 
   return applyLimitedVisibilityAdjustments(estimate, scanPhotoKinds);
@@ -907,6 +1042,7 @@ export async function parseGradeEstimateModelOutput(options: {
   modelText: string | null;
   imageStats: ImageStats;
   scanPhotoKinds?: GradeScanPhotoKind[];
+  cardMeta?: GradeScanCardMeta | null;
 }): Promise<GradeEstimateModelParseResult> {
   const scanPhotoKinds = options.scanPhotoKinds ?? ["front", "back"];
   const noResponseFallback = buildFallbackGradeEstimate({
@@ -982,7 +1118,8 @@ export async function parseGradeEstimateModelOutput(options: {
     parsed.value ?? {},
     options.imageStats,
     Boolean(parsed.warning),
-    scanPhotoKinds
+    scanPhotoKinds,
+    options.cardMeta ?? null
   );
   const probabilities = estimate.grade_probabilities?.psa
     ? mapPsaToOutcomes(estimate.grade_probabilities.psa)

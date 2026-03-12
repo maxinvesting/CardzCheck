@@ -16,7 +16,10 @@ export type GradeScanFeatureVector = Record<
 >;
 
 export type GradeScanCardMeta = {
+  game?: string | null;
   sport?: string | null;
+  player_name?: string | null;
+  title?: string | null;
   year?: string | number | null;
   set_name?: string | null;
   chrome?: boolean | null;
@@ -386,6 +389,9 @@ export function getGradeScanFeatureVector(
 
   if (cardMeta?.sport) {
     featureVector.v1_card_meta_sport = cardMeta.sport;
+  }
+  if (cardMeta?.game) {
+    featureVector.v1_card_meta_game = cardMeta.game;
   }
   if (cardYear !== null) {
     featureVector.v1_card_meta_year = cardYear;

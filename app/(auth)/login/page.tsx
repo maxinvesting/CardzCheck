@@ -69,25 +69,26 @@ function LoginForm() {
               CardzCheck
             </Link>
             <h1 className="mt-6 text-3xl font-semibold leading-tight text-white">
-              Welcome back.
+              Back to your card desk.
               <br />
-              Your dashboard is ready.
+              Comp, grade, and execute.
             </h1>
             <p className="mt-4 text-sm text-gray-400">
-              Sign in to continue tracking values, running comps, and managing your collection.
+              Sign in to continue with your pricing workflows, grading decisions, and portfolio
+              operations.
             </p>
             <ul className="mt-6 space-y-3 text-sm text-gray-300">
               <li className="flex items-center gap-2 rounded-lg border border-gray-800 bg-gray-950/40 p-3">
                 <span className="inline-block h-2 w-2 rounded-full bg-blue-400" />
-                Real-time comps and value tracking
+                Live comps and collection movement
               </li>
               <li className="flex items-center gap-2 rounded-lg border border-gray-800 bg-gray-950/40 p-3">
                 <span className="inline-block h-2 w-2 rounded-full bg-blue-400" />
-                Photo-based card identification
+                Grade Probability and submission planning
               </li>
               <li className="flex items-center gap-2 rounded-lg border border-gray-800 bg-gray-950/40 p-3">
                 <span className="inline-block h-2 w-2 rounded-full bg-blue-400" />
-                Collection analytics and watchlists
+                Business inventory and profit workflows
               </li>
             </ul>
           </aside>
@@ -108,7 +109,7 @@ function LoginForm() {
               </p>
             ) : (
               <p className="mt-2 text-center text-sm text-gray-400 lg:text-left">
-                Use the same account you use in the app dashboard.
+                Use your CardzCheck account to pick up where you left off.
               </p>
             )}
 

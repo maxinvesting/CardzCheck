@@ -17,6 +17,7 @@ import {
 } from "./config";
 import { searchEbayDualSignal } from "@/lib/ebay";
 import type { IdentificationResult, PricingInput, PricingResult } from "@/types/bulk";
+import { inferShopCategoryLabel } from "@/lib/cards/market-category";
 
 // ----------------------------------------------------------------
 // Internal: detect serial-numbered cards from insert/parallel notes
@@ -41,7 +42,18 @@ function choosePriceBand(id: IdentificationResult): PriceBandKey {
     return hasSerialNumber(id.insertParallelNotes) ? "insert_numbered" : "insert_generic";
   }
 
-  if (id.rookieFlag) return "rookie";
+  const inferredCategory = inferShopCategoryLabel(
+    {
+      title: id.titleCandidate,
+      set: id.setName,
+      player: id.player,
+    },
+    "Football"
+  );
+
+  if (id.rookieFlag && inferredCategory !== "Pokemon" && inferredCategory !== "One Piece") {
+    return "rookie";
+  }
 
   if (!id.year || !id.player) return "unknown";
 
@@ -64,12 +76,26 @@ function rulesBasedPrice(id: IdentificationResult): PricingResult {
     };
   }
 
+  const inferredCategory = inferShopCategoryLabel(
+    {
+      title: id.titleCandidate,
+      set: id.setName,
+      player: id.player,
+    },
+    "Football"
+  );
+
   const bandKey = choosePriceBand(id);
   const band = PRICE_BANDS[bandKey];
   let listingPrice: number = band.suggested;
 
   // Rookie bump for high-confidence identified rookies
-  if (id.rookieFlag && id.confidence >= STRONG_CONFIDENCE_THRESHOLD) {
+  if (
+    id.rookieFlag &&
+    inferredCategory !== "Pokemon" &&
+    inferredCategory !== "One Piece" &&
+    id.confidence >= STRONG_CONFIDENCE_THRESHOLD
+  ) {
     listingPrice = Math.round(listingPrice * 1.25 * 100) / 100;
   }
 
@@ -80,8 +106,8 @@ function rulesBasedPrice(id: IdentificationResult): PricingResult {
   const pricingConfidence = Math.round(id.confidence * 0.85 * 1000) / 1000;
 
   const bandLabels: Record<PriceBandKey, string> = {
-    base_veteran:    "base card (veteran)",
-    base_young:      "base card (recent/young player)",
+    base_veteran:    "base card (older era)",
+    base_young:      "base card (modern era)",
     rookie:          "rookie card",
     insert_generic:  "insert/parallel",
     insert_numbered: "serial-numbered insert/parallel",
@@ -106,9 +132,19 @@ async function liveCompsPrice(id: IdentificationResult): Promise<PricingResult |
   // Need at minimum a player name to search
   if (!id.player) return null;
 
+  const inferredCategory = inferShopCategoryLabel(
+    {
+      title: id.titleCandidate,
+      set: id.setName,
+      player: id.player,
+    },
+    "Football"
+  );
+
   try {
     const result = await searchEbayDualSignal({
       player: id.player,
+      sport: inferredCategory,
       year: id.year ?? undefined,
       set: id.setName ?? undefined,
       grade: undefined, // bulk cards are ungraded

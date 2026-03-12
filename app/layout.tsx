@@ -4,8 +4,9 @@ import "../styles/businessTheme.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 
 export const metadata: Metadata = {
-  title: "CardzCheck - Sports Card Price Comps",
-  description: "Find sports card prices and track your collection. Real-time comps (Beta) from eBay. Card Ladder charges $200/year. We charge $20.",
+  title: "CardzCheck - Card Pricing and Portfolio Workspace",
+  description:
+    "CardzCheck gives collectors and sellers live comps, grading probability insights, and collection or inventory tracking in one workspace.",
 };
 
 export default function RootLayout({

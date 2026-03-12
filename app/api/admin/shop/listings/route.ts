@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminAuth } from "@/lib/admin";
 import { createServiceClient } from "@/lib/supabase/server";
+import {
+  inferShopCategoryLabel,
+  normalizeShopCategoryLabel,
+  SHOP_CATEGORY_OPTIONS,
+} from "@/lib/cards/market-category";
 
 type ListingStatus = "active" | "sold" | "reserved" | "delisted";
 type PublishState = "draft" | "published";
@@ -15,7 +20,7 @@ const ALLOWED_STATUS: ListingStatus[] = [
 const ALLOWED_PUBLISH_STATES: PublishState[] = ["draft", "published"];
 const ALLOWED_CONDITIONS: ListingCondition[] = ["raw", "graded", "sealed"];
 
-const ALLOWED_SPORTS = new Set(["Football", "Basketball", "Baseball", "Other"]);
+const ALLOWED_SPORTS = new Set<string>(SHOP_CATEGORY_OPTIONS);
 
 function asString(value: unknown): string | null {
   if (typeof value !== "string") return null;
@@ -97,10 +102,13 @@ function asImageUrls(value: unknown): string[] {
     .filter((url) => /^https?:\/\//i.test(url));
 }
 
-function sanitizeSport(value: unknown): string {
+function sanitizeSport(value: unknown, fallback: string = "Other"): string {
+  const normalized = normalizeShopCategoryLabel(value);
+  if (normalized) return normalized;
+
   const sport = asString(value);
-  if (!sport) return "Football";
-  return ALLOWED_SPORTS.has(sport) ? sport : "Other";
+  if (!sport) return fallback;
+  return ALLOWED_SPORTS.has(sport) ? sport : fallback;
 }
 
 function parseYearFromText(value: string | null): number | null {
@@ -357,7 +365,16 @@ export async function POST(request: NextRequest) {
     grade,
     cert_number: asNullableString(body?.cert_number),
     condition: asCondition(body?.condition, "graded"),
-    sport: sanitizeSport(body?.sport),
+    sport: inferShopCategoryLabel(
+      {
+        sport: asString(body?.sport),
+        game: asString(body?.game),
+        title,
+        set: setBrand,
+        player: playerName,
+      },
+      "Other"
+    ),
     price,
     cmv,
     cost_basis: costBasis,

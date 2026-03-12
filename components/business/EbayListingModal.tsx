@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { estimateEbayFees } from "@/lib/ebay/selling/fee-calculator";
+import { getEbayListingCategoryId } from "@/lib/cards/market-category";
 import type { BusinessInventoryItem } from "@/types";
 
 interface Props {
@@ -20,11 +21,12 @@ const CONDITION_OPTIONS = [
 
 const CATEGORY_OPTIONS = [
   { value: "261328", label: "Sports Trading Cards" },
+  { value: "183454", label: "CCG Individual Cards (Pokemon / One Piece / TCG)" },
+  { value: "183050", label: "Non-Sport Trading Cards" },
   { value: "261333", label: "Football Cards" },
   { value: "261334", label: "Baseball Cards" },
   { value: "261335", label: "Basketball Cards" },
   { value: "261336", label: "Hockey Cards" },
-  { value: "261332", label: "Non-Sport Cards" },
 ];
 
 function fmt(cents: number): string {
@@ -37,6 +39,7 @@ function fmt(cents: number): string {
 
 export default function EbayListingModal({ item, isTopRated = false, onClose, onSuccess }: Props) {
   const defaultPrice = item.list_price_cents ?? item.cost_basis_total_cents ?? 0;
+  const defaultCategoryId = getEbayListingCategoryId({ title: item.title, sport: null });
 
   const [title, setTitle] = useState(item.title);
   const [priceCents, setPriceCents] = useState(defaultPrice);
@@ -44,7 +47,7 @@ export default function EbayListingModal({ item, isTopRated = false, onClose, on
   const [condition, setCondition] = useState(
     item.condition_status === "graded" ? "LIKE_NEW" : "VERY_GOOD"
   );
-  const [categoryId, setCategoryId] = useState("261328");
+  const [categoryId, setCategoryId] = useState(defaultCategoryId);
   const [description, setDescription] = useState(
     item.grade
       ? `${item.title}. ${item.grading_company ?? ""}${item.grade ? ` ${item.grade}` : ""}${item.cert_number ? ` #${item.cert_number}` : ""}.`

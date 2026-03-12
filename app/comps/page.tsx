@@ -534,7 +534,7 @@ function CompsPageContent() {
             </span>
           </div>
           <p className="text-gray-400">
-            Find comparable listings and market values for any sports card
+            Find comparable listings and market values for any trading card
           </p>
         </div>
 
@@ -902,7 +902,7 @@ function CompsPageContent() {
               />
             </svg>
             <p className="text-gray-400 mb-2">
-              Search for any sports card to get estimated values from active listings
+              Search for any trading card to get estimated values from active listings
             </p>
             <p className="text-sm text-gray-500">
               Try searching "Michael Jordan Fleer 1986 PSA 10" or upload a card photo

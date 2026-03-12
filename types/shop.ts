@@ -16,7 +16,7 @@ export interface ShopListing {
   grade: string;
   condition: "raw" | "graded" | "sealed";
   cert_number: string | null;
-  sport: string;
+  sport: string; // category/game label (e.g., Football, Pokemon, One Piece)
   price: number;
   cmv: number | null;
   cost_basis?: number | null; // admin only, excluded from public API

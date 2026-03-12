@@ -2,6 +2,7 @@
 
 import type { EbaySearchParams } from "./types";
 import { getSetProfile, resolveSetTaxonomy } from "./set-taxonomy";
+import { getEbayBrowseCategoryId } from "@/lib/cards/market-category";
 import crypto from "crypto";
 
 const EXCLUSION_OPERATOR_PATTERN = /(^|\s)-(?:"[^"]+"|\S+)/g;
@@ -148,6 +149,10 @@ export function normalizeQueryForCache(params: EbaySearchParams): string {
     parts.push(params.cardNumber.replace(/^#/, "").trim());
   }
 
+  if (params.game) {
+    parts.push(`game:${params.game.toLowerCase().trim()}`);
+  }
+
   // Limit (for cache key differentiation)
   if (params.limit !== undefined) {
     parts.push(`limit:${params.limit}`);
@@ -168,8 +173,11 @@ export function hashQuery(normalizedQuery: string): string {
  */
 export function normalizeSetName(setName: string): string {
   let normalized = setName.toLowerCase().trim();
-  // Remove common sport suffixes
-  normalized = normalized.replace(/\s+(football|basketball|baseball|hockey|soccer)\b/gi, "");
+  // Remove common category suffixes
+  normalized = normalized.replace(
+    /\s+(football|basketball|baseball|hockey|soccer|pokemon|one\s+piece)\b/gi,
+    ""
+  );
   // Remove leading brand
   normalized = normalized.replace(/^panini\s+/i, "");
   // Standardize common variations
@@ -202,7 +210,14 @@ export function normalizeGrade(grade: string): string {
 export function buildActiveListingsUrl(params: EbaySearchParams): string {
   const query = buildSearchQuery(params);
   const encodedQuery = encodeURIComponent(query);
-  return `https://www.ebay.com/sch/i.html?_nkw=${encodedQuery}&_sacat=212&_sop=15&_ipg=60`;
+  const categoryId = getEbayBrowseCategoryId({
+    game: params.game,
+    sport: params.sport,
+    set: params.set,
+    player: params.player,
+    keywords: params.keywords,
+  });
+  return `https://www.ebay.com/sch/i.html?_nkw=${encodedQuery}&_sacat=${categoryId}&_sop=15&_ipg=60`;
 }
 
 /**
@@ -211,7 +226,14 @@ export function buildActiveListingsUrl(params: EbaySearchParams): string {
 export function buildSoldListingsUrl(params: EbaySearchParams): string {
   const query = buildSearchQuery(params);
   const encodedQuery = encodeURIComponent(query);
-  return `https://www.ebay.com/sch/i.html?_nkw=${encodedQuery}&_sacat=212&LH_Sold=1&LH_Complete=1&_sop=13&_ipg=60`;
+  const categoryId = getEbayBrowseCategoryId({
+    game: params.game,
+    sport: params.sport,
+    set: params.set,
+    player: params.player,
+    keywords: params.keywords,
+  });
+  return `https://www.ebay.com/sch/i.html?_nkw=${encodedQuery}&_sacat=${categoryId}&LH_Sold=1&LH_Complete=1&_sop=13&_ipg=60`;
 }
 
 /**
@@ -466,7 +488,7 @@ export function titleMatchesGrade(titleLower: string, wantedGrade: string): bool
 }
 
 /**
- * Canonical list of insert / sub-set keywords for sports trading cards.
+ * Canonical list of insert / sub-set keywords for trading cards.
  * Used to reject insert listings when the user searched for a non-insert parallel.
  * Keep in sync: this is the single source of truth; browse-api and dual-signal both import it.
  */

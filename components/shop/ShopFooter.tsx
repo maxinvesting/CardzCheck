@@ -35,17 +35,11 @@ export default function ShopFooter() {
 
           <div>
             <h4 className="mb-3 text-sm font-semibold uppercase tracking-wider text-slate-900">
-              CardzCheck
+              Marketplace
             </h4>
             <p className="text-sm text-slate-600">
-              Powered by CardzCheck Est. Market Value with transparent pricing context from real listings.
+              Browse currently available listings and complete checkout in-app.
             </p>
-            <Link
-              href="/comps"
-              className="mt-3 inline-block rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:border-slate-300 hover:text-slate-900"
-            >
-              Try Comps
-            </Link>
           </div>
 
           <div>

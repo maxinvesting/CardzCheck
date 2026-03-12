@@ -121,7 +121,7 @@ export async function getRelatedListings(
   const samePlayer = candidates.filter(
     (c) => c.player_name?.toLowerCase() === listing.player_name?.toLowerCase()
   );
-  const sameSport = candidates.filter(
+  const sameCategory = candidates.filter(
     (c) => c.sport === listing.sport && c.player_name !== listing.player_name
   );
   const similarPrice = candidates.filter(
@@ -135,7 +135,7 @@ export async function getRelatedListings(
   const seen = new Set<string>();
   const related: ShopListing[] = [];
 
-  for (const c of [...samePlayer, ...sameSport, ...similarPrice]) {
+  for (const c of [...samePlayer, ...sameCategory, ...similarPrice]) {
     if (seen.has(c.id) || related.length >= 6) continue;
     seen.add(c.id);
     related.push(c);

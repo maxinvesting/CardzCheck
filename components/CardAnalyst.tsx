@@ -31,7 +31,7 @@ const GENERAL_PROMPTS = [
   "Analyze my collection for sell candidates",
   "Which cards in my watchlist look undervalued?",
   "Is anything I own overvalued right now?",
-  "Good <$200 football buy right now",
+  "Good <$200 Pokemon or sports buy right now",
 ];
 
 export default function CardAnalyst({

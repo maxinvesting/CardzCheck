@@ -9,11 +9,16 @@ import {
   resolveGradeEstimateImages,
 } from "@/lib/grading/gradeEstimateImages";
 import { parseGradeEstimateModelOutput } from "@/lib/grading/gradeEstimateModel";
+import type { GradeScanCardMeta } from "@/lib/grading/gradeFeatures";
 import {
   GRADE_SCAN_MAX_CLOSEUPS,
   GRADE_SCAN_MAX_TOTAL_PHOTOS,
   isCloseupKind,
 } from "@/lib/grading/scanPhotos";
+import {
+  buildCategoryPromptNote,
+  resolveGradingCategory,
+} from "@/lib/grading/grading-profile";
 
 function getAnthropicClient() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -24,9 +29,9 @@ function getAnthropicClient() {
 }
 
 
-const SYSTEM_PROMPT = `You are a sports card grading specialist. Produce strict JSON only. Use conservative assumptions and never inflate high-grade odds when evidence is weak.`;
+const SYSTEM_PROMPT = `You are a trading card grading specialist. Handle sports cards and TCG cards (including Pokemon and One Piece). Produce strict JSON only. Use conservative assumptions and never inflate high-grade odds when evidence is weak.`;
 
-const USER_PROMPT = `Analyze these photos of the SAME RAW (unslabbed) sports trading card.
+const USER_PROMPT = `Analyze these photos of the SAME RAW (unslabbed) trading card.
 
 Use ALL provided images. Better images increase analysis accuracy; explicitly reflect this in image_quality and confidence.
 
@@ -44,6 +49,11 @@ Centering gate rules (must enforce):
 Surface rules (must enforce):
 - Extract explicit surface defects with location + severity.
 - If glare/blur blocks surface reading, say that clearly, lower confidence, and shift probabilities downward.
+
+TCG strict profile rules (must enforce when card is Pokemon, One Piece, or other TCG):
+- Edge whitening, edge chipping, corner whitening, rough cuts, and print lines are major gem-mint blockers.
+- If multiple moderate edge/corner whitening/chipping findings exist, keep PSA 10 probability very low.
+- Explain category-specific blockers explicitly in grade_notes and findings.
 
 Output ONLY valid JSON (no markdown, no prose) with this exact schema:
 {
@@ -127,11 +137,35 @@ Hard requirements:
 - Probabilities in each array must sum to 1.0.
 - If uncertain, widen range and shift probability mass lower (conservative).`;
 
+function readString(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function readYear(value: unknown): string | number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim().length > 0) return value.trim();
+  return null;
+}
+
 export async function POST(request: NextRequest) {
   let imageStats = buildImageStats([]);
 
   try {
     const body = await request.json();
+    const bodyCard = body?.card && typeof body.card === "object" ? body.card : null;
+    const cardMeta: GradeScanCardMeta = {
+      game: readString(body?.game) ?? readString(bodyCard?.game),
+      sport: readString(body?.sport) ?? readString(bodyCard?.sport),
+      player_name:
+        readString(body?.player_name) ?? readString(bodyCard?.player_name),
+      set_name: readString(body?.set_name) ?? readString(bodyCard?.set_name),
+      year: readYear(body?.year) ?? readYear(bodyCard?.year),
+      title: readString(body?.title) ?? null,
+      chrome: null,
+    };
+
     const scanPhotos = extractScanPhotos(body);
 
     if (scanPhotos.length === 0) {
@@ -189,13 +223,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const categoryNote = buildCategoryPromptNote(resolveGradingCategory(cardMeta));
     const rolePrompt = `Photo role map:\n${scanPhotos
       .map((photo, index) => `${index + 1}. ${photo.kind.replace(/_/g, " ")}`)
       .join("\n")}\n${
       closeupCount === 0
         ? "\nNo close-up photos were provided. Treat corners/edges/surface visibility as limited and avoid high confidence."
         : "\nUse matching close-up types as primary evidence for corners, edges, and surface."
-    }`;
+    }\n\n${categoryNote}`;
 
     // Process card image for grade estimation
     const anthropic = getAnthropicClient();
@@ -236,6 +271,7 @@ export async function POST(request: NextRequest) {
       modelText,
       imageStats,
       scanPhotoKinds: scanPhotos.map((photo) => photo.kind),
+      cardMeta,
     });
     return NextResponse.json(parsed.estimate);
   } catch (error) {

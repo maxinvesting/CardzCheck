@@ -7,6 +7,7 @@ import CompactMetricsRow from "@/components/dashboard/CompactMetricsRow";
 import CompactTopPerformers from "@/components/dashboard/CompactTopPerformers";
 import CompactQuickActions from "@/components/dashboard/CompactQuickActions";
 import ActivityFeed from "@/components/dashboard/ActivityFeed";
+import { Surface } from "@/components/ui/Surface";
 import AddCardModalNew from "@/components/AddCardModalNew";
 import PaywallModal from "@/components/PaywallModal";
 import { createClient } from "@/lib/supabase/client";
@@ -144,25 +145,34 @@ export default function DashboardPage() {
 
   return (
     <AuthenticatedLayout>
-      <div className="p-4 sm:p-6 max-w-6xl mx-auto">
+      <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
         {/* Greeting */}
-        <div className="mb-4">
-          <h1 className="text-xl font-bold text-white">
+        <header className="mb-4 sm:mb-6">
+          <h1 className="text-xl font-semibold leading-snug text-[var(--biz-text)]">
             Welcome back{userName ? `, ${userName}` : ""}
           </h1>
-        </div>
+          <p className="mt-1 text-sm text-[var(--biz-muted)]">
+            Overview of your collection value and recent activity.
+          </p>
+        </header>
 
-        {/* Compact Metrics Row */}
-        <div className="mb-4">
-          <CompactMetricsRow items={collectionItems} loading={loading} />
-        </div>
+        {/* Metrics band */}
+        <section className="mb-4 sm:mb-6">
+          <Surface>
+            <CompactMetricsRow items={collectionItems} loading={loading} />
+          </Surface>
+        </section>
 
-        {/* Compact Single Column Layout */}
-        <div className="space-y-4 mb-4">
-          <CompactTopPerformers items={collectionItems} loading={loading} />
-          <ActivityFeed recentCards={collectionItems.slice(0, 5)} />
-          <CompactQuickActions onAddCard={() => setShowAddModal(true)} />
-        </div>
+        {/* Secondary layout: performers, activity, quick actions */}
+        <section className="space-y-4">
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(260px,1fr)]">
+            <div className="space-y-4">
+              <CompactTopPerformers items={collectionItems} loading={loading} />
+              <ActivityFeed recentCards={collectionItems.slice(0, 5)} />
+            </div>
+            <CompactQuickActions onAddCard={() => setShowAddModal(true)} />
+          </div>
+        </section>
 
         {/* Add Card Modal */}
         <AddCardModalNew
@@ -249,7 +259,7 @@ export default function DashboardPage() {
             </button>
           </div>
         )}
-      </div>
+      </main>
     </AuthenticatedLayout>
   );
 }

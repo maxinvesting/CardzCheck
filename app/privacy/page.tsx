@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export const metadata = {
   title: "Privacy Policy - CardzCheck",
-  description: "Privacy Policy for CardzCheck sports card price lookup",
+  description: "Privacy Policy for CardzCheck trading card price lookup",
 };
 
 export default function PrivacyPage() {
@@ -42,7 +42,7 @@ export default function PrivacyPage() {
               CardzCheck (&quot;we&quot;, &quot;our&quot;, or &quot;us&quot;) is
               committed to protecting your privacy. This Privacy Policy explains
               how we collect, use, and safeguard your information when you use
-              our sports card price lookup and collection tracking service.
+              our trading card price lookup and collection tracking service.
             </p>
           </section>
 

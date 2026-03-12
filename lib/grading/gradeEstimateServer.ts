@@ -19,12 +19,16 @@ import {
 } from "@/lib/grade-estimator/value";
 import { DEFAULT_COMPS_WINDOW_DAYS } from "@/lib/grade-estimator/constants";
 import { recordGradeTokenUsage } from "@/lib/grading/tokenBudget";
+import {
+  buildCategoryPromptNote,
+  resolveGradingCategory,
+} from "@/lib/grading/grading-profile";
 
-const SYSTEM_PROMPT = `You are an expert sports card grading specialist with comprehensive knowledge of PSA, BGS, SGC, and TAG grading standards. Produce strict JSON only.
+const SYSTEM_PROMPT = `You are an expert trading card grading specialist with comprehensive knowledge of PSA, BGS, SGC, and TAG grading standards. Support sports cards and TCG cards (including Pokemon and One Piece). Produce strict JSON only.
 
 Be accurate — calibrate your probabilities to the actual evidence in front of you. Do not systematically inflate or deflate grades. When the evidence clearly shows a gem-quality card, reflect that with high PSA 10 probability. When evidence is ambiguous or weak, widen the grade range and lower confidence_label rather than defaulting probabilities to lower grades.`;
 
-const USER_PROMPT = `Analyze these photos of the SAME RAW (unslabbed) sports trading card.
+const USER_PROMPT = `Analyze these photos of the SAME RAW (unslabbed) trading card.
 
 Use ALL provided images. Better images increase analysis accuracy; explicitly reflect this in image_quality and confidence.
 
@@ -49,6 +53,11 @@ Centering gate rules (must enforce):
 Surface rules (must enforce):
 - Extract explicit surface defects with location + severity.
 - If glare/blur blocks surface reading, say that clearly, lower confidence, and widen the grade range.
+
+TCG strict profile rules (must enforce when card is Pokemon, One Piece, or other TCG):
+- Edge whitening, edge chipping, corner whitening, rough cuts, and print lines are major gem-mint blockers.
+- If multiple moderate edge/corner whitening/chipping findings exist, keep PSA 10 probability very low.
+- Explain category-specific blockers explicitly in grade_notes and findings.
 
 Close-up priority rules (must enforce when close-ups are available):
 - Corners evidence must prioritize corner_tl/corner_tr/corner_bl/corner_br close-ups.
@@ -153,6 +162,14 @@ function getAnthropicClient() {
 function buildCardContextNote(cardIdentity?: CardIdentity | null): string {
   if (!cardIdentity) return "";
   const parts: string[] = [];
+  const category = resolveGradingCategory({
+    sport: cardIdentity.sport,
+    set_name: cardIdentity.setName,
+    player_name: cardIdentity.player,
+    year: cardIdentity.year,
+  });
+
+  parts.push(buildCategoryPromptNote(category));
 
   if (cardIdentity.cardStock === "chromium") {
     parts.push(

@@ -337,6 +337,8 @@ export interface GradeEstimateCenteringDetail {
 
 export interface GradeEstimateAnalysisMetadata {
   feature_version?: string;
+  grading_profile?: string;
+  card_category?: "sports" | "pokemon" | "one_piece" | "other_tcg";
   centering_score?: number;
   surface_score?: number;
   corners_score?: number;
@@ -557,7 +559,7 @@ export type CardIdentity = {
   brand: string | null; // e.g., Panini, Topps, Upper Deck
   setName: string | null; // e.g., Mosaic, Prizm, Donruss Optic, Bowman Chrome
   subset: string | null; // e.g., Base, Silver Prizm, Green Mosaic, Purple Prizm
-  sport: string | null; // e.g., Football, Basketball, Baseball, Hockey, Soccer
+  sport: string | null; // category/game, e.g., Football, Basketball, Pokemon, One Piece
   league: string | null; // e.g., NFL, NBA, MLB, NHL, NCAA, UEFA
   cardNumber: string | null;
   rookie: boolean | null;

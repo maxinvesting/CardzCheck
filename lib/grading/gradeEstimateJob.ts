@@ -3,6 +3,7 @@ import type { GradeOutcome } from "@/lib/grading/gradeProbability";
 import type { GradeEstimate, GradeScanPhoto, WorthGradingResult } from "@/types";
 import type { GradeEstimatorCardInput } from "@/lib/grade-estimator/value";
 import type { ImageStats } from "@/lib/grading/fallbackEstimate";
+import type { GradeScanCardMeta } from "@/lib/grading/gradeFeatures";
 
 export type GradeEstimateJobStatus = "queued" | "running" | "done" | "error";
 export type GradeEstimateJobStepStatus =
@@ -86,6 +87,7 @@ export type GradeEstimateJobDependencies = {
     modelText: string | null;
     imageStats: ImageStats;
     scanPhotoKinds: GradeScanPhoto["kind"][];
+    cardMeta?: GradeScanCardMeta | null;
   }) => Promise<{
     estimate: GradeEstimate;
     probabilities: GradeOutcome[] | null;
@@ -187,6 +189,8 @@ function mapCardInput(identity?: CardIdentity): GradeEstimatorCardInput | null {
   if (!identity?.player) return null;
   return {
     player_name: identity.player,
+    sport: identity.sport ?? undefined,
+    game: identity.sport ?? undefined,
     year: identity.year ? String(identity.year) : undefined,
     set_name: identity.setName ?? undefined,
     card_number: identity.cardNumber ?? undefined,
@@ -248,6 +252,33 @@ export async function runGradeEstimateJob(
       modelText: job.internal.modelText ?? null,
       imageStats,
       scanPhotoKinds: input.scanPhotos.map((photo) => photo.kind),
+      cardMeta: {
+        game:
+          job.partial.identity?.sport ??
+          input.card?.game ??
+          input.card?.sport ??
+          null,
+        sport:
+          job.partial.identity?.sport ??
+          input.card?.sport ??
+          input.card?.game ??
+          null,
+        player_name:
+          job.partial.identity?.player ?? input.card?.player_name ?? null,
+        year:
+          job.partial.identity?.year ??
+          (input.card?.year && Number.isFinite(Number(input.card.year))
+            ? Number(input.card.year)
+            : null),
+        set_name: job.partial.identity?.setName ?? input.card?.set_name ?? null,
+        chrome: job.partial.identity
+          ? job.partial.identity.cardStock === "chromium"
+          : null,
+        title:
+          [input.card?.year, input.card?.set_name, input.card?.player_name]
+            .filter(Boolean)
+            .join(" ") || null,
+      },
     });
     job.partial.preliminaryRange = parsed.preliminaryRange;
     job.partial.probabilities = parsed.probabilities;
