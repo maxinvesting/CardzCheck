@@ -200,7 +200,7 @@ function BUSINESS_NAV_ITEMS(): NavItem[] {
     { name: "Dashboard", href: "/business", icon: <HomeIcon />, exact: true },
     { name: "Ledger", href: "/business/ledger", icon: <LedgerIcon /> },
     { name: "Grade Probability Engine", href: "/grade-hub", icon: <BadgeIcon />, badge: "Featured" },
-    { name: "News & Updates", href: "/news", icon: <NewsIcon />, badge: "New" },
+    { name: "News & Updates", href: "/business/news", icon: <NewsIcon />, badge: "New" },
     { name: "Comps", href: "/business/comps", icon: <ChartIcon />, badge: "Beta" },
     { name: "Business Consultant", href: "/business/consultant", icon: <AnalystIcon /> },
     { name: "Marketplace", href: "/shop", icon: <ShopIcon /> },

@@ -42,6 +42,13 @@ const CATEGORY_COLORS: Record<string, string> = {
   business: "text-amber-400 bg-amber-500/10 border-amber-500/20",
 };
 
+const SOURCE_STYLE: Record<string, string> = {
+  scd: "bg-sky-500/10 text-sky-300 border-sky-500/25",
+  cbc: "bg-emerald-500/10 text-emerald-300 border-emerald-500/25",
+  beckett: "bg-purple-500/10 text-purple-300 border-purple-500/25",
+  cardzcheck: "bg-blue-500/10 text-blue-200 border-blue-500/25",
+};
+
 function timeAgo(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
   const m = Math.floor(ms / 60_000);
@@ -58,6 +65,28 @@ function CategoryPill({ category }: { category: string }) {
   return (
     <span className={`inline-flex items-center rounded-full border px-2 py-px text-[10px] font-semibold uppercase tracking-wider ${CATEGORY_COLORS[category] ?? "text-[var(--biz-muted)] border-white/10"}`}>
       {CATEGORY_LABELS[category as Category] ?? category}
+    </span>
+  );
+}
+
+function SourceBadge({ source, label }: { source: string; label: string }) {
+  const initials = label
+    .split(" ")
+    .map((p) => p[0])
+    .join("")
+    .slice(0, 3)
+    .toUpperCase();
+
+  const cls =
+    SOURCE_STYLE[source] ??
+    "bg-white/5 text-[var(--biz-muted)] border-white/10";
+
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-px text-[10px] font-medium uppercase tracking-wide ${cls}`}>
+      <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-black/30 text-[9px]">
+        {initials}
+      </span>
+      <span className="truncate max-w-[9rem]">{label}</span>
     </span>
   );
 }
@@ -90,8 +119,8 @@ function LeadArticle({ item }: { item: NewsItem }) {
     <div className="group py-7">
       <div className="mb-3 flex flex-wrap items-center gap-2.5">
         <CategoryPill category={item.category} />
-        <span className="text-[11px] text-[var(--biz-muted)]">{item.sourceLabel}</span>
-        <span className="text-[var(--biz-muted)] opacity-30">·</span>
+        <SourceBadge source={item.source} label={item.sourceLabel} />
+        <span className="text-[var(--biz-muted)] opacity-30 hidden sm:inline">·</span>
         <span className="text-[11px] text-[var(--biz-muted)]">{timeAgo(item.publishedAt)}</span>
       </div>
       <h2 className="text-[1.35rem] font-bold leading-snug tracking-tight text-[var(--biz-text)] transition-colors group-hover:text-blue-300">
@@ -123,8 +152,8 @@ function ArticleRow({ item }: { item: NewsItem }) {
       <div className="min-w-0 flex-1">
         <div className="mb-1.5 flex flex-wrap items-center gap-2">
           <CategoryPill category={item.category} />
-          <span className="text-[11px] text-[var(--biz-muted)]">{item.sourceLabel}</span>
-          <span className="text-[var(--biz-muted)] opacity-30">·</span>
+          <SourceBadge source={item.source} label={item.sourceLabel} />
+          <span className="text-[var(--biz-muted)] opacity-30 hidden sm:inline">·</span>
           <span className="text-[11px] text-[var(--biz-muted)]">{timeAgo(item.publishedAt)}</span>
         </div>
         <h3 className="text-sm font-semibold leading-snug text-[var(--biz-text)] transition-colors group-hover:text-blue-300">
@@ -308,7 +337,7 @@ export default function NewsPage() {
 
           {/* ── Footer ────────────────────────────────────────────────── */}
           {!loading && (
-            <div className="border-t border-[color:var(--biz-border)] py-8 mt-4">
+            <div className="border-t border-[color:var(--biz-border)] py-8 mt-4 space-y-1.5">
               <p className="text-[11px] text-[var(--biz-muted)]">
                 News sourced from third-party RSS feeds. CardzCheck is not responsible for external content.
                 {data?.fetchedAt && (
@@ -316,6 +345,36 @@ export default function NewsPage() {
                     Updated {timeAgo(data.fetchedAt)}.
                   </span>
                 )}
+              </p>
+              <p className="text-[10px] text-[var(--biz-muted)]">
+                Current external feeds:&nbsp;
+                <a
+                  href="https://www.sportscollectorsdaily.com/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline-offset-2 hover:underline"
+                >
+                  Sports Collectors Daily
+                </a>
+                ,&nbsp;
+                <a
+                  href="https://www.cardboardconnection.com/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline-offset-2 hover:underline"
+                >
+                  Cardboard Connection
+                </a>
+                ,&nbsp;
+                <a
+                  href="https://www.beckett.com/news/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline-offset-2 hover:underline"
+                >
+                  Beckett Media
+                </a>
+                , plus CardzCheck platform announcements.
               </p>
             </div>
           )}
