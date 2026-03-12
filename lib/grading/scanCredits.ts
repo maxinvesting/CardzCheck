@@ -13,7 +13,7 @@ export type ScanCreditStatus = {
 
 /** Ensure the credit row exists, apply any pending weekly grant, and return current status. */
 export async function getScanCreditStatus(userId: string): Promise<ScanCreditStatus> {
-  const supabase = createServiceClient();
+  const supabase = await createServiceClient();
 
   // Apply weekly grant (idempotent DB function)
   await supabase.rpc("apply_weekly_grade_credit", { p_user_id: userId });
@@ -48,7 +48,7 @@ export async function getScanCreditStatus(userId: string): Promise<ScanCreditSta
  * Returns true if a credit was available and consumed; false if none remain.
  */
 export async function consumeScanCredit(userId: string): Promise<boolean> {
-  const supabase = createServiceClient();
+  const supabase = await createServiceClient();
   const { data, error } = await supabase.rpc("consume_grade_scan_credit", {
     p_user_id: userId,
   });

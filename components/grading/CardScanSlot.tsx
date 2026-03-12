@@ -128,6 +128,8 @@ export default function CardScanSlot({
           card: identifiedCard
             ? {
                 player_name: identifiedCard.player_name,
+                game: identifiedCard.cardIdentity?.sport ?? undefined,
+                sport: identifiedCard.cardIdentity?.sport ?? undefined,
                 year: identifiedCard.year,
                 set_name: identifiedCard.set_name,
                 card_number: identifiedCard.card_number,
@@ -253,8 +255,21 @@ export default function CardScanSlot({
 
           {isAnalyzing && (
             <motion.div key="progress" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
-              {showAnimation && <GradeAnalysisAnimation />}
-              {gradeJob && <GradeEstimateProgressPanel job={gradeJob} elapsedLabel={null} />}
+              {showAnimation && (
+                <GradeAnalysisAnimation
+                  imageUrl={identifiedCard?.imageUrl ?? null}
+                  estimate={gradeEstimate}
+                  valueResult={null}
+                  onComplete={() => setShowAnimation(false)}
+                />
+              )}
+              {gradeJob && (
+                <GradeEstimateProgressPanel
+                  status={gradeJob.status}
+                  steps={gradeJob.steps}
+                  elapsedLabel={null}
+                />
+              )}
             </motion.div>
           )}
 

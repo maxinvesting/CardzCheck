@@ -130,7 +130,7 @@ export async function GET() {
   // Fetch announcements from DB
   let announcements: NewsItem[] = [];
   try {
-    const service = (await import("@/lib/supabase/server")).createServiceClient();
+    const service = await (await import("@/lib/supabase/server")).createServiceClient();
     const query = service
       .from("announcements")
       .select("*")

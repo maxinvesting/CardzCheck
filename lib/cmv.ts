@@ -105,8 +105,9 @@ async function fallbackFromActiveListings(
 
     let fallbackCmv: number | null = null;
 
-    const saleRange = dualResult.estimatedSaleRange?.estimatedSaleRange;
-    if (dualResult.estimatedSaleRange?.pricingAvailable && saleRange) {
+    const priceResult = dualResult.estimatedSaleRange;
+    const saleRange = priceResult.pricingAvailable ? priceResult.estimatedSaleRange : null;
+    if (priceResult.pricingAvailable && saleRange) {
       const { low, high } = saleRange;
       const mid = Math.round(((low + high) / 2) * 100) / 100;
       if (Number.isFinite(mid) && mid > 0) {

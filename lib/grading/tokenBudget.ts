@@ -59,7 +59,7 @@ export async function checkGradeTokenBudget(
     };
   }
 
-  const supabase = createServiceClient();
+  const supabase = await createServiceClient();
   const period = currentPeriodStart();
 
   const { data } = await supabase
@@ -97,7 +97,7 @@ export async function recordGradeTokenUsage(
 ): Promise<void> {
   const costCents = calculateCostCents(inputTokens, outputTokens);
   const period = currentPeriodStart();
-  const supabase = createServiceClient();
+  const supabase = await createServiceClient();
 
   const { error } = await supabase.rpc("increment_grade_token_usage", {
     p_user_id: userId,

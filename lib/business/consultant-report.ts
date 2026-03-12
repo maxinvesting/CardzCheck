@@ -105,19 +105,19 @@ export function parseBusinessConsultantReport(
       sales_count: coerceNumber(dataCoverageRaw.sales_count, 0),
       missing: toArray<string>(dataCoverageRaw.missing).map((m) => coerceString(m)),
     },
-    kpis: toArray(parsed.kpis).map((kpi) => ({
+    kpis: toArray<Record<string, unknown>>(parsed.kpis).map((kpi) => ({
       label: coerceString(kpi.label),
       value: coerceString(kpi.value),
       hint: coerceString(kpi.hint),
     })),
-    high_risk_positions: toArray(parsed.high_risk_positions).map((pos) => ({
+    high_risk_positions: toArray<Record<string, unknown>>(parsed.high_risk_positions).map((pos) => ({
       item: coerceString(pos.item),
       cost_basis: coerceNumber(pos.cost_basis, 0),
       cmv: coerceNumber(pos.cmv, 0),
       delta_pct: coerceNumber(pos.delta_pct, 0),
       reason: coerceString(pos.reason),
     })),
-    recommended_actions: toArray(parsed.recommended_actions).map((act) => ({
+    recommended_actions: toArray<Record<string, unknown>>(parsed.recommended_actions).map((act) => ({
       action: coerceString(act.action),
       impact: coerceString(act.impact),
       effort: (act.effort === "low" || act.effort === "medium" || act.effort === "high"

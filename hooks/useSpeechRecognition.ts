@@ -5,7 +5,8 @@ import { useState, useRef, useCallback, useEffect } from "react";
 export function useSpeechRecognition() {
   const [isListening, setIsListening] = useState(false);
   const [isSupported, setIsSupported] = useState(false);
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recognitionRef = useRef<any>(null);
 
   useEffect(() => {
     setIsSupported(
@@ -19,18 +20,21 @@ export function useSpeechRecognition() {
       if (!isSupported) return;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      const recognition: SpeechRecognition = new SR();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const recognition: any = new SR();
       recognition.lang = "en-US";
       recognition.interimResults = false;
       recognition.maxAlternatives = 1;
 
-      recognition.onresult = (event: SpeechRecognitionEvent) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      recognition.onresult = (event: any) => {
         const transcript = event.results[0][0].transcript;
         onResult(transcript);
         setIsListening(false);
       };
 
-      recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      recognition.onerror = (event: any) => {
         onError?.(event.error);
         setIsListening(false);
       };
