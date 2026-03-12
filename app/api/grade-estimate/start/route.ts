@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { canAccessFeature, checkProAccess } from "@/lib/access";
+import { consumeScanCredit } from "@/lib/grading/scanCredits";
 import { extractScanPhotos } from "@/lib/grading/gradeEstimateImages";
 import {
   createGradeEstimateJob,
@@ -51,20 +52,36 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Token budget enforcement — skip in test mode to avoid blocking local dev.
+    // Token budget + credit enforcement — skip in test mode.
     if (!isTestMode()) {
       const proAccess = await checkProAccess(user.id);
-      const budget = await checkGradeTokenBudget(user.id, proAccess.tier);
-      if (!budget.allowed) {
-        return NextResponse.json(
-          {
-            error: budget.reason ?? "Monthly scanning budget reached.",
-            code: "BUDGET_EXCEEDED",
-            budgetCents: budget.budgetCents,
-            spentCents: budget.spentCents,
-          },
-          { status: 429 }
-        );
+
+      if (proAccess.tier === "free") {
+        // Free tier: consume one scan credit (access check already verified > 0)
+        const consumed = await consumeScanCredit(user.id);
+        if (!consumed) {
+          return NextResponse.json(
+            {
+              error: "No scan credits remaining. Upgrade for unlimited scans or wait for your weekly credit.",
+              code: "NO_CREDITS",
+            },
+            { status: 403 }
+          );
+        }
+      } else {
+        // Paid tiers: enforce monthly token budget
+        const budget = await checkGradeTokenBudget(user.id, proAccess.tier);
+        if (!budget.allowed) {
+          return NextResponse.json(
+            {
+              error: budget.reason ?? "Monthly scanning budget reached.",
+              code: "BUDGET_EXCEEDED",
+              budgetCents: budget.budgetCents,
+              spentCents: budget.spentCents,
+            },
+            { status: 429 }
+          );
+        }
       }
     }
 
