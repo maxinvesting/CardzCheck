@@ -20,7 +20,7 @@ const FAQ_SECTIONS = [
       },
       {
         q: "How do I add a card to my collection?",
-        a: "After searching for a card, click the card result to open its detail view, then click "Add to Collection." You can specify the grade, purchase price, and quantity. Your collection total value updates automatically.",
+        a: "After searching for a card, click the card result to open its detail view, then click \"Add to Collection.\" You can specify the grade, purchase price, and quantity. Your collection total value updates automatically.",
       },
       {
         q: "What's the difference between the Free and Pro plans?",
@@ -129,7 +129,7 @@ const FAQ_SECTIONS = [
       },
       {
         q: "How do I add a card to my Watchlist?",
-        a: "Search for a card and open its detail page. Click "Add to Watchlist" to start tracking it. You can manage all your watched cards from the Watchlist page in the sidebar.",
+        a: "Search for a card and open its detail page. Click \"Add to Watchlist\" to start tracking it. You can manage all your watched cards from the Watchlist page in the sidebar.",
       },
       {
         q: "Does the Watchlist send price alerts?",
@@ -152,7 +152,7 @@ const FAQ_SECTIONS = [
       },
       {
         q: "What can I ask the Analyst?",
-        a: "You can ask things like: "Which cards in my collection have gained the most value in the last 90 days?", "Is now a good time to sell my Patrick Mahomes rookie?", "What are the best-valued PSA 10 cards under $100 right now?", or "Summarize recent sales trends for 2023 Topps Chrome." The Analyst has context about your collection and CardzCheck's market data.",
+        a: "You can ask things like: \"Which cards in my collection have gained the most value in the last 90 days?\", \"Is now a good time to sell my Patrick Mahomes rookie?\", \"What are the best-valued PSA 10 cards under $100 right now?\", or \"Summarize recent sales trends for 2023 Topps Chrome.\" The Analyst has context about your collection and CardzCheck's market data.",
       },
       {
         q: "Is CardzCheck Analyst available on the Free plan?",
@@ -179,7 +179,7 @@ const FAQ_SECTIONS = [
       },
       {
         q: "How do I connect my eBay account?",
-        a: "Go to Settings → eBay Integration and click "Connect eBay Account." You'll be redirected to eBay to authorize CardzCheck. Once connected, you can sync your active listings and import sales history directly into your Business ledger.",
+        a: "Go to Settings → eBay Integration and click \"Connect eBay Account.\" You'll be redirected to eBay to authorize CardzCheck. Once connected, you can sync your active listings and import sales history directly into your Business ledger.",
       },
       {
         q: "What is the eBay Parity Price?",
@@ -202,7 +202,7 @@ const FAQ_SECTIONS = [
     items: [
       {
         q: "How do I upgrade to Pro?",
-        a: "Click "Upgrade" in the sidebar or go to Settings → Current Plan → Upgrade. You'll be taken to a secure checkout. Pro is a one-time payment with lifetime access — no recurring subscription.",
+        a: "Click \"Upgrade\" in the sidebar or go to Settings → Current Plan → Upgrade. You'll be taken to a secure checkout. Pro is a one-time payment with lifetime access — no recurring subscription.",
       },
       {
         q: "Is Pro a one-time payment or a subscription?",
@@ -214,7 +214,7 @@ const FAQ_SECTIONS = [
       },
       {
         q: "How do I reset my password?",
-        a: "On the login page, click "Forgot password?" to receive a reset link at your registered email address. If you don't see the email, check your spam folder. If you still need help, contact support.",
+        a: "On the login page, click \"Forgot password?\" to receive a reset link at your registered email address. If you don't see the email, check your spam folder. If you still need help, contact support.",
       },
       {
         q: "How do I delete my account?",
