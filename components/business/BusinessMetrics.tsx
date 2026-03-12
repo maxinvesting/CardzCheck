@@ -40,7 +40,7 @@ const KPI_STRIP_STYLE: CSSProperties = {
   background:
     "linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(249, 250, 251, 0.96) 100%)",
   border: "1px solid var(--biz-border)",
-  borderRadius: "18px",
+  borderRadius: "12px",
 };
 
 function metricDividerClasses(index: number): string {
@@ -71,8 +71,8 @@ function MetricCell({
     <div
       className={cx(
         "min-w-0 border-[color:var(--biz-border)]",
-        compact ? "px-4 py-4 sm:px-5" : "px-5 py-5",
-        "flex min-h-[104px] flex-col justify-between",
+        compact ? "px-4 py-3 sm:px-5" : "px-5 py-4",
+        "flex flex-col justify-between",
         metricDividerClasses(index),
         item.emphasized && "bg-white/55"
       )}
@@ -86,9 +86,9 @@ function MetricCell({
         ) : (
           <p
             className={cx(
-              "whitespace-nowrap text-[clamp(1.7rem,2.5vw,2.35rem)] font-semibold leading-none tracking-[-0.03em] tabular-nums",
+              "whitespace-nowrap text-[clamp(1.15rem,1.8vw,1.5rem)] font-semibold leading-none tracking-[-0.02em] tabular-nums",
               item.valueClass,
-              item.emphasized && "text-[clamp(1.8rem,2.7vw,2.5rem)]"
+              item.emphasized && "text-[clamp(1.25rem,2vw,1.65rem)]"
             )}
           >
             {item.value}

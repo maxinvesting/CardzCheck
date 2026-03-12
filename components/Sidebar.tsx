@@ -321,10 +321,10 @@ export default function Sidebar() {
                 onClick={() => setIsOpen(false)}
                 className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
                   isActive(item)
-                    ? item.href.includes("/shop")
-                      ? "bg-cyan-600 text-white"
-                      : isBusinessWorkspace
+                    ? isBusinessWorkspace
                       ? "border border-[color:var(--biz-border)] border-l-2 border-l-[var(--biz-primary)] bg-[#F3F4F6] text-[var(--biz-text)]"
+                      : item.href.includes("/shop")
+                      ? "bg-cyan-600 text-white"
                       : "bg-blue-600 text-white"
                     : isBusinessWorkspace
                       ? "text-[var(--biz-muted)] hover:bg-[#F9FAFB] hover:text-[var(--biz-text)]"

@@ -132,7 +132,7 @@ export default function BusinessDashboardView({
   }, [recentSales, items]);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       {/* ── Page header ─────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
