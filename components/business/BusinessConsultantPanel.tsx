@@ -1,7 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
-import { Surface } from "@/components/ui/Surface";
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { MicButton } from "@/components/ui/MicButton";
 import { SpeakButton } from "@/components/ui/SpeakButton";
 import type { BusinessConsultation } from "@/types";
@@ -9,8 +15,10 @@ import type { BusinessConsultantReport } from "@/lib/business/consultant-report"
 import { parseBusinessConsultantReport } from "@/lib/business/consultant-report";
 
 const CONSULTANT_COPY = {
-  title: "CardzCheck Business Consultant",
-  subtitle: "Inventory Strategy • Pricing Decisions • Grading Analysis • Liquidity Planning",
+  eyebrow: "Business Consultant Agent",
+  title: "Operator-mode guidance for pricing, grading, and liquidity.",
+  subtitle:
+    "Ask a business question, review the operator memo above, and keep the composer anchored below like a proper agent workspace.",
   helper:
     "Uses your inventory, sales history, and comps data to support card-business decisions. Missing inputs are treated as constraints.",
   promptSuggestions: [
@@ -25,7 +33,7 @@ const CONSULTANT_COPY = {
     "Optimize my channel mix (eBay, shows, Whatnot)",
   ],
   placeholder:
-    "Ask the Consultant… (pricing, grading submissions, inventory turnover, liquidity, risk exposure, channel strategy…)",
+    "Ask the Consultant... (pricing, grading submissions, inventory turnover, liquidity, risk exposure, channel strategy...)",
   submitButton: "Generate Analysis",
 } as const;
 
@@ -53,6 +61,9 @@ const TEMPLATES = [
   },
 ] as const;
 
+const CAPABILITY_PILLS = ["Pricing", "Inventory", "Grading", "Liquidity"] as const;
+
+type TemplateId = (typeof TEMPLATES)[number]["id"] | "custom";
 type Phase = "idle" | "acknowledge" | "working" | "deliverable";
 type StepStatus = "queued" | "working" | "completed";
 
@@ -66,19 +77,34 @@ const CONSULTANT_STEPS = [
 ];
 
 const WORKING_STATUS_LINES = [
-  "Reviewing inventory & sales data…",
-  "Drafting action plan…",
-  "Finalizing recommendations…",
-  "Modeling margin structure…",
-  "Analyzing channel distribution…",
+  "Reviewing inventory and sales data...",
+  "Drafting action plan...",
+  "Finalizing recommendations...",
+  "Modeling margin structure...",
+  "Analyzing channel distribution...",
 ];
 
 const ACKNOWLEDGE_MS = 400;
 const STEP_INTERVAL_MS = 500;
 const STATUS_ROTATE_MS = 2200;
 
+const CONSULTANT_THEME_STYLE: CSSProperties = {
+  ["--biz-text" as string]: "#f4f7fb",
+  ["--biz-muted" as string]: "rgba(226, 232, 240, 0.68)",
+  ["--biz-border" as string]: "rgba(148, 163, 184, 0.16)",
+  ["--biz-primary" as string]: "#63e6be",
+  ["--biz-warning" as string]: "#fbbf24",
+  ["--biz-surface" as string]: "rgba(255, 255, 255, 0.04)",
+  ["--biz-surface-soft" as string]: "rgba(15, 23, 42, 0.72)",
+  ["--surface" as string]: "rgba(255, 255, 255, 0.04)",
+};
+
+const glassPanelClass =
+  "rounded-[28px] border border-white/10 bg-white/[0.04] shadow-[0_30px_120px_rgba(0,0,0,0.45)] backdrop-blur-xl";
+
 function useReducedMotion(): boolean {
   const [reduced, setReduced] = useState(false);
+
   useEffect(() => {
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
     setReduced(mq.matches);
@@ -86,6 +112,7 @@ function useReducedMotion(): boolean {
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
   }, []);
+
   return reduced;
 }
 
@@ -107,6 +134,60 @@ function formatHeading(line: string): string {
   return line.replace(/^#{1,6}\s*/, "").replace(/AI Insights/gi, "Market Ideas").trim();
 }
 
+function formatReportTimestamp(value: string): string {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function formatContextMetric(
+  summary: Record<string, unknown> | null,
+  key: string,
+  suffix = ""
+): string | null {
+  if (!summary || typeof summary !== "object") return null;
+
+  const value = summary[key];
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const formatted = value.toLocaleString(undefined, {
+      maximumFractionDigits: suffix ? 1 : 0,
+    });
+    return `${formatted}${suffix}`;
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    return `${value}${suffix}`;
+  }
+
+  return null;
+}
+
+function buildSpeakableResponse(
+  report: BusinessConsultantReport | null,
+  rawText: string
+): string {
+  if (!report) return rawText;
+
+  const parts = [
+    report.report_title,
+    ...report.kpis.slice(0, 4).map((kpi) => `${kpi.label}: ${kpi.value}`),
+    ...report.recommended_actions
+      .slice(0, 3)
+      .map((action) => (action.impact ? `${action.action}. ${action.impact}` : action.action)),
+    ...report.notes.slice(0, 3),
+  ]
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  return parts.join(". ");
+}
+
 function ConsultantResponse({ text }: { text: string }) {
   const lines = text
     .replace(/\r\n/g, "\n")
@@ -121,7 +202,7 @@ function ConsultantResponse({ text }: { text: string }) {
     content.push(
       <ul
         key={`ul-${key++}`}
-        className="my-2 list-disc space-y-1 pl-5 text-[13px] leading-relaxed text-[var(--biz-text)]"
+        className="my-3 list-disc space-y-1.5 pl-5 text-sm leading-7 text-[var(--biz-text)]"
       >
         {bulletBuffer.map((item, i) => (
           <li key={`li-${key}-${i}`}>{renderInline(item, `li-${key}-${i}`)}</li>
@@ -143,7 +224,7 @@ function ConsultantResponse({ text }: { text: string }) {
       flushBullets();
       const heading = formatHeading(line);
       content.push(
-        <h3 key={`h-${key++}`} className="mt-4 text-base font-semibold text-white">
+        <h3 key={`h-${key++}`} className="mt-5 text-base font-semibold tracking-tight text-white">
           {heading}
         </h3>
       );
@@ -157,10 +238,7 @@ function ConsultantResponse({ text }: { text: string }) {
 
     flushBullets();
     content.push(
-      <p
-        key={`p-${key++}`}
-        className="my-1.5 text-[13px] leading-relaxed text-[var(--biz-text)]"
-      >
+      <p key={`p-${key++}`} className="my-2 text-sm leading-7 text-[var(--biz-text)]">
         {renderInline(line, `p-${key}`)}
       </p>
     );
@@ -169,11 +247,11 @@ function ConsultantResponse({ text }: { text: string }) {
   flushBullets();
 
   return (
-    <article className="rounded-md border border-[var(--biz-border)] bg-[var(--surface)] px-4 py-3 text-[13px] leading-relaxed">
+    <article className="rounded-[24px] border border-white/10 bg-white/[0.03] px-5 py-4">
       {content.length > 0 ? (
         content
       ) : (
-        <p className="text-xs text-[var(--biz-muted)]">No analysis text returned.</p>
+        <p className="text-sm text-[var(--biz-muted)]">No analysis text returned.</p>
       )}
     </article>
   );
@@ -189,21 +267,21 @@ function ConsultantWorkingPanel({
   reducedMotion: boolean;
 }) {
   return (
-    <div className="rounded-md border border-[var(--biz-border)] bg-[var(--surface)] px-3 py-3">
-      <div className="mb-3 flex items-center gap-2">
+    <div className="rounded-[24px] border border-white/10 bg-white/[0.03] px-4 py-4">
+      <div className="mb-4 flex items-center gap-2">
         <span
-          className={`h-2 w-2 shrink-0 rounded-full bg-[var(--biz-primary)] ${
+          className={`h-2.5 w-2.5 shrink-0 rounded-full bg-[var(--biz-primary)] ${
             reducedMotion ? "" : "animate-pulse motion-reduce:animate-none"
           }`}
           aria-hidden
         />
-        <span className="text-xs text-[var(--biz-muted)]">{statusLine}</span>
+        <span className="text-sm text-[var(--biz-muted)]">{statusLine}</span>
       </div>
-      <ul className="space-y-1.5" role="list" aria-label="Analysis in progress">
+      <ul className="space-y-2" role="list" aria-label="Analysis in progress">
         {steps.map((step, i) => (
           <li
             key={step.label}
-            className={`flex items-center gap-2 text-[11px] transition-opacity duration-200 ${
+            className={`flex items-center gap-2.5 text-xs transition-opacity duration-200 ${
               step.status === "queued"
                 ? "text-[var(--biz-muted)]"
                 : step.status === "working"
@@ -227,7 +305,7 @@ function ConsultantWorkingPanel({
               />
             ) : (
               <span
-                className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--biz-border)]"
+                className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-white/20"
                 aria-hidden
               />
             )}
@@ -237,18 +315,6 @@ function ConsultantWorkingPanel({
       </ul>
     </div>
   );
-}
-
-function formatReportTimestamp(value: string): string {
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value;
-  return d.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
 }
 
 function ConsultantReportView({
@@ -262,17 +328,19 @@ function ConsultantReportView({
 
   if (!report && !trimmed) {
     return (
-      <p className="text-xs text-[var(--biz-muted)]">
-        Run an analysis to see a structured report based on your inventory and sales data.
-      </p>
+      <div className="rounded-[24px] border border-dashed border-white/10 bg-white/[0.02] px-5 py-10 text-center">
+        <p className="text-sm text-[var(--biz-muted)]">
+          Run an analysis to see a structured report based on your inventory and sales data.
+        </p>
+      </div>
     );
   }
 
   if (!report) {
     return (
       <div className="space-y-3">
-        <p className="text-xs text-[var(--biz-muted)]">
-          Output could not be fully structured. Showing formatted text instead.
+        <p className="text-xs uppercase tracking-[0.18em] text-[var(--biz-muted)]">
+          Showing formatted text output
         </p>
         <ConsultantResponse text={trimmed} />
       </div>
@@ -284,79 +352,76 @@ function ConsultantReportView({
   const hasNotes = report.notes.length > 0;
 
   return (
-    <div className="space-y-5">
-      {/* Report header */}
+    <div className="space-y-6">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold text-[var(--biz-text)]">
+          <h3 className="text-lg font-semibold tracking-tight text-[var(--biz-text)]">
             {report.report_title || "Business Consultant Report"}
           </h3>
-          <p className="mt-0.5 text-xs text-[var(--biz-muted)]">
+          <p className="mt-1 text-sm text-[var(--biz-muted)]">
             {formatReportTimestamp(report.timestamp)}
           </p>
         </div>
-        <div className="flex flex-wrap gap-1.5 text-[10px]">
-          <span className="inline-flex items-center gap-1 rounded-full border border-[var(--biz-border)] bg-[var(--surface)] px-2 py-0.5 text-[var(--biz-muted)]">
+        <div className="flex flex-wrap gap-2 text-[11px]">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[var(--biz-muted)]">
             <span className="h-1.5 w-1.5 rounded-full bg-[var(--biz-primary)]" />
             Inventory {report.data_coverage.inventory_count.toLocaleString()}
           </span>
-          <span className="inline-flex items-center gap-1 rounded-full border border-[var(--biz-border)] bg-[var(--surface)] px-2 py-0.5 text-[var(--biz-muted)]">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[var(--biz-muted)]">
             <span className="h-1.5 w-1.5 rounded-full bg-[var(--biz-primary)]" />
             Sales {report.data_coverage.sales_count.toLocaleString()}
           </span>
           {report.data_coverage.missing.length > 0 && (
-            <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-[var(--biz-warning)]">
-              Missing data: {report.data_coverage.missing.join(", ")}
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-1 text-amber-100">
+              Missing: {report.data_coverage.missing.join(", ")}
             </span>
           )}
         </div>
       </header>
 
-      {/* KPI strip */}
       {report.kpis.length > 0 && (
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {report.kpis.map((kpi) => (
             <div
               key={kpi.label}
-              className="rounded-md border border-[var(--biz-border)] bg-[var(--biz-surface)] px-3 py-2"
+              className="rounded-[22px] border border-white/10 bg-white/[0.03] px-4 py-3"
             >
-              <p className="text-[10px] font-medium uppercase tracking-normal text-[var(--biz-muted)]">
+              <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--biz-muted)]">
                 {kpi.label}
               </p>
-              <p className="mt-1 text-sm font-semibold tabular-nums text-[var(--biz-text)]">
+              <p className="mt-2 text-lg font-semibold tracking-tight text-[var(--biz-text)]">
                 {kpi.value}
               </p>
               {kpi.hint && (
-                <p className="mt-0.5 text-[10px] text-[var(--biz-muted)]">{kpi.hint}</p>
+                <p className="mt-1 text-xs leading-5 text-[var(--biz-muted)]">{kpi.hint}</p>
               )}
             </div>
           ))}
         </div>
       )}
 
-      {/* High risk positions */}
       {hasHighRisk && (
-        <section>
-          <h4 className="mb-2 text-xs font-semibold uppercase tracking-normal text-[var(--biz-muted)]">
+        <section className="space-y-3">
+          <h4 className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--biz-muted)]">
             High-Risk Positions
           </h4>
-          <div className="overflow-hidden rounded-md border border-[var(--biz-border)] bg-[var(--surface)]">
-            <div className="grid grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.9fr)] gap-x-3 border-b border-[var(--biz-border)] bg-[var(--biz-surface)] px-3 py-1.5 text-[10px] font-medium uppercase tracking-normal text-[var(--biz-muted)]">
+          <div className="overflow-hidden rounded-[24px] border border-white/10 bg-slate-950/40">
+            <div className="grid grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.9fr)] gap-x-3 border-b border-white/10 px-4 py-2 text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--biz-muted)]">
               <span>Item</span>
               <span className="text-right">Cost Basis</span>
               <span className="text-right">CMV</span>
-              <span className="text-right">Δ %</span>
+              <span className="text-right">Delta</span>
             </div>
-            <div className="divide-y divide-[var(--biz-border)] text-xs">
+            <div className="divide-y divide-white/10 text-sm">
               {report.high_risk_positions.map((pos) => (
                 <div
                   key={`${pos.item}-${pos.reason}`}
-                  className="grid grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.9fr)] gap-x-3 px-3 py-1.5 align-middle"
+                  className="grid grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.9fr)] gap-x-3 px-4 py-3"
                 >
                   <div className="min-w-0">
                     <p className="truncate text-[var(--biz-text)]">{pos.item}</p>
                     {pos.reason && (
-                      <p className="mt-0.5 text-[10px] text-[var(--biz-muted)]">{pos.reason}</p>
+                      <p className="mt-1 text-xs leading-5 text-[var(--biz-muted)]">{pos.reason}</p>
                     )}
                   </div>
                   <div className="text-right tabular-nums text-[var(--biz-text)]">
@@ -367,7 +432,7 @@ function ConsultantReportView({
                   <div className="text-right tabular-nums text-[var(--biz-text)]">
                     {pos.cmv.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                   </div>
-                  <div className="text-right tabular-nums text-[var(--biz-warning)]">
+                  <div className="text-right tabular-nums text-amber-200">
                     {pos.delta_pct.toFixed(1)}%
                   </div>
                 </div>
@@ -377,27 +442,26 @@ function ConsultantReportView({
         </section>
       )}
 
-      {/* Recommended actions */}
       {hasActions && (
-        <section>
-          <h4 className="mb-2 text-xs font-semibold uppercase tracking-normal text-[var(--biz-muted)]">
+        <section className="space-y-3">
+          <h4 className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--biz-muted)]">
             Recommended Actions
           </h4>
-          <ul className="space-y-1.5 text-[13px] leading-relaxed text-[var(--biz-text)]">
+          <ul className="space-y-2.5 text-sm leading-7 text-[var(--biz-text)]">
             {report.recommended_actions.map((act, idx) => (
               <li
                 key={`${act.action}-${idx}`}
-                className="rounded-md border border-[var(--biz-border)] bg-[var(--surface)] px-3 py-2"
+                className="rounded-[22px] border border-white/10 bg-white/[0.03] px-4 py-3"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-xs font-semibold text-[var(--biz-text)]">{act.action}</p>
+                    <p className="font-semibold text-[var(--biz-text)]">{act.action}</p>
                     {act.impact && (
-                      <p className="mt-0.5 text-[11px] text-[var(--biz-muted)]">{act.impact}</p>
+                      <p className="mt-1 text-sm leading-6 text-[var(--biz-muted)]">{act.impact}</p>
                     )}
                   </div>
-                  <span className="shrink-0 rounded-full border border-[var(--biz-border)] bg-[var(--biz-surface)] px-2 py-0.5 text-[10px] capitalize text-[var(--biz-muted)]">
-                    Effort: {act.effort}
+                  <span className="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-[var(--biz-muted)]">
+                    {act.effort}
                   </span>
                 </div>
               </li>
@@ -406,15 +470,19 @@ function ConsultantReportView({
         </section>
       )}
 
-      {/* Notes */}
       {hasNotes && (
-        <section>
-          <h4 className="mb-2 text-xs font-semibold uppercase tracking-normal text-[var(--biz-muted)]">
+        <section className="space-y-3">
+          <h4 className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--biz-muted)]">
             Notes
           </h4>
-          <ul className="list-disc space-y-1.5 pl-4 text-[13px] leading-relaxed text-[var(--biz-text)]">
+          <ul className="space-y-2.5 text-sm leading-7 text-[var(--biz-text)]">
             {report.notes.map((note, idx) => (
-              <li key={idx}>{note}</li>
+              <li
+                key={idx}
+                className="rounded-[22px] border border-white/10 bg-white/[0.03] px-4 py-3"
+              >
+                {note}
+              </li>
             ))}
           </ul>
         </section>
@@ -425,9 +493,8 @@ function ConsultantReportView({
 
 export default function BusinessConsultantPanel() {
   const [prompt, setPrompt] = useState("");
-  const [selectedTemplateId, setSelectedTemplateId] = useState<(typeof TEMPLATES)[number]["id"] | "custom">(
-    "inventory_strategy"
-  );
+  const [submittedPrompt, setSubmittedPrompt] = useState("");
+  const [selectedTemplateId, setSelectedTemplateId] = useState<TemplateId>("custom");
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [advancedContext, setAdvancedContext] = useState("");
   const [report, setReport] = useState<BusinessConsultantReport | null>(null);
@@ -444,9 +511,11 @@ export default function BusinessConsultantPanel() {
   const statusIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const acknowledgeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const transcriptEndRef = useRef<HTMLDivElement | null>(null);
   const reducedMotion = useReducedMotion();
 
   const steps: { label: string; status: StepStatus }[] = CONSULTANT_STEPS.map((label, i) => {
+    if (phase === "acknowledge") return { label, status: "queued" as StepStatus };
     if (i < stepIndex) return { label, status: "completed" as StepStatus };
     if (i === stepIndex && phase === "working") return { label, status: "working" as StepStatus };
     return { label, status: "queued" as StepStatus };
@@ -485,30 +554,39 @@ export default function BusinessConsultantPanel() {
   const handleLoadConsultation = useCallback(
     (consultation: BusinessConsultation) => {
       if (!consultation) return;
+
       clearTimers();
+      const parsed = parseBusinessConsultantReport(consultation.response);
+
       setError(null);
       setHistoryNotice(null);
       setActiveConsultationId(consultation.id);
-      setPrompt(consultation.prompt);
-      setResponse(consultation.response);
+      setSubmittedPrompt(consultation.prompt);
+      setPrompt("");
+      setAdvancedContext("");
+      setAdvancedOpen(false);
+      setSelectedTemplateId("custom");
+      setReport(parsed.report);
+      setResponse(parsed.rawText || consultation.response);
       setStepIndex(CONSULTANT_STEPS.length);
       setStatusLineIndex(0);
       setPhase("deliverable");
-      if (textareaRef.current) {
-        textareaRef.current.value = consultation.prompt;
-      }
+      textareaRef.current?.focus();
     },
     [clearTimers]
   );
 
-  const handleRunConsultation = async () => {
-    const value = textareaRef.current?.value?.trim() ?? prompt.trim();
+  const handleRunConsultation = useCallback(async () => {
+    const value = prompt.trim();
     if (!value || (phase !== "idle" && phase !== "deliverable")) return;
 
     setError(null);
     setHistoryNotice(null);
+    setActiveConsultationId(null);
+    setSubmittedPrompt(value);
+    setPrompt("");
     setResponse("");
-    setPrompt(value);
+    setReport(null);
     setStepIndex(0);
     setStatusLineIndex(0);
     setPhase("acknowledge");
@@ -539,7 +617,11 @@ export default function BusinessConsultantPanel() {
       const res = await fetch("/api/business/consultant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: value }),
+        body: JSON.stringify({
+          prompt: value,
+          context: advancedContext.trim() || null,
+          template_key: selectedTemplateId === "custom" ? null : selectedTemplateId,
+        }),
       });
       const data = await res.json();
 
@@ -547,10 +629,14 @@ export default function BusinessConsultantPanel() {
         throw new Error(data?.message || data?.error || "Consultation failed");
       }
 
+      const parsed = parseBusinessConsultantReport(data.response || "");
+
       clearTimers();
       setStepIndex(CONSULTANT_STEPS.length);
       setResponse(data.response || "");
+      setReport((data?.report as BusinessConsultantReport | null) ?? parsed.report);
       setPhase("deliverable");
+
       if (data?.saved === false) {
         setHistoryNotice(
           data?.saveWarning || "Analysis generated. History is temporarily unavailable for this run."
@@ -569,10 +655,12 @@ export default function BusinessConsultantPanel() {
       }
     } catch (err) {
       clearTimers();
+      setPrompt(value);
+      setReport(null);
       setError(err instanceof Error ? err.message : "Consultation request failed");
       setPhase("idle");
     }
-  };
+  }, [advancedContext, clearTimers, phase, prompt, selectedTemplateId]);
 
   useEffect(() => {
     void loadConsultations();
@@ -581,6 +669,21 @@ export default function BusinessConsultantPanel() {
   useEffect(() => () => clearTimers(), [clearTimers]);
 
   const isWorking = phase === "acknowledge" || phase === "working";
+  const hasTranscript = Boolean(submittedPrompt || response.trim() || error || isWorking || report);
+  const statusLine =
+    phase === "acknowledge"
+      ? "Checking your inventory and sales context..."
+      : WORKING_STATUS_LINES[statusLineIndex];
+  const speakableResponse = buildSpeakableResponse(report, response);
+
+  useEffect(() => {
+    if (!hasTranscript) return;
+    transcriptEndRef.current?.scrollIntoView({
+      behavior: reducedMotion ? "auto" : "smooth",
+      block: "end",
+    });
+  }, [error, hasTranscript, historyNotice, reducedMotion, report, response, submittedPrompt, phase]);
+
   const formatHistoryTime = (dateStr: string): string => {
     const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
     if (seconds < 60) return "just now";
@@ -591,155 +694,333 @@ export default function BusinessConsultantPanel() {
   };
 
   return (
-    <section className="relative z-20 mt-3 rounded-lg border border-gray-800 bg-gray-900/80">
-      <div className="border-b border-gray-800 px-3 py-2">
-        <div>
-          <h2 className="text-sm font-semibold text-white">{CONSULTANT_COPY.title}</h2>
-          <p className="text-xs text-gray-400">{CONSULTANT_COPY.subtitle}</p>
-        </div>
-      </div>
-
-      <div className="space-y-2 p-3">
-        <div className="text-[11px] text-gray-500">{CONSULTANT_COPY.helper}</div>
-
-        <div className="flex flex-wrap gap-1.5">
-          {CONSULTANT_COPY.promptSuggestions.map((suggestion) => (
-            <button
-              key={suggestion}
-              onClick={() => {
-                setActiveConsultationId(null);
-                setPrompt(suggestion);
-                if (textareaRef.current) textareaRef.current.value = suggestion;
-              }}
-              disabled={isWorking}
-              className="rounded border border-gray-800 bg-gray-950/50 px-2 py-1 text-[10px] text-gray-300 transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {suggestion}
-            </button>
-          ))}
-        </div>
-
-        <div className="rounded-md border border-gray-800 bg-gray-950/40 px-2.5 py-2">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <p className="text-[11px] font-medium text-gray-300">Saved Consultations</p>
-            <button
-              type="button"
-              onClick={() => void loadConsultations()}
-              disabled={historyLoading || isWorking}
-              className="rounded border border-gray-700 px-1.5 py-0.5 text-[10px] text-gray-300 hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {historyLoading ? "Loading..." : "Refresh"}
-            </button>
+    <section
+      className="relative z-10 flex min-h-[calc(100vh-8rem)] flex-col pb-10 lg:min-h-[calc(100vh-5rem)]"
+      style={CONSULTANT_THEME_STYLE}
+    >
+      <header className="mx-auto w-full max-w-5xl pt-2 md:pt-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-3xl">
+            <span className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-medium uppercase tracking-[0.2em] text-slate-300">
+              {CONSULTANT_COPY.eyebrow}
+            </span>
+            <h1 className="mt-4 text-3xl font-semibold tracking-[-0.04em] text-white sm:text-4xl">
+              {CONSULTANT_COPY.title}
+            </h1>
+            <p className="mt-3 text-sm leading-7 text-slate-400">{CONSULTANT_COPY.subtitle}</p>
           </div>
 
-          {historyLoading ? (
-            <p className="text-[11px] text-gray-500">Loading saved consultations...</p>
-          ) : consultations.length === 0 ? (
-            <p className="text-[11px] text-gray-500">
-              No saved consultations yet. Your completed analyses will appear here.
+          <div className="flex flex-wrap gap-2">
+            {CAPABILITY_PILLS.map((pill) => (
+              <span
+                key={pill}
+                className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs text-slate-300"
+              >
+                {pill}
+              </span>
+            ))}
+          </div>
+        </div>
+      </header>
+
+      <div className="mx-auto mt-5 w-full max-w-5xl space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-slate-500">
+              Recent analyses
             </p>
-          ) : (
-            <div className="max-h-36 space-y-1 overflow-y-auto pr-1">
-              {consultations.map((consultation) => (
+            <p className="mt-1 text-sm text-slate-400">
+              Reload any prior pricing or liquidity readout without leaving the thread.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void loadConsultations()}
+            disabled={historyLoading || isWorking}
+            className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] font-medium text-slate-300 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {historyLoading ? "Loading..." : "Refresh"}
+          </button>
+        </div>
+
+        {historyLoading ? (
+          <div className="rounded-[22px] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-slate-500">
+            Loading saved consultations...
+          </div>
+        ) : consultations.length > 0 ? (
+          <div className="flex gap-3 overflow-x-auto pb-1">
+            {consultations.map((consultation) => {
+              const inventoryItems = formatContextMetric(
+                consultation.context_summary,
+                "inventoryItems"
+              );
+              const totalSales = formatContextMetric(consultation.context_summary, "totalSales");
+              const coverage = formatContextMetric(
+                consultation.context_summary,
+                "cmvCoveragePct",
+                "%"
+              );
+
+              return (
                 <button
                   key={consultation.id}
                   type="button"
                   onClick={() => handleLoadConsultation(consultation)}
                   disabled={isWorking}
-                  className={`w-full rounded border px-2 py-1.5 text-left transition-colors ${
+                  className={`min-w-[250px] rounded-[22px] border px-4 py-3 text-left transition ${
                     consultation.id === activeConsultationId
-                      ? "border-emerald-700/60 bg-emerald-900/20"
-                      : "border-gray-800 bg-gray-950/40 hover:bg-gray-900"
+                      ? "border-emerald-300/25 bg-emerald-300/10"
+                      : "border-white/10 bg-white/[0.03] hover:bg-white/[0.07]"
                   } disabled:cursor-not-allowed disabled:opacity-50`}
                 >
-                  <p className="truncate text-xs text-gray-200">{consultation.title}</p>
-                  <p className="mt-0.5 text-[10px] text-gray-500">
-                    {formatHistoryTime(consultation.updated_at)}
-                  </p>
+                  <p className="truncate text-sm font-medium text-slate-100">{consultation.title}</p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                    <span>{formatHistoryTime(consultation.updated_at)}</span>
+                    {inventoryItems && (
+                      <span className="rounded-full border border-white/10 px-2 py-0.5 text-slate-400">
+                        Inv {inventoryItems}
+                      </span>
+                    )}
+                    {totalSales && (
+                      <span className="rounded-full border border-white/10 px-2 py-0.5 text-slate-400">
+                        Sales {totalSales}
+                      </span>
+                    )}
+                    {coverage && (
+                      <span className="rounded-full border border-white/10 px-2 py-0.5 text-slate-400">
+                        CMV {coverage}
+                      </span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="mx-auto mt-6 w-full max-w-4xl flex-1 pb-40 lg:pb-36">
+        {hasTranscript ? (
+          <div className="space-y-5">
+            {submittedPrompt && (
+              <div className="ml-auto max-w-3xl rounded-[28px] border border-emerald-300/20 bg-emerald-300/10 px-5 py-4">
+                <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-emerald-100/80">
+                  You asked
+                </p>
+                <p className="mt-2 text-sm leading-7 text-emerald-50">{submittedPrompt}</p>
+              </div>
+            )}
+
+            {historyNotice && (
+              <div className="max-w-3xl rounded-[24px] border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-sm text-amber-100">
+                {historyNotice}
+              </div>
+            )}
+
+            <div className={`${glassPanelClass} max-w-4xl p-5 sm:p-6`}>
+              <div className="mb-5 flex items-start justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full border border-emerald-300/20 bg-emerald-300/10 text-sm font-semibold text-emerald-100">
+                    BC
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-slate-500">
+                      Consultant
+                    </p>
+                    <h2 className="mt-1 text-base font-semibold text-white">
+                      Business operator readout
+                    </h2>
+                  </div>
+                </div>
+
+                {response.trim().length > 0 && (
+                  <SpeakButton
+                    text={speakableResponse}
+                    size="sm"
+                    className="bg-white/[0.06] text-slate-200 hover:bg-white/[0.1]"
+                  />
+                )}
+              </div>
+
+              {error ? (
+                <div className="rounded-[20px] border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-100">
+                  {error}
+                </div>
+              ) : isWorking ? (
+                <ConsultantWorkingPanel
+                  steps={steps}
+                  statusLine={statusLine}
+                  reducedMotion={reducedMotion}
+                />
+              ) : (
+                <ConsultantReportView report={report} rawText={response} />
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="flex min-h-[44vh] flex-col items-center justify-center text-center">
+            <span className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-medium uppercase tracking-[0.2em] text-slate-300">
+              Start Here
+            </span>
+            <h2 className="mt-5 text-3xl font-semibold tracking-[-0.04em] text-white">
+              Ask a business question and let the agent write the operator memo.
+            </h2>
+            <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-400">
+              {CONSULTANT_COPY.helper}
+            </p>
+
+            <div className="mt-8 grid w-full max-w-4xl gap-3 md:grid-cols-2">
+              {TEMPLATES.map((template) => (
+                <button
+                  key={template.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedTemplateId(template.id);
+                    setPrompt(template.example);
+                    textareaRef.current?.focus();
+                  }}
+                  className="rounded-[24px] border border-white/10 bg-white/[0.03] px-5 py-4 text-left transition hover:bg-white/[0.07]"
+                >
+                  <p className="text-sm font-semibold text-white">{template.label}</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-400">{template.example}</p>
                 </button>
               ))}
             </div>
-          )}
-        </div>
-
-        {historyNotice && (
-          <div className="rounded-md border border-amber-700/40 bg-amber-950/20 px-2.5 py-2 text-xs text-amber-200">
-            {historyNotice}
           </div>
         )}
+        <div ref={transcriptEndRef} />
+      </div>
 
-        <textarea
-          ref={textareaRef}
-          defaultValue=""
-          onChange={(e) => {
-            setActiveConsultationId(null);
-            setPrompt(e.target.value);
-          }}
-          placeholder={CONSULTANT_COPY.placeholder}
-          rows={4}
-          disabled={isWorking}
-          id="consultant-prompt-input"
-          aria-label="Business decision prompt"
-          autoComplete="off"
-          className="relative z-20 w-full rounded-md border border-gray-800 bg-gray-950 px-2.5 py-2 text-sm text-gray-100 placeholder:text-gray-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:opacity-70 disabled:cursor-not-allowed"
-        />
+      <div className="sticky bottom-24 z-20 mt-auto pt-4 lg:bottom-6">
+        <div className={`${glassPanelClass} mx-auto w-full max-w-4xl p-3 sm:p-4`}>
+          <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
+            {TEMPLATES.map((template) => {
+              const isActive = selectedTemplateId === template.id;
+              return (
+                <button
+                  key={template.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedTemplateId(template.id);
+                    setPrompt(template.example);
+                    textareaRef.current?.focus();
+                  }}
+                  disabled={isWorking}
+                  className={`shrink-0 rounded-full border px-4 py-2 text-xs font-medium transition ${
+                    isActive
+                      ? "border-emerald-300/30 bg-emerald-300/12 text-emerald-100"
+                      : "border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.08]"
+                  } disabled:cursor-not-allowed disabled:opacity-60`}
+                >
+                  {template.label}
+                </button>
+              );
+            })}
+          </div>
 
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <MicButton
-              onResult={(text) => {
+          <div className="rounded-[24px] border border-white/10 bg-[#040812]/80 backdrop-blur-md">
+            {advancedOpen && (
+              <div className="border-b border-white/10 px-5 py-4">
+                <label
+                  htmlFor="consultant-constraints-input"
+                  className="text-[11px] font-medium uppercase tracking-[0.2em] text-slate-400"
+                >
+                  Constraints / goals
+                </label>
+                <textarea
+                  id="consultant-constraints-input"
+                  value={advancedContext}
+                  onChange={(e) => setAdvancedContext(e.target.value)}
+                  rows={3}
+                  disabled={isWorking}
+                  placeholder="Example: Need cash in 21 days, avoid selling grails, target max 20 packages per week."
+                  className="mt-3 w-full resize-none rounded-[20px] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm leading-6 text-slate-100 placeholder:text-slate-500 focus:border-white/20 focus:outline-none disabled:cursor-not-allowed disabled:opacity-70"
+                />
+              </div>
+            )}
+
+            <textarea
+              ref={textareaRef}
+              value={prompt}
+              onChange={(e) => {
                 setActiveConsultationId(null);
-                setPrompt(text);
-                if (textareaRef.current) textareaRef.current.value = text;
+                setSelectedTemplateId("custom");
+                setPrompt(e.target.value);
               }}
-              size="sm"
+              onKeyDown={(e) => {
+                if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                  e.preventDefault();
+                  void handleRunConsultation();
+                }
+              }}
+              placeholder={CONSULTANT_COPY.placeholder}
+              rows={4}
+              disabled={isWorking}
+              id="consultant-prompt-input"
+              aria-label="Business decision prompt"
+              autoComplete="off"
+              className="min-h-[136px] w-full resize-none border-0 bg-transparent px-5 py-5 text-[15px] leading-7 text-slate-100 placeholder:text-slate-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-70"
             />
-            <p className="text-[11px] text-gray-500">
-              Consultant output is structured for decision-making, not conversation.
-            </p>
-          </div>
-          <button
-            onClick={handleRunConsultation}
-            disabled={isWorking || !prompt.trim()}
-            className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {phase === "acknowledge"
-              ? "Analyzing…"
-              : phase === "working"
-                ? "Working…"
-                : CONSULTANT_COPY.submitButton}
-          </button>
-        </div>
 
-        {phase === "acknowledge" && (
-          <p className="text-xs text-gray-400">
-            Got it — analyzing your business data…
-          </p>
-        )}
+            <div className="flex flex-col gap-4 border-t border-white/10 px-5 py-4 md:flex-row md:items-end md:justify-between">
+              <div className="flex flex-wrap items-center gap-3">
+                <MicButton
+                  onResult={(text) => {
+                    setActiveConsultationId(null);
+                    setSelectedTemplateId("custom");
+                    setPrompt(text);
+                    textareaRef.current?.focus();
+                  }}
+                  size="sm"
+                  className="bg-white/[0.06] text-slate-200 hover:bg-white/[0.1]"
+                />
+                <button
+                  type="button"
+                  onClick={() => setAdvancedOpen((prev) => !prev)}
+                  disabled={isWorking}
+                  className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs font-medium text-slate-300 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {advancedOpen ? "Hide constraints" : "Add constraints"}
+                </button>
+                <p className="text-xs leading-6 text-slate-500">
+                  Cleaner agent layout, same structured memo. Press Cmd/Ctrl + Enter to run.
+                </p>
+              </div>
 
-        {phase === "working" && (
-          <ConsultantWorkingPanel
-            steps={steps}
-            statusLine={WORKING_STATUS_LINES[statusLineIndex]}
-            reducedMotion={reducedMotion}
-          />
-        )}
-
-        {error && (
-          <div className="rounded-md border border-red-800 bg-red-950/30 px-2.5 py-2 text-xs text-red-300">
-            {error}
-          </div>
-        )}
-
-        {phase === "deliverable" && response.trim().length > 0 && (
-          <div>
-            <div className="mb-1.5 flex items-center justify-between">
-              <span className="text-[11px] text-gray-500">Analysis</span>
-              <SpeakButton text={response} size="sm" />
+              <button
+                type="button"
+                onClick={() => void handleRunConsultation()}
+                disabled={isWorking || !prompt.trim()}
+                className="inline-flex min-h-[44px] items-center justify-center rounded-full bg-emerald-400 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {phase === "acknowledge"
+                  ? "Analyzing..."
+                  : phase === "working"
+                    ? "Working..."
+                    : CONSULTANT_COPY.submitButton}
+              </button>
             </div>
-            <ConsultantResponse text={response} />
           </div>
-        )}
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            {CONSULTANT_COPY.promptSuggestions.slice(0, 5).map((suggestion) => (
+              <button
+                key={suggestion}
+                type="button"
+                onClick={() => {
+                  setActiveConsultationId(null);
+                  setSelectedTemplateId("custom");
+                  setPrompt(suggestion);
+                  textareaRef.current?.focus();
+                }}
+                disabled={isWorking}
+                className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-slate-300 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {suggestion}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
     </section>
   );

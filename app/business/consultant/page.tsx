@@ -14,6 +14,10 @@ export default function BusinessConsultantPage() {
   const [hasAccess, setHasAccess] = useState<boolean | null>(null);
   const [needsMigration, setNeedsMigration] = useState(false);
 
+  const shellClassName =
+    "relative min-h-screen overflow-hidden bg-[#080b11] text-slate-100";
+  const contentClassName = "relative mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-10";
+
   const loadAccess = useCallback(async () => {
     try {
       const res = await fetch("/api/business/inventory", { cache: "no-store" });
@@ -57,10 +61,15 @@ export default function BusinessConsultantPage() {
   if (loading) {
     return (
       <AuthenticatedLayout>
-        <main className="mx-auto max-w-4xl px-4 py-6">
-          <div className="space-y-3 animate-pulse">
-            <div className="h-8 w-64 rounded bg-gray-800" />
-            <div className="h-48 rounded-xl bg-gray-800" />
+        <main className={shellClassName}>
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(52,211,153,0.16),transparent_34%),radial-gradient(circle_at_82%_16%,rgba(96,165,250,0.12),transparent_28%),linear-gradient(180deg,#080b11_0%,#0b0f16_42%,#080b11_100%)]" />
+          <div className={contentClassName}>
+            <div className="mx-auto max-w-4xl space-y-4 animate-pulse">
+              <div className="mx-auto h-6 w-32 rounded-full bg-white/10" />
+              <div className="mx-auto h-14 w-96 max-w-full rounded-full bg-white/10" />
+              <div className="mx-auto h-6 w-[42rem] max-w-full rounded-full bg-white/5" />
+              <div className="h-80 rounded-[32px] border border-white/10 bg-white/[0.04]" />
+            </div>
           </div>
         </main>
       </AuthenticatedLayout>
@@ -70,8 +79,13 @@ export default function BusinessConsultantPage() {
   if (hasAccess === false) {
     return (
       <AuthenticatedLayout>
-        <main className="mx-auto max-w-4xl px-4 py-6">
-          <BusinessPaywall />
+        <main className={shellClassName}>
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(52,211,153,0.16),transparent_34%),radial-gradient(circle_at_82%_16%,rgba(96,165,250,0.12),transparent_28%),linear-gradient(180deg,#080b11_0%,#0b0f16_42%,#080b11_100%)]" />
+          <div className={contentClassName}>
+            <div className="mx-auto max-w-4xl">
+              <BusinessPaywall />
+            </div>
+          </div>
         </main>
       </AuthenticatedLayout>
     );
@@ -79,17 +93,22 @@ export default function BusinessConsultantPage() {
 
   return (
     <AuthenticatedLayout>
-      <main className="mx-auto max-w-4xl px-4 py-6">
-        {needsMigration ? (
-          <BusinessMigrationBanner
-            onRetry={() => {
-              setLoading(true);
-              loadAccess();
-            }}
-          />
-        ) : (
-          <BusinessConsultantPanel />
-        )}
+      <main className={shellClassName}>
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(52,211,153,0.16),transparent_34%),radial-gradient(circle_at_82%_16%,rgba(96,165,250,0.12),transparent_28%),linear-gradient(180deg,#080b11_0%,#0b0f16_42%,#080b11_100%)]" />
+        <div className={contentClassName}>
+          {needsMigration ? (
+            <div className="mx-auto max-w-4xl">
+              <BusinessMigrationBanner
+                onRetry={() => {
+                  setLoading(true);
+                  void loadAccess();
+                }}
+              />
+            </div>
+          ) : (
+            <BusinessConsultantPanel />
+          )}
+        </div>
       </main>
     </AuthenticatedLayout>
   );
