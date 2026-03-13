@@ -309,14 +309,49 @@ export default function DualCardUploader({
     [backFile, closeups.length, frontFile, validateFile]
   );
 
+  const handleBatchFiles = useCallback(
+    async (files: File[]) => {
+      if (files.length === 0) return;
+
+      const validated: File[] = [];
+      for (const file of files) {
+        const validationError = validateFile(file);
+        if (validationError) {
+          setError(validationError);
+          return;
+        }
+        validated.push(file);
+      }
+
+      let remaining = [...validated];
+
+      if (!frontFile && remaining.length > 0) {
+        const [first, ...rest] = remaining;
+        await handleFrontFile(first);
+        remaining = rest;
+      }
+
+      if (!backFile && remaining.length > 0) {
+        const [second, ...rest] = remaining;
+        await handleBackFile(second);
+        remaining = rest;
+      }
+
+      if (remaining.length > 0) {
+        await addCloseupFiles(remaining, "other");
+      }
+    },
+    [addCloseupFiles, backFile, frontFile, handleBackFile, handleFrontFile, validateFile]
+  );
+
   const handleCloseupDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault();
       setCloseupDragging(false);
       const files = Array.from(event.dataTransfer.files ?? []);
-      void addCloseupFiles(files, "other");
+      void handleBatchFiles(files);
     },
-    [addCloseupFiles]
+    [handleBatchFiles]
   );
 
   const handleAnalyze = useCallback(async () => {
@@ -630,9 +665,11 @@ export default function DualCardUploader({
           }`}
         >
           <p className="text-sm font-medium text-slate-800">
-            Drag and drop close-up photos, or click to select
+            Drag and drop all photos (front, back, and close-ups), or click to select
           </p>
-          <p className="mt-1 text-xs text-slate-500">Tag each close-up as corners, edges, surface, or other.</p>
+          <p className="mt-1 text-xs text-slate-500">
+            We’ll auto-assign front and back; tag each close-up as corners, edges, surface, or other.
+          </p>
           <button
             type="button"
             disabled={Boolean(disabled) || closeupSlotsRemaining <= 0}

@@ -11,7 +11,7 @@ import CardScanSlot, { type SlotState } from "@/components/grading/CardScanSlot"
 const TIER_MAX_SLOTS: Record<string, number> = {
   free: 1,
   pro: 1,
-  business: 3,
+  business: 10,
 };
 
 // ── Logo ───────────────────────────────────────────────────────────────────
@@ -70,7 +70,7 @@ function ScanPageInner() {
   );
   const [activeSlots, setActiveSlots] = useState(requestedSlots);
   const [slotStates, setSlotStates] = useState<SlotState[]>(
-    Array.from({ length: 3 }, () => "idle" as SlotState)
+    Array.from({ length: TIER_MAX_SLOTS.business }, () => "idle" as SlotState)
   );
 
   useEffect(() => {
@@ -143,7 +143,7 @@ function ScanPageInner() {
           {maxSlots > 1 ? (
             <div className="flex shrink-0 items-center gap-1">
               <span className="mr-1 hidden text-[10px] text-white/25 sm:inline">Cards</span>
-              {[1, 2, 3].map((n) => (
+              {Array.from({ length: maxSlots }, (_, idx) => idx + 1).map((n) => (
                 <button
                   key={n}
                   onClick={() => setActiveSlots(n)}
@@ -208,7 +208,11 @@ function ScanPageInner() {
               Back to Hub
             </Link>
             <button
-              onClick={() => setSlotStates(Array.from({ length: 3 }, () => "idle" as SlotState))}
+              onClick={() =>
+                setSlotStates(
+                  Array.from({ length: TIER_MAX_SLOTS.business }, () => "idle" as SlotState)
+                )
+              }
               className="rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-900/40 transition-colors hover:bg-blue-500 active:scale-[0.97]"
             >
               New Session
