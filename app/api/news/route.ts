@@ -78,9 +78,17 @@ const RSS_SOURCES = [
     category: "industry" as NewsItem["category"],
   },
   {
+    // Beckett is primarily a pricing/valuation resource — market is the right home
     url: "https://www.beckett.com/news/feed/",
     source: "beckett",
     sourceLabel: "Beckett Media",
+    category: "market" as NewsItem["category"],
+  },
+  {
+    // PSA covers grading news, population reports, and authentication guides
+    url: "https://www.psacard.com/articles/rss",
+    source: "psa",
+    sourceLabel: "PSA",
     category: "grading" as NewsItem["category"],
   },
 ];

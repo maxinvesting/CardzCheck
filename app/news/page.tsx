@@ -46,6 +46,7 @@ const SOURCE_STYLE: Record<string, string> = {
   scd: "bg-sky-500/10 text-sky-300 border-sky-500/25",
   cbc: "bg-emerald-500/10 text-emerald-300 border-emerald-500/25",
   beckett: "bg-purple-500/10 text-purple-300 border-purple-500/25",
+  psa: "bg-red-500/10 text-red-300 border-red-500/25",
   cardzcheck: "bg-blue-500/10 text-blue-200 border-blue-500/25",
 };
 
@@ -223,6 +224,12 @@ export default function NewsPage() {
 
   const [lead, ...rest] = filtered;
 
+  // Filter announcements by category when a specific tab is active so that
+  // "CardzCheck" and "Business" tabs only show their matching announcements.
+  const filteredAnnouncements = activeCategory === "all"
+    ? (data?.announcements ?? [])
+    : (data?.announcements ?? []).filter((item) => item.category === activeCategory);
+
   const visibleCategories: Category[] = ["all", "industry", "grading", "market", "platform"];
   if (data?.isBusiness) visibleCategories.push("business");
 
@@ -276,26 +283,26 @@ export default function NewsPage() {
         <div className="mx-auto max-w-4xl px-6 py-0">
 
           {/* ── Announcements ──────────────────────────────────────────── */}
-          {(data?.announcements?.length ?? 0) > 0 && (
+          {filteredAnnouncements.length > 0 && (
             <div className="mt-8 mb-2">
               <p className="mb-0 text-[11px] font-semibold uppercase tracking-widest text-[var(--biz-muted)]">
                 Announcements
               </p>
-              {data!.announcements.map((item, i) => (
+              {filteredAnnouncements.map((item, i) => (
                 <AnnouncementRow key={item.id} item={item} isFirst={i === 0} />
               ))}
             </div>
           )}
 
           {/* ── Divider before feed ─────────────────────────────────── */}
-          {(data?.announcements?.length ?? 0) > 0 && allFeed.length > 0 && (
+          {filteredAnnouncements.length > 0 && filtered.length > 0 && (
             <div className="my-4 h-px bg-[color:var(--biz-border)]" />
           )}
 
           {/* ── Feed section header ─────────────────────────────────── */}
-          {!loading && allFeed.length > 0 && (
+          {!loading && filtered.length > 0 && (
             <p className="mt-6 text-[11px] font-semibold uppercase tracking-widest text-[var(--biz-muted)]">
-              Industry news
+              {activeCategory === "all" ? "Latest news" : `${CATEGORY_LABELS[activeCategory]} news`}
             </p>
           )}
 
@@ -321,7 +328,7 @@ export default function NewsPage() {
           )}
 
           {/* ── Empty ─────────────────────────────────────────────────── */}
-          {!loading && !error && filtered.length === 0 && (
+          {!loading && !error && filtered.length === 0 && filteredAnnouncements.length === 0 && (
             <p className="mt-10 text-center text-sm text-[var(--biz-muted)]">
               No articles in this category right now.
             </p>
@@ -373,6 +380,15 @@ export default function NewsPage() {
                   className="underline-offset-2 hover:underline"
                 >
                   Beckett Media
+                </a>
+                ,&nbsp;
+                <a
+                  href="https://www.psacard.com/articles/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline-offset-2 hover:underline"
+                >
+                  PSA
                 </a>
                 , plus CardzCheck platform announcements.
               </p>
