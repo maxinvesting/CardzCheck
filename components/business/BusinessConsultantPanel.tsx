@@ -100,7 +100,7 @@ const CONSULTANT_THEME_STYLE: CSSProperties = {
 };
 
 const glassPanelClass =
-  "rounded-[28px] border border-white/10 bg-white/[0.04] shadow-[0_30px_120px_rgba(0,0,0,0.45)] backdrop-blur-xl";
+  "rounded-[24px] border border-white/10 bg-gradient-to-br from-white/[0.06] via-white/[0.04] to-white/[0.02] shadow-[0_24px_90px_rgba(0,0,0,0.42)] backdrop-blur-xl";
 
 function useReducedMotion(): boolean {
   const [reduced, setReduced] = useState(false);
@@ -670,6 +670,7 @@ export default function BusinessConsultantPanel() {
 
   const isWorking = phase === "acknowledge" || phase === "working";
   const hasTranscript = Boolean(submittedPrompt || response.trim() || error || isWorking || report);
+  const isIdleState = !hasTranscript;
   const statusLine =
     phase === "acknowledge"
       ? "Checking your inventory and sales context..."
@@ -695,19 +696,31 @@ export default function BusinessConsultantPanel() {
 
   return (
     <section
-      className="relative z-10 flex min-h-[calc(100vh-8rem)] flex-col pb-10 lg:min-h-[calc(100vh-5rem)]"
+      className={`relative z-10 flex flex-col ${
+        isIdleState
+          ? "min-h-[calc(100vh-7rem)] pb-4 lg:min-h-[calc(100vh-4.6rem)]"
+          : "min-h-[calc(100vh-8rem)] pb-8 lg:min-h-[calc(100vh-5rem)]"
+      }`}
       style={CONSULTANT_THEME_STYLE}
     >
-      <header className="mx-auto w-full max-w-5xl pt-2 md:pt-6">
+      <header
+        className={`mx-auto w-full max-w-5xl ${
+          isIdleState ? "pt-1 md:pt-3" : "pt-2 md:pt-6"
+        }`}
+      >
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-3xl">
             <span className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-medium uppercase tracking-[0.2em] text-slate-300">
               {CONSULTANT_COPY.eyebrow}
             </span>
-            <h1 className="mt-4 text-3xl font-semibold tracking-[-0.04em] text-white sm:text-4xl">
+            <h1
+              className={`font-semibold tracking-[-0.04em] text-white ${
+                isIdleState ? "mt-3 text-[2rem] sm:text-[2.6rem]" : "mt-4 text-3xl sm:text-4xl"
+              }`}
+            >
               {CONSULTANT_COPY.title}
             </h1>
-            <p className="mt-3 text-sm leading-7 text-slate-400">{CONSULTANT_COPY.subtitle}</p>
+            <p className="mt-2 text-sm leading-6 text-slate-400">{CONSULTANT_COPY.subtitle}</p>
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -723,13 +736,13 @@ export default function BusinessConsultantPanel() {
         </div>
       </header>
 
-      <div className="mx-auto mt-5 w-full max-w-5xl space-y-4">
+      <div className={`mx-auto w-full max-w-5xl space-y-3 ${isIdleState ? "mt-3" : "mt-5"}`}>
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-slate-500">
               Recent analyses
             </p>
-            <p className="mt-1 text-sm text-slate-400">
+            <p className="mt-1 text-sm leading-6 text-slate-400">
               Reload any prior pricing or liquidity readout without leaving the thread.
             </p>
           </div>
@@ -767,7 +780,7 @@ export default function BusinessConsultantPanel() {
                   type="button"
                   onClick={() => handleLoadConsultation(consultation)}
                   disabled={isWorking}
-                  className={`min-w-[250px] rounded-[22px] border px-4 py-3 text-left transition ${
+                  className={`min-w-[230px] rounded-[20px] border px-3.5 py-2.5 text-left transition ${
                     consultation.id === activeConsultationId
                       ? "border-emerald-300/25 bg-emerald-300/10"
                       : "border-white/10 bg-white/[0.03] hover:bg-white/[0.07]"
@@ -799,7 +812,11 @@ export default function BusinessConsultantPanel() {
         ) : null}
       </div>
 
-      <div className="mx-auto mt-6 w-full max-w-4xl flex-1 pb-40 lg:pb-36">
+      <div
+        className={`mx-auto w-full max-w-4xl flex-1 ${
+          isIdleState ? "mt-4 pb-24 lg:pb-20" : "mt-6 pb-32 lg:pb-28"
+        }`}
+      >
         {hasTranscript ? (
           <div className="space-y-5">
             {submittedPrompt && (
@@ -858,18 +875,18 @@ export default function BusinessConsultantPanel() {
             </div>
           </div>
         ) : (
-          <div className="flex min-h-[44vh] flex-col items-center justify-center text-center">
+          <div className="flex min-h-[28vh] flex-col items-center justify-center text-center md:min-h-[26vh]">
             <span className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-medium uppercase tracking-[0.2em] text-slate-300">
               Start Here
             </span>
-            <h2 className="mt-5 text-3xl font-semibold tracking-[-0.04em] text-white">
+            <h2 className="mt-4 text-2xl font-semibold tracking-[-0.04em] text-white sm:text-[2rem]">
               Ask a business question and let the agent write the operator memo.
             </h2>
-            <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-400">
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">
               {CONSULTANT_COPY.helper}
             </p>
 
-            <div className="mt-8 grid w-full max-w-4xl gap-3 md:grid-cols-2">
+            <div className="mt-5 grid w-full max-w-4xl gap-2.5 md:grid-cols-2">
               {TEMPLATES.map((template) => (
                 <button
                   key={template.id}
@@ -879,10 +896,10 @@ export default function BusinessConsultantPanel() {
                     setPrompt(template.example);
                     textareaRef.current?.focus();
                   }}
-                  className="rounded-[24px] border border-white/10 bg-white/[0.03] px-5 py-4 text-left transition hover:bg-white/[0.07]"
+                  className="rounded-[20px] border border-white/10 bg-white/[0.03] px-4 py-3.5 text-left transition hover:bg-white/[0.07]"
                 >
                   <p className="text-sm font-semibold text-white">{template.label}</p>
-                  <p className="mt-2 text-sm leading-6 text-slate-400">{template.example}</p>
+                  <p className="mt-1.5 text-sm leading-6 text-slate-400">{template.example}</p>
                 </button>
               ))}
             </div>
@@ -891,9 +908,9 @@ export default function BusinessConsultantPanel() {
         <div ref={transcriptEndRef} />
       </div>
 
-      <div className="sticky bottom-24 z-20 mt-auto pt-4 lg:bottom-6">
+      <div className={`sticky z-20 mt-auto ${isIdleState ? "bottom-20 pt-3 lg:bottom-4" : "bottom-24 pt-4 lg:bottom-6"}`}>
         <div className={`${glassPanelClass} mx-auto w-full max-w-4xl p-3 sm:p-4`}>
-          <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
+          <div className="mb-2.5 flex gap-2 overflow-x-auto pb-1">
             {TEMPLATES.map((template) => {
               const isActive = selectedTemplateId === template.id;
               return (
@@ -906,7 +923,7 @@ export default function BusinessConsultantPanel() {
                     textareaRef.current?.focus();
                   }}
                   disabled={isWorking}
-                  className={`shrink-0 rounded-full border px-4 py-2 text-xs font-medium transition ${
+                  className={`shrink-0 rounded-full border px-3.5 py-1.5 text-xs font-medium transition ${
                     isActive
                       ? "border-emerald-300/30 bg-emerald-300/12 text-emerald-100"
                       : "border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.08]"
@@ -918,9 +935,9 @@ export default function BusinessConsultantPanel() {
             })}
           </div>
 
-          <div className="rounded-[24px] border border-white/10 bg-[#040812]/80 backdrop-blur-md">
+          <div className="rounded-[20px] border border-white/10 bg-[#040812]/80 backdrop-blur-md">
             {advancedOpen && (
-              <div className="border-b border-white/10 px-5 py-4">
+              <div className="border-b border-white/10 px-4 py-3.5">
                 <label
                   htmlFor="consultant-constraints-input"
                   className="text-[11px] font-medium uppercase tracking-[0.2em] text-slate-400"
@@ -934,7 +951,7 @@ export default function BusinessConsultantPanel() {
                   rows={3}
                   disabled={isWorking}
                   placeholder="Example: Need cash in 21 days, avoid selling grails, target max 20 packages per week."
-                  className="mt-3 w-full resize-none rounded-[20px] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm leading-6 text-slate-100 placeholder:text-slate-500 focus:border-white/20 focus:outline-none disabled:cursor-not-allowed disabled:opacity-70"
+                  className="mt-2.5 w-full resize-none rounded-[18px] border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm leading-6 text-slate-100 placeholder:text-slate-500 focus:border-white/20 focus:outline-none disabled:cursor-not-allowed disabled:opacity-70"
                 />
               </div>
             )}
@@ -954,15 +971,15 @@ export default function BusinessConsultantPanel() {
                 }
               }}
               placeholder={CONSULTANT_COPY.placeholder}
-              rows={4}
+              rows={3}
               disabled={isWorking}
               id="consultant-prompt-input"
               aria-label="Business decision prompt"
               autoComplete="off"
-              className="min-h-[136px] w-full resize-none border-0 bg-transparent px-5 py-5 text-[15px] leading-7 text-slate-100 placeholder:text-slate-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-70"
+              className="min-h-[110px] w-full resize-none border-0 bg-transparent px-4 py-4 text-[15px] leading-6 text-slate-100 placeholder:text-slate-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-70"
             />
 
-            <div className="flex flex-col gap-4 border-t border-white/10 px-5 py-4 md:flex-row md:items-end md:justify-between">
+            <div className="flex flex-col gap-3 border-t border-white/10 px-4 py-3.5 md:flex-row md:items-end md:justify-between">
               <div className="flex flex-wrap items-center gap-3">
                 <MicButton
                   onResult={(text) => {
@@ -982,7 +999,7 @@ export default function BusinessConsultantPanel() {
                 >
                   {advancedOpen ? "Hide constraints" : "Add constraints"}
                 </button>
-                <p className="text-xs leading-6 text-slate-500">
+                <p className="hidden text-xs leading-6 text-slate-500 lg:block">
                   Cleaner agent layout, same structured memo. Press Cmd/Ctrl + Enter to run.
                 </p>
               </div>
@@ -1002,8 +1019,8 @@ export default function BusinessConsultantPanel() {
             </div>
           </div>
 
-          <div className="mt-3 flex flex-wrap gap-2">
-            {CONSULTANT_COPY.promptSuggestions.slice(0, 5).map((suggestion) => (
+          <div className="mt-2.5 flex flex-wrap gap-2">
+            {CONSULTANT_COPY.promptSuggestions.slice(0, isIdleState ? 3 : 5).map((suggestion) => (
               <button
                 key={suggestion}
                 type="button"
@@ -1014,7 +1031,7 @@ export default function BusinessConsultantPanel() {
                   textareaRef.current?.focus();
                 }}
                 disabled={isWorking}
-                className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-slate-300 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs text-slate-300 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {suggestion}
               </button>
