@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import GradeEstimatorHistoryPanel from "@/components/grading/GradeEstimatorHistoryPanel";
 
@@ -185,11 +185,14 @@ export default function GradeHubPage() {
       .catch(() => {});
   }, []);
 
+  const pathname = usePathname();
+  const isBusinessContext = pathname?.startsWith("/business");
   const isBusiness = credits?.tier === "business";
   const isUnlimited = credits?.unlimited === true;
   const canScan = isUnlimited || (credits?.remaining ?? 0) > 0;
   const scanSlots = isBusiness ? 3 : 1;
-  const scanHref = `/grade-hub/scan?slots=${scanSlots}`;
+  const scanBase = isBusinessContext ? "/business/grade-hub/scan" : "/grade-hub/scan";
+  const scanHref = `${scanBase}?slots=${scanSlots}`;
 
   return (
     <div className="relative min-h-screen overflow-x-hidden" style={{ background: "#060a12" }}>
