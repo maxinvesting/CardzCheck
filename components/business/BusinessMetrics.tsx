@@ -8,106 +8,40 @@ function fmt(cents: number): string {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
-    minimumFractionDigits: 2,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
   }).format(cents / 100);
 }
 
-function cx(...classes: Array<string | false | null | undefined>): string {
-  return classes.filter(Boolean).join(" ");
+function fmtFull(cents: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+  }).format(cents / 100);
 }
 
 interface Props {
   metrics: Metrics | null;
   loading: boolean;
-  /** Filter-aware inventory value; when provided, shows Inventory Value card */
   inventorySummary?: InventoryValueSummary | null;
-  /** Total item count (all items) for "X of Y" when filtered */
   totalItemCount?: number;
-  /** Compact/dense layout (Business mode) */
   compact?: boolean;
 }
 
-interface MetricItem {
-  label: string;
-  value: string;
-  valueClass: string;
-  detail?: string;
-  secondaryDetail?: string;
-  emphasized?: boolean;
-}
-
-const KPI_STRIP_STYLE: CSSProperties = {
+const STRIP_STYLE: CSSProperties = {
   background:
-    "linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(249, 250, 251, 0.96) 100%)",
+    "linear-gradient(180deg, rgba(255,255,255,0.99) 0%, rgba(249,250,251,0.97) 100%)",
   border: "1px solid var(--biz-border)",
-  borderRadius: "18px",
+  borderRadius: "14px",
 };
 
-function metricDividerClasses(index: number): string {
-  return cx(
-    index >= 2 && "border-t",
-    index % 2 === 1 && "border-l",
-    index >= 3 ? "sm:border-t" : "sm:border-t-0",
-    index % 3 === 0 ? "sm:border-l-0" : "sm:border-l",
-    index >= 4 ? "md:border-t" : "md:border-t-0",
-    index % 4 === 0 ? "md:border-l-0" : "md:border-l",
-    "lg:border-t-0",
-    index === 0 ? "lg:border-l-0" : "lg:border-l"
-  );
-}
-
-function MetricCell({
-  item,
-  index,
-  loading,
-  compact,
-}: {
-  item: MetricItem;
-  index: number;
-  loading: boolean;
-  compact: boolean;
-}) {
-  return (
-    <div
-      className={cx(
-        "min-w-0 border-[color:var(--biz-border)]",
-        compact ? "px-4 py-4 sm:px-5" : "px-5 py-5",
-        "flex min-h-[104px] flex-col justify-between",
-        metricDividerClasses(index),
-        item.emphasized && "bg-white/55"
-      )}
-    >
-      <div className="space-y-2">
-        <p className="text-[10px] font-semibold uppercase leading-[1.15] tracking-[0.18em] text-[var(--biz-muted)]">
-          {item.label}
-        </p>
-        {loading ? (
-          <div className="h-10 w-24 animate-pulse rounded bg-[var(--biz-skeleton)]" />
-        ) : (
-          <p
-            className={cx(
-              "whitespace-nowrap text-[clamp(1.7rem,2.5vw,2.35rem)] font-semibold leading-none tracking-[-0.03em] tabular-nums",
-              item.valueClass,
-              item.emphasized && "text-[clamp(1.8rem,2.7vw,2.5rem)]"
-            )}
-          >
-            {item.value}
-          </p>
-        )}
-      </div>
-
-      {!loading && item.detail ? (
-        <div className="pt-2">
-          <p className="text-xs leading-tight text-[var(--biz-muted)]">{item.detail}</p>
-          {item.secondaryDetail ? (
-            <p className="pt-1 text-xs leading-tight text-[var(--biz-muted)]">
-              {item.secondaryDetail}
-            </p>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
-  );
+interface CellDef {
+  label: string;
+  primary: string;
+  secondary?: string;
+  primaryClass: string;
+  tag?: string;
 }
 
 export default function BusinessMetrics({
@@ -117,90 +51,107 @@ export default function BusinessMetrics({
   totalItemCount,
   compact = false,
 }: Props) {
-  const items: MetricItem[] = [
+  const cells: CellDef[] = [
     {
-      label: "Revenue MTD",
-      value: metrics ? fmt(metrics.revenueMtd) : "—",
-      valueClass: "text-[var(--biz-text)]",
+      label: "Revenue",
+      primary: metrics ? fmt(metrics.revenueMtd) : "—",
+      secondary: metrics ? `${fmt(metrics.revenueYtd)} YTD` : undefined,
+      primaryClass: "text-[var(--biz-text)]",
+      tag: "MTD",
     },
     {
-      label: "Revenue YTD",
-      value: metrics ? fmt(metrics.revenueYtd) : "—",
-      valueClass: "text-[var(--biz-text)]",
+      label: "Profit",
+      primary: metrics ? fmt(metrics.profitMtd) : "—",
+      secondary: metrics ? `${fmt(metrics.profitYtd)} YTD` : undefined,
+      primaryClass:
+        metrics && metrics.profitMtd >= 0 ? "text-emerald-600" : "text-red-500",
+      tag: "MTD",
     },
     {
-      label: "Profit MTD",
-      value: metrics ? fmt(metrics.profitMtd) : "—",
-      valueClass: metrics && metrics.profitMtd >= 0 ? "text-emerald-700" : "text-red-600",
-    },
-    {
-      label: "Profit YTD",
-      value: metrics ? fmt(metrics.profitYtd) : "—",
-      valueClass: metrics && metrics.profitYtd >= 0 ? "text-emerald-700" : "text-red-600",
-    },
-    {
-      label: "Sales MTD",
-      value: metrics ? String(metrics.salesCountMtd) : "—",
-      valueClass: "text-[var(--biz-text)]",
-    },
-    {
-      label: "Sales YTD",
-      value: metrics ? String(metrics.salesCountYtd) : "—",
-      valueClass: "text-[var(--biz-text)]",
+      label: "Sales",
+      primary: metrics ? String(metrics.salesCountMtd) : "—",
+      secondary: metrics ? `${metrics.salesCountYtd} YTD` : undefined,
+      primaryClass: "text-[var(--biz-text)]",
+      tag: "MTD",
     },
     {
       label: "Active Inventory",
-      value: metrics ? String(metrics.activeInventoryCount) : "—",
-      valueClass: "text-[var(--biz-text)]",
+      primary: metrics ? String(metrics.activeInventoryCount) : "—",
+      primaryClass: "text-[var(--biz-text)]",
     },
   ];
 
   if (inventorySummary) {
-    const itemCountLabel = `${inventorySummary.itemCount} item${inventorySummary.itemCount !== 1 ? "s" : ""}`;
-    const inventoryLabel =
-      totalItemCount != null && inventorySummary.itemCount !== totalItemCount
-        ? "Inventory Value (Filtered)"
-        : "Inventory Value";
-
-    items.push({
-      label: inventoryLabel,
-      value:
+    const isFiltered =
+      totalItemCount != null &&
+      inventorySummary.itemCount !== totalItemCount;
+    const hasCmv = inventorySummary.itemsWithCmv > 0;
+    cells.push({
+      label: isFiltered ? "Inventory Value (Filtered)" : "Inventory Value",
+      primary:
         inventorySummary.itemCount === 0
           ? fmt(0)
-          : inventorySummary.itemsWithCmv > 0
-            ? fmt(inventorySummary.totalCmvCents)
-            : fmt(inventorySummary.totalCostCents),
-      valueClass: "text-[var(--biz-text)]",
-      detail:
-        inventorySummary.itemsWithCmv > 0
-          ? `Est. Market Value · ${itemCountLabel}`
-          : `Cost Basis · ${itemCountLabel}`,
-      secondaryDetail:
-        inventorySummary.itemsWithCmv > 0 &&
-        inventorySummary.itemsWithCmv < inventorySummary.itemCount
-          ? `Cost: ${fmt(inventorySummary.totalCostCents)}`
-          : undefined,
-      emphasized: true,
+          : hasCmv
+          ? fmtFull(inventorySummary.totalCmvCents)
+          : fmtFull(inventorySummary.totalCostCents),
+      secondary: hasCmv
+        ? `Est. Market Value · ${inventorySummary.itemCount} item${inventorySummary.itemCount !== 1 ? "s" : ""}`
+        : `Cost Basis · ${inventorySummary.itemCount} item${inventorySummary.itemCount !== 1 ? "s" : ""}`,
+      primaryClass: "text-[var(--biz-text)]",
     });
   }
 
+  const colClass =
+    cells.length >= 5
+      ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-5"
+      : "grid-cols-2 sm:grid-cols-4";
+
   return (
-    <div className={compact ? "mb-3 md:mb-4" : "mb-5"}>
-      <div style={KPI_STRIP_STYLE} className="overflow-hidden">
-        <div
-          className={cx(
-            "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4",
-            items.length === 8 ? "lg:grid-cols-8" : "lg:grid-cols-7"
-          )}
-        >
-          {items.map((item, index) => (
-            <MetricCell
-              key={item.label}
-              item={item}
-              index={index}
-              loading={loading}
-              compact={compact}
-            />
+    <div className={compact ? "mb-2" : "mb-5"}>
+      <div style={STRIP_STYLE} className="overflow-hidden">
+        <div className={`grid ${colClass}`}>
+          {cells.map((cell, i) => (
+            <div
+              key={cell.label}
+              className={[
+                "flex flex-col justify-between gap-3",
+                compact ? "px-5 py-4" : "px-6 py-5",
+                "min-h-[92px] border-[color:var(--biz-border)]",
+                i > 0 ? "border-l" : "",
+                i >= 2 ? "border-t sm:border-t-0" : "",
+                cells.length >= 5 && i >= 3 ? "sm:border-t lg:border-t-0" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+            >
+              <div className="flex items-start justify-between gap-1">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--biz-muted)] leading-tight">
+                  {cell.label}
+                </p>
+                {cell.tag && (
+                  <span className="shrink-0 rounded bg-[var(--biz-border)] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[var(--biz-muted)]">
+                    {cell.tag}
+                  </span>
+                )}
+              </div>
+
+              {loading ? (
+                <div className="h-8 w-20 animate-pulse rounded-md bg-[var(--biz-skeleton)]" />
+              ) : (
+                <div>
+                  <p
+                    className={`text-2xl font-semibold tabular-nums leading-none tracking-tight ${cell.primaryClass}`}
+                  >
+                    {cell.primary}
+                  </p>
+                  {cell.secondary && (
+                    <p className="mt-1.5 text-[11px] text-[var(--biz-muted)] tabular-nums leading-tight">
+                      {cell.secondary}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
           ))}
         </div>
       </div>
