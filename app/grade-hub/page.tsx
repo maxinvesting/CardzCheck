@@ -188,8 +188,6 @@ export default function GradeHubPage() {
   const isBusiness = credits?.tier === "business";
   const isUnlimited = credits?.unlimited === true;
   const canScan = isUnlimited || (credits?.remaining ?? 0) > 0;
-  const scanSlots = isBusiness ? 3 : 1;
-  const scanHref = `/grade-hub/scan?slots=${scanSlots}`;
 
   return (
     <div className="relative min-h-screen overflow-x-hidden" style={{ background: "#060a12" }}>
@@ -245,13 +243,12 @@ export default function GradeHubPage() {
               <div className="flex flex-col items-center gap-3 sm:flex-row lg:items-start">
                 {canScan ? (
                   <Link
-                    href={scanHref}
+                    href="/grade-hub/scan?slots=1"
                     className="group relative inline-flex items-center gap-3 overflow-hidden rounded-2xl bg-blue-600 px-7 py-4 text-sm font-bold text-white shadow-2xl shadow-blue-900/50 transition-all duration-200 hover:bg-blue-500 hover:shadow-blue-800/60 active:scale-[0.97]"
                   >
-                    {/* scan line animation */}
                     <span className="pointer-events-none absolute inset-0 -translate-x-full animate-[shimmer_2.5s_infinite] bg-gradient-to-r from-transparent via-white/10 to-transparent" />
                     <ScanEngineLogo />
-                    <span className="text-[15px]">{isBusiness ? "Start Batch Session" : "Start New Scan"}</span>
+                    <span className="text-[15px]">Scan a Card</span>
                     <svg className="h-4 w-4 transition-transform duration-150 group-hover:translate-x-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                     </svg>
@@ -264,10 +261,16 @@ export default function GradeHubPage() {
                     Upgrade for unlimited scans
                   </Link>
                 )}
-                {isBusiness && (
-                  <p className="self-center text-[11px] text-white/25 lg:self-auto">
-                    Up to {scanSlots} cards at once
-                  </p>
+                {isBusiness && canScan && (
+                  <Link
+                    href="/grade-hub/scan?slots=3"
+                    className="inline-flex items-center gap-2 rounded-2xl border border-white/[0.10] bg-white/[0.04] px-5 py-4 text-sm font-semibold text-white/60 transition-all hover:border-white/20 hover:bg-white/[0.07] hover:text-white/80 active:scale-[0.97]"
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                    </svg>
+                    Batch (3 cards)
+                  </Link>
                 )}
               </div>
             </div>
@@ -318,7 +321,7 @@ export default function GradeHubPage() {
             <StatCard value="4" label="Attributes scored" sub="Centering · Corners · Edges · Surface" />
             <StatCard value="PSA & BGS" label="Grading scales" sub="Full probability distribution" />
             <StatCard value="&lt;60s" label="Average analysis time" sub="Async job processing" />
-            <StatCard value={isBusiness ? "3 cards" : "1 card"} label="Simultaneous scans" sub={isBusiness ? "Business plan" : "Upgrade for batch"} />
+            <StatCard value={isBusiness ? "3 cards" : "1 card"} label="Batch scan limit" sub={isBusiness ? "Business plan" : "Upgrade for batch"} />
           </div>
         </div>
       </section>
