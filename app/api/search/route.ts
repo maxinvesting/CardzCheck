@@ -3,9 +3,37 @@ import { createClient } from "@/lib/supabase/server";
 import { buildSearchQuery } from "@/lib/ebay";
 import { searchEbayDualSignal, buildSoldListingsUrl } from "@/lib/ebay/index";
 import { getMarketCmvForQuery } from "@/lib/market-discount";
+import { buildCompEvaluation, convertEvaluatedCompToApiComp } from "@/lib/comps/evaluation";
 import { LIMITS } from "@/types";
 import { isTestMode } from "@/lib/test-mode";
 import { logDebug } from "@/lib/logging";
+
+function median(sorted: number[]): number {
+  if (sorted.length === 0) return 0;
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 0) {
+    return (sorted[mid - 1] + sorted[mid]) / 2;
+  }
+  return sorted[mid] ?? 0;
+}
+
+function summarizeForSale(items: Array<{ price: number }>): {
+  count: number;
+  low: number;
+  median: number;
+  high: number;
+} {
+  if (!items.length) {
+    return { count: 0, low: 0, median: 0, high: 0 };
+  }
+  const prices = items.map((item) => item.price).sort((a, b) => a - b);
+  return {
+    count: items.length,
+    low: prices[0] ?? 0,
+    median: median(prices),
+    high: prices[prices.length - 1] ?? 0,
+  };
+}
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -141,6 +169,66 @@ export async function GET(request: NextRequest) {
       activeItemsOverride: result.forSale.items,
     });
 
+    const compEvaluation = buildCompEvaluation({
+      items: result.forSale.items,
+      query: {
+        player,
+        year,
+        set,
+        grade,
+        cardNumber,
+        parallelType,
+        serialNumber,
+        variation,
+        autograph,
+        relic,
+      },
+      passUsed: result.passUsed,
+      marketMethod: market.cmv.method,
+      soldCount: market.cmv.soldCount,
+    });
+
+    const includedEvaluatedComps = [
+      ...compEvaluation.exactComps,
+      ...compEvaluation.similarComps,
+      ...compEvaluation.supportComps,
+    ];
+    const includedForSaleItems = includedEvaluatedComps.map((comp) => comp.item);
+    const forSaleStats = summarizeForSale(includedForSaleItems);
+    const filteredForSale = {
+      ...result.forSale,
+      count: forSaleStats.count,
+      low: forSaleStats.low,
+      median: forSaleStats.median,
+      high: forSaleStats.high,
+      items: includedForSaleItems,
+    };
+    const fallbackCompMode =
+      (result.passUsed === "broad" || result.passUsed === "minimal") &&
+      market.cmv.method !== "sold_median";
+    const directionalMidpointFromEstimate =
+      result.estimatedSaleRange.pricingAvailable && result.estimatedSaleRange.estimatedSaleRange
+        ? Math.round(
+            ((result.estimatedSaleRange.estimatedSaleRange.low +
+              result.estimatedSaleRange.estimatedSaleRange.high) /
+              2) *
+              100
+          ) / 100
+        : null;
+    const directionalMidpoint =
+      compEvaluation.midpoint ?? directionalMidpointFromEstimate ?? null;
+    const combinedDisclaimers = Array.from(
+      new Set([
+        ...result.disclaimers,
+        ...compEvaluation.disclaimerMessages,
+        ...(fallbackCompMode
+          ? [
+              "Fallback search results were needed and are treated as directional support only.",
+            ]
+          : []),
+      ])
+    );
+
     // New format: Return full pricing response
     if (useNewFormat) {
       logDebug(
@@ -148,38 +236,77 @@ export async function GET(request: NextRequest) {
       );
       return NextResponse.json({
         ...result,
+        forSale: filteredForSale,
+        disclaimers: combinedDisclaimers,
         _marketDiscount: market.cmv,
+        _compEvaluation: {
+          exactComps: compEvaluation.exactComps.map(convertEvaluatedCompToApiComp),
+          similarComps: compEvaluation.similarComps.map(convertEvaluatedCompToApiComp),
+          supportComps: compEvaluation.supportComps.map(convertEvaluatedCompToApiComp),
+          rejectedComps: compEvaluation.rejectedComps.map(convertEvaluatedCompToApiComp),
+          confidenceScore: compEvaluation.confidenceScore,
+          confidenceBand: compEvaluation.confidenceBand,
+          confidenceExplanation: compEvaluation.confidenceExplanation,
+          valuationSource: compEvaluation.valuationSource,
+          usedCompCount: compEvaluation.usedCompCount,
+          exactCompCount: compEvaluation.exactCompCount,
+          similarCompCount: compEvaluation.similarCompCount,
+          supportCompCount: compEvaluation.supportCompCount,
+          rejectedCompCount: compEvaluation.rejectedCompCount,
+          spreadPct: compEvaluation.spreadPct,
+          rangeLow: compEvaluation.rangeLow,
+          rangeHigh: compEvaluation.rangeHigh,
+          midpoint: compEvaluation.midpoint,
+          disclaimerStates: compEvaluation.disclaimerStates,
+          disclaimerMessages: compEvaluation.disclaimerMessages,
+          includeReasonSummary: compEvaluation.includeReasonSummary,
+          excludeReasonSummary: compEvaluation.excludeReasonSummary,
+        },
       });
     }
 
     // Legacy format: Convert to old response shape
-    const comps = result.forSale.items.map(item => ({
-      title: item.title,
-      price: item.price,
-      date: new Date().toISOString().split("T")[0],
-      link: item.url,
-      image: item.image,
-      source: "ebay" as const,
-    }));
+    const comps = includedEvaluatedComps.map((comp) =>
+      convertEvaluatedCompToApiComp(comp)
+    );
 
     // Calculate CMV from sold-first/listing-adjusted discount model.
-    let cmv = market.cmv.cmv ?? result.forSale.median;
+    let cmv =
+      fallbackCompMode
+        ? null
+        : market.cmv.cmv ?? compEvaluation.midpoint ?? filteredForSale.median;
     let estimatedLow = 0;
     let estimatedHigh = 0;
 
-    if (market.cmv.rangeLow !== null && market.cmv.rangeHigh !== null) {
+    if (
+      !fallbackCompMode &&
+      market.cmv.rangeLow !== null &&
+      market.cmv.rangeHigh !== null
+    ) {
       estimatedLow = market.cmv.rangeLow;
       estimatedHigh = market.cmv.rangeHigh;
+    } else if (
+      compEvaluation.rangeLow !== null &&
+      compEvaluation.rangeHigh !== null
+    ) {
+      estimatedLow = compEvaluation.rangeLow;
+      estimatedHigh = compEvaluation.rangeHigh;
     } else if (result.estimatedSaleRange.pricingAvailable) {
       const { low, high } = result.estimatedSaleRange.estimatedSaleRange;
-      if (market.cmv.cmv === null) {
+      if (market.cmv.cmv === null && !fallbackCompMode) {
         cmv = Math.round(((low + high) / 2) * 100) / 100;
       }
       estimatedLow = low;
       estimatedHigh = high;
     }
 
-    const avg = result.forSale.count > 0
+    if (fallbackCompMode && directionalMidpoint !== null) {
+      cmv = null;
+      estimatedLow = compEvaluation.rangeLow ?? estimatedLow;
+      estimatedHigh = compEvaluation.rangeHigh ?? estimatedHigh;
+    }
+
+    const avg = filteredForSale.count > 0
       ? Math.round((comps.reduce((sum, c) => sum + c.price, 0) / comps.length) * 100) / 100
       : 0;
 
@@ -225,18 +352,41 @@ export async function GET(request: NextRequest) {
       stats: {
         cmv, // Estimated sale price (midpoint of range)
         avg,
-        low: result.forSale.low,
-        high: result.forSale.high,
-        count: result.forSale.count,
+        low: filteredForSale.low,
+        high: filteredForSale.high,
+        count: filteredForSale.count,
       },
       query,
       // New fields for frontend migration
-      _forSale: result.forSale,
+      _forSale: filteredForSale,
       _estimatedSaleRange: result.estimatedSaleRange,
-      _disclaimers: result.disclaimers,
+      _disclaimers: combinedDisclaimers,
       _passUsed: result.passUsed,
       _totalPasses: result.totalPasses,
       _marketDiscount: market.cmv,
+      _compEvaluation: {
+        exactComps: compEvaluation.exactComps.map(convertEvaluatedCompToApiComp),
+        similarComps: compEvaluation.similarComps.map(convertEvaluatedCompToApiComp),
+        supportComps: compEvaluation.supportComps.map(convertEvaluatedCompToApiComp),
+        rejectedComps: compEvaluation.rejectedComps.map(convertEvaluatedCompToApiComp),
+        confidenceScore: compEvaluation.confidenceScore,
+        confidenceBand: compEvaluation.confidenceBand,
+        confidenceExplanation: compEvaluation.confidenceExplanation,
+        valuationSource: compEvaluation.valuationSource,
+        usedCompCount: compEvaluation.usedCompCount,
+        exactCompCount: compEvaluation.exactCompCount,
+        similarCompCount: compEvaluation.similarCompCount,
+        supportCompCount: compEvaluation.supportCompCount,
+        rejectedCompCount: compEvaluation.rejectedCompCount,
+        spreadPct: compEvaluation.spreadPct,
+        rangeLow: compEvaluation.rangeLow,
+        rangeHigh: compEvaluation.rangeHigh,
+        midpoint: compEvaluation.midpoint,
+        disclaimerStates: compEvaluation.disclaimerStates,
+        disclaimerMessages: compEvaluation.disclaimerMessages,
+        includeReasonSummary: compEvaluation.includeReasonSummary,
+        excludeReasonSummary: compEvaluation.excludeReasonSummary,
+      },
     });
   } catch (error) {
     console.error("Search error:", error);

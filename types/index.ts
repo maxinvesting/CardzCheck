@@ -203,6 +203,16 @@ export interface Comp {
   link: string;
   image?: string;
   source: "ebay";
+  included?: boolean;
+  category?: "exact" | "similar" | "support" | "rejected";
+  include_reason_codes?: string[];
+  exclude_reason_codes?: string[];
+  include_reasons_text?: string[];
+  exclude_reasons_text?: string[];
+  match_confidence?: number;
+  identity_confidence?: number;
+  valuation_weight?: number;
+  quality_score?: number;
 }
 
 export interface CompsStats {
@@ -280,6 +290,33 @@ export interface SearchResult {
     expectedDiscountConfidence: "high" | "medium" | "low" | null;
     cardFingerprint: string;
     queryText: string;
+  };
+  _compEvaluation?: {
+    exactComps: Comp[];
+    similarComps: Comp[];
+    supportComps: Comp[];
+    rejectedComps: Comp[];
+    confidenceScore: number;
+    confidenceBand: "high" | "medium" | "low" | "very_low";
+    confidenceExplanation: string;
+    valuationSource:
+      | "exact_sold"
+      | "mixed_sold"
+      | "active_directional"
+      | "insufficient_exact_comps";
+    usedCompCount: number;
+    exactCompCount: number;
+    similarCompCount: number;
+    supportCompCount: number;
+    rejectedCompCount: number;
+    spreadPct: number | null;
+    rangeLow: number | null;
+    rangeHigh: number | null;
+    midpoint: number | null;
+    disclaimerStates: string[];
+    disclaimerMessages: string[];
+    includeReasonSummary: string[];
+    excludeReasonSummary: string[];
   };
 }
 
