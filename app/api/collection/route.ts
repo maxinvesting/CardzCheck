@@ -7,6 +7,50 @@ import { logDebug, redactId } from "@/lib/logging";
 import { normalizeHttpUrl, resolveStoredImagePath, uniqueHttpUrls } from "@/lib/collection-images";
 import { hasBusinessAccess } from "@/lib/access";
 
+// ---------------------------------------------------------------------------
+// Simple async concurrency limiter — avoids hammering external APIs (eBay,
+// Anthropic) when many collection items are CMV-stale at the same time.
+// ---------------------------------------------------------------------------
+function withConcurrency<T>(
+  tasks: (() => Promise<T>)[],
+  maxConcurrent: number
+): Promise<T[]> {
+  return new Promise((resolve, reject) => {
+    const results: T[] = new Array(tasks.length);
+    let started = 0;
+    let completed = 0;
+    let failed = false;
+
+    function runNext() {
+      if (failed) return;
+      if (started >= tasks.length) return;
+
+      const index = started++;
+      tasks[index]()
+        .then((result) => {
+          results[index] = result;
+          completed++;
+          if (completed === tasks.length) {
+            resolve(results);
+          } else {
+            runNext();
+          }
+        })
+        .catch((err) => {
+          failed = true;
+          reject(err);
+        });
+    }
+
+    const initialBatch = Math.min(maxConcurrent, tasks.length);
+    for (let i = 0; i < initialBatch; i++) {
+      runNext();
+    }
+  });
+}
+
+const CMV_MAX_CONCURRENT = 3;
+
 const ACQUISITION_TYPES: readonly AcquisitionType[] = [
   "pulled",
   "bought",
@@ -94,10 +138,12 @@ function deriveBusinessTitle(input: {
   return display || input.player_name || "Untitled card";
 }
 
+type InsertedRow = Record<string, unknown>;
+
 async function insertCollectionItemWithFallback(
   supabase: Awaited<ReturnType<typeof createClient>>,
   insertPayload: Record<string, unknown>
-): Promise<{ item: any | null; error: unknown | null; removedColumns: string[] }> {
+): Promise<{ item: InsertedRow | null; error: unknown | null; removedColumns: string[] }> {
   const payload = { ...insertPayload };
   const removedColumns: string[] = [];
 
@@ -163,9 +209,11 @@ export async function GET() {
       .in("card_id", cardIds)
       .eq("position", 0);
 
+    type CardImage = { card_id: string; storage_path: string; [key: string]: unknown };
+
     // Create a map of card_id -> primary_image
-    const primaryImageMap = new Map();
-    (primaryImages || []).forEach((img: any) => {
+    const primaryImageMap = new Map<string, CardImage & { url: string | null }>();
+    (primaryImages || []).forEach((img: CardImage) => {
       const resolvedUrl = resolveStoredImagePath(
         img.storage_path,
         (path) => supabase.storage.from("card-images").getPublicUrl(path).data.publicUrl
@@ -176,8 +224,8 @@ export async function GET() {
       });
     });
 
-    const updatedItems = await Promise.all(
-      (items || []).map(async (item: CollectionItem) => {
+    const updatedItems = await withConcurrency(
+      (items || []).map((item: CollectionItem) => async () => {
         const itemWithImage = {
           ...item,
           primary_image: primaryImageMap.get(item.id) || null,
@@ -188,10 +236,10 @@ export async function GET() {
           id: redactId(item.id),
           player: item.player_name,
           stale,
-          cmv_confidence: (item as any).cmv_confidence ?? "MISSING",
-          cmv_last_updated: (item as any).cmv_last_updated ?? "MISSING",
-          estimated_cmv: (item as any).estimated_cmv ?? "MISSING",
-          est_cmv: (item as any).est_cmv ?? "MISSING",
+          cmv_confidence: item.cmv_confidence ?? "MISSING",
+          cmv_last_updated: item.cmv_last_updated ?? "MISSING",
+          estimated_cmv: item.estimated_cmv ?? "MISSING",
+          est_cmv: item.est_cmv ?? "MISSING",
         });
 
         if (!stale) {
@@ -226,11 +274,12 @@ export async function GET() {
           console.error("CMV calculation failed for item:", redactId(item.id), cmvError);
           return itemWithImage;
         }
-      })
+      }),
+      CMV_MAX_CONCURRENT
     );
 
     if (updatedItems.length > 0) {
-      const first = updatedItems[0] as any;
+      const first = updatedItems[0] as CollectionItem;
       logDebug("💰 GET collection first row CMV", {
         id: redactId(first.id),
         player: first.player_name,
@@ -380,15 +429,10 @@ export async function POST(request: NextRequest) {
       normalizedImageUrls[0] ||
       null;
 
-    // Store players array and insert in notes if DB columns don't exist yet
-    // TODO: Add migration for players (JSONB) and insert (text) columns
-    const notesParts: string[] = [];
-    if (notes) notesParts.push(notes);
-    if (insert) notesParts.push(`[INSERT:${insert}]`);
-    if (players && players.length > 1) {
-      notesParts.push(`[PLAYERS:${JSON.stringify(players)}]`);
-    }
-    const combinedNotes = notesParts.length > 0 ? notesParts.join(" | ") : null;
+    // players and insert_type now have first-class columns (migration 20260314).
+    // The schema-fallback retry loop in insertCollectionItemWithFallback will
+    // gracefully drop them if the migration hasn't been applied yet.
+    const combinedNotes = notes || null;
 
     logDebug("📦 Inserting collection item", {
       userId: redactId(user.id),
@@ -435,6 +479,8 @@ export async function POST(request: NextRequest) {
       user_id: user.id,
       item_kind: isBusinessUser ? "inventory" : "owned",
       player_name,
+      players: Array.isArray(players) && players.length > 1 ? players : null,
+      insert_type: typeof insert === "string" && insert.trim() ? insert.trim() : null,
       title: isBusinessUser
         ? deriveBusinessTitle({ player_name, year: year || null, set_name: set_name || null, grade: grade || null })
         : null,
@@ -472,7 +518,9 @@ export async function POST(request: NextRequest) {
 
     // Insert with schema fallback so older DBs without new columns still work.
     const insertResult = await insertCollectionItemWithFallback(supabase, insertPayload);
-    const item = insertResult.item;
+    // Cast to CollectionItem: the schema-fallback function returns the raw Supabase row
+    // which matches the CollectionItem shape once inserted successfully.
+    const item = insertResult.item as CollectionItem | null;
     const error = insertResult.error;
 
     if (error || !item) {
@@ -496,10 +544,10 @@ export async function POST(request: NextRequest) {
     // Verify the row has CMV after insert
     logDebug("✅ Inserted row CMV check", {
       id: redactId(item.id),
-      estimated_cmv: (item as any).estimated_cmv ?? "MISSING",
-      est_cmv: (item as any).est_cmv ?? "MISSING",
-      cmv_confidence: (item as any).cmv_confidence ?? "MISSING",
-      cmv_last_updated: (item as any).cmv_last_updated ?? "MISSING",
+      estimated_cmv: item.estimated_cmv ?? "MISSING",
+      est_cmv: item.est_cmv ?? "MISSING",
+      cmv_confidence: item.cmv_confidence ?? "MISSING",
+      cmv_last_updated: item.cmv_last_updated ?? "MISSING",
     });
 
     // Persist user + fallback image URLs for stable rendering across refreshes.

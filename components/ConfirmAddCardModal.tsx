@@ -101,7 +101,8 @@ export default function ConfirmAddCardModal({
     const trimmed = nextYear.trim();
     if (trimmed && !/^\d{4}$/.test(trimmed)) {
       setError("Year must be a 4-digit number");
-      return;
+    } else {
+      setError(null);
     }
   };
 
