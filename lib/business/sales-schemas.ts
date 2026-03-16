@@ -9,12 +9,23 @@ export const SALES_CHANNELS = [
   "other",
 ] as const;
 
-const centsSchema = z.number().int();
-const optionalCentsSchema = z.number().int().optional().nullable();
+// Max $9,999,999.99 — guards against overflow in metrics/aggregation math
+// and prevents obviously bogus entries ($9B card sale) from corrupting reporting.
+const MAX_CENTS = 999_999_999;
+const centsSchema = z.number().int().min(0).max(MAX_CENTS);
+const optionalCentsSchema = z.number().int().min(0).max(MAX_CENTS).optional().nullable();
+
+// ISO 8601 date (YYYY-MM-DD) or datetime (YYYY-MM-DDTHH:mm...) only.
+// Plain .string() would accept arbitrary garbage fed into date range DB queries.
+const isoDateSchema = z
+  .string()
+  .trim()
+  .regex(/^\d{4}-\d{2}-\d{2}(T[\d:.Z+-]+)?$/, "Must be an ISO 8601 date")
+  .optional();
 
 export const listSalesQuerySchema = z.object({
-  from: z.string().trim().optional(),
-  to: z.string().trim().optional(),
+  from: isoDateSchema,
+  to: isoDateSchema,
   page: z.coerce.number().int().min(1).optional().default(1),
   page_size: z.coerce.number().int().min(1).max(200).optional().default(50),
   channel: z.enum(SALES_CHANNELS).optional(),

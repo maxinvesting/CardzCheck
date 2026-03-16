@@ -13,16 +13,25 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { ALLOWED_URL_HOSTS } from "@/lib/identify-card-validation";
 
 type Params = { params: Promise<{ batchId: string }> };
 
 const MAX_ITEMS_PER_REQUEST = 100;
 
+/**
+ * Accept only HTTPS URLs from allowed Supabase storage hosts.
+ * Prevents SSRF: without a host allowlist any HTTPS URL would pass,
+ * letting attackers point the bulk pipeline at internal endpoints.
+ */
 function isValidUrl(value: unknown): value is string {
   if (typeof value !== "string") return false;
   try {
     const url = new URL(value);
-    return url.protocol === "https:";
+    if (url.protocol !== "https:") return false;
+    return ALLOWED_URL_HOSTS.some(
+      (host) => url.hostname === host || url.hostname.endsWith(`.${host}`)
+    );
   } catch {
     return false;
   }

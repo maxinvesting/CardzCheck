@@ -23,12 +23,20 @@ type ProspectRow = {
   updated_at?: string | null;
 };
 
+// Maximum accepted price: $10,000,000. Prevents overflow when converting to
+// cents (value * 100) — e.g. "1e308" is technically Number.isFinite but
+// 1e308 * 100 > Number.MAX_VALUE → Infinity → Postgres crash.
+const MAX_PRICE = 10_000_000;
+
 function toNumberOrNull(value: unknown): number | null {
   if (value === null || value === undefined || value === "") return null;
-  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value >= 0 && value <= MAX_PRICE ? value : null;
+  }
   if (typeof value === "string") {
     const parsed = Number(value.trim());
-    return Number.isFinite(parsed) ? parsed : null;
+    if (!Number.isFinite(parsed)) return null;
+    return parsed >= 0 && parsed <= MAX_PRICE ? parsed : null;
   }
   return null;
 }
@@ -174,11 +182,30 @@ export async function POST(request: NextRequest) {
       target_price,
     } = body;
 
-    if (!player_name) {
+    if (!player_name || typeof player_name !== "string" || !player_name.trim()) {
       return NextResponse.json(
         { error: "Player name is required" },
         { status: 400 }
       );
+    }
+
+    if (player_name.trim().length > 120) {
+      return NextResponse.json({ error: "Player name too long (max 120 characters)" }, { status: 400 });
+    }
+    if (year && (typeof year !== "string" || year.length > 20)) {
+      return NextResponse.json({ error: "Year too long (max 20 characters)" }, { status: 400 });
+    }
+    if (set_brand && (typeof set_brand !== "string" || set_brand.length > 200)) {
+      return NextResponse.json({ error: "Set name too long (max 200 characters)" }, { status: 400 });
+    }
+    if (card_number && (typeof card_number !== "string" || card_number.length > 50)) {
+      return NextResponse.json({ error: "Card number too long (max 50 characters)" }, { status: 400 });
+    }
+    if (parallel_variant && (typeof parallel_variant !== "string" || parallel_variant.length > 100)) {
+      return NextResponse.json({ error: "Parallel variant too long (max 100 characters)" }, { status: 400 });
+    }
+    if (condition && (typeof condition !== "string" || condition.length > 100)) {
+      return NextResponse.json({ error: "Condition too long (max 100 characters)" }, { status: 400 });
     }
 
     const isBusinessUser = await hasBusinessAccess(user.id);
@@ -376,12 +403,15 @@ export async function PATCH(request: NextRequest) {
       });
     }
 
-    // Only allow updating specific fields
+    // Only allow updating specific fields — validate before storing
     const allowedUpdates: Record<string, unknown> = {};
-    if (updates.target_price !== undefined)
-      allowedUpdates.target_price = updates.target_price;
-    if (updates.condition !== undefined)
-      allowedUpdates.condition = updates.condition;
+    if (updates.target_price !== undefined) {
+      allowedUpdates.target_price = toNumberOrNull(updates.target_price);
+    }
+    if (updates.condition !== undefined) {
+      const cond = typeof updates.condition === "string" ? updates.condition.slice(0, 100) : null;
+      allowedUpdates.condition = cond;
+    }
 
     const { data: item, error } = await supabase
       .from("watchlist")

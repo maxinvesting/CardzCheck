@@ -38,6 +38,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (message.length > 2000) {
+      return NextResponse.json(
+        { ok: false, error: "Message too long (max 2000 characters)", code: "MESSAGE_TOO_LONG" },
+        { status: 400 }
+      );
+    }
+
     // Check authorization and usage limits
     if (isTestMode()) {
       logDebug("🧪 TEST MODE: Bypassing analyst auth check");
@@ -99,8 +106,31 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Increment usage after successful response (done below)
-      // Store user info for later
+      // Atomically claim one query slot before doing the expensive AI call.
+      // Uses a conditional UPDATE that only increments when still under the limit,
+      // preventing concurrent requests from both passing the check above.
+      const { count: claimedCount } = await supabase
+        .from("users")
+        .update({ analyst_queries_used: used + 1 })
+        .eq("id", user.id)
+        .eq("analyst_queries_used", used); // optimistic lock — fails if already changed
+
+      if (!claimedCount || claimedCount === 0) {
+        // Another concurrent request already incremented; recheck limit
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "limit_reached",
+            message: `You've used all ${ANALYST_QUERY_LIMIT} analyst queries. Contact support for more.`,
+            used,
+            limit,
+            code: "LIMIT_REACHED",
+          },
+          { status: 403 }
+        );
+      }
+
+      // Slot claimed — store user info for personalization below
       (request as unknown as { userId: string; userName: string | null }).userId = user.id;
       (request as unknown as { userId: string; userName: string | null }).userName = userData?.name || null;
     }
@@ -137,33 +167,61 @@ STYLE GUIDE FOR MARKET DATA (IMPORTANT):
 - End with actionable takeaway when relevant: what to watch for, when to buy, risk to consider`;
 
     if (cardContext) {
+      // Sanitize all string fields: strip newlines and control characters that
+      // could break prompt structure or inject rogue instructions into the
+      // system prompt (prompt injection via card metadata).
+      const sanitizeContextField = (val: string | undefined): string | undefined => {
+        if (!val) return val;
+        return val
+          .replace(/[\r\n\t]/g, " ")          // collapse line breaks / tabs
+          .replace(/[\x00-\x1F\x7F]/g, "")    // strip other control chars
+          .slice(0, 200)                         // hard cap per field
+          .trim();
+      };
+
+      const safeYear       = sanitizeContextField(cardContext.year);
+      const safePlayerName = sanitizeContextField(cardContext.playerName);
+      const safeSetName    = sanitizeContextField(cardContext.setName);
+      const safeGrade      = sanitizeContextField(cardContext.grade);
+
       const cardDetails = [];
-      if (cardContext.year) cardDetails.push(cardContext.year);
-      if (cardContext.playerName) cardDetails.push(cardContext.playerName);
-      if (cardContext.setName) cardDetails.push(cardContext.setName);
-      if (cardContext.grade) cardDetails.push(cardContext.grade);
+      if (safeYear) cardDetails.push(safeYear);
+      if (safePlayerName) cardDetails.push(safePlayerName);
+      if (safeSetName) cardDetails.push(safeSetName);
+      if (safeGrade) cardDetails.push(safeGrade);
 
       systemPrompt += `
 
 Current card context:
 - Card: ${cardDetails.join(" ") || "Unknown card"}`;
 
-      if (cardContext.avgPrice !== undefined) {
+      // Only embed numeric fields if they are actually finite numbers
+      const safeAvgPrice =
+        typeof cardContext.avgPrice === "number" && Number.isFinite(cardContext.avgPrice)
+          ? cardContext.avgPrice
+          : null;
+      const safeChange30d =
+        typeof cardContext.priceChange30d === "number" && Number.isFinite(cardContext.priceChange30d)
+          ? cardContext.priceChange30d
+          : null;
+
+      if (safeAvgPrice !== null) {
         systemPrompt += `
-- Average sale price: $${cardContext.avgPrice.toLocaleString()}`;
+- Average sale price: $${safeAvgPrice.toLocaleString()}`;
       }
 
-      if (cardContext.priceChange30d !== undefined) {
+      if (safeChange30d !== null) {
         systemPrompt += `
-- 30-day price change: ${cardContext.priceChange30d > 0 ? "+" : ""}${cardContext.priceChange30d}%`;
+- 30-day price change: ${safeChange30d > 0 ? "+" : ""}${safeChange30d}%`;
       }
 
       if (cardContext.recentSales && cardContext.recentSales.length > 0) {
         const salesStr = cardContext.recentSales
           .slice(0, 5)
+          .filter((s) => typeof s.price === "number" && Number.isFinite(s.price))
           .map((s) => `$${s.price}`)
           .join(", ");
-        systemPrompt += `
+        if (salesStr) systemPrompt += `
 - Recent sales: ${salesStr}`;
       }
     } else {
@@ -223,30 +281,6 @@ No specific card selected. Answer general trading card market questions.`;
       : "Unable to analyze at this time.";
 
     logDebug("✅ Analyst response received", { length: responseText.length });
-
-    // Increment usage count after successful response
-    if (!isTestMode()) {
-      const supabase = await createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (user) {
-        // Get current count and increment
-        const { data: userData } = await supabase
-          .from("users")
-          .select("analyst_queries_used")
-          .eq("id", user.id)
-          .single();
-
-        const currentUsed = userData?.analyst_queries_used || 0;
-
-        await supabase
-          .from("users")
-          .update({ analyst_queries_used: currentUsed + 1 })
-          .eq("id", user.id);
-      }
-    }
 
     return NextResponse.json({
       ok: true,

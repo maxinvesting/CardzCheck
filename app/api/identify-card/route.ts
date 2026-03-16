@@ -74,9 +74,10 @@ function validateImageUrl(url: string): { valid: boolean; error?: string } {
     );
 
     if (!isAllowedHost) {
-      console.warn(
-        `[identify-card] URL from untrusted host: ${parsedUrl.hostname}`
-      );
+      return {
+        valid: false,
+        error: `Image URL host not allowed: ${parsedUrl.hostname}. Only Supabase-hosted images are accepted.`,
+      };
     }
 
     return { valid: true };

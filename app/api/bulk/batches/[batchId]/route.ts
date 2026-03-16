@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { hasBusinessAccess } from "@/lib/access";
 
 type Params = { params: Promise<{ batchId: string }> };
 
@@ -17,11 +18,20 @@ export async function GET(_request: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Load batch (RLS ensures it belongs to user)
+  const isBusiness = await hasBusinessAccess(user.id);
+  if (!isBusiness) {
+    return NextResponse.json(
+      { error: "Business subscription required to use Bulk Mode" },
+      { status: 403 }
+    );
+  }
+
+  // Load batch — explicit user_id check guards against RLS misconfiguration
   const { data: batch, error: batchError } = await supabase
     .from("bulk_batches")
     .select("*")
     .eq("id", batchId)
+    .eq("user_id", user.id)
     .single();
 
   if (batchError || !batch) {
@@ -86,6 +96,14 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const isBusiness = await hasBusinessAccess(user.id);
+  if (!isBusiness) {
+    return NextResponse.json(
+      { error: "Business subscription required to use Bulk Mode" },
+      { status: 403 }
+    );
+  }
+
   let body: { name?: string; status?: string };
   try {
     body = await request.json();
@@ -98,6 +116,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   if (typeof body.name === "string") {
     const name = body.name.trim();
     if (!name) return NextResponse.json({ error: "Name cannot be empty" }, { status: 400 });
+    if (name.length > 120) return NextResponse.json({ error: "Batch name too long (max 120 characters)" }, { status: 400 });
     updates.name = name;
   }
 
@@ -113,6 +132,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     .from("bulk_batches")
     .update(updates)
     .eq("id", batchId)
+    .eq("user_id", user.id)
     .select()
     .single();
 

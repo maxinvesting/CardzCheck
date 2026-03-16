@@ -98,6 +98,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (prompt.length > 2000) {
+      return NextResponse.json(
+        { ok: false, error: "Prompt too long (max 2000 characters)", code: "PROMPT_TOO_LONG" },
+        { status: 400 }
+      );
+    }
+
+    if (context && context.length > 1000) {
+      return NextResponse.json(
+        { ok: false, error: "Context too long (max 1000 characters)", code: "CONTEXT_TOO_LONG" },
+        { status: 400 }
+      );
+    }
+
     const supabase = await createClient();
     const {
       data: { user },

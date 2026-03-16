@@ -78,7 +78,9 @@ export async function GET(request: NextRequest) {
       }
       title = inventoryItem.title?.trim() || null;
     } else if (titleParam?.trim()) {
-      title = titleParam.trim();
+      // Cap at 300 chars — this value is forwarded to /api/search as a query param.
+      // Without a cap, a huge string could cause excessive search query sizes.
+      title = titleParam.trim().slice(0, 300);
     }
 
     if (!title) {

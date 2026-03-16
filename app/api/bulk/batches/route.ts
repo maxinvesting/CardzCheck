@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { hasBusinessAccess } from "@/lib/access";
 
 export async function GET() {
   const supabase = await createClient();
@@ -12,6 +13,14 @@ export async function GET() {
 
   if (authError || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const isBusiness = await hasBusinessAccess(user.id);
+  if (!isBusiness) {
+    return NextResponse.json(
+      { error: "Business subscription required to use Bulk Mode" },
+      { status: 403 }
+    );
   }
 
   const { data: batches, error } = await supabase
@@ -34,6 +43,14 @@ export async function POST(request: NextRequest) {
 
   if (authError || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const isBusiness = await hasBusinessAccess(user.id);
+  if (!isBusiness) {
+    return NextResponse.json(
+      { error: "Business subscription required to use Bulk Mode" },
+      { status: 403 }
+    );
   }
 
   let body: { name?: string };

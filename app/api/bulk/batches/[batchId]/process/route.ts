@@ -15,6 +15,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { hasBusinessAccess } from "@/lib/access";
 import { processBatch } from "@/lib/bulk/pipeline";
 
 type Params = { params: Promise<{ batchId: string }> };
@@ -31,11 +32,20 @@ export async function POST(_request: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const isBusiness = await hasBusinessAccess(user.id);
+  if (!isBusiness) {
+    return NextResponse.json(
+      { error: "Business subscription required to use Bulk Mode" },
+      { status: 403 }
+    );
+  }
+
   // Verify batch belongs to user and is in a processable state
   const { data: batch, error: batchError } = await supabase
     .from("bulk_batches")
     .select("id, status, item_count")
     .eq("id", batchId)
+    .eq("user_id", user.id)
     .single();
 
   if (batchError || !batch) {

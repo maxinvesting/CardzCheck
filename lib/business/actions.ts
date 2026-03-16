@@ -301,7 +301,13 @@ export async function listInventory(
   if (filters?.condition_status)
     query = query.eq("condition_status", filters.condition_status);
   if (filters?.search) {
-    const search = filters.search.replace(/,/g, " ").trim();
+    // Strip characters that are special in Supabase's PostgREST filter syntax
+    // to prevent filter injection (e.g. "foo%,notes.ilike.%" → match-all bypass).
+    // Also cap length to avoid excessively large queries.
+    const search = filters.search
+      .replace(/[%_(),]/g, " ")  // strip PostgREST/SQL wildcards and filter delimiters
+      .trim()
+      .slice(0, 120);
     if (search.length > 0) {
       query = query.or(
         `title.ilike.%${search}%,notes.ilike.%${search}%`
