@@ -10,6 +10,7 @@ import { useGradeEstimateFromImages } from "@/lib/grading/useGradeEstimateFromIm
 import { gradingCopy } from "@/copy/grading";
 import { formatEbayTitle, calculateEbayParityPrice, EBAY_FEE_RATES } from "@/lib/ebay/parity-price";
 import type { EbayFeeRateKey } from "@/lib/ebay/parity-price";
+import EbayListingModal from "@/components/business/EbayListingModal";
 
 function fmtCents(cents: number | null): string {
   if (cents === null) return "";
@@ -58,6 +59,8 @@ export default function ItemDetailDrawer({
   const [valueError, setValueError] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [ebayTitleCopied, setEbayTitleCopied] = useState(false);
+  const [showEbayListingModal, setShowEbayListingModal] = useState(false);
+  const [ebayOverrideImages, setEbayOverrideImages] = useState<string[] | null>(null);
 
   useEffect(() => {
     if (!item) return;
@@ -314,6 +317,21 @@ export default function ItemDetailDrawer({
           <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
             <h2 className="text-lg font-bold text-white">Edit Item</h2>
             <div className="flex items-center gap-2">
+              {item.status !== "sold" && !((item as any).ebay_item_id) && (
+                <button
+                  type="button"
+                  onClick={() => setShowEbayListingModal(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] bg-[#86b817] hover:bg-[#86b817]/90 text-white text-sm font-medium rounded-lg transition-colors"
+                >
+                  <span className="text-xs font-extrabold tracking-tight">
+                    <span style={{ color: "#e43137" }}>e</span>
+                    <span style={{ color: "#0064d3" }}>B</span>
+                    <span style={{ color: "#f5af02" }}>a</span>
+                    <span style={{ color: "#86b817" }}>y</span>
+                  </span>
+                  <span>List on eBay</span>
+                </button>
+              )}
               {item.id && (
                 <Link
                   href={`/card/${item.id}?from=business`}
@@ -564,6 +582,33 @@ export default function ItemDetailDrawer({
                       primaryImageUrl={cardForGrade.imageUrls[0] ?? null}
                       imageUrls={cardForGrade.imageUrls}
                     />
+                    {item.status !== "sold" && (
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const urls = cardForGrade.imageUrls.filter(
+                              (u) => typeof u === "string" && u.length > 0
+                            );
+                            if (urls.length === 0) return;
+                            setEbayOverrideImages(urls);
+                            setShowEbayListingModal(true);
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3 py-2.5 min-h-[40px] bg-[#86b817] hover:bg-[#86b817]/90 text-white text-xs font-medium rounded-lg transition-colors"
+                        >
+                          <span className="text-[11px] font-extrabold tracking-tight">
+                            <span style={{ color: "#e43137" }}>e</span>
+                            <span style={{ color: "#0064d3" }}>B</span>
+                            <span style={{ color: "#f5af02" }}>a</span>
+                            <span style={{ color: "#86b817" }}>y</span>
+                          </span>
+                          <span>List with these photos</span>
+                        </button>
+                        <p className="text-[10px] text-gray-500">
+                          Uses the grade run images as your eBay photos.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
                 {gradeEstimate.estimate && (valueLoading || valueResult || valueError) && (
@@ -626,6 +671,22 @@ export default function ItemDetailDrawer({
           </div>
         </div>
       </div>
+      {showEbayListingModal && item && (
+        <EbayListingModal
+          item={item}
+          overrideImageUrls={ebayOverrideImages ?? undefined}
+          onClose={() => setShowEbayListingModal(false)}
+          onSuccess={(listingId) => {
+            onSave(item.id, {
+              status: "listed",
+              channel: "ebay",
+              ...( { ebay_item_id: listingId } as any),
+            });
+            setEbayOverrideImages(null);
+            setShowEbayListingModal(false);
+          }}
+        />
+      )}
     </>
   );
 }

@@ -1,6 +1,69 @@
 /**
  * POST /api/business/ebay/orders/sync
  * Manually trigger an eBay order sync for the authenticated business user.
+ * Uses the shared syncOrders() helper, which:
+ *   - Pages Fulfillment API orders since last sync cursor
+ *   - Calls handleEbayOrderSold() for each paid order
+ *   - Deduplicates via external_order_id uniqueness
+ */
+
+import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+import { requireBusinessAccess } from "@/lib/business/actions";
+import { syncOrders } from "@/lib/ebay/selling/sync";
+
+export const dynamic = "force-dynamic";
+
+export async function POST(): Promise<NextResponse> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    await requireBusinessAccess(user.id);
+
+    // Ensure there is an active eBay account before attempting sync
+    const { data: account, error: accountError } = await supabase
+      .from("ebay_accounts")
+      .select("id, is_active")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (accountError) throw accountError;
+    if (!account?.is_active) {
+      return NextResponse.json(
+        { error: "No active eBay account connected." },
+        { status: 400 }
+      );
+    }
+
+    const result = await syncOrders(user.id);
+
+    return NextResponse.json(
+      {
+        success: true,
+        newSalesCreated: result.newSalesCreated,
+        ordersProcessed: result.ordersProcessed,
+        errors: result.errors,
+      },
+      { status: 200 }
+    );
+  } catch (err) {
+    console.error("[ebay/orders/sync] error:", err);
+    const message =
+      err instanceof Error ? err.message : "Failed to sync eBay orders";
+    const status = (err as any)?.status ?? 500;
+    return NextResponse.json({ error: message }, { status });
+  }
+}
+
+/**
+ * POST /api/business/ebay/orders/sync
+ * Manually trigger an eBay order sync for the authenticated business user.
  * Also callable from a Vercel cron job for automatic sync.
  */
 

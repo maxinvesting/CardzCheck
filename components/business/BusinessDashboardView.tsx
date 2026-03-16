@@ -74,6 +74,8 @@ export default function BusinessDashboardView({
   const MS_PER_DAY = 86_400_000;
   const [showImportWizard, setShowImportWizard] = useState(false);
   const [showStorefrontDropdown, setShowStorefrontDropdown] = useState(false);
+  const [syncingEbayOrders, setSyncingEbayOrders] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
 
   const primaryStorefront = storefronts.find((s) => s.is_primary) ?? storefronts[0] ?? null;
   const hasStorefronts = storefronts.length > 0;
@@ -130,6 +132,26 @@ export default function BusinessDashboardView({
     ).length;
     return { revenueCents, profitCents, salesCount: ebaySales.length, activeEbayListings };
   }, [recentSales, items]);
+
+  async function handleSyncEbayOrders() {
+    if (syncingEbayOrders) return;
+    setSyncError(null);
+    setSyncingEbayOrders(true);
+    try {
+      const res = await fetch("/api/business/ebay/orders/sync", {
+        method: "POST",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.success) {
+        throw new Error(data.error ?? "Failed to sync eBay orders");
+      }
+      // No-op: dashboard metrics will refresh on next server render/navigation
+    } catch (err) {
+      setSyncError(err instanceof Error ? err.message : "Failed to sync eBay orders");
+    } finally {
+      setSyncingEbayOrders(false);
+    }
+  }
 
   return (
     <div className="space-y-8">
@@ -292,12 +314,20 @@ export default function BusinessDashboardView({
               </div>
 
               {ebayAccount?.connected ? (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <button
                     onClick={() => setShowImportWizard(true)}
                     className="cc-btn-secondary rounded-md px-3 py-1.5 text-xs font-medium"
                   >
                     Import
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSyncEbayOrders}
+                    disabled={syncingEbayOrders}
+                    className="cc-btn-secondary rounded-md px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+                  >
+                    {syncingEbayOrders ? "Syncing…" : "Sync Orders"}
                   </button>
                   <Link
                     href="/business/ledger"
@@ -342,6 +372,11 @@ export default function BusinessDashboardView({
               <p className="text-xs text-[var(--biz-muted)]">
                 Connect your eBay account to sync orders automatically, list cards directly from
                 inventory, and track eBay-specific profit metrics.
+              </p>
+            )}
+            {syncError && (
+              <p className="mt-2 text-[10px] text-red-600">
+                {syncError}
               </p>
             )}
           </Surface>
