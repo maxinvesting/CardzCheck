@@ -24,7 +24,7 @@ const FAQ_SECTIONS = [
       },
       {
         q: "What's the difference between the Free and Pro plans?",
-        a: "Free accounts get 3 card searches to explore the platform. Pro Members get unlimited searches, unlimited collection tracking, collection value tracking, and access to Pro-exclusive features like the Watchlist and CardzCheck Analyst. Pro is a one-time payment with lifetime access.",
+        a: "Free accounts are built for collection tracking — you get up to 5 cards in your collection, 2 AI consultations per month, and 2 grade scans per month. Pro ($10/month) is for serious collectors: unlimited comp searches, full collection tracking, Analyst AI, Grade Probability Engine, Watchlist, and deeper analytics. Business ($25/month) is designed for sellers, adding inventory, sales, ledger workflows, and higher usage limits.",
       },
       {
         q: "Can I use CardzCheck on mobile?",
@@ -156,7 +156,7 @@ const FAQ_SECTIONS = [
       },
       {
         q: "Is CardzCheck Analyst available on the Free plan?",
-        a: "No. CardzCheck Analyst is a Pro-exclusive feature. Upgrade to Pro to unlock it.",
+        a: "Free users get 2 AI consultations per month as a trial. Unlimited Analyst access requires a Pro or Business subscription.",
       },
     ],
   },
@@ -202,11 +202,11 @@ const FAQ_SECTIONS = [
     items: [
       {
         q: "How do I upgrade to Pro?",
-        a: "Click \"Upgrade\" in the sidebar or go to Settings → Current Plan → Upgrade. You'll be taken to a secure checkout. Pro is a one-time payment with lifetime access — no recurring subscription.",
+        a: "Click \"Upgrade\" in the sidebar or go to Settings → Current Plan → Upgrade. You'll be taken to a secure Stripe checkout. Pro is $10/month or $96/year (save $24). Cancel anytime.",
       },
       {
-        q: "Is Pro a one-time payment or a subscription?",
-        a: "Pro is a one-time payment that grants lifetime access to all Pro features. You will never be billed again after your initial purchase.",
+        q: "Is Pro a subscription or a one-time payment?",
+        a: "Pro is a monthly or annual subscription at $10/month or $96/year. Business is $25/month or $240/year. You can cancel anytime from Settings → Current Plan → Manage Subscription.",
       },
       {
         q: "How do I change my email address?",

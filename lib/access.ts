@@ -2,6 +2,7 @@ import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { isTestMode } from "@/lib/test-mode";
 import { getScanCreditStatus } from "@/lib/grading/scanCredits";
 import type { Subscription, Usage } from "@/types";
+import { LIMITS } from "@/types";
 
 export interface AccessCheck {
   hasAccess: boolean;
@@ -151,8 +152,8 @@ export async function getUsage(userId: string): Promise<UsageCheck> {
   return {
     searchesUsed,
     aiMessagesUsed,
-    canSearch: searchesUsed < 3,
-    canUseAI: aiMessagesUsed < 3,
+    canSearch: searchesUsed < LIMITS.FREE_SEARCHES,
+    canUseAI: aiMessagesUsed < LIMITS.FREE_AI_MESSAGES,
   };
 }
 
@@ -249,7 +250,7 @@ export async function canAccessFeature(
       if (!usage.canSearch) {
         return {
           allowed: false,
-          reason: "You've used all 3 free searches. Upgrade for unlimited.",
+          reason: `You've used all ${LIMITS.FREE_SEARCHES} free searches. Upgrade to Pro for unlimited.`,
           upgradeRequired: true,
         };
       }
@@ -270,7 +271,7 @@ export async function canAccessFeature(
       if (!usage.canUseAI) {
         return {
           allowed: false,
-          reason: "You've used all 3 free AI messages. Upgrade for unlimited.",
+          reason: `You've used all ${LIMITS.FREE_AI_MESSAGES} free AI consultations this month. Upgrade to Pro for unlimited.`,
           upgradeRequired: true,
         };
       }
@@ -296,7 +297,7 @@ export async function canAccessFeature(
         return {
           allowed: false,
           reason:
-            "Business tools require a Business subscription ($15/mo or $150/yr).",
+            "Business tools require a Business subscription ($25/mo or $240/yr).",
           upgradeRequired: true,
         };
       }

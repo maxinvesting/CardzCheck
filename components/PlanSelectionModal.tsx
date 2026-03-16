@@ -155,54 +155,29 @@ export default function PlanSelectionModal({
               </div>
 
               <ul className="space-y-3 mb-6">
-                <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                  <svg
-                    className="w-5 h-5 text-green-500 flex-shrink-0"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
-                  {LIMITS.FREE_SEARCHES} card searches
-                </li>
-                <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                  <svg
-                    className="w-5 h-5 text-green-500 flex-shrink-0"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
-                  {LIMITS.FREE_COLLECTION} cards in collection
-                </li>
-                <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                  <svg
-                    className="w-5 h-5 text-green-500 flex-shrink-0"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
-                  {LIMITS.FREE_AI_MESSAGES} AI messages
-                </li>
+                {[
+                  "Track your collection",
+                  "Basic portfolio dashboard",
+                  `${LIMITS.FREE_AI_MESSAGES} AI consultations / month`,
+                  "2 AI grade scans / month",
+                ].map((feature) => (
+                  <li key={feature} className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                    <svg
+                      className="w-5 h-5 text-green-500 flex-shrink-0"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M5 13l4 4L19 7"
+                      />
+                    </svg>
+                    {feature}
+                  </li>
+                ))}
                 <li className="flex items-center gap-2 text-gray-500 dark:text-gray-500">
                   <svg
                     className="w-5 h-5 text-gray-400 flex-shrink-0"
@@ -217,7 +192,7 @@ export default function PlanSelectionModal({
                       d="M6 18L18 6M6 6l12 12"
                     />
                   </svg>
-                  No watchlist
+                  No unlimited comps or watchlist
                 </li>
               </ul>
 
@@ -254,79 +229,39 @@ export default function PlanSelectionModal({
                   Pro
                 </h3>
                 <div className="mt-2">
-                  <span className="text-4xl font-bold text-gray-900 dark:text-white">$20</span>
-                  <span className="text-lg text-gray-500 dark:text-gray-400"> activation</span>
+                  <span className="text-4xl font-bold text-gray-900 dark:text-white">$10</span>
+                  <span className="text-lg text-gray-500 dark:text-gray-400">/mo</span>
                 </div>
                 <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
-                  + $5/month
+                  or $96/year (save $24)
                 </p>
               </div>
 
               <ul className="space-y-3 mb-6">
-                <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                  <svg
-                    className="w-5 h-5 text-green-500 flex-shrink-0"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
-                  Unlimited searches
-                </li>
-                <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                  <svg
-                    className="w-5 h-5 text-green-500 flex-shrink-0"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
-                  Unlimited collection
-                </li>
-                <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                  <svg
-                    className="w-5 h-5 text-green-500 flex-shrink-0"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
-                  Watchlist tracking
-                </li>
-                <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                  <svg
-                    className="w-5 h-5 text-green-500 flex-shrink-0"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
-                  AI Assistant
-                </li>
+                {[
+                  "Unlimited comp searches",
+                  "Full collection tracking",
+                  "Analyst AI + Grade Probability Engine",
+                  "Deeper card analytics & market tools",
+                  "Watchlist & price alerts",
+                ].map((feature) => (
+                  <li key={feature} className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                    <svg
+                      className="w-5 h-5 text-green-500 flex-shrink-0"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M5 13l4 4L19 7"
+                      />
+                    </svg>
+                    {feature}
+                  </li>
+                ))}
               </ul>
 
               <button

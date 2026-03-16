@@ -54,17 +54,18 @@ export default function PricingModal({ isOpen, onClose }: PricingModalProps) {
   const proFeatures = [
     "Unlimited comp searches",
     "Full collection tracking",
-    "CardzCheck Analyst AI",
-    "Grade Probability Engine",
+    "Analyst AI + Grade Probability Engine",
+    "Deeper card analytics & market tools",
     "Watchlist & price alerts",
     "Priority support",
   ];
 
   const businessFeatures = [
     "Everything in Pro",
-    "Inventory tracking spreadsheet",
-    "Revenue & profit dashboards",
-    "Bulk actions & CSV export",
+    "Higher usage limits for active sellers",
+    "Inventory + sales + ledger workflows",
+    "Profit-focused business dashboard",
+    "eBay integration & bulk actions",
   ];
 
   return (
@@ -78,9 +79,9 @@ export default function PricingModal({ isOpen, onClose }: PricingModalProps) {
         {/* Header */}
         <div className="p-6 border-b border-gray-800 flex items-start justify-between">
           <div>
-            <h2 className="text-xl font-bold text-white">Upgrade Your Plan</h2>
+            <h2 className="text-xl font-bold text-white">Plans That Scale With You</h2>
             <p className="text-sm text-gray-400 mt-1">
-              Choose the plan that fits your needs
+              Start free with collection tracking. Upgrade for advanced analytics or full seller workflows.
             </p>
           </div>
           <button

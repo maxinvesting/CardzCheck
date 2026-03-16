@@ -7,13 +7,14 @@ const INPUT_COST_PER_1M_CENTS = 300;
 const OUTPUT_COST_PER_1M_CENTS = 1500;
 
 // ─── Monthly budgets by subscription tier ────────────────────────────────────
-// "pro"      = personal tier  → $1.00 / month
-// "business" = business tier  → $2.00 / month
-// "free"     = no grading access (blocked upstream by canAccessFeature)
+// "pro"      = collector intelligence tier  → $1.50 / month
+// "business" = seller/high-usage tier       → $4.00 / month (materially higher than Pro)
+// "free"     = no token budget (credit system used upstream via canAccessFeature)
+// NOTE: Keep in sync with PLAN_LIMITS.*.grade_token_budget_cents in types/index.ts
 const TIER_MONTHLY_BUDGET_CENTS: Record<string, number> = {
   free: 0,
-  pro: 100,      // $1.00
-  business: 200, // $2.00
+  pro: 150,      // $1.50
+  business: 400, // $4.00
 };
 
 export type TokenBudgetCheck = {

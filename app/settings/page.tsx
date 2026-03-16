@@ -242,19 +242,22 @@ function SettingsContent() {
   const paidPlanName = isBusinessMember ? "Business Member" : "Pro Member";
   const paidPlanBadge = isBusinessMember ? "Business" : "Pro";
   const paidPlanDescription = isBusinessMember
-    ? "Inventory, sales analytics, and all Pro features included"
-    : "Unlimited searches and collection tracking";
+    ? "Built for sellers — inventory, sales, ledger, and all Pro features included"
+    : "Collector intelligence — unlimited comps, analytics, and AI tools";
   const paidPlanFeatures = isBusinessMember
     ? [
-        "Spreadsheet-style inventory tracking",
-        "Revenue & profit dashboards",
-        "eBay integration tools",
-        "All Pro features included",
+        "Everything in Pro",
+        "Higher usage limits for active sellers",
+        "Inventory + sales + ledger workflows",
+        "Profit-focused business dashboard",
+        "eBay integration & bulk actions",
       ]
     : [
-        "Unlimited searches",
-        "Unlimited collection tracking",
-        "Collection value tracking",
+        "Unlimited comp searches",
+        "Full collection tracking",
+        "Analyst AI + Grade Probability Engine",
+        "Deeper card analytics & market tools",
+        "Watchlist & price alerts",
       ];
 
   return (
@@ -530,13 +533,14 @@ function SettingsContent() {
 
                 <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4">
                   <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Upgrade and get:
+                    Upgrade to Pro for:
                   </p>
                   <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
-                    <li>• Unlimited searches</li>
-                    <li>• Unlimited collection tracking</li>
-                    <li>• Collection value tracking</li>
-                    <li>• One-time payment, lifetime access</li>
+                    <li>• Unlimited comp searches</li>
+                    <li>• Full collection tracking</li>
+                    <li>• Analyst AI + Grade Probability Engine</li>
+                    <li>• Watchlist & price alerts</li>
+                    <li>• $10/month or $96/year — cancel anytime</li>
                   </ul>
                 </div>
               </div>

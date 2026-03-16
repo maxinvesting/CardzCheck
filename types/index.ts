@@ -707,7 +707,46 @@ export const LIMITS = {
   FREE_SEARCHES: 3,
   FREE_COLLECTION: 5,
   FREE_WATCHLIST: 0, // Watchlist is Pro-only
-  FREE_AI_MESSAGES: 3, // Free users get 3 AI messages
+  FREE_AI_MESSAGES: 2, // Free users get 2 AI consultations / month
+} as const;
+
+/**
+ * Per-tier plan limits and positioning metadata.
+ * Single source of truth for feature differentiation across Free / Pro / Business.
+ */
+export const PLAN_LIMITS = {
+  free: {
+    grade_scans_per_month: 2,       // via weekly-credit system (INITIAL_FREE_CREDITS)
+    ai_consultations_per_month: 2,  // matches LIMITS.FREE_AI_MESSAGES
+    comp_searches_per_month: 3,     // matches LIMITS.FREE_SEARCHES
+    collection_cards: 5,            // matches LIMITS.FREE_COLLECTION
+    grade_token_budget_cents: 0,    // no paid token budget; credit system used instead
+    analyst_queries_per_month: 2,
+    watchlist: false,
+  },
+  pro: {
+    grade_scans_per_month: null,    // unlimited (token budget applies)
+    ai_consultations_per_month: null,
+    comp_searches_per_month: null,
+    collection_cards: null,
+    grade_token_budget_cents: 150,  // $1.50 / month
+    analyst_queries_per_month: null,
+    watchlist: true,
+  },
+  business: {
+    grade_scans_per_month: null,    // unlimited (token budget applies)
+    ai_consultations_per_month: null,
+    comp_searches_per_month: null,
+    collection_cards: null,
+    grade_token_budget_cents: 400,  // $4.00 / month — materially higher than Pro
+    analyst_queries_per_month: null,
+    watchlist: true,
+    // Business-only features
+    inventory: true,
+    sales_ledger: true,
+    profit_dashboard: true,
+    bulk_mode_priority: true,
+  },
 } as const;
 
 export function isCardIdentificationError(

@@ -83,9 +83,9 @@ export default function PaywallModal({ isOpen, onClose, type }: PaywallModalProp
         <div className="p-6">
           <div className="text-center mb-6">
             <p className="text-4xl font-bold text-gray-900 dark:text-white">
-              $20
+              $10
             </p>
-            <p className="text-gray-500 dark:text-gray-400">one-time payment</p>
+            <p className="text-gray-500 dark:text-gray-400">per month &middot; or $96/year (save $24)</p>
           </div>
 
           <ul className="space-y-3 mb-6">
@@ -93,37 +93,36 @@ export default function PaywallModal({ isOpen, onClose, type }: PaywallModalProp
               <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
-              Unlimited card searches
+              Unlimited comp searches
             </li>
             <li className="flex items-center gap-3 text-gray-700 dark:text-gray-300">
               <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
-              Unlimited collection tracking
+              Full collection tracking
             </li>
             <li className="flex items-center gap-3 text-gray-700 dark:text-gray-300">
               <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
-              AI card photo identification
+              Analyst AI + Grade Probability Engine
             </li>
             <li className="flex items-center gap-3 text-gray-700 dark:text-gray-300">
               <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
-              Real-time eBay sold prices
+              Deeper card analytics & market tools
             </li>
             <li className="flex items-center gap-3 text-gray-700 dark:text-gray-300">
               <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
-              Collection value tracking
+              Watchlist & price alerts
             </li>
           </ul>
 
           <div className="text-center text-sm text-gray-500 dark:text-gray-400 mb-6">
-            <p>Card Ladder charges $200/year.</p>
-            <p className="font-medium text-gray-700 dark:text-gray-300">We charge $20. Once.</p>
+            <p className="font-medium text-gray-700 dark:text-gray-300">Cancel anytime. No contracts.</p>
           </div>
 
           <div className="space-y-3">
