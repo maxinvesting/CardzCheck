@@ -228,7 +228,7 @@ const QUICK_LINKS = [
   { label: "Search Cards", href: "/dashboard", desc: "Look up any card and see recent sales", color: "blue" },
   { label: "My Collection", href: "/collection", desc: "Track and value your card collection", color: "purple" },
   { label: "Comps", href: "/comps", desc: "Browse recent sold listings", color: "emerald" },
-  { label: "Grade Engine", href: "/grade-probability", desc: "Predict grading outcomes with AI", color: "amber" },
+  { label: "Grade Probability Engine", href: "/grade-probability", desc: "Estimate grading probabilities with AI", color: "amber" },
   { label: "Bulk Mode", href: "/bulk", desc: "Add or evaluate cards in bulk", color: "rose" },
   { label: "Marketplace", href: "/shop", desc: "Browse cards for sale", color: "cyan" },
 ];

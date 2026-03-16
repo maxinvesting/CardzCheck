@@ -21,14 +21,22 @@ export default async function AdminShopPage() {
               Manage marketplace listings, sync from business inventory, and upload
               images.
             </p>
-            {isOwner(admin.user) && (
+            <div className="mt-2 flex flex-wrap gap-4">
               <Link
-                href="/admin/access"
-                className="mt-2 inline-block text-sm text-cyan-400 hover:text-cyan-300"
+                href="/admin/news"
+                className="text-sm text-cyan-400 hover:text-cyan-300"
               >
-                Manage admin access
+                Manage news &amp; announcements
               </Link>
-            )}
+              {isOwner(admin.user) && (
+                <Link
+                  href="/admin/access"
+                  className="text-sm text-cyan-400 hover:text-cyan-300"
+                >
+                  Manage admin access
+                </Link>
+              )}
+            </div>
           </div>
           <AdminShopClient />
         </div>

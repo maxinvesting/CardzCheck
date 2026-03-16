@@ -266,112 +266,168 @@ export default function BusinessDashboardView({
         </div>
       )}
 
-      {/* ── eBay Integration Panel ──────────────────────────────────────── */}
+      {/* ── Workflow band: eBay + Grade & Actions ───────────────────────── */}
       {!needsMigration && (
-        <Surface className="p-6">
-          <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-            <div className="flex items-center gap-2.5">
-              <span className="text-sm font-extrabold tracking-tighter leading-none">
-                <span style={{ color: "#e43137" }}>e</span>
-                <span style={{ color: "#0064d3" }}>B</span>
-                <span style={{ color: "#f5af02" }}>a</span>
-                <span style={{ color: "#86b817" }}>y</span>
-              </span>
-              <span className="text-xs text-[var(--muted)]">
-                {ebayAccount?.connected
-                  ? `Connected · ${ebayAccount.ebay_username ?? ""}`
-                  : "Not connected"}
-              </span>
-              {ebayAccount?.top_rated_seller && (
-                <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-[var(--biz-warning)]">
-                  Top Rated Plus
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {/* eBay panel */}
+          <Surface className="p-6">
+            <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+              <div className="flex items-center gap-2.5">
+                <span className="text-sm font-extrabold tracking-tighter leading-none">
+                  <span style={{ color: "#e43137" }}>e</span>
+                  <span style={{ color: "#0064d3" }}>B</span>
+                  <span style={{ color: "#f5af02" }}>a</span>
+                  <span style={{ color: "#86b817" }}>y</span>
                 </span>
+                <span className="text-xs text-[var(--muted)]">
+                  {ebayAccount?.connected
+                    ? `Connected · ${ebayAccount.ebay_username ?? ""}`
+                    : "Not connected"}
+                </span>
+                {ebayAccount?.top_rated_seller && (
+                  <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-[var(--biz-warning)]">
+                    Top Rated Plus
+                  </span>
+                )}
+              </div>
+
+              {ebayAccount?.connected ? (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowImportWizard(true)}
+                    className="cc-btn-secondary rounded-md px-3 py-1.5 text-xs font-medium"
+                  >
+                    Import
+                  </button>
+                  <Link
+                    href="/business/ledger"
+                    className="cc-btn-secondary rounded-md px-3 py-1.5 text-xs font-semibold"
+                  >
+                    View Listings
+                  </Link>
+                </div>
+              ) : (
+                <a
+                  href="/api/auth/ebay"
+                  className="cc-btn-primary rounded-md px-3 py-1.5 text-xs font-semibold"
+                >
+                  Connect eBay
+                </a>
               )}
             </div>
 
             {ebayAccount?.connected ? (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowImportWizard(true)}
-                  className="cc-btn-secondary rounded-md px-3 py-1.5 text-xs font-medium"
-                >
-                  Import
-                </button>
-                <Link
-                  href="/business/ledger"
-                  className="cc-btn-secondary rounded-md px-3 py-1.5 text-xs font-semibold"
-                >
-                  View Listings
-                </Link>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  { label: "Active Listings", value: String(ebayKpis.activeEbayListings) },
+                  { label: "eBay Sales (30d)", value: String(ebayKpis.salesCount) },
+                  { label: "eBay Revenue (30d)", value: fmt(ebayKpis.revenueCents) },
+                  { label: "eBay Profit (30d)", value: fmt(ebayKpis.profitCents) },
+                ].map(({ label, value }) => (
+                  <div
+                    key={label}
+                    style={{ border: "1px solid var(--biz-border)" }}
+                    className="rounded-lg border border-[var(--biz-border)] bg-[#F9FAFB] px-3 py-2.5"
+                  >
+                    <p className="mb-1 text-xs uppercase tracking-normal text-[var(--biz-muted)]">
+                      {label}
+                    </p>
+                    <p className="text-xl font-semibold tabular-nums text-[var(--biz-text)]">
+                      {value}
+                    </p>
+                  </div>
+                ))}
               </div>
             ) : (
-              <a
-                href="/api/auth/ebay"
-                className="cc-btn-primary rounded-md px-3 py-1.5 text-xs font-semibold"
-              >
-                Connect eBay
-              </a>
+              <p className="text-xs text-[var(--biz-muted)]">
+                Connect your eBay account to sync orders automatically, list cards directly from
+                inventory, and track eBay-specific profit metrics.
+              </p>
             )}
-          </div>
+          </Surface>
 
-          {ebayAccount?.connected ? (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {[
-                { label: "Active Listings", value: String(ebayKpis.activeEbayListings) },
-                { label: "eBay Sales (30d)", value: String(ebayKpis.salesCount) },
-                { label: "eBay Revenue (30d)", value: fmt(ebayKpis.revenueCents) },
-                { label: "eBay Profit (30d)", value: fmt(ebayKpis.profitCents) },
-              ].map(({ label, value }) => (
-                <div
-                  key={label}
-                  style={{ border: "1px solid var(--biz-border)" }}
-                  className="rounded-lg border border-[var(--biz-border)] bg-[#F9FAFB] px-3 py-2.5"
-                >
-                  <p className="mb-1 text-xs uppercase tracking-normal text-[var(--biz-muted)]">{label}</p>
-                  <p className="text-xl font-semibold tabular-nums text-[var(--biz-text)]">{value}</p>
+          {/* Grade probability + key actions */}
+          <Surface title="Grade & Quick Actions">
+            <div className="flex flex-col gap-4">
+              <div className="flex items-start gap-3">
+                <div className="shrink-0 w-7 h-7 rounded-md bg-amber-500/15 flex items-center justify-center mt-0.5">
+                  <svg
+                    className="w-3.5 h-3.5 text-amber-700"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"
+                    />
+                  </svg>
                 </div>
-              ))}
+                <div>
+                  <p className="text-sm font-semibold text-[var(--biz-text)]">
+                    Use the Grade Probability Engine before you sell
+                  </p>
+                  <p className="mt-1 text-xs text-[var(--biz-muted)]">
+                    Estimate grade probabilities to help you decide whether submitting to PSA/BGS is worth the fees.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Link
+                  href="/business/grade-probability"
+                  className="cc-btn-primary rounded-md px-3 py-2 text-xs font-semibold"
+                >
+                  Grade Probability
+                </Link>
+                <Link
+                  href="/business/ledger"
+                  className="cc-btn-secondary rounded-md px-3 py-2 text-xs font-medium"
+                >
+                  Add Inventory
+                </Link>
+                <a
+                  href="/api/business/export?type=inventory"
+                  className="cc-btn-secondary rounded-md px-3 py-2 text-xs font-medium"
+                >
+                  Export
+                </a>
+                {primaryStorefront ? (
+                  <a
+                    href={primaryStorefront.store_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="cc-btn-secondary rounded-md px-3 py-2 text-xs font-medium"
+                  >
+                    {primaryStorefront.display_name}
+                  </a>
+                ) : ebayStoreHref ? (
+                  <a
+                    href={ebayStoreHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="cc-btn-secondary rounded-md px-3 py-2 text-xs font-medium"
+                  >
+                    eBay Store
+                  </a>
+                ) : (
+                  <Link
+                    href="/business/settings"
+                    className="cc-btn-secondary rounded-md px-3 py-2 text-xs font-medium text-[var(--muted)]"
+                  >
+                    Add Storefront
+                  </Link>
+                )}
+              </div>
             </div>
-          ) : (
-            <p className="text-xs text-[var(--biz-muted)]">
-              Connect your eBay account to sync orders automatically, list cards directly from inventory, and track eBay-specific profit metrics.
-            </p>
-          )}
-        </Surface>
+          </Surface>
+        </div>
       )}
 
       {showImportWizard && (
         <EbayImportWizard onClose={() => setShowImportWizard(false)} />
-      )}
-
-      {/* ── Grade Probability callout — calm flat strip ─────────────────── */}
-      {!needsMigration && (
-        <div
-          style={{ border: "1px solid var(--biz-border)", borderLeft: "3px solid var(--biz-accent-amber)" }}
-          className="flex flex-col gap-3 rounded-xl bg-[var(--biz-surface)] p-5 sm:flex-row sm:items-center sm:justify-between"
-        >
-          <div className="flex items-start gap-3">
-            <div className="shrink-0 w-7 h-7 rounded-md bg-amber-500/15 flex items-center justify-center mt-0.5">
-              <svg className="w-3.5 h-3.5 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-[var(--biz-text)]">
-                Grade your cards before you sell
-              </p>
-              <p className="mt-1 text-xs text-[var(--biz-muted)]">
-                Estimate grade probability and assess whether submitting to PSA/BGS is worth it — before you pay.
-              </p>
-            </div>
-          </div>
-          <Link
-            href="/business/grade-probability"
-            className="cc-btn-secondary shrink-0 whitespace-nowrap rounded-md border-amber-200 px-3 py-1.5 text-xs font-medium text-[var(--biz-warning)]"
-          >
-            Try Grade Probability →
-          </Link>
-        </div>
       )}
 
       {/* ── At a Glance ─────────────────────────────────────────────────── */}
@@ -460,7 +516,7 @@ export default function BusinessDashboardView({
             </Surface>
           </div>
 
-          {/* Right: Funnel + Quick Actions */}
+          {/* Right: Funnel + Recent Sales */}
           <div className="space-y-6">
             <Surface title="Inventory Funnel">
               {itemsEmpty ? (
@@ -500,188 +556,118 @@ export default function BusinessDashboardView({
               )}
             </Surface>
 
-            <Surface title="Quick Actions">
-              <div className="grid grid-cols-2 gap-2">
-                <Link
-                  href="/business/ledger"
-                  className="cc-btn-primary flex items-center gap-2 rounded-md px-3 py-2.5 text-xs font-medium"
-                >
-                  <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  Add Inventory
-                </Link>
-                <a
-                  href="/api/business/export?type=inventory"
-                  className="cc-btn-secondary flex items-center gap-2 rounded-md px-3 py-2.5 text-xs font-medium"
-                >
-                  <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                  </svg>
-                  Export
-                </a>
-                {primaryStorefront ? (
-                  <a
-                    href={primaryStorefront.store_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="cc-btn-secondary flex items-center gap-2 rounded-md px-3 py-2.5 text-xs font-medium"
-                  >
-                    <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                    </svg>
-                    {primaryStorefront.display_name}
-                  </a>
-                ) : ebayStoreHref ? (
-                  <a
-                    href={ebayStoreHref}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="cc-btn-secondary flex items-center gap-2 rounded-md px-3 py-2.5 text-xs font-medium"
-                  >
-                    <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                    </svg>
-                    eBay Store
-                  </a>
-                ) : (
+            <Surface title="Recent Sales">
+              {recentSalesLoading ? (
+                <div className="space-y-2.5">
+                  {[...Array(4)].map((_, i) => (
+                    <SkeletonLine key={i} w={i % 2 === 0 ? "w-full" : "w-3/4"} />
+                  ))}
+                </div>
+              ) : recentSales.length === 0 ? (
+                <p className="text-[var(--biz-muted)] text-xs">
+                  No sales recorded yet.{" "}
                   <Link
-                    href="/business/settings"
-                    className="cc-btn-secondary flex items-center gap-2 rounded-md px-3 py-2.5 text-xs font-medium text-[var(--muted)]"
+                    href="/business/ledger?tab=sales"
+                    className="text-[var(--biz-primary)] hover:underline"
                   >
-                    <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                    </svg>
-                    Add Storefront
-                  </Link>
-                )}
+                    Go to Sales tab
+                  </Link>{" "}
+                  to record one.
+                </p>
+              ) : (
+                <ul className="space-y-2.5">
+                  {recentSales.map((sale) => (
+                    <li key={sale.id} className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p
+                          className="truncate text-xs text-[var(--biz-text)]"
+                          title={sale.inventory_item?.title ?? "Sale"}
+                        >
+                          {sale.inventory_item?.title ?? "Sale"}
+                        </p>
+                        <p className="text-[10px] text-[var(--biz-muted)]">
+                          {CHANNEL_LABELS[sale.channel] ?? sale.channel} · {fmtDate(sale.sold_at)}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-xs font-semibold tabular-nums text-[var(--biz-primary)]">
+                          {fmt(sale.gross_revenue_cents)}
+                        </p>
+                        <p
+                          className={`text-[10px] tabular-nums ${
+                            sale.profit_cents >= 0 ? "text-[var(--biz-muted)]" : "text-red-600"
+                          }`}
+                        >
+                          {sale.profit_cents >= 0 ? "+" : ""}
+                          {fmt(sale.profit_cents)} profit
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {recentSales.length > 0 && (
                 <Link
-                  href="/business/grade-probability"
-                  className="cc-btn-secondary flex items-center gap-2 rounded-md border-amber-200 px-3 py-2.5 text-xs font-medium text-[var(--biz-warning)]"
+                  href="/business/ledger?tab=sales"
+                  className="mt-4 inline-block text-xs text-[var(--biz-primary)] transition-colors hover:underline"
                 >
-                  <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
-                  </svg>
-                  Grade Probability
+                  View all sales →
                 </Link>
-              </div>
+              )}
             </Surface>
           </div>
         </div>
       )}
 
-      {/* ── Recent Activity ──────────────────────────────────────────────── */}
+      {/* ── Recently Added ──────────────────────────────────────────────── */}
       {!needsMigration && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <Surface title="Recently Added">
-            {itemsEmpty ? (
-              <p className="text-[var(--biz-muted)] text-xs">
-                No items yet.{" "}
-                <Link href="/business/ledger" className="text-[var(--biz-primary)] hover:underline">
-                  Add your first item
-                </Link>
-                .
-              </p>
-            ) : (
-              <ul className="space-y-2.5">
-                {dashboardData.recentlyAdded.map((item) => (
-                  <li key={item.id} className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span
-                        className={`shrink-0 w-1.5 h-1.5 rounded-full ${
-                          item.status === "listed" || item.status === "pending_sale"
-                            ? "bg-blue-400"
-                            : item.status === "sold"
-                            ? "bg-emerald-400"
-                            : "bg-slate-300"
-                        }`}
-                      />
-                      <Link
-                        href="/business/ledger"
-                        className="truncate text-xs text-[var(--biz-text)] transition-colors hover:underline"
-                        title={item.title}
-                      >
-                        {item.title}
-                      </Link>
-                    </div>
-                    <span className="shrink-0 text-[10px] text-[var(--biz-muted)] tabular-nums">
-                      {fmtDate(item.created_at)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {items.length > 8 && (
-              <Link
-                href="/business/ledger"
-                className="mt-4 inline-block text-xs text-[var(--biz-primary)] transition-colors hover:underline"
-              >
-                View all {items.length} items →
+        <Surface title="Recently Added">
+          {itemsEmpty ? (
+            <p className="text-[var(--biz-muted)] text-xs">
+              No items yet.{" "}
+              <Link href="/business/ledger" className="text-[var(--biz-primary)] hover:underline">
+                Add your first item
               </Link>
-            )}
-          </Surface>
-
-          <Surface title="Recent Sales">
-            {recentSalesLoading ? (
-              <div className="space-y-2.5">
-                {[...Array(4)].map((_, i) => (
-                  <SkeletonLine key={i} w={i % 2 === 0 ? "w-full" : "w-3/4"} />
-                ))}
-              </div>
-            ) : recentSales.length === 0 ? (
-              <p className="text-[var(--biz-muted)] text-xs">
-                No sales recorded yet.{" "}
-                <Link
-                  href="/business/ledger?tab=sales"
-                  className="text-[var(--biz-primary)] hover:underline"
-                >
-                  Go to Sales tab
-                </Link>{" "}
-                to record one.
-              </p>
-            ) : (
-              <ul className="space-y-2.5">
-                {recentSales.map((sale) => (
-                  <li key={sale.id} className="flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <p
-                        className="truncate text-xs text-[var(--biz-text)]"
-                        title={sale.inventory_item?.title ?? "Sale"}
-                      >
-                        {sale.inventory_item?.title ?? "Sale"}
-                      </p>
-                      <p className="text-[10px] text-[var(--biz-muted)]">
-                        {CHANNEL_LABELS[sale.channel] ?? sale.channel} ·{" "}
-                        {fmtDate(sale.sold_at)}
-                      </p>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-xs font-semibold tabular-nums text-[var(--biz-primary)]">
-                        {fmt(sale.gross_revenue_cents)}
-                      </p>
-                      <p
-                        className={`text-[10px] tabular-nums ${
-                          sale.profit_cents >= 0 ? "text-[var(--biz-muted)]" : "text-red-600"
-                        }`}
-                      >
-                        {sale.profit_cents >= 0 ? "+" : ""}
-                        {fmt(sale.profit_cents)} profit
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {recentSales.length > 0 && (
-              <Link
-                href="/business/ledger?tab=sales"
-                className="mt-4 inline-block text-xs text-[var(--biz-primary)] transition-colors hover:underline"
-              >
-                View all sales →
-              </Link>
-            )}
-          </Surface>
-        </div>
+              .
+            </p>
+          ) : (
+            <ul className="space-y-2.5">
+              {dashboardData.recentlyAdded.map((item) => (
+                <li key={item.id} className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span
+                      className={`shrink-0 w-1.5 h-1.5 rounded-full ${
+                        item.status === "listed" || item.status === "pending_sale"
+                          ? "bg-blue-400"
+                          : item.status === "sold"
+                          ? "bg-emerald-400"
+                          : "bg-slate-300"
+                      }`}
+                    />
+                    <Link
+                      href="/business/ledger"
+                      className="truncate text-xs text-[var(--biz-text)] transition-colors hover:underline"
+                      title={item.title}
+                    >
+                      {item.title}
+                    </Link>
+                  </div>
+                  <span className="shrink-0 text-[10px] text-[var(--biz-muted)] tabular-nums">
+                    {fmtDate(item.created_at)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {items.length > 8 && (
+            <Link
+              href="/business/ledger"
+              className="mt-4 inline-block text-xs text-[var(--biz-primary)] transition-colors hover:underline"
+            >
+              View all {items.length} items →
+            </Link>
+          )}
+        </Surface>
       )}
     </div>
   );

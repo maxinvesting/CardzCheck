@@ -142,7 +142,7 @@ export default function Home() {
               <div className="rounded-lg border border-gray-800 bg-gray-950/40 p-4">
                 <p className="text-xs uppercase tracking-wide text-gray-500">Core Engines</p>
                 <p className="mt-1 text-sm font-semibold text-gray-100">
-                  Comps, Grade Probability, and Analyst AI
+                  Comps, Grade Probability Engine, and Analyst AI
                 </p>
               </div>
               <div className="rounded-lg border border-gray-800 bg-gray-950/40 p-4">
@@ -197,8 +197,8 @@ export default function Home() {
                 )}
               />
               <FeatureCard
-                title="Grade Before You Submit"
-                description="Estimate likely grading outcomes and expected value before paying grading fees."
+                title="Plan Grading Decisions"
+                description="Estimate likely grading outcomes and expected value before deciding whether to submit."
                 badge="Featured"
                 points={[
                   "Grade Probability Engine with confidence levels",

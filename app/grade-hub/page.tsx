@@ -44,7 +44,7 @@ function AppBar({ tier, unlimited }: { tier?: string; unlimited?: boolean }) {
         <div className="flex items-center gap-2.5">
           <ScanEngineLogo />
           <div className="leading-none">
-            <span className="text-sm font-bold tracking-tight text-white">GradeScan</span>
+            <span className="text-sm font-bold tracking-tight text-white">Grade Probability</span>
             <span className="ml-1.5 text-[10px] font-semibold tracking-widest text-blue-400 uppercase">Engine</span>
           </div>
         </div>
@@ -206,19 +206,19 @@ export default function GradeHubPage() {
             <div className="relative z-10 max-w-xl space-y-8 text-center lg:text-left">
               <div className="space-y-2">
                 <p className="text-[11px] font-bold tracking-[0.2em] uppercase text-blue-500">
-                  AI Pre-Grade Analysis Engine
+                  Grade Probability Engine
                 </p>
                 <h1 className="text-[clamp(2.4rem,5vw,3.6rem)] font-black leading-[1.05] tracking-tight text-white">
-                  Know the grade<br />
+                  Estimate your grade odds<br />
                   <span className="relative">
                     <span className="relative z-10 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400">
-                      before you submit.
+                      with AI-assisted analysis.
                     </span>
                   </span>
                 </h1>
                 <p className="mt-4 max-w-md text-base leading-relaxed text-white/45">
-                  Upload front and back. Our engine scores centering, corners, edges,
-                  and surface — delivering calibrated PSA & BGS grade probabilities in seconds.
+                  Upload front and back. The engine scores centering, corners, edges, and surface — and
+                  returns calibrated PSA &amp; BGS grade probability distributions.
                 </p>
               </div>
 
@@ -392,9 +392,9 @@ export default function GradeHubPage() {
       <footer className="border-t border-white/[0.05]">
         <div className="mx-auto max-w-6xl px-5 py-8">
           <p className="text-[11px] leading-relaxed text-white/20 max-w-2xl">
-            GradeScan Engine provides AI-assisted grade probability estimates. Results are not guaranteed
-            and should not replace professional grading judgment. CardzCheck is not affiliated with PSA,
-            BGS, SGC, or any grading company.
+            The Grade Probability Engine provides AI-assisted grade probability estimates. Results are not
+            guaranteed and should not replace professional grading judgment. CardzCheck is not affiliated
+            with PSA, BGS, SGC, or any grading company.
           </p>
         </div>
       </footer>
