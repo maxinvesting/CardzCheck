@@ -71,40 +71,33 @@ function MetricCell({
     <div
       className={cx(
         "min-w-0 border-[color:var(--biz-border)]",
-        compact ? "px-4 py-4 sm:px-5" : "px-5 py-5",
-        "flex min-h-[104px] flex-col justify-between",
+        compact ? "px-3 py-3 sm:px-4" : "px-4 py-4",
+        "flex flex-col gap-1",
         metricDividerClasses(index),
         item.emphasized && "bg-white/55"
       )}
     >
-      <div className="space-y-2">
-        <p className="text-[10px] font-semibold uppercase leading-[1.15] tracking-[0.18em] text-[var(--biz-muted)]">
-          {item.label}
+      <p className="text-[9px] font-semibold uppercase leading-none tracking-[0.16em] text-[var(--biz-muted)]">
+        {item.label}
+      </p>
+      {loading ? (
+        <div className="h-6 w-16 animate-pulse rounded bg-[var(--biz-skeleton)]" />
+      ) : (
+        <p
+          className={cx(
+            "whitespace-nowrap text-lg font-semibold leading-tight tracking-[-0.02em] tabular-nums",
+            item.valueClass,
+            item.emphasized && "text-xl"
+          )}
+        >
+          {item.value}
         </p>
-        {loading ? (
-          <div className="h-10 w-24 animate-pulse rounded bg-[var(--biz-skeleton)]" />
-        ) : (
-          <p
-            className={cx(
-              "whitespace-nowrap text-[clamp(1.7rem,2.5vw,2.35rem)] font-semibold leading-none tracking-[-0.03em] tabular-nums",
-              item.valueClass,
-              item.emphasized && "text-[clamp(1.8rem,2.7vw,2.5rem)]"
-            )}
-          >
-            {item.value}
-          </p>
-        )}
-      </div>
-
+      )}
       {!loading && item.detail ? (
-        <div className="pt-2">
-          <p className="text-xs leading-tight text-[var(--biz-muted)]">{item.detail}</p>
-          {item.secondaryDetail ? (
-            <p className="pt-1 text-xs leading-tight text-[var(--biz-muted)]">
-              {item.secondaryDetail}
-            </p>
-          ) : null}
-        </div>
+        <p className="text-[10px] leading-tight text-[var(--biz-muted)]">{item.detail}</p>
+      ) : null}
+      {!loading && item.secondaryDetail ? (
+        <p className="text-[10px] leading-tight text-[var(--biz-muted)]">{item.secondaryDetail}</p>
       ) : null}
     </div>
   );
@@ -185,11 +178,11 @@ export default function BusinessMetrics({
   }
 
   return (
-    <div className={compact ? "mb-3 md:mb-4" : "mb-5"}>
+    <div className={compact ? "mb-2" : "mb-4"}>
       <div style={KPI_STRIP_STYLE} className="overflow-hidden">
         <div
           className={cx(
-            "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4",
+            "grid grid-cols-2 sm:grid-cols-4",
             items.length === 8 ? "lg:grid-cols-8" : "lg:grid-cols-7"
           )}
         >

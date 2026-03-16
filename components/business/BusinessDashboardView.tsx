@@ -132,14 +132,14 @@ export default function BusinessDashboardView({
   }, [recentSales, items]);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       {/* ── Page header ─────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-xl font-semibold text-[var(--biz-text)] leading-snug">
+          <h1 className="text-lg font-semibold text-[var(--biz-text)] leading-snug">
             {businessName ?? "CardzCheck Business"}
           </h1>
-          <p className="mt-1 text-sm text-[var(--muted)]">
+          <p className="text-xs text-[var(--muted)]">
             Business overview &amp; insights
           </p>
         </div>
@@ -268,8 +268,8 @@ export default function BusinessDashboardView({
 
       {/* ── eBay Integration Panel ──────────────────────────────────────── */}
       {!needsMigration && (
-        <Surface className="p-6">
-          <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+        <Surface className="p-4">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-2.5">
               <span className="text-sm font-extrabold tracking-tighter leading-none">
                 <span style={{ color: "#e43137" }}>e</span>
@@ -315,7 +315,7 @@ export default function BusinessDashboardView({
           </div>
 
           {ebayAccount?.connected ? (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
               {[
                 { label: "Active Listings", value: String(ebayKpis.activeEbayListings) },
                 { label: "eBay Sales (30d)", value: String(ebayKpis.salesCount) },
@@ -325,15 +325,15 @@ export default function BusinessDashboardView({
                 <div
                   key={label}
                   style={{ border: "1px solid var(--biz-border)" }}
-                  className="rounded-lg border border-[var(--biz-border)] bg-[#F9FAFB] px-3 py-2.5"
+                  className="rounded-lg bg-[#F9FAFB] px-3 py-2"
                 >
-                  <p className="mb-1 text-xs uppercase tracking-normal text-[var(--biz-muted)]">{label}</p>
-                  <p className="text-xl font-semibold tabular-nums text-[var(--biz-text)]">{value}</p>
+                  <p className="mb-0.5 text-[9px] uppercase tracking-[0.14em] text-[var(--biz-muted)]">{label}</p>
+                  <p className="text-base font-semibold tabular-nums text-[var(--biz-text)]">{value}</p>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-xs text-[var(--biz-muted)]">
+            <p className="mt-2 text-xs text-[var(--biz-muted)]">
               Connect your eBay account to sync orders automatically, list cards directly from inventory, and track eBay-specific profit metrics.
             </p>
           )}
@@ -348,21 +348,17 @@ export default function BusinessDashboardView({
       {!needsMigration && (
         <div
           style={{ border: "1px solid var(--biz-border)", borderLeft: "3px solid var(--biz-accent-amber)" }}
-          className="flex flex-col gap-3 rounded-xl bg-[var(--biz-surface)] p-5 sm:flex-row sm:items-center sm:justify-between"
+          className="flex items-center justify-between gap-3 rounded-xl bg-[var(--biz-surface)] px-4 py-3 flex-wrap"
         >
-          <div className="flex items-start gap-3">
-            <div className="shrink-0 w-7 h-7 rounded-md bg-amber-500/15 flex items-center justify-center mt-0.5">
-              <svg className="w-3.5 h-3.5 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="flex items-center gap-2.5">
+            <div className="shrink-0 w-6 h-6 rounded-md bg-amber-500/15 flex items-center justify-center">
+              <svg className="w-3 h-3 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
               </svg>
             </div>
             <div>
-              <p className="text-sm font-semibold text-[var(--biz-text)]">
-                Grade your cards before you sell
-              </p>
-              <p className="mt-1 text-xs text-[var(--biz-muted)]">
-                Estimate grade probability and assess whether submitting to PSA/BGS is worth it — before you pay.
-              </p>
+              <p className="text-xs font-semibold text-[var(--biz-text)]">Grade your cards before you sell</p>
+              <p className="text-[11px] text-[var(--biz-muted)]">Estimate grade probability and assess whether submitting to PSA/BGS is worth it.</p>
             </div>
           </div>
           <Link
@@ -376,9 +372,9 @@ export default function BusinessDashboardView({
 
       {/* ── At a Glance ─────────────────────────────────────────────────── */}
       {!needsMigration && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {/* Left: Top movers + Risk signals */}
-          <div className="space-y-6">
+          <div className="space-y-4">
             <Surface title="Top Movers · Est. Market Value">
               {itemsEmpty ? (
                 <p className="text-[var(--biz-muted)] text-xs">
@@ -461,7 +457,7 @@ export default function BusinessDashboardView({
           </div>
 
           {/* Right: Funnel + Quick Actions */}
-          <div className="space-y-6">
+          <div className="space-y-4">
             <Surface title="Inventory Funnel">
               {itemsEmpty ? (
                 <p className="text-[var(--biz-muted)] text-xs">No inventory data yet.</p>
@@ -572,7 +568,7 @@ export default function BusinessDashboardView({
 
       {/* ── Recent Activity ──────────────────────────────────────────────── */}
       {!needsMigration && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <Surface title="Recently Added">
             {itemsEmpty ? (
               <p className="text-[var(--biz-muted)] text-xs">
