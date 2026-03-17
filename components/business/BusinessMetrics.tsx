@@ -1,209 +1,130 @@
 "use client";
 
-import type { CSSProperties } from "react";
 import type { InventoryValueSummary } from "@/lib/business/inventory-value";
 import type { BusinessMetrics as Metrics } from "@/types";
 
-function fmt(cents: number): string {
-  return new Intl.NumberFormat("en-US", {
+function fmtDollars(cents: number): string {
+  return (cents / 100).toLocaleString("en-US", {
     style: "currency",
     currency: "USD",
     minimumFractionDigits: 2,
-  }).format(cents / 100);
-}
-
-function cx(...classes: Array<string | false | null | undefined>): string {
-  return classes.filter(Boolean).join(" ");
+    maximumFractionDigits: 2,
+  });
 }
 
 interface Props {
   metrics: Metrics | null;
   loading: boolean;
-  /** Filter-aware inventory value; when provided, shows Inventory Value card */
   inventorySummary?: InventoryValueSummary | null;
-  /** Total item count (all items) for "X of Y" when filtered */
   totalItemCount?: number;
-  /** Compact/dense layout (Business mode) */
   compact?: boolean;
 }
 
-interface MetricItem {
-  label: string;
-  value: string;
-  valueClass: string;
-  detail?: string;
-  secondaryDetail?: string;
-  emphasized?: boolean;
-}
-
-const KPI_STRIP_STYLE: CSSProperties = {
-  background:
-    "linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(249, 250, 251, 0.96) 100%)",
+const CARD_STYLE: React.CSSProperties = {
+  background: "var(--color-background-secondary, #F9FAFB)",
   border: "1px solid var(--biz-border)",
-  borderRadius: "18px",
+  borderRadius: "8px",
+  padding: "14px 16px",
 };
 
-function metricDividerClasses(index: number): string {
-  return cx(
-    index >= 2 && "border-t",
-    index % 2 === 1 && "border-l",
-    index >= 3 ? "sm:border-t" : "sm:border-t-0",
-    index % 3 === 0 ? "sm:border-l-0" : "sm:border-l",
-    index >= 4 ? "md:border-t" : "md:border-t-0",
-    index % 4 === 0 ? "md:border-l-0" : "md:border-l",
-    "lg:border-t-0",
-    index === 0 ? "lg:border-l-0" : "lg:border-l"
-  );
-}
+const LABEL_STYLE: React.CSSProperties = {
+  fontSize: "11px",
+  fontWeight: 600,
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+  color: "var(--biz-muted)",
+  marginBottom: "4px",
+};
 
-function MetricCell({
-  item,
-  index,
-  loading,
-  compact,
-}: {
-  item: MetricItem;
-  index: number;
-  loading: boolean;
-  compact: boolean;
-}) {
-  return (
-    <div
-      className={cx(
-        "min-w-0 border-[color:var(--biz-border)]",
-        compact ? "px-4 py-4 sm:px-5" : "px-5 py-5",
-        "flex min-h-[104px] flex-col justify-between",
-        metricDividerClasses(index),
-        item.emphasized && "bg-white/55"
-      )}
-    >
-      <div className="space-y-2">
-        <p className="text-[10px] font-semibold uppercase leading-[1.15] tracking-[0.18em] text-[var(--biz-muted)]">
-          {item.label}
-        </p>
-        {loading ? (
-          <div className="h-10 w-24 animate-pulse rounded bg-[var(--biz-skeleton)]" />
-        ) : (
-          <p
-            className={cx(
-              "whitespace-nowrap text-[clamp(1.7rem,2.5vw,2.35rem)] font-semibold leading-none tracking-[-0.03em] tabular-nums",
-              item.valueClass,
-              item.emphasized && "text-[clamp(1.8rem,2.7vw,2.5rem)]"
-            )}
-          >
-            {item.value}
-          </p>
-        )}
-      </div>
+const VALUE_STYLE: React.CSSProperties = {
+  fontSize: "22px",
+  fontWeight: 500,
+  lineHeight: 1.1,
+  fontVariantNumeric: "tabular-nums",
+};
 
-      {!loading && item.detail ? (
-        <div className="pt-2">
-          <p className="text-xs leading-tight text-[var(--biz-muted)]">{item.detail}</p>
-          {item.secondaryDetail ? (
-            <p className="pt-1 text-xs leading-tight text-[var(--biz-muted)]">
-              {item.secondaryDetail}
-            </p>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
-  );
-}
+const SUB_STYLE: React.CSSProperties = {
+  fontSize: "11px",
+  color: "var(--biz-muted)",
+  marginTop: "4px",
+};
 
 export default function BusinessMetrics({
   metrics,
   loading,
   inventorySummary,
   totalItemCount,
-  compact = false,
 }: Props) {
-  const items: MetricItem[] = [
+  const revenueMtd = metrics ? fmtDollars(metrics.revenueMtd) : "—";
+  const revenueYtd = metrics ? fmtDollars(metrics.revenueYtd) : "—";
+  const profitMtd = metrics ? fmtDollars(metrics.profitMtd) : "—";
+  const profitYtd = metrics ? fmtDollars(metrics.profitYtd) : "—";
+  const profitPositive = !metrics || metrics.profitMtd >= 0;
+  const activeCount = metrics ? String(metrics.activeInventoryCount) : "—";
+  const totalCount = totalItemCount ?? 0;
+
+  let portfolioValue = "—";
+  let costBasisLine = "No cost data";
+  if (inventorySummary && inventorySummary.itemCount > 0) {
+    const value =
+      inventorySummary.itemsWithCmv > 0
+        ? inventorySummary.totalCmvCents
+        : inventorySummary.totalCostCents;
+    portfolioValue = fmtDollars(value);
+    costBasisLine = `Cost basis ${fmtDollars(inventorySummary.totalCostCents)}`;
+  }
+
+  const cards = [
     {
       label: "Revenue MTD",
-      value: metrics ? fmt(metrics.revenueMtd) : "—",
-      valueClass: "text-[var(--biz-text)]",
-    },
-    {
-      label: "Revenue YTD",
-      value: metrics ? fmt(metrics.revenueYtd) : "—",
-      valueClass: "text-[var(--biz-text)]",
+      value: revenueMtd,
+      valueColor: "var(--biz-text)" as string,
+      sub: `YTD ${revenueYtd}`,
     },
     {
       label: "Profit MTD",
-      value: metrics ? fmt(metrics.profitMtd) : "—",
-      valueClass: metrics && metrics.profitMtd >= 0 ? "text-emerald-700" : "text-red-600",
-    },
-    {
-      label: "Profit YTD",
-      value: metrics ? fmt(metrics.profitYtd) : "—",
-      valueClass: metrics && metrics.profitYtd >= 0 ? "text-emerald-700" : "text-red-600",
-    },
-    {
-      label: "Sales MTD",
-      value: metrics ? String(metrics.salesCountMtd) : "—",
-      valueClass: "text-[var(--biz-text)]",
-    },
-    {
-      label: "Sales YTD",
-      value: metrics ? String(metrics.salesCountYtd) : "—",
-      valueClass: "text-[var(--biz-text)]",
+      value: profitMtd,
+      valueColor: profitPositive ? "#16a34a" : "#dc2626",
+      sub: `YTD ${profitYtd}`,
     },
     {
       label: "Active Inventory",
-      value: metrics ? String(metrics.activeInventoryCount) : "—",
-      valueClass: "text-[var(--biz-text)]",
+      value: activeCount,
+      valueColor: "var(--biz-text)" as string,
+      sub: `${totalCount} total items`,
+    },
+    {
+      label: "Portfolio Value",
+      value: portfolioValue,
+      valueColor: "var(--biz-text)" as string,
+      sub: costBasisLine,
     },
   ];
 
-  if (inventorySummary) {
-    const itemCountLabel = `${inventorySummary.itemCount} item${inventorySummary.itemCount !== 1 ? "s" : ""}`;
-    const inventoryLabel =
-      totalItemCount != null && inventorySummary.itemCount !== totalItemCount
-        ? "Inventory Value (Filtered)"
-        : "Inventory Value";
-
-    items.push({
-      label: inventoryLabel,
-      value:
-        inventorySummary.itemCount === 0
-          ? fmt(0)
-          : inventorySummary.itemsWithCmv > 0
-            ? fmt(inventorySummary.totalCmvCents)
-            : fmt(inventorySummary.totalCostCents),
-      valueClass: "text-[var(--biz-text)]",
-      detail:
-        inventorySummary.itemsWithCmv > 0
-          ? `Est. Market Value · ${itemCountLabel}`
-          : `Cost Basis · ${itemCountLabel}`,
-      secondaryDetail:
-        inventorySummary.itemsWithCmv > 0 &&
-        inventorySummary.itemsWithCmv < inventorySummary.itemCount
-          ? `Cost: ${fmt(inventorySummary.totalCostCents)}`
-          : undefined,
-      emphasized: true,
-    });
-  }
-
   return (
-    <div className={compact ? "mb-3 md:mb-4" : "mb-5"}>
-      <div style={KPI_STRIP_STYLE} className="overflow-hidden">
-        <div
-          className={cx(
-            "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4",
-            items.length === 8 ? "lg:grid-cols-8" : "lg:grid-cols-7"
-          )}
-        >
-          {items.map((item, index) => (
-            <MetricCell
-              key={item.label}
-              item={item}
-              index={index}
-              loading={loading}
-              compact={compact}
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+        gap: "10px",
+      }}
+    >
+      {cards.map(({ label, value, valueColor, sub }) => (
+        <div key={label} style={CARD_STYLE}>
+          {loading ? (
+            <div
+              style={{ height: "52px" }}
+              className="animate-pulse rounded bg-[var(--biz-skeleton)]"
             />
-          ))}
+          ) : (
+            <>
+              <p style={LABEL_STYLE}>{label}</p>
+              <p style={{ ...VALUE_STYLE, color: valueColor }}>{value}</p>
+              <p style={SUB_STYLE}>{sub}</p>
+            </>
+          )}
         </div>
-      </div>
+      ))}
     </div>
   );
 }

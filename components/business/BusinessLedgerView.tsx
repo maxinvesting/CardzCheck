@@ -27,6 +27,7 @@ interface Props {
   children: ReactNode;
 }
 
+
 export default function BusinessLedgerView({
   ebayStoreHref,
   metrics,
@@ -171,7 +172,9 @@ export default function BusinessLedgerView({
       </Surface>
 
       {/* AI insights preview — only on inventory tab */}
-      {!needsMigration && activeTab === "inventory" && <BusinessAnalystPreviewCard items={items} />}
+      {!needsMigration && activeTab === "inventory" && (
+        <BusinessAnalystPreviewCard items={items} metrics={metrics} />
+      )}
 
       {/* Tab switcher */}
       {!needsMigration && (

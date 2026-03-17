@@ -1,79 +1,245 @@
 "use client";
 
+import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 import { useMemo } from "react";
-import type { BusinessInventoryItem } from "@/types";
+import type { BusinessInventoryItem, BusinessMetrics as MetricsType } from "@/types";
 import { generateBusinessAnalystInsights } from "@/lib/business/analyst-insights";
-import { Surface } from "@/components/ui/Surface";
 
 interface Props {
   items: BusinessInventoryItem[];
+  metrics?: MetricsType | null;
 }
 
-function pluralize(count: number, singular: string, plural = `${singular}s`): string {
-  return count === 1 ? singular : plural;
+function fmtDollars(cents: number): string {
+  return (cents / 100).toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
-export default function BusinessAnalystPreviewCard({ items }: Props) {
+function Badge({
+  children,
+  color,
+}: {
+  children: ReactNode;
+  color: "amber" | "blue" | "green";
+}) {
+  const styles: Record<string, CSSProperties> = {
+    amber: { background: "#FEF3C7", color: "#92400E" },
+    blue: { background: "#DBEAFE", color: "#1E40AF" },
+    green: { background: "#D1FAE5", color: "#065F46" },
+  };
+  return (
+    <span
+      style={{
+        ...styles[color],
+        fontSize: "11px",
+        fontWeight: 600,
+        padding: "2px 7px",
+        borderRadius: "4px",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
+function StatRow({ label, badge }: { label: string; badge: ReactNode }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "5px 0",
+      }}
+    >
+      <span style={{ fontSize: "12px", color: "var(--biz-muted)" }}>{label}</span>
+      {badge}
+    </div>
+  );
+}
+
+const PANEL_STYLE: CSSProperties = {
+  background: "#fff",
+  border: "0.5px solid var(--biz-border)",
+  borderRadius: "8px",
+  padding: "16px",
+};
+
+const PANEL_TITLE_STYLE: CSSProperties = {
+  fontSize: "13px",
+  fontWeight: 600,
+  color: "var(--biz-text)",
+  margin: 0,
+};
+
+const PANEL_SUBTITLE_STYLE: CSSProperties = {
+  fontSize: "11px",
+  color: "var(--biz-muted)",
+  marginTop: "2px",
+};
+
+export default function BusinessAnalystPreviewCard({ items, metrics }: Props) {
   const insights = useMemo(() => generateBusinessAnalystInsights(items), [items]);
 
-  const actionSummary =
-    insights.summary.actionCount > 0
-      ? `${insights.summary.actionCount} ${pluralize(insights.summary.actionCount, "action")} to review`
-      : "No actions right now";
+  const revenueMtd = metrics?.revenueMtd ?? 0;
+  const profitMtd = metrics?.profitMtd ?? 0;
+  const salesCountMtd = metrics?.salesCountMtd ?? 0;
+
+  const marginPct =
+    revenueMtd > 0 ? `${((profitMtd / revenueMtd) * 100).toFixed(1)}%` : "—";
+  const avgSalePrice =
+    salesCountMtd > 0
+      ? fmtDollars(Math.round(revenueMtd / salesCountMtd))
+      : "—";
+
+  const avgDaysToSell = useMemo(() => {
+    const soldItems = items.filter(
+      (i) => i.status === "sold" && i.acquisition_date && i.updated_at
+    );
+    if (soldItems.length === 0) return null;
+    const total = soldItems.reduce((sum, item) => {
+      const acquiredMs = Date.parse(item.acquisition_date!);
+      const updatedMs = Date.parse(item.updated_at);
+      if (Number.isNaN(acquiredMs) || Number.isNaN(updatedMs)) return sum;
+      return sum + Math.max(0, Math.floor((updatedMs - acquiredMs) / 86_400_000));
+    }, 0);
+    return Math.round(total / soldItems.length);
+  }, [items]);
 
   return (
-    <Surface className="mb-3 p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-semibold text-[var(--biz-text)]">Today&apos;s Actions</h2>
-          <p className="mt-0.5 text-xs text-[var(--biz-muted)]">
-            Actionable signals from your inventory data
-          </p>
-        </div>
-        <span className="rounded border border-[var(--biz-border)] bg-[#F0FDF4] px-1.5 py-0.5 text-[10px] font-medium text-[var(--biz-primary)] tracking-wide">
-          AI
-        </span>
-      </div>
-
-      <div className="mt-3 grid gap-2 text-xs sm:grid-cols-3">
-        {[
-          {
-            label: "Actions",
-            value: actionSummary,
-            sub: "List, reprice, and market signals",
-          },
-          {
-            label: "Unlisted",
-            value: `${insights.summary.unlistedActiveCount} active ${pluralize(insights.summary.unlistedActiveCount, "item")}`,
-            sub: "Items not currently listed",
-          },
-          {
-            label: "Est. MV Coverage",
-            value: `${insights.coverage.cmvCoveragePct}% of active inventory`,
-            sub: "Share of inventory with comps (Beta)",
-          },
-        ].map(({ label, value, sub }) => (
-          <div
-            key={label}
-            style={{ border: "1px solid var(--biz-border)" }}
-            className="rounded-lg bg-[#F9FAFB] px-3 py-2.5"
-          >
-            <p className="mb-1 text-[10px] uppercase tracking-normal text-[var(--biz-muted)]">{label}</p>
-            <p className="text-[var(--biz-text)]">{value}</p>
-            <p className="mt-0.5 text-[10px] text-[var(--biz-muted)]">{sub}</p>
-          </div>
-        ))}
-      </div>
-
-      <div className="mt-3 flex justify-end">
-        <Link
-          href="/business/insights"
-          className="inline-flex min-h-[44px] items-center px-1 text-xs font-medium text-[var(--biz-primary)] transition-colors hover:underline"
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "1fr 1fr",
+        gap: "10px",
+        marginBottom: "12px",
+      }}
+    >
+      {/* Left panel: Today's Actions */}
+      <div style={PANEL_STYLE}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            marginBottom: "12px",
+          }}
         >
-          View insights →
-        </Link>
+          <div>
+            <h2 style={PANEL_TITLE_STYLE}>Today&apos;s actions</h2>
+            <p style={PANEL_SUBTITLE_STYLE}>Actionable signals from your inventory</p>
+          </div>
+          <span
+            style={{
+              fontSize: "10px",
+              fontWeight: 600,
+              letterSpacing: "0.06em",
+              background: "#F0FDF4",
+              color: "var(--biz-primary)",
+              border: "1px solid var(--biz-border)",
+              borderRadius: "4px",
+              padding: "2px 6px",
+            }}
+          >
+            AI
+          </span>
+        </div>
+
+        <StatRow
+          label="List or reprice"
+          badge={<Badge color="amber">{insights.summary.actionCount} items</Badge>}
+        />
+        <StatRow
+          label="Unlisted"
+          badge={<Badge color="blue">{insights.summary.unlistedActiveCount} items</Badge>}
+        />
+        <StatRow
+          label="Market coverage"
+          badge={<Badge color="green">{insights.coverage.cmvCoveragePct}%</Badge>}
+        />
+
+        <div style={{ marginTop: "10px" }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              marginBottom: "4px",
+            }}
+          >
+            <span style={{ fontSize: "11px", color: "var(--biz-muted)" }}>
+              Est. MV coverage
+            </span>
+            <span style={{ fontSize: "11px", color: "var(--biz-muted)" }}>
+              {insights.coverage.cmvCoveragePct}%
+            </span>
+          </div>
+          <div
+            style={{
+              height: "6px",
+              borderRadius: "3px",
+              background: "#E5E7EB",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                height: "100%",
+                width: `${insights.coverage.cmvCoveragePct}%`,
+                background: "#16a34a",
+                borderRadius: "3px",
+              }}
+            />
+          </div>
+        </div>
+
+        <div style={{ marginTop: "10px", display: "flex", justifyContent: "flex-end" }}>
+          <Link
+            href="/business/insights"
+            style={{ fontSize: "12px", fontWeight: 500, color: "var(--biz-primary)" }}
+          >
+            View insights →
+          </Link>
+        </div>
       </div>
-    </Surface>
+
+      {/* Right panel: Sales Summary */}
+      <div style={PANEL_STYLE}>
+        <div style={{ marginBottom: "12px" }}>
+          <h2 style={PANEL_TITLE_STYLE}>Sales summary</h2>
+          <p style={PANEL_SUBTITLE_STYLE}>Month-to-date performance</p>
+        </div>
+
+        <StatRow
+          label="Sales MTD"
+          badge={
+            <Badge color="green">
+              {salesCountMtd} {salesCountMtd === 1 ? "sale" : "sales"}
+            </Badge>
+          }
+        />
+        <StatRow
+          label="Margin %"
+          badge={<Badge color="green">{marginPct}</Badge>}
+        />
+        <StatRow
+          label="Avg sale price"
+          badge={<Badge color="blue">{avgSalePrice}</Badge>}
+        />
+        <StatRow
+          label="Days to sell (avg)"
+          badge={
+            <Badge color="amber">
+              {avgDaysToSell !== null ? `${avgDaysToSell} days` : "—"}
+            </Badge>
+          }
+        />
+      </div>
+    </div>
   );
 }
