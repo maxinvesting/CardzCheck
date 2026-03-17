@@ -97,10 +97,10 @@ export default function EbayListingModal({
         overrideImageUrls && overrideImageUrls.length > 0
           ? overrideImageUrls
           : [
-              (item as any).user_image_url,
-              (item as any).stock_image_url,
-              (item as any).ebay_image_url,
-            ].filter((u: unknown): u is string => typeof u === "string" && u.length > 0);
+              item.user_image_url,
+              item.stock_image_url,
+              item.ebay_image_url,
+            ].filter((u): u is string => typeof u === "string" && u.length > 0);
 
       const res = await fetch("/api/business/ebay/listings", {
         method: "POST",

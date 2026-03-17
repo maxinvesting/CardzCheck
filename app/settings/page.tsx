@@ -385,7 +385,7 @@ function SettingsContent() {
             </div>
           </div>
 
-          {isBusinessSettings && (
+          {isBusinessSettings && isBusinessMember && (
             <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                 Storefronts
@@ -394,7 +394,7 @@ function SettingsContent() {
             </div>
           )}
 
-          {isBusinessSettings && (
+          {isBusinessSettings && isBusinessMember && (
             <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                 eBay Integration

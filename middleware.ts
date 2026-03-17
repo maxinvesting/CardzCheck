@@ -15,6 +15,11 @@ const RATE_LIMITS: Record<string, { limit: number; windowSec: number }> = {
   // Bulk Mode — generous limits since processing is batched server-side
   "/api/bulk/batches":         { limit: 30, windowSec: 60 },   // list + create
   "/api/bulk/batches/process": { limit: 5,  windowSec: 60 },   // AI-heavy; tight limit
+  // eBay Selling — prevent API abuse from compromised or runaway business tokens
+  "/api/business/ebay/listings":        { limit: 20, windowSec: 60 },  // create / list
+  "/api/business/ebay/listings/import": { limit: 3,  windowSec: 60 },  // async import job
+  "/api/business/ebay/sales/import":    { limit: 3,  windowSec: 60 },  // async sales import
+  "/api/business/ebay/orders/sync":     { limit: 8,  windowSec: 60 },  // manual "Sync Now"
 };
 
 // ---------------------------------------------------------------------------
