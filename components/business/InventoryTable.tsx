@@ -551,11 +551,11 @@ export default function InventoryTable({
         return <span className="text-[10px] text-[var(--biz-muted)]">Recorded</span>;
       }
       const hasEbayListing = !!(item as any).ebay_item_id;
-      const terminalStatus = item.status === "sold" || item.status === "returned";
+      // status === "sold" already handled by early return above; only check remaining terminal states
       const canListOnEbay =
         ebayConnected &&
         !hasEbayListing &&
-        !terminalStatus &&
+        item.status !== "returned" &&
         item.status !== "pending_sale";
       return (
         <div className="flex flex-col items-start gap-1">
