@@ -288,96 +288,177 @@ export default function BusinessDashboardView({
         </div>
       )}
 
-      {/* ── Workflow band: eBay + Grade & Actions ───────────────────────── */}
+      {/* ── Workflow band: Sales Channels + Grade & Actions ─────────────── */}
       {!needsMigration && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          {/* eBay panel */}
+          {/* Sales Channels panel */}
           <Surface className="p-6">
-            <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-              <div className="flex items-center gap-2.5">
-                <span className="text-sm font-extrabold tracking-tighter leading-none">
-                  <span style={{ color: "#e43137" }}>e</span>
-                  <span style={{ color: "#0064d3" }}>B</span>
-                  <span style={{ color: "#f5af02" }}>a</span>
-                  <span style={{ color: "#86b817" }}>y</span>
-                </span>
-                <span className="text-xs text-[var(--muted)]">
-                  {ebayAccount?.connected
-                    ? `Connected · ${ebayAccount.ebay_username ?? ""}`
-                    : "Not connected"}
-                </span>
-                {ebayAccount?.top_rated_seller && (
-                  <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-[var(--biz-warning)]">
-                    Top Rated Plus
+            <div className="flex items-center justify-between gap-2 mb-4">
+              <h2 className="text-sm font-semibold text-[var(--biz-text)]">Sales Channels</h2>
+              <Link
+                href="/business/settings?section=storefronts"
+                className="text-[11px] text-[var(--biz-muted)] hover:text-[var(--biz-text)] transition-colors"
+              >
+                Manage →
+              </Link>
+            </div>
+
+            <div className="space-y-3">
+              {/* eBay row */}
+              <div className="flex items-center justify-between gap-3 rounded-lg border border-[var(--biz-border)] bg-[#F9FAFB] px-3 py-2.5">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className="text-sm font-extrabold tracking-tighter leading-none shrink-0">
+                    <span style={{ color: "#e43137" }}>e</span>
+                    <span style={{ color: "#0064d3" }}>B</span>
+                    <span style={{ color: "#f5af02" }}>a</span>
+                    <span style={{ color: "#86b817" }}>y</span>
                   </span>
+                  {ebayAccount?.connected ? (
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                        Connected
+                      </span>
+                      {ebayAccount.ebay_username && (
+                        <span className="truncate text-[11px] text-[var(--biz-muted)]">
+                          {ebayAccount.ebay_username}
+                        </span>
+                      )}
+                      {ebayAccount.top_rated_seller && (
+                        <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                          TRS+
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-[11px] text-[var(--biz-muted)]">Not connected</span>
+                  )}
+                </div>
+                {ebayAccount?.connected ? (
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={handleSyncEbayOrders}
+                      disabled={syncingEbayOrders}
+                      className="cc-btn-secondary rounded px-2 py-1 text-[11px] font-medium disabled:opacity-50"
+                    >
+                      {syncingEbayOrders ? "Syncing…" : "Sync"}
+                    </button>
+                    <Link
+                      href="/business/ledger"
+                      className="cc-btn-secondary rounded px-2 py-1 text-[11px] font-medium"
+                    >
+                      Ledger
+                    </Link>
+                  </div>
+                ) : (
+                  <a
+                    href="/api/auth/ebay"
+                    className="cc-btn-primary shrink-0 rounded px-2.5 py-1 text-[11px] font-semibold"
+                  >
+                    Connect eBay
+                  </a>
                 )}
               </div>
 
-              {ebayAccount?.connected ? (
-                <div className="flex items-center gap-2 flex-wrap">
-                  <button
-                    onClick={() => setShowImportWizard(true)}
-                    className="cc-btn-secondary rounded-md px-3 py-1.5 text-xs font-medium"
-                  >
-                    Import
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSyncEbayOrders}
-                    disabled={syncingEbayOrders}
-                    className="cc-btn-secondary rounded-md px-3 py-1.5 text-xs font-medium disabled:opacity-50"
-                  >
-                    {syncingEbayOrders ? "Syncing…" : "Sync Orders"}
-                  </button>
-                  <Link
-                    href="/business/ledger"
-                    className="cc-btn-secondary rounded-md px-3 py-1.5 text-xs font-semibold"
-                  >
-                    View Listings
-                  </Link>
-                </div>
-              ) : (
-                <a
-                  href="/api/auth/ebay"
-                  className="cc-btn-primary rounded-md px-3 py-1.5 text-xs font-semibold"
-                >
-                  Connect eBay
-                </a>
-              )}
+              {/* Whatnot row */}
+              {(() => {
+                const wn = storefronts.find((s) => s.platform === "whatnot");
+                return (
+                  <div className="flex items-center justify-between gap-3 rounded-lg border border-[var(--biz-border)] bg-[#F9FAFB] px-3 py-2.5">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="text-[11px] font-semibold text-purple-700 shrink-0">Whatnot</span>
+                      {wn ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-1.5 py-0.5 text-[10px] font-medium text-purple-700">
+                          <span className="h-1.5 w-1.5 rounded-full bg-purple-500" />
+                          Connected
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-[var(--biz-muted)]">Not configured</span>
+                      )}
+                    </div>
+                    {wn ? (
+                      <a
+                        href={wn.store_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="cc-btn-secondary shrink-0 rounded px-2 py-1 text-[11px] font-medium"
+                      >
+                        View Store
+                      </a>
+                    ) : (
+                      <Link
+                        href="/business/settings?section=storefronts"
+                        className="cc-btn-secondary shrink-0 rounded px-2.5 py-1 text-[11px] font-medium"
+                      >
+                        + Add
+                      </Link>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Website row */}
+              {(() => {
+                const web = storefronts.find((s) => s.platform === "website" || s.platform === "shopify");
+                return (
+                  <div className="flex items-center justify-between gap-3 rounded-lg border border-[var(--biz-border)] bg-[#F9FAFB] px-3 py-2.5">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="text-[11px] font-semibold text-sky-700 shrink-0">Website</span>
+                      {web ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium text-sky-700">
+                          <span className="h-1.5 w-1.5 rounded-full bg-sky-500" />
+                          Connected
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-[var(--biz-muted)]">Not configured</span>
+                      )}
+                    </div>
+                    {web ? (
+                      <a
+                        href={web.store_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="cc-btn-secondary shrink-0 rounded px-2 py-1 text-[11px] font-medium"
+                      >
+                        View Store
+                      </a>
+                    ) : (
+                      <Link
+                        href="/business/settings?section=storefronts"
+                        className="cc-btn-secondary shrink-0 rounded px-2.5 py-1 text-[11px] font-medium"
+                      >
+                        + Add
+                      </Link>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
-            {ebayAccount?.connected ? (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {/* eBay KPIs when connected */}
+            {ebayAccount?.connected && (
+              <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {[
-                  { label: "Active Listings", value: String(ebayKpis.activeEbayListings) },
-                  { label: "eBay Sales (30d)", value: String(ebayKpis.salesCount) },
-                  { label: "eBay Revenue (30d)", value: fmt(ebayKpis.revenueCents) },
-                  { label: "eBay Profit (30d)", value: fmt(ebayKpis.profitCents) },
+                  { label: "Active", value: String(ebayKpis.activeEbayListings) },
+                  { label: "Sales (30d)", value: String(ebayKpis.salesCount) },
+                  { label: "Revenue (30d)", value: fmt(ebayKpis.revenueCents) },
+                  { label: "Profit (30d)", value: fmt(ebayKpis.profitCents) },
                 ].map(({ label, value }) => (
                   <div
                     key={label}
                     style={{ border: "1px solid var(--biz-border)" }}
-                    className="rounded-lg border border-[var(--biz-border)] bg-[#F9FAFB] px-3 py-2.5"
+                    className="rounded-lg px-2.5 py-2"
                   >
-                    <p className="mb-1 text-xs uppercase tracking-normal text-[var(--biz-muted)]">
-                      {label}
-                    </p>
-                    <p className="text-xl font-semibold tabular-nums text-[var(--biz-text)]">
-                      {value}
-                    </p>
+                    <p className="mb-0.5 text-[10px] uppercase tracking-normal text-[var(--biz-muted)]">{label}</p>
+                    <p className="text-base font-semibold tabular-nums text-[var(--biz-text)]">{value}</p>
                   </div>
                 ))}
               </div>
-            ) : (
-              <p className="text-xs text-[var(--biz-muted)]">
-                Connect your eBay account to sync orders automatically, list cards directly from
-                inventory, and track eBay-specific profit metrics.
-              </p>
             )}
+
             {syncError && (
-              <p className="mt-2 text-[10px] text-red-600">
-                {syncError}
-              </p>
+              <p className="mt-2 text-[10px] text-red-600">{syncError}</p>
             )}
           </Surface>
 

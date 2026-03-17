@@ -35,6 +35,7 @@ import type {
   BusinessMetrics as MetricsType,
   BusinessSale,
   EbayAccountStatus,
+  UserStorefront,
 } from "@/types";
 import type { StoreTier } from "@/lib/business/EbayProfitEngine";
 import {
@@ -194,6 +195,8 @@ function LedgerPageContent() {
   const [storeTier, setStoreTier] = useState<StoreTier>("none");
   const [ebayConnected, setEbayConnected] = useState(false);
   const [ebayTopRated, setEbayTopRated] = useState(false);
+  const [whatnotStorefront, setWhatnotStorefront] = useState<UserStorefront | null>(null);
+  const [websiteStorefront, setWebsiteStorefront] = useState<UserStorefront | null>(null);
   const perfEnabled = useMemo(() => isPerfEnabled(), []);
   const perfMockMode = useMemo(
     () => perfEnabled && searchParams.get("perfMock") === "1",
@@ -472,6 +475,19 @@ function LedgerPageContent() {
     }
   }, []);
 
+  const loadStorefronts = useCallback(async () => {
+    try {
+      const res = await fetch("/api/business/storefronts", { cache: "no-store" });
+      if (!res.ok) return;
+      const data: { storefronts: UserStorefront[] } = await res.json();
+      const storefronts = data.storefronts ?? [];
+      setWhatnotStorefront(storefronts.find((s) => s.platform === "whatnot") ?? null);
+      setWebsiteStorefront(storefronts.find((s) => s.platform === "website") ?? null);
+    } catch {
+      // Best-effort; channel bar will show "not connected" state.
+    }
+  }, []);
+
   const loadUserProfile = useCallback(async () => {
     if (perfMockMode) {
       setBusinessName("Perf Mock Business");
@@ -547,10 +563,10 @@ function LedgerPageContent() {
         router.push("/login?redirect=/business");
         return;
       }
-      await Promise.all([loadInventory(), loadMetrics(), loadEbayStoreTier()]);
+      await Promise.all([loadInventory(), loadMetrics(), loadEbayStoreTier(), loadStorefronts()]);
     }
     init();
-  }, [router, loadUserProfile, loadInventory, loadMetrics, loadEbayStoreTier]);
+  }, [router, loadUserProfile, loadInventory, loadMetrics, loadEbayStoreTier, loadStorefronts]);
 
   useEffect(() => {
     if (activeTab !== "sales" || hasAccess === false || needsMigration) return;
@@ -1082,6 +1098,11 @@ function LedgerPageContent() {
         <BusinessLedgerView
           businessName={businessName}
           ebayStoreHref={ebayStoreHref}
+          ebayConnected={ebayConnected}
+          whatnotConnected={Boolean(whatnotStorefront)}
+          whatnotUrl={whatnotStorefront?.store_url ?? null}
+          websiteConnected={Boolean(websiteStorefront)}
+          websiteUrl={websiteStorefront?.store_url ?? null}
           metrics={metrics}
           metricsLoading={metricsLoading}
           inventorySummary={inventorySummary}
