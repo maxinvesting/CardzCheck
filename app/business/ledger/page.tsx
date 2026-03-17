@@ -192,6 +192,8 @@ function LedgerPageContent() {
   const [salesPageSize] = useState(50);
   const [salesTotal, setSalesTotal] = useState(0);
   const [storeTier, setStoreTier] = useState<StoreTier>("none");
+  const [ebayConnected, setEbayConnected] = useState(false);
+  const [ebayTopRated, setEbayTopRated] = useState(false);
   const perfEnabled = useMemo(() => isPerfEnabled(), []);
   const perfMockMode = useMemo(
     () => perfEnabled && searchParams.get("perfMock") === "1",
@@ -463,8 +465,10 @@ function LedgerPageContent() {
       if (!res.ok) return;
       const data: EbayAccountStatus = await res.json();
       setStoreTier(data.store_tier ?? "none");
+      setEbayConnected(Boolean(data.connected));
+      setEbayTopRated(Boolean(data.top_rated_seller));
     } catch {
-      // Best-effort only; default "none" is still safe.
+      // Best-effort only; defaults are safe.
     }
   }, []);
 
@@ -1121,6 +1125,8 @@ function LedgerPageContent() {
                     onDelete={handleDelete}
                     onMarkSold={handleMarkSold}
                     onFilteredChange={handleFilteredChange}
+                    ebayConnected={ebayConnected}
+                    ebayTopRated={ebayTopRated}
                     dense
                     perfEnabled={perfEnabled}
                   />
@@ -1135,6 +1141,8 @@ function LedgerPageContent() {
                   onDelete={handleDelete}
                   onMarkSold={handleMarkSold}
                   onFilteredChange={handleFilteredChange}
+                  ebayConnected={ebayConnected}
+                  ebayTopRated={ebayTopRated}
                   dense
                 />
               )}
