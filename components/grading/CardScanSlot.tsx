@@ -291,7 +291,6 @@ export default function CardScanSlot({
               <DualCardUploader
                 onIdentified={handleIdentified}
                 disabled={disabled || isAnalyzing}
-                onStart={() => notify("analyzing")}
                 onReset={handleReset}
               />
               {slotState === "ready" && identifiedCard && (
