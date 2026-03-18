@@ -981,12 +981,14 @@ export default function GradeProbabilityPanel({
         ref={printRef}
         aria-hidden="true"
         style={{
-          position: "absolute",
-          left: -9999,
-          top: -9999,
+          // Keep the print target renderable for html2canvas.
+          // `visibility: hidden` can produce a blank export in some browsers.
+          position: "fixed",
+          left: -10000,
+          top: 0,
           width: 794,
-          visibility: "hidden",
           pointerEvents: "none",
+          zIndex: -1,
         }}
       >
         <GradeReportPrint
