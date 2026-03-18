@@ -224,6 +224,22 @@ function normalizeProbabilityMap<T extends Record<string, number>>(map: T): T {
   return normalized;
 }
 
+function blendProbabilityMaps<T extends Record<string, number>>(
+  base: T,
+  overlay: T,
+  overlayWeight: number
+): T {
+  const weight = clamp(overlayWeight, 0, 1);
+  const blended = Object.fromEntries(
+    Object.keys(base).map((key) => [
+      key,
+      (base[key as keyof T] ?? 0) * (1 - weight) +
+        (overlay[key as keyof T] ?? 0) * weight,
+    ])
+  ) as T;
+  return normalizeProbabilityMap(blended);
+}
+
 function normalizeEvidenceKinds(value: unknown): GradeScanPhotoKind[] {
   if (!Array.isArray(value)) return [];
   return value.filter(
@@ -318,12 +334,12 @@ function applyLimitedVisibilityAdjustments(
 
   if (adjusted.grade_probabilities?.psa) {
     const psa = { ...adjusted.grade_probabilities.psa };
-    const from10 = Math.min(psa["10"], 0.05);
-    const from9 = Math.min(psa["9"], 0.05);
+    // Limited visibility should reduce over-confidence, but not force a
+    // downward grade shift when evidence is otherwise strong.
+    const from10 = Math.min(psa["10"], 0.04);
     psa["10"] -= from10;
-    psa["9"] -= from9;
-    psa["8"] += (from10 + from9) * 0.4;
-    psa["7_or_lower"] += (from10 + from9) * 0.6;
+    psa["9"] += from10 * 0.7;
+    psa["8"] += from10 * 0.3;
     const normalizedPsa = normalizeProbabilityMap(psa);
     adjusted.grade_probabilities = {
       ...adjusted.grade_probabilities,
@@ -653,13 +669,19 @@ function applyConfidencePenalty(
   if (confidence === "high") return psa;
   const adjusted = { ...psa };
   const strengthMultiplier = clamp(options?.strengthMultiplier ?? 1, 0, 1.25);
-  const shift = (confidence === "medium" ? 0.08 : 0.16) * strengthMultiplier;
-  const from10 = Math.min(adjusted["10"], shift * 0.6);
-  const from9 = Math.min(adjusted["9"], shift * 0.4);
+  const shift = (confidence === "medium" ? 0.05 : 0.09) * strengthMultiplier;
+
+  // Uncertainty should widen outcomes, not systematically bias grades lower.
+  // Pull probability mass from extreme tails toward the middle buckets.
+  const from10 = Math.min(adjusted["10"], shift);
+  const from7 = Math.min(adjusted["7_or_lower"], shift * 0.5);
+
   adjusted["10"] -= from10;
-  adjusted["9"] -= from9;
-  adjusted["8"] += (from10 + from9) * 0.45;
-  adjusted["7_or_lower"] += (from10 + from9) * 0.55;
+  adjusted["7_or_lower"] -= from7;
+
+  adjusted["9"] += from10 * 0.65 + from7 * 0.4;
+  adjusted["8"] += from10 * 0.35 + from7 * 0.6;
+
   return normalizeProbabilityMap(adjusted);
 }
 
@@ -984,14 +1006,24 @@ async function buildEstimateFromParsed(
         distributionFromRange(rangeLabel, confidence.confidence_label)
       );
   const deterministicPsa = buildDeterministicPsaFromWeightedScore(calibratedScore);
-  let psa = calibratorPsa
-    ? calibratorPsa
-    : blendPsaDistributions(
-        deterministicPsa,
-        modelPsa,
-        confidence.confidence_label,
-        analysisStatus
-      );
+  const basePsa = blendPsaDistributions(
+    deterministicPsa,
+    modelPsa,
+    confidence.confidence_label,
+    analysisStatus
+  );
+  let psa = basePsa;
+  if (calibratorPsa) {
+    // Treat calibrator as an adjustment layer so card-specific evidence still
+    // drives variation and we avoid repetitive distributions across scans.
+    const calibratorWeight =
+      confidence.confidence_label === "high"
+        ? 0.45
+        : confidence.confidence_label === "medium"
+        ? 0.35
+        : 0.25;
+    psa = blendProbabilityMaps(basePsa, calibratorPsa, calibratorWeight);
+  }
   psa = applyCenteringGate(psa, centeringDetail, analysisStatus, cardCategory);
   psa = applyTcgDefectPenalty(
     psa,

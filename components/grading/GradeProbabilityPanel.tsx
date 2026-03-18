@@ -34,6 +34,7 @@ interface GradeProbabilityPanelProps {
   imageUrls?: string[] | null;
   scanPhotos?: GradeScanPhoto[] | null;
   showPreliminaryBadge?: boolean;
+  compact?: boolean;
 }
 
 const PSA_ORDER = ["PSA 10", "PSA 9", "PSA 8", "PSA 7 or lower"];
@@ -382,6 +383,7 @@ export default function GradeProbabilityPanel({
   imageUrls,
   scanPhotos,
   showPreliminaryBadge,
+  compact = false,
 }: GradeProbabilityPanelProps) {
   const confidence = estimate.grade_probabilities?.confidence;
 
@@ -514,7 +516,7 @@ export default function GradeProbabilityPanel({
       >
         {/* ── HERO STRIP ─────────────────────────────────────────────── */}
         <div className="border-b border-[var(--biz-border)] px-5 py-4">
-          <div className="flex items-center gap-4">
+          <div className={`flex gap-4 ${compact ? "flex-col items-start" : "items-center"}`}>
             {/* Card thumbnails — front prominent, back dimmed */}
             {frontBackUrls.length > 0 ? (
               <div className="flex shrink-0 items-end gap-1.5">
@@ -584,7 +586,13 @@ export default function GradeProbabilityPanel({
             </div>
 
             {/* Badges column */}
-            <div className="flex shrink-0 flex-col items-end gap-1.5">
+            <div
+              className={`flex shrink-0 gap-1.5 ${
+                compact
+                  ? "w-full flex-row flex-wrap items-center justify-start"
+                  : "flex-col items-end"
+              }`}
+            >
               <span
                 className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${RECOMMENDATION_CLASSES[verdict.recommendation]}`}
               >
@@ -612,7 +620,11 @@ export default function GradeProbabilityPanel({
         ) : null}
 
         {/* ── MAIN 2-COLUMN WORKSPACE ───────────────────────────────── */}
-        <div className="grid grid-cols-1 divide-y divide-[var(--biz-border)] lg:grid-cols-2 lg:divide-x lg:divide-y-0">
+        <div
+          className={`grid grid-cols-1 divide-y divide-[var(--biz-border)] ${
+            compact ? "" : "lg:grid-cols-2 lg:divide-x lg:divide-y-0"
+          }`}
+        >
 
           {/* LEFT: Probability distribution + Verdict */}
           <div className="flex flex-col gap-5 px-5 py-5">
@@ -699,7 +711,7 @@ export default function GradeProbabilityPanel({
                   size="sm"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-1.5">
+              <div className={`grid gap-1.5 ${compact ? "grid-cols-1" : "grid-cols-2"}`}>
                 <VerdictStat label="Recommendation" value={verdict.recommendation} />
                 <VerdictStat label="Suggested Grader" value={verdict.suggestedGrader} />
                 <VerdictStat label="Expected Outcome" value={verdict.expectedOutcome} />
@@ -724,15 +736,19 @@ export default function GradeProbabilityPanel({
           <div className="flex flex-col gap-4 px-5 py-5">
 
             {/* Evidence header */}
-            <div className="flex items-center justify-between gap-2">
+            <div className={`flex gap-2 ${compact ? "flex-col items-start" : "items-center justify-between"}`}>
               <SectionLabel>{gradingCopy.panel.evidenceTitle}</SectionLabel>
-              <p className="max-w-[160px] text-right text-[9px] leading-snug text-[var(--biz-muted)]">
+              <p
+                className={`text-[9px] leading-snug text-[var(--biz-muted)] ${
+                  compact ? "max-w-none text-left" : "max-w-[160px] text-right"
+                }`}
+              >
                 {gradingCopy.panel.evidenceNote}
               </p>
             </div>
 
             {/* Evidence 2×2 grid */}
-            <div className="grid grid-cols-2 gap-2">
+            <div className={`grid gap-2 ${compact ? "grid-cols-1" : "grid-cols-2"}`}>
               <EvidenceBlock
                 icon={
                   <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -875,7 +891,7 @@ export default function GradeProbabilityPanel({
             </button>
 
             {showAnalysisDetails ? (
-              <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-2">
+              <div className={`mt-3 grid gap-3 ${compact ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2"}`}>
                 <div className="rounded-md border border-[var(--biz-border)] bg-[color:var(--biz-surface-soft)] p-3">
                   <p className="mb-1.5 text-[9px] uppercase tracking-widest text-[var(--biz-muted)]">
                     Image Quality

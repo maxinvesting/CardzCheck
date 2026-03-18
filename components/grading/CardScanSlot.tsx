@@ -253,6 +253,7 @@ export default function CardScanSlot({
                 primaryImageUrl={identifiedCard?.imageUrl}
                 imageUrls={identifiedCard?.imageUrls}
                 scanPhotos={identifiedCard?.scanPhotos}
+                compact={totalSlots > 1}
               />
             </motion.div>
           )}
