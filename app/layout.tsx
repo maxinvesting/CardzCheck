@@ -4,9 +4,9 @@ import "../styles/businessTheme.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 
 export const metadata: Metadata = {
-  title: "CardzCheck - Card Pricing and Portfolio Workspace",
+  title: "CardzCheck — The Intelligence Platform for Sports Card Collectors and Businesses",
   description:
-    "CardzCheck gives collectors and sellers live comps, grading probability insights, and collection or inventory tracking in one workspace.",
+    "Grade probability, live comps, collection tracking, and full business operations in one platform.",
 };
 
 export default function RootLayout({
