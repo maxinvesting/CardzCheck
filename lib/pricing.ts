@@ -3,11 +3,11 @@
  * Single source of truth for Pro/Business monthly, annual, and savings.
  */
 
-export const PRO_MONTHLY_PRICE = 8.99;
-export const PRO_ANNUAL_PRICE = 79;
+export const PRO_MONTHLY_PRICE = 10;
+export const PRO_ANNUAL_PRICE = 90;
 
-export const BUSINESS_MONTHLY_PRICE = 15;
-export const BUSINESS_ANNUAL_PRICE = 150;
+export const BUSINESS_MONTHLY_PRICE = 25;
+export const BUSINESS_ANNUAL_PRICE = 240;
 
 /** What 12 months of monthly would cost (for savings copy). */
 export const PRO_MONTHLY_PRICE_YEARLY = PRO_MONTHLY_PRICE * 12;

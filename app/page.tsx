@@ -103,18 +103,16 @@ export default function Home() {
         <main className="mx-auto max-w-6xl px-4 pb-16 pt-10 sm:pt-14">
           <section className="rounded-2xl border border-gray-800 bg-gray-900/75 p-6 backdrop-blur-sm sm:p-10">
             <p className="inline-flex items-center rounded-full border border-blue-500/40 bg-blue-500/10 px-3 py-1 text-xs font-medium uppercase tracking-wide text-blue-300">
-              Built for collectors, flippers, and card businesses
+              COLLECTORS · FLIPPERS · DEALERS
             </p>
 
             <h1 className="mt-5 text-4xl font-bold leading-tight text-white sm:text-5xl lg:text-6xl">
-              Stop guessing card values.
-              <br />
-              Make buy, hold, and sell decisions faster.
+              The intelligence platform for sports card collectors and businesses.
             </h1>
 
             <p className="mt-5 max-w-3xl text-base text-gray-300 sm:text-lg">
-              CardzCheck combines live comps, grading probability, and portfolio-level tracking in
-              one workspace so every card move is backed by data, not intuition.
+              Grade probability, live comps, collection tracking, and full business operations — in
+              one platform built for collectors and dealers alike.
             </p>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
@@ -125,10 +123,10 @@ export default function Home() {
                 Start Free
               </Link>
               <Link
-                href="/comps"
+                href="/#features"
                 className="inline-flex items-center justify-center rounded-lg border border-gray-700 bg-gray-900 px-6 py-3 text-base font-semibold text-gray-200 transition-colors hover:border-gray-600 hover:text-white"
               >
-                Run a Comp Search
+                See How It Works
               </Link>
             </div>
 
@@ -142,7 +140,7 @@ export default function Home() {
               <div className="rounded-lg border border-gray-800 bg-gray-950/40 p-4">
                 <p className="text-xs uppercase tracking-wide text-gray-500">Core Engines</p>
                 <p className="mt-1 text-sm font-semibold text-gray-100">
-                  Comps, Grade Probability Engine, and Analyst AI
+                  Grade Probability Engine, Live Comps, and Analyst AI
                 </p>
               </div>
               <div className="rounded-lg border border-gray-800 bg-gray-950/40 p-4">
@@ -174,12 +172,32 @@ export default function Home() {
             </article>
           </section>
 
-          <section className="mt-10">
+          <section id="features" className="mt-10">
             <h2 className="mb-4 text-2xl font-semibold text-white sm:text-3xl">What You Can Do</h2>
             <div className="grid gap-4 md:grid-cols-3">
               <FeatureCard
-                title="Price with Context"
-                description="Run comps with cleaner card details and get valuation confidence before you buy or list."
+                title="Know the Grade Before You Submit"
+                description="Upload card photos and get PSA and BGS grade probabilities with confidence levels — before you pay for a submission."
+                badge="Featured"
+                points={[
+                  "Grade Probability Engine with confidence levels",
+                  "Pre-submit expected value modeling",
+                  "Submission ROI calculator",
+                ]}
+                icon={(
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"
+                    />
+                  </svg>
+                )}
+              />
+              <FeatureCard
+                title="Price with Confidence"
+                description="Run comps with real market data and get valuation clarity before you buy, list, or flip."
                 points={[
                   "Live market comps and CMV tracking",
                   "Card photo identification to reduce manual entry",
@@ -197,32 +215,12 @@ export default function Home() {
                 )}
               />
               <FeatureCard
-                title="Plan Grading Decisions"
-                description="Estimate likely grading outcomes and expected value before deciding whether to submit."
-                badge="Featured"
-                points={[
-                  "Grade Probability Engine with confidence levels",
-                  "Pre-submit value modeling",
-                  "Submission planning workflow",
-                ]}
-                icon={(
-                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"
-                    />
-                  </svg>
-                )}
-              />
-              <FeatureCard
                 title="Operate at Scale"
-                description="Move from hobby workflow to business workflow without switching tools."
+                description="Manage inventory, track P&L, and sell across eBay and Whatnot from a single business dashboard."
                 points={[
                   "Inventory, ledger, and sales tracking",
+                  "eBay and Whatnot channel integration",
                   "Business Consultant and Analyst workflows",
-                  "Bulk mode for high-volume card ops",
                 ]}
                 icon={(
                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -308,7 +306,7 @@ export default function Home() {
             <div className="mb-4 flex justify-center">
               <span className="text-2xl font-bold tracking-tight text-white">CardzCheck</span>
             </div>
-            <p>Card intelligence for comps, grading, collection growth, and card business operations.</p>
+            <p>The intelligence platform for sports card collectors and businesses.</p>
             <div className="mt-4 flex flex-wrap justify-center gap-4">
               <Link href="/terms" className="transition-colors hover:text-white">
                 Terms
