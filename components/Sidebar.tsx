@@ -179,6 +179,19 @@ function NewsIcon() {
   );
 }
 
+function AdminIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+      />
+    </svg>
+  );
+}
+
 function PERSONAL_NAV_ITEMS(): NavItem[] {
   return [
     { name: "Dashboard", href: "/dashboard", icon: <HomeIcon />, exact: true },
@@ -311,7 +324,7 @@ export default function Sidebar() {
           )}
         </Link>
 
-        <nav className="flex-1 p-4 space-y-2">
+        <nav className="flex-1 overflow-y-auto p-4 space-y-2">
           {navItems.map((item) => {
             const isProFeature = Boolean(item.isPro && user && !user.is_paid);
             return (
@@ -358,6 +371,45 @@ export default function Sidebar() {
               </Link>
             );
           })}
+
+          {user && (user.app_role === "admin" || user.app_role === "owner") && (
+            <>
+              <div className={`pt-3 pb-1 px-4 text-[10px] font-semibold uppercase tracking-widest ${
+                isBusinessWorkspace ? "text-[var(--biz-muted)]" : "text-gray-600"
+              }`}>
+                Admin
+              </div>
+              {[
+                { name: "Marketplace", href: "/admin/shop", icon: <ShopIcon /> },
+                { name: "News", href: "/admin/news", icon: <NewsIcon /> },
+              ].map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setIsOpen(false)}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                    pathname === item.href || pathname.startsWith(`${item.href}/`)
+                      ? isBusinessWorkspace
+                        ? "border border-orange-200 border-l-2 border-l-orange-500 bg-orange-50 text-orange-700"
+                        : "bg-orange-600 text-white"
+                      : isBusinessWorkspace
+                        ? "text-[var(--biz-muted)] hover:bg-[#F9FAFB] hover:text-[var(--biz-text)]"
+                        : "text-gray-400 hover:text-white hover:bg-gray-800"
+                  }`}
+                >
+                  {item.icon}
+                  <span className="font-medium">{item.name}</span>
+                  <span className={`ml-auto px-1.5 py-0.5 text-[10px] font-semibold rounded ${
+                    isBusinessWorkspace
+                      ? "bg-orange-50 border border-orange-200 text-orange-600"
+                      : "bg-orange-500/20 text-orange-400"
+                  }`}>
+                    Admin
+                  </span>
+                </Link>
+              ))}
+            </>
+          )}
         </nav>
 
         <div
