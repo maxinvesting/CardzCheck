@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 
 const MAIN_TABS = [
   { name: "Home", href: "/dashboard", icon: HomeIcon },
@@ -28,6 +29,7 @@ const TAB_BASE_PATHS = [
   "/collection",
   "/analytics",
   "/shop",
+  "/admin/shop",
   "/watchlist",
   "/comps",
   "/grade-hub",
@@ -90,6 +92,24 @@ function MoreIcon({ className }: { className?: string }) {
 export default function BottomTabBar() {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
+  const [isAdminUser, setIsAdminUser] = useState(false);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user: authUser } }) => {
+      if (!authUser) return;
+      supabase
+        .from("users")
+        .select("app_role")
+        .eq("id", authUser.id)
+        .single()
+        .then(({ data }) => {
+          if (data?.app_role === "admin" || data?.app_role === "owner") {
+            setIsAdminUser(true);
+          }
+        });
+    });
+  }, []);
 
   if (!isTabRoute(pathname)) return null;
 
@@ -159,6 +179,17 @@ export default function BottomTabBar() {
                   </Link>
                 </li>
               ))}
+              {isAdminUser && (
+                <li key="/admin">
+                  <Link
+                    href="/admin"
+                    onClick={() => setMoreOpen(false)}
+                    className="block px-4 py-3 rounded-lg text-cyan-400 hover:bg-gray-800 transition-colors font-medium"
+                  >
+                    Admin
+                  </Link>
+                </li>
+              )}
             </ul>
           </div>
         </>
