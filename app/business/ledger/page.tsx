@@ -224,7 +224,10 @@ function LedgerPageContent() {
 
   const inventorySummary = useMemo((): InventoryValueSummary | null => {
     const list = filteredItems.length > 0 ? filteredItems : items;
-    return computeInventoryValueSummary(list);
+    const activeItems = list.filter(
+      (it) => it.status !== "sold" && it.status !== "returned"
+    );
+    return computeInventoryValueSummary(activeItems);
   }, [filteredItems, items]);
 
   const ebayStoreHref = useMemo(

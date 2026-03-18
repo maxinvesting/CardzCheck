@@ -105,6 +105,7 @@ interface Props {
 }
 
 const STATUS_OPTIONS = ["unlisted", "listed", "pending_sale", "sold", "returned"] as const;
+const ACTIVE_STATUS_OPTIONS = ["unlisted", "listed", "pending_sale"] as const;
 const CHANNEL_OPTIONS = ["ebay", "whatnot", "instagram", "show", "local", "other"] as const;
 const CONDITION_OPTIONS = ["raw", "graded"] as const;
 const VIRTUALIZE_THRESHOLD = 200;
@@ -228,7 +229,9 @@ export default function InventoryTable({
 }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState("");
+  // Default to "active" so marking an item sold moves it out of the inventory view
+  // and into the Sales tab.
+  const [filterStatus, setFilterStatus] = useState<"active" | "all" | BusinessInventoryItem["status"]>("active");
   const [filterChannel, setFilterChannel] = useState("");
   const [filterCondition, setFilterCondition] = useState("");
   const [activeTab, setActiveTab] = useState<"all" | "cards" | "wax">("all");
@@ -293,7 +296,11 @@ export default function InventoryTable({
         buildDisplayTitle(it).toLowerCase().includes(q)
       );
     }
-    if (filterStatus) result = result.filter((it) => it.status === filterStatus);
+    if (filterStatus === "active") {
+      result = result.filter((it) => ACTIVE_STATUS_OPTIONS.includes(it.status as any));
+    } else if (filterStatus !== "all") {
+      result = result.filter((it) => it.status === filterStatus);
+    }
     if (filterChannel) result = result.filter((it) => it.channel === filterChannel);
     if (filterCondition)
       result = result.filter((it) => it.condition_status === filterCondition);
@@ -1003,11 +1010,12 @@ export default function InventoryTable({
             value={filterStatus}
             onChange={(e) => {
               if (perfEnabled) setPerfInteraction("filter");
-              setFilterStatus(e.target.value);
+              setFilterStatus(e.target.value as any);
             }}
             className="min-h-[44px] flex-1 shrink-0 rounded-md border border-[var(--biz-border)] bg-white px-2.5 py-2.5 text-xs text-[var(--biz-text)] sm:min-h-0 sm:flex-none sm:py-1.5"
           >
-            <option value="">All Status</option>
+            <option value="active">Active (unlisted/listed/pending_sale)</option>
+            <option value="all">All Statuses</option>
             {STATUS_OPTIONS.map((s) => (
               <option key={s} value={s}>{s}</option>
             ))}

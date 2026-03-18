@@ -59,7 +59,10 @@ function BusinessDashboardContent() {
   );
 
   const inventorySummary = useMemo((): InventoryValueSummary | null => {
-    return computeInventoryValueSummary(items);
+    const activeItems = items.filter(
+      (it) => it.status !== "sold" && it.status !== "returned"
+    );
+    return computeInventoryValueSummary(activeItems);
   }, [items]);
 
   const loadInventory = useCallback(async () => {
