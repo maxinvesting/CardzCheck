@@ -3,10 +3,18 @@ import { NextResponse } from "next/server";
 import { NextRequest } from "next/server";
 import { hasActiveBusinessTier } from "@/lib/subscription-tier";
 
+function normalizeSafeNext(nextParam: string | null): string | null {
+  if (!nextParam) return null;
+  const next = nextParam.trim();
+  if (!next.startsWith("/")) return null;
+  if (next.startsWith("//")) return null;
+  return next;
+}
+
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
-  const nextParam = requestUrl.searchParams.get("next");
+  const nextParam = normalizeSafeNext(requestUrl.searchParams.get("next"));
 
   if (code) {
     const supabase = await createClient();

@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+import { createClient } from "@/lib/supabase/server";
+import { canAccessFeature, checkProAccess } from "@/lib/access";
+import { consumeScanCredit } from "@/lib/grading/scanCredits";
+import { checkGradeTokenBudget } from "@/lib/grading/tokenBudget";
+import { isTestMode } from "@/lib/test-mode";
 import {
   buildFallbackGradeEstimate,
   buildImageStats,
@@ -153,6 +158,58 @@ export async function POST(request: NextRequest) {
   let imageStats = buildImageStats([]);
 
   try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json(
+        { error: "Unauthorized", code: "UNAUTHORIZED" },
+        { status: 401 }
+      );
+    }
+
+    const access = await canAccessFeature(user.id, "grade_estimator");
+    if (!access.allowed) {
+      return NextResponse.json(
+        {
+          error: access.reason ?? "Grade Probability Engine is not available.",
+          code: "FEATURE_ACCESS_DENIED",
+        },
+        { status: 403 }
+      );
+    }
+
+    if (!isTestMode()) {
+      const proAccess = await checkProAccess(user.id);
+      if (proAccess.tier === "free") {
+        const consumed = await consumeScanCredit(user.id);
+        if (!consumed) {
+          return NextResponse.json(
+            {
+              error: "No scan credits remaining. Upgrade for unlimited scans or wait for your weekly credit.",
+              code: "NO_CREDITS",
+            },
+            { status: 403 }
+          );
+        }
+      } else {
+        const budget = await checkGradeTokenBudget(user.id, proAccess.tier);
+        if (!budget.allowed) {
+          return NextResponse.json(
+            {
+              error: budget.reason ?? "Monthly scanning budget reached.",
+              code: "BUDGET_EXCEEDED",
+              budgetCents: budget.budgetCents,
+              spentCents: budget.spentCents,
+            },
+            { status: 429 }
+          );
+        }
+      }
+    }
+
     const body = await request.json();
     const bodyCard = body?.card && typeof body.card === "object" ? body.card : null;
     const cardMeta: GradeScanCardMeta = {

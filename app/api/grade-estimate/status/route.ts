@@ -1,8 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getGradeEstimateJob } from "@/lib/grading/gradeEstimateJobStore";
 import type { GradeEstimateJobStatusResponse } from "@/lib/grading/gradeEstimateJob";
+import { createClient } from "@/lib/supabase/server";
 
 export async function GET(request: NextRequest) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const { searchParams } = new URL(request.url);
   const jobId = searchParams.get("jobId");
   if (!jobId) {
@@ -14,6 +24,12 @@ export async function GET(request: NextRequest) {
 
   const job = getGradeEstimateJob(jobId);
   if (!job) {
+    return NextResponse.json(
+      { error: "Job not found" },
+      { status: 404 }
+    );
+  }
+  if (job.ownerUserId !== user.id) {
     return NextResponse.json(
       { error: "Job not found" },
       { status: 404 }

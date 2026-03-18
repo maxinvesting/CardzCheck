@@ -27,10 +27,10 @@ function cleanupExpiredJobs(store: JobStore) {
   }
 }
 
-export function createGradeEstimateJob(): GradeEstimateJobState {
+export function createGradeEstimateJob(ownerUserId: string): GradeEstimateJobState {
   const store = getStore();
   cleanupExpiredJobs(store);
-  const job = createGradeEstimateJobState({ ttlMs: TTL_MS });
+  const job = createGradeEstimateJobState({ ownerUserId, ttlMs: TTL_MS });
   store.set(job.jobId, job);
   return job;
 }

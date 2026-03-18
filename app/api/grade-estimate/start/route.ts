@@ -130,7 +130,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const job = createGradeEstimateJob();
+    const job = createGradeEstimateJob(user.id);
     const deps = createGradeEstimateJobDependencies(user.id);
 
     // Run the full pipeline synchronously so the result is available in this

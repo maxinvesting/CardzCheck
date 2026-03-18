@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 import {
   parseCardSearchPayload,
   runCardSearch,
@@ -51,9 +51,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const supabase = process.env.SUPABASE_SERVICE_ROLE_KEY
-      ? await createServiceClient()
-      : await createClient();
+    const supabase = await createClient();
     const queryText = [
       filters.playerId,
       filters.setSlug,

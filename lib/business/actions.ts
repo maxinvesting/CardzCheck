@@ -1377,7 +1377,11 @@ export async function getBusinessMetrics(userId: string): Promise<BusinessMetric
 
 function csvEscape(value: unknown): string {
   if (value === null || value === undefined) return "";
-  const str = String(value);
+  let str = String(value);
+  // Neutralize spreadsheet formula execution in exported CSV.
+  if (/^[=+\-@]/.test(str)) {
+    str = `'${str}`;
+  }
   if (/[",\n\r]/.test(str)) return `"${str.replace(/"/g, '""')}"`;
   return str;
 }

@@ -76,6 +76,22 @@ export async function POST(request: NextRequest) {
   }
 
   const supabase = await createServiceClient();
+  const { data: existingOrder, error: existingOrderError } = await supabase
+    .from("shop_orders")
+    .select("id")
+    .eq("stripe_checkout_session_id", session.id)
+    .maybeSingle();
+
+  if (existingOrderError) {
+    console.error("Shop webhook: failed idempotency check", existingOrderError);
+    return NextResponse.json(
+      { error: "Failed to process webhook" },
+      { status: 500 }
+    );
+  }
+  if (existingOrder) {
+    return NextResponse.json({ received: true, duplicate: true });
+  }
 
   // Fetch full session with line items for buyer info
   const stripeClient = stripe();
@@ -152,22 +168,40 @@ export async function POST(request: NextRequest) {
     subtotal += price * toSell;
     shippingTotal += shipCost * toSell;
 
-    // Atomically increment quantity_sold and set status='sold' when sold out
-    const newQuantitySold = (listing.quantity_sold ?? 0) + toSell;
-    const newStatus =
-      newQuantitySold >= (listing.quantity ?? 0) ? "sold" : "active";
+    // Compare-and-swap update to reduce race issues under concurrent webhook delivery.
+    const expectedQuantitySold = listing.quantity_sold ?? 0;
+    const newQuantitySold = expectedQuantitySold + toSell;
+    const newStatus = newQuantitySold >= (listing.quantity ?? 0) ? "sold" : "active";
 
-    const { error: updateErr } = await supabase
+    const { data: updatedRow, error: updateErr } = await supabase
       .from("shop_listings")
       .update({
         quantity_sold: newQuantitySold,
         status: newStatus,
       })
-      .eq("id", listingId);
+      .eq("id", listingId)
+      .eq("quantity_sold", expectedQuantitySold)
+      .select("id")
+      .maybeSingle();
 
     if (updateErr) {
       console.error("Shop webhook: failed to update listing", listingId, updateErr);
+      orderItems.pop();
+      subtotal -= price * toSell;
+      shippingTotal -= shipCost * toSell;
+      continue;
     }
+    if (!updatedRow) {
+      console.warn("Shop webhook: listing changed during update, skipping", listingId);
+      orderItems.pop();
+      subtotal -= price * toSell;
+      shippingTotal -= shipCost * toSell;
+    }
+  }
+
+  if (orderItems.length === 0) {
+    console.warn("Shop webhook: no fulfillable items after stock checks");
+    return NextResponse.json({ received: true, skipped: true });
   }
 
   const total = subtotal + shippingTotal;
@@ -190,6 +224,9 @@ export async function POST(request: NextRequest) {
   });
 
   if (insertErr) {
+    if (insertErr.code === "23505") {
+      return NextResponse.json({ received: true, duplicate: true });
+    }
     console.error("Shop webhook: failed to insert order", insertErr);
     return NextResponse.json(
       { error: "Failed to create order" },

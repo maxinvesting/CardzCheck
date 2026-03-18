@@ -110,7 +110,11 @@ function buildDeps(overrides?: Partial<GradeEstimateJobDependencies>): GradeEsti
 
 describe("grade estimate job", () => {
   it("transitions from queued to done", async () => {
-    const job = createGradeEstimateJobState({ jobId: "job-1", now: Date.now() });
+    const job = createGradeEstimateJobState({
+      jobId: "job-1",
+      ownerUserId: "user-1",
+      now: Date.now(),
+    });
     const deps = buildDeps();
 
     expect(job.status).toBe("queued");
@@ -124,7 +128,11 @@ describe("grade estimate job", () => {
   });
 
   it("publishes identity before probabilities are ready", async () => {
-    const job = createGradeEstimateJobState({ jobId: "job-2", now: Date.now() });
+    const job = createGradeEstimateJobState({
+      jobId: "job-2",
+      ownerUserId: "user-1",
+      now: Date.now(),
+    });
     let resolveModel: ((value: string) => void) | undefined;
     const modelPromise = new Promise<string>((resolve) => {
       resolveModel = resolve;
@@ -148,7 +156,11 @@ describe("grade estimate job", () => {
   });
 
   it("does not fail the job when post grading value errors", async () => {
-    const job = createGradeEstimateJobState({ jobId: "job-3", now: Date.now() });
+    const job = createGradeEstimateJobState({
+      jobId: "job-3",
+      ownerUserId: "user-1",
+      now: Date.now(),
+    });
     const deps = buildDeps({
       runPostGradingValue: async () => {
         throw new Error("market down");
@@ -163,7 +175,11 @@ describe("grade estimate job", () => {
   });
 
   it("falls back to input card game/sport when OCR sport is missing", async () => {
-    const job = createGradeEstimateJobState({ jobId: "job-4", now: Date.now() });
+    const job = createGradeEstimateJobState({
+      jobId: "job-4",
+      ownerUserId: "user-1",
+      now: Date.now(),
+    });
     let observedCardMeta: { game?: string | null; sport?: string | null } | null = null;
     const deps = buildDeps({
       runOcrIdentity: async () => ({

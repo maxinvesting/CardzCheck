@@ -101,6 +101,7 @@ export type GradeEstimateJobDependencies = {
 };
 
 export type GradeEstimateJobState = GradeEstimateJobStatusResponse & {
+  ownerUserId: string;
   createdAt: number;
   updatedAt: number;
   expiresAt: number;
@@ -111,21 +112,23 @@ export type GradeEstimateJobState = GradeEstimateJobStatusResponse & {
   };
 };
 
-export function createGradeEstimateJobState(options?: {
+export function createGradeEstimateJobState(options: {
   jobId?: string;
+  ownerUserId: string;
   now?: number;
   ttlMs?: number;
 }): GradeEstimateJobState {
   const now = options?.now ?? Date.now();
   const ttlMs = options?.ttlMs ?? 30 * 60 * 1000;
   const jobId =
-    options?.jobId ??
+    options.jobId ??
     (typeof crypto !== "undefined" && "randomUUID" in crypto
       ? crypto.randomUUID()
       : `job_${now}_${Math.random().toString(36).slice(2, 8)}`);
 
   return {
     jobId,
+    ownerUserId: options.ownerUserId,
     status: "queued",
     startedAt: undefined,
     finishedAt: undefined,
