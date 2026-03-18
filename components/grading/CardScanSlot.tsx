@@ -146,20 +146,24 @@ export default function CardScanSlot({
         throw new Error(payload?.error ?? payload?.reason ?? gradingCopy.status.estimateFailedFallback);
       }
 
-      const payload = await res.json();
+      const payload: GradeEstimateJobStatusResponse & { jobId?: string } = await res.json();
       if (!payload?.jobId) throw new Error(gradingCopy.status.estimateFailedFallback);
 
-      setGradeJobId(payload.jobId);
-      setGradeJob({
-        jobId: payload.jobId,
-        status: "queued",
-        startedAt: Date.now(),
-        finishedAt: undefined,
-        steps: buildQueuedSteps(),
-        partial: {},
-        final: null,
-        error: null,
-      });
+      setGradeJob(payload);
+
+      // The start endpoint runs the pipeline synchronously and returns the
+      // completed (or errored) job state. Handle it without polling.
+      if (payload.status === "done") {
+        if (payload.final?.estimate) setGradeEstimate(payload.final.estimate);
+        setAnalyzing(false);
+        setShowAnimation(false);
+        notify("done");
+      } else if (payload.status === "error") {
+        throw new Error(payload.error ?? gradingCopy.status.estimateFailedFallback);
+      } else {
+        // Fallback: status still queued/running — start polling (legacy async path).
+        setGradeJobId(payload.jobId);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : gradingCopy.status.estimateFailedFallback);
       setAnalyzing(false);
