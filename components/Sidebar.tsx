@@ -225,7 +225,7 @@ export default function Sidebar() {
   const [remainingSearches, setRemainingSearches] = useState<number | null>(null);
   const [pricingOpen, setPricingOpen] = useState(false);
 
-  const isBusinessWorkspace = pathname.startsWith("/business");
+  const isBusinessWorkspace = pathname.startsWith("/business") || pathname.startsWith("/admin");
   const isAdminUser = user?.app_role === "admin" || user?.app_role === "owner";
   const baseNavItems = isBusinessWorkspace ? BUSINESS_NAV_ITEMS() : PERSONAL_NAV_ITEMS();
   const navItems = isAdminUser
