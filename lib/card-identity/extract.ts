@@ -11,7 +11,7 @@ import { buildCardIdentityFromSignals, buildOcrSignals } from "./normalize";
 import { parseFirstJsonObject } from "./json";
 import { createBottomCrop } from "./image";
 
-const VISION_MODEL = "claude-sonnet-4-20250514";
+const VISION_MODEL = "claude-sonnet-4-6";
 
 const OCR_SYSTEM_PROMPT =
   "You are a careful OCR system. Transcribe text exactly as seen. Do not infer or guess.";

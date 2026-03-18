@@ -241,7 +241,7 @@ export default function BulkModePage() {
         </div>
 
         {/* Quick stats explainer */}
-        <div className="grid grid-cols-3 gap-3 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8">
           {[
             { icon: "📦", label: "Upload cards", desc: "Add front/back images" },
             { icon: "🤖", label: "Auto-identify", desc: "AI reads player, set, year" },

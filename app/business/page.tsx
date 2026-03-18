@@ -255,12 +255,12 @@ function BusinessDashboardContent() {
         <main className="max-w-7xl mx-auto px-4 py-4">
           <div className="animate-pulse space-y-4">
             <div className="h-8 w-48 rounded bg-[#E5E7EB]" />
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               {[...Array(4)].map((_, i) => (
                 <div key={i} className="h-20 rounded-lg bg-[#E5E7EB]" />
               ))}
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="h-48 rounded-lg bg-[#E5E7EB]" />
               <div className="h-48 rounded-lg bg-[#E5E7EB]" />
             </div>
@@ -308,12 +308,12 @@ export default function BusinessDashboardPage() {
           <main className="max-w-7xl mx-auto px-4 py-4">
             <div className="animate-pulse space-y-4">
               <div className="h-8 w-48 rounded bg-[#E5E7EB]" />
-              <div className="grid grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 {[...Array(4)].map((_, i) => (
                   <div key={i} className="h-20 rounded-lg bg-[#E5E7EB]" />
                 ))}
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="h-48 rounded-lg bg-[#E5E7EB]" />
                 <div className="h-48 rounded-lg bg-[#E5E7EB]" />
               </div>

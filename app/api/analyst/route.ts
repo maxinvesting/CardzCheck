@@ -203,7 +203,7 @@ No specific card selected. Answer general trading card market questions.`;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     logDebug("🧠 Analyst calling Anthropic", { hasCardContext: Boolean(cardContext) });
     const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6",
       max_tokens: 1024,
       system: systemPrompt,
       tools: [

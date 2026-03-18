@@ -45,9 +45,9 @@ export default function CompactMetricsRow({ items, loading }: CompactMetricsRowP
 
   if (loading) {
     return (
-      <div className="flex flex-wrap items-center justify-between gap-6">
+      <div className="grid grid-cols-2 sm:flex sm:flex-wrap sm:items-center sm:justify-between gap-4 sm:gap-6">
         {[...Array(4)].map((_, i) => (
-          <div key={i} className="min-w-[140px] flex-1">
+          <div key={i} className="sm:min-w-[140px] sm:flex-1">
             <div className="h-3 w-20 rounded-full bg-[color:var(--biz-skeleton,#e5e7eb)] mb-2" />
             <div className="h-6 w-24 rounded-full bg-[color:var(--biz-skeleton,#e5e7eb)]" />
           </div>
@@ -57,9 +57,9 @@ export default function CompactMetricsRow({ items, loading }: CompactMetricsRowP
   }
 
   return (
-    <div className="flex flex-wrap items-start justify-between gap-6">
+    <div className="grid grid-cols-2 sm:flex sm:flex-wrap sm:items-start sm:justify-between gap-4 sm:gap-6">
       {/* Collection Value */}
-      <div className="min-w-[140px] flex-1">
+      <div className="sm:min-w-[140px] sm:flex-1">
         <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--biz-muted,#6b7280)]">
           Collection Value
         </p>
@@ -74,7 +74,7 @@ export default function CompactMetricsRow({ items, loading }: CompactMetricsRowP
       </div>
 
       {/* Total Cards */}
-      <div className="min-w-[120px] flex-1">
+      <div className="sm:min-w-[120px] sm:flex-1">
         <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--biz-muted,#6b7280)]">
           Cards
         </p>
@@ -84,7 +84,7 @@ export default function CompactMetricsRow({ items, loading }: CompactMetricsRowP
       </div>
 
       {/* Cost Basis */}
-      <div className="min-w-[140px] flex-1">
+      <div className="sm:min-w-[140px] sm:flex-1">
         <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--biz-muted,#6b7280)]">
           Cost Basis
         </p>
@@ -94,7 +94,7 @@ export default function CompactMetricsRow({ items, loading }: CompactMetricsRowP
       </div>
 
       {/* Unrealized P/L */}
-      <div className="min-w-[160px] flex-1">
+      <div className="sm:min-w-[160px] sm:flex-1">
         <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--biz-muted,#6b7280)]">
           Unrealized P/L
         </p>
