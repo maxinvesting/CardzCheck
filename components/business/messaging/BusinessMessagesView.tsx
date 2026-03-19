@@ -15,14 +15,17 @@ import ConversationView from "./ConversationView";
 interface Props {
   initialStats: MessagingStats;
   initialThreads: MessageThread[];
+  isDemo: boolean;
 }
 
 export default function BusinessMessagesView({
   initialStats,
   initialThreads,
+  isDemo: initialIsDemo,
 }: Props) {
   const [stats] = useState<MessagingStats>(initialStats);
   const [threads, setThreads] = useState<MessageThread[]>(initialThreads);
+  const [isDemo, setIsDemo] = useState(initialIsDemo);
   const [filter, setFilter] = useState<ThreadFilter>("all");
   const [selectedId, setSelectedId] = useState<string | null>(
     initialThreads[0]?.id ?? null
@@ -73,6 +76,7 @@ export default function BusinessMessagesView({
         if (res.ok) {
           const data = await res.json();
           setThreads(data.threads);
+          if (typeof data.isDemo === "boolean") setIsDemo(data.isDemo);
         }
       } catch {
         // fail silently
@@ -124,9 +128,16 @@ export default function BusinessMessagesView({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-semibold text-amber-700">
-            Demo Mode
-          </span>
+          {isDemo && (
+            <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-semibold text-amber-700">
+              Demo Mode
+            </span>
+          )}
+          {!isDemo && (
+            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold text-emerald-700">
+              Live
+            </span>
+          )}
         </div>
       </div>
 
@@ -192,6 +203,7 @@ export default function BusinessMessagesView({
                   onGenerateReply={handleGenerateReply}
                   generatedReply={generatedReply}
                   replyLoading={replyLoading}
+                  isDemo={isDemo}
                 />
               </>
             ) : (

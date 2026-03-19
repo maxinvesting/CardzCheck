@@ -14,6 +14,7 @@ function BusinessMessagesContent() {
   const [hasAccess, setHasAccess] = useState<boolean | null>(null);
   const [stats, setStats] = useState<MessagingStats | null>(null);
   const [threads, setThreads] = useState<MessageThread[]>([]);
+  const [isDemo, setIsDemo] = useState(true);
 
   const loadData = useCallback(async () => {
     try {
@@ -46,6 +47,7 @@ function BusinessMessagesContent() {
         const data = await msgRes.json();
         setStats(data.stats);
         setThreads(data.threads);
+        setIsDemo(data.isDemo ?? true);
       }
     } catch {
       setHasAccess(false);
@@ -102,6 +104,7 @@ function BusinessMessagesContent() {
         <BusinessMessagesView
           initialStats={stats}
           initialThreads={threads}
+          isDemo={isDemo}
         />
       </main>
     </AuthenticatedLayout>

@@ -23,6 +23,7 @@ interface Props {
   onGenerateReply: (tone: string) => void;
   generatedReply: string | null;
   replyLoading: boolean;
+  isDemo: boolean;
 }
 
 export default function ConversationView({
@@ -32,13 +33,39 @@ export default function ConversationView({
   onGenerateReply,
   generatedReply,
   replyLoading,
+  isDemo,
 }: Props) {
   const [replyText, setReplyText] = useState("");
   const [showAI, setShowAI] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
 
   function handleUseReply(text: string) {
     setReplyText(text);
     setShowAI(false);
+  }
+
+  async function handleSend() {
+    if (!replyText.trim() || sending) return;
+    setSending(true);
+    setSendError(null);
+    try {
+      const res = await fetch(`/api/business/messages/${thread.id}/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: replyText.trim() }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setReplyText("");
+      } else {
+        setSendError(data.error ?? "Failed to send");
+      }
+    } catch {
+      setSendError("Network error");
+    } finally {
+      setSending(false);
+    }
   }
 
   return (
@@ -165,15 +192,21 @@ export default function ConversationView({
           />
           <button
             type="button"
-            disabled={!replyText.trim()}
+            disabled={!replyText.trim() || sending}
+            onClick={handleSend}
             className="self-end rounded-lg bg-[var(--biz-primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#096b40] disabled:opacity-40"
           >
-            Send
+            {sending ? "Sending..." : "Send"}
           </button>
         </div>
-        <p className="mt-1.5 text-[10px] text-[var(--biz-muted)]">
-          Messages are not sent to eBay in demo mode. Connect your eBay account to enable live messaging.
-        </p>
+        {sendError && (
+          <p className="mt-1 text-[10px] text-red-600">{sendError}</p>
+        )}
+        {isDemo && (
+          <p className="mt-1.5 text-[10px] text-[var(--biz-muted)]">
+            Demo mode — messages are not sent to eBay. Connect your eBay account to enable live messaging.
+          </p>
+        )}
       </div>
     </div>
   );

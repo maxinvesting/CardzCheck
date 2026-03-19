@@ -1,11 +1,10 @@
 /**
  * Messaging service — business logic layer.
  *
- * Currently backed by mock data. When eBay messaging API is integrated,
- * swap the data source in each function without changing the interface.
+ * Tries real eBay data first via the Trading API adapter.
+ * Falls back to mock data when eBay is not connected (demo mode).
  *
- * Platform-specific logic (eBay, Whatnot, etc.) should live in
- * dedicated adapter files (e.g., lib/messaging/adapters/ebay.ts).
+ * Platform-specific logic lives in dedicated adapter files.
  */
 
 import type {
@@ -22,66 +21,154 @@ import {
   getMockMessages,
   computeNegotiationAnalysis,
 } from "./mock-data";
+import {
+  hasEbayMessagingAccess,
+  fetchEbayMessages,
+  ebayMessagesToThreads,
+  ebayMessagesToMessages,
+  sendEbayReply,
+} from "./adapters/ebay";
+
+// ─── Internal: check eBay connection ─────────────────────────────────────────
+
+async function getEbayConnection(userId: string) {
+  try {
+    return await hasEbayMessagingAccess(userId);
+  } catch {
+    return { connected: false, username: null };
+  }
+}
 
 // ─── Thread queries ──────────────────────────────────────────────────────────
 
 export async function getMessagingStats(
-  _userId: string
-): Promise<MessagingStats> {
-  return getMockStats();
+  userId: string
+): Promise<MessagingStats & { isDemo: boolean }> {
+  const ebay = await getEbayConnection(userId);
+
+  if (ebay.connected) {
+    const result = await fetchEbayMessages(userId);
+    if (result) {
+      const threads = ebayMessagesToThreads(userId, result.messages);
+      return {
+        total_threads: threads.length,
+        unread_count: threads.reduce((s, t) => s + t.unread_count, 0),
+        needs_response: threads.filter((t) => t.status === "needs_response").length,
+        open_offers: threads.filter(
+          (t) => t.category === "offer" && t.status !== "resolved" && t.status !== "archived"
+        ).length,
+        avg_response_time_hours: null,
+        isDemo: false,
+      };
+    }
+  }
+
+  return { ...getMockStats(), isDemo: true };
 }
 
 export async function getThreads(
-  _userId: string,
+  userId: string,
   filter: ThreadFilter = "all"
-): Promise<MessageThread[]> {
-  let threads = getMockThreads();
+): Promise<{ threads: MessageThread[]; isDemo: boolean }> {
+  const ebay = await getEbayConnection(userId);
 
-  switch (filter) {
-    case "unread":
-      threads = threads.filter((t) => t.unread_count > 0);
-      break;
-    case "needs_response":
-      threads = threads.filter((t) => t.status === "needs_response");
-      break;
-    case "offers":
-      threads = threads.filter((t) => t.category === "offer");
-      break;
-    case "resolved":
-      threads = threads.filter((t) => t.status === "resolved");
-      break;
-    case "archived":
-      threads = threads.filter((t) => t.status === "archived");
-      break;
-    // "all" — no filter
+  if (ebay.connected) {
+    const result = await fetchEbayMessages(userId);
+    if (result) {
+      let threads = ebayMessagesToThreads(userId, result.messages);
+      threads = applyFilter(threads, filter);
+      return { threads, isDemo: false };
+    }
   }
 
-  return threads;
+  let threads = getMockThreads();
+  threads = applyFilter(threads, filter);
+  return { threads, isDemo: true };
 }
 
 export async function getThread(
-  _userId: string,
+  userId: string,
   threadId: string
 ): Promise<MessageThread | null> {
+  const ebay = await getEbayConnection(userId);
+
+  if (ebay.connected) {
+    const result = await fetchEbayMessages(userId);
+    if (result) {
+      const threads = ebayMessagesToThreads(userId, result.messages);
+      return threads.find((t) => t.id === threadId) ?? null;
+    }
+  }
+
   return getMockThread(threadId);
 }
 
 // ─── Message queries ─────────────────────────────────────────────────────────
 
 export async function getMessages(
-  _userId: string,
+  userId: string,
   threadId: string
 ): Promise<Message[]> {
+  const ebay = await getEbayConnection(userId);
+
+  if (ebay.connected && ebay.username) {
+    const result = await fetchEbayMessages(userId);
+    if (result) {
+      // Find all messages that belong to this thread's sender+item combo
+      const threads = ebayMessagesToThreads(userId, result.messages);
+      const thread = threads.find((t) => t.id === threadId);
+      if (thread) {
+        const threadMsgs = result.messages.filter((m) => {
+          const key = `${m.senderId}::${m.itemId ?? "general"}`;
+          return `ebay-${key.replace(/::/g, "-")}` === threadId;
+        });
+        return ebayMessagesToMessages(threadId, ebay.username, threadMsgs);
+      }
+    }
+  }
+
   return getMockMessages(threadId);
+}
+
+// ─── Send reply ──────────────────────────────────────────────────────────────
+
+export async function sendReply(
+  userId: string,
+  threadId: string,
+  body: string
+): Promise<{ success: boolean; error?: string; isDemo: boolean }> {
+  const ebay = await getEbayConnection(userId);
+
+  if (ebay.connected) {
+    // Look up thread to get recipient and item ID
+    const thread = await getThread(userId, threadId);
+    if (!thread) return { success: false, error: "Thread not found", isDemo: false };
+    if (!thread.listing_id) {
+      return { success: false, error: "No item ID linked to this thread", isDemo: false };
+    }
+
+    const result = await sendEbayReply(
+      userId,
+      thread.buyer_username,
+      thread.listing_id,
+      body,
+      thread.external_thread_id ?? undefined
+    );
+
+    return { ...result, isDemo: false };
+  }
+
+  // Demo mode — just acknowledge
+  return { success: true, isDemo: true };
 }
 
 // ─── Negotiation ─────────────────────────────────────────────────────────────
 
 export async function getNegotiationAnalysis(
-  _userId: string,
+  userId: string,
   threadId: string
 ): Promise<NegotiationAnalysis | null> {
-  const thread = getMockThread(threadId);
+  const thread = await getThread(userId, threadId);
   if (!thread) return null;
   return computeNegotiationAnalysis(thread);
 }
@@ -122,11 +209,30 @@ const TONE_TEMPLATES: Record<AIReplyTone, (thread: MessageThread) => string> = {
 };
 
 export async function generateAIReply(
-  _userId: string,
+  userId: string,
   threadId: string,
   tone: AIReplyTone
 ): Promise<string> {
-  const thread = getMockThread(threadId);
+  const thread = await getThread(userId, threadId);
   if (!thread) return "Unable to generate reply — thread not found.";
   return TONE_TEMPLATES[tone](thread);
+}
+
+// ─── Filter helper ───────────────────────────────────────────────────────────
+
+function applyFilter(threads: MessageThread[], filter: ThreadFilter): MessageThread[] {
+  switch (filter) {
+    case "unread":
+      return threads.filter((t) => t.unread_count > 0);
+    case "needs_response":
+      return threads.filter((t) => t.status === "needs_response");
+    case "offers":
+      return threads.filter((t) => t.category === "offer");
+    case "resolved":
+      return threads.filter((t) => t.status === "resolved");
+    case "archived":
+      return threads.filter((t) => t.status === "archived");
+    default:
+      return threads;
+  }
 }

@@ -31,10 +31,16 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Invalid filter" }, { status: 400 });
   }
 
-  const [stats, threads] = await Promise.all([
+  const [statsResult, threadsResult] = await Promise.all([
     getMessagingStats(user.id),
     getThreads(user.id, filter),
   ]);
 
-  return NextResponse.json({ stats, threads });
+  const isDemo = statsResult.isDemo || threadsResult.isDemo;
+
+  return NextResponse.json({
+    stats: statsResult,
+    threads: threadsResult.threads,
+    isDemo,
+  });
 }

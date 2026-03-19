@@ -29,6 +29,7 @@ const EBAY_IDENTITY_URL =
     : "https://apiz.ebay.com/commerce/identity/v1/user/";
 
 export const EBAY_SCOPES = [
+  "https://api.ebay.com/oauth/api_scope",                           // Trading API (messaging, member comms)
   "https://api.ebay.com/oauth/api_scope/sell.inventory",
   "https://api.ebay.com/oauth/api_scope/sell.fulfillment",
   "https://api.ebay.com/oauth/api_scope/sell.fulfillment.readonly",
