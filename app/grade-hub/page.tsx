@@ -48,22 +48,22 @@ export default function GradeHubPage() {
 
   return (
     <AuthenticatedLayout>
-      <div className="px-4 py-6 sm:px-6 max-w-2xl mx-auto space-y-6">
+      <div className="px-6 py-8 max-w-3xl mx-auto space-y-8">
 
-        {/* ── Page header ─────────────────────────────────────────────── */}
-        <div className="flex items-start justify-between gap-4 pb-4 border-b border-[var(--biz-border)]">
+        {/* ── Page header ──────────────────────────────────────────────── */}
+        <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-lg font-semibold text-[var(--biz-text)]">Grade Probability Engine</h1>
-            <p className="text-sm text-[var(--biz-muted)] mt-0.5">
-              Upload card images to get PSA &amp; BGS grade probability estimates
+            <h1 className="text-2xl font-bold text-[var(--biz-text)] tracking-tight">Grade Probability Engine</h1>
+            <p className="text-sm text-[var(--biz-muted)] mt-1">
+              AI-assisted PSA &amp; BGS grade estimation from card images
             </p>
           </div>
           {!isUnlimited && credits && (
-            <div className={`shrink-0 text-right`}>
+            <div className="shrink-0 text-right">
               <p className={`text-sm font-semibold tabular-nums ${
                 remaining === 0 ? "text-rose-500" : remaining === 1 ? "text-amber-500" : "text-[var(--biz-text)]"
               }`}>
-                {remaining} scan{remaining !== 1 ? "s" : ""} left
+                {remaining} scan{remaining !== 1 ? "s" : ""} remaining
               </p>
               {remaining < 2 && credits.nextGrantAt && (
                 <p className="text-xs text-[var(--biz-muted)]">+1 in {formatTimeUntil(credits.nextGrantAt)}</p>
@@ -71,78 +71,106 @@ export default function GradeHubPage() {
             </div>
           )}
           {isUnlimited && (
-            <span className="shrink-0 text-xs text-[var(--biz-muted)]">Unlimited</span>
+            <span className="shrink-0 text-xs font-medium text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-3 py-1">
+              Unlimited
+            </span>
           )}
         </div>
 
-        {/* ── Actions ─────────────────────────────────────────────────── */}
-        <div className="space-y-2">
+        {/* ── Action cards ─────────────────────────────────────────────── */}
+        <div className={`grid gap-4 ${isBusiness ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1"}`}>
+
+          {/* Scan a Card */}
           {canScan ? (
             <Link
               href="/grade-hub/scan?slots=1"
-              className="group flex items-center gap-3 rounded-lg border border-[var(--biz-border)] bg-[var(--biz-surface)] px-4 py-3 transition-colors hover:border-[var(--biz-primary)]/40 hover:bg-[var(--biz-hover)]"
+              className="group relative flex flex-col gap-4 rounded-xl border border-[var(--biz-border)] bg-[var(--biz-surface)] p-5 transition-all hover:border-[var(--biz-primary)]/50 hover:shadow-md hover:shadow-[var(--biz-primary)]/5"
             >
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[var(--biz-primary)]/10 text-[var(--biz-primary)]">
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+              <div className="flex items-start justify-between">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--biz-primary)]/10 text-[var(--biz-primary)]">
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </div>
+                <svg className="h-4 w-4 text-[var(--biz-muted)] group-hover:text-[var(--biz-primary)] transition-colors mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-[var(--biz-text)]">Scan a Card</p>
-                <p className="text-xs text-[var(--biz-muted)]">Front &amp; back upload · full grade distribution</p>
+              <div>
+                <p className="font-semibold text-[var(--biz-text)]">Scan a Card</p>
+                <p className="text-sm text-[var(--biz-muted)] mt-0.5">Upload front &amp; back for a full PSA/BGS grade probability breakdown</p>
               </div>
-              <svg className="h-4 w-4 text-[var(--biz-muted)] group-hover:text-[var(--biz-primary)] transition-colors shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
+              <div className="flex flex-wrap gap-2 mt-auto">
+                <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--biz-muted)] border border-[var(--biz-border)] rounded px-2 py-0.5">Centering</span>
+                <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--biz-muted)] border border-[var(--biz-border)] rounded px-2 py-0.5">Corners</span>
+                <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--biz-muted)] border border-[var(--biz-border)] rounded px-2 py-0.5">Edges</span>
+                <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--biz-muted)] border border-[var(--biz-border)] rounded px-2 py-0.5">Surface</span>
+              </div>
             </Link>
           ) : (
-            <Link
-              href="/settings"
-              className="flex items-center gap-3 rounded-lg border border-[var(--biz-border)] bg-[var(--biz-surface)] px-4 py-3 opacity-60"
-            >
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[var(--biz-hover)] text-[var(--biz-muted)]">
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="flex flex-col gap-4 rounded-xl border border-[var(--biz-border)] bg-[var(--biz-surface)] p-5 opacity-60">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--biz-hover)] text-[var(--biz-muted)]">
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                 </svg>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-[var(--biz-text)]">Scan a Card</p>
-                <p className="text-xs text-amber-500">No scans remaining — upgrade for unlimited</p>
+              <div>
+                <p className="font-semibold text-[var(--biz-text)]">Scan a Card</p>
+                <p className="text-sm text-amber-500 mt-0.5">No scans remaining — upgrade for unlimited</p>
               </div>
-              <svg className="h-4 w-4 text-[var(--biz-muted)] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </Link>
+            </div>
           )}
 
-          {isBusiness && canScan && (
-            <Link
-              href="/grade-hub/scan?slots=3"
-              className="group flex items-center gap-3 rounded-lg border border-[var(--biz-border)] bg-[var(--biz-surface)] px-4 py-3 transition-colors hover:border-[var(--biz-primary)]/40 hover:bg-[var(--biz-hover)]"
-            >
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[var(--biz-primary)]/10 text-[var(--biz-primary)]">
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                </svg>
+          {/* Batch Scan — business only */}
+          {isBusiness && (
+            canScan ? (
+              <Link
+                href="/grade-hub/scan?slots=3"
+                className="group relative flex flex-col gap-4 rounded-xl border border-[var(--biz-border)] bg-[var(--biz-surface)] p-5 transition-all hover:border-[var(--biz-primary)]/50 hover:shadow-md hover:shadow-[var(--biz-primary)]/5"
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--biz-primary)]/10 text-[var(--biz-primary)]">
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                    </svg>
+                  </div>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--biz-primary)] bg-[var(--biz-primary)]/10 border border-[var(--biz-primary)]/20 rounded px-2 py-0.5">Business</span>
+                    <svg className="h-4 w-4 text-[var(--biz-muted)] group-hover:text-[var(--biz-primary)] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
+                </div>
+                <div>
+                  <p className="font-semibold text-[var(--biz-text)]">Batch Scan</p>
+                  <p className="text-sm text-[var(--biz-muted)] mt-0.5">Grade up to 3 cards simultaneously in a single session</p>
+                </div>
+                <div className="flex flex-wrap gap-2 mt-auto">
+                  <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--biz-muted)] border border-[var(--biz-border)] rounded px-2 py-0.5">3 cards</span>
+                  <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--biz-muted)] border border-[var(--biz-border)] rounded px-2 py-0.5">Parallel</span>
+                  <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--biz-muted)] border border-[var(--biz-border)] rounded px-2 py-0.5">Side-by-side</span>
+                </div>
+              </Link>
+            ) : (
+              <div className="flex flex-col gap-4 rounded-xl border border-[var(--biz-border)] bg-[var(--biz-surface)] p-5 opacity-50">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--biz-hover)] text-[var(--biz-muted)]">
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="font-semibold text-[var(--biz-text)]">Batch Scan</p>
+                  <p className="text-sm text-amber-500 mt-0.5">No scans remaining</p>
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-[var(--biz-text)]">
-                  Batch Scan
-                  <span className="ml-1.5 text-xs text-[var(--biz-muted)] font-normal">3 cards simultaneously</span>
-                </p>
-                <p className="text-xs text-[var(--biz-muted)]">Process multiple cards in parallel</p>
-              </div>
-              <svg className="h-4 w-4 text-[var(--biz-muted)] group-hover:text-[var(--biz-primary)] transition-colors shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </Link>
+            )
           )}
         </div>
 
-        {/* ── Scan history ────────────────────────────────────────────── */}
+        {/* ── Recent scans ─────────────────────────────────────────────── */}
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-[var(--biz-muted)] mb-3">Recent Scans</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-[var(--biz-muted)] mb-4">Recent Scans</p>
           <GradeEstimatorHistoryPanel onSelect={() => {}} />
         </div>
 
