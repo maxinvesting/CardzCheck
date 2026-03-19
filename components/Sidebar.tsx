@@ -204,10 +204,24 @@ function PERSONAL_NAV_ITEMS(): NavItem[] {
   ];
 }
 
+function MessagesIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
+      />
+    </svg>
+  );
+}
+
 function BUSINESS_NAV_ITEMS(): NavItem[] {
   return [
     { name: "Dashboard", href: "/business", icon: <HomeIcon />, exact: true },
     { name: "Ledger", href: "/business/ledger", icon: <LedgerIcon /> },
+    { name: "Messages", href: "/business/messages", icon: <MessagesIcon />, badge: "New" },
     { name: "Grade Probability Engine", href: "/grade-hub", icon: <BadgeIcon />, badge: "Featured" },
     { name: "News & Updates", href: "/business/news", icon: <NewsIcon />, badge: "New" },
     { name: "Sales Search", href: "/business/comps", icon: <ChartIcon />, badge: "Beta" },
