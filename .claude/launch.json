@@ -13,6 +13,14 @@
       "runtimeArgs": ["dev:turbo"],
       "port": 3000,
       "autoPort": true
+    },
+    {
+      "name": "CardzCheck Main",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["dev:turbo"],
+      "port": 3001,
+      "autoPort": true,
+      "cwd": "/Users/maxwellhilliard/cardzcheck"
     }
   ]
 }
