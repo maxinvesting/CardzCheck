@@ -529,7 +529,7 @@ function CompsPageContent() {
         {/* Page Header */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-2">
-            <h1 className="text-3xl font-bold text-white">Sales Search</h1>
+            <h1 className="text-3xl font-bold text-gray-900">Compare Listings</h1>
             <span className="px-2 py-0.5 bg-amber-500/20 text-amber-400 text-xs font-medium rounded">
               Beta
             </span>
