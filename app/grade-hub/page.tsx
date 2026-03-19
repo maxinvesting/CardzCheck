@@ -307,7 +307,7 @@ export default function GradeHubPage() {
                   { label: "Avg centering", value: "—", delta: null },
                   { label: "PSA 9+ rate", value: "—", delta: null },
                   { label: "High confidence", value: "—", delta: null },
-                ].map((stat, i) => (
+                ].map((stat: { label: string; value: string; delta: string | null }, i) => (
                   <div
                     key={stat.label}
                     style={{
