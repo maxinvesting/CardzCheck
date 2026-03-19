@@ -29,7 +29,7 @@ function fmtCents(cents: number | null): string {
 function emptyPlaceholder(field: string): string {
   switch (field) {
     case "list_price_cents": return "Not listed";
-    case "current_market_value_cents": return "No comps — click to set";
+    case "current_market_value_cents": return "No estimate — click to set";
     case "location": return "Add storage";
     default: return "—";
   }

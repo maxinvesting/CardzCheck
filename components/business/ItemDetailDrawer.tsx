@@ -619,7 +619,7 @@ export default function ItemDetailDrawer({
                       </p>
                       {valueLoading && (
                         <span className="text-[10px] text-gray-400">
-                          Analyzing comps…
+                          Analyzing pricing data…
                         </span>
                       )}
                     </div>

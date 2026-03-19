@@ -874,7 +874,7 @@ export default function CardProfilePage() {
                     )}
                     {!valueResult && valueLoading && (
                       <p className="text-[11px] text-gray-500">
-                        Analyzing comps for grading recommendation…
+                        Analyzing pricing data for grading recommendation…
                       </p>
                     )}
                     {valueError && (

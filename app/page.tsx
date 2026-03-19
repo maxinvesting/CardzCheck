@@ -111,8 +111,8 @@ export default function Home() {
             </h1>
 
             <p className="mt-5 max-w-3xl text-base text-gray-300 sm:text-lg">
-              Grade probability, live comps, collection tracking, and full business operations — in
-              one platform built for collectors and dealers alike.
+              Grade probability, pricing estimates, collection tracking, and full business
+              operations — in one platform built for collectors and dealers alike.
             </p>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
@@ -134,13 +134,13 @@ export default function Home() {
               <div className="rounded-lg border border-gray-800 bg-gray-950/40 p-4">
                 <p className="text-xs uppercase tracking-wide text-gray-500">Free Start</p>
                 <p className="mt-1 text-sm font-semibold text-gray-100">
-                  {LIMITS.FREE_SEARCHES} comp searches + {LIMITS.FREE_COLLECTION} saved cards
+                  {LIMITS.FREE_SEARCHES} card searches + {LIMITS.FREE_COLLECTION} saved cards
                 </p>
               </div>
               <div className="rounded-lg border border-gray-800 bg-gray-950/40 p-4">
                 <p className="text-xs uppercase tracking-wide text-gray-500">Core Engines</p>
                 <p className="mt-1 text-sm font-semibold text-gray-100">
-                  Grade Probability Engine, Live Comps, and Analyst AI
+                  Grade Probability Engine, Pricing Insights, and Analyst AI
                 </p>
               </div>
               <div className="rounded-lg border border-gray-800 bg-gray-950/40 p-4">
@@ -197,9 +197,9 @@ export default function Home() {
               />
               <FeatureCard
                 title="Price with Confidence"
-                description="Run comps with real market data and get valuation clarity before you buy, list, or flip."
+                description="Review listing trends and estimated value ranges before you buy, list, or flip."
                 points={[
-                  "Live market comps and CMV tracking",
+                  "Estimated market value and trend tracking",
                   "Card photo identification to reduce manual entry",
                   "Saved searches and quick repeat workflows",
                 ]}
@@ -248,7 +248,7 @@ export default function Home() {
                 <p className="mt-4 text-3xl font-bold text-white">$0</p>
                 <p className="text-sm text-gray-400">forever</p>
                 <ul className="mt-5 space-y-2 text-sm text-gray-300">
-                  <li>{LIMITS.FREE_SEARCHES} comp searches</li>
+                  <li>{LIMITS.FREE_SEARCHES} card searches</li>
                   <li>{LIMITS.FREE_COLLECTION} collection cards</li>
                   <li>Basic dashboard access</li>
                 </ul>
@@ -266,7 +266,7 @@ export default function Home() {
                 <p className="mt-4 text-3xl font-bold text-white">{formatPrice(PRO_MONTHLY_PRICE)}/mo</p>
                 <p className="text-sm text-blue-200">or {formatPrice(PRO_ANNUAL_PRICE)}/year (save {formatPrice(ANNUAL_SAVINGS)})</p>
                 <ul className="mt-5 space-y-2 text-sm text-blue-100">
-                  <li>Unlimited comp searches</li>
+                  <li>Unlimited card searches</li>
                   <li>Full collection tracking</li>
                   <li>Analyst AI + Grade Probability Engine</li>
                 </ul>

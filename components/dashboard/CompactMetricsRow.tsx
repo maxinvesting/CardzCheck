@@ -68,7 +68,7 @@ export default function CompactMetricsRow({ items, loading }: CompactMetricsRowP
         </p>
         {summary.cardsWithCmv === 0 && summary.cardCount > 0 && (
           <p className="mt-1 text-[11px] text-[color:var(--biz-muted,#6b7280)]">
-            Add comps to get values
+            Run a search to get values
           </p>
         )}
       </div>

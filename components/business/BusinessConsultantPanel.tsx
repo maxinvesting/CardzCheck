@@ -20,7 +20,7 @@ const CONSULTANT_COPY = {
   subtitle:
     "Ask a business question, review the operator memo above, and keep the composer anchored below like a proper agent workspace.",
   helper:
-    "Uses your inventory, sales history, and comps data to support card-business decisions. Missing inputs are treated as constraints.",
+    "Uses your inventory, sales history, and estimate data to support card-business decisions. Missing inputs are treated as constraints.",
   promptSuggestions: [
     "Build a 30-day plan to liquidate slow-moving inventory",
     "Identify dead capital in my inventory",

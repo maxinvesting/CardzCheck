@@ -61,13 +61,13 @@ export default function ValuationCautions({
       {(includeReasonSummary?.length || excludeReasonSummary?.length) && (
         <div className="mt-3 pt-3 border-t border-gray-700/60 grid gap-2 md:grid-cols-2">
           <div>
-            <p className="text-xs font-semibold text-gray-300 mb-1">Why comps were included</p>
+            <p className="text-xs font-semibold text-gray-300 mb-1">Why listings were included</p>
             {(includeReasonSummary ?? []).slice(0, 3).map((reason) => (
               <p key={reason} className="text-xs text-gray-400">{reason}</p>
             ))}
           </div>
           <div>
-            <p className="text-xs font-semibold text-gray-300 mb-1">Why comps were excluded</p>
+            <p className="text-xs font-semibold text-gray-300 mb-1">Why listings were excluded</p>
             {(excludeReasonSummary ?? []).slice(0, 3).map((reason) => (
               <p key={reason} className="text-xs text-gray-400">{reason}</p>
             ))}

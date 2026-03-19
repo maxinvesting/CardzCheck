@@ -188,7 +188,7 @@ function CardItem({ item, onDelete }: CardItemProps) {
             <p className="text-xs text-gray-400 dark:text-gray-500">
               {isRecentlyAdded && item.cmv_confidence !== "unavailable"
                 ? "Market value is being calculated"
-                : "Add comps (Beta) to calculate value"}
+                : "Run a search (Beta) to calculate value"}
             </p>
           )}
           {gainLoss && (

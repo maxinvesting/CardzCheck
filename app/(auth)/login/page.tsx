@@ -80,7 +80,7 @@ function LoginForm() {
             <ul className="mt-6 space-y-3 text-sm text-gray-300">
               <li className="flex items-center gap-2 rounded-lg border border-gray-800 bg-gray-950/40 p-3">
                 <span className="inline-block h-2 w-2 rounded-full bg-blue-400" />
-                Live comps and collection movement
+                Pricing insights and collection movement
               </li>
               <li className="flex items-center gap-2 rounded-lg border border-gray-800 bg-gray-950/40 p-3">
                 <span className="inline-block h-2 w-2 rounded-full bg-blue-400" />

@@ -52,7 +52,7 @@ export default function PricingModal({ isOpen, onClose }: PricingModalProps) {
   }
 
   const proFeatures = [
-    "Unlimited comp searches",
+    "Unlimited card searches",
     "Full collection tracking",
     "CardzCheck Analyst AI",
     "Grade Probability Engine",

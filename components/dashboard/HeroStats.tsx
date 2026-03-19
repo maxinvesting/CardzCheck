@@ -105,7 +105,7 @@ export default function HeroStats({ items, loading, onSearch }: HeroStatsProps) 
             Track a card's value
           </h2>
           <p className="text-sm text-gray-400 mb-5">
-            Search comps, then add to your collection to track value over time.
+            Run a card search, then add it to your collection to track value over time.
           </p>
 
           <div className="mb-4">
@@ -143,11 +143,11 @@ export default function HeroStats({ items, loading, onSearch }: HeroStatsProps) 
             <div className="flex items-center gap-1.5 mt-2">
               {summary.cardsWithCmv > 0 ? (
                 <span className="text-xs text-gray-500" title="Based on active eBay listings. Actual sold prices may differ.">
-                  Based on Est. Market Value (comps)
+                  Based on estimated market data
                 </span>
               ) : (
                 <span className="text-xs text-gray-500">
-                  Collection value requires comps — add comps for estimates
+                  Collection value requires estimate data — run a search to populate values
                 </span>
               )}
             </div>

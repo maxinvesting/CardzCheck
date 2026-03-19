@@ -16,7 +16,7 @@ const MAIN_TABS = [
 const MORE_LINKS = [
   { name: "News & Updates", href: "/news" },
   { name: "Watchlist", href: "/watchlist" },
-  { name: "Comps", href: "/comps" },
+  { name: "Sales Search", href: "/comps" },
   { name: "Grade Engine", href: "/grade-hub" },
   { name: "Bulk Mode", href: "/bulk" },
   { name: "Analyst", href: "/analyst" },
