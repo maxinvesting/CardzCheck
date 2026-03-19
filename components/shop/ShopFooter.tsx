@@ -35,10 +35,11 @@ export default function ShopFooter() {
 
           <div>
             <h4 className="mb-3 text-sm font-semibold uppercase tracking-wider text-slate-900">
-              Marketplace
+              CardzCheck Deals
             </h4>
             <p className="text-sm text-slate-600">
-              Browse currently available listings and complete checkout in-app.
+              Curated inventory drops from CardzCheck, priced competitively and
+              often below market comps.
             </p>
           </div>
 

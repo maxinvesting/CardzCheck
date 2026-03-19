@@ -116,7 +116,7 @@ export default function ShopListingDetail({
         href="/shop"
         className="inline-flex items-center text-sm text-slate-600 transition-colors hover:text-cyan-700"
       >
-        {"<- Back to marketplace"}
+        {"<- Back to deals"}
       </Link>
 
       <div className="grid grid-cols-1 gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:gap-12">

@@ -4,7 +4,7 @@ import { getShopListingsWithStats } from "@/lib/shop/server";
 import ShopStorefront from "@/components/shop/ShopStorefront";
 
 export const metadata: Metadata = {
-  title: "CardzCheck Marketplace",
+  title: "CardzCheck Deals",
 };
 
 export default async function ShopPage() {
