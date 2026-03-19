@@ -65,16 +65,6 @@ export default function CardScanSlot({
     [slotIndex, onStateChange]
   );
 
-  const handleIdentified = useCallback((data: CardIdentificationResult) => {
-    setIdentifiedCard(data);
-    setGradeEstimate(null);
-    setGradeJob(null);
-    setGradeJobId(null);
-    setError(null);
-    setShowAnimation(false);
-    notify("ready");
-  }, [notify]);
-
   const handleReset = useCallback(() => {
     setIdentifiedCard(null);
     setGradeEstimate(null);
@@ -86,24 +76,27 @@ export default function CardScanSlot({
     notify("idle");
   }, [notify]);
 
-  const handleAnalyze = useCallback(async () => {
-    if (!identifiedCard) return;
-
-    const rawUrls = identifiedCard.imageUrls ??
-      (identifiedCard.imageUrl ? [identifiedCard.imageUrl] : []);
+  /**
+   * Core grade-analysis logic. Accepts the card data directly so it can be
+   * called immediately after identification (before React state has flushed).
+   */
+  const runGradeAnalysis = useCallback(async (card: CardIdentificationResult) => {
+    const rawUrls = card.imageUrls ??
+      (card.imageUrl ? [card.imageUrl] : []);
     const fallbackPhotos: GradeScanPhoto[] = rawUrls.map((url, i) => ({
       url,
       kind: (i === 0 ? "front" : "back") as GradeScanPhoto["kind"],
       sort_order: i,
     }));
     const scanPhotos = normalizeGradeScanPhotos(
-      identifiedCard.scanPhotos?.length ? identifiedCard.scanPhotos : fallbackPhotos
+      card.scanPhotos?.length ? card.scanPhotos : fallbackPhotos
     );
 
     const front = scanPhotos.find((p) => p.kind === "front");
     const back = scanPhotos.find((p) => p.kind === "back");
     if (!front || !back) {
       setError("Front and back photos are required before analysis.");
+      notify("error");
       return;
     }
     const closeups = scanPhotos.filter((p) => p.kind !== "front" && p.kind !== "back");
@@ -125,19 +118,17 @@ export default function CardScanSlot({
           back_url: back.url,
           closeups: closeups.map((p, i) => ({ url: p.url, kind: p.kind, sort_order: i })),
           scanPhotos: scanPhotos.map((p, i) => ({ ...p, sort_order: i })),
-          card: identifiedCard
-            ? {
-                player_name: identifiedCard.player_name,
-                game: identifiedCard.cardIdentity?.sport ?? undefined,
-                sport: identifiedCard.cardIdentity?.sport ?? undefined,
-                year: identifiedCard.year,
-                set_name: identifiedCard.set_name,
-                card_number: identifiedCard.card_number,
-                parallel_type: identifiedCard.parallel_type,
-                variation: identifiedCard.variation,
-                insert: identifiedCard.insert,
-              }
-            : undefined,
+          card: {
+            player_name: card.player_name,
+            game: card.cardIdentity?.sport ?? undefined,
+            sport: card.cardIdentity?.sport ?? undefined,
+            year: card.year,
+            set_name: card.set_name,
+            card_number: card.card_number,
+            parallel_type: card.parallel_type,
+            variation: card.variation,
+            insert: card.insert,
+          },
         }),
       });
 
@@ -170,7 +161,28 @@ export default function CardScanSlot({
       setShowAnimation(false);
       notify("error");
     }
-  }, [identifiedCard, notify]);
+  }, [notify]);
+
+  /**
+   * Called by DualCardUploader once photos are uploaded and identified.
+   * Immediately triggers grade analysis — no extra button click needed.
+   */
+  const handleIdentified = useCallback((data: CardIdentificationResult) => {
+    setIdentifiedCard(data);
+    setGradeEstimate(null);
+    setGradeJob(null);
+    setGradeJobId(null);
+    setError(null);
+    setShowAnimation(false);
+    // Auto-trigger grade analysis with fresh data (skip the "ready" intermediate state)
+    void runGradeAnalysis(data);
+  }, [runGradeAnalysis]);
+
+  /** Retry — re-runs analysis using stored card data. */
+  const handleAnalyze = useCallback(async () => {
+    if (!identifiedCard) return;
+    await runGradeAnalysis(identifiedCard);
+  }, [identifiedCard, runGradeAnalysis]);
 
   useEffect(() => {
     if (!gradeJobId) return;
@@ -287,22 +299,13 @@ export default function CardScanSlot({
             </motion.div>
           )}
 
-          {(slotState === "idle" || slotState === "ready") && (
-            <motion.div key="upload" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
+          {slotState === "idle" && (
+            <motion.div key="upload" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
               <DualCardUploader
                 onIdentified={handleIdentified}
                 disabled={disabled || isAnalyzing}
                 onReset={handleReset}
               />
-              {slotState === "ready" && identifiedCard && (
-                <button
-                  onClick={handleAnalyze}
-                  disabled={disabled}
-                  className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-500 active:scale-[0.98] disabled:opacity-50"
-                >
-                  Analyze Grade
-                </button>
-              )}
             </motion.div>
           )}
         </AnimatePresence>
