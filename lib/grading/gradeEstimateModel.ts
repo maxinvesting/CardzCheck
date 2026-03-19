@@ -338,8 +338,8 @@ function applyLimitedVisibilityAdjustments(
     // downward grade shift when evidence is otherwise strong.
     const from10 = Math.min(psa["10"], 0.04);
     psa["10"] -= from10;
-    psa["9"] += from10 * 0.7;
-    psa["8"] += from10 * 0.3;
+    psa["9"] += from10 * 0.85;
+    psa["8"] += from10 * 0.15;
     const normalizedPsa = normalizeProbabilityMap(psa);
     adjusted.grade_probabilities = {
       ...adjusted.grade_probabilities,
@@ -442,12 +442,12 @@ function mapWeightedScoreToRange(weightedScore: number): { low: number; high: nu
 // This makes distributions meaningfully different across similar cards.
 const DETERMINISTIC_BREAKPOINTS: Array<{ threshold: number; dist: GradeProbabilities["psa"] }> = [
   { threshold: 97, dist: { "10": 0.55, "9": 0.35, "8": 0.08, "7_or_lower": 0.02 } },
-  { threshold: 92, dist: { "10": 0.35, "9": 0.48, "8": 0.13, "7_or_lower": 0.04 } },
-  { threshold: 86, dist: { "10": 0.18, "9": 0.52, "8": 0.22, "7_or_lower": 0.08 } },
-  { threshold: 78, dist: { "10": 0.07, "9": 0.44, "8": 0.33, "7_or_lower": 0.16 } },
-  { threshold: 68, dist: { "10": 0.03, "9": 0.28, "8": 0.40, "7_or_lower": 0.29 } },
-  { threshold: 57, dist: { "10": 0.01, "9": 0.16, "8": 0.37, "7_or_lower": 0.46 } },
-  { threshold: 0,  dist: { "10": 0.00, "9": 0.08, "8": 0.27, "7_or_lower": 0.65 } },
+  { threshold: 92, dist: { "10": 0.35, "9": 0.50, "8": 0.11, "7_or_lower": 0.04 } },
+  { threshold: 86, dist: { "10": 0.20, "9": 0.55, "8": 0.17, "7_or_lower": 0.08 } },
+  { threshold: 78, dist: { "10": 0.08, "9": 0.52, "8": 0.25, "7_or_lower": 0.15 } },
+  { threshold: 68, dist: { "10": 0.03, "9": 0.36, "8": 0.33, "7_or_lower": 0.28 } },
+  { threshold: 57, dist: { "10": 0.01, "9": 0.20, "8": 0.35, "7_or_lower": 0.44 } },
+  { threshold: 0,  dist: { "10": 0.00, "9": 0.10, "8": 0.27, "7_or_lower": 0.63 } },
 ];
 
 function lerpPsa(
@@ -526,31 +526,32 @@ function applyCenteringGate(
   const severity = centering.centering_severity_0_3;
 
   // PSA 10 ceiling scales with actual centering quality.
-  // A near-perfect card should not be hard-capped at 18% — let the evidence speak.
+  // PSA's own standard allows up to 60/40 for a Gem Mint 10.
   const tcgStrict = category !== "sports";
   let maxPsa10: number;
   if (status !== "ok") {
     maxPsa10 = 0.08;
   } else if (severity === 0 && worstAxis <= 52) {
-    maxPsa10 = tcgStrict ? 0.68 : 0.85; // near-perfect centering
+    maxPsa10 = tcgStrict ? 0.68 : 0.85;
   } else if (severity === 0 && worstAxis <= 55) {
-    maxPsa10 = tcgStrict ? 0.4 : 0.65;
+    maxPsa10 = tcgStrict ? 0.45 : 0.70;
   } else if (severity <= 1 && worstAxis <= 58) {
-    maxPsa10 = tcgStrict ? 0.2 : 0.42;
+    maxPsa10 = tcgStrict ? 0.25 : 0.55;
   } else if (severity <= 1 && worstAxis <= 60) {
-    maxPsa10 = tcgStrict ? 0.08 : 0.2;
+    maxPsa10 = tcgStrict ? 0.12 : 0.35;
   } else {
-    maxPsa10 = 0.03;
+    maxPsa10 = 0.05;
   }
-  // Hard overrides for genuinely bad centering — no matter what else looks good
-  if (severity >= 2 || worstAxis > 60) maxPsa10 = Math.min(maxPsa10, 0.03);
+  // Hard overrides for genuinely bad centering (beyond PSA's 60/40 standard)
+  if (severity >= 2 || worstAxis > 62) maxPsa10 = Math.min(maxPsa10, 0.03);
   if (worstAxis >= 65 || severity >= 3) maxPsa10 = 0.01;
 
   if (gated["10"] > maxPsa10) {
     const excess = gated["10"] - maxPsa10;
     gated["10"] = maxPsa10;
-    gated["8"] += excess * 0.4;
-    gated["7_or_lower"] += excess * 0.6;
+    gated["9"] += excess * 0.70;
+    gated["8"] += excess * 0.20;
+    gated["7_or_lower"] += excess * 0.10;
   }
 
   if (worstAxis >= 65 || severity >= 3) {
@@ -558,8 +559,8 @@ function applyCenteringGate(
     if (gated["9"] > maxPsa9) {
       const excess = gated["9"] - maxPsa9;
       gated["9"] = maxPsa9;
-      gated["8"] += excess * 0.45;
-      gated["7_or_lower"] += excess * 0.55;
+      gated["8"] += excess * 0.55;
+      gated["7_or_lower"] += excess * 0.45;
     }
   }
 
@@ -632,8 +633,9 @@ function applyTcgDefectPenalty(
   if (adjusted["10"] > maxPsa10) {
     const excess = adjusted["10"] - maxPsa10;
     adjusted["10"] = maxPsa10;
-    adjusted["8"] += excess * 0.45;
-    adjusted["7_or_lower"] += excess * 0.55;
+    adjusted["9"] += excess * 0.55;
+    adjusted["8"] += excess * 0.30;
+    adjusted["7_or_lower"] += excess * 0.15;
   }
 
   // If multiple moderate/severe defects exist, cap PSA 9 as well.
@@ -653,8 +655,8 @@ function applyTcgDefectPenalty(
     if (adjusted["9"] > maxPsa9) {
       const excess = adjusted["9"] - maxPsa9;
       adjusted["9"] = maxPsa9;
-      adjusted["8"] += excess * 0.48;
-      adjusted["7_or_lower"] += excess * 0.52;
+      adjusted["8"] += excess * 0.55;
+      adjusted["7_or_lower"] += excess * 0.45;
     }
   }
 
@@ -671,16 +673,15 @@ function applyConfidencePenalty(
   const strengthMultiplier = clamp(options?.strengthMultiplier ?? 1, 0, 1.25);
   const shift = (confidence === "medium" ? 0.05 : 0.09) * strengthMultiplier;
 
-  // Uncertainty should widen outcomes, not systematically bias grades lower.
-  // Pull probability mass from extreme tails toward the middle buckets.
+  // Uncertainty should widen outcomes toward adjacent grades, not skip to PSA 8.
   const from10 = Math.min(adjusted["10"], shift);
   const from7 = Math.min(adjusted["7_or_lower"], shift * 0.5);
 
   adjusted["10"] -= from10;
   adjusted["7_or_lower"] -= from7;
 
-  adjusted["9"] += from10 * 0.65 + from7 * 0.4;
-  adjusted["8"] += from10 * 0.35 + from7 * 0.6;
+  adjusted["9"] += from10 * 0.80 + from7 * 0.55;
+  adjusted["8"] += from10 * 0.20 + from7 * 0.45;
 
   return normalizeProbabilityMap(adjusted);
 }
@@ -882,8 +883,8 @@ async function buildEstimateFromParsed(
     surfaceScore * gradingWeights.surface +
     cornersScore * gradingWeights.corners +
     edgesScore * gradingWeights.edges;
-  const imageInfluence = (imageQuality.overall_image_score - 50) * 0.12;
-  const confidenceInfluence = (confidence.overall_confidence_score - 50) * 0.12;
+  const imageInfluence = (imageQuality.overall_image_score - 50) * 0.05;
+  const confidenceInfluence = (confidence.overall_confidence_score - 50) * 0.06;
   const calibratedScore = clamp(
     weightedEvidenceScore + imageInfluence + confidenceInfluence,
     0,

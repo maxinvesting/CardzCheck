@@ -85,7 +85,7 @@ function applyPsa10SoftCap(
   outcomes: GradeOutcome[],
   options?: PsaNormalizationOptions
 ): GradeOutcome[] {
-  const maxPsa10Probability = options?.maxPsa10Probability ?? 0.15;
+  const maxPsa10Probability = options?.maxPsa10Probability ?? 0.25;
   const allowOverride = options?.allowPsa10Override ?? false;
 
   if (allowOverride) return outcomes;
@@ -128,7 +128,7 @@ export function normalizePsaDistribution(
   outcomes: GradeOutcome[],
   options?: PsaNormalizationOptions
 ): GradeOutcome[] {
-  // Soft PSA 10 cap (default 15%) unless explicitly overridden for high-confidence, top-tier evidence.
+  // Soft PSA 10 cap (default 25%) unless explicitly overridden for high-confidence, top-tier evidence.
   const capped = applyPsa10SoftCap(outcomes, options);
   return normalizeDistribution(capped);
 }
