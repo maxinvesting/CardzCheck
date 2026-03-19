@@ -3,7 +3,6 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { AnimatePresence, motion } from "framer-motion";
 import { Playfair_Display } from "next/font/google";
 import { useAuth } from "@/contexts/AuthContext";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
@@ -18,6 +17,8 @@ const TIER_MAX_SLOTS: Record<string, number> = {
   pro: 1,
   business: 10,
 };
+
+const SLOT_NAMES = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
 
 function StatusDot({ state }: { state: SlotState }) {
   if (state === "done")      return <span className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(34,197,94,0.8)]" />;
@@ -52,6 +53,7 @@ function ScanPageInner() {
     maxSlots
   );
   const [activeSlots, setActiveSlots] = useState(requestedSlots);
+  const [activeCardIndex, setActiveCardIndex] = useState(0);
   const [slotStates, setSlotStates] = useState<SlotState[]>(
     Array.from({ length: TIER_MAX_SLOTS.business }, () => "idle" as SlotState)
   );
@@ -64,17 +66,33 @@ function ScanPageInner() {
     setSlotStates((prev) => { const n = [...prev]; n[i] = s; return n; });
   }, []);
 
+  const handleNewSession = useCallback(() => {
+    setSlotStates(Array.from({ length: TIER_MAX_SLOTS.business }, () => "idle" as SlotState));
+    setActiveCardIndex(0);
+  }, []);
+
   const visible = slotStates.slice(0, activeSlots);
   const allDone = visible.every((s) => s === "done");
   const anyAnalyzing = visible.some((s) => s === "analyzing");
+  const anyStarted = visible.some((s) => s !== "idle");
   const doneCount = visible.filter((s) => s === "done").length;
 
-  const gridCls =
-    activeSlots === 1
-      ? "max-w-2xl mx-auto"
-      : activeSlots === 2
-      ? "grid grid-cols-1 lg:grid-cols-2 gap-5"
-      : "grid grid-cols-1 lg:grid-cols-3 gap-5";
+  // In session: tabs navigate between cards. Pre-session: tabs set slot count.
+  const handleTabClick = (n: number) => {
+    if (anyStarted) {
+      setActiveCardIndex(n - 1);
+    } else {
+      setActiveSlots(n);
+    }
+  };
+
+  const goPrev = () => setActiveCardIndex((i) => Math.max(0, i - 1));
+  const goNext = () => setActiveCardIndex((i) => Math.min(activeSlots - 1, i + 1));
+
+  const currentSlotState = visible[activeCardIndex] ?? "idle";
+  const currentSlotName = activeSlots > 1
+    ? `Card ${SLOT_NAMES[activeCardIndex] ?? activeCardIndex + 1}`
+    : null;
 
   return (
     <AuthenticatedLayout>
@@ -124,9 +142,11 @@ function ScanPageInner() {
               }}
             >
               Scan Session
-              <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                {visible.map((s, i) => <StatusDot key={i} state={s} />)}
-              </div>
+              {anyStarted && (
+                <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                  {visible.map((s, i) => <StatusDot key={i} state={s} />)}
+                </div>
+              )}
               {anyAnalyzing && (
                 <span style={{ fontSize: 10, color: "#bfdbfe", fontWeight: 600 }}>Analyzing…</span>
               )}
@@ -138,37 +158,51 @@ function ScanPageInner() {
             </div>
           </div>
 
-          {/* Slot selector (business) + New scan */}
+          {/* Slot/card tabs + New scan */}
           <div className="flex items-center gap-2 py-2">
             {maxSlots > 1 && (
               <div className="flex items-center gap-1 mr-2">
-                <span style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.6px" }}>Cards</span>
-                {Array.from({ length: maxSlots }, (_, idx) => idx + 1).map((n) => (
-                  <button
-                    key={n}
-                    onClick={() => setActiveSlots(n)}
-                    style={{
-                      width: 28, height: 28,
-                      borderRadius: 2,
-                      fontSize: 11,
-                      fontWeight: 700,
-                      border: "none",
-                      background: activeSlots === n ? GOLD : "transparent",
-                      color: activeSlots === n ? "#1e3a8a" : "rgba(255,255,255,0.5)",
-                      cursor: "pointer",
-                    }}
-                  >
-                    {n}
-                  </button>
-                ))}
+                <span style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.6px" }}>
+                  {anyStarted ? "Card" : "Cards"}
+                </span>
+                {Array.from({ length: anyStarted ? activeSlots : maxSlots }, (_, idx) => idx + 1).map((n) => {
+                  const isActive = anyStarted ? activeCardIndex === n - 1 : activeSlots === n;
+                  const slotState = visible[n - 1];
+                  return (
+                    <button
+                      key={n}
+                      onClick={() => handleTabClick(n)}
+                      style={{
+                        width: 28, height: 28,
+                        borderRadius: 2,
+                        fontSize: 11,
+                        fontWeight: 700,
+                        border: "none",
+                        background: isActive ? GOLD : "transparent",
+                        color: isActive ? "#1e3a8a" : "rgba(255,255,255,0.5)",
+                        cursor: "pointer",
+                        position: "relative" as const,
+                      }}
+                    >
+                      {n}
+                      {anyStarted && slotState === "done" && !isActive && (
+                        <span style={{
+                          position: "absolute",
+                          top: 3,
+                          right: 3,
+                          width: 5,
+                          height: 5,
+                          borderRadius: "50%",
+                          background: "#34d399",
+                        }} />
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             )}
             <button
-              onClick={() =>
-                setSlotStates(
-                  Array.from({ length: TIER_MAX_SLOTS.business }, () => "idle" as SlotState)
-                )
-              }
+              onClick={handleNewSession}
               style={{
                 fontSize: 11,
                 fontWeight: 700,
@@ -188,16 +222,27 @@ function ScanPageInner() {
         </div>
 
         {/* ── Body ─────────────────────────────────────────────────────── */}
-        <div className="px-6 py-8 max-w-6xl mx-auto space-y-6">
+        <div className="px-6 py-8 max-w-3xl mx-auto space-y-6">
 
-          {/* Page title */}
+          {/* Page title / progress */}
           <div className="space-y-1">
             <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "1.2px", color: GOLD }}>
               Grade Probability Engine
             </p>
-            <h1 className={playfair.className} style={{ fontSize: 22, fontWeight: 600, color: CC_BLUE, lineHeight: 1.2 }}>
-              {activeSlots === 1 ? "Analyze your card." : `Analyze ${activeSlots} cards.`}
-            </h1>
+            {anyStarted && activeSlots > 1 ? (
+              <div className="flex items-baseline gap-3">
+                <h1 className={playfair.className} style={{ fontSize: 22, fontWeight: 600, color: CC_BLUE, lineHeight: 1.2 }}>
+                  {currentSlotName ?? `Card ${activeCardIndex + 1}`}
+                </h1>
+                <span style={{ fontSize: 12, color: "#9ca3af" }}>
+                  {doneCount} of {activeSlots} complete
+                </span>
+              </div>
+            ) : (
+              <h1 className={playfair.className} style={{ fontSize: 22, fontWeight: 600, color: CC_BLUE, lineHeight: 1.2 }}>
+                {activeSlots === 1 ? "Analyze your card." : `Analyze ${activeSlots} cards.`}
+              </h1>
+            )}
           </div>
 
           {!tierLoaded ? (
@@ -209,36 +254,92 @@ function ScanPageInner() {
             </div>
           ) : (
             <>
-              {/* Scan slots */}
-              <motion.div layout className={gridCls}>
-                <AnimatePresence initial={false}>
-                  {Array.from({ length: activeSlots }).map((_, i) => (
-                    <motion.div
-                      key={i}
-                      layout
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.96 }}
-                      transition={{ duration: 0.2, delay: i * 0.05 }}
-                    >
-                      <CardScanSlot
-                        slotIndex={i}
-                        totalSlots={activeSlots}
-                        onStateChange={handleStateChange}
-                      />
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
-              </motion.div>
+              {/* Card navigation (multi-slot sessions only) */}
+              {activeSlots > 1 && anyStarted && (
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={goPrev}
+                    disabled={activeCardIndex === 0}
+                    style={{
+                      width: 32, height: 32,
+                      borderRadius: 4,
+                      border: "1px solid #d0d5dd",
+                      background: "#fff",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      cursor: activeCardIndex === 0 ? "not-allowed" : "pointer",
+                      opacity: activeCardIndex === 0 ? 0.4 : 1,
+                    }}
+                  >
+                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </button>
+
+                  <div className="flex items-center gap-1.5">
+                    {Array.from({ length: activeSlots }).map((_, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setActiveCardIndex(i)}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 4,
+                          padding: "4px 10px",
+                          borderRadius: 4,
+                          border: i === activeCardIndex ? `1px solid ${CC_BLUE}` : "1px solid #d0d5dd",
+                          background: i === activeCardIndex ? "#eff6ff" : "#fff",
+                          fontSize: 11,
+                          fontWeight: 700,
+                          color: i === activeCardIndex ? CC_BLUE : "#6b7280",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <StatusDot state={slotStates[i] ?? "idle"} />
+                        Card {SLOT_NAMES[i] ?? i + 1}
+                      </button>
+                    ))}
+                  </div>
+
+                  <button
+                    onClick={goNext}
+                    disabled={activeCardIndex === activeSlots - 1}
+                    style={{
+                      width: 32, height: 32,
+                      borderRadius: 4,
+                      border: "1px solid #d0d5dd",
+                      background: "#fff",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      cursor: activeCardIndex === activeSlots - 1 ? "not-allowed" : "pointer",
+                      opacity: activeCardIndex === activeSlots - 1 ? 0.4 : 1,
+                    }}
+                  >
+                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+
+              {/* Scan slots — all mounted, only active is visible */}
+              <div>
+                {Array.from({ length: activeSlots }).map((_, i) => (
+                  <div key={i} className={i === activeCardIndex ? "block" : "hidden"}>
+                    <CardScanSlot
+                      slotIndex={i}
+                      totalSlots={activeSlots}
+                      onStateChange={handleStateChange}
+                    />
+                  </div>
+                ))}
+              </div>
 
               {/* Post-session actions */}
               {allDone && (
-                <motion.div
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 }}
-                  className="flex justify-center gap-3"
-                >
+                <div className="flex justify-center gap-3">
                   <Link
                     href="/grade-hub"
                     style={{
@@ -250,11 +351,7 @@ function ScanPageInner() {
                     Back to Hub
                   </Link>
                   <button
-                    onClick={() =>
-                      setSlotStates(
-                        Array.from({ length: TIER_MAX_SLOTS.business }, () => "idle" as SlotState)
-                      )
-                    }
+                    onClick={handleNewSession}
                     style={{
                       fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.6px",
                       borderRadius: 2, border: "none", color: "#fff",
@@ -263,7 +360,7 @@ function ScanPageInner() {
                   >
                     New Session
                   </button>
-                </motion.div>
+                </div>
               )}
 
               {/* Photo tips */}

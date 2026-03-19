@@ -45,6 +45,7 @@ const RECOMMENDATION_CLASSES: Record<GradeVerdict["recommendation"], string> = {
   Borderline: "border-amber-200 bg-amber-50 text-amber-700",
   "Sell Raw": "border-slate-200 bg-slate-100 text-slate-700",
   "Rescan Needed": "border-rose-200 bg-rose-50 text-rose-700",
+  "Add Close-ups": "border-sky-200 bg-sky-50 text-sky-700",
 };
 
 // ─────────────────────────────────────────────────────────
@@ -391,6 +392,7 @@ export default function GradeProbabilityPanel({
   const [showAnalysisDetails, setShowAnalysisDetails] = useState(
     () => confidence === "low"
   );
+  const [evidenceExpanded, setEvidenceExpanded] = useState(false);
   const [exportingPng, setExportingPng] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
 
@@ -502,8 +504,11 @@ export default function GradeProbabilityPanel({
   const warningBanner =
     warningMessage ||
     (showPhotoQualityWarning ? gradingCopy.panel.confidenceReduced : null);
+  // Suppress "limited visibility" notes when the engine successfully read all four
+  // evidence fields — that's a complete read, not limited signal.
+  const hasFullEvidenceRead = !!(estimate.centering && estimate.corners && estimate.surface && estimate.edges);
   const visibilityNote =
-    !warningBanner && (estimate.visibility_notes?.length ?? 0) > 0
+    !warningBanner && !hasFullEvidenceRead && (estimate.visibility_notes?.length ?? 0) > 0
       ? estimate.visibility_notes![0]
       : null;
   const inlineBanner = warningBanner || visibilityNote;
@@ -735,17 +740,36 @@ export default function GradeProbabilityPanel({
           {/* RIGHT: Evidence + Notes + Close-ups */}
           <div className="flex flex-col gap-4 px-5 py-5">
 
-            {/* Evidence header */}
-            <div className={`flex gap-2 ${compact ? "flex-col items-start" : "items-center justify-between"}`}>
+            {/* Evidence header — collapsible */}
+            <button
+              type="button"
+              onClick={() => setEvidenceExpanded((prev) => !prev)}
+              className="flex w-full items-center justify-between gap-2 text-left"
+            >
               <SectionLabel>{gradingCopy.panel.evidenceTitle}</SectionLabel>
-              <p
-                className={`text-[9px] leading-snug text-[var(--biz-muted)] ${
-                  compact ? "max-w-none text-left" : "max-w-[160px] text-right"
-                }`}
-              >
-                {gradingCopy.panel.evidenceNote}
-              </p>
-            </div>
+              <div className="flex items-center gap-1.5">
+                {!evidenceExpanded && (
+                  <span className="text-[9px] leading-snug text-[var(--biz-muted)]">
+                    {gradingCopy.panel.evidenceNote}
+                  </span>
+                )}
+                <svg
+                  className={`h-3 w-3 shrink-0 text-[var(--biz-muted)] transition-transform duration-150 ${evidenceExpanded ? "rotate-180" : ""}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+            </button>
+
+            {evidenceExpanded && (
+            <>
+            {/* Evidence note (shown when expanded) */}
+            <p className="text-[9px] leading-snug text-[var(--biz-muted)]">
+              {gradingCopy.panel.evidenceNote}
+            </p>
 
             {/* Evidence 2×2 grid */}
             <div className={`grid gap-2 ${compact ? "grid-cols-1" : "grid-cols-2"}`}>
@@ -861,6 +885,8 @@ export default function GradeProbabilityPanel({
                 </div>
               </div>
             ) : null}
+            </>
+            )}
           </div>
         </div>
 

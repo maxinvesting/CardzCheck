@@ -246,16 +246,16 @@ export default function CardScanSlot({
       <div className="p-4">
         <AnimatePresence mode="wait">
           {isDone && gradeEstimate && (
-            <motion.div key="result" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }}>
+            <div key="result">
               <GradeProbabilityPanel
                 estimate={gradeEstimate}
                 cardIdentity={identifiedCard}
                 primaryImageUrl={identifiedCard?.imageUrl}
                 imageUrls={identifiedCard?.imageUrls}
                 scanPhotos={identifiedCard?.scanPhotos}
-                compact={totalSlots > 1}
+                compact={false}
               />
-            </motion.div>
+            </div>
           )}
 
           {isAnalyzing && (

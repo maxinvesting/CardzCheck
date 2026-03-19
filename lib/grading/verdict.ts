@@ -9,7 +9,16 @@ export type VerdictRecommendation =
   | "Grade"
   | "Borderline"
   | "Sell Raw"
-  | "Rescan Needed";
+  | "Rescan Needed"
+  | "Add Close-ups";
+
+// ── Rescan / confidence thresholds ─────────────────────────────────────────
+// Adjust RESCAN_CONFIDENCE_THRESHOLD to tune how aggressively the engine
+// asks for rescans. PHOTO_FLAGS_RESCAN_THRESHOLD only applies when the engine
+// has also detected genuine photo-quality problems (blur, glare, wrong angle).
+// Cards missing close-ups but otherwise readable get "Add Close-ups" instead.
+const RESCAN_CONFIDENCE_THRESHOLD = 50;   // hard gate — genuinely unusable signal
+const PHOTO_FLAGS_RESCAN_THRESHOLD = 58;  // bad photo quality + mid-low confidence
 
 export type VerdictGrader = "PSA" | "BGS" | "SGC" | "TAG";
 
@@ -169,7 +178,7 @@ function getSuggestedGrader(options: {
   if ((options.p10 >= 0.20 || options.bgs95 >= 0.08) && options.confidence !== "low") return "BGS";
 
   const isModern = options.year !== null && options.year >= 2018;
-  if (options.preferTag && isModern && options.recommendation !== "Rescan Needed") {
+  if (options.preferTag && isModern && options.recommendation !== "Rescan Needed" && options.recommendation !== "Add Close-ups") {
     return "TAG";
   }
 
@@ -187,7 +196,11 @@ function buildReasoning(options: {
   likelyProb: number;
 }): string {
   if (options.recommendation === "Rescan Needed") {
-    return `Confidence is ${options.confidence} (${options.confidenceScore}/100) with photo-quality limits on centering, corners, edges, or surface, so the scan should be retaken first. Current distribution leads with ${options.likelyLabel} at ${formatPercent(options.likelyProb)} and may shift with better close-ups.`;
+    return `Confidence is ${options.confidence} (${options.confidenceScore}/100) — photo quality is limiting the analysis. Retake with better lighting, a straight-on angle, and ensure the card fills the frame. Current distribution leads with ${options.likelyLabel} at ${formatPercent(options.likelyProb)} but may shift significantly with cleaner photos.`;
+  }
+
+  if (options.recommendation === "Add Close-ups") {
+    return `Evidence read is complete — centering, corners, edges, and surface assessed. Close-up photos of corners and surface would sharpen the confidence. Current estimate leads with ${options.likelyLabel} at ${formatPercent(options.likelyProb)} with EV ${options.ev.toFixed(1)}.`;
   }
 
   if (options.recommendation === "Grade") {
@@ -205,7 +218,8 @@ function buildStrategyTip(
   recommendation: VerdictRecommendation,
   suggestedGrader: VerdictGrader
 ): string {
-  if (recommendation === "Rescan Needed") return "Upload additional close-up photos";
+  if (recommendation === "Rescan Needed") return "Retake photos — better lighting and angle needed";
+  if (recommendation === "Add Close-ups") return "Add macro close-ups to confirm";
   if (recommendation === "Sell Raw") return "List raw on marketplace";
   if (recommendation === "Borderline") return "Wait for market timing";
 
@@ -247,24 +261,21 @@ export function buildGradeVerdict(
     );
 
   let recommendation: VerdictRecommendation;
-  if (estimate.analysis_status === "unable" || confidence === "low" || confidenceScore < 40) {
-    // Hard gates: unable status, genuinely low confidence, or very low confidence score.
-    // Old threshold was < 50, which punted too many useful medium-confidence reads.
+  if (estimate.analysis_status === "unable" || confidenceScore < RESCAN_CONFIDENCE_THRESHOLD) {
+    // Hard gates: unable status or genuinely low confidence score.
+    // Triggers for: blurry/wrong-angle photos, card not detected, or score below threshold.
     recommendation = "Rescan Needed";
-  } else if (photoFlags && confidenceScore < 58) {
-    // Photo quality issues (blur, glare in negative fields) only punt to Rescan when
-    // confidence is also genuinely low. Good front/back shots can still give a useful verdict.
-    recommendation = "Rescan Needed";
-  } else if (limitedVisibilityFlag && confidenceScore < 55) {
-    // No close-ups + medium-low confidence → ask for better photos.
-    // High-quality front/back alone can still support Borderline or Sell Raw verdicts.
+  } else if (photoFlags && confidenceScore < PHOTO_FLAGS_RESCAN_THRESHOLD) {
+    // Explicit photo-quality problems (blur, glare in negative fields) + low-medium confidence.
+    // Good front/back shots with readable evidence do NOT trigger this.
     recommendation = "Rescan Needed";
   } else if (lowGradeProb >= 0.45 || (lowGradeProb + getOutcomeProbability(outcomes, "PSA 8")) >= 0.75) {
     recommendation = "Sell Raw";
   } else if (highGradeProb >= 0.62) {
-    recommendation = "Grade";
+    // Cards with readable evidence but missing close-ups get a soft nudge, not a hard block.
+    recommendation = limitedVisibilityFlag ? "Add Close-ups" : "Grade";
   } else {
-    recommendation = "Borderline";
+    recommendation = limitedVisibilityFlag ? "Add Close-ups" : "Borderline";
   }
 
   const year = parseYear(cardIdentity);
