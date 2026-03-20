@@ -140,28 +140,50 @@ export default function ShopStorefront({
   }, []);
 
   const isEmpty = initialListings.length === 0;
+  const heroBadges = ["Below Comps", "Curated by CardzCheck", "New Drops"];
 
   return (
     <div className="space-y-0">
       <section className="border-b border-slate-200 bg-white">
-        <div className="mx-auto max-w-7xl px-4 py-12">
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-900 md:text-4xl">
-            CardzCheck Marketplace
-          </h1>
-          <p className="mt-2 text-slate-600">Simple storefront for available listings.</p>
-          {!isEmpty && (
-            <p className="mt-1 text-sm text-slate-500">
-              {stats.activeCount} active listings
+        <div className="mx-auto max-w-7xl px-4 py-10 md:py-12">
+          <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-cyan-50/50 p-6 md:p-9">
+            <div className="flex flex-wrap gap-2">
+              {heroBadges.map((badge) => (
+                <span
+                  key={badge}
+                  className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-600"
+                >
+                  {badge}
+                </span>
+              ))}
+            </div>
+
+            <h1 className="mt-4 text-3xl font-semibold tracking-tight text-slate-900 md:text-4xl">
+              CardzCheck Deals
+            </h1>
+            <p className="mt-3 max-w-3xl text-slate-600">
+              Curated sports card deals from CardzCheck inventory, priced
+              competitively and often below market comps.
             </p>
-          )}
-          {!isEmpty && (
-            <button
-              onClick={scrollToCatalog}
-              className="mt-5 rounded-lg bg-cyan-600 px-5 py-3 min-h-[44px] text-sm font-medium text-white transition-colors hover:bg-cyan-500"
-            >
-              Browse listings
-            </button>
-          )}
+            <p className="mt-2 max-w-3xl text-sm text-slate-500">
+              All listings are published by CardzCheck. This is a buyer-focused
+              storefront, not a peer-to-peer marketplace.
+            </p>
+
+            {!isEmpty && (
+              <p className="mt-4 text-sm text-slate-500">
+                {stats.activeCount} live deals
+              </p>
+            )}
+            {!isEmpty && (
+              <button
+                onClick={scrollToCatalog}
+                className="mt-5 rounded-lg bg-cyan-600 px-5 py-3 min-h-[44px] text-sm font-medium text-white transition-colors hover:bg-cyan-500"
+              >
+                Browse live deals
+              </button>
+            )}
+          </div>
         </div>
       </section>
 
@@ -170,8 +192,13 @@ export default function ShopStorefront({
         className="scroll-mt-28 border-b border-slate-200 bg-white"
       >
         <div className="mx-auto max-w-7xl space-y-6 px-4 py-12">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-2xl font-semibold text-slate-900">Listings</h2>
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="text-2xl font-semibold text-slate-900">Live Deals</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Published by CardzCheck from in-house inventory.
+              </p>
+            </div>
             {hasActiveFilters && (
               <button
                 onClick={clearFilters}
@@ -184,15 +211,27 @@ export default function ShopStorefront({
 
           {isEmpty ? (
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-6 py-10 text-center">
-              <p className="text-slate-700">No listings are available right now.</p>
-              {isAdmin && (
+              <p className="font-medium text-slate-900">No live deals right now.</p>
+              <p className="mx-auto mt-2 max-w-xl text-sm text-slate-600">
+                New deals appear here as CardzCheck publishes them. Check back
+                soon for fresh below-comps listings.
+              </p>
+              <div className="mt-5 flex flex-wrap items-center justify-center gap-4">
                 <Link
-                  href="/admin/shop"
-                  className="mt-4 inline-block text-sm text-slate-600 transition-colors hover:text-cyan-700"
+                  href="/"
+                  className="text-sm text-slate-600 transition-colors hover:text-cyan-700"
                 >
-                  Add listings in Marketplace Admin
+                  Return to Main App
                 </Link>
-              )}
+                {isAdmin && (
+                  <Link
+                    href="/admin/shop"
+                    className="text-sm text-slate-600 transition-colors hover:text-cyan-700"
+                  >
+                    Publish deals in Shop Admin
+                  </Link>
+                )}
+              </div>
             </div>
           ) : (
             <>
@@ -229,7 +268,7 @@ export default function ShopStorefront({
 
               {catalogFiltered.length === 0 ? (
                 <div className="border-t border-slate-200 py-14 text-center">
-                  <p className="text-slate-600">No listings match these filters.</p>
+                  <p className="text-slate-600">No deals match these filters.</p>
                   <button
                     onClick={clearFilters}
                     className="mt-4 rounded-lg bg-cyan-600 px-4 py-2.5 min-h-[44px] text-sm font-medium text-white transition-colors hover:bg-cyan-500"

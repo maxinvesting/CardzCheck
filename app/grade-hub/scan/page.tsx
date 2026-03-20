@@ -78,7 +78,7 @@ function ScanPageInner() {
 
   return (
     <AuthenticatedLayout>
-      <div className="min-h-screen bg-[#fafafa]">
+      <div className="min-h-screen bg-[#111]">
 
         {/* ── Tab bar ──────────────────────────────────────────────────── */}
         <div
@@ -164,11 +164,7 @@ function ScanPageInner() {
               </div>
             )}
             <button
-              onClick={() =>
-                setSlotStates(
-                  Array.from({ length: TIER_MAX_SLOTS.business }, () => "idle" as SlotState)
-                )
-              }
+              onClick={() => router.push("/grade-hub")}
               style={{
                 fontSize: 11,
                 fontWeight: 700,
@@ -195,7 +191,7 @@ function ScanPageInner() {
             <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "1.2px", color: GOLD }}>
               Grade Probability Engine
             </p>
-            <h1 className={playfair.className} style={{ fontSize: 22, fontWeight: 600, color: CC_BLUE, lineHeight: 1.2 }}>
+            <h1 className={playfair.className} style={{ fontSize: 22, fontWeight: 600, color: "#fff", lineHeight: 1.2 }}>
               {activeSlots === 1 ? "Analyze your card." : `Analyze ${activeSlots} cards.`}
             </h1>
           </div>
@@ -203,8 +199,8 @@ function ScanPageInner() {
           {!tierLoaded ? (
             <div className="flex items-center justify-center py-20">
               <div className="space-y-3 text-center">
-                <div className="mx-auto h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
-                <p style={{ fontSize: 12, color: "#9ca3af" }}>Initializing session…</p>
+                <div className="mx-auto h-6 w-6 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+                <p style={{ fontSize: 12, color: "rgba(255,255,255,0.4)" }}>Initializing session…</p>
               </div>
             </div>
           ) : (
@@ -243,18 +239,14 @@ function ScanPageInner() {
                     href="/grade-hub"
                     style={{
                       fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.6px",
-                      borderRadius: 2, border: "1px solid #d0d5dd", color: "#374151",
-                      background: "#fff", padding: "9px 20px", textDecoration: "none",
+                      borderRadius: 2, border: "1px solid rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.7)",
+                      background: "rgba(255,255,255,0.06)", padding: "9px 20px", textDecoration: "none",
                     }}
                   >
                     Back to Hub
                   </Link>
                   <button
-                    onClick={() =>
-                      setSlotStates(
-                        Array.from({ length: TIER_MAX_SLOTS.business }, () => "idle" as SlotState)
-                      )
-                    }
+                    onClick={() => router.push("/grade-hub")}
                     style={{
                       fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.6px",
                       borderRadius: 2, border: "none", color: "#fff",
@@ -266,36 +258,38 @@ function ScanPageInner() {
                 </motion.div>
               )}
 
-              {/* Photo tips */}
-              <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 32, marginTop: 16 }}>
-                <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px", color: "#9ca3af", marginBottom: 16 }}>
-                  Tips for best results
-                </p>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-                    gap: 12,
-                    border: "1px solid #d0d5dd",
-                    borderTop: `3px solid ${CC_BLUE}`,
-                    borderRadius: 2,
-                    background: "#fff",
-                    padding: "16px 20px",
-                  }}
-                >
-                  {[
-                    { n: "01", tip: "Use flat, even lighting — avoid glare, shadows, or direct flash." },
-                    { n: "02", tip: "Always include both front and back for the most accurate analysis." },
-                    { n: "03", tip: "Add close-ups of corners, edges, and surface to boost confidence." },
-                    { n: "04", tip: "Fill the frame and keep the card sharp — blur reduces accuracy." },
-                  ].map(({ n, tip }) => (
-                    <div key={n} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                      <span style={{ fontFamily: "monospace", fontSize: 10, fontWeight: 700, color: GOLD, flexShrink: 0, marginTop: 2 }}>{n}</span>
-                      <p style={{ fontSize: 12, lineHeight: 1.5, color: "#6b7280", margin: 0 }}>{tip}</p>
-                    </div>
-                  ))}
+              {/* Photo tips — only show when idle (no results yet) */}
+              {!anyAnalyzing && doneCount === 0 && (
+                <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 32, marginTop: 16 }}>
+                  <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px", color: "rgba(255,255,255,0.3)", marginBottom: 16 }}>
+                    Tips for best results
+                  </p>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                      gap: 12,
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      borderTop: `3px solid ${CC_BLUE}`,
+                      borderRadius: 2,
+                      background: "rgba(255,255,255,0.03)",
+                      padding: "16px 20px",
+                    }}
+                  >
+                    {[
+                      { n: "01", tip: "Use flat, even lighting — avoid glare, shadows, or direct flash." },
+                      { n: "02", tip: "Always include both front and back for the most accurate analysis." },
+                      { n: "03", tip: "Add close-ups of corners, edges, and surface to boost confidence." },
+                      { n: "04", tip: "Fill the frame and keep the card sharp — blur reduces accuracy." },
+                    ].map(({ n, tip }) => (
+                      <div key={n} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                        <span style={{ fontFamily: "monospace", fontSize: 10, fontWeight: 700, color: GOLD, flexShrink: 0, marginTop: 2 }}>{n}</span>
+                        <p style={{ fontSize: 12, lineHeight: 1.5, color: "rgba(255,255,255,0.35)", margin: 0 }}>{tip}</p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
             </>
           )}
         </div>
