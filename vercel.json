@@ -3,6 +3,10 @@
     {
       "path": "/api/watchlist/update-prices",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/ebay-purchase-sync",
+      "schedule": "0 */6 * * *"
     }
   ]
 }
