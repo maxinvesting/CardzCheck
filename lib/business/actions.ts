@@ -6,6 +6,15 @@ import { computeNetPayout, computeProfit } from "@/lib/business/sales-utils";
 // Uses business_inventory_items table (unified collection_items migration not yet applied)
 const BUSINESS_TABLE = "business_inventory_items" as const;
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function assertUUIDs(ids: string[]): void {
+  for (const id of ids) {
+    if (!UUID_REGEX.test(id)) {
+      throw new Error(`Invalid UUID in filter: ${id}`);
+    }
+  }
+}
+
 type BusinessInventoryRow = {
   id: string;
   user_id: string;
@@ -880,6 +889,7 @@ async function listLegacySales(args: {
       const escapedQ = q.replace(/%/g, "\\%").replace(/,/g, " ");
 
       if (inventoryIds.length > 0) {
+        assertUUIDs(inventoryIds);
         query = query.or(
           `notes.ilike.%${escapedQ}%,order_id.ilike.%${escapedQ}%,inventory_item_id.in.(${inventoryIds.join(",")})`
         );
@@ -932,8 +942,18 @@ export async function listSales(
     .order("sold_at", { ascending: false })
     .range((page - 1) * pageSize, page * pageSize - 1);
 
-  if (filters?.inventoryItemId)
+  if (filters?.inventoryItemId) {
+    const { data: ownerCheck } = await supabase
+      .from(BUSINESS_TABLE)
+      .select("id")
+      .eq("id", filters.inventoryItemId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (!ownerCheck) {
+      throw new Error("Unauthorized: inventoryItemId does not belong to user");
+    }
     query = query.eq("inventory_item_id", filters.inventoryItemId);
+  }
   if (from) query = query.gte("sold_at", normalizeSaleDateTime(from));
   if (to) {
     const toDate = /^\d{4}-\d{2}-\d{2}$/.test(to)
@@ -958,6 +978,7 @@ export async function listSales(
       const escapedQ = q.replace(/%/g, "\\%").replace(/,/g, " ");
 
       if (inventoryIds.length > 0) {
+        assertUUIDs(inventoryIds);
         query = query.or(
           `notes.ilike.%${escapedQ}%,external_order_id.ilike.%${escapedQ}%,inventory_item_id.in.(${inventoryIds.join(",")})`
         );
