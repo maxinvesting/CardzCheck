@@ -60,6 +60,11 @@ export async function createClient() {
 }
 
 export async function createServiceClient() {
+  if (process.env.NODE_ENV === "production") {
+    console.warn("[supabase][service-role] Service client created — RLS bypassed", {
+      stack: new Error().stack?.split("\n")[2]?.trim(), // caller info
+    });
+  }
   const { url } = requireSupabasePublicEnv();
   const serviceRoleKey = getSupabaseServiceRoleKey();
   if (!serviceRoleKey) {

@@ -35,6 +35,10 @@ export async function POST(request: NextRequest) {
 
   const supabase = await createServiceClient();
 
+  // TODO: Add Stripe webhook idempotency check here once a `webhook_events` table exists.
+  // Query by provider="stripe" and event_id=event.id before processing, and insert a record after.
+  // This prevents duplicate processing of retried events. See security fix notes.
+
   // Handle the event
   switch (event.type) {
     case "checkout.session.completed": {

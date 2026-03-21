@@ -20,6 +20,8 @@ export function isAdmin(user: { appRole?: AppRole | null } | null | undefined): 
   return isAdminRole(user?.appRole ?? null);
 }
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 function parseBootstrapAdminEmails(): Set<string> {
   const ownerEmail = process.env.OWNER_EMAIL ?? "";
   const adminEmails = process.env.ADMIN_EMAILS ?? "";
@@ -38,7 +40,15 @@ function parseBootstrapAdminEmails(): Set<string> {
     raw
       .split(",")
       .map((entry) => entry.trim().toLowerCase())
-      .filter((entry) => entry.length > 0)
+      .filter((entry) => {
+        if (!EMAIL_REGEX.test(entry)) {
+          if (entry.length > 0) {
+            console.warn(`[admin] Invalid email format in bootstrap config, skipping: "${entry}"`);
+          }
+          return false;
+        }
+        return true;
+      })
   );
 }
 
