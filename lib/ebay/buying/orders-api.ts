@@ -1,70 +1,24 @@
 /**
- * eBay Buy Order API v2
+ * eBay Purchase History — via Trading API GetMyeBayBuying
  *
- * Fetches orders the authenticated user has made as a BUYER.
- * Requires scope: https://api.ebay.com/oauth/api_scope/buy.order.readonly
+ * Fetches items the authenticated user has WON/PURCHASED on eBay.
+ * Uses the existing seller OAuth access token — no extra scope required.
+ * The Trading API uses XML over HTTPS with the Bearer token in the header.
  *
- * Docs: https://developer.ebay.com/api-docs/buy/order/overview.html
+ * Docs: https://developer.ebay.com/devzone/xml/docs/reference/ebay/GetMyeBayBuying.html
  */
 
 import { ebayFetch } from "../selling/client";
 
-const EBAY_API_BASE =
+const TRADING_API_URL =
   process.env.EBAY_ENVIRONMENT === "sandbox"
-    ? "https://api.sandbox.ebay.com"
-    : "https://api.ebay.com";
+    ? "https://api.sandbox.ebay.com/ws/api.dll"
+    : "https://api.ebay.com/ws/api.dll";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-export interface EbayPurchaseAmount {
-  value: string;
-  currency: string;
-}
-
-export interface EbayPurchaseLineItem {
-  lineItemId: string;
-  title: string;
-  quantity: number;
-  imageUrl?: string;
-  unitPrice: EbayPurchaseAmount;
-  /** Shipping cost charged to buyer for this line item */
-  deliveryCost?: {
-    shippingCost?: EbayPurchaseAmount;
-  };
-  /** Tax amounts (may have multiple entries) */
-  taxes?: Array<{ amount: EbayPurchaseAmount }>;
-  /** eBay item ID for linking back to the listing */
-  legacyItemId?: string;
-}
-
-export interface EbayPurchaseOrder {
-  purchaseOrderId: string;
-  creationDate: string; // ISO 8601
-  lineItems: EbayPurchaseLineItem[];
-  pricingSummary?: {
-    priceSubtotal?: EbayPurchaseAmount;
-    deliveryCost?: EbayPurchaseAmount;
-    tax?: EbayPurchaseAmount;
-    total?: EbayPurchaseAmount;
-  };
-}
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function parseDollars(amount: EbayPurchaseAmount | undefined): number {
-  if (!amount) return 0;
-  const n = parseFloat(amount.value ?? "0");
-  return Number.isFinite(n) ? n : 0;
-}
-
-function parseCents(amount: EbayPurchaseAmount | undefined): number {
-  return Math.round(parseDollars(amount) * 100);
-}
-
-// ─── Normalized type ──────────────────────────────────────────────────────────
-
 export interface NormalizedPurchaseLineItem {
-  lineItemId: string;
+  lineItemId: string;      // eBay ItemID + TransactionID
   title: string;
   quantity: number;
   imageUrl: string | null;
@@ -75,108 +29,204 @@ export interface NormalizedPurchaseLineItem {
 }
 
 export interface NormalizedPurchaseOrder {
-  purchaseOrderId: string;
-  createdAt: string;
+  purchaseOrderId: string; // OrderID or ItemID-TransactionID composite
+  createdAt: string;       // ISO 8601
   lineItems: NormalizedPurchaseLineItem[];
-  /** Order-level totals (may differ from per-line sums due to discounts) */
   totalShippingCents: number;
   totalTaxCents: number;
 }
 
-function normalizeOrder(raw: EbayPurchaseOrder): NormalizedPurchaseOrder {
-  const lineItems: NormalizedPurchaseLineItem[] = (raw.lineItems ?? []).map((li) => {
-    const taxCents = (li.taxes ?? []).reduce(
-      (sum, t) => sum + parseCents(t.amount),
-      0
-    );
-    return {
-      lineItemId: li.lineItemId,
-      title: li.title ?? "",
-      quantity: li.quantity ?? 1,
-      imageUrl: li.imageUrl ?? null,
-      unitPriceDollars: parseDollars(li.unitPrice),
-      shippingCents: parseCents(li.deliveryCost?.shippingCost),
-      taxCents,
-      legacyItemId: li.legacyItemId ?? null,
-    };
-  });
+// ─── XML helpers ─────────────────────────────────────────────────────────────
 
-  return {
-    purchaseOrderId: raw.purchaseOrderId,
-    createdAt: raw.creationDate,
-    lineItems,
-    totalShippingCents: parseCents(raw.pricingSummary?.deliveryCost),
-    totalTaxCents: parseCents(raw.pricingSummary?.tax),
-  };
+function buildGetMyeBayBuyingXml(pageNumber: number, entriesPerPage: number, modTimeTo: string): string {
+  return `<?xml version="1.0" encoding="utf-8"?>
+<GetMyeBayBuyingRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <RequesterCredentials/>
+  <WonList>
+    <Include>true</Include>
+    <IncludeNotes>false</IncludeNotes>
+    <Pagination>
+      <EntriesPerPage>${entriesPerPage}</EntriesPerPage>
+      <PageNumber>${pageNumber}</PageNumber>
+    </Pagination>
+    <ModTimeTo>${modTimeTo}</ModTimeTo>
+  </WonList>
+  <DetailLevel>ReturnAll</DetailLevel>
+</GetMyeBayBuyingRequest>`;
 }
 
-// ─── API call ─────────────────────────────────────────────────────────────────
+function extractText(xml: string, tag: string): string {
+  const m = xml.match(new RegExp(`<${tag}[^>]*>([^<]*)<\\/${tag}>`));
+  return m?.[1]?.trim() ?? "";
+}
 
-type RawOrdersResponse = {
-  orders?: EbayPurchaseOrder[];
-  total?: number;
-  next?: string;
-};
+function extractAll(xml: string, tag: string): string[] {
+  const results: string[] = [];
+  const re = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "g");
+  let m;
+  while ((m = re.exec(xml)) !== null) {
+    results.push(m[1]);
+  }
+  return results;
+}
+
+function parseDollars(str: string): number {
+  const n = parseFloat(str.replace(/[^0-9.]/g, ""));
+  return Number.isFinite(n) ? n : 0;
+}
+
+function parseXmlOrders(xml: string): NormalizedPurchaseOrder[] {
+  const orders: NormalizedPurchaseOrder[] = [];
+  const orderBlocks = extractAll(xml, "Order");
+
+  if (orderBlocks.length > 0) {
+    // Paid as grouped orders
+    for (const block of orderBlocks) {
+      const orderId = extractText(block, "OrderID");
+      const createdAt = extractText(block, "CreatedTime") || new Date().toISOString();
+      const shippingDollars = parseDollars(extractText(block, "ShippingServiceCost") || extractText(block, "ShippingCost"));
+      const taxDollars = parseDollars(extractText(block, "SalesTax") || "0");
+
+      const transactionBlocks = extractAll(block, "Transaction");
+      const lineItems: NormalizedPurchaseLineItem[] = transactionBlocks.map((tb, i) => {
+        const itemId = extractText(tb, "ItemID");
+        const transactionId = extractText(tb, "TransactionID");
+        const title = extractText(tb, "Title");
+        const quantity = parseInt(extractText(tb, "QuantityPurchased") || "1", 10) || 1;
+        const price = parseDollars(extractText(tb, "TransactionPrice") || extractText(tb, "SalePrice"));
+        const imageUrl = extractText(tb, "PictureURL") || null;
+
+        return {
+          lineItemId: transactionId || String(i),
+          title,
+          quantity,
+          imageUrl,
+          unitPriceDollars: price,
+          shippingCents: i === 0 ? Math.round(shippingDollars * 100) : 0, // assign shipping to first item
+          taxCents: i === 0 ? Math.round(taxDollars * 100) : 0,
+          legacyItemId: itemId || null,
+        };
+      });
+
+      if (lineItems.length === 0) continue;
+      orders.push({
+        purchaseOrderId: orderId || lineItems.map(l => l.legacyItemId).join("-"),
+        createdAt,
+        lineItems,
+        totalShippingCents: Math.round(shippingDollars * 100),
+        totalTaxCents: Math.round(taxDollars * 100),
+      });
+    }
+  } else {
+    // Individual item transactions (not grouped into an order)
+    const itemBlocks = extractAll(xml, "Item");
+    for (const block of itemBlocks) {
+      const itemId = extractText(block, "ItemID");
+      const title = extractText(block, "Title");
+      const quantity = parseInt(extractText(block, "QuantityPurchased") || "1", 10) || 1;
+      const price = parseDollars(extractText(block, "SalePrice") || "0");
+      const createdAt = extractText(block, "EndTime") || new Date().toISOString();
+      const imageUrl = extractText(block, "PictureURL") || null;
+      const shippingDollars = parseDollars(extractText(block, "ShippingCost") || "0");
+
+      if (!itemId) continue;
+
+      orders.push({
+        purchaseOrderId: itemId,
+        createdAt,
+        lineItems: [{
+          lineItemId: itemId,
+          title,
+          quantity,
+          imageUrl,
+          unitPriceDollars: price,
+          shippingCents: Math.round(shippingDollars * 100),
+          taxCents: 0,
+          legacyItemId: itemId,
+        }],
+        totalShippingCents: Math.round(shippingDollars * 100),
+        totalTaxCents: 0,
+      });
+    }
+  }
+
+  return orders;
+}
+
+// ─── Main API call ────────────────────────────────────────────────────────────
 
 /**
- * Fetch all purchase orders for the authenticated user since the given date.
- * Returns [] gracefully if the user lacks buy.order.readonly scope (403/401).
+ * Fetch all items the user has purchased on eBay since `after`.
+ * Returns [] gracefully on any error.
  *
  * @param userId  CardzCheck user ID (used to resolve their eBay access token)
- * @param after   Only return orders created after this date (incremental sync)
+ * @param after   Only return purchases after this date
  */
 export async function getBuyerOrders(
   userId: string,
   after?: Date
 ): Promise<NormalizedPurchaseOrder[]> {
   const results: NormalizedPurchaseOrder[] = [];
-  let offset = 0;
-  const limit = 50;
+  const entriesPerPage = 200;
+  // modTimeTo: items whose transaction was modified up to now
+  const modTimeTo = new Date().toISOString();
 
-  while (true) {
-    const params = new URLSearchParams({
-      limit: String(limit),
-      offset: String(offset),
-    });
+  let pageNumber = 1;
+  let totalPages = 1;
 
-    if (after) {
-      params.set("filter", `creationDate:[${after.toISOString()}..${new Date().toISOString()}]`);
-    }
-
-    const url = `${EBAY_API_BASE}/buy/order/v2/purchase_order?${params.toString()}`;
+  while (pageNumber <= totalPages) {
+    const body = buildGetMyeBayBuyingXml(pageNumber, entriesPerPage, modTimeTo);
 
     let res: Response;
     try {
-      res = await ebayFetch(userId, url);
+      res = await ebayFetch(userId, TRADING_API_URL, {
+        method: "POST",
+        headers: {
+          "X-EBAY-API-COMPATIBILITY-LEVEL": "1155",
+          "X-EBAY-API-CALL-NAME": "GetMyeBayBuying",
+          "X-EBAY-API-SITEID": "0",
+          "Content-Type": "text/xml;charset=utf-8",
+        },
+        body,
+      });
     } catch (err) {
-      // No connected account or token failure — bail out cleanly
-      console.warn("[ebay/buying] Failed to fetch buyer orders:", err);
-      return results;
-    }
-
-    // 401/403 means buyer scope not granted — skip silently
-    if (res.status === 401 || res.status === 403) {
-      console.info("[ebay/buying] Buyer scope not granted for user", userId, "— skipping purchase sync");
+      console.warn("[ebay/buying] Failed to call Trading API:", err);
       return results;
     }
 
     if (!res.ok) {
-      const body = await res.text().catch(() => res.statusText);
-      console.error("[ebay/buying] Unexpected error fetching buyer orders:", res.status, body);
+      console.warn("[ebay/buying] Trading API returned", res.status);
       return results;
     }
 
-    const text = await res.text();
-    if (!text) break;
+    const xml = await res.text();
 
-    const data = JSON.parse(text) as RawOrdersResponse;
-    const page = (data.orders ?? []).map(normalizeOrder);
-    results.push(...page);
+    // Check for API-level errors
+    if (xml.includes("<Ack>Failure</Ack>")) {
+      const errMsg = extractText(xml, "LongMessage") || extractText(xml, "ShortMessage");
+      console.warn("[ebay/buying] Trading API error:", errMsg);
+      return results;
+    }
 
-    const total = data.total ?? page.length;
-    offset += page.length;
+    // Parse total pages on first call
+    if (pageNumber === 1) {
+      const totalPagesStr = extractText(xml, "TotalNumberOfPages");
+      totalPages = parseInt(totalPagesStr || "1", 10) || 1;
+    }
 
-    if (offset >= total || page.length === 0) break;
+    const pageOrders = parseXmlOrders(xml);
+
+    // Filter to only orders after `after` date
+    const filtered = after
+      ? pageOrders.filter(o => new Date(o.createdAt) > after)
+      : pageOrders;
+
+    results.push(...filtered);
+
+    // If all orders on this page are older than `after`, stop paginating
+    if (after && pageOrders.length > 0 && filtered.length === 0) break;
+
+    pageNumber++;
   }
 
   return results;

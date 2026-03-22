@@ -83,7 +83,7 @@ export async function syncEbayPurchases(userId: string): Promise<PurchaseSyncRes
   // Look up last sync time for incremental fetch
   const { data: account } = await supabase
     .from("ebay_accounts")
-    .select("purchases_last_synced_at, scopes")
+    .select("purchases_last_synced_at")
     .eq("user_id", userId)
     .eq("is_active", true)
     .maybeSingle();

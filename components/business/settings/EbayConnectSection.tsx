@@ -127,12 +127,6 @@ export default function EbayConnectSection() {
         5 * 60 * 1000
       : false;
 
-  const needsBuyerReauth =
-    status?.connected &&
-    !status.scopes.includes(
-      "https://api.ebay.com/oauth/api_scope/buy.order.readonly"
-    );
-
   const currentTier: StoreTier = status?.store_tier ?? "none";
 
   return (
@@ -255,25 +249,6 @@ export default function EbayConnectSection() {
               </p>
             )}
           </div>
-
-          {/* Purchase tracking re-auth nudge */}
-          {needsBuyerReauth && (
-            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3">
-              <p className="text-xs font-medium text-amber-300">
-                Reconnect eBay to enable automatic purchase tracking
-              </p>
-              <p className="mt-0.5 text-xs text-amber-400/70">
-                CardzCheck can now auto-add cards you buy on eBay directly to
-                your inventory. A quick reconnect grants the required permission.
-              </p>
-              <a
-                href="/api/auth/ebay"
-                className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-amber-400"
-              >
-                Reconnect eBay
-              </a>
-            </div>
-          )}
 
           <div className="flex gap-2">
             <a
