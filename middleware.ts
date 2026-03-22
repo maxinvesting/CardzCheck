@@ -117,9 +117,9 @@ async function checkRateLimit(
     }
   } else if (process.env.NODE_ENV === "production") {
     // Surface clearly in Vercel logs so the operator knows to fix it
-    console.warn(
-      "[ratelimit] WARNING: In-memory rate limiting is not distributed across Vercel instances. " +
-      "Set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN for production-grade limiting."
+    console.error(
+      "[SECURITY][ratelimit] CRITICAL: Rate limiting is in-memory only. " +
+      "Configure UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN for distributed rate limiting."
     );
   }
 

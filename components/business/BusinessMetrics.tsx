@@ -20,13 +20,6 @@ interface Props {
   compact?: boolean;
 }
 
-const CARD_STYLE: React.CSSProperties = {
-  background: "var(--color-background-secondary, #F9FAFB)",
-  border: "1px solid var(--biz-border)",
-  borderRadius: "8px",
-  padding: "14px 16px",
-};
-
 const LABEL_STYLE: React.CSSProperties = {
   fontSize: "11px",
   fontWeight: 600,
@@ -37,14 +30,14 @@ const LABEL_STYLE: React.CSSProperties = {
 };
 
 const VALUE_STYLE: React.CSSProperties = {
-  fontSize: "22px",
-  fontWeight: 500,
+  fontSize: "26px",
+  fontWeight: 600,
   lineHeight: 1.1,
   fontVariantNumeric: "tabular-nums",
 };
 
 const SUB_STYLE: React.CSSProperties = {
-  fontSize: "11px",
+  fontSize: "12px",
   color: "var(--biz-muted)",
   marginTop: "4px",
 };
@@ -80,24 +73,28 @@ export default function BusinessMetrics({
       value: revenueMtd,
       valueColor: "var(--biz-text)" as string,
       sub: `YTD ${revenueYtd}`,
+      accentColor: "#3b82f6",
     },
     {
       label: "Profit MTD",
       value: profitMtd,
       valueColor: profitPositive ? "#16a34a" : "#dc2626",
       sub: `YTD ${profitYtd}`,
+      accentColor: profitPositive ? "#16a34a" : "#dc2626",
     },
     {
       label: "Active Inventory",
       value: activeCount,
       valueColor: "var(--biz-text)" as string,
       sub: `${totalCount} total items`,
+      accentColor: "#a855f7",
     },
     {
       label: "Portfolio Value",
       value: portfolioValue,
       valueColor: "var(--biz-text)" as string,
       sub: costBasisLine,
+      accentColor: "#f59e0b",
     },
   ];
 
@@ -109,8 +106,14 @@ export default function BusinessMetrics({
         gap: "10px",
       }}
     >
-      {cards.map(({ label, value, valueColor, sub }) => (
-        <div key={label} style={CARD_STYLE}>
+      {cards.map(({ label, value, valueColor, sub, accentColor }) => (
+        <div key={label} style={{
+          background: "var(--color-background-secondary, #F9FAFB)",
+          border: "1px solid var(--biz-border)",
+          borderLeft: `3px solid ${accentColor}`,
+          borderRadius: "8px",
+          padding: "14px 16px",
+        }}>
           {loading ? (
             <div
               style={{ height: "52px" }}
