@@ -35,9 +35,25 @@ export async function POST(request: NextRequest) {
 
   const supabase = await createServiceClient();
 
-  // TODO: Add Stripe webhook idempotency check here once a `webhook_events` table exists.
-  // Query by provider="stripe" and event_id=event.id before processing, and insert a record after.
-  // This prevents duplicate processing of retried events. See security fix notes.
+  // Idempotency: skip already-processed events to prevent duplicate side effects on Stripe retries
+  const { data: existingEvent } = await supabase
+    .from("webhook_events")
+    .select("id")
+    .eq("provider", "stripe")
+    .eq("event_id", event.id)
+    .maybeSingle();
+
+  if (existingEvent) {
+    logDebug("Stripe webhook event already processed, skipping", { eventId: event.id });
+    return NextResponse.json({ received: true, skipped: true });
+  }
+
+  await supabase.from("webhook_events").insert({
+    provider: "stripe",
+    event_id: event.id,
+    event_type: event.type,
+    processed_at: new Date().toISOString(),
+  });
 
   // Handle the event
   switch (event.type) {
