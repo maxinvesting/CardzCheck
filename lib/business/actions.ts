@@ -717,48 +717,6 @@ async function getInventoryContextForSale(
   };
 }
 
-/**
- * Ensure a minimal collection_items mirror row exists for inventory-backed sales.
- * This supports deployments where business_sales.inventory_item_id references collection_items(id).
- */
-async function ensureCollectionItemMirrorForSale(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  userId: string,
-  inventoryContext: { id: string; title: string | null } | null
-): Promise<void> {
-  if (!inventoryContext) return;
-
-  const label = inventoryContext.title?.trim() || "Inventory Item";
-  const collection = supabase.from("collection_items") as {
-    upsert?: (
-      values: Record<string, unknown>,
-      options: { onConflict: string; ignoreDuplicates: boolean }
-    ) => Promise<{ error: unknown }>;
-  };
-
-  if (typeof collection.upsert !== "function") return;
-
-  const { error } = await collection.upsert(
-    {
-      id: inventoryContext.id,
-      user_id: userId,
-      player_name: label,
-      notes: "Auto-linked from business inventory for sale record consistency",
-    },
-    { onConflict: "id", ignoreDuplicates: true }
-  );
-
-  if (!error) return;
-
-  const { code, message, details } = getDbErrorMeta(error);
-  // Mirror row is best-effort; never block sale writes on mirror schema mismatches.
-  console.warn("Skipping collection mirror for sale:", {
-    code,
-    message,
-    details,
-  });
-}
-
 function buildComputedSalePayload(args: {
   userId: string;
   base: SaleWriteInput;
@@ -1049,7 +1007,6 @@ export async function createSale(
   });
 
   try {
-    await ensureCollectionItemMirrorForSale(supabase, userId, inventoryContext);
     let created: BusinessSaleRow | null = null;
 
     const { data, error } = await supabase
@@ -1166,8 +1123,6 @@ export async function updateSale(
     base: mergedBase,
     inventoryContext,
   });
-
-  await ensureCollectionItemMirrorForSale(supabase, userId, inventoryContext);
 
   let updated: BusinessSaleRow | null = null;
   if (!useLegacySchema) {
