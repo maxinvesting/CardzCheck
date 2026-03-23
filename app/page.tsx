@@ -174,7 +174,7 @@ export default function Home() {
 
           <section id="features" className="mt-10">
             <h2 className="mb-4 text-2xl font-semibold text-white sm:text-3xl">What You Can Do</h2>
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <FeatureCard
                 title="Know the Grade Before You Submit"
                 description="Upload card photos and get PSA and BGS grade probabilities with confidence levels — before you pay for a submission."
@@ -233,6 +233,92 @@ export default function Home() {
                   </svg>
                 )}
               />
+              <FeatureCard
+                title="Shop Below Our eBay Price"
+                description="Paid subscribers get exclusive access to CardzCheck inventory priced at least 13.5% below our eBay storefront."
+                badge="Subscriber Deal"
+                points={[
+                  "Always 13.5%+ below our eBay storefront",
+                  "Loyalty discounts up to 10% for repeat buyers",
+                  "Extra 1% off every order for Business members",
+                ]}
+                icon={(
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 7H4l1-7z"
+                    />
+                  </svg>
+                )}
+              />
+            </div>
+          </section>
+
+          {/* CardzCheck Deals spotlight */}
+          <section className="mt-10 overflow-hidden rounded-2xl border border-cyan-500/30 bg-gradient-to-br from-cyan-950/60 via-gray-900/80 to-gray-900/80">
+            <div className="flex flex-col gap-8 p-6 sm:p-8 lg:flex-row lg:items-center">
+              <div className="flex-1">
+                <p className="text-xs font-semibold uppercase tracking-wider text-cyan-400">
+                  Subscriber Exclusive
+                </p>
+                <h2 className="mt-2 text-2xl font-semibold text-white sm:text-3xl">
+                  CardzCheck Deals
+                </h2>
+                <p className="mt-3 max-w-xl text-gray-300">
+                  Every paid subscriber gets access to our curated storefront — CardzCheck inventory
+                  priced at least <span className="font-semibold text-cyan-300">13.5% below our eBay storefront</span>.
+                  Some deals also come in below market comps. Not a peer-to-peer marketplace.
+                  Sold directly by CardzCheck.
+                </p>
+                <ul className="mt-5 space-y-2 text-sm text-gray-300">
+                  {[
+                    "Exclusive subscriber-only pricing on every listing",
+                    "Loyalty discounts unlock at 5 and 10 purchases (up to 10% off)",
+                    "Business plan members get an extra 1% off every deal",
+                    "Every 5th purchase (15, 20, 25…) earns a milestone discount",
+                  ].map((point) => (
+                    <li key={point} className="flex items-start gap-2">
+                      <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-cyan-400" />
+                      <span>{point}</span>
+                    </li>
+                  ))}
+                </ul>
+                <Link
+                  href="/shop"
+                  className="mt-6 inline-flex items-center gap-2 rounded-lg bg-cyan-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-cyan-500"
+                >
+                  Browse subscriber deals
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </Link>
+              </div>
+              <div className="shrink-0 lg:w-64">
+                <div className="rounded-xl border border-cyan-500/20 bg-cyan-950/40 p-5">
+                  <p className="text-xs uppercase tracking-wide text-cyan-400">Pricing vs. our eBay</p>
+                  <div className="mt-3 space-y-3">
+                    {[
+                      { label: "Our eBay storefront", value: "$179", muted: true },
+                      { label: "Subscriber price", value: "$155", highlight: true },
+                      { label: "You save", value: "$24 (13.5%)", green: true },
+                    ].map(({ label, value, muted, highlight, green }) => (
+                      <div key={label} className="flex items-center justify-between gap-2">
+                        <span className={`text-sm ${muted ? "text-gray-500 line-through" : "text-gray-300"}`}>
+                          {label}
+                        </span>
+                        <span className={`text-sm font-semibold tabular-nums ${highlight ? "text-white" : green ? "text-cyan-300" : "text-gray-500"}`}>
+                          {value}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="mt-4 text-[11px] text-gray-500">
+                    Example based on a $179 eBay listing. Business members save an additional 1%.
+                  </p>
+                </div>
+              </div>
             </div>
           </section>
 
@@ -269,6 +355,7 @@ export default function Home() {
                   <li>Unlimited card searches</li>
                   <li>Full collection tracking</li>
                   <li>Analyst AI + Grade Probability Engine</li>
+                  <li>Subscriber deals (13.5%+ below our eBay)</li>
                 </ul>
                 <Link
                   href="/signup"
@@ -289,6 +376,7 @@ export default function Home() {
                   <li>Everything in Pro</li>
                   <li>Inventory + sales + ledger workflows</li>
                   <li>Profit-focused business dashboard</li>
+                  <li>Extra 1% off every subscriber deal</li>
                 </ul>
                 <Link
                   href="/signup"

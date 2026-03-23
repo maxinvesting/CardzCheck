@@ -4,8 +4,8 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-  LineChart,
-  Line,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   Tooltip,
@@ -78,13 +78,7 @@ type Mode = "business" | "collection";
 // ── Helpers ──────────────────────────────────────────────────────────
 
 function pickImageUrl(item: ProfileItem): string | null {
-  return (
-    item.user_image_url ||
-    item.stock_image_url ||
-    item.ebay_image_url ||
-    item.image_url ||
-    null
-  );
+  return item.user_image_url ?? null;
 }
 
 function displayTitle(item: ProfileItem): string {
@@ -734,41 +728,44 @@ export default function CardProfilePage() {
   return (
     <div className="min-h-screen bg-gray-950 text-white">
       <div className="max-w-7xl mx-auto px-4 py-6">
-        {/* Back link */}
-        <button
-          onClick={() =>
-            router.push(isBusinessMode ? "/business" : "/collection")
-          }
-          className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors mb-4 text-sm"
-        >
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+        {/* Back link + title with gradient band */}
+        <div className="relative mb-6 pb-2">
+          <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-emerald-950/20 to-transparent rounded-xl pointer-events-none" />
+          <button
+            onClick={() =>
+              router.push(isBusinessMode ? "/business" : "/collection")
+            }
+            className="inline-flex items-center gap-1.5 text-gray-500 hover:text-gray-200 transition-colors mb-5 text-sm group"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M15 19l-7-7 7-7"
-            />
-          </svg>
-          {isBusinessMode ? "Back to Inventory" : "Back to Collection"}
-        </button>
-
-        {/* Title row */}
-        <div className="flex flex-wrap items-center gap-3 mb-6">
-          <h1 className="text-2xl font-bold">{title}</h1>
-          {item.status && (
-            <span
-              className={`px-2 py-0.5 rounded text-xs font-medium ${statusBadge(
-                item.status
-              )}`}
+            <svg
+              className="w-4 h-4 transition-transform group-hover:-translate-x-0.5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
             >
-              {item.status}
-            </span>
-          )}
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M15 19l-7-7 7-7"
+              />
+            </svg>
+            {isBusinessMode ? "Back to Inventory" : "Back to Collection"}
+          </button>
+
+          {/* Title row */}
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-2xl font-bold">{title}</h1>
+            {item.status && (
+              <span
+                className={`px-2 py-0.5 rounded text-xs font-medium ${statusBadge(
+                  item.status
+                )}`}
+              >
+                {item.status}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* ── Two-column layout ─────────────────────────────────── */}
@@ -787,9 +784,12 @@ export default function CardProfilePage() {
                   className="w-full aspect-[3/4] object-contain bg-gray-900 hover:scale-105 transition-transform duration-200"
                 />
               ) : (
-                <div className="w-full aspect-[3/4] flex flex-col items-center justify-center text-gray-600">
+                <div
+                  className="w-full aspect-[3/4] flex flex-col items-center justify-center text-gray-500 cursor-pointer hover:bg-gray-800/50 transition-colors"
+                  onClick={() => { setImageUrlInput(""); setShowImageModal(true); }}
+                >
                   <svg
-                    className="w-20 h-20 mb-2"
+                    className="w-12 h-12 mb-3 text-gray-600"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -798,10 +798,11 @@ export default function CardProfilePage() {
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       strokeWidth={1}
-                      d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                      d="M12 4v16m8-8H4"
                     />
                   </svg>
-                  <p className="text-sm">No image available</p>
+                  <p className="text-sm font-medium text-gray-400">Add your photo</p>
+                  <p className="text-xs text-gray-600 mt-1">Paste an image URL</p>
                 </div>
               )}
             </div>
@@ -811,28 +812,23 @@ export default function CardProfilePage() {
                 <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">
                   Key Facts
                 </h3>
-                <Fact label="Grade" value={item.grade} />
-                <Fact
-                  label="Condition"
-                  value={item.condition_status}
-                />
-                <Fact label="Grader" value={item.grading_company} />
-                <Fact label="Cert #" value={item.cert_number} />
-                <Fact label="Parallel" value={item.parallel_type} />
-                <Fact label="Insert" value={item.insert} />
-                <Fact label="Year" value={item.year} />
-                <Fact label="Set" value={item.set_name} />
-                <Fact
-                  label="Qty"
-                  value={String(item.quantity ?? 1)}
-                />
-                <Fact
-                  label="Acquired"
-                  value={fmtDate(
-                    item.acquisition_date ?? item.purchase_date
-                  )}
-                />
-                {item.notes && <Fact label="Notes" value={item.notes} />}
+                {item.grade && (
+                  <div className="flex justify-between items-center text-sm px-2 py-1 rounded-md bg-gray-800/30">
+                    <span className="text-gray-500">Grade</span>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-blue-950/60 border border-blue-800/40 text-blue-300 text-xs font-semibold tracking-wide">
+                      {item.grading_company ? `${item.grading_company} ` : ""}{item.grade}
+                    </span>
+                  </div>
+                )}
+                <Fact label="Condition" value={item.condition_status} index={1} />
+                <Fact label="Cert #" value={item.cert_number} index={2} />
+                <Fact label="Parallel" value={item.parallel_type} index={3} />
+                <Fact label="Insert" value={item.insert} index={4} />
+                <Fact label="Year" value={item.year} index={5} />
+                <Fact label="Set" value={item.set_name} index={6} />
+                <Fact label="Qty" value={String(item.quantity ?? 1)} index={7} />
+                <Fact label="Acquired" value={fmtDate(item.acquisition_date ?? item.purchase_date)} index={8} />
+                {item.notes && <Fact label="Notes" value={item.notes} index={9} />}
 
                 {isBusinessMode && cardForGrade && gradeEstimate.estimate && (
                   <div className="mt-3 pt-3 border-t border-gray-800 space-y-1">
@@ -951,7 +947,8 @@ export default function CardProfilePage() {
           {/* RIGHT PANELS */}
           <div className="lg:col-span-3 space-y-4">
             {/* 1) Pricing Panel */}
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+            <div className="relative bg-gray-900 border border-gray-800 rounded-xl p-5 overflow-hidden">
+              <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-emerald-500/70 via-emerald-400/50 to-transparent rounded-t-xl" />
               <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-4">
                 Pricing
               </h3>
@@ -961,7 +958,7 @@ export default function CardProfilePage() {
                   <p className="text-xs text-gray-500 mb-1">
                     {isBusinessMode ? "Est. Market Value" : "Est. Market Value"}
                   </p>
-                  <p className="text-xl font-bold tabular-nums">
+                  <p className="text-3xl font-bold tracking-tight tabular-nums text-emerald-300">
                     {fmtCents(item.current_market_value_cents)}
                   </p>
                 </div>
@@ -1046,7 +1043,7 @@ export default function CardProfilePage() {
                   </div>
                   {item.current_market_value_cents != null &&
                     item.current_market_value_cents > 0 && (
-                      <div className="flex items-center justify-between text-sm mt-1">
+                      <div className="flex items-center justify-between text-sm mt-2 pt-2 border-t border-gray-700/50">
                         <span className="text-gray-400">Unrealized P/L</span>
                         {(() => {
                           const qty = item.quantity ?? 1;
@@ -1057,12 +1054,17 @@ export default function CardProfilePage() {
                             costCents > 0 ? (diff / costCents) * 100 : 0;
                           return (
                             <span
-                              className={`font-medium tabular-nums ${
+                              className={`font-medium tabular-nums flex items-center gap-0.5 ${
                                 diff >= 0
                                   ? "text-emerald-400"
                                   : "text-red-400"
                               }`}
                             >
+                              {diff >= 0 && (
+                                <svg className="w-3 h-3 text-emerald-400 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M10 17a1 1 0 01-1-1V6.414l-3.293 3.293a1 1 0 01-1.414-1.414l5-5a1 1 0 011.414 0l5 5a1 1 0 01-1.414 1.414L11 6.414V16a1 1 0 01-1 1z" clipRule="evenodd" />
+                                </svg>
+                              )}
                               {diff >= 0 ? "+" : ""}
                               {fmtCents(diff)}{" "}
                               <span className="text-xs">
@@ -1084,43 +1086,50 @@ export default function CardProfilePage() {
               </h3>
               {chartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={200}>
-                  <LineChart data={chartData}>
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="#374151"
-                    />
+                  <AreaChart data={chartData}>
+                    <defs>
+                      <linearGradient id="cmvGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.25} />
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
                     <XAxis
                       dataKey="date"
-                      tick={{ fill: "#9CA3AF", fontSize: 11 }}
+                      tick={{ fill: "#6b7280", fontSize: 11 }}
                       tickLine={false}
+                      axisLine={false}
                     />
                     <YAxis
-                      tick={{ fill: "#9CA3AF", fontSize: 11 }}
+                      tick={{ fill: "#6b7280", fontSize: 11 }}
                       tickLine={false}
+                      axisLine={false}
                       tickFormatter={(v: number) => `$${v}`}
                     />
                     <Tooltip
                       contentStyle={{
-                        backgroundColor: "#1F2937",
+                        backgroundColor: "#111827",
                         border: "1px solid #374151",
                         borderRadius: 8,
                         color: "#fff",
+                        fontSize: 12,
                       }}
                       formatter={(value: number | undefined) => [
                         value != null ? `$${value.toFixed(2)}` : "—",
-                        "Price Point",
+                        "Price",
                       ]}
                       labelFormatter={(label) => String(label)}
                     />
-                    <Line
+                    <Area
                       type="monotone"
                       dataKey="price"
-                      stroke="#10B981"
+                      stroke="#10b981"
                       strokeWidth={2}
-                      dot={{ fill: "#10B981", r: 4 }}
-                      activeDot={{ r: 6 }}
+                      fill="url(#cmvGradient)"
+                      dot={false}
+                      activeDot={{ r: 5, fill: "#10b981", stroke: "#065f46", strokeWidth: 2 }}
                     />
-                  </LineChart>
+                  </AreaChart>
                 </ResponsiveContainer>
               ) : (
                 <div className="flex flex-col items-center justify-center h-[200px] text-gray-600">
@@ -1487,13 +1496,15 @@ export default function CardProfilePage() {
 function Fact({
   label,
   value,
+  index = 0,
 }: {
   label: string;
   value: string | null | undefined;
+  index?: number;
 }) {
   if (!value) return null;
   return (
-    <div className="flex justify-between text-sm">
+    <div className={`flex justify-between text-sm px-2 py-1 rounded-md ${index % 2 === 0 ? "bg-gray-800/30" : ""}`}>
       <span className="text-gray-500">{label}</span>
       <span className="text-gray-200 text-right max-w-[60%] truncate">
         {value}

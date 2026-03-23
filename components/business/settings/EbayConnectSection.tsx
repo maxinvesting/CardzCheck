@@ -88,6 +88,7 @@ export default function EbayConnectSection() {
         top_rated_seller: false,
         access_token_expires_at: null,
         store_tier: status?.store_tier ?? "none",
+        scopes: [],
       });
       setError(null);
     } catch (err) {

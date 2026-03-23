@@ -41,7 +41,7 @@ export async function GET(): Promise<NextResponse> {
     const { data: account, error } = await supabase
       .from("ebay_accounts")
       .select(
-        "ebay_username, top_rated_seller, access_token_expires_at, is_active, store_tier"
+        "ebay_username, top_rated_seller, access_token_expires_at, is_active, store_tier, scopes"
       )
       .eq("user_id", user.id)
       .maybeSingle();
@@ -54,6 +54,7 @@ export async function GET(): Promise<NextResponse> {
       top_rated_seller: account?.top_rated_seller ?? false,
       access_token_expires_at: account?.access_token_expires_at ?? null,
       store_tier: (account?.store_tier as StoreTier) ?? "none",
+      scopes: account?.scopes ?? [],
     };
 
     return NextResponse.json(status);
