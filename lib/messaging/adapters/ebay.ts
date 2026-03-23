@@ -363,6 +363,23 @@ async function getValidTokenForUser(userId: string): Promise<string | null> {
   }
 }
 
+/** Returns true if the user has an active eBay account connected */
+export async function isEbayConnected(userId: string): Promise<boolean> {
+  try {
+    const { createClient } = await import("@/lib/supabase/server");
+    const supabase = await createClient();
+    const { data } = await supabase
+      .from("ebay_accounts")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("is_active", true)
+      .maybeSingle();
+    return !!data;
+  } catch {
+    return false;
+  }
+}
+
 // ─── Public adapter API ───────────────────────────────────────────────────────
 
 export async function getEbayThreads(userId: string): Promise<MessageThread[]> {

@@ -14,6 +14,7 @@ function BusinessMessagesContent() {
   const [hasAccess, setHasAccess] = useState<boolean | null>(null);
   const [stats, setStats] = useState<MessagingStats | null>(null);
   const [threads, setThreads] = useState<MessageThread[]>([]);
+  const [ebayConnected, setEbayConnected] = useState<boolean | null>(null);
   const [msgError, setMsgError] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
@@ -57,6 +58,7 @@ function BusinessMessagesContent() {
         const data = await msgRes.json();
         setStats(data.stats);
         setThreads(data.threads);
+        setEbayConnected(data.ebayConnected ?? false);
       } else {
         setMsgError(`Failed to load messages (${msgRes.status})`);
       }
@@ -134,8 +136,9 @@ function BusinessMessagesContent() {
     );
   }
 
-  // No threads and no eBay connection — prompt to connect/reconnect
+  // No threads — show appropriate state based on whether eBay is connected
   if (stats.total_threads === 0 && threads.length === 0) {
+    const isConnected = ebayConnected === true;
     return (
       <AuthenticatedLayout>
         <main className="mx-auto max-w-7xl px-4 py-8">
@@ -146,19 +149,34 @@ function BusinessMessagesContent() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
               </svg>
             </div>
-            <h2 className="mb-2 text-lg font-semibold text-[var(--biz-text)]">No messages yet</h2>
-            <p className="mb-6 max-w-sm text-sm text-[var(--biz-muted)]">
-              Connect (or reconnect) your eBay account to sync your buyer messages, inquiries, and offer negotiations.
-            </p>
-            <a
-              href="/api/auth/ebay"
-              className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 transition-colors"
-            >
-              Connect eBay Account
-            </a>
-            <p className="mt-3 text-xs text-[var(--biz-muted)]">
-              Already connected? Try reconnecting to grant message access.
-            </p>
+            {isConnected ? (
+              <>
+                <h2 className="mb-2 text-lg font-semibold text-[var(--biz-text)]">eBay connected — no messages yet</h2>
+                <p className="mb-6 max-w-sm text-sm text-[var(--biz-muted)]">
+                  Your eBay account is linked. Messages from buyers will appear here once you receive them.
+                  If you&apos;re expecting messages, reconnect to grant full message access.
+                </p>
+                <a
+                  href="/api/auth/ebay"
+                  className="inline-flex items-center gap-2 rounded-lg border border-[var(--biz-border)] px-5 py-2.5 text-sm font-semibold text-[var(--biz-text)] hover:bg-gray-50 transition-colors"
+                >
+                  Reconnect to refresh access
+                </a>
+              </>
+            ) : (
+              <>
+                <h2 className="mb-2 text-lg font-semibold text-[var(--biz-text)]">Connect your eBay account</h2>
+                <p className="mb-6 max-w-sm text-sm text-[var(--biz-muted)]">
+                  Link your eBay account to sync buyer messages, inquiries, and offer negotiations.
+                </p>
+                <a
+                  href="/api/auth/ebay"
+                  className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 transition-colors"
+                >
+                  Connect eBay Account
+                </a>
+              </>
+            )}
           </div>
         </main>
       </AuthenticatedLayout>

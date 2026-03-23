@@ -4,6 +4,7 @@ import {
   getMessagingStats,
   getThreads,
 } from "@/lib/messaging/service";
+import { isEbayConnected } from "@/lib/messaging/adapters/ebay";
 import type { ThreadFilter } from "@/lib/messaging/types";
 
 const VALID_FILTERS: ThreadFilter[] = [
@@ -31,10 +32,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Invalid filter" }, { status: 400 });
   }
 
-  const [stats, threads] = await Promise.all([
+  const [stats, threads, ebayConnected] = await Promise.all([
     getMessagingStats(user.id),
     getThreads(user.id, filter),
+    isEbayConnected(user.id),
   ]);
 
-  return NextResponse.json({ stats, threads });
+  return NextResponse.json({ stats, threads, ebayConnected });
 }
