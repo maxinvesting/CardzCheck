@@ -14,28 +14,18 @@ import type { BusinessConsultation } from "@/types";
 import type { BusinessConsultantReport } from "@/lib/business/consultant-report";
 import { parseBusinessConsultantReport } from "@/lib/business/consultant-report";
 
-const CONSULTANT_COPY = {
-  eyebrow: "Business Consultant Agent",
-  title: "Operator-mode guidance for pricing, grading, and liquidity.",
-  subtitle:
-    "Ask a business question, review the operator memo above, and keep the composer anchored below like a proper agent workspace.",
-  helper:
-    "Uses your inventory, sales history, and estimate data to support card-business decisions. Missing inputs are treated as constraints.",
-  promptSuggestions: [
-    "Build a 30-day plan to liquidate slow-moving inventory",
-    "Identify dead capital in my inventory",
-    "Which cards should I discount vs hold?",
-    "Analyze margin compression risks and pricing actions",
-    "Recommend pricing for faster sell-through",
-    "Which raw cards should I submit for grading?",
-    "Analyze grading ROI vs selling raw",
-    "Which cards should be auction vs Buy It Now?",
-    "Optimize my channel mix (eBay, shows, Whatnot)",
-  ],
-  placeholder:
-    "Ask the Consultant... (pricing, grading submissions, inventory turnover, liquidity, risk exposure, channel strategy...)",
-  submitButton: "Generate Analysis",
-} as const;
+// ─── Copy & constants ───────────────────────────────────────────────────────
+
+const QUICK_PROMPTS = [
+  "What should I discount vs hold?",
+  "Identify dead capital in my inventory",
+  "Which raw cards are best grading candidates?",
+  "Build a 30-day liquidity plan",
+  "Show overpriced listings versus CMV",
+  "Which cards should I cross-list first?",
+  "Analyze margin compression risks",
+  "Which should be auction vs Buy It Now?",
+] as const;
 
 const TEMPLATES = [
   {
@@ -61,7 +51,26 @@ const TEMPLATES = [
   },
 ] as const;
 
-const CAPABILITY_PILLS = ["Pricing", "Inventory", "Grading", "Liquidity"] as const;
+// TODO: Replace with live data from GET /api/business/inventory + /api/business/metrics
+const CONTEXT_STATS_PLACEHOLDER = [
+  { label: "Inventory items", value: "—" },
+  { label: "Est. total value", value: "—" },
+  { label: "Recent sales (30d)", value: "—" },
+  { label: "Graded / Raw", value: "— / —" },
+  { label: "Active listings", value: "—" },
+  { label: "Dead capital est.", value: "—" },
+] as const;
+
+// TODO: Wire to actual inventory/listing actions once management endpoints are available
+const SUGGESTED_ACTIONS = [
+  { icon: "↓", label: "Discount selected items" },
+  { icon: "◎", label: "Mark cards as Hold" },
+  { icon: "★", label: "Flag grading candidates" },
+  { icon: "≡", label: "Build liquidation list" },
+  { icon: "⟲", label: "Review pricing outliers" },
+] as const;
+
+// ─── Types & theme ───────────────────────────────────────────────────────────
 
 type TemplateId = (typeof TEMPLATES)[number]["id"] | "custom";
 type Phase = "idle" | "acknowledge" | "working" | "deliverable";
@@ -100,7 +109,11 @@ const CONSULTANT_THEME_STYLE: CSSProperties = {
 };
 
 const glassPanelClass =
-  "rounded-[24px] border border-white/10 bg-gradient-to-br from-white/[0.06] via-white/[0.04] to-white/[0.02] shadow-[0_24px_90px_rgba(0,0,0,0.42)] backdrop-blur-xl";
+  "rounded-[20px] border border-white/10 bg-gradient-to-br from-white/[0.06] via-white/[0.04] to-white/[0.02] shadow-[0_16px_60px_rgba(0,0,0,0.36)] backdrop-blur-xl";
+
+const panelClass = "rounded-[16px] border border-white/[0.08] bg-white/[0.02]";
+
+// ─── Utilities ───────────────────────────────────────────────────────────────
 
 function useReducedMotion(): boolean {
   const [reduced, setReduced] = useState(false);
@@ -152,19 +165,13 @@ function formatContextMetric(
   suffix = ""
 ): string | null {
   if (!summary || typeof summary !== "object") return null;
-
   const value = summary[key];
   if (typeof value === "number" && Number.isFinite(value)) {
-    const formatted = value.toLocaleString(undefined, {
-      maximumFractionDigits: suffix ? 1 : 0,
-    });
-    return `${formatted}${suffix}`;
+    return `${value.toLocaleString(undefined, { maximumFractionDigits: suffix ? 1 : 0 })}${suffix}`;
   }
-
   if (typeof value === "string" && value.trim()) {
     return `${value}${suffix}`;
   }
-
   return null;
 }
 
@@ -173,7 +180,6 @@ function buildSpeakableResponse(
   rawText: string
 ): string {
   if (!report) return rawText;
-
   const parts = [
     report.report_title,
     ...report.kpis.slice(0, 4).map((kpi) => `${kpi.label}: ${kpi.value}`),
@@ -184,9 +190,10 @@ function buildSpeakableResponse(
   ]
     .map((part) => part.trim())
     .filter(Boolean);
-
   return parts.join(". ");
 }
+
+// ─── Sub-components ──────────────────────────────────────────────────────────
 
 function ConsultantResponse({ text }: { text: string }) {
   const lines = text
@@ -218,7 +225,6 @@ function ConsultantResponse({ text }: { text: string }) {
       flushBullets();
       continue;
     }
-
     const headingMatch = line.match(/^#{1,3}\s+/);
     if (headingMatch) {
       flushBullets();
@@ -230,12 +236,10 @@ function ConsultantResponse({ text }: { text: string }) {
       );
       continue;
     }
-
     if (/^[-*]\s+/.test(line)) {
       bulletBuffer.push(line.replace(/^[-*]\s+/, ""));
       continue;
     }
-
     flushBullets();
     content.push(
       <p key={`p-${key++}`} className="my-2 text-sm leading-7 text-[var(--biz-text)]">
@@ -247,7 +251,7 @@ function ConsultantResponse({ text }: { text: string }) {
   flushBullets();
 
   return (
-    <article className="rounded-[24px] border border-white/10 bg-white/[0.03] px-5 py-4">
+    <article className="rounded-[16px] border border-white/10 bg-white/[0.03] px-5 py-4">
       {content.length > 0 ? (
         content
       ) : (
@@ -267,10 +271,10 @@ function ConsultantWorkingPanel({
   reducedMotion: boolean;
 }) {
   return (
-    <div className="rounded-[24px] border border-white/10 bg-white/[0.03] px-4 py-4">
+    <div className="rounded-[16px] border border-white/10 bg-white/[0.03] px-4 py-4">
       <div className="mb-4 flex items-center gap-2">
         <span
-          className={`h-2.5 w-2.5 shrink-0 rounded-full bg-[var(--biz-primary)] ${
+          className={`h-2 w-2 shrink-0 rounded-full bg-[var(--biz-primary)] ${
             reducedMotion ? "" : "animate-pulse motion-reduce:animate-none"
           }`}
           aria-hidden
@@ -283,19 +287,15 @@ function ConsultantWorkingPanel({
             key={step.label}
             className={`flex items-center gap-2.5 text-xs transition-opacity duration-200 ${
               step.status === "queued"
-                ? "text-[var(--biz-muted)]"
+                ? "text-[var(--biz-muted)] opacity-40"
                 : step.status === "working"
                   ? "text-[var(--biz-primary)]"
                   : "text-[var(--biz-muted)]"
             }`}
-            style={{
-              transitionDelay: reducedMotion ? "0ms" : `${i * 30}ms`,
-            }}
+            style={{ transitionDelay: reducedMotion ? "0ms" : `${i * 30}ms` }}
           >
             {step.status === "completed" ? (
-              <span className="text-[var(--biz-primary)]" aria-hidden>
-                ✓
-              </span>
+              <span className="text-[var(--biz-primary)]" aria-hidden>✓</span>
             ) : step.status === "working" ? (
               <span
                 className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--biz-primary)] ${
@@ -304,10 +304,7 @@ function ConsultantWorkingPanel({
                 aria-hidden
               />
             ) : (
-              <span
-                className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-white/20"
-                aria-hidden
-              />
+              <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-white/20" aria-hidden />
             )}
             <span>{step.label}</span>
           </li>
@@ -328,7 +325,7 @@ function ConsultantReportView({
 
   if (!report && !trimmed) {
     return (
-      <div className="rounded-[24px] border border-dashed border-white/10 bg-white/[0.02] px-5 py-10 text-center">
+      <div className="rounded-[16px] border border-dashed border-white/10 bg-white/[0.02] px-5 py-8 text-center">
         <p className="text-sm text-[var(--biz-muted)]">
           Run an analysis to see a structured report based on your inventory and sales data.
         </p>
@@ -352,13 +349,13 @@ function ConsultantReportView({
   const hasNotes = report.notes.length > 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="text-lg font-semibold tracking-tight text-[var(--biz-text)]">
+          <h3 className="text-base font-semibold tracking-tight text-[var(--biz-text)]">
             {report.report_title || "Business Consultant Report"}
           </h3>
-          <p className="mt-1 text-sm text-[var(--biz-muted)]">
+          <p className="mt-0.5 text-xs text-[var(--biz-muted)]">
             {formatReportTimestamp(report.timestamp)}
           </p>
         </div>
@@ -380,16 +377,16 @@ function ConsultantReportView({
       </header>
 
       {report.kpis.length > 0 && (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
           {report.kpis.map((kpi) => (
             <div
               key={kpi.label}
-              className="rounded-[22px] border border-white/10 bg-white/[0.03] px-4 py-3"
+              className="rounded-[16px] border border-white/10 bg-white/[0.03] px-4 py-3"
             >
               <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--biz-muted)]">
                 {kpi.label}
               </p>
-              <p className="mt-2 text-lg font-semibold tracking-tight text-[var(--biz-text)]">
+              <p className="mt-1.5 text-base font-semibold tracking-tight text-[var(--biz-text)]">
                 {kpi.value}
               </p>
               {kpi.hint && (
@@ -401,14 +398,14 @@ function ConsultantReportView({
       )}
 
       {hasHighRisk && (
-        <section className="space-y-3">
-          <h4 className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--biz-muted)]">
+        <section className="space-y-2.5">
+          <h4 className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--biz-muted)]">
             High-Risk Positions
           </h4>
-          <div className="overflow-hidden rounded-[24px] border border-white/10 bg-slate-950/40">
+          <div className="overflow-hidden rounded-[16px] border border-white/10 bg-slate-950/40">
             <div className="grid grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.9fr)] gap-x-3 border-b border-white/10 px-4 py-2 text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--biz-muted)]">
               <span>Item</span>
-              <span className="text-right">Cost Basis</span>
+              <span className="text-right">Cost</span>
               <span className="text-right">CMV</span>
               <span className="text-right">Delta</span>
             </div>
@@ -416,18 +413,16 @@ function ConsultantReportView({
               {report.high_risk_positions.map((pos) => (
                 <div
                   key={`${pos.item}-${pos.reason}`}
-                  className="grid grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.9fr)] gap-x-3 px-4 py-3"
+                  className="grid grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.9fr)] gap-x-3 px-4 py-2.5"
                 >
                   <div className="min-w-0">
                     <p className="truncate text-[var(--biz-text)]">{pos.item}</p>
                     {pos.reason && (
-                      <p className="mt-1 text-xs leading-5 text-[var(--biz-muted)]">{pos.reason}</p>
+                      <p className="mt-0.5 text-xs leading-5 text-[var(--biz-muted)]">{pos.reason}</p>
                     )}
                   </div>
                   <div className="text-right tabular-nums text-[var(--biz-text)]">
-                    {pos.cost_basis.toLocaleString(undefined, {
-                      maximumFractionDigits: 0,
-                    })}
+                    {pos.cost_basis.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                   </div>
                   <div className="text-right tabular-nums text-[var(--biz-text)]">
                     {pos.cmv.toLocaleString(undefined, { maximumFractionDigits: 0 })}
@@ -443,15 +438,15 @@ function ConsultantReportView({
       )}
 
       {hasActions && (
-        <section className="space-y-3">
-          <h4 className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--biz-muted)]">
+        <section className="space-y-2.5">
+          <h4 className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--biz-muted)]">
             Recommended Actions
           </h4>
-          <ul className="space-y-2.5 text-sm leading-7 text-[var(--biz-text)]">
+          <ul className="space-y-2 text-sm leading-7 text-[var(--biz-text)]">
             {report.recommended_actions.map((act, idx) => (
               <li
                 key={`${act.action}-${idx}`}
-                className="rounded-[22px] border border-white/10 bg-white/[0.03] px-4 py-3"
+                className="rounded-[16px] border border-white/10 bg-white/[0.03] px-4 py-3"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -471,15 +466,15 @@ function ConsultantReportView({
       )}
 
       {hasNotes && (
-        <section className="space-y-3">
-          <h4 className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--biz-muted)]">
+        <section className="space-y-2.5">
+          <h4 className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--biz-muted)]">
             Notes
           </h4>
-          <ul className="space-y-2.5 text-sm leading-7 text-[var(--biz-text)]">
+          <ul className="space-y-2 text-sm leading-7 text-[var(--biz-text)]">
             {report.notes.map((note, idx) => (
               <li
                 key={idx}
-                className="rounded-[22px] border border-white/10 bg-white/[0.03] px-4 py-3"
+                className="rounded-[16px] border border-white/10 bg-white/[0.03] px-4 py-3"
               >
                 {note}
               </li>
@@ -490,6 +485,8 @@ function ConsultantReportView({
     </div>
   );
 }
+
+// ─── Main component ──────────────────────────────────────────────────────────
 
 export default function BusinessConsultantPanel() {
   const [prompt, setPrompt] = useState("");
@@ -522,18 +519,9 @@ export default function BusinessConsultantPanel() {
   });
 
   const clearTimers = useCallback(() => {
-    if (stepIntervalRef.current) {
-      clearInterval(stepIntervalRef.current);
-      stepIntervalRef.current = null;
-    }
-    if (statusIntervalRef.current) {
-      clearInterval(statusIntervalRef.current);
-      statusIntervalRef.current = null;
-    }
-    if (acknowledgeTimeoutRef.current) {
-      clearTimeout(acknowledgeTimeoutRef.current);
-      acknowledgeTimeoutRef.current = null;
-    }
+    if (stepIntervalRef.current) { clearInterval(stepIntervalRef.current); stepIntervalRef.current = null; }
+    if (statusIntervalRef.current) { clearInterval(statusIntervalRef.current); statusIntervalRef.current = null; }
+    if (acknowledgeTimeoutRef.current) { clearTimeout(acknowledgeTimeoutRef.current); acknowledgeTimeoutRef.current = null; }
   }, []);
 
   const loadConsultations = useCallback(async () => {
@@ -554,10 +542,8 @@ export default function BusinessConsultantPanel() {
   const handleLoadConsultation = useCallback(
     (consultation: BusinessConsultation) => {
       if (!consultation) return;
-
       clearTimers();
       const parsed = parseBusinessConsultantReport(consultation.response);
-
       setError(null);
       setHistoryNotice(null);
       setActiveConsultationId(consultation.id);
@@ -599,10 +585,7 @@ export default function BusinessConsultantPanel() {
     stepIntervalRef.current = setInterval(() => {
       setStepIndex((prev) => {
         if (prev >= CONSULTANT_STEPS.length - 1) {
-          if (stepIntervalRef.current) {
-            clearInterval(stepIntervalRef.current);
-            stepIntervalRef.current = null;
-          }
+          if (stepIntervalRef.current) { clearInterval(stepIntervalRef.current); stepIntervalRef.current = null; }
           return prev;
         }
         return prev + 1;
@@ -638,9 +621,7 @@ export default function BusinessConsultantPanel() {
       setPhase("deliverable");
 
       if (data?.saved === false) {
-        setHistoryNotice(
-          data?.saveWarning || "Analysis generated. History is temporarily unavailable for this run."
-        );
+        setHistoryNotice(data?.saveWarning || "Analysis generated. History is temporarily unavailable for this run.");
       } else {
         setHistoryNotice(null);
       }
@@ -662,19 +643,14 @@ export default function BusinessConsultantPanel() {
     }
   }, [advancedContext, clearTimers, phase, prompt, selectedTemplateId]);
 
-  useEffect(() => {
-    void loadConsultations();
-  }, [loadConsultations]);
-
+  useEffect(() => { void loadConsultations(); }, [loadConsultations]);
   useEffect(() => () => clearTimers(), [clearTimers]);
 
   const isWorking = phase === "acknowledge" || phase === "working";
   const hasTranscript = Boolean(submittedPrompt || response.trim() || error || isWorking || report);
-  const isIdleState = !hasTranscript;
-  const statusLine =
-    phase === "acknowledge"
-      ? "Checking your inventory and sales context..."
-      : WORKING_STATUS_LINES[statusLineIndex];
+  const statusLine = phase === "acknowledge"
+    ? "Checking your inventory and sales context..."
+    : WORKING_STATUS_LINES[statusLineIndex];
   const speakableResponse = buildSpeakableResponse(report, response);
 
   useEffect(() => {
@@ -683,7 +659,7 @@ export default function BusinessConsultantPanel() {
       behavior: reducedMotion ? "auto" : "smooth",
       block: "end",
     });
-  }, [error, hasTranscript, historyNotice, reducedMotion, report, response, submittedPrompt, phase]);
+  }, [error, hasTranscript, reducedMotion, report, response, submittedPrompt, phase]);
 
   const formatHistoryTime = (dateStr: string): string => {
     const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
@@ -695,350 +671,421 @@ export default function BusinessConsultantPanel() {
   };
 
   return (
-    <section
-      className={`relative z-10 flex flex-col ${
-        isIdleState
-          ? "min-h-[calc(100vh-7rem)] pb-4 lg:min-h-[calc(100vh-4.6rem)]"
-          : "min-h-[calc(100vh-8rem)] pb-8 lg:min-h-[calc(100vh-5rem)]"
-      }`}
-      style={CONSULTANT_THEME_STYLE}
-    >
-      <header
-        className={`mx-auto w-full max-w-5xl ${
-          isIdleState ? "pt-1 md:pt-3" : "pt-2 md:pt-6"
-        }`}
-      >
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-3xl">
-            <span className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-medium uppercase tracking-[0.2em] text-slate-300">
-              {CONSULTANT_COPY.eyebrow}
-            </span>
-            <h1
-              className={`font-semibold tracking-[-0.04em] text-white ${
-                isIdleState ? "mt-3 text-[2rem] sm:text-[2.6rem]" : "mt-4 text-3xl sm:text-4xl"
-              }`}
-            >
-              {CONSULTANT_COPY.title}
-            </h1>
-            <p className="mt-2 text-sm leading-6 text-slate-400">{CONSULTANT_COPY.subtitle}</p>
-          </div>
+    <div className="relative z-10" style={CONSULTANT_THEME_STYLE}>
 
-          <div className="flex flex-wrap gap-2">
-            {CAPABILITY_PILLS.map((pill) => (
-              <span
-                key={pill}
-                className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs text-slate-300"
-              >
-                {pill}
-              </span>
-            ))}
-          </div>
+      {/* ── TOP BAR ─────────────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between pb-3 mb-4 border-b border-white/[0.08]">
+        <div className="flex items-center gap-3 min-w-0">
+          <h1 className="text-sm font-semibold text-white tracking-tight">Business Consultant</h1>
+          <span className="hidden sm:inline text-slate-700">·</span>
+          <span className="hidden sm:inline text-xs text-slate-500 truncate">
+            Pricing · Inventory · Grading · Liquidity
+          </span>
         </div>
-      </header>
-
-      <div className={`mx-auto w-full max-w-5xl space-y-3 ${isIdleState ? "mt-3" : "mt-5"}`}>
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-slate-500">
-              Recent analyses
-            </p>
-            <p className="mt-1 text-sm leading-6 text-slate-400">
-              Reload any prior pricing or liquidity readout without leaving the thread.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => void loadConsultations()}
-            disabled={historyLoading || isWorking}
-            className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] font-medium text-slate-300 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {historyLoading ? "Loading..." : "Refresh"}
-          </button>
-        </div>
-
-        {historyLoading ? (
-          <div className="rounded-[22px] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-slate-500">
-            Loading saved consultations...
-          </div>
-        ) : consultations.length > 0 ? (
-          <div className="flex gap-3 overflow-x-auto pb-1">
-            {consultations.map((consultation) => {
-              const inventoryItems = formatContextMetric(
-                consultation.context_summary,
-                "inventoryItems"
-              );
-              const totalSales = formatContextMetric(consultation.context_summary, "totalSales");
-              const coverage = formatContextMetric(
-                consultation.context_summary,
-                "cmvCoveragePct",
-                "%"
-              );
-
-              return (
-                <button
-                  key={consultation.id}
-                  type="button"
-                  onClick={() => handleLoadConsultation(consultation)}
-                  disabled={isWorking}
-                  className={`min-w-[230px] rounded-[20px] border px-3.5 py-2.5 text-left transition ${
-                    consultation.id === activeConsultationId
-                      ? "border-emerald-300/25 bg-emerald-300/10"
-                      : "border-white/10 bg-white/[0.03] hover:bg-white/[0.07]"
-                  } disabled:cursor-not-allowed disabled:opacity-50`}
-                >
-                  <p className="truncate text-sm font-medium text-slate-100">{consultation.title}</p>
-                  <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-                    <span>{formatHistoryTime(consultation.updated_at)}</span>
-                    {inventoryItems && (
-                      <span className="rounded-full border border-white/10 px-2 py-0.5 text-slate-400">
-                        Inv {inventoryItems}
-                      </span>
-                    )}
-                    {totalSales && (
-                      <span className="rounded-full border border-white/10 px-2 py-0.5 text-slate-400">
-                        Sales {totalSales}
-                      </span>
-                    )}
-                    {coverage && (
-                      <span className="rounded-full border border-white/10 px-2 py-0.5 text-slate-400">
-                        CMV {coverage}
-                      </span>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        ) : null}
+        <span className="shrink-0 text-[10px] font-medium uppercase tracking-[0.16em] border border-emerald-300/20 bg-emerald-300/[0.05] text-emerald-300/70 px-2.5 py-1 rounded-full">
+          Operator Mode
+        </span>
       </div>
 
-      <div
-        className={`mx-auto w-full max-w-4xl flex-1 ${
-          isIdleState ? "mt-4 pb-24 lg:pb-20" : "mt-6 pb-32 lg:pb-28"
-        }`}
-      >
-        {hasTranscript ? (
-          <div className="space-y-5">
-            {submittedPrompt && (
-              <div className="ml-auto max-w-3xl rounded-[28px] border border-emerald-300/20 bg-emerald-300/10 px-5 py-4">
-                <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-emerald-100/80">
-                  You asked
-                </p>
-                <p className="mt-2 text-sm leading-7 text-emerald-50">{submittedPrompt}</p>
-              </div>
-            )}
+      {/* ── WORKSPACE GRID ──────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[200px_1fr] xl:grid-cols-[200px_1fr_220px]">
 
-            {historyNotice && (
-              <div className="max-w-3xl rounded-[24px] border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-sm text-amber-100">
-                {historyNotice}
-              </div>
-            )}
+        {/* ── LEFT SIDEBAR ──────────────────────────────────────────────── */}
+        <aside className="hidden lg:flex lg:col-start-1 flex-col gap-3">
 
-            <div className={`${glassPanelClass} max-w-4xl p-5 sm:p-6`}>
-              <div className="mb-5 flex items-start justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full border border-emerald-300/20 bg-emerald-300/10 text-sm font-semibold text-emerald-100">
-                    BC
-                  </div>
-                  <div>
-                    <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-slate-500">
-                      Consultant
-                    </p>
-                    <h2 className="mt-1 text-base font-semibold text-white">
-                      Business operator readout
-                    </h2>
-                  </div>
-                </div>
-
-                {response.trim().length > 0 && (
-                  <SpeakButton
-                    text={speakableResponse}
-                    size="sm"
-                    className="bg-white/[0.06] text-slate-200 hover:bg-white/[0.1]"
-                  />
-                )}
-              </div>
-
-              {error ? (
-                <div className="rounded-[20px] border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-100">
-                  {error}
-                </div>
-              ) : isWorking ? (
-                <ConsultantWorkingPanel
-                  steps={steps}
-                  statusLine={statusLine}
-                  reducedMotion={reducedMotion}
-                />
-              ) : (
-                <ConsultantReportView report={report} rawText={response} />
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="flex min-h-[28vh] flex-col items-center justify-center text-center md:min-h-[26vh]">
-            <span className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-medium uppercase tracking-[0.2em] text-slate-300">
-              Start Here
-            </span>
-            <h2 className="mt-4 text-2xl font-semibold tracking-[-0.04em] text-white sm:text-[2rem]">
-              Ask a business question and let the agent write the operator memo.
-            </h2>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">
-              {CONSULTANT_COPY.helper}
+          {/* Business context */}
+          <div className={`${panelClass} p-3`}>
+            <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-slate-500 mb-2.5">
+              Business Context
             </p>
-
-            <div className="mt-5 grid w-full max-w-4xl gap-2.5 md:grid-cols-2">
-              {TEMPLATES.map((template) => (
-                <button
-                  key={template.id}
-                  type="button"
-                  onClick={() => {
-                    setSelectedTemplateId(template.id);
-                    setPrompt(template.example);
-                    textareaRef.current?.focus();
-                  }}
-                  className="rounded-[20px] border border-white/10 bg-white/[0.03] px-4 py-3.5 text-left transition hover:bg-white/[0.07]"
+            {/* TODO: Replace placeholders with live data from /api/business/inventory + /api/business/metrics */}
+            <div className="space-y-px">
+              {CONTEXT_STATS_PLACEHOLDER.map(({ label, value }) => (
+                <div
+                  key={label}
+                  className="flex items-center justify-between rounded-lg px-2 py-1.5 hover:bg-white/[0.03] transition-colors"
                 >
-                  <p className="text-sm font-semibold text-white">{template.label}</p>
-                  <p className="mt-1.5 text-sm leading-6 text-slate-400">{template.example}</p>
-                </button>
+                  <span className="text-xs text-slate-500">{label}</span>
+                  <span className="text-xs font-medium text-slate-400 tabular-nums">{value}</span>
+                </div>
               ))}
             </div>
           </div>
-        )}
-        <div ref={transcriptEndRef} />
-      </div>
 
-      <div className={`sticky z-20 mt-auto ${isIdleState ? "bottom-20 pt-3 lg:bottom-4" : "bottom-24 pt-4 lg:bottom-6"}`}>
-        <div className={`${glassPanelClass} mx-auto w-full max-w-4xl p-3 sm:p-4`}>
-          <div className="mb-2.5 flex gap-2 overflow-x-auto pb-1">
-            {TEMPLATES.map((template) => {
-              const isActive = selectedTemplateId === template.id;
-              return (
-                <button
-                  key={template.id}
-                  type="button"
-                  onClick={() => {
-                    setSelectedTemplateId(template.id);
-                    setPrompt(template.example);
-                    textareaRef.current?.focus();
-                  }}
-                  disabled={isWorking}
-                  className={`shrink-0 rounded-full border px-3.5 py-1.5 text-xs font-medium transition ${
-                    isActive
-                      ? "border-emerald-300/30 bg-emerald-300/12 text-emerald-100"
-                      : "border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.08]"
-                  } disabled:cursor-not-allowed disabled:opacity-60`}
-                >
-                  {template.label}
-                </button>
-              );
-            })}
+          {/* Recent analyses */}
+          <div className={`${panelClass} p-3 flex-1`}>
+            <div className="flex items-center justify-between mb-2.5">
+              <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-slate-500">
+                Recent Analyses
+              </p>
+              <button
+                type="button"
+                onClick={() => void loadConsultations()}
+                disabled={historyLoading || isWorking}
+                className="text-[11px] text-slate-600 hover:text-slate-300 transition disabled:opacity-50"
+                title="Refresh history"
+              >
+                {historyLoading ? "·" : "↻"}
+              </button>
+            </div>
+            {historyLoading ? (
+              <p className="px-2 text-xs text-slate-600">Loading...</p>
+            ) : consultations.length > 0 ? (
+              <div className="space-y-0.5">
+                {consultations.slice(0, 10).map((consultation) => {
+                  const invItems = formatContextMetric(consultation.context_summary, "inventoryItems");
+                  const salesCount = formatContextMetric(consultation.context_summary, "totalSales");
+                  return (
+                    <button
+                      key={consultation.id}
+                      type="button"
+                      onClick={() => handleLoadConsultation(consultation)}
+                      disabled={isWorking}
+                      className={`w-full rounded-[10px] px-2 py-1.5 text-left transition ${
+                        consultation.id === activeConsultationId
+                          ? "bg-emerald-300/10 text-emerald-200"
+                          : "text-slate-400 hover:bg-white/[0.04] hover:text-slate-200"
+                      } disabled:cursor-not-allowed disabled:opacity-50`}
+                    >
+                      <p className="text-xs truncate leading-5">{consultation.title}</p>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="text-[10px] text-slate-600">{formatHistoryTime(consultation.updated_at)}</span>
+                        {invItems && (
+                          <span className="text-[10px] text-slate-700">Inv {invItems}</span>
+                        )}
+                        {salesCount && (
+                          <span className="text-[10px] text-slate-700">· {salesCount} sales</span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="px-2 text-xs text-slate-600">No prior analyses</p>
+            )}
           </div>
+        </aside>
 
-          <div className="rounded-[20px] border border-white/10 bg-[#040812]/80 backdrop-blur-md">
+        {/* ── CENTER PANEL ──────────────────────────────────────────────── */}
+        <div className="space-y-3 min-w-0">
+
+          {/* COMPOSER */}
+          <div className={`${glassPanelClass} p-3`}>
+
+            {/* Template chips */}
+            <div className="flex gap-1.5 overflow-x-auto pb-1 mb-3">
+              {TEMPLATES.map((template) => {
+                const isActive = selectedTemplateId === template.id;
+                return (
+                  <button
+                    key={template.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedTemplateId(template.id);
+                      setPrompt(template.example);
+                      textareaRef.current?.focus();
+                    }}
+                    disabled={isWorking}
+                    className={`shrink-0 rounded-full border px-3 py-1 text-[11px] font-medium transition ${
+                      isActive
+                        ? "border-emerald-300/30 bg-emerald-300/10 text-emerald-200"
+                        : "border-white/10 bg-transparent text-slate-500 hover:text-slate-200 hover:bg-white/[0.05]"
+                    } disabled:cursor-not-allowed disabled:opacity-60`}
+                  >
+                    {template.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Constraints panel */}
             {advancedOpen && (
-              <div className="border-b border-white/10 px-4 py-3.5">
+              <div className="rounded-[14px] border border-white/10 bg-white/[0.02] mb-2.5 px-3 py-3">
                 <label
                   htmlFor="consultant-constraints-input"
-                  className="text-[11px] font-medium uppercase tracking-[0.2em] text-slate-400"
+                  className="text-[10px] font-medium uppercase tracking-[0.2em] text-slate-500"
                 >
-                  Constraints / goals
+                  Constraints / Goals
                 </label>
                 <textarea
                   id="consultant-constraints-input"
                   value={advancedContext}
                   onChange={(e) => setAdvancedContext(e.target.value)}
-                  rows={3}
+                  rows={2}
                   disabled={isWorking}
-                  placeholder="Example: Need cash in 21 days, avoid selling grails, target max 20 packages per week."
-                  className="mt-2.5 w-full resize-none rounded-[18px] border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm leading-6 text-slate-100 placeholder:text-slate-500 focus:border-white/20 focus:outline-none disabled:cursor-not-allowed disabled:opacity-70"
+                  placeholder="e.g. Need cash in 21 days, avoid selling grails, max 20 packages/week."
+                  className="mt-2 w-full resize-none bg-transparent text-sm leading-6 text-slate-100 placeholder:text-slate-600 focus:outline-none disabled:opacity-70"
                 />
               </div>
             )}
 
-            <textarea
-              ref={textareaRef}
-              value={prompt}
-              onChange={(e) => {
-                setActiveConsultationId(null);
-                setSelectedTemplateId("custom");
-                setPrompt(e.target.value);
-              }}
-              onKeyDown={(e) => {
-                if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-                  e.preventDefault();
-                  void handleRunConsultation();
-                }
-              }}
-              placeholder={CONSULTANT_COPY.placeholder}
-              rows={3}
-              disabled={isWorking}
-              id="consultant-prompt-input"
-              aria-label="Business decision prompt"
-              autoComplete="off"
-              className="min-h-[110px] w-full resize-none border-0 bg-transparent px-4 py-4 text-[15px] leading-6 text-slate-100 placeholder:text-slate-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-70"
-            />
-
-            <div className="flex flex-col gap-3 border-t border-white/10 px-4 py-3.5 md:flex-row md:items-end md:justify-between">
-              <div className="flex flex-wrap items-center gap-3">
-                <MicButton
-                  onResult={(text) => {
-                    setActiveConsultationId(null);
-                    setSelectedTemplateId("custom");
-                    setPrompt(text);
-                    textareaRef.current?.focus();
-                  }}
-                  size="sm"
-                  className="bg-white/[0.06] text-slate-200 hover:bg-white/[0.1]"
-                />
+            {/* Main input */}
+            <div className="rounded-[14px] border border-white/10 bg-[#040812]/80">
+              <textarea
+                ref={textareaRef}
+                value={prompt}
+                onChange={(e) => {
+                  setActiveConsultationId(null);
+                  setSelectedTemplateId("custom");
+                  setPrompt(e.target.value);
+                }}
+                onKeyDown={(e) => {
+                  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                    e.preventDefault();
+                    void handleRunConsultation();
+                  }
+                }}
+                placeholder="Ask about pricing, grading, inventory, liquidity, risk exposure, or sell-through..."
+                rows={3}
+                disabled={isWorking}
+                id="consultant-prompt-input"
+                aria-label="Business decision prompt"
+                autoComplete="off"
+                className="w-full resize-none border-0 bg-transparent px-4 pt-3.5 pb-2.5 text-sm leading-6 text-slate-100 placeholder:text-slate-600 focus:outline-none disabled:opacity-70"
+              />
+              <div className="flex items-center justify-between gap-3 px-3 pb-3">
+                <div className="flex items-center gap-2">
+                  <MicButton
+                    onResult={(text) => {
+                      setActiveConsultationId(null);
+                      setSelectedTemplateId("custom");
+                      setPrompt(text);
+                      textareaRef.current?.focus();
+                    }}
+                    size="sm"
+                    className="bg-white/[0.05] text-slate-400 hover:bg-white/[0.1] hover:text-slate-200"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setAdvancedOpen((prev) => !prev)}
+                    disabled={isWorking}
+                    className="rounded-full border border-white/10 bg-transparent px-2.5 py-1 text-[11px] text-slate-500 transition hover:bg-white/[0.06] hover:text-slate-200 disabled:opacity-60"
+                  >
+                    {advancedOpen ? "Hide constraints" : "Constraints"}
+                  </button>
+                  <span className="hidden md:inline text-[11px] text-slate-700">⌘↵</span>
+                </div>
                 <button
                   type="button"
-                  onClick={() => setAdvancedOpen((prev) => !prev)}
-                  disabled={isWorking}
-                  className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs font-medium text-slate-300 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
+                  onClick={() => void handleRunConsultation()}
+                  disabled={isWorking || !prompt.trim()}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-full bg-emerald-400 px-4 text-xs font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {advancedOpen ? "Hide constraints" : "Add constraints"}
+                  {isWorking ? "Working..." : "Generate Analysis"}
                 </button>
-                <p className="hidden text-xs leading-6 text-slate-500 lg:block">
-                  Cleaner agent layout, same structured memo. Press Cmd/Ctrl + Enter to run.
-                </p>
               </div>
+            </div>
 
-              <button
-                type="button"
-                onClick={() => void handleRunConsultation()}
-                disabled={isWorking || !prompt.trim()}
-                className="inline-flex min-h-[44px] items-center justify-center rounded-full bg-emerald-400 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {phase === "acknowledge"
-                  ? "Analyzing..."
-                  : phase === "working"
-                    ? "Working..."
-                    : CONSULTANT_COPY.submitButton}
-              </button>
+            {/* Quick prompt chips */}
+            <div className="flex flex-wrap gap-1.5 mt-2.5">
+              {QUICK_PROMPTS.slice(0, 6).map((suggestion) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  onClick={() => {
+                    setActiveConsultationId(null);
+                    setSelectedTemplateId("custom");
+                    setPrompt(suggestion);
+                    textareaRef.current?.focus();
+                  }}
+                  disabled={isWorking}
+                  className="rounded-full border border-white/[0.07] bg-transparent px-2.5 py-1 text-[11px] text-slate-600 transition hover:text-slate-200 hover:border-white/15 hover:bg-white/[0.04] disabled:opacity-40"
+                >
+                  {suggestion}
+                </button>
+              ))}
             </div>
           </div>
 
-          <div className="mt-2.5 flex flex-wrap gap-2">
-            {CONSULTANT_COPY.promptSuggestions.slice(0, isIdleState ? 3 : 5).map((suggestion) => (
-              <button
-                key={suggestion}
-                type="button"
-                onClick={() => {
-                  setActiveConsultationId(null);
-                  setSelectedTemplateId("custom");
-                  setPrompt(suggestion);
-                  textareaRef.current?.focus();
-                }}
-                disabled={isWorking}
-                className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs text-slate-300 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {suggestion}
-              </button>
-            ))}
+          {/* ── THREAD / OUTPUT ──────────────────────────────────────────── */}
+          {hasTranscript && (
+            <div className="space-y-3">
+              {submittedPrompt && (
+                <div className="ml-auto max-w-xl rounded-[18px] border border-emerald-300/15 bg-emerald-300/[0.07] px-4 py-3">
+                  <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-emerald-200/50">
+                    You asked
+                  </p>
+                  <p className="mt-1 text-sm leading-6 text-emerald-50">{submittedPrompt}</p>
+                </div>
+              )}
+
+              {historyNotice && (
+                <div className="rounded-[14px] border border-amber-300/20 bg-amber-300/[0.07] px-4 py-3 text-xs text-amber-100">
+                  {historyNotice}
+                </div>
+              )}
+
+              <div className={`${glassPanelClass} p-4 sm:p-5`}>
+                <div className="mb-4 flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-emerald-300/20 bg-emerald-300/10 text-[10px] font-bold text-emerald-200">
+                      BC
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-slate-500">
+                        Consultant
+                      </p>
+                      <p className="text-sm font-semibold text-white leading-5">
+                        Business operator readout
+                      </p>
+                    </div>
+                  </div>
+                  {response.trim().length > 0 && (
+                    <SpeakButton
+                      text={speakableResponse}
+                      size="sm"
+                      className="bg-white/[0.05] text-slate-400 hover:bg-white/[0.1]"
+                    />
+                  )}
+                </div>
+
+                {error ? (
+                  <div className="rounded-[14px] border border-red-400/20 bg-red-400/[0.07] px-4 py-3 text-sm text-red-200">
+                    {error}
+                  </div>
+                ) : isWorking ? (
+                  <ConsultantWorkingPanel
+                    steps={steps}
+                    statusLine={statusLine}
+                    reducedMotion={reducedMotion}
+                  />
+                ) : (
+                  <ConsultantReportView report={report} rawText={response} />
+                )}
+              </div>
+            </div>
+          )}
+
+          <div ref={transcriptEndRef} />
+        </div>
+
+        {/* ── RIGHT SIDEBAR ─────────────────────────────────────────────── */}
+        <aside className="hidden xl:flex xl:col-start-3 flex-col gap-3">
+
+          {/* Suggested actions */}
+          <div className={`${panelClass} p-3`}>
+            <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-slate-500 mb-2.5">
+              Suggested Actions
+            </p>
+            {/* TODO: Wire to inventory/listing management actions once endpoints are available */}
+            <div className="space-y-1">
+              {SUGGESTED_ACTIONS.map((action) => (
+                <button
+                  key={action.label}
+                  type="button"
+                  disabled
+                  title="Coming soon"
+                  className="w-full flex items-center gap-2.5 rounded-[10px] border border-white/[0.05] bg-transparent px-2.5 py-2 text-left opacity-35 cursor-not-allowed"
+                >
+                  <span className="text-xs text-slate-500 w-4 text-center shrink-0">{action.icon}</span>
+                  <span className="text-xs text-slate-400">{action.label}</span>
+                </button>
+              ))}
+            </div>
           </div>
+
+          {/* Business signals — populated from last report */}
+          <div className={`${panelClass} p-3`}>
+            <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-slate-500 mb-2.5">
+              Business Signals
+            </p>
+            {report && report.kpis.length > 0 ? (
+              <div className="space-y-px">
+                {report.kpis.slice(0, 5).map((kpi) => (
+                  <div
+                    key={kpi.label}
+                    className="flex items-center justify-between rounded-lg px-2 py-1.5 hover:bg-white/[0.03] transition-colors"
+                  >
+                    <span className="text-xs text-slate-500 truncate pr-1">{kpi.label}</span>
+                    <span className="text-xs font-medium text-slate-300 tabular-nums shrink-0">
+                      {kpi.value}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="px-2 text-xs text-slate-600">Run an analysis to populate signals.</p>
+            )}
+          </div>
+
+          {/* Session coverage — from last report */}
+          {report && (
+            <div className={`${panelClass} p-3`}>
+              <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-slate-500 mb-2.5">
+                Session Coverage
+              </p>
+              <div className="space-y-px">
+                <div className="flex items-center justify-between rounded-lg px-2 py-1.5">
+                  <span className="text-xs text-slate-500">Inventory</span>
+                  <span className="text-xs font-medium text-slate-300 tabular-nums">
+                    {report.data_coverage.inventory_count.toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between rounded-lg px-2 py-1.5">
+                  <span className="text-xs text-slate-500">Sales refs</span>
+                  <span className="text-xs font-medium text-slate-300 tabular-nums">
+                    {report.data_coverage.sales_count.toLocaleString()}
+                  </span>
+                </div>
+              </div>
+              {report.data_coverage.missing.length > 0 && (
+                <div className="mt-2 rounded-[10px] border border-amber-300/15 bg-amber-300/[0.05] px-2.5 py-1.5">
+                  <p className="text-[10px] text-amber-200/60">
+                    Missing: {report.data_coverage.missing.join(", ")}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Mobile-only: show recent analyses inline */}
+          <div className="lg:hidden">
+            {/* On mobile, recent analyses are accessible via the left sidebar which stacks below */}
+          </div>
+        </aside>
+      </div>
+
+      {/* Mobile: Recent analyses stacked below on smaller screens */}
+      <div className="mt-4 lg:hidden">
+        <div className={`${panelClass} p-3`}>
+          <div className="flex items-center justify-between mb-2.5">
+            <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-slate-500">
+              Recent Analyses
+            </p>
+            <button
+              type="button"
+              onClick={() => void loadConsultations()}
+              disabled={historyLoading || isWorking}
+              className="text-[11px] text-slate-600 hover:text-slate-300 transition disabled:opacity-50"
+            >
+              {historyLoading ? "Loading..." : "Refresh"}
+            </button>
+          </div>
+          {consultations.length > 0 ? (
+            <div className="flex gap-2.5 overflow-x-auto pb-1">
+              {consultations.slice(0, 8).map((consultation) => (
+                <button
+                  key={consultation.id}
+                  type="button"
+                  onClick={() => handleLoadConsultation(consultation)}
+                  disabled={isWorking}
+                  className={`min-w-[180px] rounded-[12px] border px-3 py-2 text-left transition ${
+                    consultation.id === activeConsultationId
+                      ? "border-emerald-300/25 bg-emerald-300/10"
+                      : "border-white/10 bg-white/[0.02] hover:bg-white/[0.06]"
+                  } disabled:opacity-50`}
+                >
+                  <p className="text-xs font-medium text-slate-200 truncate">{consultation.title}</p>
+                  <p className="text-[10px] text-slate-600 mt-0.5">{formatHistoryTime(consultation.updated_at)}</p>
+                </button>
+              ))}
+            </div>
+          ) : !historyLoading ? (
+            <p className="text-xs text-slate-600">No prior analyses</p>
+          ) : null}
         </div>
       </div>
-    </section>
+    </div>
   );
 }
