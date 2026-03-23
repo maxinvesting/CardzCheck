@@ -72,6 +72,12 @@ export type ResolvedGradeEstimateImage = {
 export type GradeEstimateJobInput = {
   scanPhotos: GradeScanPhoto[];
   card?: GradeEstimatorCardInput | null;
+  /** User-supplied correction text to inject into the grade model prompt */
+  correctionText?: string;
+  /** Skip OCR identity step — use priorIdentity instead (for refinement re-runs) */
+  skipOcrIdentity?: boolean;
+  /** Pre-known identity to inject when skipOcrIdentity is true */
+  priorIdentity?: CardIdentity;
 };
 
 export type GradeEstimateJobDependencies = {
@@ -82,7 +88,7 @@ export type GradeEstimateJobDependencies = {
     imageStats: ImageStats;
   }>;
   runOcrIdentity: (images: ResolvedGradeEstimateImage[]) => Promise<CardIdentity>;
-  runGradeModel: (images: ResolvedGradeEstimateImage[], identity?: CardIdentity | null) => Promise<string | null>;
+  runGradeModel: (images: ResolvedGradeEstimateImage[], identity?: CardIdentity | null, correctionText?: string) => Promise<string | null>;
   parseModelOutput: (options: {
     modelText: string | null;
     imageStats: ImageStats;
@@ -208,30 +214,50 @@ export async function runGradeEstimateJob(
   updateTimestamp(job);
 
   // Step 1: OCR identity + image prep
-  const ocrStart = startStep(job, "ocr_identity");
-  try {
-    const { resolvedImages, imageStats } = await deps.resolveImages(input.scanPhotos);
-    job.internal.resolvedImages = resolvedImages;
-    job.internal.imageStats = imageStats;
+  if (input.skipOcrIdentity && input.priorIdentity) {
+    // Refinement path: skip OCR, resolve images only, inject prior identity
+    const ocrStart = startStep(job, "ocr_identity");
+    try {
+      const { resolvedImages, imageStats } = await deps.resolveImages(input.scanPhotos);
+      job.internal.resolvedImages = resolvedImages;
+      job.internal.imageStats = imageStats;
+      job.partial.identity = input.priorIdentity;
+      skipStep(job, "ocr_identity", "Skipped for refinement");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to resolve images";
+      finishStep(job, "ocr_identity", ocrStart, "error", message);
+      job.status = "error";
+      job.error = message;
+      updateTimestamp(job);
+      return;
+    }
+  } else {
+    const ocrStart = startStep(job, "ocr_identity");
+    try {
+      const { resolvedImages, imageStats } = await deps.resolveImages(input.scanPhotos);
+      job.internal.resolvedImages = resolvedImages;
+      job.internal.imageStats = imageStats;
 
-    const identity = await deps.runOcrIdentity(resolvedImages);
-    job.partial.identity = identity;
-    finishStep(job, "ocr_identity", ocrStart, "done");
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to extract identity";
-    finishStep(job, "ocr_identity", ocrStart, "error", message);
-    job.status = "error";
-    job.error = message;
-    updateTimestamp(job);
-    return;
+      const identity = await deps.runOcrIdentity(resolvedImages);
+      job.partial.identity = identity;
+      finishStep(job, "ocr_identity", ocrStart, "done");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to extract identity";
+      finishStep(job, "ocr_identity", ocrStart, "error", message);
+      job.status = "error";
+      job.error = message;
+      updateTimestamp(job);
+      return;
+    }
   }
 
   // Step 2: grade model
   const gradeStart = startStep(job, "grade_model");
   try {
     const resolvedImages = job.internal.resolvedImages ?? [];
-    // Pass identity from step 1 so the grade model can apply card-type context (chrome, vintage, etc.)
-    const modelText = await deps.runGradeModel(resolvedImages, job.partial.identity);
+    // Pass identity so the grade model can apply card-type context (chrome, vintage, etc.)
+    // Pass correctionText when refining so the user's feedback is injected into the prompt.
+    const modelText = await deps.runGradeModel(resolvedImages, job.partial.identity, input.correctionText);
     job.internal.modelText = modelText;
     finishStep(job, "grade_model", gradeStart, "done");
   } catch (error) {

@@ -198,7 +198,8 @@ function buildCardContextNote(cardIdentity?: CardIdentity | null): string {
 async function runGradeModel(
   images: ResolvedGradeEstimateImage[],
   cardIdentity?: CardIdentity | null,
-  userId?: string | null
+  userId?: string | null,
+  correctionText?: string | null
 ): Promise<string | null> {
   const closeupCount = images.filter((image) => isCloseupKind(image.kind)).length;
   const photoRoles = images
@@ -217,6 +218,11 @@ async function runGradeModel(
       ? "No close-up photos were provided. Treat corners/edges/surface visibility as limited, include a limited visibility note, and avoid high confidence."
       : "Use close-up photos as primary evidence for the matching categories."
   }${cardContextNote}`;
+
+  // Build the correction block when the user has supplied feedback
+  const correctionBlock = correctionText?.trim()
+    ? `\n\nUser correction (treat as ground truth — higher priority than your visual inference alone):\n"${correctionText.trim()}"\n\nRe-analyze the card taking this correction fully into account. Update your grade range, probabilities, findings, and grade_notes to reflect it.`
+    : "";
 
   const anthropic = getAnthropicClient();
   const message = await anthropic.messages.create({
@@ -240,7 +246,7 @@ async function runGradeModel(
           })),
           {
             type: "text",
-            text: USER_PROMPT,
+            text: USER_PROMPT + correctionBlock,
           },
         ],
       },
@@ -330,7 +336,8 @@ export function createGradeEstimateJobDependencies(userId?: string | null): Grad
     resolveImages: resolveGradeEstimateImages,
     runOcrIdentity,
     // Bind userId via closure so token usage is recorded against the requesting user.
-    runGradeModel: (images, identity) => runGradeModel(images, identity, userId),
+    // correctionText is passed through at call time from the job input.
+    runGradeModel: (images, identity, correctionText) => runGradeModel(images, identity, userId, correctionText),
     parseModelOutput: async (options) => parseGradeEstimateModelOutput(options),
     runPostGradingValue,
   };

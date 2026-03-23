@@ -60,6 +60,13 @@ export default function CardScanSlot({
   const [error, setError] = useState<string | null>(null);
   const [slotState, setSlotState] = useState<SlotState>("idle");
 
+  // Refinement state
+  const [refinePanelOpen, setRefinePanelOpen] = useState(false);
+  const [refinementText, setRefinementText] = useState("");
+  const [refining, setRefining] = useState(false);
+  const [refineError, setRefineError] = useState<string | null>(null);
+  const [appliedRefinement, setAppliedRefinement] = useState<string | null>(null);
+
   const notify = useCallback(
     (s: SlotState) => { setSlotState(s); onStateChange?.(slotIndex, s); },
     [slotIndex, onStateChange]
@@ -73,6 +80,11 @@ export default function CardScanSlot({
     setAnalyzing(false);
     setShowAnimation(false);
     setError(null);
+    setRefinePanelOpen(false);
+    setRefinementText("");
+    setRefining(false);
+    setRefineError(null);
+    setAppliedRefinement(null);
     notify("idle");
   }, [notify]);
 
@@ -184,6 +196,72 @@ export default function CardScanSlot({
     await runGradeAnalysis(identifiedCard);
   }, [identifiedCard, runGradeAnalysis]);
 
+  /** Refinement — re-runs grade model with user correction text injected. No credit consumed. */
+  const runRefinement = useCallback(async () => {
+    if (!identifiedCard || !refinementText.trim()) return;
+    setRefining(true);
+    setRefineError(null);
+
+    const rawUrls = identifiedCard.imageUrls ?? (identifiedCard.imageUrl ? [identifiedCard.imageUrl] : []);
+    const fallbackPhotos: GradeScanPhoto[] = rawUrls.map((url, i) => ({
+      url,
+      kind: (i === 0 ? "front" : "back") as GradeScanPhoto["kind"],
+      sort_order: i,
+    }));
+    const scanPhotos = normalizeGradeScanPhotos(
+      identifiedCard.scanPhotos?.length ? identifiedCard.scanPhotos : fallbackPhotos
+    );
+
+    try {
+      const res = await fetch("/api/grade-estimate/refine", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          correctionText: refinementText.trim(),
+          scanPhotos: scanPhotos.map((p, i) => ({ ...p, sort_order: i })),
+          front_url: scanPhotos.find((p) => p.kind === "front")?.url,
+          back_url: scanPhotos.find((p) => p.kind === "back")?.url,
+          closeups: scanPhotos
+            .filter((p) => p.kind !== "front" && p.kind !== "back")
+            .map((p, i) => ({ url: p.url, kind: p.kind, sort_order: i })),
+          card: {
+            player_name: identifiedCard.player_name,
+            game: identifiedCard.cardIdentity?.sport ?? undefined,
+            sport: identifiedCard.cardIdentity?.sport ?? undefined,
+            year: identifiedCard.year,
+            set_name: identifiedCard.set_name,
+            card_number: identifiedCard.card_number,
+            parallel_type: identifiedCard.parallel_type,
+            variation: identifiedCard.variation,
+            insert: identifiedCard.insert,
+          },
+          priorIdentity: identifiedCard.cardIdentity ?? undefined,
+        }),
+      });
+
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null);
+        throw new Error(payload?.error ?? "Re-analysis failed. Please try again.");
+      }
+
+      const payload: GradeEstimateJobStatusResponse = await res.json();
+
+      if (payload.status === "done" && payload.final?.estimate) {
+        setGradeEstimate(payload.final.estimate);
+        setAppliedRefinement(refinementText.trim());
+        setRefinementText("");
+        setRefinePanelOpen(false);
+        setGradeJob(payload);
+      } else if (payload.status === "error") {
+        throw new Error(payload.error ?? "Re-analysis failed. Please try again.");
+      }
+    } catch (err) {
+      setRefineError(err instanceof Error ? err.message : "Re-analysis failed. Please try again.");
+    } finally {
+      setRefining(false);
+    }
+  }, [identifiedCard, refinementText]);
+
   useEffect(() => {
     if (!gradeJobId) return;
     let cancelled = false;
@@ -266,7 +344,75 @@ export default function CardScanSlot({
                 imageUrls={identifiedCard?.imageUrls}
                 scanPhotos={identifiedCard?.scanPhotos}
                 compact={totalSlots > 1}
+                appliedRefinement={appliedRefinement}
               />
+
+              {/* Refine Analysis — collapsible correction panel */}
+              <div className="mt-3 rounded-xl border border-white/8 bg-white/[0.03] overflow-hidden">
+                <button
+                  onClick={() => { setRefinePanelOpen((o) => !o); setRefineError(null); }}
+                  className="flex w-full items-center justify-between px-4 py-2.5 text-left"
+                >
+                  <span className="text-[11px] font-semibold text-amber-400/80 tracking-wide">
+                    ✦ Refine Analysis
+                  </span>
+                  <span className="text-[10px] text-white/30">{refinePanelOpen ? "▴" : "▾"}</span>
+                </button>
+
+                <AnimatePresence>
+                  {refinePanelOpen && (
+                    <motion.div
+                      key="refine-panel"
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.18 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="px-4 pb-4 space-y-2.5 border-t border-white/8">
+                        {refining ? (
+                          <div className="flex items-center gap-2 py-3 text-amber-400/70 text-xs">
+                            <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                            </svg>
+                            Re-analyzing with your correction…
+                          </div>
+                        ) : (
+                          <>
+                            <p className="text-[10px] text-white/40 pt-3">
+                              Saw something the AI missed? Describe it and we&apos;ll re-analyze — no credit used.
+                            </p>
+                            <textarea
+                              rows={3}
+                              maxLength={500}
+                              value={refinementText}
+                              onChange={(e) => setRefinementText(e.target.value)}
+                              placeholder="e.g. there's a scratch on the top-left corner you missed…"
+                              className="w-full resize-none rounded-md border border-white/12 bg-white/5 px-3 py-2 text-xs text-white/80 placeholder:text-white/25 focus:outline-none focus:ring-1 focus:ring-amber-500/40"
+                            />
+                            <div className="flex items-center justify-between">
+                              <span className={`text-[10px] ${refinementText.length > 450 ? "text-rose-400" : "text-white/25"}`}>
+                                {refinementText.length}/500
+                              </span>
+                              <button
+                                onClick={runRefinement}
+                                disabled={!refinementText.trim()}
+                                className="rounded-lg bg-amber-500 px-3 py-1.5 text-[11px] font-semibold text-black transition-opacity disabled:opacity-30 hover:opacity-90"
+                              >
+                                Re-analyze
+                              </button>
+                            </div>
+                            {refineError && (
+                              <p className="text-[11px] text-rose-400">{refineError}</p>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             </motion.div>
           )}
 
