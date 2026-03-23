@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { getAdminAuth } from "@/lib/admin";
 import { createServiceClient } from "@/lib/supabase/server";
 
+function stripHtml(str: string): string {
+  return str.replace(/<[^>]*>/g, "").trim();
+}
+
 export async function GET() {
   const admin = await getAdminAuth();
   if (!admin.user) return admin.unauthorizedResponse!;
@@ -31,6 +35,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "title, body, and category are required." }, { status: 400 });
   }
 
+  if (title.length > 300) {
+    return NextResponse.json({ error: "title must be 300 characters or fewer." }, { status: 400 });
+  }
+  if (bodyText.length > 10000) {
+    return NextResponse.json({ error: "body must be 10000 characters or fewer." }, { status: 400 });
+  }
+
+  const sanitizedTitle = stripHtml(title);
+  const sanitizedBody = stripHtml(bodyText);
+
   const VALID_CATEGORIES = ["general", "platform", "grading", "market", "business"];
   if (!VALID_CATEGORIES.includes(category)) {
     return NextResponse.json({ error: "Invalid category." }, { status: 400 });
@@ -40,8 +54,8 @@ export async function POST(request: Request) {
   const { data, error } = await service
     .from("announcements")
     .insert({
-      title: title.trim(),
-      body: bodyText.trim(),
+      title: sanitizedTitle,
+      body: sanitizedBody,
       category,
       is_public: Boolean(is_public ?? true),
       is_pinned: Boolean(is_pinned ?? false),

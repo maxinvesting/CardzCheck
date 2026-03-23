@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 import { hasBusinessAccess } from "@/lib/access";
 import {
   listInventory,
@@ -237,37 +237,10 @@ ${JSON.stringify(businessContext, null, 2)}`,
       savedConsultation = insertedConsultation as BusinessConsultation;
     }
 
-    // Retry save with service role when auth policies block insert/select on user client,
-    // or when .single() gets 0 rows (PGRST116) e.g. due to RLS hiding the returned row.
+    // If RLS blocked the write, surface the error rather than retrying with service role.
     if (!savedConsultation && saveError && (saveError.code === "42501" || saveError.code === "PGRST116")) {
-      try {
-        const serviceSupabase = await createServiceClient();
-        const { data: serviceInserted, error: serviceSaveError } = await serviceSupabase
-          .from("business_consultations")
-          .insert({
-            user_id: user.id,
-            title: consultationTitle,
-            prompt,
-            response: consultantResponse,
-            context_summary: contextSummary,
-          })
-          .select("*")
-          .single();
-
-        if (!serviceSaveError) {
-          savedConsultation = serviceInserted as BusinessConsultation;
-          finalSaveError = null;
-        } else {
-          finalSaveError = serviceSaveError;
-          console.error("Service-role retry failed to save business consultation:", {
-            code: serviceSaveError?.code,
-            message: serviceSaveError?.message,
-            details: serviceSaveError?.details,
-          });
-        }
-      } catch (serviceClientError) {
-        console.error("Service-role retry unavailable for business consultation save:", serviceClientError);
-      }
+      console.error("[consultant] RLS blocked write — not retrying with service role", { code: saveError.code });
+      return NextResponse.json({ error: "Failed to save conversation" }, { status: 500 });
     }
 
     if (!savedConsultation && finalSaveError) {

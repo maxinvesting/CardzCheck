@@ -49,6 +49,11 @@ function parseQuantity(value: unknown): number | null {
   return parsed;
 }
 
+function stripHtml(str: string | null | undefined): string | null {
+  if (!str) return null;
+  return str.replace(/<[^>]*>/g, "").trim() || null;
+}
+
 function getErrorCode(error: unknown): string | null {
   if (!error || typeof error !== "object") return null;
   return typeof (error as { code?: unknown }).code === "string"
@@ -382,13 +387,14 @@ export async function POST(request: NextRequest) {
 
     // Store players array and insert in notes if DB columns don't exist yet
     // TODO: Add migration for players (JSONB) and insert (text) columns
+    const sanitizedNotes = stripHtml(notes);
     const notesParts: string[] = [];
-    if (notes) notesParts.push(notes);
+    if (sanitizedNotes) notesParts.push(sanitizedNotes);
     if (insert) notesParts.push(`[INSERT:${insert}]`);
     if (players && players.length > 1) {
       notesParts.push(`[PLAYERS:${JSON.stringify(players)}]`);
     }
-    const combinedNotes = notesParts.length > 0 ? notesParts.join(" | ") : null;
+    const combinedNotes = stripHtml(notesParts.length > 0 ? notesParts.join(" | ") : null);
 
     logDebug("📦 Inserting collection item", {
       userId: redactId(user.id),
