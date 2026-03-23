@@ -34,7 +34,19 @@ export const EBAY_SCOPES = [
   "https://api.ebay.com/oauth/api_scope/sell.fulfillment.readonly",
   "https://api.ebay.com/oauth/api_scope/sell.account.readonly",
   "https://api.ebay.com/oauth/api_scope/commerce.identity.readonly",
+  // buy.order.readonly requires eBay Buy API certification for production apps.
+  // Purchase history is fetched via Trading API GetMyeBayBuying instead (uses sell tokens).
 ].join(" ");
+
+/**
+ * Returns true if the account's granted scopes are missing buy.order.readonly,
+ * meaning the user needs to re-authorize to enable purchase tracking.
+ */
+export function needsBuyerScope(grantedScopes: string[]): boolean {
+  return !grantedScopes.includes(
+    "https://api.ebay.com/oauth/api_scope/buy.order.readonly"
+  );
+}
 
 function getCredentials(): { clientId: string; clientSecret: string; redirectUri: string } {
   const clientId = process.env.EBAY_CLIENT_ID;
