@@ -19,6 +19,8 @@ export interface ShopListing {
   sport: string; // category/game label (e.g., Football, Pokemon, One Piece)
   price: number;
   cmv: number | null;
+  // Public: our eBay storefront price for this card. Subscriber deals are always ≥13.5% below this.
+  ebay_storefront_price: number | null;
   cost_basis?: number | null; // admin only, excluded from public API
   ebay_sold_comp?: number | null; // admin only — reference eBay sold comp price
   quantity: number;

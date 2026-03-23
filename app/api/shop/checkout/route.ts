@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import {
   createShopCheckoutSession,
   type ShopCheckoutItem,
 } from "@/lib/stripe";
+import { hasActiveBusinessTier } from "@/lib/subscription-tier";
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,6 +24,26 @@ export async function POST(request: NextRequest) {
         { error: "Checkout is not configured" },
         { status: 503 }
       );
+    }
+
+    // Determine if user has business tier for discount
+    let businessDiscountPct = 0;
+    try {
+      const userClient = await createClient();
+      const { data: { user } } = await userClient.auth.getUser();
+      if (user) {
+        const serviceClient = await createServiceClient();
+        const { data: sub } = await serviceClient
+          .from("subscriptions")
+          .select("tier, status, current_period_end")
+          .eq("user_id", user.id)
+          .single();
+        if (hasActiveBusinessTier(sub)) {
+          businessDiscountPct = 1;
+        }
+      }
+    } catch {
+      // Non-fatal — continue without discount on error
     }
 
     const supabase = await createServiceClient();
@@ -91,7 +112,8 @@ export async function POST(request: NextRequest) {
     const session = await createShopCheckoutSession(
       checkoutItems,
       `${appUrl}/shop/order-confirmed?session_id={CHECKOUT_SESSION_ID}`,
-      `${appUrl}/shop`
+      `${appUrl}/shop`,
+      { businessDiscountPct }
     );
 
     if (!session.url) {
@@ -101,7 +123,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({ url: session.url });
+    return NextResponse.json({
+      url: session.url,
+      businessDiscountPct,
+    });
   } catch (error) {
     console.error("Shop checkout error:", error);
     return NextResponse.json(

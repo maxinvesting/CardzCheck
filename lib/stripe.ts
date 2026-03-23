@@ -169,29 +169,41 @@ export interface ShopCheckoutItem {
   grade: string;
 }
 
+export interface ShopCheckoutOptions {
+  /** Additional percentage discount applied to item price (not shipping). E.g. 1 = 1% off. */
+  businessDiscountPct?: number;
+}
+
 /**
  * Create a Stripe Checkout session for shop (one-time payment).
  * Prices and shipping come from DB; never trust client.
+ * Pass businessDiscountPct to apply the business-tier discount server-side.
  */
 export async function createShopCheckoutSession(
   items: ShopCheckoutItem[],
   successUrl: string,
-  cancelUrl: string
+  cancelUrl: string,
+  options?: ShopCheckoutOptions
 ) {
   const stripe = getStripeClient();
+  const discountMultiplier = 1 - (options?.businessDiscountPct ?? 0) / 100;
 
   const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
 
   for (const item of items) {
-    const unitPrice = item.price + item.shippingCost;
+    const discountedItemPrice = item.price * discountMultiplier;
+    const unitPrice = discountedItemPrice + item.shippingCost;
+    const isBusinessDiscount = (options?.businessDiscountPct ?? 0) > 0;
     lineItems.push({
       price_data: {
         currency: "usd",
         product_data: {
           name: `${item.playerName} ${item.year} ${item.setBrand} - ${item.grade}`,
-          description:
-            item.quantity > 1 ? `Quantity: ${item.quantity}` : undefined,
-          images: item.quantity > 1 ? undefined : undefined,
+          description: isBusinessDiscount
+            ? `Business tier discount applied (${options!.businessDiscountPct}% off item price)`
+            : item.quantity > 1
+            ? `Quantity: ${item.quantity}`
+            : undefined,
         },
         unit_amount: Math.round(unitPrice * 100), // cents
       },
@@ -211,6 +223,7 @@ export async function createShopCheckoutSession(
     metadata: {
       listingIds: JSON.stringify(listingIds),
       quantities: JSON.stringify(quantities),
+      businessDiscountPct: String(options?.businessDiscountPct ?? 0),
     },
   });
 
