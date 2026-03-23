@@ -120,6 +120,12 @@ interface ParsedMemberMessage {
   subject: string | null;
   isRead: boolean;
   status: string;
+  responses: Array<{
+    messageId: string;
+    senderUsername: string;
+    body: string;
+    creationDate: string;
+  }>;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -314,17 +320,17 @@ async function fetchInquiryMessages(
   inquiryId: string
 ): Promise<Message[]> {
   try {
-    const res = await ebayFetch(
-      userId,
-      `/post-order/v2/inquiry/${inquiryId}/message`
-    );
+    const [res, sellerUsername] = await Promise.all([
+      ebayFetch(userId, `/post-order/v2/inquiry/${inquiryId}/message`),
+      getSellerEbayUsername(userId),
+    ]);
     if (!res.ok) return [];
 
     const data = (await res.json()) as EbayInquiryMessageResponse;
     return (data.messages ?? []).map((m, i) => ({
       id: `${inquiryId}-msg-${i}`,
       thread_id: `ebay-inquiry-${inquiryId}`,
-      direction: m.sender === userId ? "outbound" : "inbound",
+      direction: (sellerUsername && m.sender === sellerUsername) ? "outbound" : "inbound",
       sender_username: m.sender,
       body: m.message,
       is_read: m.isRead ?? false,
@@ -398,22 +404,47 @@ async function fetchMemberMessageExchanges(
 
       while ((match = exchangeRegex.exec(text)) !== null) {
         const block = match[1];
-        const get = (tag: string) => {
-          const m = new RegExp(`<${tag}>(.*?)<\/${tag}>`).exec(block);
-          return m?.[1] ?? "";
+        const getFrom = (src: string, tag: string) => {
+          const m = new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`).exec(src);
+          return m?.[1]?.trim() ?? "";
         };
+        const decodeBody = (s: string) =>
+          s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&").replace(/&#39;/g, "'").replace(/&quot;/g, '"');
 
-        const msgId = get("MessageID");
+        // Prefer Question sub-block for buyer fields; fall back to block root
+        const questionBlock = /<Question>([\s\S]*?)<\/Question>/.exec(block)?.[1] ?? block;
+
+        const msgId = getFrom(questionBlock, "MessageID") || getFrom(block, "MessageID");
         if (!msgId) continue;
 
-        const creationDate = get("CreationDate");
-        const sender = get("SenderID") || get("Sender");
-        const body = get("Body").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
-        const itemId = get("ItemID");
-        const subject = get("Subject") || null;
+        const creationDate = getFrom(questionBlock, "CreationDate") || getFrom(block, "CreationDate");
+        const sender = getFrom(questionBlock, "SenderID") || getFrom(questionBlock, "Sender") || getFrom(block, "SenderID");
+        const body = decodeBody(getFrom(questionBlock, "Body") || getFrom(block, "Body"));
+        const itemId = getFrom(questionBlock, "ItemID") || getFrom(block, "ItemID");
+        const subject = getFrom(questionBlock, "Subject") || getFrom(block, "Subject") || null;
         const itemTitle = subject;
-        const isRead = get("Read") === "true";
-        const status = get("MessageStatus");
+        const isRead = getFrom(questionBlock, "Read") === "true";
+        const status = getFrom(block, "MessageStatus");
+
+        // Extract seller Response sub-blocks
+        const responses: ParsedMemberMessage["responses"] = [];
+        const responseRegex = /<Response>([\s\S]*?)<\/Response>/g;
+        let respMatch;
+        while ((respMatch = responseRegex.exec(block)) !== null) {
+          const rBlock = respMatch[1];
+          const rMsgId = getFrom(rBlock, "MessageID");
+          const rSender = getFrom(rBlock, "SenderID") || getFrom(rBlock, "Sender");
+          const rBody = decodeBody(getFrom(rBlock, "Body"));
+          const rDate = getFrom(rBlock, "CreationDate");
+          if (rBody) {
+            responses.push({
+              messageId: rMsgId || `${msgId}-resp-${responses.length}`,
+              senderUsername: rSender,
+              body: rBody,
+              creationDate: rDate || creationDate,
+            });
+          }
+        }
 
         pageMessages.push({
           messageId: msgId,
@@ -425,6 +456,7 @@ async function fetchMemberMessageExchanges(
           subject,
           isRead,
           status,
+          responses,
         });
       }
 
@@ -486,6 +518,23 @@ async function fetchMemberMessages(userId: string): Promise<MessageThread[]> {
       updated_at: latest.creationDate,
     } satisfies MessageThread;
   });
+}
+
+// Helper: get seller's eBay username for direction detection
+async function getSellerEbayUsername(userId: string): Promise<string | null> {
+  try {
+    const { createClient } = await import("@/lib/supabase/server");
+    const supabase = await createClient();
+    const { data } = await supabase
+      .from("ebay_accounts")
+      .select("ebay_username")
+      .eq("user_id", userId)
+      .eq("is_active", true)
+      .maybeSingle();
+    return data?.ebay_username ?? null;
+  } catch {
+    return null;
+  }
 }
 
 // Helper: get raw access token for Trading API
@@ -569,16 +618,38 @@ export async function getEbayMessages(
         new Date(a.creationDate).getTime() - new Date(b.creationDate).getTime()
     );
 
-    return threadExchanges.map((exchange) => ({
-      id: `${threadId}-${exchange.messageId}`,
-      thread_id: threadId,
-      direction: "inbound",
-      sender_username: exchange.sender,
-      body: exchange.body,
-      is_read: exchange.isRead,
-      external_message_id: exchange.messageId,
-      created_at: exchange.creationDate,
-    }));
+    const allMessages: Message[] = [];
+    for (const exchange of threadExchanges) {
+      // Buyer's question
+      allMessages.push({
+        id: `${threadId}-q-${exchange.messageId}`,
+        thread_id: threadId,
+        direction: "inbound",
+        sender_username: exchange.sender,
+        body: exchange.body,
+        is_read: exchange.isRead,
+        external_message_id: exchange.messageId,
+        created_at: exchange.creationDate,
+      });
+      // Seller's responses within this exchange
+      for (const response of exchange.responses) {
+        allMessages.push({
+          id: `${threadId}-r-${response.messageId}`,
+          thread_id: threadId,
+          direction: "outbound",
+          sender_username: response.senderUsername || "You",
+          body: response.body,
+          is_read: true,
+          external_message_id: response.messageId,
+          created_at: response.creationDate,
+        });
+      }
+    }
+    // Sort chronologically
+    allMessages.sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+    return allMessages;
   }
 
   return [];
@@ -664,7 +735,15 @@ export async function sendEbayMessage(
     });
     const text = await res.text();
     if (!res.ok || text.includes("<Ack>Failure</Ack>")) {
-      throw new Error("eBay rejected this reply. Please send from eBay Messages.");
+      // Extract eBay's error message if available
+      const ebayError = /<LongMessage>([\s\S]*?)<\/LongMessage>/.exec(text)?.[1]
+        ?? /<ShortMessage>([\s\S]*?)<\/ShortMessage>/.exec(text)?.[1]
+        ?? "";
+      throw new Error(
+        ebayError
+          ? `eBay: ${ebayError}`
+          : "eBay rejected this reply. Please check eBay Messages to send directly."
+      );
     }
 
     const sent: Message = {
