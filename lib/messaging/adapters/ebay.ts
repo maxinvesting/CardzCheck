@@ -143,8 +143,12 @@ function mapInquiryToThread(
   };
 }
 
+type MemberMessageExchange = NonNullable<
+  NonNullable<EbayMemberMessagesResponse["MemberMessage"]>["MemberMessageExchange"]
+>[number];
+
 function mapMemberMessageToThread(
-  exchange: NonNullable<EbayMemberMessagesResponse["MemberMessage"]>["MemberMessageExchange"][0],
+  exchange: MemberMessageExchange,
   userId: string
 ): MessageThread | null {
   const q = exchange.Question;
