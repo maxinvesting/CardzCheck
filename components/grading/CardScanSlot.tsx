@@ -60,7 +60,10 @@ export default function CardScanSlot({
   const [error, setError] = useState<string | null>(null);
   const [slotState, setSlotState] = useState<SlotState>("idle");
 
-  // Refinement state
+  // Pre-scan notes (typed before upload — fed to AI as initial context)
+  const [preScanNotes, setPreScanNotes] = useState("");
+
+  // Refinement state (post-scan correction)
   const [refinePanelOpen, setRefinePanelOpen] = useState(false);
   const [refinementText, setRefinementText] = useState("");
   const [refining, setRefining] = useState(false);
@@ -80,6 +83,7 @@ export default function CardScanSlot({
     setAnalyzing(false);
     setShowAnimation(false);
     setError(null);
+    setPreScanNotes("");
     setRefinePanelOpen(false);
     setRefinementText("");
     setRefining(false);
@@ -141,6 +145,7 @@ export default function CardScanSlot({
             variation: card.variation,
             insert: card.insert,
           },
+          preScanNotes: preScanNotes.trim() || undefined,
         }),
       });
 
@@ -173,7 +178,7 @@ export default function CardScanSlot({
       setShowAnimation(false);
       notify("error");
     }
-  }, [notify]);
+  }, [notify, preScanNotes]);
 
   /**
    * Called by DualCardUploader once photos are uploaded and identified.
@@ -446,7 +451,29 @@ export default function CardScanSlot({
           )}
 
           {slotState === "idle" && (
-            <motion.div key="upload" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <motion.div key="upload" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
+              {/* Pre-scan notes — optional context the user types before uploading */}
+              <div className="rounded-xl border border-white/8 bg-white/[0.03] px-4 py-3 space-y-2">
+                <label className="flex items-center gap-1.5 text-[11px] font-semibold text-white/50 tracking-wide">
+                  <svg className="h-3 w-3 text-amber-400/70" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clipRule="evenodd"/>
+                  </svg>
+                  Your observations <span className="font-normal text-white/25">(optional)</span>
+                </label>
+                <textarea
+                  rows={2}
+                  maxLength={400}
+                  value={preScanNotes}
+                  onChange={(e) => setPreScanNotes(e.target.value)}
+                  placeholder="e.g. I think the centering is slightly off, possible scratch near top-left corner…"
+                  className="w-full resize-none rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/80 placeholder:text-white/20 focus:outline-none focus:ring-1 focus:ring-amber-500/30"
+                />
+                {preScanNotes.length > 0 && (
+                  <p className={`text-right text-[10px] ${preScanNotes.length > 360 ? "text-rose-400" : "text-white/20"}`}>
+                    {preScanNotes.length}/400
+                  </p>
+                )}
+              </div>
               <DualCardUploader
                 onIdentified={handleIdentified}
                 disabled={disabled || isAnalyzing}

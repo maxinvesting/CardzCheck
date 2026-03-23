@@ -72,6 +72,8 @@ export type ResolvedGradeEstimateImage = {
 export type GradeEstimateJobInput = {
   scanPhotos: GradeScanPhoto[];
   card?: GradeEstimatorCardInput | null;
+  /** User observations typed before the scan — injected into the AI prompt as initial context */
+  preScanNotes?: string;
   /** User-supplied correction text to inject into the grade model prompt */
   correctionText?: string;
   /** Skip OCR identity step — use priorIdentity instead (for refinement re-runs) */
@@ -88,7 +90,7 @@ export type GradeEstimateJobDependencies = {
     imageStats: ImageStats;
   }>;
   runOcrIdentity: (images: ResolvedGradeEstimateImage[]) => Promise<CardIdentity>;
-  runGradeModel: (images: ResolvedGradeEstimateImage[], identity?: CardIdentity | null, correctionText?: string) => Promise<string | null>;
+  runGradeModel: (images: ResolvedGradeEstimateImage[], identity?: CardIdentity | null, correctionText?: string, preScanNotes?: string) => Promise<string | null>;
   parseModelOutput: (options: {
     modelText: string | null;
     imageStats: ImageStats;
@@ -256,8 +258,8 @@ export async function runGradeEstimateJob(
   try {
     const resolvedImages = job.internal.resolvedImages ?? [];
     // Pass identity so the grade model can apply card-type context (chrome, vintage, etc.)
-    // Pass correctionText when refining so the user's feedback is injected into the prompt.
-    const modelText = await deps.runGradeModel(resolvedImages, job.partial.identity, input.correctionText);
+    // Pass correctionText when refining and preScanNotes when the user typed pre-scan context.
+    const modelText = await deps.runGradeModel(resolvedImages, job.partial.identity, input.correctionText, input.preScanNotes);
     job.internal.modelText = modelText;
     finishStep(job, "grade_model", gradeStart, "done");
   } catch (error) {
