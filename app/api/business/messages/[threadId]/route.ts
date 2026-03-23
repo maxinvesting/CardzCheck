@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import {
   getThread,
   getMessages,
-  getNegotiationAnalysis,
+  getNegotiationAnalysisForThread,
   sendMessage,
 } from "@/lib/messaging/service";
 
@@ -22,15 +22,16 @@ export async function GET(
 
   const { threadId } = await params;
 
-  const [thread, messages, negotiation] = await Promise.all([
-    getThread(user.id, threadId),
-    getMessages(user.id, threadId),
-    getNegotiationAnalysis(user.id, threadId),
-  ]);
+  const thread = await getThread(user.id, threadId);
 
   if (!thread) {
     return NextResponse.json({ error: "Thread not found" }, { status: 404 });
   }
+
+  const [messages, negotiation] = await Promise.all([
+    getMessages(user.id, threadId),
+    Promise.resolve(getNegotiationAnalysisForThread(thread)),
+  ]);
 
   return NextResponse.json({ thread, messages, negotiation });
 }

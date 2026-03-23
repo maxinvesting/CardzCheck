@@ -271,6 +271,13 @@ export default function BusinessMessagesView({
       {/* Stats bar */}
       <MessagingStatsBar stats={stats} loading={false} />
 
+      {/* Assistant disclosure */}
+      <div className="rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-2.5">
+        <p className="text-xs text-amber-800">
+          Draft tools can help prepare replies, but you are responsible for final review and sending.
+        </p>
+      </div>
+
       {/* Outlook-style control row */}
       <div className="rounded-2xl border border-[var(--biz-border)] bg-white px-4 py-3 shadow-sm">
         <div className="flex flex-wrap items-center gap-2">

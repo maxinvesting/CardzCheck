@@ -17,6 +17,41 @@ import type {
   ThreadStatus,
 } from "../types";
 
+type CacheEntry<T> = {
+  value: T;
+  expiresAt: number;
+};
+
+const THREADS_TTL_MS = 30_000;
+const MEMBER_EXCHANGES_TTL_MS = 20_000;
+const memberExchangeCache = new Map<string, CacheEntry<ParsedMemberMessage[]>>();
+const threadCache = new Map<string, CacheEntry<MessageThread[]>>();
+
+function getCachedValue<T>(cache: Map<string, CacheEntry<T>>, key: string): T | null {
+  const entry = cache.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) {
+    cache.delete(key);
+    return null;
+  }
+  return entry.value;
+}
+
+function setCachedValue<T>(
+  cache: Map<string, CacheEntry<T>>,
+  key: string,
+  value: T,
+  ttlMs: number
+): T {
+  cache.set(key, { value, expiresAt: Date.now() + ttlMs });
+  return value;
+}
+
+function invalidateUserMessagingCaches(userId: string) {
+  memberExchangeCache.delete(userId);
+  threadCache.delete(userId);
+}
+
 // ─── Post Order API types ─────────────────────────────────────────────────────
 
 interface EbayInquiry {
@@ -73,6 +108,18 @@ interface EbayMemberMessagesResponse {
     }>;
   };
   Ack?: string;
+}
+
+interface ParsedMemberMessage {
+  messageId: string;
+  sender: string;
+  body: string;
+  creationDate: string;
+  itemId: string | null;
+  itemTitle: string | null;
+  subject: string | null;
+  isRead: boolean;
+  status: string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -143,49 +190,87 @@ function mapInquiryToThread(
   };
 }
 
-type MemberMessageExchange = NonNullable<
-  NonNullable<EbayMemberMessagesResponse["MemberMessage"]>["MemberMessageExchange"]
->[number];
+function slugPart(value: string): string {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
 
-function mapMemberMessageToThread(
-  exchange: MemberMessageExchange,
-  userId: string
-): MessageThread | null {
-  const q = exchange.Question;
-  if (!q) return null;
+function normalizeSubject(subject: string | null): string | null {
+  if (!subject) return null;
+  const normalized = subject
+    .toLowerCase()
+    .replace(/^(re|fw|fwd)\s*:\s*/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return normalized.length > 0 ? normalized : null;
+}
 
-  const now = new Date().toISOString();
-  const isRead = q.IsRead === "true";
+function memberThreadBaseId(
+  sender: string,
+  itemId: string | null,
+  subject: string | null
+): string {
+  const senderKey = slugPart(sender || "unknown-buyer");
+  if (itemId) {
+    const itemKey = slugPart(itemId);
+    return `ebay-msg-thread-${senderKey}-${itemKey}`;
+  }
+  const subjectKey = slugPart(normalizeSubject(subject) || "no-subject");
+  return `ebay-msg-thread-${senderKey}-subject-${subjectKey}`;
+}
 
-  return {
-    id: `ebay-msg-${q.MessageID}`,
-    user_id: userId,
-    platform: "ebay",
-    external_thread_id: q.MessageID,
-    buyer_username: q.Sender,
-    buyer_display_name: q.Sender,
-    business_customer_id: null,
-    listing_id: q.ItemID ?? null,
-    inventory_item_id: null,
-    item_title: q.ItemTitle ?? null,
-    item_image_url: null,
-    status: exchange.MessageStatus === "Unanswered" ? "needs_response" : "awaiting_buyer",
-    category: "question",
-    unread_count: isRead ? 0 : 1,
-    last_message_at: exchange.CreationDate ?? q.CreationDate,
-    last_message_preview: q.Body.slice(0, 120),
-    ai_suggested_reply: null,
-    suggested_action: null,
-    offer_amount_cents: null,
-    listing_price_cents: null,
-    cost_basis_cents: null,
-    fee_percent: null,
-    estimated_net_cents: null,
-    estimated_profit_cents: null,
-    suggested_counter_cents: null,
-    created_at: q.CreationDate,
-    updated_at: exchange.CreationDate ?? q.CreationDate ?? now,
-  };
+function dayStamp(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "unknown";
+  const y = d.getUTCFullYear();
+  const m = `${d.getUTCMonth() + 1}`.padStart(2, "0");
+  const day = `${d.getUTCDate()}`.padStart(2, "0");
+  return `${y}${m}${day}`;
+}
+
+const MEMBER_THREAD_SPLIT_MS = 14 * 24 * 60 * 60 * 1000;
+
+function buildMemberThreadBuckets(exchanges: ParsedMemberMessage[]) {
+  const groupedByBase = new Map<string, ParsedMemberMessage[]>();
+  for (const exchange of exchanges) {
+    const base = memberThreadBaseId(exchange.sender, exchange.itemId, exchange.subject);
+    const arr = groupedByBase.get(base) ?? [];
+    arr.push(exchange);
+    groupedByBase.set(base, arr);
+  }
+
+  const buckets = new Map<string, ParsedMemberMessage[]>();
+  for (const [base, entries] of groupedByBase.entries()) {
+    const sorted = [...entries].sort(
+      (a, b) =>
+        new Date(a.creationDate).getTime() - new Date(b.creationDate).getTime()
+    );
+    let chunkIndex = 0;
+    let chunk: ParsedMemberMessage[] = [];
+
+    for (const message of sorted) {
+      if (chunk.length === 0) {
+        chunk = [message];
+        continue;
+      }
+      const prev = chunk[chunk.length - 1];
+      const gapMs =
+        new Date(message.creationDate).getTime() -
+        new Date(prev.creationDate).getTime();
+      if (gapMs > MEMBER_THREAD_SPLIT_MS) {
+        const first = chunk[0];
+        buckets.set(`${base}-${dayStamp(first.creationDate)}-${chunkIndex}`, chunk);
+        chunkIndex += 1;
+        chunk = [message];
+      } else {
+        chunk.push(message);
+      }
+    }
+    if (chunk.length > 0) {
+      const first = chunk[0];
+      buckets.set(`${base}-${dayStamp(first.creationDate)}-${chunkIndex}`, chunk);
+    }
+  }
+  return buckets;
 }
 
 // ─── Post Order API calls ─────────────────────────────────────────────────────
@@ -253,12 +338,17 @@ async function fetchInquiryMessages(
 
 // ─── Trading API: GetMemberMessages ──────────────────────────────────────────
 
-async function fetchMemberMessages(userId: string): Promise<MessageThread[]> {
+async function fetchMemberMessageExchanges(
+  userId: string
+): Promise<ParsedMemberMessage[]> {
+  const cached = getCachedValue(memberExchangeCache, userId);
+  if (cached) return cached;
+
   try {
     const token = await getValidTokenForUser(userId);
     if (!token) return [];
 
-    const exchanges: MessageThread[] = [];
+    const exchanges: ParsedMemberMessage[] = [];
     const pageSize = 50;
     const maxPages = 4;
     const startCreation = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
@@ -302,7 +392,7 @@ async function fetchMemberMessages(userId: string): Promise<MessageThread[]> {
       }
 
       // Extract exchanges using simple regex (avoids XML parser dependency)
-      const pageThreads: MessageThread[] = [];
+      const pageMessages: ParsedMemberMessage[] = [];
       const exchangeRegex = /<MemberMessageExchange>([\s\S]*?)<\/MemberMessageExchange>/g;
       let match;
 
@@ -320,50 +410,82 @@ async function fetchMemberMessages(userId: string): Promise<MessageThread[]> {
         const sender = get("SenderID") || get("Sender");
         const body = get("Body").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
         const itemId = get("ItemID");
-        const itemTitle = get("Subject") || null;
+        const subject = get("Subject") || null;
+        const itemTitle = subject;
         const isRead = get("Read") === "true";
         const status = get("MessageStatus");
 
-        pageThreads.push({
-          id: `ebay-msg-${msgId}`,
-          user_id: userId,
-          platform: "ebay",
-          external_thread_id: msgId,
-          buyer_username: sender,
-          buyer_display_name: sender,
-          business_customer_id: null,
-          listing_id: itemId || null,
-          inventory_item_id: null,
-          item_title: itemTitle,
-          item_image_url: null,
-          status: status === "Unanswered" ? "needs_response" : "awaiting_buyer",
-          category: "question",
-          unread_count: isRead ? 0 : 1,
-          last_message_at: creationDate,
-          last_message_preview: body.slice(0, 120) || null,
-          ai_suggested_reply: null,
-          suggested_action: null,
-          offer_amount_cents: null,
-          listing_price_cents: null,
-          cost_basis_cents: null,
-          fee_percent: null,
-          estimated_net_cents: null,
-          estimated_profit_cents: null,
-          suggested_counter_cents: null,
-          created_at: creationDate,
-          updated_at: creationDate,
+        pageMessages.push({
+          messageId: msgId,
+          sender,
+          body,
+          creationDate,
+          itemId: itemId || null,
+          itemTitle,
+          subject,
+          isRead,
+          status,
         });
       }
 
-      exchanges.push(...pageThreads);
-      if (pageThreads.length < pageSize) break;
+      exchanges.push(...pageMessages);
+      if (pageMessages.length < pageSize) break;
     }
 
-    return exchanges;
+    return setCachedValue(
+      memberExchangeCache,
+      userId,
+      exchanges,
+      MEMBER_EXCHANGES_TTL_MS
+    );
   } catch (err) {
     console.warn("[ebay/messaging] GetMemberMessages error:", err);
     return [];
   }
+}
+
+async function fetchMemberMessages(userId: string): Promise<MessageThread[]> {
+  const exchanges = await fetchMemberMessageExchanges(userId);
+  const buckets = buildMemberThreadBuckets(exchanges);
+  return Array.from(buckets.entries()).map(([threadId, items]) => {
+    items.sort(
+      (a, b) =>
+        new Date(a.creationDate).getTime() - new Date(b.creationDate).getTime()
+    );
+    const latest = items[items.length - 1];
+    const unreadCount = items.filter((item) => !item.isRead).length;
+    const hasUnanswered = items.some((item) => item.status === "Unanswered");
+
+    return {
+      id: threadId,
+      user_id: userId,
+      platform: "ebay",
+      external_thread_id: latest.messageId,
+      buyer_username: latest.sender,
+      buyer_display_name: latest.sender,
+      business_customer_id: null,
+      listing_id: latest.itemId,
+      inventory_item_id: null,
+      item_title: latest.itemTitle,
+      item_image_url: null,
+      status: hasUnanswered ? "needs_response" : "awaiting_buyer",
+      category: "question",
+      unread_count: unreadCount,
+      last_message_at: latest.creationDate,
+      last_message_preview: latest.body.slice(0, 120) || null,
+      ai_suggested_reply: null,
+      suggested_action: null,
+      offer_amount_cents: null,
+      listing_price_cents: null,
+      cost_basis_cents: null,
+      fee_percent: null,
+      estimated_net_cents: null,
+      estimated_profit_cents: null,
+      suggested_counter_cents: null,
+      created_at: items[0].creationDate,
+      updated_at: latest.creationDate,
+    } satisfies MessageThread;
+  });
 }
 
 // Helper: get raw access token for Trading API
@@ -403,6 +525,9 @@ export async function isEbayConnected(userId: string): Promise<boolean> {
 // ─── Public adapter API ───────────────────────────────────────────────────────
 
 export async function getEbayThreads(userId: string): Promise<MessageThread[]> {
+  const cached = getCachedValue(threadCache, userId);
+  if (cached) return cached;
+
   // Fetch from both APIs in parallel; combine results
   const [inquiries, memberMessages] = await Promise.all([
     fetchPostOrderInquiries(userId),
@@ -411,9 +536,10 @@ export async function getEbayThreads(userId: string): Promise<MessageThread[]> {
 
   // Deduplicate by id, sort newest first
   const all = [...memberMessages, ...inquiries];
-  return all.sort(
+  const sorted = all.sort(
     (a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime()
   );
+  return setCachedValue(threadCache, userId, sorted, THREADS_TTL_MS);
 }
 
 export async function getEbayThread(
@@ -434,23 +560,28 @@ export async function getEbayMessages(
     return fetchInquiryMessages(userId, inquiryId);
   }
 
-  // Trading API messages — reconstruct from thread data
-  const thread = await getEbayThread(userId, threadId);
-  if (!thread || !thread.last_message_preview) return [];
+  // Trading API messages — group by stable buyer/listing thread id
+  if (threadId.startsWith("ebay-msg-")) {
+    const exchanges = await fetchMemberMessageExchanges(userId);
+    const buckets = buildMemberThreadBuckets(exchanges);
+    const threadExchanges = [...(buckets.get(threadId) ?? [])].sort(
+      (a, b) =>
+        new Date(a.creationDate).getTime() - new Date(b.creationDate).getTime()
+    );
 
-  // Return the preview message as the message body
-  return [
-    {
-      id: `${threadId}-0`,
+    return threadExchanges.map((exchange) => ({
+      id: `${threadId}-${exchange.messageId}`,
       thread_id: threadId,
       direction: "inbound",
-      sender_username: thread.buyer_username,
-      body: thread.last_message_preview,
-      is_read: thread.unread_count === 0,
-      external_message_id: thread.external_thread_id,
-      created_at: thread.last_message_at,
-    },
-  ];
+      sender_username: exchange.sender,
+      body: exchange.body,
+      is_read: exchange.isRead,
+      external_message_id: exchange.messageId,
+      created_at: exchange.creationDate,
+    }));
+  }
+
+  return [];
 }
 
 export async function sendEbayMessage(
@@ -480,7 +611,7 @@ export async function sendEbayMessage(
       throw new Error(`Unable to send message to eBay (${res.status}). ${errorBody}`.trim());
     }
 
-    return {
+    const sent: Message = {
       id: `${threadId}-${Date.now()}`,
       thread_id: threadId,
       direction: "outbound",
@@ -490,6 +621,8 @@ export async function sendEbayMessage(
       external_message_id: null,
       created_at: new Date().toISOString(),
     };
+    invalidateUserMessagingCaches(userId);
+    return sent;
   }
 
   // Trading API member message reply
@@ -534,7 +667,7 @@ export async function sendEbayMessage(
       throw new Error("eBay rejected this reply. Please send from eBay Messages.");
     }
 
-    return {
+    const sent: Message = {
       id: `${threadId}-${Date.now()}`,
       thread_id: threadId,
       direction: "outbound",
@@ -544,6 +677,8 @@ export async function sendEbayMessage(
       external_message_id: null,
       created_at: new Date().toISOString(),
     };
+    invalidateUserMessagingCaches(userId);
+    return sent;
   }
 
   throw new Error(

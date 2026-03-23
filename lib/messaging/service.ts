@@ -18,7 +18,6 @@ import {
   getEbayThreads,
   getEbayThread,
   getEbayMessages,
-  getEbayMessagingStats,
   sendEbayMessage,
 } from "./adapters/ebay";
 import { computeNegotiationAnalysis } from "./mock-data";
@@ -29,7 +28,8 @@ export async function getMessagingStats(
   userId: string
 ): Promise<MessagingStats> {
   try {
-    return await getEbayMessagingStats(userId);
+    const threads = await getEbayThreads(userId);
+    return buildStatsFromThreads(threads);
   } catch {
     return {
       total_threads: 0,
@@ -52,6 +52,54 @@ export async function getThreads(
     threads = [];
   }
 
+  switch (filter) {
+    case "unread":
+      return threads.filter((t) => t.unread_count > 0);
+    case "needs_response":
+      return threads.filter((t) => t.status === "needs_response");
+    case "offers":
+      return threads.filter((t) => t.category === "offer");
+    case "resolved":
+      return threads.filter((t) => t.status === "resolved");
+    case "archived":
+      return threads.filter((t) => t.status === "archived");
+    default:
+      return threads;
+  }
+}
+
+function buildStatsFromThreads(threads: MessageThread[]): MessagingStats {
+  const unreadCount = threads.filter((t) => t.unread_count > 0).length;
+  const needsResponse = threads.filter((t) => t.status === "needs_response").length;
+  const openOffers = threads.filter((t) => t.category === "offer").length;
+  return {
+    total_threads: threads.length,
+    unread_count: unreadCount,
+    needs_response: needsResponse,
+    open_offers: openOffers,
+    avg_response_time_hours: null,
+  };
+}
+
+export async function getMessagingOverview(
+  userId: string,
+  filter: ThreadFilter = "all"
+): Promise<{ stats: MessagingStats; threads: MessageThread[] }> {
+  try {
+    const allThreads = await getEbayThreads(userId);
+    const stats = buildStatsFromThreads(allThreads);
+    const threads = applyThreadFilter(allThreads, filter);
+    return { stats, threads };
+  } catch {
+    const stats = buildStatsFromThreads([]);
+    return { stats, threads: [] };
+  }
+}
+
+function applyThreadFilter(
+  threads: MessageThread[],
+  filter: ThreadFilter
+): MessageThread[] {
   switch (filter) {
     case "unread":
       return threads.filter((t) => t.unread_count > 0);
@@ -107,6 +155,13 @@ export async function getNegotiationAnalysis(
   threadId: string
 ): Promise<NegotiationAnalysis | null> {
   const thread = await getThread(userId, threadId);
+  if (!thread) return null;
+  return computeNegotiationAnalysis(thread);
+}
+
+export function getNegotiationAnalysisForThread(
+  thread: MessageThread | null
+): NegotiationAnalysis | null {
   if (!thread) return null;
   return computeNegotiationAnalysis(thread);
 }

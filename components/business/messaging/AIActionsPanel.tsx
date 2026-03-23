@@ -3,7 +3,7 @@
 import type { MessageThread } from "@/lib/messaging/types";
 
 const TONE_BUTTONS: { tone: string; label: string; icon: string }[] = [
-  { tone: "professional", label: "Generate Reply", icon: "M13 10V3L4 14h7v7l9-11h-7z" },
+  { tone: "professional", label: "Generate Reply", icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h6l4 4v12a2 2 0 01-2 2z" },
   { tone: "friendly", label: "Make Friendly", icon: "M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" },
   { tone: "firm", label: "Make Firm", icon: "M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" },
   { tone: "negotiate", label: "Counter Offer", icon: "M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" },
@@ -30,12 +30,13 @@ export default function AIActionsPanel({
 }: Props) {
   return (
     <div className="border-t border-[var(--biz-border)] bg-[#FAFBFC] px-5 py-3">
-      <div className="flex items-center justify-between mb-3">
+      <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <svg className="w-4 h-4 text-[var(--biz-primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+          <svg className="h-4 w-4 text-[var(--biz-primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h6l2 2h6a2 2 0 012 2v2H3V5z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9h18v10a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
           </svg>
-          <span className="text-xs font-semibold text-[var(--biz-text)]">AI Reply Assistant</span>
+          <span className="text-xs font-semibold text-[var(--biz-text)]">Reply Draft Tools</span>
         </div>
         <button
           type="button"
@@ -58,7 +59,7 @@ export default function AIActionsPanel({
             disabled={replyLoading}
             className="flex items-center gap-1.5 rounded-md border border-[var(--biz-border)] bg-white px-2.5 py-1.5 text-[11px] font-medium text-[var(--biz-text)] transition-colors hover:bg-[#F3F4F6] hover:border-[var(--biz-primary)] disabled:opacity-50"
           >
-            <svg className="w-3 h-3 text-[var(--biz-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="h-3 w-3 text-[var(--biz-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={icon} />
             </svg>
             {label}
@@ -74,7 +75,7 @@ export default function AIActionsPanel({
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
             </svg>
-            Generating reply...
+            Drafting response...
           </div>
         </div>
       )}
@@ -90,7 +91,7 @@ export default function AIActionsPanel({
               onClick={() => onUseReply(generatedReply)}
               className="rounded-md bg-[var(--biz-primary)] px-3 py-1.5 text-[11px] font-semibold text-white transition-colors hover:bg-[#096b40]"
             >
-              Use This Reply
+              Use Draft
             </button>
             <button
               type="button"

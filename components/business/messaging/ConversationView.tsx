@@ -171,10 +171,11 @@ export default function ConversationView({
                 : "border border-[var(--biz-border)] text-[var(--biz-muted)] hover:bg-[#F3F4F6] hover:text-[var(--biz-text)]"
             }`}
           >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h6l2 2h6a2 2 0 012 2v2H3V5z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9h18v10a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
             </svg>
-            AI Assist
+            Draft Tools
           </button>
           {thread.ai_suggested_reply && !showAI && (
             <button
@@ -182,7 +183,7 @@ export default function ConversationView({
               onClick={() => handleUseReply(thread.ai_suggested_reply!)}
               className="text-[11px] text-[var(--biz-primary)] hover:underline"
             >
-              Use suggested reply
+              Use draft suggestion
             </button>
           )}
         </div>
