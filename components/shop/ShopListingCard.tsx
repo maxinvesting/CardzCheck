@@ -7,6 +7,7 @@ import {
   buildListingTitle,
   formatUsd,
   getCmvDeltaPresentation,
+  getEbayStorefrontPresentation,
   getGradeChipClass,
   getShippingLabel,
 } from "./shop-formatters";
@@ -15,6 +16,7 @@ interface ShopListingCardProps {
   listing?: ShopListing;
   skeleton?: boolean;
   onQuickView?: (listing: ShopListing) => void;
+  isBusiness?: boolean;
 }
 
 function ShopListingCardSkeleton() {
@@ -39,6 +41,7 @@ function ShopListingCardSkeleton() {
 export default function ShopListingCard({
   listing,
   skeleton = false,
+  isBusiness = false,
 }: ShopListingCardProps) {
   if (skeleton || !listing) {
     return <ShopListingCardSkeleton />;
@@ -53,6 +56,8 @@ export default function ShopListingCard({
   const detailHref = `/shop/${listing.id}`;
 
   const cmv = getCmvDeltaPresentation(listing.price, listing.cmv);
+  const ebay = getEbayStorefrontPresentation(listing.price, listing.ebay_storefront_price);
+  const businessPrice = isBusiness ? listing.price * 0.99 : null;
   const shippingLine = `${getShippingLabel(listing.shipping_cost)} • Ships in 1-2 days`;
 
   const normalizedGrade = (listing.grade ?? "").toLowerCase();
@@ -124,18 +129,66 @@ export default function ShopListingCard({
           </div>
         )}
 
-        <div className="space-y-1">
-          <div className="text-2xl font-semibold tracking-tight text-slate-900 tabular-nums">
-            {formatUsd(Number(listing.price), 2)}
-          </div>
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-5">
-            {cmv.cmvLabel ? (
-              <span className="text-slate-600">{cmv.cmvLabel}</span>
-            ) : (
-              <span className="text-slate-500">Est. Market Value unavailable</span>
+        <div className="space-y-1.5">
+          {/* Subscriber price */}
+          <div className="flex items-baseline gap-2">
+            <div className="text-2xl font-semibold tracking-tight text-slate-900 tabular-nums">
+              {formatUsd(Number(listing.price), 2)}
+            </div>
+            {ebay.hasEbaySavings && ebay.ebayPrice && (
+              <div className="text-sm text-slate-400 line-through tabular-nums">
+                {ebay.ebayPrice}
+              </div>
             )}
-            <span className={cmv.deltaClass}>{cmv.deltaLabel}</span>
           </div>
+
+          {/* eBay storefront savings — primary when available */}
+          {ebay.hasEbaySavings && ebay.savingsAmount && ebay.savingsPct !== null ? (
+            <div className="space-y-0.5">
+              <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs">
+                <span className="font-medium text-emerald-600">
+                  Save {ebay.savingsAmount} ({ebay.savingsPct}%)
+                </span>
+                <span className="text-slate-400">vs. our eBay storefront</span>
+              </div>
+              {/* Optional: comps note — secondary, shown only when supported */}
+              {cmv.cmvLabel && cmv.deltaLabel.includes("below market") && (
+                <div className="text-[11px] text-emerald-600">
+                  Also below market comps
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Fallback: show CMV info when no eBay storefront price set */
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-5">
+              {cmv.cmvLabel ? (
+                <span className="text-slate-500">{cmv.cmvLabel}</span>
+              ) : null}
+              <span className={cmv.deltaClass}>{cmv.deltaLabel}</span>
+            </div>
+          )}
+
+          {/* Business price — shown when user has business tier */}
+          {businessPrice !== null && (
+            <div className="flex items-center gap-2 rounded-lg bg-cyan-50 px-2.5 py-1.5">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-cyan-700">
+                Your price
+              </span>
+              <span className="text-sm font-semibold tabular-nums text-cyan-800">
+                {formatUsd(businessPrice, 2)}
+              </span>
+              <span className="text-[11px] text-cyan-600">
+                (1% business discount)
+              </span>
+            </div>
+          )}
+
+          {/* Subscriber badge */}
+          {!isBusiness && (
+            <div className="inline-flex items-center gap-1 rounded-full bg-cyan-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-cyan-700">
+              Subscriber Price
+            </div>
+          )}
         </div>
 
         {listing.description && (
