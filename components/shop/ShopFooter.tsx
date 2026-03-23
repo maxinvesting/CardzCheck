@@ -38,8 +38,9 @@ export default function ShopFooter() {
               CardzCheck Deals
             </h4>
             <p className="text-sm text-slate-600">
-              Curated inventory drops from CardzCheck, priced competitively and
-              often below market comps.
+              Subscriber-exclusive deals from CardzCheck inventory, priced at
+              least 13.5% below our eBay storefront. Sold directly by
+              CardzCheck — not a peer-to-peer marketplace.
             </p>
           </div>
 

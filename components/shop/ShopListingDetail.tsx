@@ -4,11 +4,14 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useShopCart } from "@/contexts/ShopCartContext";
 import ShopListingCard from "./ShopListingCard";
+import ShopListingAiInsight from "./ShopListingAiInsight";
+import ShopListingGradeAnalysis from "./ShopListingGradeAnalysis";
 import type { ShopListing } from "@/types/shop";
 import {
   buildListingTitle,
   formatUsd,
   getCmvDeltaPresentation,
+  getEbayStorefrontPresentation,
   getGradeChipClass,
   getShippingLabel,
 } from "./shop-formatters";
@@ -71,6 +74,7 @@ export default function ShopListingDetail({
 
   const title = buildListingTitle(listing);
   const cmv = getCmvDeltaPresentation(listing.price, listing.cmv);
+  const ebay = getEbayStorefrontPresentation(listing.price, listing.ebay_storefront_price);
   const shippingLabel = getShippingLabel(listing.shipping_cost);
 
   const normalizedGrade = (listing.grade ?? "").toLowerCase();
@@ -78,6 +82,11 @@ export default function ShopListingDetail({
     normalizedGrade.length > 0 &&
     !normalizedGrade.includes("raw") &&
     !normalizedGrade.includes("ungraded");
+  const isRaw =
+    listing.condition === "raw" ||
+    normalizedGrade === "" ||
+    normalizedGrade.includes("raw") ||
+    normalizedGrade.includes("ungraded");
 
   const pricingTransparencyText = (() => {
     if (listing.cmv == null || listing.cmv <= 0) {
@@ -185,9 +194,21 @@ export default function ShopListingDetail({
 
           <div className="space-y-5 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="flex items-center justify-between gap-3">
-              <p className="text-3xl font-semibold tabular-nums text-slate-900">
-                {formatUsd(Number(listing.price), 2)}
-              </p>
+              <div>
+                <div className="flex items-baseline gap-2">
+                  <p className="text-3xl font-semibold tabular-nums text-slate-900">
+                    {formatUsd(Number(listing.price), 2)}
+                  </p>
+                  {ebay.hasEbaySavings && ebay.ebayPrice && (
+                    <p className="text-base text-slate-400 line-through tabular-nums">
+                      {ebay.ebayPrice}
+                    </p>
+                  )}
+                </div>
+                <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-cyan-50 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-cyan-700">
+                  Subscriber Price
+                </div>
+              </div>
               <span
                 className={`rounded-full px-2.5 py-1 text-xs font-medium ${getGradeChipClass(
                   listing.grade
@@ -197,24 +218,46 @@ export default function ShopListingDetail({
               </span>
             </div>
 
+            {/* Savings vs eBay storefront — primary pricing context */}
+            {ebay.hasEbaySavings && ebay.savingsAmount && ebay.savingsPct !== null ? (
+              <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-4">
+                <p className="text-xs uppercase tracking-[0.16em] text-emerald-700">
+                  Subscriber savings
+                </p>
+                <div className="mt-2 flex flex-wrap items-baseline gap-2">
+                  <span className="text-lg font-semibold text-emerald-700 tabular-nums">
+                    Save {ebay.savingsAmount} ({ebay.savingsPct}%)
+                  </span>
+                  <span className="text-sm text-emerald-600">vs. our eBay storefront</span>
+                </div>
+                {/* Secondary: comps note, only when supported */}
+                {cmv.cmvLabel && cmv.deltaLabel.includes("below market") && (
+                  <p className="mt-1.5 text-xs text-emerald-600">
+                    Also priced below estimated market comps ({cmv.cmvLabel})
+                  </p>
+                )}
+              </div>
+            ) : (
+              /* Fallback: show CMV when no eBay storefront price set */
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">
+                  Est. Market Value
+                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+                  <span className="text-slate-700">
+                    {cmv.cmvLabel ?? "Est. Market Value currently unavailable"}
+                  </span>
+                  <span className={cmv.deltaClass}>{cmv.deltaLabel}</span>
+                </div>
+                <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                  {pricingTransparencyText}
+                </p>
+              </div>
+            )}
+
             <div className="space-y-1 text-sm text-slate-600">
               {listing.cert_number && <p>Certification #{listing.cert_number}</p>}
               <p>{shippingLabel} • Ships in 1-2 days</p>
-            </div>
-
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">
-                Est. Market Value (CMV)
-              </p>
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-                <span className="text-slate-700">
-                  {cmv.cmvLabel ?? "Est. Market Value currently unavailable"}
-                </span>
-                <span className={cmv.deltaClass}>{cmv.deltaLabel}</span>
-              </div>
-              <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                {pricingTransparencyText}
-              </p>
             </div>
 
             {listing.ebay_comp_url && (
@@ -230,6 +273,7 @@ export default function ShopListingDetail({
                 </svg>
               </a>
             )}
+
 
             <div className="flex items-center gap-3">
               <label htmlFor="listing-qty" className="text-sm text-slate-600">
@@ -306,6 +350,10 @@ export default function ShopListingDetail({
           {listing.description && (
             <p className="text-sm leading-relaxed text-slate-600">{listing.description}</p>
           )}
+
+          <ShopListingAiInsight listingId={listing.id} />
+
+          {isRaw && <ShopListingGradeAnalysis listingId={listing.id} />}
         </section>
       </div>
 

@@ -4,6 +4,7 @@ import {
   createShopCheckoutSession,
   type ShopCheckoutItem,
 } from "@/lib/stripe";
+import { hasActiveBusinessTier } from "@/lib/subscription-tier";
 
 export async function POST(request: NextRequest) {
   try {
@@ -28,24 +29,21 @@ export async function POST(request: NextRequest) {
     // Check if the current user has an active business subscription (free shipping perk)
     let businessFreeShipping = false;
     try {
-      const authClient = await createClient();
-      const { data: { user: authUser } } = await authClient.auth.getUser();
-      if (authUser) {
-        const { data: sub } = await authClient
+      const userClient = await createClient();
+      const { data: { user } } = await userClient.auth.getUser();
+      if (user) {
+        const serviceClient = await createServiceClient();
+        const { data: sub } = await serviceClient
           .from("subscriptions")
           .select("tier, status, current_period_end")
-          .eq("user_id", authUser.id)
+          .eq("user_id", user.id)
           .single();
-        if (
-          sub?.tier === "business" &&
-          sub?.status === "active" &&
-          (!sub.current_period_end || new Date(sub.current_period_end) > new Date())
-        ) {
+        if (hasActiveBusinessTier(sub)) {
           businessFreeShipping = true;
         }
       }
     } catch {
-      // Not logged in or subscription check failed — no perk applied
+      // Non-fatal — continue without perk on error
     }
 
     const supabase = await createServiceClient();
@@ -115,7 +113,7 @@ export async function POST(request: NextRequest) {
       checkoutItems,
       `${appUrl}/shop/order-confirmed?session_id={CHECKOUT_SESSION_ID}`,
       `${appUrl}/shop`,
-      businessFreeShipping
+      { businessFreeShipping }
     );
 
     if (!session.url) {
@@ -125,7 +123,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({ url: session.url });
+    return NextResponse.json({
+      url: session.url,
+    });
   } catch (error) {
     console.error("Shop checkout error:", error);
     return NextResponse.json(

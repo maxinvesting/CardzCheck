@@ -865,6 +865,8 @@ export interface EbayAccountStatus {
   access_token_expires_at: string | null;
   /** eBay store subscription tier — drives the FVF rate in EbayProfitEngine. */
   store_tier: import("@/lib/business/EbayProfitEngine").StoreTier;
+  /** OAuth scopes granted by the user — used to detect scope gaps (e.g. buy.order.readonly). */
+  scopes: string[];
 }
 
 // =============================================

@@ -169,30 +169,39 @@ export interface ShopCheckoutItem {
   grade: string;
 }
 
+export interface ShopCheckoutOptions {
+  /** Business plan members get free shipping on all Deals orders. */
+  businessFreeShipping?: boolean;
+}
+
 /**
  * Create a Stripe Checkout session for shop (one-time payment).
  * Prices and shipping come from DB; never trust client.
+ * Business subscribers get free shipping applied server-side via options.businessFreeShipping.
  */
 export async function createShopCheckoutSession(
   items: ShopCheckoutItem[],
   successUrl: string,
   cancelUrl: string,
-  businessFreeShipping = false
+  options?: ShopCheckoutOptions
 ) {
   const stripe = getStripeClient();
+  const freeShipping = options?.businessFreeShipping ?? false;
 
   const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
 
   for (const item of items) {
-    const unitPrice = item.price + item.shippingCost;
+    const unitPrice = item.price + (freeShipping ? 0 : item.shippingCost);
     lineItems.push({
       price_data: {
         currency: "usd",
         product_data: {
           name: `${item.playerName} ${item.year} ${item.setBrand} - ${item.grade}`,
-          description:
-            item.quantity > 1 ? `Quantity: ${item.quantity}` : undefined,
-          images: item.quantity > 1 ? undefined : undefined,
+          description: freeShipping
+            ? "Business plan: free shipping applied"
+            : item.quantity > 1
+            ? `Quantity: ${item.quantity}`
+            : undefined,
         },
         unit_amount: Math.round(unitPrice * 100), // cents
       },
@@ -212,7 +221,7 @@ export async function createShopCheckoutSession(
     metadata: {
       listingIds: JSON.stringify(listingIds),
       quantities: JSON.stringify(quantities),
-      businessFreeShipping: businessFreeShipping ? "true" : "false",
+      businessFreeShipping: freeShipping ? "true" : "false",
     },
   });
 
