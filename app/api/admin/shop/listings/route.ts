@@ -277,6 +277,10 @@ export async function PATCH(request: NextRequest) {
     filtered.notes = asNullableString(updates.notes);
   }
 
+  if ("ebay_comp_url" in updates) {
+    filtered.ebay_comp_url = asNullableString(updates.ebay_comp_url);
+  }
+
   if ("quantity" in updates) {
     const quantity = asNumber(updates.quantity);
     if (quantity != null) filtered.quantity = Math.max(0, Math.trunc(quantity));
@@ -407,6 +411,8 @@ export async function POST(request: NextRequest) {
   if (ebaySoldComp != null) insert.ebay_sold_comp = ebaySoldComp;
   if (description != null) insert.description = description;
   if (notes != null) insert.notes = notes;
+  const ebayCompUrl = asNullableString(body?.ebay_comp_url);
+  if (ebayCompUrl != null) insert.ebay_comp_url = ebayCompUrl;
 
   if (hasOwn(body, "condition")) {
     insert.condition = asCondition(body?.condition, "graded");

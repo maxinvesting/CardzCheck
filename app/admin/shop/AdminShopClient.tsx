@@ -48,6 +48,7 @@ interface ListingFormState {
   is_premium: boolean;
   tags: string;
   notes: string;
+  ebay_comp_url: string;
 }
 
 const GRADE_OPTIONS: GradeOption[] = [
@@ -81,6 +82,7 @@ const DEFAULT_FORM: ListingFormState = {
   is_premium: false,
   tags: "",
   notes: "",
+  ebay_comp_url: "",
 };
 
 function createImageId() {
@@ -145,6 +147,7 @@ function listingToForm(listing: ShopListing): ListingFormState {
     is_premium: Boolean(listing.is_premium),
     tags: Array.isArray(listing.tags) ? listing.tags.join(", ") : "",
     notes: listing.notes || "",
+    ebay_comp_url: listing.ebay_comp_url || "",
   };
 }
 
@@ -207,6 +210,7 @@ function formToPayload(form: ListingFormState) {
     is_premium: form.is_premium,
     tags: parseTags(form.tags),
     notes: form.notes.trim() || null,
+    ebay_comp_url: form.ebay_comp_url.trim() || null,
   };
 }
 
@@ -617,6 +621,20 @@ function ListingFields({
           }
           className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-white"
         />
+      </label>
+
+      <label className="space-y-1 text-sm md:col-span-2">
+        <span className="text-gray-300">eBay Comp URL</span>
+        <input
+          type="url"
+          value={form.ebay_comp_url}
+          onChange={(event) =>
+            setForm((previous) => ({ ...previous, ebay_comp_url: event.target.value }))
+          }
+          className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-white"
+          placeholder="https://www.ebay.com/itm/..."
+        />
+        <span className="text-xs text-gray-500">Direct link to a sold eBay listing used as a pricing comp. Shown publicly as &ldquo;View eBay comp →&rdquo;.</span>
       </label>
 
       <label className="flex items-center gap-2 rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-300">

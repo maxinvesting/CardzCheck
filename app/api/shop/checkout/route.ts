@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import {
   createShopCheckoutSession,
   type ShopCheckoutItem,
@@ -23,6 +23,29 @@ export async function POST(request: NextRequest) {
         { error: "Checkout is not configured" },
         { status: 503 }
       );
+    }
+
+    // Check if the current user has an active business subscription (free shipping perk)
+    let businessFreeShipping = false;
+    try {
+      const authClient = await createClient();
+      const { data: { user: authUser } } = await authClient.auth.getUser();
+      if (authUser) {
+        const { data: sub } = await authClient
+          .from("subscriptions")
+          .select("tier, status, current_period_end")
+          .eq("user_id", authUser.id)
+          .single();
+        if (
+          sub?.tier === "business" &&
+          sub?.status === "active" &&
+          (!sub.current_period_end || new Date(sub.current_period_end) > new Date())
+        ) {
+          businessFreeShipping = true;
+        }
+      }
+    } catch {
+      // Not logged in or subscription check failed — no perk applied
     }
 
     const supabase = await createServiceClient();
@@ -80,7 +103,7 @@ export async function POST(request: NextRequest) {
         listingId: listing.id,
         quantity,
         price: Number(listing.price),
-        shippingCost: Number(listing.shipping_cost ?? 4),
+        shippingCost: businessFreeShipping ? 0 : Number(listing.shipping_cost ?? 4),
         playerName: String(listing.player_name),
         year: Number(listing.year),
         setBrand: String(listing.set_brand),
@@ -91,7 +114,8 @@ export async function POST(request: NextRequest) {
     const session = await createShopCheckoutSession(
       checkoutItems,
       `${appUrl}/shop/order-confirmed?session_id={CHECKOUT_SESSION_ID}`,
-      `${appUrl}/shop`
+      `${appUrl}/shop`,
+      businessFreeShipping
     );
 
     if (!session.url) {

@@ -7,6 +7,7 @@ import CompactMetricsRow from "@/components/dashboard/CompactMetricsRow";
 import CompactTopPerformers from "@/components/dashboard/CompactTopPerformers";
 import CompactQuickActions from "@/components/dashboard/CompactQuickActions";
 import ActivityFeed from "@/components/dashboard/ActivityFeed";
+import LoyaltyPerksWidget from "@/components/dashboard/LoyaltyPerksWidget";
 import { Surface } from "@/components/ui/Surface";
 import AddCardModalNew from "@/components/AddCardModalNew";
 import PaywallModal from "@/components/PaywallModal";
@@ -161,6 +162,11 @@ export default function DashboardPage() {
           <Surface>
             <CompactMetricsRow items={collectionItems} loading={loading} />
           </Surface>
+        </section>
+
+        {/* Loyalty perks progress */}
+        <section className="mb-4 sm:mb-6">
+          <LoyaltyPerksWidget />
         </section>
 
         {/* Secondary layout: performers, activity, quick actions */}

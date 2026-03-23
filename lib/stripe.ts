@@ -176,7 +176,8 @@ export interface ShopCheckoutItem {
 export async function createShopCheckoutSession(
   items: ShopCheckoutItem[],
   successUrl: string,
-  cancelUrl: string
+  cancelUrl: string,
+  businessFreeShipping = false
 ) {
   const stripe = getStripeClient();
 
@@ -211,6 +212,7 @@ export async function createShopCheckoutSession(
     metadata: {
       listingIds: JSON.stringify(listingIds),
       quantities: JSON.stringify(quantities),
+      businessFreeShipping: businessFreeShipping ? "true" : "false",
     },
   });
 
