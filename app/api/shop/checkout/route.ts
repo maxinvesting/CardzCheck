@@ -26,8 +26,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Determine if user has business tier for discount
-    let businessDiscountPct = 0;
+    // Check if the current user has an active business subscription (free shipping perk)
+    let businessFreeShipping = false;
     try {
       const userClient = await createClient();
       const { data: { user } } = await userClient.auth.getUser();
@@ -39,11 +39,11 @@ export async function POST(request: NextRequest) {
           .eq("user_id", user.id)
           .single();
         if (hasActiveBusinessTier(sub)) {
-          businessDiscountPct = 1;
+          businessFreeShipping = true;
         }
       }
     } catch {
-      // Non-fatal — continue without discount on error
+      // Non-fatal — continue without perk on error
     }
 
     const supabase = await createServiceClient();
@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
         listingId: listing.id,
         quantity,
         price: Number(listing.price),
-        shippingCost: Number(listing.shipping_cost ?? 4),
+        shippingCost: businessFreeShipping ? 0 : Number(listing.shipping_cost ?? 4),
         playerName: String(listing.player_name),
         year: Number(listing.year),
         setBrand: String(listing.set_brand),
@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
       checkoutItems,
       `${appUrl}/shop/order-confirmed?session_id={CHECKOUT_SESSION_ID}`,
       `${appUrl}/shop`,
-      { businessDiscountPct }
+      { businessFreeShipping }
     );
 
     if (!session.url) {
@@ -125,7 +125,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       url: session.url,
-      businessDiscountPct,
     });
   } catch (error) {
     console.error("Shop checkout error:", error);

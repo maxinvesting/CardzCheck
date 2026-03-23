@@ -23,6 +23,7 @@ export interface ShopListing {
   ebay_storefront_price: number | null;
   cost_basis?: number | null; // admin only, excluded from public API
   ebay_sold_comp?: number | null; // admin only — reference eBay sold comp price
+  ebay_comp_url?: string | null; // direct URL to an eBay sold listing used as a comp
   quantity: number;
   quantity_sold: number;
   image_urls: string[];

@@ -144,7 +144,7 @@ export default function ShopStorefront({
   }, []);
 
   const isEmpty = initialListings.length === 0;
-  const heroBadges = ["Subscriber Exclusive", "13.5% Below Our eBay", "Curated by CardzCheck"];
+  const heroBadges = ["Below Comps", "eBay-Verified Pricing", "New Drops"];
 
   return (
     <div className="space-y-0">
@@ -234,6 +234,29 @@ export default function ShopStorefront({
               </button>
             )}
           </div>
+        </div>
+      </section>
+
+      {/* Business free-shipping banner */}
+      {isBusiness && (
+        <section className="border-b border-cyan-100 bg-cyan-50 px-4 py-2.5">
+          <div className="mx-auto flex max-w-7xl items-center gap-2 text-sm text-cyan-800">
+            <svg className="h-4 w-4 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
+            </svg>
+            <span>
+              <strong className="font-semibold">Business plan active</strong> — free shipping applied to every order automatically.
+            </span>
+          </div>
+        </section>
+      )}
+
+      {/* Loyalty perks info */}
+      <section className="border-b border-slate-100 bg-slate-50 px-4 py-3">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-6 gap-y-1 text-xs text-slate-500">
+          <span className="font-medium text-slate-700">Repeat Buyer Perks</span>
+          <span>Every 15th purchase = <strong className="text-slate-700">5% off</strong> your order (15, 30, 45…)</span>
+          {isBusiness && <span>Business members also get <strong className="text-slate-700">free shipping</strong> on all orders.</span>}
         </div>
       </section>
 

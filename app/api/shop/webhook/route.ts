@@ -44,6 +44,7 @@ export async function POST(request: NextRequest) {
 
   const listingIdsJson = session.metadata?.listingIds;
   const quantitiesJson = session.metadata?.quantities;
+  const businessFreeShipping = session.metadata?.businessFreeShipping === "true";
 
   if (!listingIdsJson || !quantitiesJson) {
     console.error("Shop webhook: missing listingIds or quantities in metadata");
@@ -136,7 +137,7 @@ export async function POST(request: NextRequest) {
     }
 
     const price = Number(listing.price);
-    const shipCost = Number(listing.shipping_cost ?? 4);
+    const shipCost = businessFreeShipping ? 0 : Number(listing.shipping_cost ?? 4);
 
     orderItems.push({
       listing_id: listing.id,

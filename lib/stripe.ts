@@ -170,14 +170,14 @@ export interface ShopCheckoutItem {
 }
 
 export interface ShopCheckoutOptions {
-  /** Additional percentage discount applied to item price (not shipping). E.g. 1 = 1% off. */
-  businessDiscountPct?: number;
+  /** Business plan members get free shipping on all Deals orders. */
+  businessFreeShipping?: boolean;
 }
 
 /**
  * Create a Stripe Checkout session for shop (one-time payment).
  * Prices and shipping come from DB; never trust client.
- * Pass businessDiscountPct to apply the business-tier discount server-side.
+ * Business subscribers get free shipping applied server-side via options.businessFreeShipping.
  */
 export async function createShopCheckoutSession(
   items: ShopCheckoutItem[],
@@ -186,21 +186,19 @@ export async function createShopCheckoutSession(
   options?: ShopCheckoutOptions
 ) {
   const stripe = getStripeClient();
-  const discountMultiplier = 1 - (options?.businessDiscountPct ?? 0) / 100;
+  const freeShipping = options?.businessFreeShipping ?? false;
 
   const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
 
   for (const item of items) {
-    const discountedItemPrice = item.price * discountMultiplier;
-    const unitPrice = discountedItemPrice + item.shippingCost;
-    const isBusinessDiscount = (options?.businessDiscountPct ?? 0) > 0;
+    const unitPrice = item.price + (freeShipping ? 0 : item.shippingCost);
     lineItems.push({
       price_data: {
         currency: "usd",
         product_data: {
           name: `${item.playerName} ${item.year} ${item.setBrand} - ${item.grade}`,
-          description: isBusinessDiscount
-            ? `Business tier discount applied (${options!.businessDiscountPct}% off item price)`
+          description: freeShipping
+            ? "Business plan: free shipping applied"
             : item.quantity > 1
             ? `Quantity: ${item.quantity}`
             : undefined,
@@ -223,7 +221,7 @@ export async function createShopCheckoutSession(
     metadata: {
       listingIds: JSON.stringify(listingIds),
       quantities: JSON.stringify(quantities),
-      businessDiscountPct: String(options?.businessDiscountPct ?? 0),
+      businessFreeShipping: freeShipping ? "true" : "false",
     },
   });
 

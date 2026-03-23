@@ -260,6 +260,21 @@ export default function ShopListingDetail({
               <p>{shippingLabel} • Ships in 1-2 days</p>
             </div>
 
+            {listing.ebay_comp_url && (
+              <a
+                href={listing.ebay_comp_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-sm text-cyan-700 hover:text-cyan-600 hover:underline"
+              >
+                View eBay comp
+                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                </svg>
+              </a>
+            )}
+
+
             <div className="flex items-center gap-3">
               <label htmlFor="listing-qty" className="text-sm text-slate-600">
                 Qty
