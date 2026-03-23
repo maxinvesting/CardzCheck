@@ -193,10 +193,14 @@ function mapMemberMessageToThread(
 async function fetchPostOrderInquiries(
   userId: string
 ): Promise<MessageThread[]> {
+  const statuses = ["OPEN", "AWAITING_SELLER_RESPONSE", "CLOSED", "CS_CLOSED"];
+  const merged = new Map<string, MessageThread>();
+
+  for (const status of statuses) {
   try {
     const res = await ebayFetch(
       userId,
-      "/post-order/v2/inquiry?status=OPEN&limit=50",
+        `/post-order/v2/inquiry?status=${encodeURIComponent(status)}&limit=50`,
       { headers: { "X-EBAY-C-ENDUSERCTX": `userId=${userId}` } }
     );
 
@@ -205,13 +209,19 @@ async function fetchPostOrderInquiries(
       console.info("[ebay/messaging] Post Order scope not granted, skipping inquiries");
       return [];
     }
-    if (!res.ok) return [];
+      if (!res.ok) continue;
 
     const data = (await res.json()) as EbayInquiryListResponse;
-    return (data.inquiries ?? []).map((inq) => mapInquiryToThread(inq, userId));
-  } catch {
-    return [];
+      for (const inquiry of data.inquiries ?? []) {
+        const mapped = mapInquiryToThread(inquiry, userId);
+        merged.set(mapped.id, mapped);
+      }
+    } catch {
+      continue;
+    }
   }
+
+  return Array.from(merged.values());
 }
 
 async function fetchInquiryMessages(
@@ -248,95 +258,105 @@ async function fetchMemberMessages(userId: string): Promise<MessageThread[]> {
     const token = await getValidTokenForUser(userId);
     if (!token) return [];
 
-    const xml = `<?xml version="1.0" encoding="utf-8"?>
+    const exchanges: MessageThread[] = [];
+    const pageSize = 50;
+    const maxPages = 4;
+    const startCreation = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
+    const endCreation = new Date().toISOString();
+
+    for (let page = 1; page <= maxPages; page++) {
+      const xml = `<?xml version="1.0" encoding="utf-8"?>
 <GetMemberMessagesRequest xmlns="urn:ebay:apis:eBLBaseComponents">
   <RequesterCredentials>
     <eBayAuthToken>${token}</eBayAuthToken>
   </RequesterCredentials>
   <MailMessageType>All</MailMessageType>
-  <MessageStatus>Unanswered</MessageStatus>
-  <StartCreationTime>${new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()}</StartCreationTime>
-  <EndCreationTime>${new Date().toISOString()}</EndCreationTime>
+  <StartCreationTime>${startCreation}</StartCreationTime>
+  <EndCreationTime>${endCreation}</EndCreationTime>
   <Pagination>
-    <EntriesPerPage>25</EntriesPerPage>
-    <PageNumber>1</PageNumber>
+    <EntriesPerPage>${pageSize}</EntriesPerPage>
+    <PageNumber>${page}</PageNumber>
   </Pagination>
 </GetMemberMessagesRequest>`;
 
-    const res = await fetch("https://api.ebay.com/ws/api.dll", {
-      method: "POST",
-      headers: {
-        "X-EBAY-API-SITEID": "0",
-        "X-EBAY-API-COMPATIBILITY-LEVEL": "967",
-        "X-EBAY-API-CALL-NAME": "GetMemberMessages",
-        "Content-Type": "text/xml",
-      },
-      body: xml,
-    });
-
-    if (!res.ok) return [];
-
-    // Parse XML response minimally — extract key fields
-    const text = await res.text();
-
-    // Check for Failure ack
-    if (text.includes("<Ack>Failure</Ack>")) {
-      console.info("[ebay/messaging] GetMemberMessages failed (scope likely not granted)");
-      return [];
-    }
-
-    // Extract exchanges using simple regex (avoids XML parser dependency)
-    const exchanges: MessageThread[] = [];
-    const exchangeRegex = /<MemberMessageExchange>([\s\S]*?)<\/MemberMessageExchange>/g;
-    let match;
-
-    while ((match = exchangeRegex.exec(text)) !== null) {
-      const block = match[1];
-      const get = (tag: string) => {
-        const m = new RegExp(`<${tag}>(.*?)<\/${tag}>`).exec(block);
-        return m?.[1] ?? "";
-      };
-
-      const msgId = get("MessageID");
-      if (!msgId) continue;
-
-      const creationDate = get("CreationDate");
-      const sender = get("SenderID") || get("Sender");
-      const body = get("Body").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
-      const itemId = get("ItemID");
-      const itemTitle = get("Subject") || null;
-      const isRead = get("Read") === "true";
-      const status = get("MessageStatus");
-
-      exchanges.push({
-        id: `ebay-msg-${msgId}`,
-        user_id: userId,
-        platform: "ebay",
-        external_thread_id: msgId,
-        buyer_username: sender,
-        buyer_display_name: sender,
-        business_customer_id: null,
-        listing_id: itemId || null,
-        inventory_item_id: null,
-        item_title: itemTitle,
-        item_image_url: null,
-        status: status === "Unanswered" ? "needs_response" : "awaiting_buyer",
-        category: "question",
-        unread_count: isRead ? 0 : 1,
-        last_message_at: creationDate,
-        last_message_preview: body.slice(0, 120) || null,
-        ai_suggested_reply: null,
-        suggested_action: null,
-        offer_amount_cents: null,
-        listing_price_cents: null,
-        cost_basis_cents: null,
-        fee_percent: null,
-        estimated_net_cents: null,
-        estimated_profit_cents: null,
-        suggested_counter_cents: null,
-        created_at: creationDate,
-        updated_at: creationDate,
+      const res = await fetch("https://api.ebay.com/ws/api.dll", {
+        method: "POST",
+        headers: {
+          "X-EBAY-API-SITEID": "0",
+          "X-EBAY-API-COMPATIBILITY-LEVEL": "967",
+          "X-EBAY-API-CALL-NAME": "GetMemberMessages",
+          "Content-Type": "text/xml",
+        },
+        body: xml,
       });
+
+      if (!res.ok) break;
+
+      // Parse XML response minimally — extract key fields
+      const text = await res.text();
+
+      // Check for Failure ack
+      if (text.includes("<Ack>Failure</Ack>")) {
+        console.info("[ebay/messaging] GetMemberMessages failed (scope likely not granted)");
+        return [];
+      }
+
+      // Extract exchanges using simple regex (avoids XML parser dependency)
+      const pageThreads: MessageThread[] = [];
+      const exchangeRegex = /<MemberMessageExchange>([\s\S]*?)<\/MemberMessageExchange>/g;
+      let match;
+
+      while ((match = exchangeRegex.exec(text)) !== null) {
+        const block = match[1];
+        const get = (tag: string) => {
+          const m = new RegExp(`<${tag}>(.*?)<\/${tag}>`).exec(block);
+          return m?.[1] ?? "";
+        };
+
+        const msgId = get("MessageID");
+        if (!msgId) continue;
+
+        const creationDate = get("CreationDate");
+        const sender = get("SenderID") || get("Sender");
+        const body = get("Body").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+        const itemId = get("ItemID");
+        const itemTitle = get("Subject") || null;
+        const isRead = get("Read") === "true";
+        const status = get("MessageStatus");
+
+        pageThreads.push({
+          id: `ebay-msg-${msgId}`,
+          user_id: userId,
+          platform: "ebay",
+          external_thread_id: msgId,
+          buyer_username: sender,
+          buyer_display_name: sender,
+          business_customer_id: null,
+          listing_id: itemId || null,
+          inventory_item_id: null,
+          item_title: itemTitle,
+          item_image_url: null,
+          status: status === "Unanswered" ? "needs_response" : "awaiting_buyer",
+          category: "question",
+          unread_count: isRead ? 0 : 1,
+          last_message_at: creationDate,
+          last_message_preview: body.slice(0, 120) || null,
+          ai_suggested_reply: null,
+          suggested_action: null,
+          offer_amount_cents: null,
+          listing_price_cents: null,
+          cost_basis_cents: null,
+          fee_percent: null,
+          estimated_net_cents: null,
+          estimated_profit_cents: null,
+          suggested_counter_cents: null,
+          created_at: creationDate,
+          updated_at: creationDate,
+        });
+      }
+
+      exchanges.push(...pageThreads);
+      if (pageThreads.length < pageSize) break;
     }
 
     return exchanges;
@@ -431,6 +451,104 @@ export async function getEbayMessages(
       created_at: thread.last_message_at,
     },
   ];
+}
+
+export async function sendEbayMessage(
+  userId: string,
+  threadId: string,
+  body: string
+): Promise<Message> {
+  const content = body.trim();
+  if (!content) {
+    throw new Error("Message cannot be empty.");
+  }
+
+  // Post Order inquiry message
+  if (threadId.startsWith("ebay-inquiry-")) {
+    const inquiryId = threadId.replace("ebay-inquiry-", "");
+    const res = await ebayFetch(
+      userId,
+      `/post-order/v2/inquiry/${inquiryId}/send_message`,
+      {
+        method: "POST",
+        body: JSON.stringify({ message: { content } }),
+      }
+    );
+
+    if (!res.ok) {
+      const errorBody = await res.text().catch(() => "");
+      throw new Error(`Unable to send message to eBay (${res.status}). ${errorBody}`.trim());
+    }
+
+    return {
+      id: `${threadId}-${Date.now()}`,
+      thread_id: threadId,
+      direction: "outbound",
+      sender_username: "You",
+      body: content,
+      is_read: true,
+      external_message_id: null,
+      created_at: new Date().toISOString(),
+    };
+  }
+
+  // Trading API member message reply
+  if (threadId.startsWith("ebay-msg-")) {
+    const thread = await getEbayThread(userId, threadId);
+    const token = await getValidTokenForUser(userId);
+    if (!thread || !thread.external_thread_id || !token) {
+      throw new Error("Unable to resolve thread details for sending.");
+    }
+    if (!thread.listing_id) {
+      throw new Error("This thread is missing listing context required for eBay reply.");
+    }
+
+    const xml = `<?xml version="1.0" encoding="utf-8"?>
+<AddMemberMessageRTQRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <RequesterCredentials>
+    <eBayAuthToken>${token}</eBayAuthToken>
+  </RequesterCredentials>
+  <ItemID>${thread.listing_id}</ItemID>
+  <MemberMessage>
+    <Body>${content
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")}</Body>
+    <ParentMessageID>${thread.external_thread_id}</ParentMessageID>
+    <RecipientID>${thread.buyer_username}</RecipientID>
+  </MemberMessage>
+</AddMemberMessageRTQRequest>`;
+
+    const res = await fetch("https://api.ebay.com/ws/api.dll", {
+      method: "POST",
+      headers: {
+        "X-EBAY-API-SITEID": "0",
+        "X-EBAY-API-COMPATIBILITY-LEVEL": "967",
+        "X-EBAY-API-CALL-NAME": "AddMemberMessageRTQ",
+        "Content-Type": "text/xml",
+      },
+      body: xml,
+    });
+    const text = await res.text();
+    if (!res.ok || text.includes("<Ack>Failure</Ack>")) {
+      throw new Error("eBay rejected this reply. Please send from eBay Messages.");
+    }
+
+    return {
+      id: `${threadId}-${Date.now()}`,
+      thread_id: threadId,
+      direction: "outbound",
+      sender_username: "You",
+      body: content,
+      is_read: true,
+      external_message_id: null,
+      created_at: new Date().toISOString(),
+    };
+  }
+
+  throw new Error(
+    "This conversation type does not support direct send from CardzCheck yet. Reply in eBay Messages."
+  );
 }
 
 export async function getEbayMessagingStats(

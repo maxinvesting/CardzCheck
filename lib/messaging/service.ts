@@ -19,6 +19,7 @@ import {
   getEbayThread,
   getEbayMessages,
   getEbayMessagingStats,
+  sendEbayMessage,
 } from "./adapters/ebay";
 import { computeNegotiationAnalysis } from "./mock-data";
 
@@ -89,6 +90,14 @@ export async function getMessages(
   } catch {
     return [];
   }
+}
+
+export async function sendMessage(
+  userId: string,
+  threadId: string,
+  body: string
+): Promise<Message> {
+  return sendEbayMessage(userId, threadId, body);
 }
 
 // ─── Negotiation ─────────────────────────────────────────────────────────────

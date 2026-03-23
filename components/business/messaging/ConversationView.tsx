@@ -23,6 +23,10 @@ interface Props {
   onGenerateReply: (tone: string) => void;
   generatedReply: string | null;
   replyLoading: boolean;
+  onSendMessage: (body: string) => Promise<boolean>;
+  sendLoading: boolean;
+  sendError: string | null;
+  onUpdateThreadStatus: (threadId: string, status: MessageThread["status"]) => void;
 }
 
 export default function ConversationView({
@@ -32,6 +36,10 @@ export default function ConversationView({
   onGenerateReply,
   generatedReply,
   replyLoading,
+  onSendMessage,
+  sendLoading,
+  sendError,
+  onUpdateThreadStatus,
 }: Props) {
   const [replyText, setReplyText] = useState("");
   const [showAI, setShowAI] = useState(false);
@@ -41,10 +49,19 @@ export default function ConversationView({
     setShowAI(false);
   }
 
+  async function handleSend() {
+    const body = replyText.trim();
+    if (!body || sendLoading) return;
+    const ok = await onSendMessage(body);
+    if (ok) {
+      setReplyText("");
+    }
+  }
+
   return (
     <div className="flex h-full flex-col">
       {/* Thread header */}
-      <div className="border-b border-[var(--biz-border)] px-5 py-4">
+      <div className="border-b border-[var(--biz-border)] bg-gradient-to-r from-white to-emerald-50/60 px-5 py-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
@@ -65,6 +82,20 @@ export default function ConversationView({
             )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => onUpdateThreadStatus(thread.id, "resolved")}
+              className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100"
+            >
+              Mark Resolved
+            </button>
+            <button
+              type="button"
+              onClick={() => onUpdateThreadStatus(thread.id, "archived")}
+              className="rounded-md border border-gray-200 bg-white px-2 py-1 text-[11px] font-medium text-[var(--biz-muted)] hover:bg-[#F9FAFB]"
+            >
+              Archive
+            </button>
             <StatusChip status={thread.status} />
           </div>
         </div>
@@ -76,7 +107,7 @@ export default function ConversationView({
       )}
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-5 py-4">
+      <div className="flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top_left,#ecfdf5_0%,#ffffff_35%)] px-5 py-4">
         <div className="mx-auto max-w-2xl space-y-4">
           {messages.map((msg) => {
             const isOutbound = msg.direction === "outbound";
@@ -86,10 +117,10 @@ export default function ConversationView({
                 className={`flex ${isOutbound ? "justify-end" : "justify-start"}`}
               >
                 <div
-                  className={`max-w-[80%] rounded-xl px-4 py-3 ${
+                  className={`max-w-[80%] rounded-2xl px-4 py-3 shadow-sm ${
                     isOutbound
-                      ? "bg-[var(--biz-primary)] text-white"
-                      : "border border-[var(--biz-border)] bg-[#F9FAFB] text-[var(--biz-text)]"
+                      ? "bg-gradient-to-br from-emerald-500 to-emerald-700 text-white"
+                      : "border border-[var(--biz-border)] bg-white text-[var(--biz-text)]"
                   }`}
                 >
                   <div className="flex items-center gap-2 mb-1">
@@ -129,7 +160,7 @@ export default function ConversationView({
       )}
 
       {/* Reply composer */}
-      <div className="border-t border-[var(--biz-border)] px-5 py-3">
+      <div className="border-t border-[var(--biz-border)] bg-white px-5 py-3">
         <div className="flex items-center gap-2 mb-2">
           <button
             type="button"
@@ -165,15 +196,20 @@ export default function ConversationView({
           />
           <button
             type="button"
-            disabled={!replyText.trim()}
-            className="self-end rounded-lg bg-[var(--biz-primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#096b40] disabled:opacity-40"
+            onClick={handleSend}
+            disabled={!replyText.trim() || sendLoading}
+            className="self-end rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-700 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all hover:brightness-110 disabled:opacity-40"
           >
-            Send
+            {sendLoading ? "Sending..." : "Send"}
           </button>
         </div>
-        <p className="mt-1.5 text-[10px] text-[var(--biz-muted)]">
-          Messages are not sent to eBay in demo mode. Connect your eBay account to enable live messaging.
-        </p>
+        {sendError ? (
+          <p className="mt-1.5 text-[11px] text-red-600">{sendError}</p>
+        ) : (
+          <p className="mt-1.5 text-[10px] text-[var(--biz-muted)]">
+            Replies send directly when supported for this conversation type.
+          </p>
+        )}
       </div>
     </div>
   );

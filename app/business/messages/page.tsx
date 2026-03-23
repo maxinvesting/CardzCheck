@@ -105,14 +105,14 @@ function BusinessMessagesContent() {
     return (
       <AuthenticatedLayout>
         <main className="mx-auto max-w-7xl px-4 py-8">
-          <h1 className="text-2xl font-bold text-[var(--biz-text)] mb-8">Messages</h1>
+          <h1 className="text-2xl font-bold text-[var(--biz-text)] mb-8">Customer Service</h1>
           <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--biz-border)] bg-white dark:bg-gray-900 py-20 text-center">
             <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-red-50">
               <svg className="h-8 w-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
               </svg>
             </div>
-            <h2 className="mb-2 text-lg font-semibold text-[var(--biz-text)]">Unable to load messages</h2>
+            <h2 className="mb-2 text-lg font-semibold text-[var(--biz-text)]">Unable to load customer service inbox</h2>
             <p className="mb-6 max-w-sm text-sm text-[var(--biz-muted)]">
               {msgError ?? "Something went wrong. Try refreshing or reconnecting your eBay account."}
             </p>
@@ -142,7 +142,7 @@ function BusinessMessagesContent() {
     return (
       <AuthenticatedLayout>
         <main className="mx-auto max-w-7xl px-4 py-8">
-          <h1 className="text-2xl font-bold text-[var(--biz-text)] mb-8">Messages</h1>
+          <h1 className="text-2xl font-bold text-[var(--biz-text)] mb-8">Customer Service</h1>
           <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--biz-border)] bg-white dark:bg-gray-900 py-20 text-center">
             <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#F0FDF4]">
               <svg className="h-8 w-8 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
