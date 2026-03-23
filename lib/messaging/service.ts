@@ -1,11 +1,10 @@
 /**
  * Messaging service — business logic layer.
  *
- * Currently backed by mock data. When eBay messaging API is integrated,
- * swap the data source in each function without changing the interface.
+ * Fetches real eBay messages via the eBay adapter.
+ * If the user has no connected eBay account, returns empty results.
  *
- * Platform-specific logic (eBay, Whatnot, etc.) should live in
- * dedicated adapter files (e.g., lib/messaging/adapters/ebay.ts).
+ * Platform-specific logic lives in lib/messaging/adapters/.
  */
 
 import type {
@@ -16,72 +15,89 @@ import type {
   NegotiationAnalysis,
 } from "./types";
 import {
-  getMockStats,
-  getMockThreads,
-  getMockThread,
-  getMockMessages,
-  computeNegotiationAnalysis,
-} from "./mock-data";
+  getEbayThreads,
+  getEbayThread,
+  getEbayMessages,
+  getEbayMessagingStats,
+} from "./adapters/ebay";
+import { computeNegotiationAnalysis } from "./mock-data";
 
 // ─── Thread queries ──────────────────────────────────────────────────────────
 
 export async function getMessagingStats(
-  _userId: string
+  userId: string
 ): Promise<MessagingStats> {
-  return getMockStats();
+  try {
+    return await getEbayMessagingStats(userId);
+  } catch {
+    return {
+      total_threads: 0,
+      unread_count: 0,
+      needs_response: 0,
+      open_offers: 0,
+      avg_response_time_hours: null,
+    };
+  }
 }
 
 export async function getThreads(
-  _userId: string,
+  userId: string,
   filter: ThreadFilter = "all"
 ): Promise<MessageThread[]> {
-  let threads = getMockThreads();
+  let threads: MessageThread[];
+  try {
+    threads = await getEbayThreads(userId);
+  } catch {
+    threads = [];
+  }
 
   switch (filter) {
     case "unread":
-      threads = threads.filter((t) => t.unread_count > 0);
-      break;
+      return threads.filter((t) => t.unread_count > 0);
     case "needs_response":
-      threads = threads.filter((t) => t.status === "needs_response");
-      break;
+      return threads.filter((t) => t.status === "needs_response");
     case "offers":
-      threads = threads.filter((t) => t.category === "offer");
-      break;
+      return threads.filter((t) => t.category === "offer");
     case "resolved":
-      threads = threads.filter((t) => t.status === "resolved");
-      break;
+      return threads.filter((t) => t.status === "resolved");
     case "archived":
-      threads = threads.filter((t) => t.status === "archived");
-      break;
-    // "all" — no filter
+      return threads.filter((t) => t.status === "archived");
+    default:
+      return threads;
   }
-
-  return threads;
 }
 
 export async function getThread(
-  _userId: string,
+  userId: string,
   threadId: string
 ): Promise<MessageThread | null> {
-  return getMockThread(threadId);
+  try {
+    return await getEbayThread(userId, threadId);
+  } catch {
+    return null;
+  }
 }
 
 // ─── Message queries ─────────────────────────────────────────────────────────
 
 export async function getMessages(
-  _userId: string,
+  userId: string,
   threadId: string
 ): Promise<Message[]> {
-  return getMockMessages(threadId);
+  try {
+    return await getEbayMessages(userId, threadId);
+  } catch {
+    return [];
+  }
 }
 
 // ─── Negotiation ─────────────────────────────────────────────────────────────
 
 export async function getNegotiationAnalysis(
-  _userId: string,
+  userId: string,
   threadId: string
 ): Promise<NegotiationAnalysis | null> {
-  const thread = getMockThread(threadId);
+  const thread = await getThread(userId, threadId);
   if (!thread) return null;
   return computeNegotiationAnalysis(thread);
 }
@@ -99,7 +115,6 @@ export type AIReplyTone =
 
 const TONE_TEMPLATES: Record<AIReplyTone, (thread: MessageThread) => string> = {
   professional: (t) =>
-    t.ai_suggested_reply ??
     `Thank you for your message regarding ${t.item_title ?? "this item"}. I'll look into this and get back to you shortly.`,
   friendly: (t) =>
     `Hey ${t.buyer_display_name ?? t.buyer_username}! Thanks for reaching out about ${t.item_title ?? "this item"}. Happy to help — let me know what you need!`,
@@ -122,11 +137,11 @@ const TONE_TEMPLATES: Record<AIReplyTone, (thread: MessageThread) => string> = {
 };
 
 export async function generateAIReply(
-  _userId: string,
+  userId: string,
   threadId: string,
   tone: AIReplyTone
 ): Promise<string> {
-  const thread = getMockThread(threadId);
+  const thread = await getThread(userId, threadId);
   if (!thread) return "Unable to generate reply — thread not found.";
   return TONE_TEMPLATES[tone](thread);
 }

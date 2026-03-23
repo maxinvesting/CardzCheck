@@ -29,11 +29,14 @@ const EBAY_IDENTITY_URL =
     : "https://apiz.ebay.com/commerce/identity/v1/user/";
 
 export const EBAY_SCOPES = [
+  "https://api.ebay.com/oauth/api_scope",
   "https://api.ebay.com/oauth/api_scope/sell.inventory",
   "https://api.ebay.com/oauth/api_scope/sell.fulfillment",
   "https://api.ebay.com/oauth/api_scope/sell.fulfillment.readonly",
   "https://api.ebay.com/oauth/api_scope/sell.account.readonly",
   "https://api.ebay.com/oauth/api_scope/commerce.identity.readonly",
+  "https://api.ebay.com/oauth/api_scope/sell.postorder",
+  "https://api.ebay.com/oauth/api_scope/sell.postorder.readonly",
 ].join(" ");
 
 function getCredentials(): { clientId: string; clientSecret: string; redirectUri: string } {
