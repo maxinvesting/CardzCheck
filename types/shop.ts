@@ -35,6 +35,35 @@ export interface ShopListing {
   shipping_cost: number;
   notes: string | null;
   tags: string[];
+  // AI-generated cache fields (populated lazily via /api/shop/listings/[id]/ai-insight and grade-analysis)
+  ai_insight: string | null;
+  ai_insight_at: string | null;
+  grade_analysis: ShopListingGradeAnalysis | null;
+  grade_analysis_at: string | null;
+}
+
+/** Cached grade probability output stored in shop_listings.grade_analysis */
+export interface ShopListingGradeAnalysis {
+  status: "ok" | "low_confidence" | "unable";
+  estimated_grade_low: number;
+  estimated_grade_high: number;
+  grade_notes: string;
+  confidence: {
+    overall_confidence_score: number;
+    confidence_label: "high" | "medium" | "low";
+    limiting_factors: string[];
+  };
+  centering: {
+    left_right_ratio: string;
+    top_bottom_ratio: string;
+    centering_severity_0_3: number;
+    centering_notes: string;
+  };
+  surface: string;
+  corners: string;
+  edges: string;
+  probabilities: Array<{ label: string; probability: number }>;
+  analyzed_image_url: string | null;
 }
 
 export interface ShopOrder {

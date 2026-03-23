@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useShopCart } from "@/contexts/ShopCartContext";
 import ShopListingCard from "./ShopListingCard";
+import ShopListingAiInsight from "./ShopListingAiInsight";
+import ShopListingGradeAnalysis from "./ShopListingGradeAnalysis";
 import type { ShopListing } from "@/types/shop";
 import {
   buildListingTitle,
@@ -80,6 +82,11 @@ export default function ShopListingDetail({
     normalizedGrade.length > 0 &&
     !normalizedGrade.includes("raw") &&
     !normalizedGrade.includes("ungraded");
+  const isRaw =
+    listing.condition === "raw" ||
+    normalizedGrade === "" ||
+    normalizedGrade.includes("raw") ||
+    normalizedGrade.includes("ungraded");
 
   const pricingTransparencyText = (() => {
     if (listing.cmv == null || listing.cmv <= 0) {
@@ -328,6 +335,10 @@ export default function ShopListingDetail({
           {listing.description && (
             <p className="text-sm leading-relaxed text-slate-600">{listing.description}</p>
           )}
+
+          <ShopListingAiInsight listingId={listing.id} />
+
+          {isRaw && <ShopListingGradeAnalysis listingId={listing.id} />}
         </section>
       </div>
 
