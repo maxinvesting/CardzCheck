@@ -36,6 +36,59 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Handle refunds: mark order as refunded and restore inventory
+  if (event.type === "charge.refunded") {
+    const charge = event.data.object as Stripe.Charge;
+    const paymentIntentId =
+      typeof charge.payment_intent === "string"
+        ? charge.payment_intent
+        : charge.payment_intent?.id ?? null;
+
+    if (paymentIntentId) {
+      const supabase = await createServiceClient();
+
+      const { data: order } = await supabase
+        .from("shop_orders")
+        .select("id,payment_status,items")
+        .eq("stripe_payment_intent_id", paymentIntentId)
+        .single();
+
+      if (order && order.payment_status !== "cancelled") {
+        const items = order.items as Array<{ listing_id: string; quantity: number }> | null;
+        if (Array.isArray(items)) {
+          for (const item of items) {
+            if (!item.listing_id || !item.quantity) continue;
+            const { data: listing } = await supabase
+              .from("shop_listings")
+              .select("quantity_sold, quantity, status")
+              .eq("id", item.listing_id)
+              .single();
+
+            if (listing) {
+              const newQuantitySold = Math.max(0, (listing.quantity_sold ?? 0) - item.quantity);
+              const newStatus =
+                listing.status === "sold" && newQuantitySold < (listing.quantity ?? 0)
+                  ? "active"
+                  : listing.status;
+
+              await supabase
+                .from("shop_listings")
+                .update({ quantity_sold: newQuantitySold, status: newStatus })
+                .eq("id", item.listing_id);
+            }
+          }
+        }
+
+        await supabase
+          .from("shop_orders")
+          .update({ payment_status: "refunded" })
+          .eq("id", order.id);
+      }
+    }
+
+    return NextResponse.json({ received: true });
+  }
+
   if (event.type !== "checkout.session.completed") {
     return NextResponse.json({ received: true });
   }

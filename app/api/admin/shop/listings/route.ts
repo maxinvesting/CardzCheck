@@ -7,7 +7,7 @@ import {
   SHOP_CATEGORY_OPTIONS,
 } from "@/lib/cards/market-category";
 
-type ListingStatus = "active" | "sold" | "reserved" | "delisted";
+type ListingStatus = "active" | "sold" | "reserved" | "delisted" | "archived";
 type PublishState = "draft" | "published";
 type ListingCondition = "raw" | "graded" | "sealed";
 
@@ -16,6 +16,7 @@ const ALLOWED_STATUS: ListingStatus[] = [
   "sold",
   "reserved",
   "delisted",
+  "archived",
 ];
 const ALLOWED_PUBLISH_STATES: PublishState[] = ["draft", "published"];
 const ALLOWED_CONDITIONS: ListingCondition[] = ["raw", "graded", "sealed"];
