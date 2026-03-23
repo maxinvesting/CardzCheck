@@ -144,7 +144,7 @@ function mapInquiryToThread(
 }
 
 function mapMemberMessageToThread(
-  exchange: NonNullable<EbayMemberMessagesResponse["MemberMessage"]>["MemberMessageExchange"][0],
+  exchange: NonNullable<NonNullable<EbayMemberMessagesResponse["MemberMessage"]>["MemberMessageExchange"]>[number],
   userId: string
 ): MessageThread | null {
   const q = exchange.Question;
