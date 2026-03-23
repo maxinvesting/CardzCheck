@@ -106,7 +106,7 @@ function BusinessMessagesContent() {
       <AuthenticatedLayout>
         <main className="mx-auto max-w-7xl px-4 py-8">
           <h1 className="text-2xl font-bold text-[var(--biz-text)] mb-8">Customer Service</h1>
-          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--biz-border)] bg-white dark:bg-gray-900 py-20 text-center">
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--biz-border)] bg-white py-20 text-center shadow-sm">
             <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-red-50">
               <svg className="h-8 w-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
@@ -119,13 +119,13 @@ function BusinessMessagesContent() {
             <div className="flex gap-3">
               <button
                 onClick={() => { setLoading(true); loadData(); }}
-                className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 transition-colors"
+                className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-500"
               >
                 Try Again
               </button>
               <a
                 href="/api/auth/ebay"
-                className="inline-flex items-center gap-2 rounded-lg border border-[var(--biz-border)] px-5 py-2.5 text-sm font-semibold text-[var(--biz-text)] hover:bg-gray-50 transition-colors"
+                className="inline-flex items-center gap-2 rounded-lg border border-[var(--biz-border)] bg-white px-5 py-2.5 text-sm font-semibold text-[var(--biz-text)] transition-colors hover:bg-gray-50"
               >
                 Reconnect eBay
               </a>
@@ -143,7 +143,7 @@ function BusinessMessagesContent() {
       <AuthenticatedLayout>
         <main className="mx-auto max-w-7xl px-4 py-8">
           <h1 className="text-2xl font-bold text-[var(--biz-text)] mb-8">Customer Service</h1>
-          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--biz-border)] bg-white dark:bg-gray-900 py-20 text-center">
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--biz-border)] bg-white py-20 text-center shadow-sm">
             <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#F0FDF4]">
               <svg className="h-8 w-8 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
@@ -158,7 +158,7 @@ function BusinessMessagesContent() {
                 </p>
                 <a
                   href="/api/auth/ebay"
-                  className="inline-flex items-center gap-2 rounded-lg border border-[var(--biz-border)] px-5 py-2.5 text-sm font-semibold text-[var(--biz-text)] hover:bg-gray-50 transition-colors"
+                  className="inline-flex items-center gap-2 rounded-lg border border-[var(--biz-border)] bg-white px-5 py-2.5 text-sm font-semibold text-[var(--biz-text)] transition-colors hover:bg-gray-50"
                 >
                   Reconnect to refresh access
                 </a>
@@ -171,7 +171,7 @@ function BusinessMessagesContent() {
                 </p>
                 <a
                   href="/api/auth/ebay"
-                  className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 transition-colors"
+                  className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-500"
                 >
                   Connect eBay Account
                 </a>
