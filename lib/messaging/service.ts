@@ -223,23 +223,34 @@ export async function generateAIReply(
       .filter(Boolean)
       .join(" | ");
 
-    const systemPrompt = `You are a professional sports card and collectibles seller on eBay. You're responding to a buyer message on behalf of the seller.
+    // Find the last inbound (buyer) message to respond to specifically
+    const lastBuyerMessage = [...messages]
+      .reverse()
+      .find((m) => m.direction === "inbound");
 
-Write ONLY the reply message body — no subject line, no greeting like "Dear buyer", no sign-off like "Best regards". Just the message content. Keep it concise (2-5 sentences max unless the situation requires more detail). Use natural, conversational language appropriate for eBay messaging.`;
+    const systemPrompt = `You are a professional sports card and collectibles seller on eBay. You're drafting a reply to a buyer on behalf of the seller.
+
+Rules:
+- Write ONLY the reply body — no subject, no "Dear buyer", no "Best regards" sign-off
+- Directly address what the buyer said in their last message
+- Keep it concise and natural (2-4 sentences unless more detail is clearly needed)
+- Match the tone of an experienced eBay seller`;
 
     const userPrompt = `${TONE_INSTRUCTIONS[tone]}
 
 Item: ${thread.item_title ?? "this item"}
 Buyer: ${thread.buyer_username}
-${priceContext ? `Pricing: ${priceContext}` : ""}
-${thread.category === "complaint" ? "Context: buyer has a complaint or issue with the item" : ""}
-${thread.category === "shipping" ? "Context: buyer has a shipping or delivery question/issue" : ""}
-${thread.category === "return_refund" ? "Context: buyer is requesting a return or refund" : ""}
+${priceContext ? `Pricing context: ${priceContext}` : ""}
+${thread.category === "complaint" ? "Situation: buyer has a complaint or issue with the item" : ""}
+${thread.category === "shipping" ? "Situation: buyer has a shipping or delivery question/issue" : ""}
+${thread.category === "return_refund" ? "Situation: buyer is requesting a return or refund" : ""}
 
-Conversation so far:
-${transcript || "(No prior messages — this is the opening message)"}
+${lastBuyerMessage ? `The buyer's most recent message (what you are replying to):\n"${lastBuyerMessage.body}"` : ""}
 
-Reply:`;
+Full conversation history for context:
+${transcript || "(No prior messages)"}
+
+Write the reply now:`;
 
     const response = await client.messages.create({
       model: "claude-haiku-4-5-20251001",

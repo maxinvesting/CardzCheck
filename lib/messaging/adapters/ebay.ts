@@ -528,6 +528,59 @@ async function fetchMemberMessages(userId: string): Promise<MessageThread[]> {
   });
 }
 
+// ─── Supabase outbound message persistence ────────────────────────────────────
+// eBay's API does not return seller-sent messages, so we store them ourselves.
+
+async function saveOutboundMessage(
+  userId: string,
+  threadId: string,
+  body: string,
+  sellerUsername: string
+): Promise<void> {
+  try {
+    const { createClient } = await import("@/lib/supabase/server");
+    const supabase = await createClient();
+    await supabase.from("cs_outbound_messages").insert({
+      user_id: userId,
+      ebay_thread_id: threadId,
+      sender_username: sellerUsername,
+      body,
+    });
+  } catch (err) {
+    // Non-fatal — message still sent to eBay, just won't persist locally
+    console.warn("[ebay/messaging] Failed to save outbound message:", err);
+  }
+}
+
+async function loadOutboundMessages(
+  userId: string,
+  threadId: string
+): Promise<Message[]> {
+  try {
+    const { createClient } = await import("@/lib/supabase/server");
+    const supabase = await createClient();
+    const { data } = await supabase
+      .from("cs_outbound_messages")
+      .select("id, sender_username, body, created_at")
+      .eq("user_id", userId)
+      .eq("ebay_thread_id", threadId)
+      .order("created_at", { ascending: true });
+
+    return (data ?? []).map((row) => ({
+      id: `cs-out-${row.id}`,
+      thread_id: threadId,
+      direction: "outbound" as const,
+      sender_username: row.sender_username,
+      body: row.body,
+      is_read: true,
+      external_message_id: null,
+      created_at: row.created_at,
+    }));
+  } catch {
+    return [];
+  }
+}
+
 // Helper: get seller's eBay username for direction detection
 async function getSellerEbayUsername(userId: string): Promise<string | null> {
   try {
@@ -614,28 +667,35 @@ export async function getEbayMessages(
   // Post Order inquiry messages
   if (threadId.startsWith("ebay-inquiry-")) {
     const inquiryId = threadId.replace("ebay-inquiry-", "");
-    return fetchInquiryMessages(userId, inquiryId);
+    const [ebayMessages, savedOutbound] = await Promise.all([
+      fetchInquiryMessages(userId, inquiryId),
+      loadOutboundMessages(userId, threadId),
+    ]);
+    return mergeAndSort(ebayMessages, savedOutbound);
   }
 
   // Trading API messages — group by stable buyer/listing thread id
   if (threadId.startsWith("ebay-msg-")) {
-    const exchanges = await fetchMemberMessageExchanges(userId);
+    const [exchanges, sellerUsername, savedOutbound] = await Promise.all([
+      fetchMemberMessageExchanges(userId),
+      getSellerEbayUsername(userId),
+      loadOutboundMessages(userId, threadId),
+    ]);
     const buckets = buildMemberThreadBuckets(exchanges);
     const threadExchanges = [...(buckets.get(threadId) ?? [])].sort(
       (a, b) =>
         new Date(a.creationDate).getTime() - new Date(b.creationDate).getTime()
     );
 
-    const sellerUsername = await getSellerEbayUsername(userId);
-
-    const allMessages: Message[] = [];
+    const ebayMessages: Message[] = [];
     for (const exchange of threadExchanges) {
-      // Some exchanges are seller replies returned as top-level Question blocks
+      // eBay API only returns buyer (inbound) messages — seller replies are not included
+      // Direction: if sender matches seller username it's outbound, otherwise inbound
       const isSellerExchange = sellerUsername
         ? exchange.sender.toLowerCase() === sellerUsername.toLowerCase()
         : false;
 
-      allMessages.push({
+      ebayMessages.push({
         id: `${threadId}-q-${exchange.messageId}`,
         thread_id: threadId,
         direction: isSellerExchange ? "outbound" : "inbound",
@@ -645,12 +705,12 @@ export async function getEbayMessages(
         external_message_id: exchange.messageId,
         created_at: exchange.creationDate,
       });
-      // Nested seller Response blocks (alternate exchange format)
+      // Nested Response blocks (present in some exchange formats)
       for (const response of exchange.responses) {
         const isSellerResponse = sellerUsername
           ? response.senderUsername.toLowerCase() === sellerUsername.toLowerCase()
-          : true; // assume nested responses are always seller
-        allMessages.push({
+          : true;
+        ebayMessages.push({
           id: `${threadId}-r-${response.messageId}`,
           thread_id: threadId,
           direction: isSellerResponse ? "outbound" : "inbound",
@@ -662,14 +722,25 @@ export async function getEbayMessages(
         });
       }
     }
-    // Sort chronologically
-    allMessages.sort(
-      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-    );
-    return allMessages;
+
+    return mergeAndSort(ebayMessages, savedOutbound);
   }
 
   return [];
+}
+
+/** Merge eBay API messages with locally-saved outbound messages, dedup by body+date, sort chronologically */
+function mergeAndSort(ebayMessages: Message[], savedOutbound: Message[]): Message[] {
+  // Deduplicate: if a saved outbound message matches an eBay message by body, skip it
+  const ebayOutboundBodies = new Set(
+    ebayMessages.filter((m) => m.direction === "outbound").map((m) => m.body.trim())
+  );
+  const uniqueOutbound = savedOutbound.filter(
+    (m) => !ebayOutboundBodies.has(m.body.trim())
+  );
+  const all = [...ebayMessages, ...uniqueOutbound];
+  all.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  return all;
 }
 
 export async function sendEbayMessage(
@@ -699,15 +770,19 @@ export async function sendEbayMessage(
       throw new Error(`Unable to send message to eBay (${res.status}). ${errorBody}`.trim());
     }
 
+    const sellerUsername = await getSellerEbayUsername(userId);
+    const sentAt = new Date().toISOString();
+    await saveOutboundMessage(userId, threadId, content, sellerUsername ?? "You");
+
     const sent: Message = {
       id: `${threadId}-${Date.now()}`,
       thread_id: threadId,
       direction: "outbound",
-      sender_username: "You",
+      sender_username: sellerUsername ?? "You",
       body: content,
       is_read: true,
       external_message_id: null,
-      created_at: new Date().toISOString(),
+      created_at: sentAt,
     };
     invalidateUserMessagingCaches(userId);
     return sent;
@@ -763,15 +838,19 @@ export async function sendEbayMessage(
       );
     }
 
+    const sellerUsername2 = await getSellerEbayUsername(userId);
+    const sentAt2 = new Date().toISOString();
+    await saveOutboundMessage(userId, threadId, content, sellerUsername2 ?? "You");
+
     const sent: Message = {
       id: `${threadId}-${Date.now()}`,
       thread_id: threadId,
       direction: "outbound",
-      sender_username: "You",
+      sender_username: sellerUsername2 ?? "You",
       body: content,
       is_read: true,
       external_message_id: null,
-      created_at: new Date().toISOString(),
+      created_at: sentAt2,
     };
     invalidateUserMessagingCaches(userId);
     return sent;
