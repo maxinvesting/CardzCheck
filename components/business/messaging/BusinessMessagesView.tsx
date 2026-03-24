@@ -32,6 +32,7 @@ export default function BusinessMessagesView({
   const [negotiation, setNegotiation] = useState<NegotiationAnalysis | null>(null);
   const [threadLoading, setThreadLoading] = useState(false);
   const [generatedReply, setGeneratedReply] = useState<string | null>(null);
+  const [replySource, setReplySource] = useState<"ai" | "fallback" | null>(null);
   const [replyLoading, setReplyLoading] = useState(false);
   const [sendLoading, setSendLoading] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
@@ -178,6 +179,7 @@ export default function BusinessMessagesView({
       if (!selectedId) return;
       setReplyLoading(true);
       setGeneratedReply(null);
+      setReplySource(null);
       try {
         const res = await fetch(`/api/business/messages/${selectedId}/ai-reply`, {
           method: "POST",
@@ -187,6 +189,7 @@ export default function BusinessMessagesView({
         if (res.ok) {
           const data = await res.json();
           setGeneratedReply(data.reply);
+          setReplySource(data.source ?? null);
         }
       } catch {
         // fail silently
@@ -388,6 +391,7 @@ export default function BusinessMessagesView({
                   negotiation={negotiation}
                   onGenerateReply={handleGenerateReply}
                   generatedReply={generatedReply}
+                  replySource={replySource}
                   replyLoading={replyLoading}
                   onSendMessage={handleSendMessage}
                   sendLoading={sendLoading}

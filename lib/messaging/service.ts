@@ -194,16 +194,24 @@ const TONE_INSTRUCTIONS: Record<AIReplyTone, string> = {
     "Write a reply that asks for more information needed to help them. Be specific about what you need.",
 };
 
+export type AIReplyResult = { text: string; source: "ai" | "fallback" };
+
 export async function generateAIReply(
   userId: string,
   threadId: string,
   tone: AIReplyTone
-): Promise<string> {
+): Promise<AIReplyResult> {
   const [thread, messages] = await Promise.all([
     getThread(userId, threadId),
     getMessages(userId, threadId),
   ]);
-  if (!thread) return "Unable to generate reply — thread not found.";
+  if (!thread) return { text: "Unable to generate reply — thread not found.", source: "fallback" };
+
+  // Check for API key before attempting
+  if (!process.env.ANTHROPIC_API_KEY) {
+    console.warn("[messaging] ANTHROPIC_API_KEY not set — using fallback template");
+    return { text: buildFallback(tone, thread), source: "fallback" };
+  }
 
   try {
     const Anthropic = (await import("@anthropic-ai/sdk")).default;
@@ -262,24 +270,30 @@ Write the reply now:`;
 
     const text =
       response.content[0]?.type === "text" ? response.content[0].text.trim() : null;
-    if (text) return text;
+    if (text) return { text, source: "ai" };
   } catch (err) {
     console.warn("[messaging] AI reply generation failed, falling back:", err);
   }
 
-  // Fallback to simple templates if AI fails
+  return { text: buildFallback(tone, thread), source: "fallback" };
+}
+
+function buildFallback(tone: AIReplyTone, thread: Awaited<ReturnType<typeof getThread>>): string {
+  if (!thread) return "Unable to generate reply.";
+  const item = thread.item_title ?? "this item";
+  const buyer = thread.buyer_display_name ?? thread.buyer_username;
   const fallbacks: Record<AIReplyTone, string> = {
-    professional: `Thank you for your message about ${thread.item_title ?? "this item"}. I'll look into this and get back to you shortly.`,
-    friendly: `Hey ${thread.buyer_display_name ?? thread.buyer_username}! Thanks for reaching out about ${thread.item_title ?? "this item"}. Happy to help!`,
+    professional: `Thank you for your message about ${item}. I'll look into this and get back to you shortly.`,
+    friendly: `Hey ${buyer}! Thanks for reaching out about ${item}. Happy to help!`,
     firm: thread.listing_price_cents
       ? `I appreciate the interest, but I'm firm at $${(thread.listing_price_cents / 100).toFixed(2)} on this one.`
       : `I appreciate the interest, but I'm holding firm on the listed price.`,
     negotiate: thread.suggested_counter_cents
       ? `Thanks for the offer. I can meet you at $${(thread.suggested_counter_cents / 100).toFixed(2)} — let me know if that works.`
       : `Thanks for the offer. I have some room to work with — what price were you thinking?`,
-    decline: `I appreciate the offer, but I can't go that low on ${thread.item_title ?? "this item"}. I'm holding at the current price for now.`,
+    decline: `I appreciate the offer, but I can't go that low on ${item}. I'm holding at the current price for now.`,
     accept: `You've got a deal! Go ahead and complete the purchase and I'll ship it right away. Thanks!`,
-    ask_details: `Thanks for reaching out about ${thread.item_title ?? "this item"}. Could you give me a bit more detail so I can help you out?`,
+    ask_details: `Thanks for reaching out about ${item}. Could you give me a bit more detail so I can help you out?`,
   };
   return fallbacks[tone];
 }

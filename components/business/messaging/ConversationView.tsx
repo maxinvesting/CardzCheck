@@ -22,6 +22,7 @@ interface Props {
   negotiation: NegotiationAnalysis | null;
   onGenerateReply: (tone: string) => void;
   generatedReply: string | null;
+  replySource?: "ai" | "fallback" | null;
   replyLoading: boolean;
   onSendMessage: (body: string) => Promise<boolean>;
   sendLoading: boolean;
@@ -35,6 +36,7 @@ export default function ConversationView({
   negotiation,
   onGenerateReply,
   generatedReply,
+  replySource,
   replyLoading,
   onSendMessage,
   sendLoading,
@@ -43,6 +45,7 @@ export default function ConversationView({
 }: Props) {
   const [replyText, setReplyText] = useState("");
   const [showAI, setShowAI] = useState(false);
+  const lastBuyerMessage = [...messages].reverse().find((m) => m.direction === "inbound") ?? null;
 
   function handleUseReply(text: string) {
     setReplyText(text);
@@ -151,7 +154,9 @@ export default function ConversationView({
       {showAI && (
         <AIActionsPanel
           thread={thread}
+          lastBuyerMessage={lastBuyerMessage}
           generatedReply={generatedReply}
+          replySource={replySource ?? null}
           replyLoading={replyLoading}
           onGenerateReply={onGenerateReply}
           onUseReply={handleUseReply}
