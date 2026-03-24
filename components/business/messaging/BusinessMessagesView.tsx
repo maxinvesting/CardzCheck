@@ -272,10 +272,16 @@ export default function BusinessMessagesView({
       <MessagingStatsBar stats={stats} loading={false} />
 
       {/* Assistant disclosure */}
-      <div className="rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-2.5">
-        <p className="text-xs text-amber-800">
-          Draft tools can help prepare replies, but you are responsible for final review and sending.
-        </p>
+      <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 px-4 py-2.5">
+        <div className="flex items-center gap-2">
+          <svg className="h-3.5 w-3.5 shrink-0 text-emerald-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+          <p className="text-xs text-emerald-800">
+            <span className="font-semibold">AI handles the drafting — you handle the sending.</span>
+            {" "}Open any conversation and click <span className="font-medium">AI Reply Assistant</span> to generate context-aware replies. Review, edit if needed, then send.
+          </p>
+        </div>
       </div>
 
       {/* Outlook-style control row */}

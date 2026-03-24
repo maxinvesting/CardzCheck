@@ -2,14 +2,14 @@
 
 import type { MessageThread } from "@/lib/messaging/types";
 
-const TONE_BUTTONS: { tone: string; label: string; icon: string }[] = [
-  { tone: "professional", label: "Generate Reply", icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h6l4 4v12a2 2 0 01-2 2z" },
-  { tone: "friendly", label: "Make Friendly", icon: "M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" },
-  { tone: "firm", label: "Make Firm", icon: "M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" },
-  { tone: "negotiate", label: "Counter Offer", icon: "M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" },
-  { tone: "decline", label: "Decline Politely", icon: "M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" },
-  { tone: "accept", label: "Accept Deal", icon: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" },
-  { tone: "ask_details", label: "Ask for Details", icon: "M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" },
+const TONE_BUTTONS: { tone: string; label: string; description: string }[] = [
+  { tone: "professional", label: "Draft Reply", description: "Context-aware professional response" },
+  { tone: "friendly", label: "Friendly Tone", description: "Warm, rapport-building response" },
+  { tone: "firm", label: "Hold Price", description: "Politely decline to negotiate" },
+  { tone: "negotiate", label: "Counter Offer", description: "Open or continue a negotiation" },
+  { tone: "decline", label: "Decline", description: "Politely decline their request" },
+  { tone: "accept", label: "Accept Deal", description: "Accept with next steps" },
+  { tone: "ask_details", label: "Ask for Details", description: "Request more information" },
 ];
 
 interface Props {
@@ -30,13 +30,17 @@ export default function AIActionsPanel({
 }: Props) {
   return (
     <div className="border-t border-[var(--biz-border)] bg-[#FAFBFC] px-5 py-3">
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-2.5 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <svg className="h-4 w-4 text-[var(--biz-primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h6l2 2h6a2 2 0 012 2v2H3V5z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9h18v10a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-          </svg>
-          <span className="text-xs font-semibold text-[var(--biz-text)]">Reply Draft Tools</span>
+          <div className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100">
+            <svg className="h-3 w-3 text-emerald-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+          </div>
+          <div>
+            <span className="text-xs font-semibold text-[var(--biz-text)]">AI Reply Assistant</span>
+            <span className="ml-2 text-[10px] text-[var(--biz-muted)]">Reads the full conversation — drafts are ready to review &amp; send</span>
+          </div>
         </div>
         <button
           type="button"
@@ -51,53 +55,54 @@ export default function AIActionsPanel({
 
       {/* Tone buttons */}
       <div className="flex flex-wrap gap-1.5 mb-3">
-        {TONE_BUTTONS.map(({ tone, label, icon }) => (
+        {TONE_BUTTONS.map(({ tone, label, description }) => (
           <button
             key={tone}
             type="button"
             onClick={() => onGenerateReply(tone)}
             disabled={replyLoading}
-            className="flex items-center gap-1.5 rounded-md border border-[var(--biz-border)] bg-white px-2.5 py-1.5 text-[11px] font-medium text-[var(--biz-text)] transition-colors hover:bg-[#F3F4F6] hover:border-[var(--biz-primary)] disabled:opacity-50"
+            title={description}
+            className="flex items-center gap-1 rounded-md border border-[var(--biz-border)] bg-white px-2.5 py-1.5 text-[11px] font-medium text-[var(--biz-text)] transition-colors hover:border-emerald-400 hover:bg-emerald-50 hover:text-emerald-800 disabled:opacity-50"
           >
-            <svg className="h-3 w-3 text-[var(--biz-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={icon} />
-            </svg>
             {label}
           </button>
         ))}
       </div>
 
-      {/* Generated reply preview */}
+      {/* Loading */}
       {replyLoading && (
-        <div className="rounded-lg border border-[var(--biz-border)] bg-white p-3">
+        <div className="rounded-lg border border-emerald-100 bg-white p-3">
           <div className="flex items-center gap-2 text-xs text-[var(--biz-muted)]">
-            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+            <svg className="w-3.5 h-3.5 animate-spin text-emerald-600" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
             </svg>
-            Drafting response...
+            <span>Reading conversation and drafting reply...</span>
           </div>
         </div>
       )}
 
+      {/* Generated reply */}
       {generatedReply && !replyLoading && (
         <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-3">
+          <div className="flex items-center gap-1.5 mb-2">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">AI Draft</span>
+            <span className="text-[10px] text-[var(--biz-muted)]">— review before sending</span>
+          </div>
           <p className="text-xs text-[var(--biz-text)] leading-relaxed whitespace-pre-wrap">
             {generatedReply}
           </p>
-          <div className="mt-2 flex items-center gap-2">
+          <div className="mt-2.5 flex items-center gap-2">
             <button
               type="button"
               onClick={() => onUseReply(generatedReply)}
-              className="rounded-md bg-[var(--biz-primary)] px-3 py-1.5 text-[11px] font-semibold text-white transition-colors hover:bg-[#096b40]"
+              className="rounded-md bg-emerald-600 px-3 py-1.5 text-[11px] font-semibold text-white transition-colors hover:bg-emerald-700"
             >
               Use Draft
             </button>
             <button
               type="button"
-              onClick={() => {
-                navigator.clipboard.writeText(generatedReply);
-              }}
+              onClick={() => navigator.clipboard.writeText(generatedReply)}
               className="rounded-md border border-[var(--biz-border)] bg-white px-3 py-1.5 text-[11px] font-medium text-[var(--biz-muted)] transition-colors hover:text-[var(--biz-text)]"
             >
               Copy

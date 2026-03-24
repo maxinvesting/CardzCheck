@@ -618,25 +618,34 @@ export async function getEbayMessages(
         new Date(a.creationDate).getTime() - new Date(b.creationDate).getTime()
     );
 
+    const sellerUsername = await getSellerEbayUsername(userId);
+
     const allMessages: Message[] = [];
     for (const exchange of threadExchanges) {
-      // Buyer's question
+      // Some exchanges are seller replies returned as top-level Question blocks
+      const isSellerExchange = sellerUsername
+        ? exchange.sender.toLowerCase() === sellerUsername.toLowerCase()
+        : false;
+
       allMessages.push({
         id: `${threadId}-q-${exchange.messageId}`,
         thread_id: threadId,
-        direction: "inbound",
+        direction: isSellerExchange ? "outbound" : "inbound",
         sender_username: exchange.sender,
         body: exchange.body,
         is_read: exchange.isRead,
         external_message_id: exchange.messageId,
         created_at: exchange.creationDate,
       });
-      // Seller's responses within this exchange
+      // Nested seller Response blocks (alternate exchange format)
       for (const response of exchange.responses) {
+        const isSellerResponse = sellerUsername
+          ? response.senderUsername.toLowerCase() === sellerUsername.toLowerCase()
+          : true; // assume nested responses are always seller
         allMessages.push({
           id: `${threadId}-r-${response.messageId}`,
           thread_id: threadId,
-          direction: "outbound",
+          direction: isSellerResponse ? "outbound" : "inbound",
           sender_username: response.senderUsername || "You",
           body: response.body,
           is_read: true,
