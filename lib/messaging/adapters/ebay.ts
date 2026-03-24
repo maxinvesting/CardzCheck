@@ -566,7 +566,7 @@ async function loadOutboundMessages(
       .eq("ebay_thread_id", threadId)
       .order("created_at", { ascending: true });
 
-    return (data ?? []).map((row) => ({
+    return (data ?? []).map((row: { id: string; sender_username: string; body: string; created_at: string }) => ({
       id: `cs-out-${row.id}`,
       thread_id: threadId,
       direction: "outbound" as const,
