@@ -16,6 +16,7 @@ function BusinessMessagesContent() {
   const [threads, setThreads] = useState<MessageThread[]>([]);
   const [ebayConnected, setEbayConnected] = useState<boolean | null>(null);
   const [msgError, setMsgError] = useState<string | null>(null);
+  const [businessName, setBusinessName] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     setMsgError(null);
@@ -29,6 +30,14 @@ function BusinessMessagesContent() {
         router.push("/login?redirect=/business/messages");
         return;
       }
+
+      // Fetch business name for UI personalisation
+      const { data: profile } = await supabase
+        .from("users")
+        .select("business_name")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (profile?.business_name) setBusinessName(profile.business_name);
 
       // Check business access
       const accessRes = await fetch("/api/business/inventory", {
@@ -189,6 +198,7 @@ function BusinessMessagesContent() {
         <BusinessMessagesView
           initialStats={stats}
           initialThreads={threads}
+          businessName={businessName}
         />
       </main>
     </AuthenticatedLayout>
