@@ -15,11 +15,13 @@ import ConversationView from "./ConversationView";
 interface Props {
   initialStats: MessagingStats;
   initialThreads: MessageThread[];
+  businessName?: string | null;
 }
 
 export default function BusinessMessagesView({
   initialStats,
   initialThreads,
+  businessName,
 }: Props) {
   const [stats] = useState<MessagingStats>(initialStats);
   const [threads, setThreads] = useState<MessageThread[]>(initialThreads);
@@ -397,6 +399,7 @@ export default function BusinessMessagesView({
                   sendLoading={sendLoading}
                   sendError={sendError}
                   onUpdateThreadStatus={handleUpdateThreadStatus}
+                  businessName={businessName}
                 />
               </>
             ) : (

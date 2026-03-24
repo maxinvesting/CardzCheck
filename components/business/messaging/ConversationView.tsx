@@ -28,6 +28,7 @@ interface Props {
   sendLoading: boolean;
   sendError: string | null;
   onUpdateThreadStatus: (threadId: string, status: MessageThread["status"]) => void;
+  businessName?: string | null;
 }
 
 export default function ConversationView({
@@ -42,6 +43,7 @@ export default function ConversationView({
   sendLoading,
   sendError,
   onUpdateThreadStatus,
+  businessName,
 }: Props) {
   const [replyText, setReplyText] = useState("");
   const [showAI, setShowAI] = useState(false);
@@ -161,6 +163,7 @@ export default function ConversationView({
           onGenerateReply={onGenerateReply}
           onUseReply={handleUseReply}
           onClose={() => setShowAI(false)}
+          businessName={businessName}
         />
       )}
 
@@ -179,7 +182,7 @@ export default function ConversationView({
             <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
-            AI Reply Assistant
+            {businessName ? `${businessName} Support Advisor` : "Support Advisor"}
           </button>
           {thread.ai_suggested_reply && !showAI && (
             <button
@@ -212,7 +215,7 @@ export default function ConversationView({
           <p className="mt-1.5 text-[11px] text-red-600">{sendError}</p>
         ) : (
           <p className="mt-1.5 text-[10px] text-[var(--biz-muted)]">
-            Use <span className="font-medium text-emerald-700">AI Reply Assistant</span> above to generate a draft, then review and send.
+            Use <span className="font-medium text-emerald-700">{businessName ? `${businessName} Support Advisor` : "Support Advisor"}</span> above to generate a draft, then review and send.
           </p>
         )}
       </div>
