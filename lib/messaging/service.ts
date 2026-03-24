@@ -199,7 +199,8 @@ export type AIReplyResult = { text: string; source: "ai" | "fallback" };
 export async function generateAIReply(
   userId: string,
   threadId: string,
-  tone: AIReplyTone
+  tone: AIReplyTone,
+  hint?: string
 ): Promise<AIReplyResult> {
   const [thread, messages] = await Promise.all([
     getThread(userId, threadId),
@@ -253,7 +254,7 @@ ${priceContext ? `Pricing context: ${priceContext}` : ""}
 ${thread.category === "complaint" ? "Situation: buyer has a complaint or issue with the item" : ""}
 ${thread.category === "shipping" ? "Situation: buyer has a shipping or delivery question/issue" : ""}
 ${thread.category === "return_refund" ? "Situation: buyer is requesting a return or refund" : ""}
-
+${hint ? `\nSeller's note — make sure to include this in the reply: "${hint}"` : ""}
 ${lastBuyerMessage ? `The buyer's most recent message (what you are replying to):\n"${lastBuyerMessage.body}"` : ""}
 
 Full conversation history for context:
