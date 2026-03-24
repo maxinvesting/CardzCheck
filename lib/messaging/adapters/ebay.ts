@@ -398,21 +398,22 @@ async function fetchMemberMessageExchanges(
       }
 
       // Extract exchanges using simple regex (avoids XML parser dependency)
+      // Note: use [^>]* to handle optional XML attributes on any tag
       const pageMessages: ParsedMemberMessage[] = [];
-      const exchangeRegex = /<MemberMessageExchange>([\s\S]*?)<\/MemberMessageExchange>/g;
+      const exchangeRegex = /<MemberMessageExchange[^>]*>([\s\S]*?)<\/MemberMessageExchange>/g;
       let match;
 
       while ((match = exchangeRegex.exec(text)) !== null) {
         const block = match[1];
         const getFrom = (src: string, tag: string) => {
-          const m = new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`).exec(src);
+          const m = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`).exec(src);
           return m?.[1]?.trim() ?? "";
         };
         const decodeBody = (s: string) =>
           s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&").replace(/&#39;/g, "'").replace(/&quot;/g, '"');
 
         // Prefer Question sub-block for buyer fields; fall back to block root
-        const questionBlock = /<Question>([\s\S]*?)<\/Question>/.exec(block)?.[1] ?? block;
+        const questionBlock = /<Question[^>]*>([\s\S]*?)<\/Question>/.exec(block)?.[1] ?? block;
 
         const msgId = getFrom(questionBlock, "MessageID") || getFrom(block, "MessageID");
         if (!msgId) continue;
@@ -426,9 +427,9 @@ async function fetchMemberMessageExchanges(
         const isRead = getFrom(questionBlock, "Read") === "true";
         const status = getFrom(block, "MessageStatus");
 
-        // Extract seller Response sub-blocks
+        // Extract seller Response sub-blocks (handle optional attributes on <Response>)
         const responses: ParsedMemberMessage["responses"] = [];
-        const responseRegex = /<Response>([\s\S]*?)<\/Response>/g;
+        const responseRegex = /<Response[^>]*>([\s\S]*?)<\/Response>/g;
         let respMatch;
         while ((respMatch = responseRegex.exec(block)) !== null) {
           const rBlock = respMatch[1];
@@ -445,6 +446,8 @@ async function fetchMemberMessageExchanges(
             });
           }
         }
+
+        console.log(`[ebay/debug] exchange msgId=${msgId} sender=${sender} status=${status} responses=${responses.length}`);
 
         pageMessages.push({
           messageId: msgId,
@@ -789,4 +792,50 @@ export async function getEbayMessagingStats(
     open_offers: openOffers,
     avg_response_time_hours: null,
   };
+}
+
+/** Debug: returns raw parsed exchanges for a thread — used by ?debug=1 on the thread API route */
+export async function getEbayRawDebug(
+  userId: string,
+  threadId: string
+): Promise<unknown> {
+  const sellerUsername = await getSellerEbayUsername(userId);
+
+  if (threadId.startsWith("ebay-msg-")) {
+    // Bypass cache to always get fresh data
+    memberExchangeCache.delete(userId);
+    const exchanges = await fetchMemberMessageExchanges(userId);
+    const buckets = buildMemberThreadBuckets(exchanges);
+    const threadExchanges = buckets.get(threadId) ?? [];
+    return {
+      sellerUsername,
+      threadId,
+      exchangeCount: threadExchanges.length,
+      exchanges: threadExchanges.map((e) => ({
+        messageId: e.messageId,
+        sender: e.sender,
+        isSellerExchange: sellerUsername
+          ? e.sender.toLowerCase() === sellerUsername.toLowerCase()
+          : false,
+        bodyPreview: e.body.slice(0, 80),
+        creationDate: e.creationDate,
+        status: e.status,
+        responseCount: e.responses.length,
+        responses: e.responses.map((r) => ({
+          messageId: r.messageId,
+          senderUsername: r.senderUsername,
+          bodyPreview: r.body.slice(0, 80),
+          creationDate: r.creationDate,
+        })),
+      })),
+    };
+  }
+
+  if (threadId.startsWith("ebay-inquiry-")) {
+    const inquiryId = threadId.replace("ebay-inquiry-", "");
+    const messages = await fetchInquiryMessages(userId, inquiryId);
+    return { sellerUsername, threadId, messages };
+  }
+
+  return { error: "Unknown thread type" };
 }

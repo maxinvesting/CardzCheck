@@ -6,6 +6,7 @@ import {
   getNegotiationAnalysisForThread,
   sendMessage,
 } from "@/lib/messaging/service";
+import { getEbayRawDebug } from "@/lib/messaging/adapters/ebay";
 
 export async function GET(
   _req: NextRequest,
@@ -21,11 +22,17 @@ export async function GET(
   }
 
   const { threadId } = await params;
+  const debug = _req.nextUrl.searchParams.get("debug") === "1";
 
   const thread = await getThread(user.id, threadId);
 
   if (!thread) {
     return NextResponse.json({ error: "Thread not found" }, { status: 404 });
+  }
+
+  if (debug) {
+    const raw = await getEbayRawDebug(user.id, threadId);
+    return NextResponse.json({ thread, raw });
   }
 
   const [messages, negotiation] = await Promise.all([
