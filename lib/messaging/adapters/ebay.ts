@@ -210,6 +210,23 @@ function normalizeSubject(subject: string | null): string | null {
   return normalized.length > 0 ? normalized : null;
 }
 
+/**
+ * Extract a clean item title from an eBay subject line.
+ * eBay formats subjects as: "{username} sent a message about {item title} {item number}"
+ * We want just the item title (e.g. "Shedeur Sanders True Silver Rookie 2025 Panini Mosaic #290")
+ */
+function extractItemTitleFromSubject(subject: string | null): string | null {
+  if (!subject) return null;
+  // Strip Re:/Fw: prefix
+  let s = subject.replace(/^(re|fw|fwd)\s*:\s*/gi, "").trim();
+  // eBay pattern: "{username} sent a message about {item title} {ebay item number}"
+  const aboutMatch = /sent a message about (.+?)(?:\s+#?\d{10,}.*)?$/i.exec(s);
+  if (aboutMatch) return aboutMatch[1].trim() || null;
+  // Fallback: strip trailing eBay item number (12-digit)
+  s = s.replace(/\s*#?\d{10,}.*$/, "").trim();
+  return s.length > 0 ? s : null;
+}
+
 function memberThreadBaseId(
   sender: string,
   itemId: string | null,
@@ -397,22 +414,28 @@ async function fetchMemberMessageExchanges(
         return [];
       }
 
+      // Log first 1200 chars of first page for debugging
+      if (page === 1) {
+        console.log("[ebay/debug] GetMemberMessages raw (first 1200):", text.slice(0, 1200));
+      }
+
       // Extract exchanges using simple regex (avoids XML parser dependency)
+      // Note: use [^>]* to handle optional XML attributes on any tag
       const pageMessages: ParsedMemberMessage[] = [];
-      const exchangeRegex = /<MemberMessageExchange>([\s\S]*?)<\/MemberMessageExchange>/g;
+      const exchangeRegex = /<MemberMessageExchange[^>]*>([\s\S]*?)<\/MemberMessageExchange>/g;
       let match;
 
       while ((match = exchangeRegex.exec(text)) !== null) {
         const block = match[1];
         const getFrom = (src: string, tag: string) => {
-          const m = new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`).exec(src);
+          const m = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`).exec(src);
           return m?.[1]?.trim() ?? "";
         };
         const decodeBody = (s: string) =>
           s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&").replace(/&#39;/g, "'").replace(/&quot;/g, '"');
 
         // Prefer Question sub-block for buyer fields; fall back to block root
-        const questionBlock = /<Question>([\s\S]*?)<\/Question>/.exec(block)?.[1] ?? block;
+        const questionBlock = /<Question[^>]*>([\s\S]*?)<\/Question>/.exec(block)?.[1] ?? block;
 
         const msgId = getFrom(questionBlock, "MessageID") || getFrom(block, "MessageID");
         if (!msgId) continue;
@@ -422,13 +445,13 @@ async function fetchMemberMessageExchanges(
         const body = decodeBody(getFrom(questionBlock, "Body") || getFrom(block, "Body"));
         const itemId = getFrom(questionBlock, "ItemID") || getFrom(block, "ItemID");
         const subject = getFrom(questionBlock, "Subject") || getFrom(block, "Subject") || null;
-        const itemTitle = subject;
+        const itemTitle = extractItemTitleFromSubject(subject);
         const isRead = getFrom(questionBlock, "Read") === "true";
         const status = getFrom(block, "MessageStatus");
 
-        // Extract seller Response sub-blocks
+        // Extract seller Response sub-blocks (handle optional attributes on <Response>)
         const responses: ParsedMemberMessage["responses"] = [];
-        const responseRegex = /<Response>([\s\S]*?)<\/Response>/g;
+        const responseRegex = /<Response[^>]*>([\s\S]*?)<\/Response>/g;
         let respMatch;
         while ((respMatch = responseRegex.exec(block)) !== null) {
           const rBlock = respMatch[1];
@@ -445,6 +468,8 @@ async function fetchMemberMessageExchanges(
             });
           }
         }
+
+        console.log(`[ebay/debug] exchange msgId=${msgId} sender=${sender} status=${status} responses=${responses.length}`);
 
         pageMessages.push({
           messageId: msgId,
@@ -518,6 +543,59 @@ async function fetchMemberMessages(userId: string): Promise<MessageThread[]> {
       updated_at: latest.creationDate,
     } satisfies MessageThread;
   });
+}
+
+// ─── Supabase outbound message persistence ────────────────────────────────────
+// eBay's API does not return seller-sent messages, so we store them ourselves.
+
+async function saveOutboundMessage(
+  userId: string,
+  threadId: string,
+  body: string,
+  sellerUsername: string
+): Promise<void> {
+  try {
+    const { createClient } = await import("@/lib/supabase/server");
+    const supabase = await createClient();
+    await supabase.from("cs_outbound_messages").insert({
+      user_id: userId,
+      ebay_thread_id: threadId,
+      sender_username: sellerUsername,
+      body,
+    });
+  } catch (err) {
+    // Non-fatal — message still sent to eBay, just won't persist locally
+    console.warn("[ebay/messaging] Failed to save outbound message:", err);
+  }
+}
+
+async function loadOutboundMessages(
+  userId: string,
+  threadId: string
+): Promise<Message[]> {
+  try {
+    const { createClient } = await import("@/lib/supabase/server");
+    const supabase = await createClient();
+    const { data } = await supabase
+      .from("cs_outbound_messages")
+      .select("id, sender_username, body, created_at")
+      .eq("user_id", userId)
+      .eq("ebay_thread_id", threadId)
+      .order("created_at", { ascending: true });
+
+    return (data ?? []).map((row: { id: string; sender_username: string; body: string; created_at: string }) => ({
+      id: `cs-out-${row.id}`,
+      thread_id: threadId,
+      direction: "outbound" as const,
+      sender_username: row.sender_username,
+      body: row.body,
+      is_read: true,
+      external_message_id: null,
+      created_at: row.created_at,
+    }));
+  } catch {
+    return [];
+  }
 }
 
 // Helper: get seller's eBay username for direction detection
@@ -606,37 +684,53 @@ export async function getEbayMessages(
   // Post Order inquiry messages
   if (threadId.startsWith("ebay-inquiry-")) {
     const inquiryId = threadId.replace("ebay-inquiry-", "");
-    return fetchInquiryMessages(userId, inquiryId);
+    const [ebayMessages, savedOutbound] = await Promise.all([
+      fetchInquiryMessages(userId, inquiryId),
+      loadOutboundMessages(userId, threadId),
+    ]);
+    return mergeAndSort(ebayMessages, savedOutbound);
   }
 
   // Trading API messages — group by stable buyer/listing thread id
   if (threadId.startsWith("ebay-msg-")) {
-    const exchanges = await fetchMemberMessageExchanges(userId);
+    const [exchanges, sellerUsername, savedOutbound] = await Promise.all([
+      fetchMemberMessageExchanges(userId),
+      getSellerEbayUsername(userId),
+      loadOutboundMessages(userId, threadId),
+    ]);
     const buckets = buildMemberThreadBuckets(exchanges);
     const threadExchanges = [...(buckets.get(threadId) ?? [])].sort(
       (a, b) =>
         new Date(a.creationDate).getTime() - new Date(b.creationDate).getTime()
     );
 
-    const allMessages: Message[] = [];
+    const ebayMessages: Message[] = [];
     for (const exchange of threadExchanges) {
-      // Buyer's question
-      allMessages.push({
+      // eBay API only returns buyer (inbound) messages — seller replies are not included
+      // Direction: if sender matches seller username it's outbound, otherwise inbound
+      const isSellerExchange = sellerUsername
+        ? exchange.sender.toLowerCase() === sellerUsername.toLowerCase()
+        : false;
+
+      ebayMessages.push({
         id: `${threadId}-q-${exchange.messageId}`,
         thread_id: threadId,
-        direction: "inbound",
+        direction: isSellerExchange ? "outbound" : "inbound",
         sender_username: exchange.sender,
         body: exchange.body,
         is_read: exchange.isRead,
         external_message_id: exchange.messageId,
         created_at: exchange.creationDate,
       });
-      // Seller's responses within this exchange
+      // Nested Response blocks (present in some exchange formats)
       for (const response of exchange.responses) {
-        allMessages.push({
+        const isSellerResponse = sellerUsername
+          ? response.senderUsername.toLowerCase() === sellerUsername.toLowerCase()
+          : true;
+        ebayMessages.push({
           id: `${threadId}-r-${response.messageId}`,
           thread_id: threadId,
-          direction: "outbound",
+          direction: isSellerResponse ? "outbound" : "inbound",
           sender_username: response.senderUsername || "You",
           body: response.body,
           is_read: true,
@@ -645,14 +739,25 @@ export async function getEbayMessages(
         });
       }
     }
-    // Sort chronologically
-    allMessages.sort(
-      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-    );
-    return allMessages;
+
+    return mergeAndSort(ebayMessages, savedOutbound);
   }
 
   return [];
+}
+
+/** Merge eBay API messages with locally-saved outbound messages, dedup by body+date, sort chronologically */
+function mergeAndSort(ebayMessages: Message[], savedOutbound: Message[]): Message[] {
+  // Deduplicate: if a saved outbound message matches an eBay message by body, skip it
+  const ebayOutboundBodies = new Set(
+    ebayMessages.filter((m) => m.direction === "outbound").map((m) => m.body.trim())
+  );
+  const uniqueOutbound = savedOutbound.filter(
+    (m) => !ebayOutboundBodies.has(m.body.trim())
+  );
+  const all = [...ebayMessages, ...uniqueOutbound];
+  all.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  return all;
 }
 
 export async function sendEbayMessage(
@@ -682,15 +787,19 @@ export async function sendEbayMessage(
       throw new Error(`Unable to send message to eBay (${res.status}). ${errorBody}`.trim());
     }
 
+    const sellerUsername = await getSellerEbayUsername(userId);
+    const sentAt = new Date().toISOString();
+    await saveOutboundMessage(userId, threadId, content, sellerUsername ?? "You");
+
     const sent: Message = {
       id: `${threadId}-${Date.now()}`,
       thread_id: threadId,
       direction: "outbound",
-      sender_username: "You",
+      sender_username: sellerUsername ?? "You",
       body: content,
       is_read: true,
       external_message_id: null,
-      created_at: new Date().toISOString(),
+      created_at: sentAt,
     };
     invalidateUserMessagingCaches(userId);
     return sent;
@@ -746,15 +855,19 @@ export async function sendEbayMessage(
       );
     }
 
+    const sellerUsername2 = await getSellerEbayUsername(userId);
+    const sentAt2 = new Date().toISOString();
+    await saveOutboundMessage(userId, threadId, content, sellerUsername2 ?? "You");
+
     const sent: Message = {
       id: `${threadId}-${Date.now()}`,
       thread_id: threadId,
       direction: "outbound",
-      sender_username: "You",
+      sender_username: sellerUsername2 ?? "You",
       body: content,
       is_read: true,
       external_message_id: null,
-      created_at: new Date().toISOString(),
+      created_at: sentAt2,
     };
     invalidateUserMessagingCaches(userId);
     return sent;
@@ -780,4 +893,50 @@ export async function getEbayMessagingStats(
     open_offers: openOffers,
     avg_response_time_hours: null,
   };
+}
+
+/** Debug: returns raw parsed exchanges for a thread — used by ?debug=1 on the thread API route */
+export async function getEbayRawDebug(
+  userId: string,
+  threadId: string
+): Promise<unknown> {
+  const sellerUsername = await getSellerEbayUsername(userId);
+
+  if (threadId.startsWith("ebay-msg-")) {
+    // Bypass cache to always get fresh data
+    memberExchangeCache.delete(userId);
+    const exchanges = await fetchMemberMessageExchanges(userId);
+    const buckets = buildMemberThreadBuckets(exchanges);
+    const threadExchanges = buckets.get(threadId) ?? [];
+    return {
+      sellerUsername,
+      threadId,
+      exchangeCount: threadExchanges.length,
+      exchanges: threadExchanges.map((e) => ({
+        messageId: e.messageId,
+        sender: e.sender,
+        isSellerExchange: sellerUsername
+          ? e.sender.toLowerCase() === sellerUsername.toLowerCase()
+          : false,
+        bodyPreview: e.body.slice(0, 80),
+        creationDate: e.creationDate,
+        status: e.status,
+        responseCount: e.responses.length,
+        responses: e.responses.map((r) => ({
+          messageId: r.messageId,
+          senderUsername: r.senderUsername,
+          bodyPreview: r.body.slice(0, 80),
+          creationDate: r.creationDate,
+        })),
+      })),
+    };
+  }
+
+  if (threadId.startsWith("ebay-inquiry-")) {
+    const inquiryId = threadId.replace("ebay-inquiry-", "");
+    const messages = await fetchInquiryMessages(userId, inquiryId);
+    return { sellerUsername, threadId, messages };
+  }
+
+  return { error: "Unknown thread type" };
 }

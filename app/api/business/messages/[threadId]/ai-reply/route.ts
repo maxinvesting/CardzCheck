@@ -33,7 +33,7 @@ export async function POST(
     return NextResponse.json({ error: "Invalid tone" }, { status: 400 });
   }
 
-  const reply = await generateAIReply(user.id, threadId, tone);
+  const result = await generateAIReply(user.id, threadId, tone);
 
-  return NextResponse.json({ reply });
+  return NextResponse.json({ reply: result.text, source: result.source });
 }

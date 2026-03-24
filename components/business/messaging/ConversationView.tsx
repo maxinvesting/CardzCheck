@@ -22,6 +22,7 @@ interface Props {
   negotiation: NegotiationAnalysis | null;
   onGenerateReply: (tone: string) => void;
   generatedReply: string | null;
+  replySource?: "ai" | "fallback" | null;
   replyLoading: boolean;
   onSendMessage: (body: string) => Promise<boolean>;
   sendLoading: boolean;
@@ -35,6 +36,7 @@ export default function ConversationView({
   negotiation,
   onGenerateReply,
   generatedReply,
+  replySource,
   replyLoading,
   onSendMessage,
   sendLoading,
@@ -43,6 +45,7 @@ export default function ConversationView({
 }: Props) {
   const [replyText, setReplyText] = useState("");
   const [showAI, setShowAI] = useState(false);
+  const lastBuyerMessage = [...messages].reverse().find((m) => m.direction === "inbound") ?? null;
 
   function handleUseReply(text: string) {
     setReplyText(text);
@@ -151,7 +154,9 @@ export default function ConversationView({
       {showAI && (
         <AIActionsPanel
           thread={thread}
+          lastBuyerMessage={lastBuyerMessage}
           generatedReply={generatedReply}
+          replySource={replySource ?? null}
           replyLoading={replyLoading}
           onGenerateReply={onGenerateReply}
           onUseReply={handleUseReply}
@@ -167,15 +172,14 @@ export default function ConversationView({
             onClick={() => setShowAI(!showAI)}
             className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
               showAI
-                ? "bg-[var(--biz-primary)] text-white"
-                : "border border-[var(--biz-border)] text-[var(--biz-muted)] hover:bg-[#F3F4F6] hover:text-[var(--biz-text)]"
+                ? "bg-emerald-600 text-white"
+                : "border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
             }`}
           >
             <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h6l2 2h6a2 2 0 012 2v2H3V5z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9h18v10a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
-            Draft Tools
+            AI Reply Assistant
           </button>
           {thread.ai_suggested_reply && !showAI && (
             <button
@@ -208,7 +212,7 @@ export default function ConversationView({
           <p className="mt-1.5 text-[11px] text-red-600">{sendError}</p>
         ) : (
           <p className="mt-1.5 text-[10px] text-[var(--biz-muted)]">
-            Replies send directly when supported for this conversation type.
+            Use <span className="font-medium text-emerald-700">AI Reply Assistant</span> above to generate a draft, then review and send.
           </p>
         )}
       </div>
