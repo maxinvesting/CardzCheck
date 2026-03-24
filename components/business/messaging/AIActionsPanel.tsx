@@ -19,7 +19,7 @@ interface Props {
   generatedReply: string | null;
   replySource: "ai" | "fallback" | null;
   replyLoading: boolean;
-  onGenerateReply: (tone: string) => void;
+  onGenerateReply: (tone: string, hint?: string) => void;
   onUseReply: (text: string) => void;
   onClose: () => void;
   businessName?: string | null;
@@ -39,6 +39,7 @@ export default function AIActionsPanel({
   const [selectedTone, setSelectedTone] = useState("professional");
   const [showTones, setShowTones] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [hint, setHint] = useState("");
 
   function handleCopy(text: string) {
     navigator.clipboard.writeText(text);
@@ -89,13 +90,26 @@ export default function AIActionsPanel({
         </div>
       )}
 
+      {/* Hint input */}
+      {!replyLoading && (
+        <div className="mb-3">
+          <textarea
+            value={hint}
+            onChange={(e) => setHint(e.target.value)}
+            placeholder="Add context… e.g. 'let them know the bundle ships Friday' or 'mention we can do $40'"
+            rows={2}
+            className="w-full resize-none rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 placeholder-gray-400 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+          />
+        </div>
+      )}
+
       {/* Generate controls (only when no draft shown) */}
       {!generatedReply && !replyLoading && (
         <div className="space-y-2">
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={() => onGenerateReply(selectedTone)}
+              onClick={() => onGenerateReply(selectedTone, hint)}
               className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:brightness-110 active:scale-[0.98]"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -183,7 +197,7 @@ export default function AIActionsPanel({
             </div>
             <button
               type="button"
-              onClick={() => onGenerateReply(selectedTone)}
+              onClick={() => onGenerateReply(selectedTone, hint)}
               className="flex items-center gap-1 text-[11px] font-medium text-gray-500 hover:text-emerald-700 transition-colors"
             >
               <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">

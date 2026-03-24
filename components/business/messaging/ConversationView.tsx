@@ -20,7 +20,7 @@ interface Props {
   thread: MessageThread;
   messages: Message[];
   negotiation: NegotiationAnalysis | null;
-  onGenerateReply: (tone: string) => void;
+  onGenerateReply: (tone: string, hint?: string) => void;
   generatedReply: string | null;
   replySource?: "ai" | "fallback" | null;
   replyLoading: boolean;

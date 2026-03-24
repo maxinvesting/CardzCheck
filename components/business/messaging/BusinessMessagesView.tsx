@@ -177,7 +177,7 @@ export default function BusinessMessagesView({
 
   // Generate AI reply
   const handleGenerateReply = useCallback(
-    async (tone: string) => {
+    async (tone: string, hint?: string) => {
       if (!selectedId) return;
       setReplyLoading(true);
       setGeneratedReply(null);
@@ -186,7 +186,7 @@ export default function BusinessMessagesView({
         const res = await fetch(`/api/business/messages/${selectedId}/ai-reply`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tone }),
+          body: JSON.stringify({ tone, hint: hint?.trim() || undefined }),
         });
         if (res.ok) {
           const data = await res.json();
