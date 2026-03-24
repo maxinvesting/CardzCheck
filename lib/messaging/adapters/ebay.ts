@@ -397,6 +397,11 @@ async function fetchMemberMessageExchanges(
         return [];
       }
 
+      // Log first 1200 chars of first page for debugging
+      if (page === 1) {
+        console.log("[ebay/debug] GetMemberMessages raw (first 1200):", text.slice(0, 1200));
+      }
+
       // Extract exchanges using simple regex (avoids XML parser dependency)
       // Note: use [^>]* to handle optional XML attributes on any tag
       const pageMessages: ParsedMemberMessage[] = [];
