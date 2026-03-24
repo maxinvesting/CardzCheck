@@ -210,6 +210,23 @@ function normalizeSubject(subject: string | null): string | null {
   return normalized.length > 0 ? normalized : null;
 }
 
+/**
+ * Extract a clean item title from an eBay subject line.
+ * eBay formats subjects as: "{username} sent a message about {item title} {item number}"
+ * We want just the item title (e.g. "Shedeur Sanders True Silver Rookie 2025 Panini Mosaic #290")
+ */
+function extractItemTitleFromSubject(subject: string | null): string | null {
+  if (!subject) return null;
+  // Strip Re:/Fw: prefix
+  let s = subject.replace(/^(re|fw|fwd)\s*:\s*/gi, "").trim();
+  // eBay pattern: "{username} sent a message about {item title} {ebay item number}"
+  const aboutMatch = /sent a message about (.+?)(?:\s+#?\d{10,}.*)?$/i.exec(s);
+  if (aboutMatch) return aboutMatch[1].trim() || null;
+  // Fallback: strip trailing eBay item number (12-digit)
+  s = s.replace(/\s*#?\d{10,}.*$/, "").trim();
+  return s.length > 0 ? s : null;
+}
+
 function memberThreadBaseId(
   sender: string,
   itemId: string | null,
@@ -428,7 +445,7 @@ async function fetchMemberMessageExchanges(
         const body = decodeBody(getFrom(questionBlock, "Body") || getFrom(block, "Body"));
         const itemId = getFrom(questionBlock, "ItemID") || getFrom(block, "ItemID");
         const subject = getFrom(questionBlock, "Subject") || getFrom(block, "Subject") || null;
-        const itemTitle = subject;
+        const itemTitle = extractItemTitleFromSubject(subject);
         const isRead = getFrom(questionBlock, "Read") === "true";
         const status = getFrom(block, "MessageStatus");
 

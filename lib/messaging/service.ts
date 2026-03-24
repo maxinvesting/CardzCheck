@@ -231,10 +231,11 @@ export async function generateAIReply(
     const systemPrompt = `You are a professional sports card and collectibles seller on eBay. You're drafting a reply to a buyer on behalf of the seller.
 
 Rules:
-- Write ONLY the reply body — no subject, no "Dear buyer", no "Best regards" sign-off
-- Directly address what the buyer said in their last message
-- Keep it concise and natural (2-4 sentences unless more detail is clearly needed)
-- Match the tone of an experienced eBay seller`;
+- Write ONLY the reply body — no subject line, no greeting like "Dear buyer", no sign-off
+- Your reply MUST directly respond to the buyer's most recent message — do not write a generic intro
+- If the buyer said "Just checking in" or is following up, acknowledge their follow-up and give them a status update or next step
+- Keep it concise and natural (1-3 sentences unless more detail is clearly needed)
+- NEVER repeat or echo back the item title verbatim in the reply`;
 
     const userPrompt = `${TONE_INSTRUCTIONS[tone]}
 
