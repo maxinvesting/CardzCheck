@@ -150,7 +150,9 @@ export async function POST(request: NextRequest) {
 
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-20250514",
-      max_tokens: 1800,
+      max_tokens: 4096,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      tools: [{ type: "web_search_20250305", name: "web_search" }] as any,
       system: `${BUSINESS_CONSULTANT_MASTER_PROMPT}
 
 ADDITIONAL EXECUTION RULES:
@@ -191,6 +193,8 @@ ${JSON.stringify(businessContext, null, 2)}`,
       ],
     });
 
+    // Filter to text blocks only — web_search_tool_result and tool_use blocks are
+    // intermediate steps and should not be included in the final response text.
     const textBlocks = response.content.filter((block) => block.type === "text");
     const modelText =
       textBlocks.length > 0
