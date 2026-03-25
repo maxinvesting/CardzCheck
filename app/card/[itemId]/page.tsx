@@ -21,7 +21,7 @@ import {
 import { useGradeEstimateFromImages } from "@/lib/grading/useGradeEstimateFromImages";
 import type { GradeEstimatorCardInput } from "@/lib/grade-estimator/value";
 import type { WorthGradingResult } from "@/types";
-import GetCompsButton from "@/components/ui/GetCompsButton";
+import { buildEbaySoldUrl } from "@/lib/ebay/comps-url";
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -91,6 +91,44 @@ function displayTitle(item: ProfileItem): string {
   if (item.title) return item.title;
   const parts = [item.year, item.player_name, item.set_name, item.grade];
   return parts.filter(Boolean).join(" ") || "Untitled";
+}
+
+function buildGradeSearchTerm(
+  grade?: string | null,
+  gradingCompany?: string | null
+): string | null {
+  const normalizedGrade = grade?.trim();
+  if (!normalizedGrade) return null;
+  if (/^(PSA|BGS|SGC|CGC)\s/i.test(normalizedGrade)) {
+    return normalizedGrade;
+  }
+  return `${(gradingCompany || "PSA").toUpperCase()} ${normalizedGrade}`;
+}
+
+function buildEbayActiveSearchQuery(item: ProfileItem, fallbackTitle: string): string {
+  const rawTitle = item.title?.trim();
+  if (rawTitle && !/^(PSA|BGS|SGC|CGC)?\s*\d+(\.\d+)?$/i.test(rawTitle)) {
+    return rawTitle;
+  }
+
+  const identityParts = [
+    item.year,
+    item.player_name,
+    item.set_name,
+    item.parallel_type,
+    item.insert,
+  ]
+    .map((part) => part?.trim())
+    .filter((part): part is string => Boolean(part));
+
+  const gradePart = buildGradeSearchTerm(item.grade, item.grading_company);
+  const parts = identityParts.length > 0 && gradePart
+    ? [...identityParts, gradePart]
+    : identityParts;
+  if (parts.length > 0) return parts.join(" ");
+  if (gradePart) return gradePart;
+  if (fallbackTitle.trim()) return fallbackTitle.trim();
+  return "sports trading card";
 }
 
 function fmtDate(d: string | null | undefined): string {
@@ -354,6 +392,23 @@ export default function CardProfilePage() {
 
   const imageUrl = item ? pickImageUrl(item) : null;
   const title = item ? displayTitle(item) : "";
+  const ebayActiveSearchQuery = item
+    ? buildEbayActiveSearchQuery(item, title)
+    : "sports trading card";
+  const ebayActiveSearchUrl = `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(
+    ebayActiveSearchQuery
+  )}&_sacat=212`;
+  const ebayCompsUrl = item
+    ? buildEbaySoldUrl({
+        player: item.player_name,
+        year: item.year,
+        setName: item.set_name,
+        parallel: item.parallel_type,
+        gradingCompany: item.grading_company,
+        grade: item.grade,
+        title: item.title ?? title,
+      })
+    : buildEbaySoldUrl({ title: "sports trading card" });
 
   useEffect(() => {
     if (!isBusinessMode || !item || imageUrl || attemptedImageHydrationRef.current) {
@@ -1090,6 +1145,16 @@ export default function CardProfilePage() {
                           Mark Sold
                         </button>
                       )}
+                      <a
+                        href={ebayCompsUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => setShowOverflow(false)}
+                        className="block w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors"
+                        style={{ color: "#3D3A37" }}
+                      >
+                        Find Comps on eBay
+                      </a>
                       <button
                         onClick={() => { setShowOverflow(false); setImageUrlInput(imageUrl ?? ""); setShowImageModal(true); }}
                         className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors"
@@ -1452,9 +1517,7 @@ export default function CardProfilePage() {
                     Search for comparable listings on eBay to track live market prices.
                   </p>
                   <a
-                    href={`https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(
-                      [item.year, item.player_name, item.set_name, item.grade].filter(Boolean).join(" ")
-                    )}&_sacat=212`}
+                    href={ebayActiveSearchUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-gray-800"
@@ -1463,7 +1526,7 @@ export default function CardProfilePage() {
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                     </svg>
-                    Search eBay
+                    Find Comps on eBay
                   </a>
                 </div>
               )}
