@@ -154,14 +154,14 @@ export default function BusinessDashboardView({
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       {/* ── Page header ─────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-xl font-semibold text-[var(--biz-text)] leading-snug">
+          <h1 className="text-lg font-semibold text-[var(--biz-text)] leading-snug">
             {businessName ?? "CardzCheck Business"}
           </h1>
-          <p className="mt-1 text-sm text-[var(--muted)]">
+          <p className="text-xs text-[var(--muted)]">
             Business overview &amp; insights
           </p>
         </div>
