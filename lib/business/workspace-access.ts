@@ -1,5 +1,5 @@
 import { hasActiveBusinessTier } from "@/lib/subscription-tier";
-import { isBusinessSubscriptionActive } from "@/lib/business/context";
+import { isBusinessSubscriptionActive } from "./subscription-utils";
 
 type SupabaseLike = {
   from: (table: string) => {
