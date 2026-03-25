@@ -22,6 +22,7 @@ import {
 import { buildGradeVerdict, type GradeVerdict } from "@/lib/grading/verdict";
 import { SpeakButton } from "@/components/ui/SpeakButton";
 import { buildCompsLinks } from "@/lib/ebay/comps-url";
+import PreSubmissionAnalysisSection from "@/components/grading/PreSubmissionAnalysisSection";
 
 interface GradeProbabilityPanelProps {
   estimate: GradeEstimate;
@@ -30,6 +31,9 @@ interface GradeProbabilityPanelProps {
     year?: string;
     set_name?: string;
     parallel_type?: string;
+    card_number?: string;
+    variation?: string;
+    insert?: string;
   } | null;
   primaryImageUrl?: string | null;
   imageUrls?: string[] | null;
@@ -869,6 +873,10 @@ export default function GradeProbabilityPanel({
           </div>
         );
       })()}
+
+      {cardIdentity && cardIdentity.player_name ? (
+        <PreSubmissionAnalysisSection estimate={estimate} cardIdentity={cardIdentity} />
+      ) : null}
 
       {/* Off-screen print target */}
       <div
