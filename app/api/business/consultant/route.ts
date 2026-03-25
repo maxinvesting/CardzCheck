@@ -134,13 +134,17 @@ export async function POST(request: NextRequest) {
 
     const anthropic = new Anthropic({ apiKey });
 
+    // Detect grading questions so we can inject a stronger pre-search instruction.
+    const isGradingQuestion = /grad(e|ing)|psa|bgs|sgc|slab|submit|submission|worth grading|grade roi/i.test(prompt);
+
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-20250514",
-      max_tokens: 4096,
+      max_tokens: 8096,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       tools: [{ type: "web_search_20250305", name: "web_search" }] as any,
       system: `${BUSINESS_CONSULTANT_MASTER_PROMPT}
 ${modeHint === "report" ? '\nMODE OVERRIDE: Always set response_mode to "report" for this request, regardless of question type.\n' : ""}
+${isGradingQuestion ? '\nGRADING ANALYSIS DETECTED: You MUST execute all three mandatory web_search calls (PSA 10, PSA 9, raw sold eBay 2026) BEFORE generating any analysis or JSON output. Do not produce the final JSON until all three searches are complete and you have real sold comp data. Use the exact fee figures from the system prompt — do not estimate fees.\n' : ""}
 ADDITIONAL EXECUTION RULES:
 - Use only the provided BUSINESS DATA JSON.
 - If a requested metric is not present in the JSON, explicitly mark it as a Constraint.
