@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import SportsCardBackground from "@/components/SportsCardBackground";
-import { hasActiveBusinessTier } from "@/lib/subscription-tier";
+import { hasBusinessWorkspaceAccess } from "@/lib/business/workspace-access";
 
 function LoginForm() {
   const [email, setEmail] = useState("");
@@ -37,13 +37,11 @@ function LoginForm() {
       let redirectTarget = redirectParam || "/dashboard";
 
       if (!redirectParam && data.user) {
-        const { data: sub } = await supabase
-          .from("subscriptions")
-          .select("tier, status, current_period_end")
-          .eq("user_id", data.user.id)
-          .maybeSingle();
-
-        if (hasActiveBusinessTier(sub)) {
+        const hasBusinessAccess = await hasBusinessWorkspaceAccess(
+          supabase as any,
+          data.user.id
+        );
+        if (hasBusinessAccess) {
           redirectTarget = "/business";
         }
       }
@@ -74,13 +72,13 @@ function LoginForm() {
               Comp, grade, and execute.
             </h1>
             <p className="mt-4 text-sm text-gray-400">
-              Sign in to continue with your pricing workflows, grading decisions, and portfolio
+              Sign in to continue with your pricing workflows, grading decisions, and inventory
               operations.
             </p>
             <ul className="mt-6 space-y-3 text-sm text-gray-300">
               <li className="flex items-center gap-2 rounded-lg border border-gray-800 bg-gray-950/40 p-3">
                 <span className="inline-block h-2 w-2 rounded-full bg-blue-400" />
-                Live comps and collection movement
+                Pricing insights and collection movement
               </li>
               <li className="flex items-center gap-2 rounded-lg border border-gray-800 bg-gray-950/40 p-3">
                 <span className="inline-block h-2 w-2 rounded-full bg-blue-400" />

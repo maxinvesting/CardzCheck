@@ -529,13 +529,13 @@ function CompsPageContent() {
         {/* Page Header */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-2">
-            <h1 className="text-3xl font-bold text-white">Comps</h1>
+            <h1 className="text-3xl font-bold text-gray-900">Compare Listings</h1>
             <span className="px-2 py-0.5 bg-amber-500/20 text-amber-400 text-xs font-medium rounded">
               Beta
             </span>
           </div>
           <p className="text-gray-400">
-            Find comparable listings and market values for any trading card
+            Review listing history and estimated values for any trading card
           </p>
         </div>
 
@@ -839,7 +839,7 @@ function CompsPageContent() {
                     {results._compEvaluation && results._compEvaluation.exactComps.length > 0 && (
                       <div className="space-y-3">
                         <h2 className="text-xl font-semibold text-white">
-                          Exact Comps ({results._compEvaluation.exactComps.length})
+                          Exact Matches ({results._compEvaluation.exactComps.length})
                         </h2>
                         <CompsTable
                           isCurrentListings
@@ -854,7 +854,7 @@ function CompsPageContent() {
                     {results._compEvaluation && results._compEvaluation.similarComps.length > 0 && (
                       <div className="space-y-3">
                         <h2 className="text-xl font-semibold text-white">
-                          Similar Support Comps ({results._compEvaluation.similarComps.length})
+                          Similar Support Matches ({results._compEvaluation.similarComps.length})
                         </h2>
                         <CompsTable
                           isCurrentListings
@@ -912,7 +912,7 @@ function CompsPageContent() {
                     {results._compEvaluation && results._compEvaluation.rejectedComps.length > 0 && (
                       <details className="rounded-lg border border-gray-700/60 bg-gray-900/20 p-3">
                         <summary className="cursor-pointer text-sm text-gray-300">
-                          Hidden weak/rejected comps ({results._compEvaluation.rejectedComps.length})
+                          Hidden weak/rejected matches ({results._compEvaluation.rejectedComps.length})
                         </summary>
                         <div className="mt-3">
                           <CompsTable

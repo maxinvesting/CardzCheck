@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { requireBusinessAccess } from "@/lib/business/actions";
+import { requireBusinessOwnerContext } from "@/lib/business/context";
 import { createListing } from "@/lib/ebay/selling/inventory-api";
 import { handleEbayListingCreated } from "@/lib/ebay/selling/event-handlers";
 import { businessInventoryProvider } from "@/lib/inventory/business-inventory-provider";
@@ -23,7 +23,7 @@ export async function GET(): Promise<NextResponse> {
     } = await supabase.auth.getUser();
 
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    await requireBusinessAccess(user.id);
+    await requireBusinessOwnerContext(user.id);
 
     const { data, error } = await supabase
       .from("ebay_listings")
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     } = await supabase.auth.getUser();
 
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    await requireBusinessAccess(user.id);
+    await requireBusinessOwnerContext(user.id);
 
     const body = await req.json();
     const {

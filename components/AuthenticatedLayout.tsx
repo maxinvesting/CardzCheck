@@ -12,7 +12,7 @@ export default function AuthenticatedLayout({
 }) {
   const pathname = usePathname();
   const isBusinessRoute = pathname?.startsWith("/business");
-  const isBusinessShell = isBusinessRoute || pathname === "/dashboard";
+  const isBusinessShell = isBusinessRoute || pathname === "/dashboard" || pathname?.startsWith("/grade-hub") || pathname?.startsWith("/bulk");
 
   return (
     <div

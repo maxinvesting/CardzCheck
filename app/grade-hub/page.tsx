@@ -1,10 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Playfair_Display } from "next/font/google";
 import { useAuth } from "@/contexts/AuthContext";
+import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import GradeEstimatorHistoryPanel from "@/components/grading/GradeEstimatorHistoryPanel";
+
+const playfair = Playfair_Display({ subsets: ["latin"], weight: ["400", "600"] });
+
+// CardzCheck blue = blue-600 (#2563eb)
+const CC_BLUE = "#2563eb";
+const GOLD = "#c8a951";
 
 type CreditStatus = {
   tier: "free" | "pro" | "business";
@@ -12,6 +19,8 @@ type CreditStatus = {
   remaining: number | null;
   nextGrantAt: string | null;
 };
+
+type Tab = "scan" | "batch" | "history";
 
 function formatTimeUntil(iso: string | null): string {
   if (!iso) return "";
@@ -24,155 +33,11 @@ function formatTimeUntil(iso: string | null): string {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
-// ── App top bar ────────────────────────────────────────────────────────────
-function AppBar({ tier, unlimited }: { tier?: string; unlimited?: boolean }) {
-  return (
-    <header className="fixed top-0 inset-x-0 z-40 border-b border-white/[0.06] bg-[#060a12]/80 backdrop-blur-xl">
-      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-5">
-        {/* Left: back to app */}
-        <Link
-          href="/dashboard"
-          className="flex items-center gap-2 text-xs text-white/40 transition-colors hover:text-white/70"
-        >
-          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-          CardzCheck
-        </Link>
-
-        {/* Center: wordmark */}
-        <div className="flex items-center gap-2.5">
-          <ScanEngineLogo />
-          <div className="leading-none">
-            <span className="text-sm font-bold tracking-tight text-white">GradeScan</span>
-            <span className="ml-1.5 text-[10px] font-semibold tracking-widest text-blue-400 uppercase">Engine</span>
-          </div>
-        </div>
-
-        {/* Right: tier pill */}
-        <div className="flex items-center gap-3">
-          {tier && <TierPill tier={tier} />}
-          {unlimited && (
-            <span className="hidden sm:inline text-[11px] text-white/30">Unlimited</span>
-          )}
-        </div>
-      </div>
-    </header>
-  );
-}
-
-// ── Logo mark ──────────────────────────────────────────────────────────────
-function ScanEngineLogo() {
-  return (
-    <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-      <rect width="28" height="28" rx="7" fill="url(#se-g)" />
-      {/* scan line */}
-      <rect x="6" y="13" width="16" height="1.5" rx="0.75" fill="white" opacity="0.9" />
-      {/* card outline */}
-      <rect x="8" y="8" width="12" height="12" rx="2" stroke="white" strokeWidth="1.5" opacity="0.45" fill="none" />
-      {/* corner markers */}
-      <path d="M8 11V8h3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.9" />
-      <path d="M20 11V8h-3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.9" />
-      <path d="M8 17v3h3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.9" />
-      <path d="M20 17v3h-3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.9" />
-      <defs>
-        <linearGradient id="se-g" x1="0" y1="0" x2="28" y2="28">
-          <stop stopColor="#2563eb" />
-          <stop offset="1" stopColor="#1e40af" />
-        </linearGradient>
-      </defs>
-    </svg>
-  );
-}
-
-// ── Tier pill ──────────────────────────────────────────────────────────────
-function TierPill({ tier }: { tier: string }) {
-  const map: Record<string, { label: string; cls: string }> = {
-    free:     { label: "Free",     cls: "text-white/40 border-white/10 bg-white/[0.03]" },
-    pro:      { label: "Personal", cls: "text-blue-400 border-blue-500/30 bg-blue-500/10" },
-    business: { label: "Business", cls: "text-amber-400 border-amber-500/30 bg-amber-500/10" },
-  };
-  const { label, cls } = map[tier] ?? map.free;
-  return (
-    <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[10px] font-bold tracking-widest uppercase ${cls}`}>
-      <span className="h-1 w-1 rounded-full bg-current opacity-80" />
-      {label}
-    </span>
-  );
-}
-
-// ── Animated scan lines (decorative) ──────────────────────────────────────
-function ScanGrid() {
-  return (
-    <div className="pointer-events-none absolute inset-0 overflow-hidden opacity-[0.035]">
-      {/* horizontal scan lines */}
-      {Array.from({ length: 20 }).map((_, i) => (
-        <div key={i} className="absolute w-full border-t border-blue-400" style={{ top: `${i * 5}%` }} />
-      ))}
-      {/* vertical scan lines */}
-      {Array.from({ length: 20 }).map((_, i) => (
-        <div key={i} className="absolute h-full border-l border-blue-400" style={{ left: `${i * 5}%` }} />
-      ))}
-    </div>
-  );
-}
-
-// ── Grade probability visual ───────────────────────────────────────────────
-function GradeBar({ grade, pct, active }: { grade: string; pct: number; active?: boolean }) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className={`w-8 text-right text-[10px] font-bold ${active ? "text-blue-400" : "text-white/30"}`}>{grade}</span>
-      <div className="relative flex-1 h-1.5 rounded-full bg-white/[0.06]">
-        <div
-          className={`absolute left-0 top-0 h-full rounded-full transition-all duration-700 ${active ? "bg-blue-500" : "bg-white/20"}`}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-      <span className={`w-8 text-[10px] ${active ? "text-blue-400 font-semibold" : "text-white/20"}`}>{pct}%</span>
-    </div>
-  );
-}
-
-// ── Stat card ─────────────────────────────────────────────────────────────
-function StatCard({ value, label, sub }: { value: string; label: string; sub?: string }) {
-  return (
-    <div className="space-y-1 rounded-xl border border-white/[0.07] bg-white/[0.02] px-5 py-4">
-      <p className="text-2xl font-extrabold tracking-tight text-white">{value}</p>
-      <p className="text-xs font-semibold text-white/60">{label}</p>
-      {sub && <p className="text-[10px] text-white/25">{sub}</p>}
-    </div>
-  );
-}
-
-// ── Credit ring ───────────────────────────────────────────────────────────
-function CreditRing({ remaining, total = 2 }: { remaining: number; total?: number }) {
-  const r = 18;
-  const circ = 2 * Math.PI * r;
-  const pct = remaining / total;
-  const color = remaining === 0 ? "#f43f5e" : remaining === 1 ? "#f59e0b" : "#22c55e";
-  return (
-    <svg width="44" height="44" viewBox="0 0 44 44" className="shrink-0">
-      <circle cx="22" cy="22" r={r} fill="none" stroke="white" strokeOpacity="0.06" strokeWidth="3" />
-      <circle
-        cx="22" cy="22" r={r}
-        fill="none"
-        stroke={color}
-        strokeWidth="3"
-        strokeDasharray={circ}
-        strokeDashoffset={circ * (1 - pct)}
-        strokeLinecap="round"
-        transform="rotate(-90 22 22)"
-        style={{ transition: "stroke-dashoffset 0.6s ease" }}
-      />
-      <text x="22" y="26" textAnchor="middle" fontSize="11" fontWeight="700" fill="white">{remaining}</text>
-    </svg>
-  );
-}
-
 export default function GradeHubPage() {
   const { authUser, loading: authLoading } = useAuth();
   const router = useRouter();
   const [credits, setCredits] = useState<CreditStatus | null>(null);
+  const [activeTab, setActiveTab] = useState<Tab>("scan");
 
   useEffect(() => {
     if (!authLoading && !authUser) router.replace("/login");
@@ -188,223 +53,439 @@ export default function GradeHubPage() {
   const isBusiness = credits?.tier === "business";
   const isUnlimited = credits?.unlimited === true;
   const canScan = isUnlimited || (credits?.remaining ?? 0) > 0;
+  const remaining = credits?.remaining ?? 0;
+
+  const tabs: { key: Tab; label: string; show: boolean }[] = [
+    { key: "scan", label: "Scan a card", show: true },
+    { key: "batch", label: "Batch scan", show: isBusiness },
+    { key: "history", label: "History", show: true },
+  ];
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden" style={{ background: "#060a12" }}>
-      <ScanGrid />
-      <AppBar tier={credits?.tier} unlimited={isUnlimited} />
+    <AuthenticatedLayout>
+      <div className="min-h-screen bg-[#fafafa]">
 
-      {/* ── Hero section ──────────────────────────────────────────────────── */}
-      <section className="relative pt-14">
-        {/* Glow */}
-        <div className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] rounded-full bg-blue-600/10 blur-[80px]" />
+        {/* ── Tab bar ──────────────────────────────────────────────────── */}
+        <div
+          style={{ backgroundColor: CC_BLUE, borderBottom: `3px solid ${GOLD}` }}
+          className="flex items-center gap-0 px-6"
+        >
+          {/* Tabs */}
+          <div className="flex items-stretch flex-1">
+            {tabs.filter((t) => t.show).map((tab) => {
+              const isActive = activeTab === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key)}
+                  className="relative px-5 py-3.5 transition-colors"
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.6px",
+                    color: isActive ? "#fff" : "rgba(255,255,255,0.55)",
+                    borderBottom: isActive ? `3px solid ${GOLD}` : "3px solid transparent",
+                    marginBottom: -3,
+                    background: "transparent",
+                    border: "none",
+                    borderBottomWidth: 3,
+                    borderBottomStyle: "solid",
+                    borderBottomColor: isActive ? GOLD : "transparent",
+                  }}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
 
-        <div className="mx-auto max-w-6xl px-5">
-          <div className="flex min-h-[calc(100vh-56px)] flex-col items-center justify-center gap-16 py-20 lg:flex-row lg:items-start lg:justify-between lg:py-28">
+          {/* Right-side action buttons */}
+          <div className="flex items-center gap-2 py-2">
+            <button
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: "0.6px",
+                borderRadius: 2,
+                border: "1px solid rgba(255,255,255,0.6)",
+                color: "#fff",
+                background: "transparent",
+                padding: "6px 14px",
+              }}
+            >
+              Settings
+            </button>
+            <button
+              onClick={() => router.push(isBusiness ? "/grade-hub/scan?slots=1" : "/grade-hub/scan?slots=1")}
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: "0.6px",
+                borderRadius: 2,
+                border: "none",
+                color: "#1e3a8a",
+                background: GOLD,
+                padding: "6px 14px",
+              }}
+            >
+              New scan
+            </button>
+          </div>
+        </div>
 
-            {/* Left: headline + CTA */}
-            <div className="relative z-10 max-w-xl space-y-8 text-center lg:text-left">
-              <div className="space-y-2">
-                <p className="text-[11px] font-bold tracking-[0.2em] uppercase text-blue-500">
-                  AI Pre-Grade Analysis Engine
-                </p>
-                <h1 className="text-[clamp(2.4rem,5vw,3.6rem)] font-black leading-[1.05] tracking-tight text-white">
-                  Know the grade<br />
-                  <span className="relative">
-                    <span className="relative z-10 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400">
-                      before you submit.
-                    </span>
-                  </span>
-                </h1>
-                <p className="mt-4 max-w-md text-base leading-relaxed text-white/45">
-                  Upload front and back. Our engine scores centering, corners, edges,
-                  and surface — delivering calibrated PSA & BGS grade probabilities in seconds.
-                </p>
-              </div>
+        {/* ── Body ─────────────────────────────────────────────────────── */}
+        <div className="px-6 py-8 max-w-4xl mx-auto space-y-7">
 
-              {/* Free credit indicator */}
-              {!isUnlimited && credits && (
-                <div className="inline-flex items-center gap-4 rounded-2xl border border-white/[0.08] bg-white/[0.03] px-5 py-3.5">
-                  <CreditRing remaining={credits.remaining ?? 0} />
-                  <div>
-                    <p className="text-sm font-semibold text-white">
-                      {credits.remaining === 0 ? "No scans remaining" : `${credits.remaining} scan${credits.remaining !== 1 ? "s" : ""} remaining`}
+          {/* ── Page header ──────────────────────────────────────────── */}
+          <div className="space-y-1">
+            <p
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: "1.2px",
+                color: GOLD,
+              }}
+            >
+              Grade Probability Engine
+            </p>
+            <h1
+              className={playfair.className}
+              style={{ fontSize: 26, fontWeight: 600, color: CC_BLUE, lineHeight: 1.2 }}
+            >
+              Estimate your grade odds.
+            </h1>
+            <p style={{ fontSize: 13, color: "#6b7280", lineHeight: 1.5, maxWidth: 560 }}>
+              Upload card images — the engine scores centering, corners, edges &amp; surface and returns calibrated PSA &amp; BGS distributions.
+            </p>
+          </div>
+
+          {/* ── Tab: Scan a card / Batch scan ────────────────────────── */}
+          {(activeTab === "scan" || activeTab === "batch") && (
+            <>
+              {/* Upload zone */}
+              <div
+                style={{
+                  background: "#fff",
+                  border: "1px solid #d0d5dd",
+                  borderTop: `3px solid ${CC_BLUE}`,
+                  borderRadius: 2,
+                }}
+              >
+                {/* Main drop area */}
+                <div className="flex flex-col items-center gap-4 px-8 py-10">
+                  {/* Upload icon circle */}
+                  <div
+                    style={{
+                      width: 56,
+                      height: 56,
+                      borderRadius: "50%",
+                      border: `2px solid ${CC_BLUE}`,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: CC_BLUE,
+                    }}
+                  >
+                    <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+                        d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                    </svg>
+                  </div>
+
+                  <div className="text-center space-y-1.5">
+                    <p className={`${playfair.className}`} style={{ fontSize: 17, fontWeight: 600, color: "#111827" }}>
+                      Drop card images here
                     </p>
-                    <p className="text-[11px] text-white/35">
-                      {credits.nextGrantAt && (credits.remaining ?? 0) < 2
-                        ? `+1 free credit in ${formatTimeUntil(credits.nextGrantAt)}`
-                        : "2 free credits · replenishes weekly"}
+                    <p style={{ fontSize: 13, color: "#6b7280", lineHeight: 1.5, maxWidth: 420 }}>
+                      Upload front &amp; back for a full grade probability breakdown across PSA &amp; BGS scales.
                     </p>
                   </div>
-                </div>
-              )}
 
-              {/* CTA */}
-              <div className="flex flex-col items-center gap-3 sm:flex-row lg:items-start">
-                {canScan ? (
-                  <Link
-                    href="/grade-hub/scan?slots=1"
-                    className="group relative inline-flex items-center gap-3 overflow-hidden rounded-2xl bg-blue-600 px-7 py-4 text-sm font-bold text-white shadow-2xl shadow-blue-900/50 transition-all duration-200 hover:bg-blue-500 hover:shadow-blue-800/60 active:scale-[0.97]"
+                  {/* Factor row */}
+                  <div
+                    style={{
+                      border: "1px solid #d0d5dd",
+                      borderRadius: 2,
+                      display: "flex",
+                      width: "100%",
+                      maxWidth: 420,
+                      overflow: "hidden",
+                    }}
                   >
-                    <span className="pointer-events-none absolute inset-0 -translate-x-full animate-[shimmer_2.5s_infinite] bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-                    <ScanEngineLogo />
-                    <span className="text-[15px]">Scan a Card</span>
-                    <svg className="h-4 w-4 transition-transform duration-150 group-hover:translate-x-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                    </svg>
-                  </Link>
-                ) : (
-                  <Link
-                    href="/settings"
-                    className="inline-flex items-center gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-7 py-4 text-sm font-bold text-amber-400 transition-all hover:bg-amber-500/20 active:scale-[0.97]"
-                  >
-                    Upgrade for unlimited scans
-                  </Link>
-                )}
-                {isBusiness && canScan && (
-                  <Link
-                    href="/grade-hub/scan?slots=3"
-                    className="inline-flex items-center gap-2 rounded-2xl border border-white/[0.10] bg-white/[0.04] px-5 py-4 text-sm font-semibold text-white/60 transition-all hover:border-white/20 hover:bg-white/[0.07] hover:text-white/80 active:scale-[0.97]"
-                  >
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                    </svg>
-                    Batch (3 cards)
-                  </Link>
-                )}
-              </div>
-            </div>
-
-            {/* Right: mock grade output panel */}
-            <div className="relative w-full max-w-[340px] shrink-0 lg:mt-8">
-              {/* Glow behind panel */}
-              <div className="pointer-events-none absolute inset-0 rounded-2xl bg-blue-600/15 blur-2xl scale-95" />
-              <div className="relative rounded-2xl border border-white/[0.09] bg-[#0c1220] p-5 shadow-2xl">
-                <div className="mb-4 flex items-center justify-between">
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-white/30">Grade Analysis</p>
-                    <p className="mt-0.5 text-sm font-bold text-white">2023 Topps Chrome · Ohtani RC</p>
+                    {["Centering", "Corners", "Edges", "Surface"].map((f, i) => (
+                      <div
+                        key={f}
+                        style={{
+                          flex: 1,
+                          textAlign: "center",
+                          padding: "8px 4px",
+                          fontSize: 10,
+                          fontWeight: 700,
+                          textTransform: "uppercase",
+                          letterSpacing: "0.8px",
+                          color: "#9ca3af",
+                          borderRight: i < 3 ? "1px solid #d0d5dd" : "none",
+                        }}
+                      >
+                        {f}
+                      </div>
+                    ))}
                   </div>
-                  <span className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 text-[11px] font-bold text-emerald-400">
-                    PSA 10 · 68%
-                  </span>
+
+                  {/* CTA buttons */}
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => canScan
+                        ? router.push(activeTab === "batch" ? "/grade-hub/scan?slots=3" : "/grade-hub/scan?slots=1")
+                        : router.push("/settings")
+                      }
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 700,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.6px",
+                        borderRadius: 2,
+                        border: "none",
+                        color: "#fff",
+                        background: canScan ? CC_BLUE : "#9ca3af",
+                        padding: "9px 20px",
+                        cursor: canScan ? "pointer" : "not-allowed",
+                      }}
+                    >
+                      {canScan ? "Choose files" : "No scans left"}
+                    </button>
+                    {isBusiness && activeTab === "scan" && (
+                      <button
+                        onClick={() => canScan ? router.push("/grade-hub/scan?slots=3") : undefined}
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 700,
+                          textTransform: "uppercase",
+                          letterSpacing: "0.6px",
+                          borderRadius: 2,
+                          border: `1px solid ${CC_BLUE}`,
+                          color: CC_BLUE,
+                          background: "transparent",
+                          padding: "9px 20px",
+                          opacity: canScan ? 1 : 0.5,
+                        }}
+                      >
+                        Batch scan
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Fine print */}
+                  <p style={{ fontSize: 10, color: "#d1d5db" }}>
+                    {isBusiness
+                      ? "Business plan · Up to 3 cards per batch · Unlimited scans"
+                      : isUnlimited
+                      ? "Unlimited scans"
+                      : `${remaining} scan${remaining !== 1 ? "s" : ""} remaining${credits?.nextGrantAt ? ` · +1 in ${formatTimeUntil(credits.nextGrantAt)}` : ""}`
+                    }
+                  </p>
                 </div>
-                <div className="space-y-2.5">
-                  <GradeBar grade="10" pct={68} active />
-                  <GradeBar grade="9" pct={22} />
-                  <GradeBar grade="8" pct={7} />
-                  <GradeBar grade="7" pct={3} />
-                </div>
-                <div className="mt-4 grid grid-cols-4 gap-2 border-t border-white/[0.06] pt-4">
-                  {[
-                    { label: "Centering", val: "9.5" },
-                    { label: "Corners", val: "10" },
-                    { label: "Edges", val: "9.5" },
-                    { label: "Surface", val: "10" },
-                  ].map(({ label, val }) => (
-                    <div key={label} className="text-center">
-                      <p className="text-[13px] font-extrabold text-white">{val}</p>
-                      <p className="text-[9px] text-white/30">{label}</p>
+              </div>
+
+              {/* Stats strip */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(4, 1fr)",
+                  border: "1px solid #d0d5dd",
+                  borderRadius: 2,
+                  background: "#fff",
+                  overflow: "hidden",
+                }}
+              >
+                {[
+                  { label: "Total scans", value: "—", delta: null },
+                  { label: "Avg centering", value: "—", delta: null },
+                  { label: "PSA 9+ rate", value: "—", delta: null },
+                  { label: "High confidence", value: "—", delta: null },
+                ].map((stat: { label: string; value: string; delta: string | null }, i) => (
+                  <div
+                    key={stat.label}
+                    style={{
+                      padding: "14px 16px",
+                      borderRight: i < 3 ? "1px solid #d0d5dd" : "none",
+                    }}
+                  >
+                    <p
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.8px",
+                        color: "#9ca3af",
+                        marginBottom: 4,
+                      }}
+                    >
+                      {stat.label}
+                    </p>
+                    <p
+                      className={playfair.className}
+                      style={{ fontSize: 22, fontWeight: 600, color: CC_BLUE, lineHeight: 1.1 }}
+                    >
+                      {stat.value}
+                    </p>
+                    {stat.delta && (
+                      <p
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 600,
+                          color: stat.delta.startsWith("+") ? "#2d7a4e" : "#b91c1c",
+                          marginTop: 2,
+                        }}
+                      >
+                        {stat.delta}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* ── Tab: History ─────────────────────────────────────────── */}
+          {activeTab === "history" && (
+            <div>
+              {/* Section header */}
+              <div className="flex items-center justify-between mb-4">
+                <h2
+                  className={playfair.className}
+                  style={{ fontSize: 16, fontWeight: 600, color: CC_BLUE }}
+                >
+                  Recent scans
+                </h2>
+                <button
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.6px",
+                    color: GOLD,
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                  }}
+                >
+                  View all →
+                </button>
+              </div>
+
+              {/* History panel wrapped in table-styled container */}
+              <div
+                style={{
+                  border: "1px solid #d0d5dd",
+                  borderRadius: 2,
+                  overflow: "hidden",
+                }}
+              >
+                {/* Table header row */}
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "48px 1fr 120px 100px 80px 36px",
+                    background: CC_BLUE,
+                    padding: "10px 16px",
+                    gap: 8,
+                  }}
+                >
+                  {["", "Card", "Grade range", "Confidence", "Date", ""].map((col, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.8px",
+                        color: "rgba(255,255,255,0.6)",
+                      }}
+                    >
+                      {col}
                     </div>
                   ))}
                 </div>
+
+                {/* History panel output */}
+                <div className="divide-y divide-gray-100">
+                  <GradeEstimatorHistoryPanel onSelect={() => {}} />
+                </div>
               </div>
             </div>
-          </div>
-        </div>
-      </section>
+          )}
 
-      {/* ── Stats row ─────────────────────────────────────────────────────── */}
-      <section className="border-t border-white/[0.05]">
-        <div className="mx-auto max-w-6xl px-5 py-12">
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <StatCard value="4" label="Attributes scored" sub="Centering · Corners · Edges · Surface" />
-            <StatCard value="PSA & BGS" label="Grading scales" sub="Full probability distribution" />
-            <StatCard value="&lt;60s" label="Average analysis time" sub="Async job processing" />
-            <StatCard value={isBusiness ? "3 cards" : "1 card"} label="Batch scan limit" sub={isBusiness ? "Business plan" : "Upgrade for batch"} />
-          </div>
-        </div>
-      </section>
-
-      {/* ── How it works ──────────────────────────────────────────────────── */}
-      <section className="border-t border-white/[0.05]">
-        <div className="mx-auto max-w-6xl px-5 py-16">
-          <p className="mb-10 text-[11px] font-bold uppercase tracking-[0.18em] text-white/25">How it works</p>
-          <div className="grid gap-6 sm:grid-cols-3">
-            {[
-              {
-                step: "01",
-                title: "Upload photos",
-                desc: "Provide front and back. Add corner or edge close-ups for higher confidence.",
-                icon: (
-                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                ),
-              },
-              {
-                step: "02",
-                title: "Engine analyzes",
-                desc: "Our AI scores each of the four PSA/BGS sub-grades: centering, corners, edges, and surface.",
-                icon: (
-                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                  </svg>
-                ),
-              },
-              {
-                step: "03",
-                title: "Grade probabilities",
-                desc: "Receive a full distribution across every grade tier — not just a single estimate.",
-                icon: (
-                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                  </svg>
-                ),
-              },
-            ].map(({ step, title, desc, icon }) => (
-              <div key={step} className="group space-y-4 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6 transition-colors hover:border-white/[0.10] hover:bg-white/[0.03]">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600/10 text-blue-400">
-                    {icon}
-                  </div>
-                  <span className="font-mono text-[10px] font-bold text-white/20">{step}</span>
+          {/* Recent scans preview on scan/batch tabs */}
+          {activeTab !== "history" && (
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h2
+                  className={playfair.className}
+                  style={{ fontSize: 16, fontWeight: 600, color: CC_BLUE }}
+                >
+                  Recent scans
+                </h2>
+                <button
+                  onClick={() => setActiveTab("history")}
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.6px",
+                    color: GOLD,
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                  }}
+                >
+                  View all →
+                </button>
+              </div>
+              <div
+                style={{
+                  border: "1px solid #d0d5dd",
+                  borderRadius: 2,
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "48px 1fr 120px 100px 80px 36px",
+                    background: CC_BLUE,
+                    padding: "10px 16px",
+                    gap: 8,
+                  }}
+                >
+                  {["", "Card", "Grade range", "Confidence", "Date", ""].map((col, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.8px",
+                        color: "rgba(255,255,255,0.6)",
+                      }}
+                    >
+                      {col}
+                    </div>
+                  ))}
                 </div>
-                <div>
-                  <p className="font-bold text-white">{title}</p>
-                  <p className="mt-1.5 text-sm leading-relaxed text-white/40">{desc}</p>
+                <div className="divide-y divide-gray-100">
+                  <GradeEstimatorHistoryPanel onSelect={() => {}} />
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
+            </div>
+          )}
 
-      {/* ── Scan history ──────────────────────────────────────────────────── */}
-      <section className="border-t border-white/[0.05]">
-        <div className="mx-auto max-w-6xl px-5 py-14">
-          <p className="mb-6 text-[11px] font-bold uppercase tracking-[0.18em] text-white/25">Recent scans</p>
-          <GradeEstimatorHistoryPanel onSelect={() => {}} />
         </div>
-      </section>
-
-      {/* ── Footer ────────────────────────────────────────────────────────── */}
-      <footer className="border-t border-white/[0.05]">
-        <div className="mx-auto max-w-6xl px-5 py-8">
-          <p className="text-[11px] leading-relaxed text-white/20 max-w-2xl">
-            GradeScan Engine provides AI-assisted grade probability estimates. Results are not guaranteed
-            and should not replace professional grading judgment. CardzCheck is not affiliated with PSA,
-            BGS, SGC, or any grading company.
-          </p>
-        </div>
-      </footer>
-
-      <style>{`
-        @keyframes shimmer {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(200%); }
-        }
-      `}</style>
-    </div>
+      </div>
+    </AuthenticatedLayout>
   );
 }

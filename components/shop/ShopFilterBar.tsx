@@ -153,7 +153,7 @@ export default function ShopFilterBar({
           />
         </div>
         <span className="shrink-0 text-sm tabular-nums text-slate-500">
-          {resultCount} listings
+          {resultCount} deals
         </span>
       </div>
 
@@ -177,7 +177,7 @@ export default function ShopFilterBar({
           </svg>
           Filters
         </button>
-        <span className="text-sm tabular-nums text-slate-500">{resultCount} listings</span>
+        <span className="text-sm tabular-nums text-slate-500">{resultCount} deals</span>
       </div>
 
       {mobileOpen && (

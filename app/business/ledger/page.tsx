@@ -35,6 +35,7 @@ import type {
   BusinessMetrics as MetricsType,
   BusinessSale,
   EbayAccountStatus,
+  UserStorefront,
 } from "@/types";
 import type { StoreTier } from "@/lib/business/EbayProfitEngine";
 import {
@@ -58,6 +59,7 @@ import {
 const EBAY_STORE_URL_STORAGE_KEY = "cardzcheck_ebay_store_url";
 const EBAY_STORE_URL_UPDATED_EVENT = "cardzcheck:ebay-store-url-updated";
 const PERF_MOCK_ITEM_COUNT = 1200;
+const PERF_MOCK_BUSINESS_ACCOUNT_ID = "perf-business-account";
 
 function readStoredEbayStoreUrl(): string | null {
   if (typeof window === "undefined") return null;
@@ -118,6 +120,7 @@ function buildPerfMockInventory(count = PERF_MOCK_ITEM_COUNT): BusinessInventory
     return {
       id: `perf-item-${index + 1}`,
       user_id: "perf-user",
+      business_account_id: PERF_MOCK_BUSINESS_ACCOUNT_ID,
       card_id: `perf-card-${index + 1}`,
       title: `2024 Topps Chrome Prospect ${index + 1}`,
       quantity: (index % 3) + 1,
@@ -192,6 +195,10 @@ function LedgerPageContent() {
   const [salesPageSize] = useState(50);
   const [salesTotal, setSalesTotal] = useState(0);
   const [storeTier, setStoreTier] = useState<StoreTier>("none");
+  const [ebayConnected, setEbayConnected] = useState(false);
+  const [ebayTopRated, setEbayTopRated] = useState(false);
+  const [whatnotStorefront, setWhatnotStorefront] = useState<UserStorefront | null>(null);
+  const [websiteStorefront, setWebsiteStorefront] = useState<UserStorefront | null>(null);
   const perfEnabled = useMemo(() => isPerfEnabled(), []);
   const perfMockMode = useMemo(
     () => perfEnabled && searchParams.get("perfMock") === "1",
@@ -219,7 +226,10 @@ function LedgerPageContent() {
 
   const inventorySummary = useMemo((): InventoryValueSummary | null => {
     const list = filteredItems.length > 0 ? filteredItems : items;
-    return computeInventoryValueSummary(list);
+    const activeItems = list.filter(
+      (it) => it.status !== "sold" && it.status !== "returned"
+    );
+    return computeInventoryValueSummary(activeItems);
   }, [filteredItems, items]);
 
   const ebayStoreHref = useMemo(
@@ -463,8 +473,23 @@ function LedgerPageContent() {
       if (!res.ok) return;
       const data: EbayAccountStatus = await res.json();
       setStoreTier(data.store_tier ?? "none");
+      setEbayConnected(Boolean(data.connected));
+      setEbayTopRated(Boolean(data.top_rated_seller));
     } catch {
-      // Best-effort only; default "none" is still safe.
+      // Best-effort only; defaults are safe.
+    }
+  }, []);
+
+  const loadStorefronts = useCallback(async () => {
+    try {
+      const res = await fetch("/api/business/storefronts", { cache: "no-store" });
+      if (!res.ok) return;
+      const data: { storefronts: UserStorefront[] } = await res.json();
+      const storefronts = data.storefronts ?? [];
+      setWhatnotStorefront(storefronts.find((s) => s.platform === "whatnot") ?? null);
+      setWebsiteStorefront(storefronts.find((s) => s.platform === "website") ?? null);
+    } catch {
+      // Best-effort; channel bar will show "not connected" state.
     }
   }, []);
 
@@ -543,10 +568,10 @@ function LedgerPageContent() {
         router.push("/login?redirect=/business");
         return;
       }
-      await Promise.all([loadInventory(), loadMetrics(), loadEbayStoreTier()]);
+      await Promise.all([loadInventory(), loadMetrics(), loadEbayStoreTier(), loadStorefronts()]);
     }
     init();
-  }, [router, loadUserProfile, loadInventory, loadMetrics, loadEbayStoreTier]);
+  }, [router, loadUserProfile, loadInventory, loadMetrics, loadEbayStoreTier, loadStorefronts]);
 
   useEffect(() => {
     if (activeTab !== "sales" || hasAccess === false || needsMigration) return;
@@ -736,6 +761,7 @@ function LedgerPageContent() {
       const created: BusinessInventoryItem = {
         id: `perf-new-${Date.now()}`,
         user_id: "perf-user",
+        business_account_id: PERF_MOCK_BUSINESS_ACCOUNT_ID,
         card_id: null,
         title: (item.title as string) || "Untitled item",
         quantity: (item.quantity as number) || 1,
@@ -847,6 +873,7 @@ function LedgerPageContent() {
         id: `perf-sale-${Date.now()}`,
         user_id: "perf-user",
         business_id: "perf-business",
+        business_account_id: PERF_MOCK_BUSINESS_ACCOUNT_ID,
         inventory_item_id: inventoryId,
         channel: (sale.channel as BusinessSale["channel"]) || "ebay",
         sold_at:
@@ -1078,6 +1105,11 @@ function LedgerPageContent() {
         <BusinessLedgerView
           businessName={businessName}
           ebayStoreHref={ebayStoreHref}
+          ebayConnected={ebayConnected}
+          whatnotConnected={Boolean(whatnotStorefront)}
+          whatnotUrl={whatnotStorefront?.store_url ?? null}
+          websiteConnected={Boolean(websiteStorefront)}
+          websiteUrl={websiteStorefront?.store_url ?? null}
           metrics={metrics}
           metricsLoading={metricsLoading}
           inventorySummary={inventorySummary}
@@ -1121,6 +1153,8 @@ function LedgerPageContent() {
                     onDelete={handleDelete}
                     onMarkSold={handleMarkSold}
                     onFilteredChange={handleFilteredChange}
+                    ebayConnected={ebayConnected}
+                    ebayTopRated={ebayTopRated}
                     dense
                     perfEnabled={perfEnabled}
                   />
@@ -1135,6 +1169,8 @@ function LedgerPageContent() {
                   onDelete={handleDelete}
                   onMarkSold={handleMarkSold}
                   onFilteredChange={handleFilteredChange}
+                  ebayConnected={ebayConnected}
+                  ebayTopRated={ebayTopRated}
                   dense
                 />
               )}

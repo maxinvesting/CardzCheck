@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { createClient, createServiceClient } from "@/lib/supabase/server";
-import { hasBusinessAccess } from "@/lib/access";
+import { createClient } from "@/lib/supabase/server";
+import { requireBusinessContext } from "@/lib/business/context";
 import {
   listInventory,
   listSales,
@@ -16,6 +16,7 @@ interface ConsultantRequest {
   prompt: string;
   context?: string | null;
   template_key?: string | null;
+  mode_hint?: "chat" | "report" | null;
 }
 
 const CONSULTATION_HISTORY_LIMIT = 25;
@@ -35,22 +36,12 @@ export async function GET() {
       );
     }
 
-    const businessAccess = await hasBusinessAccess(user.id);
-    if (!businessAccess) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Business subscription required",
-          code: "BUSINESS_REQUIRED",
-        },
-        { status: 403 }
-      );
-    }
+    const context = await requireBusinessContext(user.id);
 
     const { data: consultations, error } = await supabase
       .from("business_consultations")
       .select("*")
-      .eq("user_id", user.id)
+      .eq("business_account_id", context.businessAccountId)
       .order("updated_at", { ascending: false })
       .limit(CONSULTATION_HISTORY_LIMIT);
 
@@ -72,14 +63,18 @@ export async function GET() {
     });
   } catch (error) {
     console.error("Business consultant history GET error:", error);
+    const status = (error as { status?: number })?.status ?? 500;
     return NextResponse.json(
       {
         ok: false,
-        error: "Failed to load consultant history",
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to load consultant history",
         message: error instanceof Error ? error.message : "Unknown error",
         code: "BUSINESS_CONSULTANT_HISTORY_ERROR",
       },
-      { status: 500 }
+      { status }
     );
   }
 }
@@ -88,8 +83,9 @@ export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as ConsultantRequest;
     const prompt = body?.prompt?.trim();
-    const context = body?.context?.trim() || "";
+    const additionalContext = body?.context?.trim() || "";
     const templateKey = body?.template_key?.trim() || null;
+    const modeHint = body?.mode_hint ?? null;
 
     if (!prompt) {
       return NextResponse.json(
@@ -110,17 +106,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const businessAccess = await hasBusinessAccess(user.id);
-    if (!businessAccess) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Business subscription required",
-          code: "BUSINESS_REQUIRED",
-        },
-        { status: 403 }
-      );
-    }
+    const businessContextScope = await requireBusinessContext(user.id);
 
     const [inventory, salesResult, metrics] = await Promise.all([
       listInventory(user.id),
@@ -150,26 +136,38 @@ export async function POST(request: NextRequest) {
 
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-20250514",
-      max_tokens: 1800,
+      max_tokens: 4096,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      tools: [{ type: "web_search_20250305", name: "web_search" }] as any,
       system: `${BUSINESS_CONSULTANT_MASTER_PROMPT}
-
+${modeHint === "report" ? '\nMODE OVERRIDE: Always set response_mode to "report" for this request, regardless of question type.\n' : ""}
 ADDITIONAL EXECUTION RULES:
 - Use only the provided BUSINESS DATA JSON.
 - If a requested metric is not present in the JSON, explicitly mark it as a Constraint.
 - Distinguish deterministic values from directional estimates.
 
+RESPONSE MODE SELECTION:
+- Use "answer" for: direct or conversational questions ("where", "how do I", "what should I do about X", single-topic questions, sourcing/logistics questions).
+- Use "report" for: broad business analysis, inventory health reviews, liquidity/pricing/grading strategy, multi-faceted assessments, template-driven requests.
+
 OUTPUT FORMAT (STRICT):
 - Respond with a single JSON object ONLY (no markdown, no code fences, no commentary).
 - The JSON MUST conform to this schema:
 {
+  "response_mode": "report" | "answer",
   "report_title": string,
   "timestamp": string,
   "data_coverage": { "inventory_count": number, "sales_count": number, "missing": string[] },
+  "answer": string | null,
+  "key_points": string[],
   "kpis": [{ "label": string, "value": string, "hint": string }],
   "high_risk_positions": [{ "item": string, "cost_basis": number, "cmv": number, "delta_pct": number, "reason": string }],
   "recommended_actions": [{ "action": string, "impact": string, "effort": "low"|"medium"|"high" }],
   "notes": string[]
 }
+- When response_mode is "answer": populate "answer" (direct paragraph response to the question) and "key_points" (supporting bullet points); "kpis" and "high_risk_positions" should be empty arrays.
+- When response_mode is "report": populate "kpis" and "high_risk_positions" as needed; "answer" should be null and "key_points" should be an empty array.
+- "recommended_actions" and "notes" may be used in both modes.
 - Arrays may be empty, but all keys must be present.
 - All numeric fields must be numbers (not strings).
 - The JSON must be parseable with a standard JSON parser without any preprocessing.`,
@@ -183,7 +181,7 @@ TEMPLATE CATEGORY:
 ${templateKey ?? "custom"}
 
 ADDITIONAL CONTEXT / CONSTRAINTS (OPTIONAL, PROVIDED BY USER):
-${context || "None provided."}
+${additionalContext || "None provided."}
 
 BUSINESS DATA JSON (SOURCE OF TRUTH):
 ${JSON.stringify(businessContext, null, 2)}`,
@@ -191,6 +189,8 @@ ${JSON.stringify(businessContext, null, 2)}`,
       ],
     });
 
+    // Filter to text blocks only — web_search_tool_result and tool_use blocks are
+    // intermediate steps and should not be included in the final response text.
     const textBlocks = response.content.filter((block) => block.type === "text");
     const modelText =
       textBlocks.length > 0
@@ -222,6 +222,7 @@ ${JSON.stringify(businessContext, null, 2)}`,
     const { data: insertedConsultation, error: saveError } = await supabase
       .from("business_consultations")
       .insert({
+        business_account_id: businessContextScope.businessAccountId,
         user_id: user.id,
         title: consultationTitle,
         prompt,
@@ -237,37 +238,10 @@ ${JSON.stringify(businessContext, null, 2)}`,
       savedConsultation = insertedConsultation as BusinessConsultation;
     }
 
-    // Retry save with service role when auth policies block insert/select on user client,
-    // or when .single() gets 0 rows (PGRST116) e.g. due to RLS hiding the returned row.
+    // If RLS blocked the write, surface the error rather than retrying with service role.
     if (!savedConsultation && saveError && (saveError.code === "42501" || saveError.code === "PGRST116")) {
-      try {
-        const serviceSupabase = await createServiceClient();
-        const { data: serviceInserted, error: serviceSaveError } = await serviceSupabase
-          .from("business_consultations")
-          .insert({
-            user_id: user.id,
-            title: consultationTitle,
-            prompt,
-            response: consultantResponse,
-            context_summary: contextSummary,
-          })
-          .select("*")
-          .single();
-
-        if (!serviceSaveError) {
-          savedConsultation = serviceInserted as BusinessConsultation;
-          finalSaveError = null;
-        } else {
-          finalSaveError = serviceSaveError;
-          console.error("Service-role retry failed to save business consultation:", {
-            code: serviceSaveError?.code,
-            message: serviceSaveError?.message,
-            details: serviceSaveError?.details,
-          });
-        }
-      } catch (serviceClientError) {
-        console.error("Service-role retry unavailable for business consultation save:", serviceClientError);
-      }
+      console.error("[consultant] RLS blocked write — not retrying with service role", { code: saveError.code });
+      return NextResponse.json({ error: "Failed to save conversation" }, { status: 500 });
     }
 
     if (!savedConsultation && finalSaveError) {
@@ -297,14 +271,18 @@ ${JSON.stringify(businessContext, null, 2)}`,
     });
   } catch (error) {
     console.error("Business consultant error:", error);
+    const status = (error as { status?: number })?.status ?? 500;
     return NextResponse.json(
       {
         ok: false,
-        error: "Failed to generate business consultation",
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to generate business consultation",
         message: error instanceof Error ? error.message : "Unknown error",
         code: "BUSINESS_CONSULTANT_ERROR",
       },
-      { status: 500 }
+      { status }
     );
   }
 }

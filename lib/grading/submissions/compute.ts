@@ -13,10 +13,10 @@ import type {
 } from "@/lib/grading/submissions/types";
 
 export const DEFAULT_PSA_DISTRIBUTION: PsaDistribution = {
-  "10": 0.08,
-  "9": 0.34,
-  "8": 0.36,
-  "7_or_lower": 0.22,
+  "10": 0.10,
+  "9": 0.38,
+  "8": 0.28,
+  "7_or_lower": 0.24,
 };
 
 const DISTRIBUTION_KEYS: Array<keyof PsaDistribution> = ["10", "9", "8", "7_or_lower"];

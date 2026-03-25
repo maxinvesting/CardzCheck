@@ -11,6 +11,14 @@ import { Surface } from "@/components/ui/Surface";
 interface Props {
   businessName: string | null;
   ebayStoreHref: string | null;
+  /** Whether an active eBay OAuth account is connected */
+  ebayConnected?: boolean;
+  /** Whether the user has a Whatnot storefront configured */
+  whatnotConnected?: boolean;
+  whatnotUrl?: string | null;
+  /** Whether the user has a website/storefront configured */
+  websiteConnected?: boolean;
+  websiteUrl?: string | null;
   metrics: MetricsType | null;
   metricsLoading: boolean;
   inventorySummary: InventoryValueSummary | null;
@@ -27,8 +35,14 @@ interface Props {
   children: ReactNode;
 }
 
+
 export default function BusinessLedgerView({
   ebayStoreHref,
+  ebayConnected = false,
+  whatnotConnected = false,
+  whatnotUrl,
+  websiteConnected = false,
+  websiteUrl,
   metrics,
   metricsLoading,
   inventorySummary,
@@ -59,23 +73,110 @@ export default function BusinessLedgerView({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {ebayStoreHref ? (
-              <a
-                href={ebayStoreHref}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="cc-btn-secondary whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium"
-              >
-                eBay Storefront
-              </a>
-            ) : (
-              <Link
-                href="/business/settings"
-                className="cc-btn-secondary whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium text-[var(--biz-muted)]"
-              >
-                Add eBay Storefront
-              </Link>
-            )}
+            {/* ── Sales channels status bar ───────────────────────────────── */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              {/* eBay */}
+              {ebayConnected ? (
+                ebayStoreHref ? (
+                  <a
+                    href={ebayStoreHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100 transition-colors"
+                  >
+                    <span className="font-extrabold tracking-tighter text-[10px] leading-none">
+                      <span style={{ color: "#e43137" }}>e</span>
+                      <span style={{ color: "#0064d3" }}>B</span>
+                      <span style={{ color: "#f5af02" }}>a</span>
+                      <span style={{ color: "#86b817" }}>y</span>
+                    </span>
+                    Connected
+                    <svg className="w-3 h-3 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                  </a>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
+                    <span className="font-extrabold tracking-tighter text-[10px] leading-none">
+                      <span style={{ color: "#e43137" }}>e</span>
+                      <span style={{ color: "#0064d3" }}>B</span>
+                      <span style={{ color: "#f5af02" }}>a</span>
+                      <span style={{ color: "#86b817" }}>y</span>
+                    </span>
+                    Connected
+                    <svg className="w-3 h-3 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                  </span>
+                )
+              ) : (
+                <a
+                  href="/api/auth/ebay"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-700 hover:bg-amber-100 transition-colors"
+                >
+                  <span className="font-extrabold tracking-tighter text-[10px] leading-none">
+                    <span style={{ color: "#e43137" }}>e</span>
+                    <span style={{ color: "#0064d3" }}>B</span>
+                    <span style={{ color: "#f5af02" }}>a</span>
+                    <span style={{ color: "#86b817" }}>y</span>
+                  </span>
+                  Connect
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
+                </a>
+              )}
+
+              {/* Whatnot */}
+              {whatnotConnected && whatnotUrl ? (
+                <a
+                  href={whatnotUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-purple-200 bg-purple-50 px-2.5 py-1 text-[11px] font-medium text-purple-700 hover:bg-purple-100 transition-colors"
+                >
+                  Whatnot
+                  <svg className="w-3 h-3 text-purple-500" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                </a>
+              ) : (
+                <Link
+                  href="/business/settings?section=storefronts"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-[var(--biz-border)] bg-[#F9FAFB] px-2.5 py-1 text-[11px] font-medium text-[var(--biz-muted)] hover:bg-[#F3F4F6] transition-colors"
+                >
+                  Whatnot
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                </Link>
+              )}
+
+              {/* Website / Storefront */}
+              {websiteConnected && websiteUrl ? (
+                <a
+                  href={websiteUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-medium text-sky-700 hover:bg-sky-100 transition-colors"
+                >
+                  Website
+                  <svg className="w-3 h-3 text-sky-500" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                </a>
+              ) : (
+                <Link
+                  href="/business/settings?section=storefronts"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-[var(--biz-border)] bg-[#F9FAFB] px-2.5 py-1 text-[11px] font-medium text-[var(--biz-muted)] hover:bg-[#F3F4F6] transition-colors"
+                >
+                  Website
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                </Link>
+              )}
+            </div>
 
             <a
               href="/api/business/export?type=inventory"
@@ -171,7 +272,9 @@ export default function BusinessLedgerView({
       </Surface>
 
       {/* AI insights preview — only on inventory tab */}
-      {!needsMigration && activeTab === "inventory" && <BusinessAnalystPreviewCard items={items} />}
+      {!needsMigration && activeTab === "inventory" && (
+        <BusinessAnalystPreviewCard items={items} metrics={metrics} />
+      )}
 
       {/* Tab switcher */}
       {!needsMigration && (

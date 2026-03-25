@@ -75,7 +75,7 @@ export default function CollectionMetricsCard({
         </p>
         {summary.cardsWithCmv === 0 && cardCount > 0 && (
           <p className="mt-1 text-xs text-blue-200">
-            Collection value requires comps. Add comps to get estimated values.
+            Collection value requires estimate data. Run a search to get estimated values.
           </p>
         )}
         {change30Day !== null && change30DayPercent !== null && (

@@ -33,7 +33,7 @@ export default function CardDetailsForm({
   };
 
   if (!isEditing) {
-    const handleRunComps = () => {
+    const handleRunSearch = () => {
       const params = new URLSearchParams();
       params.set("player", card.player_name);
       if (card.year) params.set("year", card.year);
@@ -51,10 +51,10 @@ export default function CardDetailsForm({
           </h2>
           <div className="flex items-center gap-2">
             <button
-              onClick={handleRunComps}
+              onClick={handleRunSearch}
               className="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-white rounded-lg text-sm font-medium transition-colors"
             >
-              Run Comps
+              Run Search
             </button>
             <button
               onClick={() => setIsEditing(true)}
@@ -93,7 +93,7 @@ export default function CardDetailsForm({
             }
           />
           <DetailRow
-            label="Current Market Value"
+            label="Est. Market Value"
             value={formatCurrency(cmv)}
             className={cmv ? "font-semibold" : ""}
           />

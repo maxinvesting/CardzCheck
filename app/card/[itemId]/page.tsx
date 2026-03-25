@@ -3,9 +3,10 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { createClient as createSupabaseClient } from "@/lib/supabase/client";
 import {
-  LineChart,
-  Line,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   Tooltip,
@@ -13,14 +14,11 @@ import {
   CartesianGrid,
 } from "recharts";
 import {
-  computePositionVsFloor,
   estimateTakeHome,
   fmtCents,
-  fmtPct,
 } from "@/lib/business/pricing";
-import GradeProbabilityPanel from "@/components/grading/GradeProbabilityPanel";
 import { useGradeEstimateFromImages } from "@/lib/grading/useGradeEstimateFromImages";
-import type { GradeEstimatorCardInput, GradeEstimatorCardInput as GradeEstimatorCardInputType } from "@/lib/grade-estimator/value";
+import type { GradeEstimatorCardInput } from "@/lib/grade-estimator/value";
 import type { WorthGradingResult } from "@/types";
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -66,7 +64,6 @@ interface ProfileSale {
   profit_cents?: number;
   order_id?: string | null;
   notes?: string | null;
-  // Fields from new business_sales schema
   channel?: string | null;
   sold_price_cents?: number;
   net_payout_cents?: number;
@@ -74,6 +71,7 @@ interface ProfileSale {
 }
 
 type Mode = "business" | "collection";
+type TabId = "details" | "sales" | "chart" | "shop";
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -115,6 +113,8 @@ function toTimestamp(value: string | null | undefined): number | null {
 function isValidHttpUrl(value: string): boolean {
   return /^https?:\/\//i.test(value);
 }
+
+const MAX_IMAGE_UPLOAD_BYTES = 10 * 1024 * 1024;
 
 function statusBadge(status: string | null | undefined) {
   const s = (status ?? "").toLowerCase();
@@ -163,7 +163,10 @@ export default function CardProfilePage() {
   const [imageZoom, setImageZoom] = useState(false);
   const [showImageModal, setShowImageModal] = useState(false);
   const [imageUrlInput, setImageUrlInput] = useState("");
+  const [imageFileInput, setImageFileInput] = useState<File | null>(null);
+  const [imageFilePreviewUrl, setImageFilePreviewUrl] = useState<string | null>(null);
   const [savingImage, setSavingImage] = useState(false);
+  const imageFilePickerRef = useRef<HTMLInputElement | null>(null);
   const attemptedImageHydrationRef = useRef(false);
 
   // Update Price modal
@@ -179,6 +182,13 @@ export default function CardProfilePage() {
     sale_date: new Date().toISOString().slice(0, 10),
   });
   const [recordingSale, setRecordingSale] = useState(false);
+
+  // Overflow menu
+  const [showOverflow, setShowOverflow] = useState(false);
+  const overflowRef = useRef<HTMLDivElement>(null);
+
+  // Active tab
+  const [activeTab, setActiveTab] = useState<TabId>("details");
 
   // Toast
   const [toast, setToast] = useState<{
@@ -202,6 +212,16 @@ export default function CardProfilePage() {
     }
   }, [toast]);
 
+  useEffect(() => {
+    if (!imageFileInput) {
+      setImageFilePreviewUrl(null);
+      return;
+    }
+    const objectUrl = URL.createObjectURL(imageFileInput);
+    setImageFilePreviewUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [imageFileInput]);
+
   // ── Data Loading ─────────────────────────────────────────────────
 
   const loadProfile = useCallback(async () => {
@@ -209,7 +229,6 @@ export default function CardProfilePage() {
       setItem(data.item);
       setSales(data.sales ?? []);
 
-      // Prepare Business-mode grade estimator input when we have images and identity
       if (mode === "business" && data.item) {
         const businessItem = data.item as ProfileItem;
         const imageCandidates = [
@@ -244,12 +263,8 @@ export default function CardProfilePage() {
       const res = await fetch(`/api/card-profile/${itemId}?from=${mode}`, {
         cache: "no-store",
       });
-      if (res.status === 401) {
-        return { status: "unauthorized" as const };
-      }
-      if (res.status === 404) {
-        return { status: "not_found" as const };
-      }
+      if (res.status === 401) return { status: "unauthorized" as const };
+      if (res.status === 404) return { status: "not_found" as const };
       if (!res.ok) {
         let message = "Failed to load profile";
         try {
@@ -357,12 +372,8 @@ export default function CardProfilePage() {
           setItem((prev) => (prev ? { ...prev, ...updatedItem } : prev));
           return;
         }
-        const stockImage = typeof data.stock_image_url === "string"
-          ? data.stock_image_url
-          : null;
-        const ebayImage = typeof data.ebay_image_url === "string"
-          ? data.ebay_image_url
-          : null;
+        const stockImage = typeof data.stock_image_url === "string" ? data.stock_image_url : null;
+        const ebayImage = typeof data.ebay_image_url === "string" ? data.ebay_image_url : null;
         if (stockImage || ebayImage) {
           setItem((prev) =>
             prev
@@ -384,14 +395,6 @@ export default function CardProfilePage() {
     };
   }, [isBusinessMode, item, imageUrl]);
 
-  const position = useMemo(() => {
-    if (!item) return null;
-    return computePositionVsFloor(
-      item.list_price_cents,
-      item.current_market_value_cents
-    );
-  }, [item]);
-
   const takeHome = useMemo(() => {
     if (!item) return [];
     return estimateTakeHome(item.list_price_cents);
@@ -399,12 +402,8 @@ export default function CardProfilePage() {
 
   const costCents = useMemo(() => {
     if (!item) return null;
-    if (typeof item.cost_basis_total_cents === "number") {
-      return item.cost_basis_total_cents;
-    }
-    if (typeof item.purchase_price === "number") {
-      return Math.round(item.purchase_price * 100);
-    }
+    if (typeof item.cost_basis_total_cents === "number") return item.cost_basis_total_cents;
+    if (typeof item.purchase_price === "number") return Math.round(item.purchase_price * 100);
     return null;
   }, [item]);
 
@@ -414,12 +413,7 @@ export default function CardProfilePage() {
   });
 
   const fetchWorthGrading = useCallback(async () => {
-    if (
-      !cardForGrade?.cardIdentity ||
-      !gradeEstimate.estimate?.grade_probabilities
-    ) {
-      return;
-    }
+    if (!cardForGrade?.cardIdentity || !gradeEstimate.estimate?.grade_probabilities) return;
     setValueLoading(true);
     setValueError(null);
     try {
@@ -429,13 +423,10 @@ export default function CardProfilePage() {
         body: JSON.stringify({
           card: cardForGrade.cardIdentity,
           gradeProbabilities: gradeEstimate.estimate.grade_probabilities,
-          estimatorConfidence:
-            gradeEstimate.estimate.grade_probabilities.confidence,
+          estimatorConfidence: gradeEstimate.estimate.grade_probabilities.confidence,
         }),
       });
-      if (!response.ok) {
-        throw new Error("POST_GRADING_VALUE_UNAVAILABLE");
-      }
+      if (!response.ok) throw new Error("POST_GRADING_VALUE_UNAVAILABLE");
       const result: WorthGradingResult = await response.json();
       setValueResult(result);
     } catch {
@@ -447,10 +438,7 @@ export default function CardProfilePage() {
   }, [cardForGrade, gradeEstimate.estimate]);
 
   useEffect(() => {
-    if (
-      !cardForGrade?.cardIdentity ||
-      !gradeEstimate.estimate?.grade_probabilities
-    ) {
+    if (!cardForGrade?.cardIdentity || !gradeEstimate.estimate?.grade_probabilities) {
       setValueResult(null);
       setValueError(null);
       setValueLoading(false);
@@ -459,20 +447,14 @@ export default function CardProfilePage() {
     void fetchWorthGrading();
   }, [cardForGrade, gradeEstimate.estimate, fetchWorthGrading]);
 
-  // Chart data: timeline including cost, list, floor, and sales.
+  // Chart data
   const chartData = useMemo(() => {
     if (!item) return [];
-    const points: Array<{
-      ts: number;
-      date: string;
-      price: number;
-      label: string;
-    }> = [];
+    const points: Array<{ ts: number; date: string; price: number; label: string }> = [];
 
     const nowTs = Date.now();
     const createdTs = toTimestamp(item.created_at) ?? nowTs;
-    const acquiredTs =
-      toTimestamp(item.acquisition_date ?? item.purchase_date) ?? createdTs;
+    const acquiredTs = toTimestamp(item.acquisition_date ?? item.purchase_date) ?? createdTs;
     const updatedTs = toTimestamp(item.updated_at) ?? nowTs;
 
     if (typeof costCents === "number" && costCents > 0) {
@@ -493,10 +475,7 @@ export default function CardProfilePage() {
       });
     }
 
-    if (
-      typeof item.current_market_value_cents === "number" &&
-      item.current_market_value_cents > 0
-    ) {
+    if (typeof item.current_market_value_cents === "number" && item.current_market_value_cents > 0) {
       points.push({
         ts: updatedTs,
         date: fmtDate(new Date(updatedTs).toISOString()),
@@ -508,8 +487,7 @@ export default function CardProfilePage() {
     sales.forEach((sale, index) => {
       const saleCents = sale.sale_price_cents ?? sale.sold_price_cents ?? 0;
       if (saleCents <= 0) return;
-      const saleTs =
-        (toTimestamp(sale.sale_date || sale.sold_at) ?? nowTs) + index;
+      const saleTs = (toTimestamp(sale.sale_date || sale.sold_at) ?? nowTs) + index;
       points.push({
         ts: saleTs,
         date: fmtDate(sale.sale_date || sale.sold_at),
@@ -530,6 +508,16 @@ export default function CardProfilePage() {
       }));
   }, [item, sales, costCents, isBusinessMode]);
 
+  // Unrealized P/L
+  const plData = useMemo(() => {
+    if (costCents == null || !item?.current_market_value_cents) return null;
+    const qty = item.quantity ?? 1;
+    const cmvTotal = item.current_market_value_cents * qty;
+    const diff = cmvTotal - costCents;
+    const pct = costCents > 0 ? (diff / costCents) * 100 : 0;
+    return { diff, pct };
+  }, [item, costCents]);
+
   // ── Actions ──────────────────────────────────────────────────────
 
   const handleUpdatePrice = async () => {
@@ -548,9 +536,7 @@ export default function CardProfilePage() {
       if (res.ok) {
         const updated = await res.json();
         setItem((prev) =>
-          prev
-            ? { ...prev, list_price_cents: updated.list_price_cents ?? cents }
-            : prev
+          prev ? { ...prev, list_price_cents: updated.list_price_cents ?? cents } : prev
         );
         setShowPriceModal(false);
         setNewPrice("");
@@ -592,11 +578,7 @@ export default function CardProfilePage() {
         setSales((prev) => [sale, ...prev]);
         setItem((prev) => (prev ? { ...prev, status: "sold" } : prev));
         setShowSoldModal(false);
-        setSoldForm({
-          sale_price: "",
-          channel: "ebay",
-          sale_date: new Date().toISOString().slice(0, 10),
-        });
+        setSoldForm({ sale_price: "", channel: "ebay", sale_date: new Date().toISOString().slice(0, 10) });
         setToast({ type: "success", message: "Sale recorded" });
       } else {
         setToast({ type: "error", message: "Failed to record sale" });
@@ -611,7 +593,7 @@ export default function CardProfilePage() {
   const handleSaveImageUrl = async () => {
     if (!item || savingImage) return;
     const trimmed = imageUrlInput.trim();
-    if (trimmed && !isValidHttpUrl(trimmed)) {
+    if (!imageFileInput && trimmed && !isValidHttpUrl(trimmed)) {
       setToast({
         type: "error",
         message: "Please enter a full image URL that starts with http:// or https://",
@@ -621,7 +603,50 @@ export default function CardProfilePage() {
 
     setSavingImage(true);
     try {
-      const payloadUrl = trimmed || null;
+      let payloadUrl: string | null = trimmed || null;
+      if (imageFileInput) {
+        if (!imageFileInput.type.startsWith("image/")) {
+          setToast({ type: "error", message: "Please choose an image file" });
+          return;
+        }
+        if (imageFileInput.size > MAX_IMAGE_UPLOAD_BYTES) {
+          setToast({ type: "error", message: "Image must be under 10MB" });
+          return;
+        }
+
+        const supabase = createSupabaseClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user) {
+          setToast({ type: "error", message: "Please log in to upload images" });
+          return;
+        }
+
+        const sanitizedName = imageFileInput.name.replace(/[^\w.-]+/g, "_");
+        const extension = sanitizedName.includes(".")
+          ? sanitizedName.split(".").pop()
+          : imageFileInput.type.split("/")[1] || "jpg";
+        const randomPart = Math.random().toString(36).slice(2, 10);
+        const storagePath = `${user.id}/profile/${Date.now()}-${randomPart}.${extension}`;
+
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from("card-images")
+          .upload(storagePath, imageFileInput, {
+            cacheControl: "3600",
+            contentType: imageFileInput.type || undefined,
+            upsert: false,
+          });
+
+        if (uploadError) {
+          setToast({ type: "error", message: "Failed to upload image" });
+          return;
+        }
+
+        payloadUrl = supabase.storage
+          .from("card-images")
+          .getPublicUrl(uploadData.path).data.publicUrl;
+      }
       const endpoint = isBusinessMode
         ? "/api/business/inventory"
         : `/api/cards/${item.id}`;
@@ -636,7 +661,7 @@ export default function CardProfilePage() {
       });
 
       if (!res.ok) {
-        setToast({ type: "error", message: "Failed to save image URL" });
+        setToast({ type: "error", message: "Failed to save image" });
         return;
       }
 
@@ -673,35 +698,66 @@ export default function CardProfilePage() {
         );
       }
 
+      setImageFileInput(null);
+      if (imageFilePickerRef.current) {
+        imageFilePickerRef.current.value = "";
+      }
       setShowImageModal(false);
       setToast({
         type: "success",
-        message: payloadUrl ? "Image URL saved" : "Image URL removed",
+        message: payloadUrl ? "Image saved" : "Image removed",
       });
     } catch {
-      setToast({ type: "error", message: "Failed to save image URL" });
+      setToast({ type: "error", message: "Failed to save image" });
     } finally {
       setSavingImage(false);
     }
+  };
+
+  const openImageModal = (currentUrl: string | null) => {
+    setImageUrlInput(currentUrl ?? "");
+    setImageFileInput(null);
+    if (imageFilePickerRef.current) {
+      imageFilePickerRef.current.value = "";
+    }
+    setShowImageModal(true);
+  };
+
+  const handleImageFileSelection = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0] ?? null;
+    if (!file) {
+      setImageFileInput(null);
+      return;
+    }
+    if (!file.type.startsWith("image/")) {
+      setToast({ type: "error", message: "Please choose an image file" });
+      event.target.value = "";
+      setImageFileInput(null);
+      return;
+    }
+    if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+      setToast({ type: "error", message: "Image must be under 10MB" });
+      event.target.value = "";
+      setImageFileInput(null);
+      return;
+    }
+    setImageFileInput(file);
+    setImageUrlInput("");
   };
 
   // ── Render: Loading / Error ──────────────────────────────────────
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-950 text-white">
-        <div className="max-w-7xl mx-auto px-4 py-8">
-          <div className="animate-pulse space-y-6">
-            <div className="h-6 w-40 bg-gray-800 rounded" />
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <div className="aspect-[3/4] bg-gray-800 rounded-xl" />
-              <div className="space-y-4">
-                <div className="h-24 bg-gray-800 rounded-xl" />
-                <div className="h-40 bg-gray-800 rounded-xl" />
-                <div className="h-32 bg-gray-800 rounded-xl" />
-              </div>
-            </div>
-          </div>
+      <div
+        className="min-h-screen flex items-center justify-center"
+        style={{ background: "#EEECE8", fontFamily: "'Sora', sans-serif" }}
+      >
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-gray-300 border-t-gray-700 rounded-full animate-spin" />
+          <p className="text-sm text-gray-500">Loading card…</p>
         </div>
       </div>
     );
@@ -709,21 +765,19 @@ export default function CardProfilePage() {
 
   if (error || !item) {
     return (
-      <div className="min-h-screen bg-gray-950 text-white">
-        <div className="max-w-7xl mx-auto px-4 py-8">
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
-            <h2 className="text-xl font-semibold mb-2">
-              {error || "Item not found"}
-            </h2>
-            <button
-              onClick={() =>
-                router.push(isBusinessMode ? "/business" : "/collection")
-              }
-              className="mt-4 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium"
-            >
-              {isBusinessMode ? "Back to Inventory" : "Back to Collection"}
-            </button>
-          </div>
+      <div
+        className="min-h-screen flex items-center justify-center px-4"
+        style={{ background: "#EEECE8", fontFamily: "'Sora', sans-serif" }}
+      >
+        <div className="bg-white rounded-2xl p-10 text-center shadow-sm max-w-sm w-full">
+          <p className="text-lg font-semibold text-gray-800 mb-2">{error || "Item not found"}</p>
+          <button
+            onClick={() => router.push(isBusinessMode ? "/business" : "/collection")}
+            className="mt-4 px-6 py-2.5 text-white rounded-xl text-sm font-medium hover:bg-gray-800 transition-colors"
+            style={{ background: "#111" }}
+          >
+            {isBusinessMode ? "Back to Inventory" : "Back to Collection"}
+          </button>
         </div>
       </div>
     );
@@ -731,471 +785,577 @@ export default function CardProfilePage() {
 
   // ── Render: Profile ──────────────────────────────────────────────
 
+  const marketValue = item.current_market_value_cents;
+  const gradeCompany = (item.grading_company ?? "PSA").toUpperCase();
+  const gradeNum = item.grade ?? "—";
+  const certNum = item.cert_number;
+  const playerName = item.player_name ?? item.title ?? "Unknown Player";
+  const setLabel = [item.year, item.set_name].filter(Boolean).join(" · ");
+  const hasParallel = !!(item.parallel_type || item.insert);
+
+  const tabs: { id: TabId; label: string }[] = [
+    { id: "details", label: "Details" },
+    { id: "sales", label: "Sales History" },
+    { id: "chart", label: "Price Chart" },
+    { id: "shop", label: "Shop" },
+  ];
+
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
-      <div className="max-w-7xl mx-auto px-4 py-6">
+    <div
+      className="min-h-screen"
+      style={{ background: "#EEECE8", fontFamily: "'Sora', sans-serif" }}
+    >
+      <div className="max-w-[1100px] mx-auto px-4 py-8">
         {/* Back link */}
         <button
-          onClick={() =>
-            router.push(isBusinessMode ? "/business" : "/collection")
-          }
-          className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors mb-4 text-sm"
+          onClick={() => router.push(isBusinessMode ? "/business" : "/collection")}
+          className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors mb-5"
         >
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M15 19l-7-7 7-7"
-            />
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
           {isBusinessMode ? "Back to Inventory" : "Back to Collection"}
         </button>
 
-        {/* Title row */}
-        <div className="flex flex-wrap items-center gap-3 mb-6">
-          <h1 className="text-2xl font-bold">{title}</h1>
-          {item.status && (
-            <span
-              className={`px-2 py-0.5 rounded text-xs font-medium ${statusBadge(
-                item.status
-              )}`}
-            >
-              {item.status}
-            </span>
-          )}
-        </div>
-
-        {/* ── Two-column layout ─────────────────────────────────── */}
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-          {/* LEFT PANEL: Image + Key Facts + Actions */}
-          <div className="lg:col-span-2 space-y-4">
-            {/* Image */}
-            <div
-              className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden cursor-pointer"
-              onClick={() => imageUrl && setImageZoom(true)}
-            >
-              {imageUrl ? (
-                <img
-                  src={imageUrl}
-                  alt={title}
-                  className="w-full aspect-[3/4] object-contain bg-gray-900 hover:scale-105 transition-transform duration-200"
-                />
-              ) : (
-                <div className="w-full aspect-[3/4] flex flex-col items-center justify-center text-gray-600">
-                  <svg
-                    className="w-20 h-20 mb-2"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={1}
-                      d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                    />
-                  </svg>
-                  <p className="text-sm">No image available</p>
+        {/* Main card */}
+        <div
+          className="flex overflow-hidden"
+          style={{
+            background: "#fff",
+            borderRadius: 20,
+            boxShadow: "0 4px 40px rgba(0,0,0,0.08)",
+          }}
+        >
+          {/* ── LEFT PANEL ───────────────────────────────────────── */}
+          <div
+            className="shrink-0 flex flex-col"
+            style={{ width: 380, background: "#F7F6F2", borderRadius: "20px 0 0 20px" }}
+          >
+            {/* Image area */}
+            <div className="relative flex flex-col items-center" style={{ flex: 1 }}>
+              {/* PSA-style slab label */}
+              <div
+                className="w-full flex items-center justify-between px-3 py-2"
+                style={{ background: "#fff", borderBottom: "1px solid #E8E6E1" }}
+              >
+                <div
+                  className="flex flex-col gap-0.5 leading-none"
+                  style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 7, color: "#555" }}
+                >
+                  {item.set_name && (
+                    <span className="uppercase tracking-widest">{item.set_name}</span>
+                  )}
+                  <span className="uppercase tracking-widest font-semibold" style={{ color: "#1a1a1a" }}>
+                    {playerName}
+                  </span>
+                  {item.insert && (
+                    <span className="uppercase tracking-widest">{item.insert}</span>
+                  )}
                 </div>
-              )}
+                <div
+                  className="font-bold leading-none"
+                  style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 24, color: "#C8102E" }}
+                >
+                  {gradeNum}
+                </div>
+              </div>
+
+              {/* Card image */}
+              <div className="relative w-full flex items-center justify-center py-6 px-8">
+                {imageUrl ? (
+                  <div
+                    className="relative cursor-pointer"
+                    style={{ width: 260, height: 360 }}
+                    onClick={() => setImageZoom(true)}
+                  >
+                    <Image
+                      src={imageUrl}
+                      alt={title}
+                      fill
+                      unoptimized
+                      className="object-contain hover:scale-[1.02] transition-transform duration-200"
+                    />
+                  </div>
+                ) : (
+                  <div
+                    className="flex flex-col items-center justify-center"
+                    style={{
+                      width: 260,
+                      height: 360,
+                      borderRadius: 8,
+                      background: "linear-gradient(160deg, #0b1f3a 0%, #1f4d78 100%)",
+                    }}
+                  >
+                    <svg className="w-16 h-16 mb-2 opacity-30" fill="none" stroke="white" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <p className="text-white/40 text-xs font-medium tracking-wide">No Image</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Player name bar */}
+              <div
+                className="w-full px-4 py-2.5"
+                style={{ background: "rgba(10,15,28,0.72)" }}
+              >
+                <p className="text-white font-semibold text-sm truncate" style={{ fontFamily: "'Sora', sans-serif" }}>
+                  {playerName}
+                </p>
+                {item.year && (
+                  <p className="text-white/50 text-xs mt-0.5">{item.year}</p>
+                )}
+              </div>
             </div>
 
-              {/* Key Facts */}
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-2">
-                <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">
-                  Key Facts
-                </h3>
-                <Fact label="Grade" value={item.grade} />
-                <Fact
-                  label="Condition"
-                  value={item.condition_status}
-                />
-                <Fact label="Grader" value={item.grading_company} />
-                <Fact label="Cert #" value={item.cert_number} />
-                <Fact label="Parallel" value={item.parallel_type} />
-                <Fact label="Insert" value={item.insert} />
-                <Fact label="Year" value={item.year} />
-                <Fact label="Set" value={item.set_name} />
-                <Fact
-                  label="Qty"
-                  value={String(item.quantity ?? 1)}
-                />
-                <Fact
-                  label="Acquired"
-                  value={fmtDate(
-                    item.acquisition_date ?? item.purchase_date
-                  )}
-                />
-                {item.notes && <Fact label="Notes" value={item.notes} />}
+            {/* 3 ghost icon buttons */}
+            <div
+              className="flex items-center justify-center gap-3 px-6 py-4"
+              style={{ borderTop: "1px solid #E8E6E1" }}
+            >
+              {/* Cert / PSA lookup */}
+              {certNum ? (
+                <a
+                  href={`https://www.psacard.com/cert/${certNum}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="View PSA Cert"
+                  className="flex items-center justify-center w-10 h-10 rounded-xl text-gray-500 hover:text-gray-800 hover:border-gray-400 transition-colors"
+                  style={{ border: "1.5px solid #DDDBD6", background: "transparent" }}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                  </svg>
+                </a>
+              ) : (
+                <div
+                  className="w-full aspect-[3/4] flex flex-col items-center justify-center text-gray-500 cursor-pointer hover:bg-gray-800/50 transition-colors"
+                  onClick={() => openImageModal(null)}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                  </svg>
+                  <p className="text-sm font-medium text-gray-400">Add your photo</p>
+                  <p className="text-xs text-gray-600 mt-1">Upload from your files</p>
+                </div>
+              )}
 
-                {isBusinessMode && cardForGrade && gradeEstimate.estimate && (
-                  <div className="mt-3 pt-3 border-t border-gray-800 space-y-1">
-                    <p className="text-[11px] font-semibold text-gray-300 uppercase tracking-wide">
-                      Grade estimate
-                    </p>
-                    <div className="text-[11px] text-gray-400">
-                      <span>
-                        Most likely range: PSA{" "}
-                        {gradeEstimate.estimate.estimated_grade_low}–
-                        {gradeEstimate.estimate.estimated_grade_high}
-                      </span>
-                      {gradeEstimate.estimate.grade_probabilities?.confidence && (
-                        <span className="ml-1 text-gray-500">
-                          · {gradeEstimate.estimate.grade_probabilities.confidence} confidence
-                        </span>
+              {/* Change image */}
+              <button
+                onClick={() => { setImageUrlInput(imageUrl ?? ""); setShowImageModal(true); }}
+                title="Change image"
+                className="flex items-center justify-center w-10 h-10 rounded-xl text-gray-500 hover:text-gray-800 hover:border-gray-400 transition-colors"
+                style={{ border: "1.5px solid #DDDBD6", background: "transparent" }}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </button>
+
+              {/* Fullscreen */}
+              <button
+                onClick={() => imageUrl && setImageZoom(true)}
+                disabled={!imageUrl}
+                title="View fullscreen"
+                className="flex items-center justify-center w-10 h-10 rounded-xl text-gray-500 hover:text-gray-800 hover:border-gray-400 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                style={{ border: "1.5px solid #DDDBD6", background: "transparent" }}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          {/* ── RIGHT PANEL ──────────────────────────────────────── */}
+          <div className="flex-1 flex flex-col" style={{ minWidth: 0 }}>
+            <div style={{ padding: "32px 32px 0 32px" }}>
+              {/* 1. Set tag */}
+              <p
+                className="uppercase tracking-widest mb-2"
+                style={{ fontSize: 10, color: "#B0ADA8", fontWeight: 500 }}
+              >
+                {setLabel || "Sports Card"}
+              </p>
+
+              {/* 2. Player name */}
+              <h1
+                className="leading-tight mb-3"
+                style={{
+                  fontSize: 34,
+                  fontWeight: 800,
+                  letterSpacing: "-0.02em",
+                  color: "#0F0E0D",
+                  lineHeight: 1.1,
+                }}
+              >
+                {playerName}
+              </h1>
+
+              {/* 3. Parallel pill */}
+              {hasParallel && (
+                <div className="flex items-center gap-2 mb-4">
+                  <span
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold"
+                    style={{
+                      background: "#F0FAF4",
+                      border: "1px solid #B8E6CC",
+                      color: "#167A40",
+                    }}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+                    {[item.parallel_type, item.insert].filter(Boolean).join(" · ")}
+                    {item.cert_number && ` · #${item.cert_number}`}
+                  </span>
+                </div>
+                <button
+                  onClick={() => openImageModal(imageUrl)}
+                  className="w-full px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-100 rounded-lg text-sm font-medium transition-colors"
+                >
+                  {imageUrl ? "Change Image" : "Set Image"}
+                </button>
+              </div>
+
+              {/* 5. CTA row */}
+              <div className="flex items-center gap-2 mb-6">
+                {/* Primary: List on eBay / Set Price */}
+                <button
+                  onClick={() => openImageModal(imageUrl)}
+                  className="flex-1 px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-100 rounded-lg text-sm font-medium transition-colors"
+                >
+                  {imageUrl ? "Change Image" : "Set Image"}
+                </button>
+
+                {/* Edit */}
+                {isBusinessMode ? (
+                  <button
+                    onClick={() => { setImageUrlInput(imageUrl ?? ""); setShowImageModal(true); }}
+                    className="flex items-center justify-center gap-1.5 px-5 text-sm font-semibold transition-colors hover:bg-gray-50"
+                    style={{
+                      height: 44,
+                      borderRadius: 11,
+                      border: "1.5px solid #E4E2DE",
+                      color: "#3D3A37",
+                      background: "#fff",
+                    }}
+                  >
+                    Edit
+                  </button>
+                ) : (
+                  <Link
+                    href={`/cards/${item.id}`}
+                    className="flex items-center justify-center gap-1.5 px-5 text-sm font-semibold transition-colors hover:bg-gray-50"
+                    style={{
+                      height: 44,
+                      borderRadius: 11,
+                      border: "1.5px solid #E4E2DE",
+                      color: "#3D3A37",
+                      background: "#fff",
+                    }}
+                  >
+                    Edit
+                  </Link>
+                )}
+
+                {/* Overflow ··· */}
+                <div className="relative" ref={overflowRef}>
+                  <button
+                    onClick={() => setShowOverflow((v) => !v)}
+                    className="flex items-center justify-center font-bold transition-colors hover:bg-gray-50"
+                    style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 11,
+                      border: "1.5px solid #E4E2DE",
+                      color: "#3D3A37",
+                      background: "#fff",
+                      fontSize: 18,
+                      letterSpacing: 2,
+                    }}
+                  >
+                    ···
+                  </button>
+                  {showOverflow && (
+                    <div
+                      className="absolute right-0 top-12 z-30 py-1 min-w-[160px]"
+                      style={{
+                        background: "#fff",
+                        borderRadius: 12,
+                        border: "1px solid #E4E2DE",
+                        boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+                      }}
+                    >
+                      {isBusinessMode && item.status !== "sold" && (
+                        <button
+                          onClick={() => { setShowOverflow(false); setShowSoldModal(true); }}
+                          className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors"
+                          style={{ color: "#3D3A37" }}
+                        >
+                          Mark Sold
+                        </button>
                       )}
+                      <button
+                        onClick={() => { setShowOverflow(false); setImageUrlInput(imageUrl ?? ""); setShowImageModal(true); }}
+                        className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors"
+                        style={{ color: "#3D3A37" }}
+                      >
+                        {imageUrl ? "Change Image URL" : "Set Image URL"}
+                      </button>
                     </div>
-                    {valueResult && (
-                      <div className="text-[11px] text-gray-400">
-                        <span>
+                  )}
+                </div>
+              </div>
+
+              {/* 6. Data grid */}
+              <div className="grid gap-2 mb-6" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
+                {/* Cert Number */}
+                <DataCell label="Cert Number">
+                  {certNum ? (
+                    <a
+                      href={`https://www.psacard.com/cert/${certNum}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        fontFamily: "'JetBrains Mono', monospace",
+                        color: "#2563EB",
+                        textDecoration: "underline",
+                        fontWeight: 600,
+                        fontSize: 13,
+                      }}
+                    >
+                      {certNum}
+                    </a>
+                  ) : (
+                    <EmptyCell />
+                  )}
+                </DataCell>
+
+                {/* Grade */}
+                <DataCell label="Grade">
+                  {item.grade ? (
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, color: "#0F0E0D", fontSize: 13 }}>
+                      {gradeCompany} {item.grade}
+                    </span>
+                  ) : (
+                    <EmptyCell />
+                  )}
+                </DataCell>
+
+                {/* Cost Basis */}
+                <DataCell label="Cost Basis">
+                  {costCents != null ? (
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, color: "#0F0E0D", fontSize: 13 }}>
+                      {fmtMoney(costCents)}
+                    </span>
+                  ) : (
+                    <EmptyCell />
+                  )}
+                </DataCell>
+
+                {/* Unrealized P/L */}
+                <DataCell label="Unrealized P/L">
+                  {plData ? (
+                    <span
+                      style={{
+                        fontFamily: "'JetBrains Mono', monospace",
+                        fontWeight: 600,
+                        fontSize: 13,
+                        color: plData.diff >= 0 ? "#16A34A" : "#DC2626",
+                      }}
+                    >
+                      {plData.diff >= 0 ? "+" : ""}
+                      {fmtMoney(plData.diff)}
+                    </span>
+                  ) : (
+                    <EmptyCell />
+                  )}
+                </DataCell>
+
+                {/* Date Acquired */}
+                <DataCell label="Date Acquired">
+                  {item.acquisition_date || item.purchase_date ? (
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, color: "#0F0E0D", fontSize: 13 }}>
+                      {fmtDate(item.acquisition_date ?? item.purchase_date)}
+                    </span>
+                  ) : (
+                    <EmptyCell />
+                  )}
+                </DataCell>
+
+                {/* Source */}
+                <DataCell label="Source">
+                  {item.channel ? (
+                    <span
+                      className="capitalize"
+                      style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, color: "#0F0E0D", fontSize: 13 }}
+                    >
+                      {item.channel}
+                    </span>
+                  ) : (
+                    <EmptyCell />
+                  )}
+                </DataCell>
+              </div>
+
+              {/* 7. Tab bar */}
+              <div
+                className="flex items-center gap-6 -mx-8 px-8"
+                style={{ borderTop: "1.5px solid #EBEBEA" }}
+              >
+                {tabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className="relative text-sm font-medium transition-colors py-3"
+                    style={{
+                      color: activeTab === tab.id ? "#0F0E0D" : "#A09D9A",
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {tab.label}
+                    {activeTab === tab.id && (
+                      <span
+                        className="absolute top-0 left-0 right-0"
+                        style={{ height: 2, background: "#0F0E0D", borderRadius: "0 0 2px 2px" }}
+                      />
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Tab content */}
+            <div className="flex-1 overflow-auto px-8 py-6">
+              {/* Details tab */}
+              {activeTab === "details" && (
+                <div className="space-y-1">
+                  <div className="grid grid-cols-2 gap-x-8">
+                    <FactRow label="Condition" value={item.condition_status} />
+                    <FactRow label="Grading Company" value={item.grading_company} />
+                    <FactRow label="Year" value={item.year} />
+                    <FactRow label="Set" value={item.set_name} />
+                    <FactRow label="Parallel" value={item.parallel_type} />
+                    <FactRow label="Insert" value={item.insert} />
+                    <FactRow label="Quantity" value={item.quantity != null ? String(item.quantity) : null} />
+                    <FactRow label="Status" value={item.status} />
+                  </div>
+
+                  {item.notes && (
+                    <div className="mt-4 p-3 rounded-xl" style={{ background: "#F7F6F2", border: "1px solid #EBEBEA" }}>
+                      <p className="text-xs uppercase tracking-widest text-gray-400 mb-1">Notes</p>
+                      <p className="text-sm text-gray-700">{item.notes}</p>
+                    </div>
+                  )}
+
+                  {isBusinessMode && cardForGrade && gradeEstimate.estimate && (
+                    <div className="mt-4 p-3 rounded-xl" style={{ background: "#F7F6F2", border: "1px solid #EBEBEA" }}>
+                      <p className="text-xs uppercase tracking-widest text-gray-400 mb-2">Grade Estimate</p>
+                      <p className="text-sm text-gray-700">
+                        Most likely: PSA {gradeEstimate.estimate.estimated_grade_low}–{gradeEstimate.estimate.estimated_grade_high}
+                        {gradeEstimate.estimate.grade_probabilities?.confidence && (
+                          <span className="text-gray-400 ml-2">· {gradeEstimate.estimate.grade_probabilities.confidence} confidence</span>
+                        )}
+                      </p>
+                      {valueResult && (
+                        <p className="text-sm text-gray-700 mt-1">
                           Should grade?{" "}
-                          <span className="font-medium text-emerald-300">
+                          <span className="font-semibold text-emerald-600">
                             {valueResult.rating === "strong_yes"
-                              ? "Strong yes"
+                              ? "Strong Yes"
                               : valueResult.rating === "yes"
                               ? "Yes"
                               : valueResult.rating === "maybe"
                               ? "Maybe"
                               : "No"}
                           </span>
-                        </span>
-                        {valueResult.bestOption !== "none" && (
-                          <span className="ml-1 text-gray-500">
-                            · Best: {valueResult.bestOption.toUpperCase()}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                    {!valueResult && valueLoading && (
-                      <p className="text-[11px] text-gray-500">
-                        Analyzing comps for grading recommendation…
-                      </p>
-                    )}
-                    {valueError && (
-                      <button
-                        type="button"
-                        onClick={() => void fetchWorthGrading()}
-                        className="mt-1 text-[11px] text-blue-300 hover:text-blue-200"
-                      >
-                        Retry grading value analysis
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
+                          {valueResult.bestOption !== "none" && (
+                            <span className="text-gray-400 ml-2">· Best: {valueResult.bestOption.toUpperCase()}</span>
+                          )}
+                        </p>
+                      )}
+                      {!valueResult && valueLoading && (
+                        <p className="text-xs text-gray-400 mt-1">Analyzing grading value…</p>
+                      )}
+                      {valueError && (
+                        <button onClick={() => void fetchWorthGrading()} className="mt-1 text-xs text-blue-500 hover:text-blue-400">
+                          Retry analysis
+                        </button>
+                      )}
+                    </div>
+                  )}
 
-            {/* Quick Actions */}
-            {isBusinessMode && (
-              <div className="space-y-2">
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => {
-                      setNewPrice(
-                        item.list_price_cents != null
-                          ? (item.list_price_cents / 100).toFixed(2)
-                          : ""
-                      );
-                      setShowPriceModal(true);
-                    }}
-                    className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
-                  >
-                    Update Price
-                  </button>
-                  {item.status !== "sold" && (
-                    <button
-                      onClick={() => setShowSoldModal(true)}
-                      className="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium transition-colors"
-                    >
-                      Mark Sold
-                    </button>
+                  {isBusinessMode && takeHome.length > 0 && (
+                    <div className="mt-4 p-3 rounded-xl" style={{ background: "#F7F6F2", border: "1px solid #EBEBEA" }}>
+                      <p className="text-xs uppercase tracking-widest text-gray-400 mb-2">Est. Take-Home at List Price</p>
+                      <div className="space-y-1">
+                        {takeHome.map((th) => (
+                          <div key={th.channel} className="flex justify-between text-sm">
+                            <span className="text-gray-500 capitalize">
+                              {th.channel}{" "}
+                              <span className="text-gray-400 text-xs">({(th.feeRate * 100).toFixed(1)}%)</span>
+                            </span>
+                            <span className="font-medium" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                              {fmtCents(th.netCents)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   )}
                 </div>
-                <button
-                  onClick={() => {
-                    setImageUrlInput(imageUrl ?? "");
-                    setShowImageModal(true);
-                  }}
-                  className="w-full px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-100 rounded-lg text-sm font-medium transition-colors"
-                >
-                  {imageUrl ? "Change Image URL" : "Set Image URL"}
-                </button>
-              </div>
-            )}
-            {!isBusinessMode && (
-              <div className="flex gap-2">
-                <Link
-                  href={`/cards/${item.id}`}
-                  className="flex-1 text-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
-                >
-                  Edit Details
-                </Link>
-                <button
-                  onClick={() => {
-                    setImageUrlInput(imageUrl ?? "");
-                    setShowImageModal(true);
-                  }}
-                  className="flex-1 px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-100 rounded-lg text-sm font-medium transition-colors"
-                >
-                  {imageUrl ? "Change Image URL" : "Set Image URL"}
-                </button>
-              </div>
-            )}
-          </div>
+              )}
 
-          {/* RIGHT PANELS */}
-          <div className="lg:col-span-3 space-y-4">
-            {/* 1) Pricing Panel */}
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-              <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-4">
-                Pricing
-              </h3>
-              <div className="grid grid-cols-2 gap-4">
-                {/* Market Floor / CMV */}
+              {/* Sales History tab */}
+              {activeTab === "sales" && (
                 <div>
-                  <p className="text-xs text-gray-500 mb-1">
-                    {isBusinessMode ? "Est. Market Value" : "Est. Market Value"}
-                  </p>
-                  <p className="text-xl font-bold tabular-nums">
-                    {fmtCents(item.current_market_value_cents)}
-                  </p>
-                </div>
-
-                {/* List Price / Cost Basis */}
-                {isBusinessMode ? (
-                  <div>
-                    <p className="text-xs text-gray-500 mb-1">Your List Price</p>
-                    <p className="text-xl font-bold tabular-nums">
-                      {fmtCents(item.list_price_cents)}
-                    </p>
-                  </div>
-                ) : (
-                  <div>
-                    <p className="text-xs text-gray-500 mb-1">Cost Basis</p>
-                    <p className="text-xl font-bold tabular-nums">
-                      {item.purchase_price != null
-                        ? fmtCents(Math.round(item.purchase_price * 100))
-                        : "—"}
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {/* Position vs Floor (business only) */}
-              {isBusinessMode && position && (
-                <div className="mt-4 pt-4 border-t border-gray-800">
-                  <p className="text-xs text-gray-500 mb-1">
-                    Position vs Floor
-                  </p>
-                  <div className="flex items-center gap-3">
-                    <span className="text-lg font-semibold tabular-nums">
-                      {position.diffCents >= 0 ? "+" : ""}
-                      {fmtCents(position.diffCents)}
-                    </span>
-                    <span
-                      className={`px-2 py-0.5 rounded text-xs font-medium ${severityBadge(
-                        position.severity
-                      )}`}
-                    >
-                      {fmtPct(position.diffPct)}
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {/* Take-Home Estimates (business only) */}
-              {isBusinessMode && takeHome.length > 0 && (
-                <div className="mt-4 pt-4 border-t border-gray-800">
-                  <p className="text-xs text-gray-500 mb-2">
-                    Est. Take-Home at List Price
-                  </p>
-                  <div className="space-y-1.5">
-                    {takeHome.map((th) => (
-                      <div
-                        key={th.channel}
-                        className="flex items-center justify-between text-sm"
-                      >
-                        <span className="text-gray-400 capitalize">
-                          {th.channel}{" "}
-                          <span className="text-xs text-gray-600">
-                            ({(th.feeRate * 100).toFixed(1)}% fee)
-                          </span>
-                        </span>
-                        <span className="font-medium tabular-nums">
-                          {fmtCents(th.netCents)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Cost / Profit summary */}
-              {costCents != null && costCents > 0 && (
-                <div className="mt-4 pt-4 border-t border-gray-800">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-400">Cost Basis</span>
-                    <span className="font-medium tabular-nums">
-                      {fmtCents(costCents)}
-                    </span>
-                  </div>
-                  {item.current_market_value_cents != null &&
-                    item.current_market_value_cents > 0 && (
-                      <div className="flex items-center justify-between text-sm mt-1">
-                        <span className="text-gray-400">Unrealized P/L</span>
-                        {(() => {
-                          const qty = item.quantity ?? 1;
-                          const cmvTotal =
-                            (item.current_market_value_cents ?? 0) * qty;
-                          const diff = cmvTotal - costCents;
-                          const pct =
-                            costCents > 0 ? (diff / costCents) * 100 : 0;
-                          return (
-                            <span
-                              className={`font-medium tabular-nums ${
-                                diff >= 0
-                                  ? "text-emerald-400"
-                                  : "text-red-400"
-                              }`}
-                            >
-                              {diff >= 0 ? "+" : ""}
-                              {fmtCents(diff)}{" "}
-                              <span className="text-xs">
-                                ({fmtPct(pct)})
-                              </span>
-                            </span>
-                          );
-                        })()}
-                      </div>
-                    )}
-                </div>
-              )}
-            </div>
-
-            {/* 2) Chart Panel */}
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-              <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-4">
-                Price History
-              </h3>
-              {chartData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={200}>
-                  <LineChart data={chartData}>
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="#374151"
-                    />
-                    <XAxis
-                      dataKey="date"
-                      tick={{ fill: "#9CA3AF", fontSize: 11 }}
-                      tickLine={false}
-                    />
-                    <YAxis
-                      tick={{ fill: "#9CA3AF", fontSize: 11 }}
-                      tickLine={false}
-                      tickFormatter={(v: number) => `$${v}`}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "#1F2937",
-                        border: "1px solid #374151",
-                        borderRadius: 8,
-                        color: "#fff",
-                      }}
-                      formatter={(value: number | undefined) => [
-                        value != null ? `$${value.toFixed(2)}` : "—",
-                        "Price Point",
-                      ]}
-                      labelFormatter={(label) => String(label)}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="price"
-                      stroke="#10B981"
-                      strokeWidth={2}
-                      dot={{ fill: "#10B981", r: 4 }}
-                      activeDot={{ r: 6 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="flex flex-col items-center justify-center h-[200px] text-gray-600">
-                  <svg
-                    className="w-10 h-10 mb-2"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={1}
-                      d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"
-                    />
-                  </svg>
-                  <p className="text-sm">
-                    Chart available after we collect more data
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* 3) Activity Panel */}
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-              <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-4">
-                Activity
-              </h3>
-
-              {/* Sales History */}
-              {sales.length > 0 ? (
-                <div>
-                  <p className="text-xs text-gray-500 mb-2">Sales</p>
-                  <div className="overflow-x-auto">
+                  {sales.length > 0 ? (
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="text-left text-xs text-gray-500 border-b border-gray-800">
-                          <th className="pb-2 font-medium">Date</th>
-                          <th className="pb-2 font-medium">Channel</th>
-                          <th className="pb-2 font-medium text-right">
-                            Gross
-                          </th>
-                          <th className="pb-2 font-medium text-right">
-                            Net
-                          </th>
-                          <th className="pb-2 font-medium text-right">
-                            Profit
-                          </th>
+                        <tr style={{ borderBottom: "1px solid #EBEBEA" }}>
+                          {["Date", "Channel", "Gross", "Net", "Profit"].map((h) => (
+                            <th
+                              key={h}
+                              className="pb-2 font-semibold"
+                              style={{
+                                fontSize: 11,
+                                color: "#A09D9A",
+                                textAlign: h === "Gross" || h === "Net" || h === "Profit" ? "right" : "left",
+                              }}
+                            >
+                              {h}
+                            </th>
+                          ))}
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-800/60">
+                      <tbody>
                         {sales.map((s) => (
-                          <tr key={s.id}>
-                            <td className="py-2 text-gray-300">
+                          <tr key={s.id} style={{ borderBottom: "1px solid #F3F2F0" }}>
+                            <td className="py-2.5 text-xs" style={{ color: "#6B6864" }}>
                               {fmtDate(s.sale_date || s.sold_at)}
                             </td>
-                            <td className="py-2 text-gray-400 capitalize">
+                            <td className="py-2.5 capitalize text-xs" style={{ color: "#9D9A97" }}>
                               {s.channel ?? "—"}
                             </td>
-                            <td className="py-2 text-right tabular-nums text-gray-300">
-                              {fmtCents(
-                                s.sale_price_cents ?? s.sold_price_cents
-                              )}
-                            </td>
-                            <td className="py-2 text-right tabular-nums text-gray-300">
-                              {fmtCents(
-                                s.net_proceeds_cents ?? s.net_payout_cents
-                              )}
+                            <td
+                              className="py-2.5 text-right text-xs"
+                              style={{ fontFamily: "'JetBrains Mono', monospace", color: "#3D3A37" }}
+                            >
+                              {fmtCents(s.sale_price_cents ?? s.sold_price_cents)}
                             </td>
                             <td
-                              className={`py-2 text-right tabular-nums font-medium ${
-                                (s.profit_cents ?? 0) >= 0
-                                  ? "text-emerald-400"
-                                  : "text-red-400"
-                              }`}
+                              className="py-2.5 text-right text-xs"
+                              style={{ fontFamily: "'JetBrains Mono', monospace", color: "#3D3A37" }}
+                            >
+                              {fmtCents(s.net_proceeds_cents ?? s.net_payout_cents)}
+                            </td>
+                            <td
+                              className="py-2.5 text-right text-xs font-semibold"
+                              style={{
+                                fontFamily: "'JetBrains Mono', monospace",
+                                color: (s.profit_cents ?? 0) >= 0 ? "#16A34A" : "#DC2626",
+                              }}
                             >
                               {fmtCents(s.profit_cents)}
                             </td>
@@ -1203,95 +1363,156 @@ export default function CardProfilePage() {
                         ))}
                       </tbody>
                     </table>
+                  ) : (
+                    <p className="text-sm text-gray-400 py-4">No sales recorded for this item.</p>
+                  )}
+
+                  <div className="mt-6">
+                    <p className="text-xs uppercase tracking-widest text-gray-400 mb-3">Timeline</p>
+                    <div className="space-y-2">
+                      {item.created_at && (
+                        <TimelineEntry date={item.created_at} label="Added to collection" />
+                      )}
+                      {(item.acquisition_date || item.purchase_date) && (
+                        <TimelineEntry
+                          date={(item.acquisition_date ?? item.purchase_date)!}
+                          label="Acquired"
+                        />
+                      )}
+                      {item.status === "sold" && sales[0] && (
+                        <TimelineEntry
+                          date={sales[0].sale_date || sales[0].sold_at || ""}
+                          label={`Sold for ${fmtCents(sales[0].sale_price_cents ?? sales[0].sold_price_cents)}`}
+                        />
+                      )}
+                    </div>
                   </div>
                 </div>
-              ) : isBusinessMode ? (
-                <p className="text-sm text-gray-600">
-                  No sales recorded for this item.
-                </p>
-              ) : null}
+              )}
 
-              {/* Inventory Events */}
-              <div
-                className={
-                  sales.length > 0
-                    ? "mt-4 pt-4 border-t border-gray-800"
-                    : ""
-                }
-              >
-                <p className="text-xs text-gray-500 mb-2">Timeline</p>
-                <div className="space-y-2">
-                  {item.created_at && (
-                    <TimelineEntry
-                      date={item.created_at}
-                      label="Added to collection"
-                    />
-                  )}
-                  {(item.acquisition_date || item.purchase_date) && (
-                    <TimelineEntry
-                      date={
-                        (item.acquisition_date ?? item.purchase_date)!
-                      }
-                      label="Acquired"
-                    />
-                  )}
-                  {item.status === "sold" && sales[0] && (
-                    <TimelineEntry
-                      date={sales[0].sale_date || sales[0].sold_at || ""}
-                      label={`Sold for ${fmtCents(
-                        sales[0].sale_price_cents ??
-                          sales[0].sold_price_cents
-                      )}`}
-                    />
+              {/* Price Chart tab */}
+              {activeTab === "chart" && (
+                <div>
+                  {chartData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={240}>
+                      <AreaChart data={chartData}>
+                        <defs>
+                          <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#0F0E0D" stopOpacity={0.12} />
+                            <stop offset="95%" stopColor="#0F0E0D" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#EBEBEA" />
+                        <XAxis
+                          dataKey="date"
+                          tick={{ fill: "#A09D9A", fontSize: 11, fontFamily: "'Sora', sans-serif" }}
+                          tickLine={false}
+                        />
+                        <YAxis
+                          tick={{ fill: "#A09D9A", fontSize: 11, fontFamily: "'JetBrains Mono', monospace" }}
+                          tickLine={false}
+                          tickFormatter={(v: number) => `$${v}`}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            background: "#fff",
+                            border: "1px solid #EBEBEA",
+                            borderRadius: 10,
+                            color: "#0F0E0D",
+                            fontFamily: "'Sora', sans-serif",
+                          }}
+                          formatter={(value: number | undefined) => [
+                            value != null ? `$${value.toFixed(2)}` : "—",
+                            "Price",
+                          ]}
+                          labelFormatter={(label) => String(label)}
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="price"
+                          stroke="#0F0E0D"
+                          strokeWidth={2}
+                          fill="url(#priceGradient)"
+                          dot={{ fill: "#0F0E0D", r: 4 }}
+                          activeDot={{ r: 6 }}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-12 gap-2" style={{ color: "#C0BDBA" }}>
+                      <svg className="w-10 h-10 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+                      </svg>
+                      <p className="text-sm">Chart available after more data is collected</p>
+                    </div>
                   )}
                 </div>
-              </div>
+              )}
+
+              {/* Shop tab */}
+              {activeTab === "shop" && (
+                <div className="flex flex-col items-center justify-center py-10 gap-4">
+                  <p className="text-sm text-center max-w-xs" style={{ color: "#9D9A97" }}>
+                    Search for comparable listings on eBay to track live market prices.
+                  </p>
+                  <a
+                    href={`https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(
+                      [item.year, item.player_name, item.set_name, item.grade].filter(Boolean).join(" ")
+                    )}&_sacat=212`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-gray-800"
+                    style={{ background: "#111", borderRadius: 11 }}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                    Search eBay
+                  </a>
+                </div>
+              )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* ── Image Zoom Modal ──────────────────────────────────────── */}
+      {/* ── Image Zoom Modal ─────────────────────────────────────────── */}
       {imageZoom && imageUrl && (
         <div
-          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(0,0,0,0.85)" }}
           onClick={() => setImageZoom(false)}
         >
           <img
             src={imageUrl}
             alt={title}
-            className="max-w-full max-h-[90vh] object-contain rounded-lg"
+            className="max-w-full max-h-[90vh] object-contain rounded-xl"
             onClick={(e) => e.stopPropagation()}
           />
           <button
             onClick={() => setImageZoom(false)}
-            className="absolute top-4 right-4 p-2 bg-gray-900/80 hover:bg-gray-800 rounded-full text-white"
+            className="absolute top-4 right-4 p-2 rounded-full text-white hover:bg-white/10 transition-colors"
           >
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
       )}
 
-      {/* ── Update Price Modal ────────────────────────────────────── */}
+      {/* ── Update Price Modal ───────────────────────────────────────── */}
       {showPriceModal && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-sm">
-            <h3 className="text-lg font-semibold mb-4">Update List Price</h3>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(0,0,0,0.5)" }}
+        >
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+            <h3 className="text-lg font-bold mb-4 text-gray-900">
+              {isBusinessMode ? "Update List Price" : "Set Price"}
+            </h3>
             <div className="mb-4">
-              <label className="block text-sm text-gray-400 mb-1">
-                New Price ($)
+              <label className="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wide">
+                Price ($)
               </label>
               <input
                 type="number"
@@ -1299,40 +1520,44 @@ export default function CardProfilePage() {
                 min="0"
                 value={newPrice}
                 onChange={(e) => setNewPrice(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleUpdatePrice();
-                }}
+                onKeyDown={(e) => { if (e.key === "Enter") handleUpdatePrice(); }}
                 autoFocus
-                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                className="w-full px-3 py-2.5 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                style={{ border: "1.5px solid #E4E2DE", fontFamily: "'JetBrains Mono', monospace" }}
               />
             </div>
-            <div className="flex gap-3">
+            <div className="flex gap-2">
               <button
                 onClick={() => setShowPriceModal(false)}
-                className="flex-1 px-4 py-2 border border-gray-700 rounded-lg text-gray-300 hover:bg-gray-800"
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
+                style={{ border: "1.5px solid #E4E2DE", color: "#6B6864" }}
               >
                 Cancel
               </button>
               <button
                 onClick={handleUpdatePrice}
                 disabled={updatingPrice}
-                className="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg font-medium"
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:bg-gray-800 transition-colors"
+                style={{ background: "#111", borderRadius: 11 }}
               >
-                {updatingPrice ? "Saving..." : "Save"}
+                {updatingPrice ? "Saving…" : "Save"}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── Mark Sold Modal ───────────────────────────────────────── */}
+      {/* ── Mark Sold Modal ──────────────────────────────────────────── */}
       {showSoldModal && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-sm">
-            <h3 className="text-lg font-semibold mb-4">Mark Sold</h3>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(0,0,0,0.5)" }}
+        >
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+            <h3 className="text-lg font-bold mb-4 text-gray-900">Mark Sold</h3>
             <div className="space-y-3">
               <div>
-                <label className="block text-sm text-gray-400 mb-1">
+                <label className="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wide">
                   Sold Price ($) *
                 </label>
                 <input
@@ -1340,29 +1565,21 @@ export default function CardProfilePage() {
                   step="0.01"
                   min="0"
                   value={soldForm.sale_price}
-                  onChange={(e) =>
-                    setSoldForm((f) => ({
-                      ...f,
-                      sale_price: e.target.value,
-                    }))
-                  }
+                  onChange={(e) => setSoldForm((f) => ({ ...f, sale_price: e.target.value }))}
                   autoFocus
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  className="w-full px-3 py-2.5 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                  style={{ border: "1.5px solid #E4E2DE", fontFamily: "'JetBrains Mono', monospace" }}
                 />
               </div>
               <div>
-                <label className="block text-sm text-gray-400 mb-1">
+                <label className="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wide">
                   Channel
                 </label>
                 <select
                   value={soldForm.channel}
-                  onChange={(e) =>
-                    setSoldForm((f) => ({
-                      ...f,
-                      channel: e.target.value,
-                    }))
-                  }
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white"
+                  onChange={(e) => setSoldForm((f) => ({ ...f, channel: e.target.value }))}
+                  className="w-full px-3 py-2.5 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                  style={{ border: "1.5px solid #E4E2DE" }}
                 >
                   <option value="ebay">eBay</option>
                   <option value="whatnot">Whatnot</option>
@@ -1373,65 +1590,119 @@ export default function CardProfilePage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm text-gray-400 mb-1">
+                <label className="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wide">
                   Sold Date
                 </label>
                 <input
                   type="date"
                   value={soldForm.sale_date}
-                  onChange={(e) =>
-                    setSoldForm((f) => ({
-                      ...f,
-                      sale_date: e.target.value,
-                    }))
-                  }
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white"
+                  onChange={(e) => setSoldForm((f) => ({ ...f, sale_date: e.target.value }))}
+                  className="w-full px-3 py-2.5 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                  style={{ border: "1.5px solid #E4E2DE" }}
                 />
               </div>
             </div>
-            <div className="flex gap-3 mt-5">
+            <div className="flex gap-2 mt-5">
               <button
                 onClick={() => setShowSoldModal(false)}
-                className="flex-1 px-4 py-2 border border-gray-700 rounded-lg text-gray-300 hover:bg-gray-800"
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
+                style={{ border: "1.5px solid #E4E2DE", color: "#6B6864" }}
               >
                 Cancel
               </button>
               <button
                 onClick={handleMarkSold}
                 disabled={recordingSale || !soldForm.sale_price}
-                className="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg font-medium"
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:bg-gray-800 transition-colors"
+                style={{ background: "#111", borderRadius: 11 }}
               >
-                {recordingSale ? "Recording..." : "Record Sale"}
+                {recordingSale ? "Recording…" : "Record Sale"}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── Image URL Modal ─────────────────────────────────────── */}
+      {/* ── Image Modal ─────────────────────────────────────── */}
       {showImageModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
           <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-lg">
-            <h3 className="text-lg font-semibold mb-4">Set Image URL</h3>
-            <div className="space-y-2">
-              <label className="block text-sm text-gray-400">
-                Image URL (https://...)
-              </label>
-              <input
-                type="url"
-                value={imageUrlInput}
-                onChange={(e) => setImageUrlInput(e.target.value)}
-                placeholder="https://..."
-                autoFocus
-                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-              />
-              <p className="text-xs text-gray-500">
-                Leave blank to remove your custom image override.
-              </p>
+            <h3 className="text-lg font-semibold mb-4">Set Image</h3>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="block text-sm text-gray-400">
+                  Upload from your files
+                </label>
+                <input
+                  ref={imageFilePickerRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageFileSelection}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => imageFilePickerRef.current?.click()}
+                  className="w-full px-3 py-2 border border-gray-700 rounded-lg text-gray-200 hover:bg-gray-800 text-sm text-left"
+                >
+                  {imageFileInput ? imageFileInput.name : "Choose image file"}
+                </button>
+                {imageFilePreviewUrl && (
+                  <img
+                    src={imageFilePreviewUrl}
+                    alt="Selected upload preview"
+                    className="w-full max-h-52 object-contain rounded-lg border border-gray-800 bg-gray-950"
+                  />
+                )}
+                {imageFileInput && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setImageFileInput(null);
+                      if (imageFilePickerRef.current) {
+                        imageFilePickerRef.current.value = "";
+                      }
+                    }}
+                    className="text-xs text-gray-400 hover:text-gray-200"
+                  >
+                    Clear selected file
+                  </button>
+                )}
+              </div>
+              <div className="space-y-2">
+                <label className="block text-sm text-gray-400">
+                  Or paste an image URL (optional)
+                </label>
+                <input
+                  type="url"
+                  value={imageUrlInput}
+                  onChange={(e) => {
+                    setImageUrlInput(e.target.value);
+                    if (imageFileInput) {
+                      setImageFileInput(null);
+                      if (imageFilePickerRef.current) {
+                        imageFilePickerRef.current.value = "";
+                      }
+                    }
+                  }}
+                  placeholder="https://..."
+                  autoFocus
+                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                />
+                <p className="text-xs text-gray-500">
+                  Leave both file and URL blank to remove your custom image.
+                </p>
+              </div>
             </div>
-            <div className="flex gap-3 mt-5">
+            <div className="flex gap-2 mt-5">
               <button
-                onClick={() => setShowImageModal(false)}
+                onClick={() => {
+                  setShowImageModal(false);
+                  setImageFileInput(null);
+                  if (imageFilePickerRef.current) {
+                    imageFilePickerRef.current.value = "";
+                  }
+                }}
                 className="flex-1 px-4 py-2 border border-gray-700 rounded-lg text-gray-300 hover:bg-gray-800"
               >
                 Cancel
@@ -1439,41 +1710,30 @@ export default function CardProfilePage() {
               <button
                 onClick={handleSaveImageUrl}
                 disabled={savingImage}
-                className="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg font-medium"
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:bg-gray-800 transition-colors"
+                style={{ background: "#111", borderRadius: 11 }}
               >
-                {savingImage ? "Saving..." : "Save"}
+                {savingImage ? "Saving…" : "Save"}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── Toast ─────────────────────────────────────────────────── */}
+      {/* ── Toast ─────────────────────────────────────────────────────── */}
       {toast && (
         <div
-          className={`fixed bottom-4 right-4 p-4 rounded-lg shadow-lg z-50 flex items-center gap-3 ${
-            toast.type === "success"
-              ? "bg-emerald-600 text-white"
-              : "bg-red-600 text-white"
-          }`}
+          className="fixed bottom-5 right-5 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg text-white"
+          style={{
+            background: toast.type === "success" ? "#16A34A" : "#DC2626",
+            fontFamily: "'Sora', sans-serif",
+            fontSize: 14,
+          }}
         >
           <span>{toast.message}</span>
-          <button
-            onClick={() => setToast(null)}
-            className="hover:opacity-75"
-          >
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
+          <button onClick={() => setToast(null)} className="opacity-75 hover:opacity-100">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
@@ -1482,38 +1742,50 @@ export default function CardProfilePage() {
   );
 }
 
-// ── Sub-components ───────────────────────────────────────────────────
+// ── Sub-components ────────────────────────────────────────────────────
 
-function Fact({
-  label,
-  value,
-}: {
-  label: string;
-  value: string | null | undefined;
-}) {
-  if (!value) return null;
+function DataCell({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex justify-between text-sm">
-      <span className="text-gray-500">{label}</span>
-      <span className="text-gray-200 text-right max-w-[60%] truncate">
-        {value}
+    <div
+      className="flex flex-col gap-1.5 p-3 rounded-[11px]"
+      style={{ background: "#F7F6F2", border: "1px solid #EBEBEA" }}
+    >
+      <span
+        className="uppercase tracking-widest"
+        style={{ fontSize: 9, color: "#C0BDBA", fontWeight: 500 }}
+      >
+        {label}
       </span>
+      <div className="text-sm leading-tight">{children}</div>
     </div>
   );
 }
 
-function TimelineEntry({
-  date,
-  label,
-}: {
-  date: string;
-  label: string;
-}) {
+function EmptyCell() {
   return (
-    <div className="flex items-center gap-3 text-sm">
-      <div className="w-2 h-2 rounded-full bg-gray-600 shrink-0" />
-      <span className="text-gray-400">{fmtDate(date)}</span>
-      <span className="text-gray-300">{label}</span>
+    <span style={{ color: "#C0BDBA", fontWeight: 400, fontSize: 20, lineHeight: 1 }}>+</span>
+  );
+}
+
+function FactRow({ label, value }: { label: string; value: string | null | undefined }) {
+  if (!value) return null;
+  return (
+    <div
+      className="flex justify-between items-center py-1.5"
+      style={{ borderBottom: "1px solid #F3F2F0" }}
+    >
+      <span className="text-xs font-medium" style={{ color: "#A09D9A" }}>{label}</span>
+      <span className="text-xs font-medium capitalize" style={{ color: "#3D3A37" }}>{value}</span>
+    </div>
+  );
+}
+
+function TimelineEntry({ date, label }: { date: string; label: string }) {
+  return (
+    <div className="flex items-center gap-3">
+      <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: "#C0BDBA" }} />
+      <span className="text-xs" style={{ color: "#A09D9A" }}>{fmtDate(date)}</span>
+      <span className="text-xs" style={{ color: "#6B6864" }}>{label}</span>
     </div>
   );
 }

@@ -9,7 +9,7 @@ import CardDetailsForm from "@/components/CardDetailsForm";
 import GradeProbabilityPanel from "@/components/grading/GradeProbabilityPanel";
 import GradeEstimateProgressPanel from "@/components/grading/GradeEstimateProgressPanel";
 import { createClient } from "@/lib/supabase/client";
-import { hasActiveBusinessTier } from "@/lib/subscription-tier";
+import { hasBusinessWorkspaceAccess } from "@/lib/business/workspace-access";
 import { useGradeEstimateFromImages } from "@/lib/grading/useGradeEstimateFromImages";
 import { gradingCopy } from "@/copy/grading";
 
@@ -39,13 +39,7 @@ export default function CardProfilePage() {
       } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data: subscription } = await supabase
-        .from("subscriptions")
-        .select("tier, status, current_period_end")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      setIsBusinessUser(hasActiveBusinessTier(subscription));
+      setIsBusinessUser(await hasBusinessWorkspaceAccess(supabase as any, user.id));
     } catch {
       setIsBusinessUser(false);
     }
