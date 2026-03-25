@@ -1141,7 +1141,7 @@ export default function CardProfilePage() {
                 <DataCell label="Cost Basis">
                   {costCents != null ? (
                     <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, color: "#0F0E0D", fontSize: 13 }}>
-                      {fmtMoney(costCents)}
+                      {fmtCents(costCents)}
                     </span>
                   ) : (
                     <EmptyCell />
@@ -1160,7 +1160,7 @@ export default function CardProfilePage() {
                       }}
                     >
                       {plData.diff >= 0 ? "+" : ""}
-                      {fmtMoney(plData.diff)}
+                      {fmtCents(plData.diff)}
                     </span>
                   ) : (
                     <EmptyCell />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
@@ -9,6 +9,31 @@ import { createClient } from "@/lib/supabase/client";
 type InviteState = "loading" | "requires_auth" | "success" | "error";
 
 export default function BusinessInvitePage() {
+  return (
+    <Suspense fallback={<InviteLoadingFallback />}>
+      <BusinessInviteContent />
+    </Suspense>
+  );
+}
+
+function InviteLoadingFallback() {
+  return (
+    <AuthenticatedLayout>
+      <main className="mx-auto max-w-xl px-4 py-14">
+        <section className="rounded-2xl border border-[color:var(--biz-border)] bg-[var(--biz-surface)] p-6">
+          <h1 className="text-2xl font-semibold text-[var(--biz-text)]">
+            Business Team Invite
+          </h1>
+          <p className="mt-2 text-sm text-[var(--biz-muted)]">
+            Checking invite...
+          </p>
+        </section>
+      </main>
+    </AuthenticatedLayout>
+  );
+}
+
+function BusinessInviteContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [state, setState] = useState<InviteState>("loading");
@@ -104,4 +129,3 @@ export default function BusinessInvitePage() {
     </AuthenticatedLayout>
   );
 }
-
