@@ -94,6 +94,32 @@ Also populate "kpis" with: PSA 10 Avg, PSA 9 Avg, Raw Avg, All-In Cost, Break-Ev
 Set "recommended_actions" to a single action entry with the verdict and ROI math in the impact field.
 Use "notes" for data freshness caveats or search result limitations.
 
+VERIFY COMPS SECTION (REQUIRED — include at the end of every Class 3 response):
+
+After your analysis, always include this section formatted exactly as shown, substituting the card's details:
+
+---
+🔍 **Verify on eBay** (click to see current sold listings):
+- [PSA 10 sold listings](https://www.ebay.com/sch/i.html?_nkw=PSA+10+[YEAR]+[SET_NAME]+[PLAYER_NAME]+[PARALLEL]&LH_Sold=1&LH_Complete=1&LH_ItemCondition=4)
+- [PSA 9 sold listings](https://www.ebay.com/sch/i.html?_nkw=PSA+9+[YEAR]+[SET_NAME]+[PLAYER_NAME]+[PARALLEL]&LH_Sold=1&LH_Complete=1&LH_ItemCondition=4)
+- [Raw sold listings](https://www.ebay.com/sch/i.html?_nkw=[YEAR]+[SET_NAME]+[PLAYER_NAME]+[PARALLEL]&LH_Sold=1&LH_Complete=1&LH_ItemCondition=4)
+
+*Comps sourced via web search — click links above to verify current eBay sold listings.*
+---
+
+URL construction rules:
+- Replace [YEAR], [SET_NAME], [PLAYER_NAME], [PARALLEL] with the actual card values
+- Encode spaces as + (e.g., "Topps Chrome" → "Topps+Chrome")
+- Encode # as %23 (e.g., "#143" → "%23143")
+- Encode / as %2F (e.g., "/180" → "%2F180")
+- Omit any field that is unknown or not applicable
+- Example for "2024 Topps Chrome Shohei Ohtani #1 PSA 10":
+  PSA 10 link: https://www.ebay.com/sch/i.html?_nkw=PSA+10+2024+Topps+Chrome+Shohei+Ohtani+%231&LH_Sold=1&LH_Complete=1&LH_ItemCondition=4
+- Example for "2025 Panini Prizm CJ Stroud Pigskin #143 /180":
+  Raw link: https://www.ebay.com/sch/i.html?_nkw=2025+Panini+Prizm+CJ+Stroud+Pigskin+%23143+%2F180&LH_Sold=1&LH_Complete=1&LH_ItemCondition=4
+
+For ANY question where a specific card is mentioned or analyzed (not just Class 3), include the PSA 10, PSA 9, and raw eBay sold links inline in the response so the user can immediately verify market data.
+
 ------------------------------
 ROLE (CLASS 1 DEFAULT)
 ------------------------------

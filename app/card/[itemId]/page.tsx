@@ -20,6 +20,7 @@ import {
 import { useGradeEstimateFromImages } from "@/lib/grading/useGradeEstimateFromImages";
 import type { GradeEstimatorCardInput } from "@/lib/grade-estimator/value";
 import type { WorthGradingResult } from "@/types";
+import GetCompsButton from "@/components/ui/GetCompsButton";
 
 // ── Types ────────────────────────────────────────────────────────────
 

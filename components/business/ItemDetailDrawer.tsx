@@ -11,6 +11,8 @@ import { gradingCopy } from "@/copy/grading";
 import { formatEbayTitle, calculateEbayParityPrice, EBAY_FEE_RATES } from "@/lib/ebay/parity-price";
 import type { EbayFeeRateKey } from "@/lib/ebay/parity-price";
 import EbayListingModal from "@/components/business/EbayListingModal";
+import GetCompsButton from "@/components/ui/GetCompsButton";
+import { compsParamsFromTitle } from "@/lib/ebay/comps-url";
 
 function fmtCents(cents: number | null): string {
   if (cents === null) return "";
@@ -332,6 +334,20 @@ export default function ItemDetailDrawer({
                   <span>List on eBay</span>
                 </button>
               )}
+              <GetCompsButton
+                params={
+                  cardForGrade?.cardIdentity
+                    ? {
+                        player: cardForGrade.cardIdentity.player_name,
+                        year: cardForGrade.cardIdentity.year?.toString(),
+                        setName: cardForGrade.cardIdentity.set_name,
+                        parallel: cardForGrade.cardIdentity.parallel_type,
+                        grade: form.grade || item.grade,
+                        gradingCompany: form.grading_company || item.grading_company,
+                      }
+                    : compsParamsFromTitle(item.title, form.grade || item.grade, form.grading_company || item.grading_company)
+                }
+              />
               {item.id && (
                 <Link
                   href={`/card/${item.id}?from=business`}
