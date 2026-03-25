@@ -6,7 +6,7 @@
 
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { requireBusinessAccess } from "@/lib/business/actions";
+import { requireBusinessOwnerContext } from "@/lib/business/context";
 import { syncEbayPurchases } from "@/lib/ebay/buying/purchase-sync";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +23,7 @@ export async function POST(): Promise<NextResponse> {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    await requireBusinessAccess(user.id);
+    await requireBusinessOwnerContext(user.id);
 
     const { data: account } = await supabase
       .from("ebay_accounts")

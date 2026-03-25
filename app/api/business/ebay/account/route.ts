@@ -10,7 +10,7 @@
 
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { requireBusinessAccess } from "@/lib/business/actions";
+import { requireBusinessOwnerContext } from "@/lib/business/context";
 import type { EbayAccountStatus } from "@/types";
 import type { StoreTier } from "@/lib/business/EbayProfitEngine";
 
@@ -36,7 +36,7 @@ export async function GET(): Promise<NextResponse> {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    await requireBusinessAccess(user.id);
+    await requireBusinessOwnerContext(user.id);
 
     const { data: account, error } = await supabase
       .from("ebay_accounts")
@@ -77,7 +77,7 @@ export async function PATCH(request: Request): Promise<NextResponse> {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    await requireBusinessAccess(user.id);
+    await requireBusinessOwnerContext(user.id);
 
     const body = await request.json();
     const { store_tier } = body as { store_tier?: unknown };

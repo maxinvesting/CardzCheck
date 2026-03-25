@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { normalizeHttpUrl, resolveStoredImagePath } from "@/lib/collection-images";
+import { requireBusinessContext } from "@/lib/business/context";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -86,13 +87,15 @@ export async function GET(
     const supabase = await createClient();
 
     if (from === "business") {
+      const context = await requireBusinessContext(userId);
+
       // Load from business_inventory_items
       const { data: itemById, error: itemByIdErr } = isUuid(itemId)
         ? await supabase
             .from("business_inventory_items")
             .select("*")
             .eq("id", itemId)
-            .eq("user_id", userId)
+            .eq("business_account_id", context.businessAccountId)
             .maybeSingle()
         : { data: null, error: null };
 
@@ -106,7 +109,7 @@ export async function GET(
           .from("business_inventory_items")
           .select("*")
           .eq("card_id", itemId)
-          .eq("user_id", userId)
+          .eq("business_account_id", context.businessAccountId)
           .order("created_at", { ascending: false })
           .limit(1);
 
@@ -182,7 +185,7 @@ export async function GET(
         .from("business_sales")
         .select("*")
         .eq("inventory_item_id", item.id)
-        .eq("business_id", userId)
+        .eq("business_account_id", context.businessAccountId)
         .eq("is_deleted", false)
         .order("sold_at", { ascending: false });
       if (!salesRes.error) sales = salesRes.data ?? [];
@@ -218,9 +221,10 @@ export async function GET(
     });
   } catch (err: any) {
     console.error("Card profile GET error:", err);
+    const status = err?.status ?? 500;
     return NextResponse.json(
-      { error: "Failed to load card profile" },
-      { status: 500 }
+      { error: err?.message || "Failed to load card profile" },
+      { status }
     );
   }
 }

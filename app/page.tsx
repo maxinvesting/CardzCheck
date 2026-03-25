@@ -7,11 +7,11 @@ import type { ReactNode } from "react";
 import Header from "@/components/Header";
 import SportsCardBackground from "@/components/SportsCardBackground";
 import { createClient } from "@/lib/supabase/client";
-import { hasActiveBusinessTier } from "@/lib/subscription-tier";
+import { hasBusinessWorkspaceAccess } from "@/lib/business/workspace-access";
 import {
   ANNUAL_SAVINGS,
-  BUSINESS_ANNUAL_PRICE,
-  BUSINESS_ANNUAL_SAVINGS,
+  BUSINESS_ADDITIONAL_SEAT_MONTHLY_PRICE,
+  BUSINESS_INCLUDED_SEATS,
   BUSINESS_MONTHLY_PRICE,
   PRO_ANNUAL_PRICE,
   PRO_MONTHLY_PRICE,
@@ -68,13 +68,12 @@ export default function Home() {
       const { data: { user } } = await supabase.auth.getUser();
 
       if (user) {
-        const { data: subscription } = await supabase
-          .from("subscriptions")
-          .select("tier, status, current_period_end")
-          .eq("user_id", user.id)
-          .maybeSingle();
+        const hasBusinessAccess = await hasBusinessWorkspaceAccess(
+          supabase as any,
+          user.id
+        );
 
-        if (hasActiveBusinessTier(subscription)) {
+        if (hasBusinessAccess) {
           router.replace("/business");
           return;
         }
@@ -166,8 +165,7 @@ export default function Home() {
               <p className="text-xs uppercase tracking-wide text-emerald-300">Business Mode</p>
               <h2 className="mt-2 text-2xl font-semibold text-white">Run inventory like a real desk.</h2>
               <p className="mt-3 text-sm text-gray-400">
-                Manage inventory, track sales and fees, and monitor take-home profit across
-                channels from a single dashboard.
+                Manage inventory, sales, and pricing with your team in one workspace built for card operations.
               </p>
             </article>
           </section>
@@ -219,6 +217,7 @@ export default function Home() {
                 description="Manage inventory, track P&L, and sell across eBay and Whatnot from a single business dashboard."
                 points={[
                   "Inventory, ledger, and sales tracking",
+                  "Owner, manager, and employee seat roles",
                   "eBay and Whatnot channel integration",
                   "Business Consultant and Analyst workflows",
                 ]}
@@ -366,17 +365,17 @@ export default function Home() {
               </article>
 
               <article className="rounded-xl border border-emerald-500/50 bg-emerald-500/10 p-6">
-                <p className="text-xs font-semibold uppercase tracking-wide text-emerald-200">For Sellers</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-emerald-200">For Card Teams</p>
                 <h3 className="mt-2 text-lg font-semibold text-white">Business</h3>
                 <p className="mt-4 text-3xl font-bold text-white">{formatPrice(BUSINESS_MONTHLY_PRICE)}/mo</p>
                 <p className="text-sm text-emerald-200">
-                  or {formatPrice(BUSINESS_ANNUAL_PRICE)}/year (save {formatPrice(BUSINESS_ANNUAL_SAVINGS)})
+                  Includes {BUSINESS_INCLUDED_SEATS} user · Add team members for {formatPrice(BUSINESS_ADDITIONAL_SEAT_MONTHLY_PRICE)}/month each
                 </p>
                 <ul className="mt-5 space-y-2 text-sm text-emerald-100">
                   <li>Everything in Pro</li>
-                  <li>Inventory + sales + ledger workflows</li>
+                  <li>Shared inventory, sales, and ledger workflows</li>
+                  <li>Role-based team access and seat controls</li>
                   <li>Profit-focused business dashboard</li>
-                  <li>Extra 1% off every subscriber deal</li>
                 </ul>
                 <Link
                   href="/signup"

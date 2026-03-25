@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
-import { hasBusinessAccess } from "@/lib/access";
+import { requireBusinessContext } from "@/lib/business/context";
 import {
   listInventory,
   listSales,
@@ -36,22 +36,12 @@ export async function GET() {
       );
     }
 
-    const businessAccess = await hasBusinessAccess(user.id);
-    if (!businessAccess) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Business subscription required",
-          code: "BUSINESS_REQUIRED",
-        },
-        { status: 403 }
-      );
-    }
+    const context = await requireBusinessContext(user.id);
 
     const { data: consultations, error } = await supabase
       .from("business_consultations")
       .select("*")
-      .eq("user_id", user.id)
+      .eq("business_account_id", context.businessAccountId)
       .order("updated_at", { ascending: false })
       .limit(CONSULTATION_HISTORY_LIMIT);
 
@@ -73,14 +63,18 @@ export async function GET() {
     });
   } catch (error) {
     console.error("Business consultant history GET error:", error);
+    const status = (error as { status?: number })?.status ?? 500;
     return NextResponse.json(
       {
         ok: false,
-        error: "Failed to load consultant history",
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to load consultant history",
         message: error instanceof Error ? error.message : "Unknown error",
         code: "BUSINESS_CONSULTANT_HISTORY_ERROR",
       },
-      { status: 500 }
+      { status }
     );
   }
 }
@@ -89,7 +83,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as ConsultantRequest;
     const prompt = body?.prompt?.trim();
-    const context = body?.context?.trim() || "";
+    const additionalContext = body?.context?.trim() || "";
     const templateKey = body?.template_key?.trim() || null;
     const modeHint = body?.mode_hint ?? null;
 
@@ -112,17 +106,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const businessAccess = await hasBusinessAccess(user.id);
-    if (!businessAccess) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Business subscription required",
-          code: "BUSINESS_REQUIRED",
-        },
-        { status: 403 }
-      );
-    }
+    const businessContextScope = await requireBusinessContext(user.id);
 
     const [inventory, salesResult, metrics] = await Promise.all([
       listInventory(user.id),
@@ -197,7 +181,7 @@ TEMPLATE CATEGORY:
 ${templateKey ?? "custom"}
 
 ADDITIONAL CONTEXT / CONSTRAINTS (OPTIONAL, PROVIDED BY USER):
-${context || "None provided."}
+${additionalContext || "None provided."}
 
 BUSINESS DATA JSON (SOURCE OF TRUTH):
 ${JSON.stringify(businessContext, null, 2)}`,
@@ -238,6 +222,7 @@ ${JSON.stringify(businessContext, null, 2)}`,
     const { data: insertedConsultation, error: saveError } = await supabase
       .from("business_consultations")
       .insert({
+        business_account_id: businessContextScope.businessAccountId,
         user_id: user.id,
         title: consultationTitle,
         prompt,
@@ -286,14 +271,18 @@ ${JSON.stringify(businessContext, null, 2)}`,
     });
   } catch (error) {
     console.error("Business consultant error:", error);
+    const status = (error as { status?: number })?.status ?? 500;
     return NextResponse.json(
       {
         ok: false,
-        error: "Failed to generate business consultation",
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to generate business consultation",
         message: error instanceof Error ? error.message : "Unknown error",
         code: "BUSINESS_CONSULTANT_ERROR",
       },
-      { status: 500 }
+      { status }
     );
   }
 }

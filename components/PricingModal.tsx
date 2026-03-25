@@ -6,8 +6,8 @@ import {
   PRO_ANNUAL_PRICE,
   ANNUAL_SAVINGS,
   BUSINESS_MONTHLY_PRICE,
-  BUSINESS_ANNUAL_PRICE,
-  BUSINESS_ANNUAL_SAVINGS,
+  BUSINESS_ADDITIONAL_SEAT_MONTHLY_PRICE,
+  BUSINESS_INCLUDED_SEATS,
   formatPrice,
 } from "@/lib/pricing";
 
@@ -62,9 +62,10 @@ export default function PricingModal({ isOpen, onClose }: PricingModalProps) {
 
   const businessFeatures = [
     "Everything in Pro",
-    "Inventory tracking spreadsheet",
-    "Revenue & profit dashboards",
-    "Bulk actions & CSV export",
+    `Includes ${BUSINESS_INCLUDED_SEATS} user seat`,
+    `Additional seats ${formatPrice(BUSINESS_ADDITIONAL_SEAT_MONTHLY_PRICE)}/month each`,
+    "Shared inventory and sales workflows",
+    "Revenue and profit dashboards",
   ];
 
   return (
@@ -168,17 +169,10 @@ export default function PricingModal({ isOpen, onClose }: PricingModalProps) {
               <h3 className="text-lg font-bold text-white mb-1">Business</h3>
               <div className="flex items-end gap-1 mb-4">
                 <span className="text-3xl font-bold text-white">
-                  {billing === "monthly"
-                    ? formatPrice(BUSINESS_MONTHLY_PRICE)
-                    : formatPrice(BUSINESS_ANNUAL_PRICE / 12, { decimals: 2 })}
+                  {formatPrice(BUSINESS_MONTHLY_PRICE)}
                 </span>
                 <span className="text-gray-400 mb-0.5">/mo</span>
               </div>
-              {billing === "annual" && (
-                <p className="text-xs text-gray-400 -mt-3 mb-4">
-                  Billed {formatPrice(BUSINESS_ANNUAL_PRICE)}/year · Save {formatPrice(BUSINESS_ANNUAL_SAVINGS)}
-                </p>
-              )}
 
               <ul className="space-y-2 mb-5">
                 {businessFeatures.map((f) => (
@@ -200,7 +194,11 @@ export default function PricingModal({ isOpen, onClose }: PricingModalProps) {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       credentials: "include",
-                      body: JSON.stringify({ billing, tier: "business" }),
+                      body: JSON.stringify({
+                        billing: "monthly",
+                        tier: "business",
+                        seat_quantity: 1,
+                      }),
                     });
                     const data = await response.json();
                     if (!response.ok) {

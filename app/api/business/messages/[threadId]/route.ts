@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { requireBusinessOwnerContext } from "@/lib/business/context";
 import {
   getThread,
   getMessages,
@@ -19,6 +20,14 @@ export async function GET(
 
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  try {
+    await requireBusinessOwnerContext(user.id);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Owner access required";
+    const status = (error as { status?: number })?.status ?? 403;
+    return NextResponse.json({ error: message }, { status });
   }
 
   const { threadId } = await params;
@@ -54,6 +63,14 @@ export async function POST(
 
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  try {
+    await requireBusinessOwnerContext(user.id);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Owner access required";
+    const status = (error as { status?: number })?.status ?? 403;
+    return NextResponse.json({ error: message }, { status });
   }
 
   const { threadId } = await params;

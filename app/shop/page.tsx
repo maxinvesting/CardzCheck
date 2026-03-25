@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { getAdminAuth, isAdmin } from "@/lib/admin";
 import { getShopListingsWithStats } from "@/lib/shop/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
-import { hasActiveBusinessTier, hasActiveProTier, type SubscriptionTier } from "@/lib/subscription-tier";
+import { hasActiveProTier, type SubscriptionTier } from "@/lib/subscription-tier";
+import { hasBusinessWorkspaceAccess } from "@/lib/business/workspace-access";
 import ShopStorefront from "@/components/shop/ShopStorefront";
 
 export const metadata: Metadata = {
@@ -22,7 +23,9 @@ async function getUserTier(): Promise<SubscriptionTier | null> {
       .eq("user_id", user.id)
       .single();
 
-    if (hasActiveBusinessTier(sub)) return "business";
+    if (await hasBusinessWorkspaceAccess(serviceClient as any, user.id)) {
+      return "business";
+    }
     if (hasActiveProTier(sub)) return "pro";
     return "free";
   } catch {

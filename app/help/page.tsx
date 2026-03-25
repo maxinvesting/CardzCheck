@@ -24,7 +24,7 @@ const FAQ_SECTIONS = [
       },
       {
         q: "What's the difference between the Free and Pro plans?",
-        a: "Free accounts get 3 card searches to explore the platform. Pro Members get unlimited searches, unlimited collection tracking, collection value tracking, and access to Pro-exclusive features like the Watchlist and CardzCheck Analyst. Pro is a one-time payment with lifetime access.",
+        a: "Free accounts get 3 card searches to explore the platform. Pro members get unlimited searches, unlimited collection tracking, collection value tracking, and access to Pro-exclusive features like the Watchlist and CardzCheck Analyst.",
       },
       {
         q: "Can I use CardzCheck on mobile?",
@@ -171,7 +171,11 @@ const FAQ_SECTIONS = [
     items: [
       {
         q: "What is the Business workspace?",
-        a: "The Business workspace is designed for card dealers, resellers, and shop owners. It adds a dedicated Ledger (inventory tracking), Sales analytics, Revenue & profit dashboards, eBay integration, and a Business Consultant AI — all separate from your personal collection.",
+        a: "The Business workspace is designed for card dealers, resellers, and shop owners. It adds a dedicated Ledger (inventory tracking), Sales analytics, Revenue & profit dashboards, eBay integration, and a Business Consultant AI in a shared team workspace.",
+      },
+      {
+        q: "How many users are included with Business?",
+        a: "Business is $29/month and includes 1 owner seat. You can add additional team members for $12/month per seat.",
       },
       {
         q: "How do I switch between the personal and business workspaces?",
@@ -202,11 +206,11 @@ const FAQ_SECTIONS = [
     items: [
       {
         q: "How do I upgrade to Pro?",
-        a: "Click \"Upgrade\" in the sidebar or go to Settings → Current Plan → Upgrade. You'll be taken to a secure checkout. Pro is a one-time payment with lifetime access — no recurring subscription.",
+        a: "Click \"Upgrade\" in the sidebar or go to Settings → Current Plan → Upgrade. You'll be taken to secure Stripe checkout where you can select the plan that fits your workflow.",
       },
       {
-        q: "Is Pro a one-time payment or a subscription?",
-        a: "Pro is a one-time payment that grants lifetime access to all Pro features. You will never be billed again after your initial purchase.",
+        q: "How does Business billing work for teams?",
+        a: "Business billing is monthly. The base plan is $29/month (1 included seat), and each additional team seat is $12/month.",
       },
       {
         q: "How do I change my email address?",

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { requireBusinessOwnerContext } from "@/lib/business/context";
 import {
   getMessagingOverview,
 } from "@/lib/messaging/service";
@@ -23,6 +24,14 @@ export async function GET(req: NextRequest) {
 
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  try {
+    await requireBusinessOwnerContext(user.id);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Owner access required";
+    const status = (error as { status?: number })?.status ?? 403;
+    return NextResponse.json({ error: message }, { status });
   }
 
   const { searchParams } = new URL(req.url);

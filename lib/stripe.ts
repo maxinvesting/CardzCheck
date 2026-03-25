@@ -108,14 +108,15 @@ export async function createProSubscriptionCheckout(
 }
 
 /**
- * Create Business subscription checkout. Supports monthly and annual billing.
+ * Create Business subscription checkout (monthly seats pricing).
  */
 export async function createBusinessSubscriptionCheckout(
   userId: string,
   userEmail: string,
   successUrl: string,
   cancelUrl: string,
-  billing: "monthly" | "annual" = "monthly"
+  _billing: "monthly" | "annual" = "monthly",
+  seatQuantity = 1
 ) {
   const stripe = getStripeClient();
 
@@ -135,10 +136,8 @@ export async function createBusinessSubscriptionCheckout(
     customerId = customer.id;
   }
 
-  const priceId =
-    billing === "annual"
-      ? process.env.STRIPE_BUSINESS_ANNUAL_PRICE_ID
-      : process.env.STRIPE_BUSINESS_MONTHLY_PRICE_ID;
+  // Business seats are monthly only. Keep billing arg for backward compatibility.
+  const priceId = process.env.STRIPE_BUSINESS_MONTHLY_PRICE_ID;
 
   if (!priceId) {
     throw new Error("Business price ID not configured");
@@ -147,12 +146,24 @@ export async function createBusinessSubscriptionCheckout(
   const session = await stripe.checkout.sessions.create({
     customer: customerId,
     payment_method_types: ["card"],
-    line_items: [{ price: priceId, quantity: 1 }],
+    line_items: [{ price: priceId, quantity: Math.max(1, Math.trunc(seatQuantity)) }],
     mode: "subscription",
     success_url: successUrl,
     cancel_url: cancelUrl,
-    metadata: { userId, tier: "business" },
-    subscription_data: { metadata: { userId, tier: "business" } },
+    metadata: {
+      userId,
+      tier: "business",
+      billing_interval: "monthly",
+      seat_quantity: String(Math.max(1, Math.trunc(seatQuantity))),
+    },
+    subscription_data: {
+      metadata: {
+        userId,
+        tier: "business",
+        billing_interval: "monthly",
+        seat_quantity: String(Math.max(1, Math.trunc(seatQuantity))),
+      },
+    },
   });
 
   return session;
