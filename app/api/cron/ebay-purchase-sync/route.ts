@@ -15,8 +15,13 @@ export const maxDuration = 300;
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   // Verify cron secret to prevent unauthorized triggers
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret) {
+  const cronSecret = process.env.CRON_SECRET?.trim();
+  if (!cronSecret) {
+    if (process.env.NODE_ENV === "production") {
+      console.error("[cron/ebay-purchase-sync] CRON_SECRET is missing in production");
+      return NextResponse.json({ error: "Server misconfigured" }, { status: 500 });
+    }
+  } else {
     const authHeader = req.headers.get("authorization");
     if (authHeader !== `Bearer ${cronSecret}`) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
