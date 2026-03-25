@@ -59,6 +59,7 @@ import {
 const EBAY_STORE_URL_STORAGE_KEY = "cardzcheck_ebay_store_url";
 const EBAY_STORE_URL_UPDATED_EVENT = "cardzcheck:ebay-store-url-updated";
 const PERF_MOCK_ITEM_COUNT = 1200;
+const PERF_MOCK_BUSINESS_ACCOUNT_ID = "perf-business-account";
 
 function readStoredEbayStoreUrl(): string | null {
   if (typeof window === "undefined") return null;
@@ -119,6 +120,7 @@ function buildPerfMockInventory(count = PERF_MOCK_ITEM_COUNT): BusinessInventory
     return {
       id: `perf-item-${index + 1}`,
       user_id: "perf-user",
+      business_account_id: PERF_MOCK_BUSINESS_ACCOUNT_ID,
       card_id: `perf-card-${index + 1}`,
       title: `2024 Topps Chrome Prospect ${index + 1}`,
       quantity: (index % 3) + 1,
@@ -759,6 +761,7 @@ function LedgerPageContent() {
       const created: BusinessInventoryItem = {
         id: `perf-new-${Date.now()}`,
         user_id: "perf-user",
+        business_account_id: PERF_MOCK_BUSINESS_ACCOUNT_ID,
         card_id: null,
         title: (item.title as string) || "Untitled item",
         quantity: (item.quantity as number) || 1,
@@ -870,6 +873,7 @@ function LedgerPageContent() {
         id: `perf-sale-${Date.now()}`,
         user_id: "perf-user",
         business_id: "perf-business",
+        business_account_id: PERF_MOCK_BUSINESS_ACCOUNT_ID,
         inventory_item_id: inventoryId,
         channel: (sale.channel as BusinessSale["channel"]) || "ebay",
         sold_at:

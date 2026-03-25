@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { CardImage } from "@/types";
+import { getBusinessContextForUser } from "@/lib/business/context";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -46,6 +47,8 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const businessContext = await getBusinessContextForUser(user.id);
+
     const fetchCollectionCardById = async (id: string) => {
       if (!isUuid(id)) return null;
       const { data, error } = await supabase
@@ -65,12 +68,20 @@ export async function GET(
       const businessSelect =
         "id,card_id,title,grade,grading_company,cert_number,acquisition_type,acquisition_date,cost_basis_total_cents,user_image_url,stock_image_url,ebay_image_url,notes,created_at,updated_at";
 
-      const { data: businessById, error: businessByIdError } = await supabase
+      let businessByIdQuery = supabase
         .from("business_inventory_items")
         .select(businessSelect)
-        .eq("id", cardId)
-        .eq("user_id", user.id)
-        .maybeSingle();
+        .eq("id", cardId);
+
+      businessByIdQuery = businessContext
+        ? businessByIdQuery.eq(
+            "business_account_id",
+            businessContext.businessAccountId
+          )
+        : businessByIdQuery.eq("user_id", user.id);
+
+      const { data: businessById, error: businessByIdError } =
+        await businessByIdQuery.maybeSingle();
 
       if (businessByIdError && businessByIdError.code !== "PGRST116") {
         throw businessByIdError;
@@ -79,12 +90,20 @@ export async function GET(
       let businessLink = businessById as BusinessInventoryLinkRow | null;
 
       if (!businessLink) {
+        let businessByCardIdQuery = supabase
+          .from("business_inventory_items")
+          .select(businessSelect)
+          .eq("card_id", cardId);
+
+        businessByCardIdQuery = businessContext
+          ? businessByCardIdQuery.eq(
+              "business_account_id",
+              businessContext.businessAccountId
+            )
+          : businessByCardIdQuery.eq("user_id", user.id);
+
         const { data: businessByCardIdRows, error: businessByCardIdError } =
-          await supabase
-            .from("business_inventory_items")
-            .select(businessSelect)
-            .eq("card_id", cardId)
-            .eq("user_id", user.id)
+          await businessByCardIdQuery
             .order("created_at", { ascending: false })
             .limit(1);
 

@@ -3,13 +3,12 @@
 import { useState } from "react";
 import {
   BUSINESS_MONTHLY_PRICE,
-  BUSINESS_ANNUAL_PRICE,
-  BUSINESS_ANNUAL_SAVINGS,
+  BUSINESS_ADDITIONAL_SEAT_MONTHLY_PRICE,
+  BUSINESS_INCLUDED_SEATS,
   formatPrice,
 } from "@/lib/pricing";
 
 export default function BusinessPaywall() {
-  const [billing, setBilling] = useState<"monthly" | "annual">("monthly");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -21,7 +20,11 @@ export default function BusinessPaywall() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ billing, tier: "business" }),
+        body: JSON.stringify({
+          billing: "monthly",
+          tier: "business",
+          seat_quantity: 1,
+        }),
       });
       const data = await response.json();
 
@@ -42,10 +45,10 @@ export default function BusinessPaywall() {
   }
 
   const features = [
-    "Spreadsheet-style inventory tracking",
-    "Revenue & profit dashboards (MTD / YTD)",
-    "Bulk status & location updates",
-    "CSV export for inventory",
+    `Base includes ${BUSINESS_INCLUDED_SEATS} owner seat`,
+    `Add teammates for ${formatPrice(BUSINESS_ADDITIONAL_SEAT_MONTHLY_PRICE)}/month each`,
+    "Shared inventory and sales dashboards",
+    "Role-based access for owner, manager, and employee",
     "All Pro features included",
   ];
 
@@ -69,48 +72,18 @@ export default function BusinessPaywall() {
         </div>
 
         <div className="p-6">
-          {/* Billing toggle */}
-          <div className="flex items-center bg-gray-800 rounded-xl p-1 gap-1 mb-5">
-            <button
-              onClick={() => setBilling("monthly")}
-              className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
-                billing === "monthly"
-                  ? "bg-gray-700 text-white"
-                  : "text-gray-400 hover:text-gray-200"
-              }`}
-            >
-              Monthly
-            </button>
-            <button
-              onClick={() => setBilling("annual")}
-              className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
-                billing === "annual"
-                  ? "bg-gray-700 text-white"
-                  : "text-gray-400 hover:text-gray-200"
-              }`}
-            >
-              Annual
-              <span className="text-xs bg-emerald-600 text-white px-1.5 py-0.5 rounded-full">
-                Save {formatPrice(BUSINESS_ANNUAL_SAVINGS)}
-              </span>
-            </button>
-          </div>
-
           {/* Price */}
           <div className="text-center mb-5">
             <div className="flex items-end justify-center gap-1">
               <span className="text-4xl font-bold text-white">
-                {billing === "monthly"
-                  ? formatPrice(BUSINESS_MONTHLY_PRICE)
-                  : formatPrice(BUSINESS_ANNUAL_PRICE / 12, { decimals: 2 })}
+                {formatPrice(BUSINESS_MONTHLY_PRICE)}
               </span>
               <span className="text-gray-400 mb-1">/mo</span>
             </div>
-            {billing === "annual" && (
-              <p className="text-sm text-gray-400 mt-1">
-                Billed {formatPrice(BUSINESS_ANNUAL_PRICE)}/year
-              </p>
-            )}
+            <p className="text-sm text-gray-400 mt-1">
+              {formatPrice(BUSINESS_MONTHLY_PRICE)} base +{" "}
+              {formatPrice(BUSINESS_ADDITIONAL_SEAT_MONTHLY_PRICE)} per additional seat
+            </p>
           </div>
 
           {/* Features */}
@@ -138,7 +111,7 @@ export default function BusinessPaywall() {
           >
             {loading
               ? "Redirecting to checkout..."
-              : `Get Business — ${billing === "monthly" ? `${formatPrice(BUSINESS_MONTHLY_PRICE)}/mo` : `${formatPrice(BUSINESS_ANNUAL_PRICE)}/yr`}`}
+              : `Get Business — ${formatPrice(BUSINESS_MONTHLY_PRICE)}/mo`}
           </button>
           <p className="text-center text-xs text-gray-500 mt-3">
             Secure checkout powered by Stripe. Cancel anytime.

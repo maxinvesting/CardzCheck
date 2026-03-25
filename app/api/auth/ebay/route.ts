@@ -39,7 +39,9 @@ export async function GET(): Promise<NextResponse> {
 
     const ok = await hasBusinessAccess(user.id);
     if (!ok) {
-      return NextResponse.json({ error: "Business subscription required" }, { status: 403 });
+      return NextResponse.redirect(
+        `${SITE_URL}/business/settings?ebay=error&code=not_business`
+      );
     }
 
     // Fail fast with a user-friendly message if eBay env vars are missing,

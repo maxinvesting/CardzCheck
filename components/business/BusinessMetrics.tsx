@@ -56,27 +56,27 @@ export default function BusinessMetrics({
   const activeCount = metrics ? String(metrics.activeInventoryCount) : "—";
   const totalCount = totalItemCount ?? 0;
 
-  let portfolioValue = "—";
+  let inventoryValue = "—";
   let costBasisLine = "No cost data";
   if (inventorySummary && inventorySummary.itemCount > 0) {
     const value =
       inventorySummary.itemsWithCmv > 0
         ? inventorySummary.totalCmvCents
         : inventorySummary.totalCostCents;
-    portfolioValue = fmtDollars(value);
+    inventoryValue = fmtDollars(value);
     costBasisLine = `Cost basis ${fmtDollars(inventorySummary.totalCostCents)}`;
   }
 
   const cards = [
     {
-      label: "Revenue MTD",
+      label: "Sales MTD",
       value: revenueMtd,
       valueColor: "var(--biz-text)" as string,
       sub: `YTD ${revenueYtd}`,
       accentColor: "#3b82f6",
     },
     {
-      label: "Profit MTD",
+      label: "Net Earnings MTD",
       value: profitMtd,
       valueColor: profitPositive ? "#16a34a" : "#dc2626",
       sub: `YTD ${profitYtd}`,
@@ -90,8 +90,8 @@ export default function BusinessMetrics({
       accentColor: "#a855f7",
     },
     {
-      label: "Portfolio Value",
-      value: portfolioValue,
+      label: "Inventory Value",
+      value: inventoryValue,
       valueColor: "var(--biz-text)" as string,
       sub: costBasisLine,
       accentColor: "#f59e0b",

@@ -1,5 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
-import { hasBusinessAccess } from "@/lib/access";
+import {
+  hasRole,
+  requireBusinessContext,
+  type BusinessContext,
+  type BusinessRole,
+} from "@/lib/business/context";
 import type { BusinessInventoryItem, BusinessSale, BusinessMetrics } from "@/types";
 import { computeNetPayout, computeProfit } from "@/lib/business/sales-utils";
 
@@ -18,6 +23,7 @@ function assertUUIDs(ids: string[]): void {
 type BusinessInventoryRow = {
   id: string;
   user_id: string;
+  business_account_id?: string | null;
   card_id: string | null;
   title: string;
   quantity: number | null;
@@ -47,23 +53,22 @@ type BusinessInventoryRow = {
 /**
  * Require Business access, throwing a structured error if not.
  */
-export async function requireBusinessAccess(userId: string): Promise<void> {
-  const ok = await hasBusinessAccess(userId);
-  if (!ok) {
-    const err = new Error("Business subscription required");
-    (err as any).status = 403;
+export async function requireBusinessAccess(
+  userId: string
+): Promise<BusinessContext> {
+  return requireBusinessContext(userId);
+}
+
+function requireRole(
+  context: BusinessContext,
+  roles: ReadonlyArray<BusinessRole>,
+  message: string
+): void {
+  if (!hasRole(context, roles)) {
+    const err = new Error(message);
+    (err as { status?: number }).status = 403;
     throw err;
   }
-}
-
-function dollarsToCents(value: number | null | undefined): number | null {
-  if (typeof value !== "number" || !Number.isFinite(value)) return null;
-  return Math.round(value * 100);
-}
-
-function centsToDollars(value: number | null | undefined): number | null {
-  if (typeof value !== "number" || !Number.isFinite(value)) return null;
-  return value / 100;
 }
 
 function normalizeAcquisitionType(
@@ -182,6 +187,7 @@ function toBusinessInventoryItem(row: BusinessInventoryRow): BusinessInventoryIt
   return {
     id: row.id,
     user_id: row.user_id,
+    business_account_id: row.business_account_id ?? row.user_id,
     card_id: row.card_id || row.id,
     title: row.title || "Untitled item",
     quantity: normalizeQuantity(row.quantity),
@@ -211,10 +217,15 @@ function toBusinessInventoryItem(row: BusinessInventoryRow): BusinessInventoryIt
 
 function buildInventoryInsertPayload(
   userId: string,
-  item: Omit<BusinessInventoryItem, "id" | "user_id" | "created_at" | "updated_at">
+  businessAccountId: string,
+  item: Omit<
+    BusinessInventoryItem,
+    "id" | "user_id" | "business_account_id" | "created_at" | "updated_at"
+  >
 ): Record<string, unknown> {
   return {
     user_id: userId,
+    business_account_id: businessAccountId,
     card_id: normalizeCardId((item as any).card_id),
     title: item.title || "Untitled item",
     quantity: normalizeQuantity(item.quantity),
@@ -242,7 +253,10 @@ function buildInventoryInsertPayload(
 
 function buildInventoryUpdatePayload(
   updates: Partial<
-    Omit<BusinessInventoryItem, "id" | "user_id" | "created_at" | "updated_at">
+    Omit<
+      BusinessInventoryItem,
+      "id" | "user_id" | "business_account_id" | "created_at" | "updated_at"
+    >
   >
 ): Record<string, unknown> {
   const payload: Record<string, unknown> = {};
@@ -296,13 +310,13 @@ export async function listInventory(
     search?: string;
   }
 ): Promise<BusinessInventoryItem[]> {
-  await requireBusinessAccess(userId);
+  const context = await requireBusinessAccess(userId);
   const supabase = await createClient();
 
   let query = supabase
     .from(BUSINESS_TABLE)
     .select("*")
-    .eq("user_id", userId)
+    .eq("business_account_id", context.businessAccountId)
     .order("created_at", { ascending: false });
 
   if (filters?.status) query = query.eq("status", filters.status);
@@ -328,14 +342,14 @@ export async function getInventoryItem(
   userId: string,
   itemId: string
 ): Promise<BusinessInventoryItem | null> {
-  await requireBusinessAccess(userId);
+  const context = await requireBusinessAccess(userId);
   const supabase = await createClient();
 
   const { data, error } = await supabase
     .from(BUSINESS_TABLE)
     .select("*")
     .eq("id", itemId)
-    .eq("user_id", userId)
+    .eq("business_account_id", context.businessAccountId)
     .maybeSingle();
 
   if (error && error.code !== "PGRST116") throw error;
@@ -345,14 +359,17 @@ export async function getInventoryItem(
 
 export async function createInventoryItem(
   userId: string,
-  item: Omit<BusinessInventoryItem, "id" | "user_id" | "created_at" | "updated_at">
+  item: Omit<
+    BusinessInventoryItem,
+    "id" | "user_id" | "business_account_id" | "created_at" | "updated_at"
+  >
 ): Promise<BusinessInventoryItem> {
-  await requireBusinessAccess(userId);
+  const context = await requireBusinessAccess(userId);
   const supabase = await createClient();
 
   const { data, error } = await supabase
     .from(BUSINESS_TABLE)
-    .insert(buildInventoryInsertPayload(userId, item))
+    .insert(buildInventoryInsertPayload(userId, context.businessAccountId, item))
     .select("*")
     .single();
 
@@ -363,16 +380,21 @@ export async function createInventoryItem(
 export async function updateInventoryItem(
   userId: string,
   itemId: string,
-  updates: Partial<Omit<BusinessInventoryItem, "id" | "user_id" | "created_at" | "updated_at">>
+  updates: Partial<
+    Omit<
+      BusinessInventoryItem,
+      "id" | "user_id" | "business_account_id" | "created_at" | "updated_at"
+    >
+  >
 ): Promise<BusinessInventoryItem> {
-  await requireBusinessAccess(userId);
+  const context = await requireBusinessAccess(userId);
   const supabase = await createClient();
 
   const { data, error } = await supabase
     .from(BUSINESS_TABLE)
     .update(buildInventoryUpdatePayload(updates))
     .eq("id", itemId)
-    .eq("user_id", userId)
+    .eq("business_account_id", context.businessAccountId)
     .select("*")
     .single();
 
@@ -384,14 +406,19 @@ export async function deleteInventoryItems(
   userId: string,
   itemIds: string[]
 ): Promise<void> {
-  await requireBusinessAccess(userId);
+  const context = await requireBusinessAccess(userId);
+  requireRole(
+    context,
+    ["owner", "manager"],
+    "Only owners and managers can remove inventory items"
+  );
   const supabase = await createClient();
 
   const { error } = await supabase
     .from(BUSINESS_TABLE)
     .delete()
     .in("id", itemIds)
-    .eq("user_id", userId);
+    .eq("business_account_id", context.businessAccountId);
 
   if (error) throw error;
 }
@@ -401,7 +428,7 @@ export async function bulkUpdateInventory(
   itemIds: string[],
   updates: { status?: string; location?: string }
 ): Promise<void> {
-  await requireBusinessAccess(userId);
+  const context = await requireBusinessAccess(userId);
   const supabase = await createClient();
 
   const payload: Record<string, unknown> = {};
@@ -412,7 +439,7 @@ export async function bulkUpdateInventory(
     .from(BUSINESS_TABLE)
     .update(payload)
     .in("id", itemIds)
-    .eq("user_id", userId);
+    .eq("business_account_id", context.businessAccountId);
 
   if (error) throw error;
 }
@@ -425,6 +452,7 @@ type BusinessSaleRow = {
   id: string;
   user_id: string;
   business_id?: string | null;
+  business_account_id?: string | null;
   inventory_item_id?: string | null;
   channel?: string | null;
   sold_at?: string | null;
@@ -490,7 +518,7 @@ function isBusinessSalesSchemaMismatch(error: unknown): boolean {
   const { code, combined } = getDbErrorMeta(error);
   const mentionsSales =
     combined.includes("business_sales") ||
-    /(business_id|is_deleted|sold_at|sold_price_cents|shipping_cost_cents|tax_cents|net_payout_cents|cogs_cents|external_order_id|sale_date|sale_price_cents|shipping_paid_cents|other_costs_cents|net_proceeds_cents|order_id)/.test(
+    /(business_id|business_account_id|is_deleted|sold_at|sold_price_cents|shipping_cost_cents|tax_cents|net_payout_cents|cogs_cents|external_order_id|sale_date|sale_price_cents|shipping_paid_cents|other_costs_cents|net_proceeds_cents|order_id)/.test(
       combined
     );
   if (!mentionsSales) return false;
@@ -501,7 +529,7 @@ function isBusinessSalesSchemaMismatch(error: unknown): boolean {
 
   return (
     combined.includes("column") &&
-    /(business_id|is_deleted|sold_at|sold_price_cents|shipping_cost_cents|tax_cents|net_payout_cents|cogs_cents|external_order_id|sale_date|sale_price_cents|shipping_paid_cents|other_costs_cents|net_proceeds_cents|order_id)/.test(
+    /(business_id|business_account_id|is_deleted|sold_at|sold_price_cents|shipping_cost_cents|tax_cents|net_payout_cents|cogs_cents|external_order_id|sale_date|sale_price_cents|shipping_paid_cents|other_costs_cents|net_proceeds_cents|order_id)/.test(
       combined
     )
   );
@@ -589,6 +617,10 @@ function normalizeSaleDateTime(value: string | null | undefined): string {
   return dt.toISOString();
 }
 
+function isUUID(value: string): boolean {
+  return UUID_REGEX.test(value);
+}
+
 function toBusinessSale(row: BusinessSaleRow): BusinessSale {
   const soldPriceCents = toInt(row.sold_price_cents ?? row.sale_price_cents);
   const shippingChargedCents = toInt(row.shipping_charged_cents);
@@ -629,6 +661,8 @@ function toBusinessSale(row: BusinessSaleRow): BusinessSale {
     id: row.id,
     user_id: row.user_id,
     business_id: row.business_id || row.user_id,
+    business_account_id:
+      row.business_account_id || row.business_id || row.user_id,
     inventory_item_id: row.inventory_item_id ?? null,
     channel: normalizeChannel(row.channel),
     sold_at: soldAt,
@@ -654,7 +688,7 @@ function toBusinessSale(row: BusinessSaleRow): BusinessSale {
 }
 
 async function attachInventoryTitles(
-  userId: string,
+  businessAccountId: string,
   sales: BusinessSale[]
 ): Promise<BusinessSale[]> {
   const inventoryIds = Array.from(
@@ -666,13 +700,15 @@ async function attachInventoryTitles(
   );
 
   if (inventoryIds.length === 0) return sales;
+  const validInventoryIds = inventoryIds.filter(isUUID);
+  if (validInventoryIds.length === 0) return sales;
 
   const supabase = await createClient();
   const { data, error } = await supabase
     .from(BUSINESS_TABLE)
     .select("id, title")
-    .in("id", inventoryIds)
-    .eq("user_id", userId);
+    .in("id", validInventoryIds)
+    .eq("business_account_id", businessAccountId);
   if (error) return sales;
 
   const titleById = new Map<string, string>();
@@ -693,8 +729,50 @@ async function attachInventoryTitles(
   }));
 }
 
-async function getInventoryContextForSale(
+/**
+ * Ensure a minimal collection_items mirror row exists for inventory-backed sales.
+ * This supports deployments where business_sales.inventory_item_id references collection_items(id).
+ */
+async function ensureCollectionItemMirrorForSale(
+  supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string,
+  inventoryContext: { id: string; title: string | null } | null
+): Promise<void> {
+  if (!inventoryContext) return;
+
+  const label = inventoryContext.title?.trim() || "Inventory Item";
+  const collection = supabase.from("collection_items") as {
+    upsert?: (
+      values: Record<string, unknown>,
+      options: { onConflict: string; ignoreDuplicates: boolean }
+    ) => Promise<{ error: unknown }>;
+  };
+
+  if (typeof collection.upsert !== "function") return;
+
+  const { error } = await collection.upsert(
+    {
+      id: inventoryContext.id,
+      user_id: userId,
+      player_name: label,
+      notes: "Auto-linked from business inventory for sale record consistency",
+    },
+    { onConflict: "id", ignoreDuplicates: true }
+  );
+
+  if (!error) return;
+
+  const { code, message, details } = getDbErrorMeta(error);
+  // Mirror row is best-effort; never block sale writes on mirror schema mismatches.
+  console.warn("Skipping collection mirror for sale:", {
+    code,
+    message,
+    details,
+  });
+}
+
+async function getInventoryContextForSale(
+  businessAccountId: string,
   inventoryItemId?: string | null
 ): Promise<{ id: string; title: string | null; channel: string | null; cost_basis_total_cents: number | null } | null> {
   if (!inventoryItemId) return null;
@@ -703,7 +781,7 @@ async function getInventoryContextForSale(
     .from(BUSINESS_TABLE)
     .select("id, title, channel, cost_basis_total_cents")
     .eq("id", inventoryItemId)
-    .eq("user_id", userId)
+    .eq("business_account_id", businessAccountId)
     .maybeSingle();
 
   if (error) throw error;
@@ -719,10 +797,12 @@ async function getInventoryContextForSale(
 
 function buildComputedSalePayload(args: {
   userId: string;
+  businessAccountId: string;
+  legacyBusinessOwnerId: string;
   base: SaleWriteInput;
   inventoryContext: { id: string; channel: string | null; cost_basis_total_cents: number | null } | null;
 }) {
-  const { userId, base, inventoryContext } = args;
+  const { userId, businessAccountId, legacyBusinessOwnerId, base, inventoryContext } = args;
 
   const soldPriceCents = toInt(base.sold_price_cents);
   const shippingChargedCents = toInt(base.shipping_charged_cents);
@@ -750,7 +830,8 @@ function buildComputedSalePayload(args: {
 
   return {
     user_id: userId,
-    business_id: userId,
+    business_id: legacyBusinessOwnerId,
+    business_account_id: businessAccountId,
     inventory_item_id: inventoryContext?.id ?? base.inventory_item_id ?? null,
     channel: normalizedChannel,
     sold_at: soldAt,
@@ -811,7 +892,7 @@ function buildLegacySalePayload(
 
 async function listLegacySales(args: {
   supabase: Awaited<ReturnType<typeof createClient>>;
-  userId: string;
+  ownerUserId: string;
   page: number;
   pageSize: number;
   from?: string;
@@ -819,11 +900,12 @@ async function listLegacySales(args: {
   inventoryItemId?: string;
   search?: string;
 }): Promise<{ data: BusinessSaleRow[]; count: number }> {
-  const { supabase, userId, page, pageSize, from, to, inventoryItemId, search } = args;
+  const { supabase, ownerUserId, page, pageSize, from, to, inventoryItemId, search } =
+    args;
   let query = supabase
     .from("business_sales")
     .select("*", { count: "exact" })
-    .eq("user_id", userId)
+    .eq("user_id", ownerUserId)
     .order("sale_date", { ascending: false })
     .range((page - 1) * pageSize, page * pageSize - 1);
 
@@ -837,9 +919,8 @@ async function listLegacySales(args: {
       const { data: inventoryMatches } = await supabase
         .from(BUSINESS_TABLE)
         .select("id")
-        .eq("user_id", userId)
-        .ilike("title", `%${q}%`)
-        .limit(200);
+        .eq("user_id", ownerUserId)
+        .ilike("title", `%${q}%`);
 
       const inventoryIds = (inventoryMatches ?? [])
         .map((row: { id: string | null }) => row.id)
@@ -884,7 +965,7 @@ export async function listSales(
   pageSize: number;
   total: number;
 }> {
-  await requireBusinessAccess(userId);
+  const context = await requireBusinessAccess(userId);
   const supabase = await createClient();
 
   const page = Math.max(filters?.page ?? 1, 1);
@@ -895,7 +976,7 @@ export async function listSales(
   let query = supabase
     .from("business_sales")
     .select("*", { count: "exact" })
-    .eq("business_id", userId)
+    .eq("business_account_id", context.businessAccountId)
     .eq("is_deleted", false)
     .order("sold_at", { ascending: false })
     .range((page - 1) * pageSize, page * pageSize - 1);
@@ -905,7 +986,7 @@ export async function listSales(
       .from(BUSINESS_TABLE)
       .select("id")
       .eq("id", filters.inventoryItemId)
-      .eq("user_id", userId)
+      .eq("business_account_id", context.businessAccountId)
       .maybeSingle();
     if (!ownerCheck) {
       throw new Error("Unauthorized: inventoryItemId does not belong to user");
@@ -926,9 +1007,8 @@ export async function listSales(
       const { data: inventoryMatches } = await supabase
         .from(BUSINESS_TABLE)
         .select("id")
-        .eq("user_id", userId)
-        .ilike("title", `%${q}%`)
-        .limit(200);
+        .eq("business_account_id", context.businessAccountId)
+        .ilike("title", `%${q}%`);
 
       const inventoryIds = (inventoryMatches ?? [])
         .map((row: { id: string | null }) => row.id)
@@ -957,7 +1037,7 @@ export async function listSales(
     if (!isBusinessSalesSchemaMismatch(error)) throw error;
     const legacy = await listLegacySales({
       supabase,
-      userId,
+      ownerUserId: context.ownerUserId,
       page,
       pageSize,
       from,
@@ -970,7 +1050,7 @@ export async function listSales(
   }
 
   const mappedSales = await attachInventoryTitles(
-    userId,
+    context.businessAccountId,
     salesRows.map(toBusinessSale)
   );
 
@@ -986,11 +1066,11 @@ export async function createSale(
   userId: string,
   sale: SaleWriteInput
 ): Promise<BusinessSale> {
-  await requireBusinessAccess(userId);
+  const context = await requireBusinessAccess(userId);
   const supabase = await createClient();
 
   const inventoryContext = await getInventoryContextForSale(
-    userId,
+    context.businessAccountId,
     sale.inventory_item_id
   );
 
@@ -1000,8 +1080,12 @@ export async function createSale(
     throw err;
   }
 
+  await ensureCollectionItemMirrorForSale(supabase, userId, inventoryContext);
+
   const insertPayload = buildComputedSalePayload({
     userId,
+    businessAccountId: context.businessAccountId,
+    legacyBusinessOwnerId: context.ownerUserId,
     base: sale,
     inventoryContext,
   });
@@ -1037,7 +1121,7 @@ export async function createSale(
         .from(BUSINESS_TABLE)
         .update({ status: "sold" })
         .eq("id", insertPayload.inventory_item_id)
-        .eq("user_id", userId);
+        .eq("business_account_id", context.businessAccountId);
       if (updateError) normalizeBusinessSaleError(updateError);
     }
 
@@ -1047,7 +1131,7 @@ export async function createSale(
       throw err;
     }
 
-    const [withTitles] = await attachInventoryTitles(userId, [
+    const [withTitles] = await attachInventoryTitles(context.businessAccountId, [
       toBusinessSale(created),
     ]);
     return withTitles;
@@ -1061,7 +1145,7 @@ export async function updateSale(
   saleId: string,
   updates: SaleWriteInput
 ): Promise<BusinessSale> {
-  await requireBusinessAccess(userId);
+  const context = await requireBusinessAccess(userId);
   const supabase = await createClient();
   let useLegacySchema = false;
 
@@ -1070,7 +1154,7 @@ export async function updateSale(
     .from("business_sales")
     .select("*")
     .eq("id", saleId)
-    .eq("business_id", userId)
+    .eq("business_account_id", context.businessAccountId)
     .eq("is_deleted", false)
     .maybeSingle();
 
@@ -1081,7 +1165,7 @@ export async function updateSale(
       .from("business_sales")
       .select("*")
       .eq("id", saleId)
-      .eq("user_id", userId)
+      .eq("user_id", context.ownerUserId)
       .maybeSingle();
     if (legacyExistingError) throw legacyExistingError;
     existing = (legacyExisting as BusinessSaleRow | null) ?? null;
@@ -1114,12 +1198,16 @@ export async function updateSale(
   };
 
   const inventoryContext = await getInventoryContextForSale(
-    userId,
+    context.businessAccountId,
     mergedBase.inventory_item_id
   );
 
+  await ensureCollectionItemMirrorForSale(supabase, userId, inventoryContext);
+
   const payload = buildComputedSalePayload({
     userId,
+    businessAccountId: context.businessAccountId,
+    legacyBusinessOwnerId: context.ownerUserId,
     base: mergedBase,
     inventoryContext,
   });
@@ -1130,7 +1218,7 @@ export async function updateSale(
       .from("business_sales")
       .update(payload)
       .eq("id", saleId)
-      .eq("business_id", userId)
+      .eq("business_account_id", context.businessAccountId)
       .eq("is_deleted", false)
       .select("*")
       .single();
@@ -1149,7 +1237,7 @@ export async function updateSale(
       .from("business_sales")
       .update(legacyPayload)
       .eq("id", saleId)
-      .eq("user_id", userId)
+      .eq("user_id", context.ownerUserId)
       .select("*")
       .single();
     if (error) throw error;
@@ -1161,7 +1249,7 @@ export async function updateSale(
       .from(BUSINESS_TABLE)
       .update({ status: "sold" })
       .eq("id", payload.inventory_item_id)
-      .eq("user_id", userId);
+      .eq("business_account_id", context.businessAccountId);
   }
 
   if (!updated) {
@@ -1170,21 +1258,26 @@ export async function updateSale(
     throw err;
   }
 
-  const [withTitles] = await attachInventoryTitles(userId, [
+  const [withTitles] = await attachInventoryTitles(context.businessAccountId, [
     toBusinessSale(updated),
   ]);
   return withTitles;
 }
 
 export async function deleteSale(userId: string, saleId: string): Promise<void> {
-  await requireBusinessAccess(userId);
+  const context = await requireBusinessAccess(userId);
+  requireRole(
+    context,
+    ["owner", "manager"],
+    "Only owners and managers can delete sales"
+  );
   const supabase = await createClient();
 
   const { error } = await supabase
     .from("business_sales")
     .update({ is_deleted: true })
     .eq("id", saleId)
-    .eq("business_id", userId);
+    .eq("business_account_id", context.businessAccountId);
 
   if (error) {
     if (!isBusinessSalesSchemaMismatch(error)) throw error;
@@ -1192,7 +1285,7 @@ export async function deleteSale(userId: string, saleId: string): Promise<void> 
       .from("business_sales")
       .delete()
       .eq("id", saleId)
-      .eq("user_id", userId);
+      .eq("user_id", context.ownerUserId);
     if (legacyDeleteError) throw legacyDeleteError;
   }
 }
@@ -1208,14 +1301,14 @@ export async function deleteSale(userId: string, saleId: string): Promise<void> 
  */
 async function aggregateSalesKpis(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  businessId: string,
+  businessAccountId: string,
   from: string,
   to: string
 ): Promise<{ revenue_cents: number; profit_cents: number; sales_count: number }> {
   const { data, error } = await supabase
     .from("business_sales")
     .select("sold_price_cents, shipping_charged_cents, profit_cents")
-    .eq("business_id", businessId)
+    .eq("business_account_id", businessAccountId)
     .eq("is_deleted", false)
     .gte("sold_at", from)
     .lt("sold_at", to);
@@ -1239,7 +1332,7 @@ async function aggregateSalesKpis(
 
 async function aggregateLegacySalesKpis(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  userId: string,
+  ownerUserId: string,
   from: string,
   to: string
 ): Promise<{ revenue_cents: number; profit_cents: number; sales_count: number }> {
@@ -1248,7 +1341,7 @@ async function aggregateLegacySalesKpis(
   const { data, error } = await supabase
     .from("business_sales")
     .select("sale_price_cents, shipping_charged_cents, profit_cents")
-    .eq("user_id", userId)
+    .eq("user_id", ownerUserId)
     .gte("sale_date", fromDate)
     .lte("sale_date", toDate);
 
@@ -1270,7 +1363,7 @@ async function aggregateLegacySalesKpis(
 }
 
 export async function getBusinessMetrics(userId: string): Promise<BusinessMetrics> {
-  await requireBusinessAccess(userId);
+  const context = await requireBusinessAccess(userId);
   const supabase = await createClient();
 
   const now = new Date();
@@ -1291,13 +1384,13 @@ export async function getBusinessMetrics(userId: string): Promise<BusinessMetric
     [mtd, ytd] = await Promise.all([
       aggregateSalesKpis(
         supabase,
-        userId,
+        context.businessAccountId,
         monthStart.toISOString(),
         rangeEnd.toISOString()
       ),
       aggregateSalesKpis(
         supabase,
-        userId,
+        context.businessAccountId,
         yearStart.toISOString(),
         rangeEnd.toISOString()
       ),
@@ -1308,13 +1401,13 @@ export async function getBusinessMetrics(userId: string): Promise<BusinessMetric
         [mtd, ytd] = await Promise.all([
           aggregateLegacySalesKpis(
             supabase,
-            userId,
+            context.ownerUserId,
             monthStart.toISOString(),
             rangeEnd.toISOString()
           ),
           aggregateLegacySalesKpis(
             supabase,
-            userId,
+            context.ownerUserId,
             yearStart.toISOString(),
             rangeEnd.toISOString()
           ),
@@ -1333,7 +1426,7 @@ export async function getBusinessMetrics(userId: string): Promise<BusinessMetric
   const { count: activeCount } = await supabase
     .from(BUSINESS_TABLE)
     .select("id", { count: "exact", head: true })
-    .eq("user_id", userId)
+    .eq("business_account_id", context.businessAccountId)
     .neq("status", "sold");
 
   return {

@@ -44,29 +44,33 @@ interface Props {
   threads: MessageThread[];
   selectedId: string | null;
   filter: ThreadFilter;
+  pinnedThreadIds: string[];
   onSelectThread: (id: string) => void;
   onFilterChange: (f: ThreadFilter) => void;
+  onTogglePin: (id: string) => void;
 }
 
 export default function ThreadList({
   threads,
   selectedId,
   filter,
+  pinnedThreadIds,
   onSelectThread,
   onFilterChange,
+  onTogglePin,
 }: Props) {
   return (
     <div className="flex h-full flex-col">
       {/* Filter tabs */}
-      <div className="flex gap-1 overflow-x-auto border-b border-[var(--biz-border)] px-3 py-2">
+      <div className="flex gap-1 overflow-x-auto border-b border-[var(--biz-border)] bg-[#FAFAFA] px-3 py-2">
         {FILTER_TABS.map((tab) => (
           <button
             key={tab.key}
             onClick={() => onFilterChange(tab.key)}
             className={`whitespace-nowrap rounded-md px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
               filter === tab.key
-                ? "bg-[var(--biz-primary)] text-white"
-                : "text-[var(--biz-muted)] hover:bg-[#F3F4F6] hover:text-[var(--biz-text)]"
+                ? "bg-gradient-to-r from-emerald-500 to-emerald-700 text-white shadow-sm"
+                : "text-[var(--biz-muted)] hover:bg-white hover:text-[var(--biz-text)]"
             }`}
           >
             {tab.label}
@@ -85,6 +89,7 @@ export default function ThreadList({
             const cat = CATEGORY_LABELS[thread.category] ?? CATEGORY_LABELS.other;
             const isSelected = thread.id === selectedId;
             const hasUnread = thread.unread_count > 0;
+            const isPinned = pinnedThreadIds.includes(thread.id);
 
             return (
               <button
@@ -92,7 +97,7 @@ export default function ThreadList({
                 onClick={() => onSelectThread(thread.id)}
                 className={`w-full border-b border-[var(--biz-border)] px-4 py-3.5 text-left transition-colors ${
                   isSelected
-                    ? "bg-[#F0FDF4] border-l-2 border-l-[var(--biz-primary)]"
+                    ? "border-l-2 border-l-[var(--biz-primary)] bg-gradient-to-r from-emerald-50 to-white"
                     : "hover:bg-[#F9FAFB]"
                 }`}
               >
@@ -100,6 +105,11 @@ export default function ThreadList({
                   <div className="min-w-0 flex-1">
                     {/* Buyer + status */}
                     <div className="flex items-center gap-2">
+                      {isPinned && (
+                        <span className="rounded bg-amber-100 px-1 py-0.5 text-[9px] font-semibold text-amber-700">
+                          PIN
+                        </span>
+                      )}
                       <span
                         className={`h-2 w-2 shrink-0 rounded-full ${
                           STATUS_DOTS[thread.status] ?? "bg-gray-300"
@@ -143,6 +153,20 @@ export default function ThreadList({
                     <span className="text-[10px] tabular-nums text-[var(--biz-muted)]">
                       {relativeTime(thread.last_message_at)}
                     </span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onTogglePin(thread.id);
+                      }}
+                      className={`rounded border px-1.5 py-0.5 text-[9px] font-semibold ${
+                        isPinned
+                          ? "border-amber-200 bg-amber-50 text-amber-700"
+                          : "border-[var(--biz-border)] bg-white text-[var(--biz-muted)]"
+                      }`}
+                    >
+                      {isPinned ? "Unpin" : "Pin"}
+                    </button>
                     <span
                       className={`rounded-full border px-1.5 py-0.5 text-[9px] font-medium ${cat.color}`}
                     >

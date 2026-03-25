@@ -221,7 +221,7 @@ function BUSINESS_NAV_ITEMS(): NavItem[] {
   return [
     { name: "Dashboard", href: "/business", icon: <HomeIcon />, exact: true },
     { name: "Ledger", href: "/business/ledger", icon: <LedgerIcon /> },
-    { name: "Messages", href: "/business/messages", icon: <MessagesIcon />, badge: "New" },
+    { name: "Customer Service", href: "/business/messages", icon: <MessagesIcon />, badge: "New" },
     { name: "Grade Probability Engine", href: "/grade-hub", icon: <BadgeIcon />, badge: "Featured" },
     { name: "News & Updates", href: "/business/news", icon: <NewsIcon />, badge: "New" },
     { name: "Compare Listings", href: "/business/comps", icon: <ChartIcon />, badge: "Beta" },
@@ -241,6 +241,7 @@ export default function Sidebar() {
 
   const isBusinessWorkspace = pathname.startsWith("/business") || pathname.startsWith("/grade-hub") || pathname.startsWith("/bulk");
   const isAdminUser = user?.app_role === "admin" || user?.app_role === "owner";
+  const hasPaidWorkspace = Boolean(user?.is_paid) || isBusinessWorkspace;
   const baseNavItems = isBusinessWorkspace ? BUSINESS_NAV_ITEMS() : PERSONAL_NAV_ITEMS();
   const navItems: NavItem[] = isAdminUser
     ? [
@@ -434,7 +435,7 @@ export default function Sidebar() {
             isBusinessWorkspace ? "border-[color:var(--biz-border)]" : "border-gray-800"
           }`}
         >
-          {user && !user.is_paid && remainingSearches !== null && (
+          {user && !hasPaidWorkspace && remainingSearches !== null && (
             <div className={`rounded-lg px-4 py-3 ${isBusinessWorkspace ? "cc-surface" : "bg-gray-800"}`}>
               <div className="mb-1 text-xs text-[var(--biz-muted)]">Free Plan</div>
               <div className={`text-sm font-medium ${isBusinessWorkspace ? "text-[var(--biz-text)]" : "text-white"}`}>
@@ -449,7 +450,7 @@ export default function Sidebar() {
               <div className={`truncate text-sm font-medium ${isBusinessWorkspace ? "text-[var(--biz-text)]" : "text-white"}`}>
                 {user.email}
               </div>
-              {user.is_paid && (
+              {hasPaidWorkspace && (
                 <div
                   className={`mt-2 inline-flex items-center rounded px-2 py-1 text-xs font-medium ${
                     isBusinessWorkspace
@@ -457,13 +458,13 @@ export default function Sidebar() {
                       : "bg-blue-600 text-white"
                   }`}
                 >
-                  {isBusinessWorkspace ? "Business Member" : "Pro Member"}
+                  {isBusinessWorkspace ? "Business Workspace" : "Pro Member"}
                 </div>
               )}
             </div>
           )}
 
-          {user && !user.is_paid && (
+          {user && !hasPaidWorkspace && (
             <button
               onClick={() => {
                 setIsOpen(false);

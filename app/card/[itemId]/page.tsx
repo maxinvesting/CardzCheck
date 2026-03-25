@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import Image from "next/image";
+import { createClient as createSupabaseClient } from "@/lib/supabase/client";
 import {
   AreaChart,
   Area,
@@ -114,13 +114,33 @@ function isValidHttpUrl(value: string): boolean {
   return /^https?:\/\//i.test(value);
 }
 
-function fmtMoney(cents: number | null | undefined): string {
-  if (cents == null) return "—";
-  return (cents / 100).toLocaleString("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-  });
+const MAX_IMAGE_UPLOAD_BYTES = 10 * 1024 * 1024;
+
+function statusBadge(status: string | null | undefined) {
+  const s = (status ?? "").toLowerCase();
+  const colors: Record<string, string> = {
+    sold: "bg-emerald-900/50 text-emerald-400",
+    listed: "bg-blue-900/50 text-blue-400",
+    pending_sale: "bg-yellow-900/50 text-yellow-400",
+    returned: "bg-red-900/50 text-red-400",
+    unlisted: "bg-gray-800 text-gray-400",
+  };
+  return colors[s] || "bg-gray-800 text-gray-400";
+}
+
+function severityBadge(severity: string) {
+  switch (severity) {
+    case "low":
+      return "bg-emerald-900/50 text-emerald-400";
+    case "at":
+      return "bg-blue-900/50 text-blue-400";
+    case "above":
+      return "bg-yellow-900/50 text-yellow-400";
+    case "well-above":
+      return "bg-red-900/50 text-red-400";
+    default:
+      return "bg-gray-800 text-gray-400";
+  }
 }
 
 // ── Page Component ───────────────────────────────────────────────────
@@ -143,7 +163,10 @@ export default function CardProfilePage() {
   const [imageZoom, setImageZoom] = useState(false);
   const [showImageModal, setShowImageModal] = useState(false);
   const [imageUrlInput, setImageUrlInput] = useState("");
+  const [imageFileInput, setImageFileInput] = useState<File | null>(null);
+  const [imageFilePreviewUrl, setImageFilePreviewUrl] = useState<string | null>(null);
   const [savingImage, setSavingImage] = useState(false);
+  const imageFilePickerRef = useRef<HTMLInputElement | null>(null);
   const attemptedImageHydrationRef = useRef(false);
 
   // Update Price modal
@@ -189,17 +212,15 @@ export default function CardProfilePage() {
     }
   }, [toast]);
 
-  // Close overflow on outside click
   useEffect(() => {
-    if (!showOverflow) return;
-    const handler = (e: MouseEvent) => {
-      if (overflowRef.current && !overflowRef.current.contains(e.target as Node)) {
-        setShowOverflow(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [showOverflow]);
+    if (!imageFileInput) {
+      setImageFilePreviewUrl(null);
+      return;
+    }
+    const objectUrl = URL.createObjectURL(imageFileInput);
+    setImageFilePreviewUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [imageFileInput]);
 
   // ── Data Loading ─────────────────────────────────────────────────
 
@@ -572,7 +593,7 @@ export default function CardProfilePage() {
   const handleSaveImageUrl = async () => {
     if (!item || savingImage) return;
     const trimmed = imageUrlInput.trim();
-    if (trimmed && !isValidHttpUrl(trimmed)) {
+    if (!imageFileInput && trimmed && !isValidHttpUrl(trimmed)) {
       setToast({
         type: "error",
         message: "Please enter a full image URL that starts with http:// or https://",
@@ -582,8 +603,53 @@ export default function CardProfilePage() {
 
     setSavingImage(true);
     try {
-      const payloadUrl = trimmed || null;
-      const endpoint = isBusinessMode ? "/api/business/inventory" : `/api/cards/${item.id}`;
+      let payloadUrl: string | null = trimmed || null;
+      if (imageFileInput) {
+        if (!imageFileInput.type.startsWith("image/")) {
+          setToast({ type: "error", message: "Please choose an image file" });
+          return;
+        }
+        if (imageFileInput.size > MAX_IMAGE_UPLOAD_BYTES) {
+          setToast({ type: "error", message: "Image must be under 10MB" });
+          return;
+        }
+
+        const supabase = createSupabaseClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user) {
+          setToast({ type: "error", message: "Please log in to upload images" });
+          return;
+        }
+
+        const sanitizedName = imageFileInput.name.replace(/[^\w.-]+/g, "_");
+        const extension = sanitizedName.includes(".")
+          ? sanitizedName.split(".").pop()
+          : imageFileInput.type.split("/")[1] || "jpg";
+        const randomPart = Math.random().toString(36).slice(2, 10);
+        const storagePath = `${user.id}/profile/${Date.now()}-${randomPart}.${extension}`;
+
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from("card-images")
+          .upload(storagePath, imageFileInput, {
+            cacheControl: "3600",
+            contentType: imageFileInput.type || undefined,
+            upsert: false,
+          });
+
+        if (uploadError) {
+          setToast({ type: "error", message: "Failed to upload image" });
+          return;
+        }
+
+        payloadUrl = supabase.storage
+          .from("card-images")
+          .getPublicUrl(uploadData.path).data.publicUrl;
+      }
+      const endpoint = isBusinessMode
+        ? "/api/business/inventory"
+        : `/api/cards/${item.id}`;
       const body = isBusinessMode
         ? { id: item.id, user_image_url: payloadUrl }
         : { user_image_url: payloadUrl };
@@ -595,7 +661,7 @@ export default function CardProfilePage() {
       });
 
       if (!res.ok) {
-        setToast({ type: "error", message: "Failed to save image URL" });
+        setToast({ type: "error", message: "Failed to save image" });
         return;
       }
 
@@ -632,16 +698,56 @@ export default function CardProfilePage() {
         );
       }
 
+      setImageFileInput(null);
+      if (imageFilePickerRef.current) {
+        imageFilePickerRef.current.value = "";
+      }
       setShowImageModal(false);
-      setToast({ type: "success", message: payloadUrl ? "Image URL saved" : "Image URL removed" });
+      setToast({
+        type: "success",
+        message: payloadUrl ? "Image saved" : "Image removed",
+      });
     } catch {
-      setToast({ type: "error", message: "Failed to save image URL" });
+      setToast({ type: "error", message: "Failed to save image" });
     } finally {
       setSavingImage(false);
     }
   };
 
-  // ── Render: Loading ──────────────────────────────────────────────
+  const openImageModal = (currentUrl: string | null) => {
+    setImageUrlInput(currentUrl ?? "");
+    setImageFileInput(null);
+    if (imageFilePickerRef.current) {
+      imageFilePickerRef.current.value = "";
+    }
+    setShowImageModal(true);
+  };
+
+  const handleImageFileSelection = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0] ?? null;
+    if (!file) {
+      setImageFileInput(null);
+      return;
+    }
+    if (!file.type.startsWith("image/")) {
+      setToast({ type: "error", message: "Please choose an image file" });
+      event.target.value = "";
+      setImageFileInput(null);
+      return;
+    }
+    if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+      setToast({ type: "error", message: "Image must be under 10MB" });
+      event.target.value = "";
+      setImageFileInput(null);
+      return;
+    }
+    setImageFileInput(file);
+    setImageUrlInput("");
+  };
+
+  // ── Render: Loading / Error ──────────────────────────────────────
 
   if (loading) {
     return (
@@ -823,13 +929,14 @@ export default function CardProfilePage() {
                 </a>
               ) : (
                 <div
-                  className="flex items-center justify-center w-10 h-10 rounded-xl text-gray-300 cursor-not-allowed"
-                  style={{ border: "1.5px solid #DDDBD6", background: "transparent" }}
-                  title="No cert number"
+                  className="w-full aspect-[3/4] flex flex-col items-center justify-center text-gray-500 cursor-pointer hover:bg-gray-800/50 transition-colors"
+                  onClick={() => openImageModal(null)}
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
                   </svg>
+                  <p className="text-sm font-medium text-gray-400">Add your photo</p>
+                  <p className="text-xs text-gray-600 mt-1">Upload from your files</p>
                 </div>
               )}
 
@@ -901,68 +1008,22 @@ export default function CardProfilePage() {
                     {item.cert_number && ` · #${item.cert_number}`}
                   </span>
                 </div>
-              )}
-
-              {/* 4. Market Value row */}
-              <div className="flex items-center gap-3 mb-6">
-                <div className="flex items-center gap-1.5">
-                  <span
-                    className="uppercase tracking-widest"
-                    style={{ fontSize: 10, color: "#BBBBBB", fontWeight: 500 }}
-                  >
-                    Market Value
-                  </span>
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="#BBBBBB" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <span
-                  className="font-extrabold"
-                  style={{
-                    fontSize: 40,
-                    color: "#0F0E0D",
-                    fontFamily: "'JetBrains Mono', monospace",
-                    lineHeight: 1,
-                    letterSpacing: "-0.03em",
-                  }}
+                <button
+                  onClick={() => openImageModal(imageUrl)}
+                  className="w-full px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-100 rounded-lg text-sm font-medium transition-colors"
                 >
-                  {marketValue ? fmtMoney(marketValue) : "—"}
-                </span>
-                {plData && (
-                  <span
-                    className="inline-flex items-center px-2.5 py-1 rounded-lg text-sm font-semibold"
-                    style={{
-                      background: plData.diff >= 0 ? "#F0FAF4" : "#FEF2F2",
-                      color: plData.diff >= 0 ? "#16A34A" : "#DC2626",
-                    }}
-                  >
-                    {plData.diff >= 0 ? "+" : ""}
-                    {plData.pct.toFixed(1)}%
-                  </span>
-                )}
+                  {imageUrl ? "Change Image" : "Set Image"}
+                </button>
               </div>
 
               {/* 5. CTA row */}
               <div className="flex items-center gap-2 mb-6">
                 {/* Primary: List on eBay / Set Price */}
                 <button
-                  onClick={() => {
-                    setNewPrice(
-                      item.list_price_cents != null
-                        ? (item.list_price_cents / 100).toFixed(2)
-                        : item.purchase_price != null
-                        ? String(item.purchase_price)
-                        : ""
-                    );
-                    setShowPriceModal(true);
-                  }}
-                  className="flex-1 flex items-center justify-center gap-2 font-semibold text-sm text-white transition-colors hover:bg-gray-800"
-                  style={{ background: "#111", borderRadius: 11, height: 44 }}
+                  onClick={() => openImageModal(imageUrl)}
+                  className="flex-1 px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-100 rounded-lg text-sm font-medium transition-colors"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-5 5a2 2 0 01-2.828 0l-7-7A2 2 0 013 10V5a2 2 0 012-2z" />
-                  </svg>
-                  {isBusinessMode ? "List on eBay" : "Set Price"}
+                  {imageUrl ? "Change Image" : "Set Image"}
                 </button>
 
                 {/* Edit */}
@@ -1562,34 +1623,87 @@ export default function CardProfilePage() {
         </div>
       )}
 
-      {/* ── Image URL Modal ───────────────────────────────────────────── */}
+      {/* ── Image Modal ─────────────────────────────────────── */}
       {showImageModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: "rgba(0,0,0,0.5)" }}
-        >
-          <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-2xl">
-            <h3 className="text-lg font-bold mb-4 text-gray-900">Set Image URL</h3>
-            <div className="space-y-2">
-              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide">
-                Image URL (https://…)
-              </label>
-              <input
-                type="url"
-                value={imageUrlInput}
-                onChange={(e) => setImageUrlInput(e.target.value)}
-                placeholder="https://…"
-                autoFocus
-                className="w-full px-3 py-2.5 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900"
-                style={{ border: "1.5px solid #E4E2DE" }}
-              />
-              <p className="text-xs text-gray-400">Leave blank to remove your custom image override.</p>
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-lg">
+            <h3 className="text-lg font-semibold mb-4">Set Image</h3>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="block text-sm text-gray-400">
+                  Upload from your files
+                </label>
+                <input
+                  ref={imageFilePickerRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageFileSelection}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => imageFilePickerRef.current?.click()}
+                  className="w-full px-3 py-2 border border-gray-700 rounded-lg text-gray-200 hover:bg-gray-800 text-sm text-left"
+                >
+                  {imageFileInput ? imageFileInput.name : "Choose image file"}
+                </button>
+                {imageFilePreviewUrl && (
+                  <img
+                    src={imageFilePreviewUrl}
+                    alt="Selected upload preview"
+                    className="w-full max-h-52 object-contain rounded-lg border border-gray-800 bg-gray-950"
+                  />
+                )}
+                {imageFileInput && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setImageFileInput(null);
+                      if (imageFilePickerRef.current) {
+                        imageFilePickerRef.current.value = "";
+                      }
+                    }}
+                    className="text-xs text-gray-400 hover:text-gray-200"
+                  >
+                    Clear selected file
+                  </button>
+                )}
+              </div>
+              <div className="space-y-2">
+                <label className="block text-sm text-gray-400">
+                  Or paste an image URL (optional)
+                </label>
+                <input
+                  type="url"
+                  value={imageUrlInput}
+                  onChange={(e) => {
+                    setImageUrlInput(e.target.value);
+                    if (imageFileInput) {
+                      setImageFileInput(null);
+                      if (imageFilePickerRef.current) {
+                        imageFilePickerRef.current.value = "";
+                      }
+                    }
+                  }}
+                  placeholder="https://..."
+                  autoFocus
+                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                />
+                <p className="text-xs text-gray-500">
+                  Leave both file and URL blank to remove your custom image.
+                </p>
+              </div>
             </div>
             <div className="flex gap-2 mt-5">
               <button
-                onClick={() => setShowImageModal(false)}
-                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
-                style={{ border: "1.5px solid #E4E2DE", color: "#6B6864" }}
+                onClick={() => {
+                  setShowImageModal(false);
+                  setImageFileInput(null);
+                  if (imageFilePickerRef.current) {
+                    imageFilePickerRef.current.value = "";
+                  }
+                }}
+                className="flex-1 px-4 py-2 border border-gray-700 rounded-lg text-gray-300 hover:bg-gray-800"
               >
                 Cancel
               </button>

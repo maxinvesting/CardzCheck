@@ -20,9 +20,15 @@ interface Props {
   thread: MessageThread;
   messages: Message[];
   negotiation: NegotiationAnalysis | null;
-  onGenerateReply: (tone: string) => void;
+  onGenerateReply: (tone: string, hint?: string) => void;
   generatedReply: string | null;
+  replySource?: "ai" | "fallback" | null;
   replyLoading: boolean;
+  onSendMessage: (body: string) => Promise<boolean>;
+  sendLoading: boolean;
+  sendError: string | null;
+  onUpdateThreadStatus: (threadId: string, status: MessageThread["status"]) => void;
+  businessName?: string | null;
 }
 
 export default function ConversationView({
@@ -31,20 +37,36 @@ export default function ConversationView({
   negotiation,
   onGenerateReply,
   generatedReply,
+  replySource,
   replyLoading,
+  onSendMessage,
+  sendLoading,
+  sendError,
+  onUpdateThreadStatus,
+  businessName,
 }: Props) {
   const [replyText, setReplyText] = useState("");
   const [showAI, setShowAI] = useState(false);
+  const lastBuyerMessage = [...messages].reverse().find((m) => m.direction === "inbound") ?? null;
 
   function handleUseReply(text: string) {
     setReplyText(text);
     setShowAI(false);
   }
 
+  async function handleSend() {
+    const body = replyText.trim();
+    if (!body || sendLoading) return;
+    const ok = await onSendMessage(body);
+    if (ok) {
+      setReplyText("");
+    }
+  }
+
   return (
     <div className="flex h-full flex-col">
       {/* Thread header */}
-      <div className="border-b border-[var(--biz-border)] px-5 py-4">
+      <div className="border-b border-[var(--biz-border)] bg-gradient-to-r from-white to-emerald-50/60 px-5 py-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
@@ -65,6 +87,20 @@ export default function ConversationView({
             )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => onUpdateThreadStatus(thread.id, "resolved")}
+              className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100"
+            >
+              Mark Resolved
+            </button>
+            <button
+              type="button"
+              onClick={() => onUpdateThreadStatus(thread.id, "archived")}
+              className="rounded-md border border-gray-200 bg-white px-2 py-1 text-[11px] font-medium text-[var(--biz-muted)] hover:bg-[#F9FAFB]"
+            >
+              Archive
+            </button>
             <StatusChip status={thread.status} />
           </div>
         </div>
@@ -76,7 +112,7 @@ export default function ConversationView({
       )}
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-5 py-4">
+      <div className="flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top_left,#ecfdf5_0%,#ffffff_35%)] px-5 py-4">
         <div className="mx-auto max-w-2xl space-y-4">
           {messages.map((msg) => {
             const isOutbound = msg.direction === "outbound";
@@ -86,10 +122,10 @@ export default function ConversationView({
                 className={`flex ${isOutbound ? "justify-end" : "justify-start"}`}
               >
                 <div
-                  className={`max-w-[80%] rounded-xl px-4 py-3 ${
+                  className={`max-w-[80%] rounded-2xl px-4 py-3 shadow-sm ${
                     isOutbound
-                      ? "bg-[var(--biz-primary)] text-white"
-                      : "border border-[var(--biz-border)] bg-[#F9FAFB] text-[var(--biz-text)]"
+                      ? "bg-gradient-to-br from-emerald-500 to-emerald-700 text-white"
+                      : "border border-[var(--biz-border)] bg-white text-[var(--biz-text)]"
                   }`}
                 >
                   <div className="flex items-center gap-2 mb-1">
@@ -120,30 +156,33 @@ export default function ConversationView({
       {showAI && (
         <AIActionsPanel
           thread={thread}
+          lastBuyerMessage={lastBuyerMessage}
           generatedReply={generatedReply}
+          replySource={replySource ?? null}
           replyLoading={replyLoading}
           onGenerateReply={onGenerateReply}
           onUseReply={handleUseReply}
           onClose={() => setShowAI(false)}
+          businessName={businessName}
         />
       )}
 
       {/* Reply composer */}
-      <div className="border-t border-[var(--biz-border)] px-5 py-3">
+      <div className="border-t border-[var(--biz-border)] bg-white px-5 py-3">
         <div className="flex items-center gap-2 mb-2">
           <button
             type="button"
             onClick={() => setShowAI(!showAI)}
             className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
               showAI
-                ? "bg-[var(--biz-primary)] text-white"
-                : "border border-[var(--biz-border)] text-[var(--biz-muted)] hover:bg-[#F3F4F6] hover:text-[var(--biz-text)]"
+                ? "bg-emerald-600 text-white"
+                : "border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
             }`}
           >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
-            AI Assist
+            {businessName ? `${businessName} Support Advisor` : "Support Advisor"}
           </button>
           {thread.ai_suggested_reply && !showAI && (
             <button
@@ -151,7 +190,7 @@ export default function ConversationView({
               onClick={() => handleUseReply(thread.ai_suggested_reply!)}
               className="text-[11px] text-[var(--biz-primary)] hover:underline"
             >
-              Use suggested reply
+              Use draft suggestion
             </button>
           )}
         </div>
@@ -165,15 +204,20 @@ export default function ConversationView({
           />
           <button
             type="button"
-            disabled={!replyText.trim()}
-            className="self-end rounded-lg bg-[var(--biz-primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#096b40] disabled:opacity-40"
+            onClick={handleSend}
+            disabled={!replyText.trim() || sendLoading}
+            className="self-end rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-700 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all hover:brightness-110 disabled:opacity-40"
           >
-            Send
+            {sendLoading ? "Sending..." : "Send"}
           </button>
         </div>
-        <p className="mt-1.5 text-[10px] text-[var(--biz-muted)]">
-          Messages are not sent to eBay in demo mode. Connect your eBay account to enable live messaging.
-        </p>
+        {sendError ? (
+          <p className="mt-1.5 text-[11px] text-red-600">{sendError}</p>
+        ) : (
+          <p className="mt-1.5 text-[10px] text-[var(--biz-muted)]">
+            Use <span className="font-medium text-emerald-700">{businessName ? `${businessName} Support Advisor` : "Support Advisor"}</span> above to generate a draft, then review and send.
+          </p>
+        )}
       </div>
     </div>
   );

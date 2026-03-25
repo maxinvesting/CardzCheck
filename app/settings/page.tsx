@@ -7,6 +7,7 @@ import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import PricingModal from "@/components/PricingModal";
 import EbayConnectSection from "@/components/business/settings/EbayConnectSection";
 import StorefrontsSection from "@/components/business/settings/StorefrontsSection";
+import TeamManagementSection from "@/components/business/settings/TeamManagementSection";
 import { createClient } from "@/lib/supabase/client";
 import { hasActiveBusinessTier } from "@/lib/subscription-tier";
 import type { User } from "@/types";
@@ -72,6 +73,7 @@ function SettingsContent() {
   const [pricingOpen, setPricingOpen] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [hasBusinessWorkspace, setHasBusinessWorkspace] = useState(false);
   const isBusinessSettings = pathname.startsWith("/business");
 
   useEffect(() => {
@@ -124,6 +126,26 @@ function SettingsContent() {
           .maybeSingle(),
       ]);
       setSubscription(subscriptionData ?? null);
+
+      const legacyBusinessAccess =
+        Boolean(userData?.is_paid) && hasActiveBusinessTier(subscriptionData);
+      let membershipBusinessAccess = false;
+      const { data: membershipRows, error: membershipError } = await supabase
+        .from("business_memberships")
+        .select("business_account_id")
+        .eq("user_id", authUser.id)
+        .eq("status", "active")
+        .limit(1);
+
+      if (!membershipError) {
+        membershipBusinessAccess = (membershipRows?.length ?? 0) > 0;
+      } else if (
+        !["42P01", "42703", "PGRST205"].includes(membershipError.code || "")
+      ) {
+        console.warn("Failed to resolve business membership access:", membershipError);
+      }
+
+      setHasBusinessWorkspace(legacyBusinessAccess || membershipBusinessAccess);
 
       const hasTableEbayStoreUrl =
         !!userData &&
@@ -238,18 +260,19 @@ function SettingsContent() {
     );
   }
 
-  const isBusinessMember = Boolean(user?.is_paid) && hasActiveBusinessTier(subscription);
-  const paidPlanName = isBusinessMember ? "Business Member" : "Pro Member";
+  const isBusinessMember = hasBusinessWorkspace;
+  const paidPlanName = isBusinessMember ? "Business Workspace" : "Pro Member";
   const paidPlanBadge = isBusinessMember ? "Business" : "Pro";
   const paidPlanDescription = isBusinessMember
-    ? "Inventory, sales analytics, and all Pro features included"
+    ? "Team workspace with inventory, sales analytics, and shared operations"
     : "Unlimited searches and collection tracking";
   const paidPlanFeatures = isBusinessMember
     ? [
-        "Spreadsheet-style inventory tracking",
+        "Business base includes 1 user",
+        "Add extra team seats for $12/month each",
+        "Shared inventory and sales workflows",
         "Revenue & profit dashboards",
-        "eBay integration tools",
-        "All Pro features included",
+        "Owner-managed billing and seat controls",
       ]
     : [
         "Unlimited searches",
@@ -388,6 +411,15 @@ function SettingsContent() {
           {isBusinessSettings && (
             <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                Team Management
+              </h2>
+              <TeamManagementSection />
+            </div>
+          )}
+
+          {isBusinessSettings && (
+            <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                 Storefronts
               </h2>
               <StorefrontsSection />
@@ -440,6 +472,7 @@ function SettingsContent() {
           )}
 
           {/* Current Plan */}
+          {!isBusinessSettings && (
           <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
               Current Plan
@@ -536,12 +569,13 @@ function SettingsContent() {
                     <li>• Unlimited searches</li>
                     <li>• Unlimited collection tracking</li>
                     <li>• Collection value tracking</li>
-                    <li>• One-time payment, lifetime access</li>
+                    <li>• Business workspace from $29/month (1 user included, +$12/seat)</li>
                   </ul>
                 </div>
               </div>
             )}
           </div>
+          )}
 
           {/* Password */}
           <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6">

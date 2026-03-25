@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { requireBusinessOwnerContext } from "@/lib/business/context";
 import {
-  getMessagingStats,
-  getThreads,
+  getMessagingOverview,
 } from "@/lib/messaging/service";
+import { isEbayConnected } from "@/lib/messaging/adapters/ebay";
 import type { ThreadFilter } from "@/lib/messaging/types";
 
 const VALID_FILTERS: ThreadFilter[] = [
@@ -24,6 +25,14 @@ export async function GET(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  try {
+    await requireBusinessOwnerContext(user.id);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Owner access required";
+    const status = (error as { status?: number })?.status ?? 403;
+    return NextResponse.json({ error: message }, { status });
+  }
 
   const { searchParams } = new URL(req.url);
   const filter = (searchParams.get("filter") ?? "all") as ThreadFilter;
@@ -31,10 +40,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Invalid filter" }, { status: 400 });
   }
 
-  const [stats, threads] = await Promise.all([
-    getMessagingStats(user.id),
-    getThreads(user.id, filter),
+  const [overview, ebayConnected] = await Promise.all([
+    getMessagingOverview(user.id, filter),
+    isEbayConnected(user.id),
   ]);
 
-  return NextResponse.json({ stats, threads });
+  return NextResponse.json({
+    stats: overview.stats,
+    threads: overview.threads,
+    ebayConnected,
+  });
 }

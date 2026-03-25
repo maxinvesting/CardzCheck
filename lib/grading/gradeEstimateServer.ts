@@ -198,7 +198,9 @@ function buildCardContextNote(cardIdentity?: CardIdentity | null): string {
 async function runGradeModel(
   images: ResolvedGradeEstimateImage[],
   cardIdentity?: CardIdentity | null,
-  userId?: string | null
+  userId?: string | null,
+  correctionText?: string | null,
+  preScanNotes?: string | null
 ): Promise<string | null> {
   const closeupCount = images.filter((image) => isCloseupKind(image.kind)).length;
   const photoRoles = images
@@ -212,11 +214,22 @@ async function runGradeModel(
     )
     .join("\n");
   const cardContextNote = buildCardContextNote(cardIdentity);
+
+  // Pre-scan notes are injected before the photos so they prime the AI's attention
+  const preScanBlock = preScanNotes?.trim()
+    ? `\n\nOwner's observations before analysis (use these to guide your attention — treat as reliable context, but verify against the photos):\n"${preScanNotes.trim()}"`
+    : "";
+
   const photoRolePrompt = `Photo role map (use this for evidence attribution):\n${photoRoles}\n\nClose-up count: ${closeupCount}.\n${
     closeupCount === 0
       ? "No close-up photos were provided. Treat corners/edges/surface visibility as limited, include a limited visibility note, and avoid high confidence."
       : "Use close-up photos as primary evidence for the matching categories."
-  }${cardContextNote}`;
+  }${cardContextNote}${preScanBlock}`;
+
+  // Build the correction block when the user has supplied post-scan feedback
+  const correctionBlock = correctionText?.trim()
+    ? `\n\nUser correction (treat as ground truth — higher priority than your visual inference alone):\n"${correctionText.trim()}"\n\nRe-analyze the card taking this correction fully into account. Update your grade range, probabilities, findings, and grade_notes to reflect it.`
+    : "";
 
   const anthropic = getAnthropicClient();
   const message = await anthropic.messages.create({
@@ -240,7 +253,7 @@ async function runGradeModel(
           })),
           {
             type: "text",
-            text: USER_PROMPT,
+            text: USER_PROMPT + correctionBlock,
           },
         ],
       },
@@ -330,7 +343,8 @@ export function createGradeEstimateJobDependencies(userId?: string | null): Grad
     resolveImages: resolveGradeEstimateImages,
     runOcrIdentity,
     // Bind userId via closure so token usage is recorded against the requesting user.
-    runGradeModel: (images, identity) => runGradeModel(images, identity, userId),
+    // correctionText and preScanNotes are passed through at call time from the job input.
+    runGradeModel: (images, identity, correctionText, preScanNotes) => runGradeModel(images, identity, userId, correctionText, preScanNotes),
     parseModelOutput: async (options) => parseGradeEstimateModelOutput(options),
     runPostGradingValue,
   };
