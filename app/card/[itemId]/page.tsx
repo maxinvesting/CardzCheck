@@ -6,15 +6,6 @@ import Link from "next/link";
 import Image from "next/image";
 import { createClient as createSupabaseClient } from "@/lib/supabase/client";
 import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  CartesianGrid,
-} from "recharts";
-import {
   estimateTakeHome,
   fmtCents,
 } from "@/lib/business/pricing";
@@ -73,7 +64,7 @@ interface ProfileSale {
 }
 
 type Mode = "business" | "collection";
-type TabId = "details" | "sales" | "chart" | "shop";
+type TabId = "details" | "shop";
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -504,67 +495,6 @@ export default function CardProfilePage() {
     void fetchWorthGrading();
   }, [cardForGrade, gradeEstimate.estimate, fetchWorthGrading]);
 
-  // Chart data
-  const chartData = useMemo(() => {
-    if (!item) return [];
-    const points: Array<{ ts: number; date: string; price: number; label: string }> = [];
-
-    const nowTs = Date.now();
-    const createdTs = toTimestamp(item.created_at) ?? nowTs;
-    const acquiredTs = toTimestamp(item.acquisition_date ?? item.purchase_date) ?? createdTs;
-    const updatedTs = toTimestamp(item.updated_at) ?? nowTs;
-
-    if (typeof costCents === "number" && costCents > 0) {
-      points.push({
-        ts: acquiredTs,
-        date: fmtDate(new Date(acquiredTs).toISOString()),
-        price: costCents / 100,
-        label: "Cost Basis",
-      });
-    }
-
-    if (typeof item.list_price_cents === "number" && item.list_price_cents > 0) {
-      points.push({
-        ts: updatedTs - 60_000,
-        date: fmtDate(new Date(updatedTs - 60_000).toISOString()),
-        price: item.list_price_cents / 100,
-        label: "List Price",
-      });
-    }
-
-    if (typeof item.current_market_value_cents === "number" && item.current_market_value_cents > 0) {
-      points.push({
-        ts: updatedTs,
-        date: fmtDate(new Date(updatedTs).toISOString()),
-        price: item.current_market_value_cents / 100,
-        label: isBusinessMode ? "Market Floor" : "Market Value",
-      });
-    }
-
-    sales.forEach((sale, index) => {
-      const saleCents = sale.sale_price_cents ?? sale.sold_price_cents ?? 0;
-      if (saleCents <= 0) return;
-      const saleTs = (toTimestamp(sale.sale_date || sale.sold_at) ?? nowTs) + index;
-      points.push({
-        ts: saleTs,
-        date: fmtDate(sale.sale_date || sale.sold_at),
-        price: saleCents / 100,
-        label: sale.channel ? `Sale (${sale.channel})` : "Sale",
-      });
-    });
-
-    if (points.length === 0) return [];
-
-    return points
-      .sort((a, b) => a.ts - b.ts)
-      .map((point, index) => ({
-        id: `${point.label}-${index}`,
-        date: point.date === "—" ? fmtDate(new Date(point.ts).toISOString()) : point.date,
-        price: Number(point.price.toFixed(2)),
-        label: point.label,
-      }));
-  }, [item, sales, costCents, isBusinessMode]);
-
   // Unrealized P/L
   const plData = useMemo(() => {
     if (costCents == null || !item?.current_market_value_cents) return null;
@@ -852,8 +782,6 @@ export default function CardProfilePage() {
 
   const tabs: { id: TabId; label: string }[] = [
     { id: "details", label: "Details" },
-    { id: "sales", label: "Sales History" },
-    { id: "chart", label: "Price Chart" },
     { id: "shop", label: "Shop" },
   ];
 
@@ -1368,148 +1296,6 @@ export default function CardProfilePage() {
                 </div>
               )}
 
-              {/* Sales History tab */}
-              {activeTab === "sales" && (
-                <div>
-                  {sales.length > 0 ? (
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr style={{ borderBottom: "1px solid #EBEBEA" }}>
-                          {["Date", "Channel", "Gross", "Net", "Profit"].map((h) => (
-                            <th
-                              key={h}
-                              className="pb-2 font-semibold"
-                              style={{
-                                fontSize: 11,
-                                color: "#A09D9A",
-                                textAlign: h === "Gross" || h === "Net" || h === "Profit" ? "right" : "left",
-                              }}
-                            >
-                              {h}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {sales.map((s) => (
-                          <tr key={s.id} style={{ borderBottom: "1px solid #F3F2F0" }}>
-                            <td className="py-2.5 text-xs" style={{ color: "#6B6864" }}>
-                              {fmtDate(s.sale_date || s.sold_at)}
-                            </td>
-                            <td className="py-2.5 capitalize text-xs" style={{ color: "#9D9A97" }}>
-                              {s.channel ?? "—"}
-                            </td>
-                            <td
-                              className="py-2.5 text-right text-xs"
-                              style={{ fontFamily: "'JetBrains Mono', monospace", color: "#3D3A37" }}
-                            >
-                              {fmtCents(s.sale_price_cents ?? s.sold_price_cents)}
-                            </td>
-                            <td
-                              className="py-2.5 text-right text-xs"
-                              style={{ fontFamily: "'JetBrains Mono', monospace", color: "#3D3A37" }}
-                            >
-                              {fmtCents(s.net_proceeds_cents ?? s.net_payout_cents)}
-                            </td>
-                            <td
-                              className="py-2.5 text-right text-xs font-semibold"
-                              style={{
-                                fontFamily: "'JetBrains Mono', monospace",
-                                color: (s.profit_cents ?? 0) >= 0 ? "#16A34A" : "#DC2626",
-                              }}
-                            >
-                              {fmtCents(s.profit_cents)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  ) : (
-                    <p className="text-sm text-gray-400 py-4">No sales recorded for this item.</p>
-                  )}
-
-                  <div className="mt-6">
-                    <p className="text-xs uppercase tracking-widest text-gray-400 mb-3">Timeline</p>
-                    <div className="space-y-2">
-                      {item.created_at && (
-                        <TimelineEntry date={item.created_at} label="Added to collection" />
-                      )}
-                      {(item.acquisition_date || item.purchase_date) && (
-                        <TimelineEntry
-                          date={(item.acquisition_date ?? item.purchase_date)!}
-                          label="Acquired"
-                        />
-                      )}
-                      {item.status === "sold" && sales[0] && (
-                        <TimelineEntry
-                          date={sales[0].sale_date || sales[0].sold_at || ""}
-                          label={`Sold for ${fmtCents(sales[0].sale_price_cents ?? sales[0].sold_price_cents)}`}
-                        />
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Price Chart tab */}
-              {activeTab === "chart" && (
-                <div>
-                  {chartData.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={240}>
-                      <AreaChart data={chartData}>
-                        <defs>
-                          <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#0F0E0D" stopOpacity={0.12} />
-                            <stop offset="95%" stopColor="#0F0E0D" stopOpacity={0} />
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#EBEBEA" />
-                        <XAxis
-                          dataKey="date"
-                          tick={{ fill: "#A09D9A", fontSize: 11, fontFamily: "'Sora', sans-serif" }}
-                          tickLine={false}
-                        />
-                        <YAxis
-                          tick={{ fill: "#A09D9A", fontSize: 11, fontFamily: "'JetBrains Mono', monospace" }}
-                          tickLine={false}
-                          tickFormatter={(v: number) => `$${v}`}
-                        />
-                        <Tooltip
-                          contentStyle={{
-                            background: "#fff",
-                            border: "1px solid #EBEBEA",
-                            borderRadius: 10,
-                            color: "#0F0E0D",
-                            fontFamily: "'Sora', sans-serif",
-                          }}
-                          formatter={(value: number | undefined) => [
-                            value != null ? `$${value.toFixed(2)}` : "—",
-                            "Price",
-                          ]}
-                          labelFormatter={(label) => String(label)}
-                        />
-                        <Area
-                          type="monotone"
-                          dataKey="price"
-                          stroke="#0F0E0D"
-                          strokeWidth={2}
-                          fill="url(#priceGradient)"
-                          dot={{ fill: "#0F0E0D", r: 4 }}
-                          activeDot={{ r: 6 }}
-                        />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center py-12 gap-2" style={{ color: "#C0BDBA" }}>
-                      <svg className="w-10 h-10 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
-                      </svg>
-                      <p className="text-sm">Chart available after more data is collected</p>
-                    </div>
-                  )}
-                </div>
-              )}
-
               {/* Shop tab */}
               {activeTab === "shop" && (
                 <div className="flex flex-col items-center justify-center py-10 gap-4">
@@ -1517,7 +1303,7 @@ export default function CardProfilePage() {
                     Search for comparable listings on eBay to track live market prices.
                   </p>
                   <a
-                    href={ebayActiveSearchUrl}
+                    href={ebayCompsUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-gray-800"
@@ -1835,16 +1621,6 @@ function FactRow({ label, value }: { label: string; value: string | null | undef
     >
       <span className="text-xs font-medium" style={{ color: "#A09D9A" }}>{label}</span>
       <span className="text-xs font-medium capitalize" style={{ color: "#3D3A37" }}>{value}</span>
-    </div>
-  );
-}
-
-function TimelineEntry({ date, label }: { date: string; label: string }) {
-  return (
-    <div className="flex items-center gap-3">
-      <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: "#C0BDBA" }} />
-      <span className="text-xs" style={{ color: "#A09D9A" }}>{fmtDate(date)}</span>
-      <span className="text-xs" style={{ color: "#6B6864" }}>{label}</span>
     </div>
   );
 }
