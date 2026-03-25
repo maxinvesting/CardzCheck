@@ -23,6 +23,7 @@ import GradeProbabilityPanel from "@/components/grading/GradeProbabilityPanel";
 import { useGradeEstimateFromImages } from "@/lib/grading/useGradeEstimateFromImages";
 import type { GradeEstimatorCardInput, GradeEstimatorCardInput as GradeEstimatorCardInputType } from "@/lib/grade-estimator/value";
 import type { WorthGradingResult } from "@/types";
+import GetCompsButton from "@/components/ui/GetCompsButton";
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -1032,6 +1033,19 @@ export default function CardProfilePage() {
                 </button>
               </div>
             )}
+
+            {/* Get Comps — always visible */}
+            <GetCompsButton
+              params={{
+                player: item.player_name,
+                year: item.year,
+                setName: item.set_name,
+                parallel: item.parallel_type,
+                grade: item.grade,
+                gradingCompany: item.grading_company,
+              }}
+              className="w-full flex items-center justify-center gap-1.5 px-4 py-2.5 min-h-[44px] bg-[#1a2f4e] hover:bg-[#1e3a5f] border border-blue-900/40 text-blue-200 rounded-lg text-sm font-medium transition-colors"
+            />
           </div>
 
           {/* RIGHT PANELS */}

@@ -19,6 +19,7 @@ import {
 } from "@/lib/dev/perf";
 import EbayListingBadge from "./EbayListingBadge";
 import EbayListingModal from "./EbayListingModal";
+import { buildEbaySoldUrl } from "@/lib/ebay/comps-url";
 
 function fmtCents(cents: number | null): string {
   if (cents === null) return "";
@@ -564,6 +565,11 @@ export default function InventoryTable({
         !hasEbayListing &&
         item.status !== "returned" &&
         item.status !== "pending_sale";
+      const compsUrl = buildEbaySoldUrl({
+        title: item.title,
+        grade: item.grade,
+        gradingCompany: item.grading_company,
+      });
       return (
         <div className="flex flex-col items-start gap-1">
           <button
@@ -588,6 +594,15 @@ export default function InventoryTable({
               List eBay
             </button>
           )}
+          <a
+            href={compsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="rounded border border-[var(--biz-border)] bg-[#F9FAFB] px-2 py-0.5 text-[10px] font-medium text-[var(--biz-primary)] hover:bg-[#F3F4F6] transition-colors"
+          >
+            Get Comps
+          </a>
         </div>
       );
     }
