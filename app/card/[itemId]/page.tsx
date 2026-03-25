@@ -1009,13 +1009,7 @@ export default function CardProfilePage() {
                     {item.cert_number && ` · #${item.cert_number}`}
                   </span>
                 </div>
-                <button
-                  onClick={() => openImageModal(imageUrl)}
-                  className="w-full px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-100 rounded-lg text-sm font-medium transition-colors"
-                >
-                  {imageUrl ? "Change Image" : "Set Image"}
-                </button>
-              </div>
+              )}
 
               {/* 5. CTA row */}
               <div className="flex items-center gap-2 mb-6">
