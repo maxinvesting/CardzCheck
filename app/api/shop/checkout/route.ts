@@ -4,7 +4,7 @@ import {
   createShopCheckoutSession,
   type ShopCheckoutItem,
 } from "@/lib/stripe";
-import { hasActiveBusinessTier } from "@/lib/subscription-tier";
+import { hasActiveBusinessTier, hasActiveProTier } from "@/lib/subscription-tier";
 
 export async function POST(request: NextRequest) {
   try {
@@ -26,24 +26,41 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if the current user has an active business subscription (free shipping perk)
+    // Check user tier — free/unauthenticated users cannot check out
     let businessFreeShipping = false;
     try {
       const userClient = await createClient();
       const { data: { user } } = await userClient.auth.getUser();
-      if (user) {
-        const serviceClient = await createServiceClient();
-        const { data: sub } = await serviceClient
-          .from("subscriptions")
-          .select("tier, status, current_period_end")
-          .eq("user_id", user.id)
-          .single();
-        if (hasActiveBusinessTier(sub)) {
-          businessFreeShipping = true;
-        }
+      if (!user) {
+        return NextResponse.json(
+          { error: "You must be logged in to purchase" },
+          { status: 401 }
+        );
+      }
+
+      const serviceClient = await createServiceClient();
+      const { data: sub } = await serviceClient
+        .from("subscriptions")
+        .select("tier, status, current_period_end")
+        .eq("user_id", user.id)
+        .single();
+
+      const isActiveSub = hasActiveBusinessTier(sub) || hasActiveProTier(sub);
+      if (!isActiveSub) {
+        return NextResponse.json(
+          { error: "A Pro or Business subscription is required to purchase from the shop" },
+          { status: 403 }
+        );
+      }
+
+      if (hasActiveBusinessTier(sub)) {
+        businessFreeShipping = true;
       }
     } catch {
-      // Non-fatal — continue without perk on error
+      return NextResponse.json(
+        { error: "Could not verify subscription status" },
+        { status: 500 }
+      );
     }
 
     const supabase = await createServiceClient();

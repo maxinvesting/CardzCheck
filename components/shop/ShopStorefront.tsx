@@ -60,6 +60,7 @@ export default function ShopStorefront({
   userTier,
 }: ShopStorefrontProps) {
   const isBusiness = userTier === "business";
+  const isLocked = !userTier || userTier === "free";
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [gradeFilter, setGradeFilter] = useState<string | null>(null);
@@ -193,28 +194,27 @@ export default function ShopStorefront({
                 <svg className="h-4 w-4 shrink-0 text-cyan-600" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                Up to 10% extra off for repeat buyers
+                5% off every 15th purchase
               </div>
             </div>
 
-            {/* Business tier callout / personal upsell */}
+            {/* Business tier callout / pro upsell */}
             {isBusiness ? (
               <div className="mt-5 flex items-center gap-2 rounded-lg border border-cyan-200 bg-cyan-50 px-4 py-3">
                 <svg className="h-4 w-4 shrink-0 text-cyan-600" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <span className="text-sm font-medium text-cyan-800">
-                  Business plan active — extra 1% off applied to every purchase automatically.
+                  Business plan active — free shipping applied to every order automatically.
                 </span>
               </div>
-            ) : userTier != null ? (
+            ) : userTier === "pro" ? (
               <div className="mt-5 flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
                 <svg className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
                 </svg>
                 <p className="text-sm text-slate-600">
-                  <span className="font-medium text-slate-800">Business plan members save an extra 1% on every deal.</span>{" "}
-                  On a $200 card that's $2 back per purchase — stacks with all other discounts.
+                  <span className="font-medium text-slate-800">Business plan members also get free shipping on every order.</span>{" "}
                   <a href="/upgrade" className="ml-1 font-medium text-cyan-700 hover:underline">Upgrade to Business →</a>
                 </p>
               </div>
@@ -251,14 +251,39 @@ export default function ShopStorefront({
         </section>
       )}
 
+      {/* Free / unauthenticated user upgrade banner */}
+      {isLocked && (
+        <section className="border-b border-amber-100 bg-amber-50 px-4 py-3">
+          <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-sm text-amber-800">
+              <svg className="h-4 w-4 shrink-0 text-amber-500" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clipRule="evenodd" />
+              </svg>
+              <span>
+                <strong className="font-semibold">You&apos;re browsing as a free member.</strong>{" "}
+                Subscribe to access exclusive pricing on all deals.
+              </span>
+            </div>
+            <a
+              href="/upgrade"
+              className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-amber-400"
+            >
+              Subscribe now →
+            </a>
+          </div>
+        </section>
+      )}
+
       {/* Loyalty perks info */}
-      <section className="border-b border-slate-100 bg-slate-50 px-4 py-3">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-6 gap-y-1 text-xs text-slate-500">
-          <span className="font-medium text-slate-700">Repeat Buyer Perks</span>
-          <span>Every 15th purchase = <strong className="text-slate-700">5% off</strong> your order (15, 30, 45…)</span>
-          {isBusiness && <span>Business members also get <strong className="text-slate-700">free shipping</strong> on all orders.</span>}
-        </div>
-      </section>
+      {!isLocked && (
+        <section className="border-b border-slate-100 bg-slate-50 px-4 py-3">
+          <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-6 gap-y-1 text-xs text-slate-500">
+            <span className="font-medium text-slate-700">Repeat Buyer Perks</span>
+            <span>Every 15th purchase = <strong className="text-slate-700">5% off</strong> your order (15, 30, 45…)</span>
+            {isBusiness && <span>Business members get <strong className="text-slate-700">free shipping</strong> on all orders.</span>}
+          </div>
+        </section>
+      )}
 
       <section
         id={CATALOG_ID}
@@ -354,7 +379,7 @@ export default function ShopStorefront({
                 <>
                   <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     {catalogPageItems.map((listing) => (
-                      <ShopListingCard key={listing.id} listing={listing} isBusiness={isBusiness} />
+                      <ShopListingCard key={listing.id} listing={listing} userTier={userTier} />
                     ))}
                   </div>
 
@@ -410,7 +435,7 @@ export default function ShopStorefront({
                   Complete purchases to unlock additional savings. The more you
                   buy, the better your pricing gets.
                   {isBusiness && (
-                    <span className="ml-1 font-medium text-cyan-700">Your business plan also adds 1% off every order.</span>
+                    <span className="ml-1 font-medium text-cyan-700">Your business plan includes free shipping on every order.</span>
                   )}
                 </p>
                 <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -422,22 +447,22 @@ export default function ShopStorefront({
                       active: true,
                     },
                     {
-                      threshold: "5+ purchases",
-                      label: "5% loyalty discount",
-                      description: "Extra 5% off all deals after your 5th completed purchase",
+                      threshold: "15th purchase",
+                      label: "5% milestone bonus",
+                      description: "Every 15th completed purchase (15, 30, 45…) earns 5% off that order",
                       active: false,
                     },
                     {
-                      threshold: "10+ purchases",
-                      label: "10% loyalty discount",
-                      description: "Extra 10% off all deals after your 10th completed purchase",
+                      threshold: "30th purchase",
+                      label: "5% milestone bonus",
+                      description: "Milestone perks stack — keep buying to hit your next reward",
                       active: false,
                     },
                     {
-                      threshold: "Every 5th after that",
-                      label: "5% milestone deal",
-                      description: "Every 5th purchase (15, 20, 25...) gets an extra 5% off that order",
-                      active: false,
+                      threshold: "Business plan",
+                      label: "Free shipping",
+                      description: "Business subscribers get free shipping on every order, always",
+                      active: isBusiness,
                     },
                   ].map((tier) => (
                     <div
