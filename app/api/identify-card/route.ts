@@ -88,9 +88,10 @@ function validateImageUrl(url: string): { valid: boolean; error?: string } {
     );
 
     if (!isAllowedHost) {
-      console.warn(
-        `[identify-card] URL from untrusted host: ${parsedUrl.hostname}`
-      );
+      return {
+        valid: false,
+        error: `Image URL host is not allowed: ${parsedUrl.hostname}`,
+      };
     }
 
     return { valid: true };
