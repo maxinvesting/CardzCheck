@@ -28,7 +28,7 @@ export interface ShopListing {
   quantity_sold: number;
   image_urls: string[];
   thumbnail_url: string | null;
-  status: "active" | "sold" | "reserved" | "delisted";
+  status: "active" | "sold" | "reserved" | "delisted" | "archived";
   publish_state: "draft" | "published";
   featured: boolean;
   is_premium: boolean;
@@ -79,7 +79,7 @@ export interface ShopOrder {
   total: number | null;
   stripe_checkout_session_id: string | null;
   stripe_payment_intent_id: string | null;
-  payment_status: "pending" | "paid" | "failed" | "refunded";
+  payment_status: "pending" | "paid" | "failed" | "refunded" | "cancelled";
   fulfillment_status: "unfulfilled" | "shipped" | "delivered";
   tracking_number: string | null;
   tracking_carrier: string | null;

@@ -549,20 +549,20 @@ export default function BusinessDashboardView({
       {/* ── At a Glance ─────────────────────────────────────────────────── */}
       {!needsMigration && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          {/* Left: Top movers + Risk signals */}
+          {/* Left: Highest-value inventory + alerts */}
           <div className="space-y-6">
-            <Surface title="Top Movers · Est. Market Value">
+            <Surface title="Highest-Value Inventory · Est. Market Value">
               {itemsEmpty ? (
                 <p className="text-[var(--biz-muted)] text-xs">
                   No inventory yet.{" "}
                   <Link href="/business/ledger" className="text-[var(--biz-primary)] hover:underline">
                     Add items
                   </Link>{" "}
-                  to see top performers.
+                  to see your highest-value inventory.
                 </p>
               ) : dashboardData.topMovers.length === 0 ? (
                 <p className="text-[var(--biz-muted)] text-xs">
-                  Add Est. Market Values to your items to see top movers.
+                  Add Est. Market Values to your items to see highest-value inventory.
                 </p>
               ) : (
                 <ul className="space-y-2.5">
@@ -584,7 +584,7 @@ export default function BusinessDashboardView({
               )}
             </Surface>
 
-            <Surface title="Risk Signals">
+            <Surface title="Inventory Alerts">
               {itemsEmpty ? (
                 <p className="text-[var(--biz-muted)] text-xs">No active inventory to analyze.</p>
               ) : (
@@ -626,7 +626,7 @@ export default function BusinessDashboardView({
                   href="/business/ledger"
                   className="mt-4 inline-block text-xs text-[var(--biz-primary)] transition-colors hover:underline"
                 >
-                  Review in Ledger →
+                  Review inventory →
                 </Link>
               )}
             </Surface>

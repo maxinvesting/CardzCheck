@@ -41,7 +41,7 @@ export default function CompactTopPerformers({ items, loading }: CompactTopPerfo
     <section className="rounded-xl border border-[color:var(--biz-border,#e5e7eb)] bg-[color:var(--biz-surface,#ffffff)] p-4">
       <div className="mb-3 flex items-center justify-between gap-2">
         <h2 className="text-sm font-semibold text-[color:var(--biz-text,#111827)]">
-          Top Movers
+          Highest-Value Cards
         </h2>
         {items.length > 0 && (
           <Link
@@ -56,7 +56,7 @@ export default function CompactTopPerformers({ items, loading }: CompactTopPerfo
       {performers.length === 0 ? (
         <div className="py-6 text-center">
           <p className="text-xs text-[color:var(--biz-muted,#6b7280)]">
-            Add cards to see top movers.
+            Add cards to see highest-value cards.
           </p>
         </div>
       ) : (

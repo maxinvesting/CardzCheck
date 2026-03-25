@@ -21,7 +21,7 @@ export default function MessagingStatsBar({ stats, loading }: Props) {
       {cards.map(({ label, value, color }) => (
         <div
           key={label}
-          className="rounded-lg border border-[var(--biz-border)] bg-white px-3 py-2.5"
+          className="rounded-xl border border-[var(--biz-border)] bg-white px-3 py-2.5 shadow-[0_3px_10px_rgba(0,0,0,0.04)]"
         >
           <p className="text-[10px] uppercase tracking-wide text-[var(--biz-muted)]">{label}</p>
           {loading ? (

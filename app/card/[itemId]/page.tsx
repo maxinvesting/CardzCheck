@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { createClient as createSupabaseClient } from "@/lib/supabase/client";
 import {
   AreaChart,
   Area,
@@ -110,6 +111,8 @@ function isValidHttpUrl(value: string): boolean {
   return /^https?:\/\//i.test(value);
 }
 
+const MAX_IMAGE_UPLOAD_BYTES = 10 * 1024 * 1024;
+
 function statusBadge(status: string | null | undefined) {
   const s = (status ?? "").toLowerCase();
   const colors: Record<string, string> = {
@@ -157,7 +160,10 @@ export default function CardProfilePage() {
   const [imageZoom, setImageZoom] = useState(false);
   const [showImageModal, setShowImageModal] = useState(false);
   const [imageUrlInput, setImageUrlInput] = useState("");
+  const [imageFileInput, setImageFileInput] = useState<File | null>(null);
+  const [imageFilePreviewUrl, setImageFilePreviewUrl] = useState<string | null>(null);
   const [savingImage, setSavingImage] = useState(false);
+  const imageFilePickerRef = useRef<HTMLInputElement | null>(null);
   const attemptedImageHydrationRef = useRef(false);
 
   // Update Price modal
@@ -195,6 +201,16 @@ export default function CardProfilePage() {
       return () => clearTimeout(t);
     }
   }, [toast]);
+
+  useEffect(() => {
+    if (!imageFileInput) {
+      setImageFilePreviewUrl(null);
+      return;
+    }
+    const objectUrl = URL.createObjectURL(imageFileInput);
+    setImageFilePreviewUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [imageFileInput]);
 
   // ── Data Loading ─────────────────────────────────────────────────
 
@@ -605,7 +621,7 @@ export default function CardProfilePage() {
   const handleSaveImageUrl = async () => {
     if (!item || savingImage) return;
     const trimmed = imageUrlInput.trim();
-    if (trimmed && !isValidHttpUrl(trimmed)) {
+    if (!imageFileInput && trimmed && !isValidHttpUrl(trimmed)) {
       setToast({
         type: "error",
         message: "Please enter a full image URL that starts with http:// or https://",
@@ -615,7 +631,50 @@ export default function CardProfilePage() {
 
     setSavingImage(true);
     try {
-      const payloadUrl = trimmed || null;
+      let payloadUrl: string | null = trimmed || null;
+      if (imageFileInput) {
+        if (!imageFileInput.type.startsWith("image/")) {
+          setToast({ type: "error", message: "Please choose an image file" });
+          return;
+        }
+        if (imageFileInput.size > MAX_IMAGE_UPLOAD_BYTES) {
+          setToast({ type: "error", message: "Image must be under 10MB" });
+          return;
+        }
+
+        const supabase = createSupabaseClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user) {
+          setToast({ type: "error", message: "Please log in to upload images" });
+          return;
+        }
+
+        const sanitizedName = imageFileInput.name.replace(/[^\w.-]+/g, "_");
+        const extension = sanitizedName.includes(".")
+          ? sanitizedName.split(".").pop()
+          : imageFileInput.type.split("/")[1] || "jpg";
+        const randomPart = Math.random().toString(36).slice(2, 10);
+        const storagePath = `${user.id}/profile/${Date.now()}-${randomPart}.${extension}`;
+
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from("card-images")
+          .upload(storagePath, imageFileInput, {
+            cacheControl: "3600",
+            contentType: imageFileInput.type || undefined,
+            upsert: false,
+          });
+
+        if (uploadError) {
+          setToast({ type: "error", message: "Failed to upload image" });
+          return;
+        }
+
+        payloadUrl = supabase.storage
+          .from("card-images")
+          .getPublicUrl(uploadData.path).data.publicUrl;
+      }
       const endpoint = isBusinessMode
         ? "/api/business/inventory"
         : `/api/cards/${item.id}`;
@@ -630,7 +689,7 @@ export default function CardProfilePage() {
       });
 
       if (!res.ok) {
-        setToast({ type: "error", message: "Failed to save image URL" });
+        setToast({ type: "error", message: "Failed to save image" });
         return;
       }
 
@@ -667,16 +726,53 @@ export default function CardProfilePage() {
         );
       }
 
+      setImageFileInput(null);
+      if (imageFilePickerRef.current) {
+        imageFilePickerRef.current.value = "";
+      }
       setShowImageModal(false);
       setToast({
         type: "success",
-        message: payloadUrl ? "Image URL saved" : "Image URL removed",
+        message: payloadUrl ? "Image saved" : "Image removed",
       });
     } catch {
-      setToast({ type: "error", message: "Failed to save image URL" });
+      setToast({ type: "error", message: "Failed to save image" });
     } finally {
       setSavingImage(false);
     }
+  };
+
+  const openImageModal = (currentUrl: string | null) => {
+    setImageUrlInput(currentUrl ?? "");
+    setImageFileInput(null);
+    if (imageFilePickerRef.current) {
+      imageFilePickerRef.current.value = "";
+    }
+    setShowImageModal(true);
+  };
+
+  const handleImageFileSelection = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0] ?? null;
+    if (!file) {
+      setImageFileInput(null);
+      return;
+    }
+    if (!file.type.startsWith("image/")) {
+      setToast({ type: "error", message: "Please choose an image file" });
+      event.target.value = "";
+      setImageFileInput(null);
+      return;
+    }
+    if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+      setToast({ type: "error", message: "Image must be under 10MB" });
+      event.target.value = "";
+      setImageFileInput(null);
+      return;
+    }
+    setImageFileInput(file);
+    setImageUrlInput("");
   };
 
   // ── Render: Loading / Error ──────────────────────────────────────
@@ -786,7 +882,7 @@ export default function CardProfilePage() {
               ) : (
                 <div
                   className="w-full aspect-[3/4] flex flex-col items-center justify-center text-gray-500 cursor-pointer hover:bg-gray-800/50 transition-colors"
-                  onClick={() => { setImageUrlInput(""); setShowImageModal(true); }}
+                  onClick={() => openImageModal(null)}
                 >
                   <svg
                     className="w-12 h-12 mb-3 text-gray-600"
@@ -802,7 +898,7 @@ export default function CardProfilePage() {
                     />
                   </svg>
                   <p className="text-sm font-medium text-gray-400">Add your photo</p>
-                  <p className="text-xs text-gray-600 mt-1">Paste an image URL</p>
+                  <p className="text-xs text-gray-600 mt-1">Upload from your files</p>
                 </div>
               )}
             </div>
@@ -913,13 +1009,10 @@ export default function CardProfilePage() {
                   )}
                 </div>
                 <button
-                  onClick={() => {
-                    setImageUrlInput(imageUrl ?? "");
-                    setShowImageModal(true);
-                  }}
+                  onClick={() => openImageModal(imageUrl)}
                   className="w-full px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-100 rounded-lg text-sm font-medium transition-colors"
                 >
-                  {imageUrl ? "Change Image URL" : "Set Image URL"}
+                  {imageUrl ? "Change Image" : "Set Image"}
                 </button>
               </div>
             )}
@@ -932,13 +1025,10 @@ export default function CardProfilePage() {
                   Edit Details
                 </Link>
                 <button
-                  onClick={() => {
-                    setImageUrlInput(imageUrl ?? "");
-                    setShowImageModal(true);
-                  }}
+                  onClick={() => openImageModal(imageUrl)}
                   className="flex-1 px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-100 rounded-lg text-sm font-medium transition-colors"
                 >
-                  {imageUrl ? "Change Image URL" : "Set Image URL"}
+                  {imageUrl ? "Change Image" : "Set Image"}
                 </button>
               </div>
             )}
@@ -1417,30 +1507,86 @@ export default function CardProfilePage() {
         </div>
       )}
 
-      {/* ── Image URL Modal ─────────────────────────────────────── */}
+      {/* ── Image Modal ─────────────────────────────────────── */}
       {showImageModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
           <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-lg">
-            <h3 className="text-lg font-semibold mb-4">Set Image URL</h3>
-            <div className="space-y-2">
-              <label className="block text-sm text-gray-400">
-                Image URL (https://...)
-              </label>
-              <input
-                type="url"
-                value={imageUrlInput}
-                onChange={(e) => setImageUrlInput(e.target.value)}
-                placeholder="https://..."
-                autoFocus
-                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-              />
-              <p className="text-xs text-gray-500">
-                Leave blank to remove your custom image override.
-              </p>
+            <h3 className="text-lg font-semibold mb-4">Set Image</h3>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="block text-sm text-gray-400">
+                  Upload from your files
+                </label>
+                <input
+                  ref={imageFilePickerRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageFileSelection}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => imageFilePickerRef.current?.click()}
+                  className="w-full px-3 py-2 border border-gray-700 rounded-lg text-gray-200 hover:bg-gray-800 text-sm text-left"
+                >
+                  {imageFileInput ? imageFileInput.name : "Choose image file"}
+                </button>
+                {imageFilePreviewUrl && (
+                  <img
+                    src={imageFilePreviewUrl}
+                    alt="Selected upload preview"
+                    className="w-full max-h-52 object-contain rounded-lg border border-gray-800 bg-gray-950"
+                  />
+                )}
+                {imageFileInput && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setImageFileInput(null);
+                      if (imageFilePickerRef.current) {
+                        imageFilePickerRef.current.value = "";
+                      }
+                    }}
+                    className="text-xs text-gray-400 hover:text-gray-200"
+                  >
+                    Clear selected file
+                  </button>
+                )}
+              </div>
+              <div className="space-y-2">
+                <label className="block text-sm text-gray-400">
+                  Or paste an image URL (optional)
+                </label>
+                <input
+                  type="url"
+                  value={imageUrlInput}
+                  onChange={(e) => {
+                    setImageUrlInput(e.target.value);
+                    if (imageFileInput) {
+                      setImageFileInput(null);
+                      if (imageFilePickerRef.current) {
+                        imageFilePickerRef.current.value = "";
+                      }
+                    }
+                  }}
+                  placeholder="https://..."
+                  autoFocus
+                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                />
+                <p className="text-xs text-gray-500">
+                  Leave both file and URL blank to remove your custom image.
+                </p>
+              </div>
             </div>
             <div className="flex gap-3 mt-5">
               <button
-                onClick={() => setShowImageModal(false)}
+                onClick={() => {
+                  setShowImageModal(false);
+                  setImageFileInput(null);
+                  if (imageFilePickerRef.current) {
+                    imageFilePickerRef.current.value = "";
+                  }
+                }}
                 className="flex-1 px-4 py-2 border border-gray-700 rounded-lg text-gray-300 hover:bg-gray-800"
               >
                 Cancel

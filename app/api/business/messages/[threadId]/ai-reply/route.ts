@@ -28,12 +28,13 @@ export async function POST(
   const { threadId } = await params;
   const body = await req.json();
   const tone = (body.tone ?? "professional") as AIReplyTone;
+  const hint = typeof body.hint === "string" ? body.hint.trim() : undefined;
 
   if (!VALID_TONES.includes(tone)) {
     return NextResponse.json({ error: "Invalid tone" }, { status: 400 });
   }
 
-  const reply = await generateAIReply(user.id, threadId, tone);
+  const result = await generateAIReply(user.id, threadId, tone, hint);
 
-  return NextResponse.json({ reply });
+  return NextResponse.json({ reply: result.text, source: result.source });
 }

@@ -74,7 +74,7 @@ function LoginForm() {
               Comp, grade, and execute.
             </h1>
             <p className="mt-4 text-sm text-gray-400">
-              Sign in to continue with your pricing workflows, grading decisions, and portfolio
+              Sign in to continue with your pricing workflows, grading decisions, and inventory
               operations.
             </p>
             <ul className="mt-6 space-y-3 text-sm text-gray-300">

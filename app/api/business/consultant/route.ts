@@ -16,6 +16,7 @@ interface ConsultantRequest {
   prompt: string;
   context?: string | null;
   template_key?: string | null;
+  mode_hint?: "chat" | "report" | null;
 }
 
 const CONSULTATION_HISTORY_LIMIT = 25;
@@ -90,6 +91,7 @@ export async function POST(request: NextRequest) {
     const prompt = body?.prompt?.trim();
     const context = body?.context?.trim() || "";
     const templateKey = body?.template_key?.trim() || null;
+    const modeHint = body?.mode_hint ?? null;
 
     if (!prompt) {
       return NextResponse.json(
@@ -150,26 +152,38 @@ export async function POST(request: NextRequest) {
 
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-20250514",
-      max_tokens: 1800,
+      max_tokens: 4096,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      tools: [{ type: "web_search_20250305", name: "web_search" }] as any,
       system: `${BUSINESS_CONSULTANT_MASTER_PROMPT}
-
+${modeHint === "report" ? '\nMODE OVERRIDE: Always set response_mode to "report" for this request, regardless of question type.\n' : ""}
 ADDITIONAL EXECUTION RULES:
 - Use only the provided BUSINESS DATA JSON.
 - If a requested metric is not present in the JSON, explicitly mark it as a Constraint.
 - Distinguish deterministic values from directional estimates.
 
+RESPONSE MODE SELECTION:
+- Use "answer" for: direct or conversational questions ("where", "how do I", "what should I do about X", single-topic questions, sourcing/logistics questions).
+- Use "report" for: broad business analysis, inventory health reviews, liquidity/pricing/grading strategy, multi-faceted assessments, template-driven requests.
+
 OUTPUT FORMAT (STRICT):
 - Respond with a single JSON object ONLY (no markdown, no code fences, no commentary).
 - The JSON MUST conform to this schema:
 {
+  "response_mode": "report" | "answer",
   "report_title": string,
   "timestamp": string,
   "data_coverage": { "inventory_count": number, "sales_count": number, "missing": string[] },
+  "answer": string | null,
+  "key_points": string[],
   "kpis": [{ "label": string, "value": string, "hint": string }],
   "high_risk_positions": [{ "item": string, "cost_basis": number, "cmv": number, "delta_pct": number, "reason": string }],
   "recommended_actions": [{ "action": string, "impact": string, "effort": "low"|"medium"|"high" }],
   "notes": string[]
 }
+- When response_mode is "answer": populate "answer" (direct paragraph response to the question) and "key_points" (supporting bullet points); "kpis" and "high_risk_positions" should be empty arrays.
+- When response_mode is "report": populate "kpis" and "high_risk_positions" as needed; "answer" should be null and "key_points" should be an empty array.
+- "recommended_actions" and "notes" may be used in both modes.
 - Arrays may be empty, but all keys must be present.
 - All numeric fields must be numbers (not strings).
 - The JSON must be parseable with a standard JSON parser without any preprocessing.`,
@@ -191,6 +205,8 @@ ${JSON.stringify(businessContext, null, 2)}`,
       ],
     });
 
+    // Filter to text blocks only — web_search_tool_result and tool_use blocks are
+    // intermediate steps and should not be included in the final response text.
     const textBlocks = response.content.filter((block) => block.type === "text");
     const modelText =
       textBlocks.length > 0

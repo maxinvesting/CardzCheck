@@ -35,6 +35,8 @@ interface GradeProbabilityPanelProps {
   scanPhotos?: GradeScanPhoto[] | null;
   showPreliminaryBadge?: boolean;
   compact?: boolean;
+  /** Correction text applied during a refinement re-run — shows a "Refined" badge */
+  appliedRefinement?: string | null;
 }
 
 const PSA_ORDER = ["PSA 10", "PSA 9", "PSA 8", "PSA 7 or lower"];
@@ -384,6 +386,7 @@ export default function GradeProbabilityPanel({
   scanPhotos,
   showPreliminaryBadge,
   compact = false,
+  appliedRefinement,
 }: GradeProbabilityPanelProps) {
   const confidence = estimate.grade_probabilities?.confidence;
 
@@ -532,6 +535,13 @@ export default function GradeProbabilityPanel({
               <span className="mt-1 inline-flex items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-400">
                 Preliminary
               </span>
+            )}
+            {appliedRefinement && (
+              <span
+                title={`Refined with: "${appliedRefinement}"`}
+                className="mt-1 inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-400 cursor-help"
+              >
+                ✦ Refined</span>
             )}
           </div>
 
