@@ -3,9 +3,16 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Playfair_Display } from "next/font/google";
+import dynamic from "next/dynamic";
 import { useAuth } from "@/contexts/AuthContext";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import GradeEstimatorHistoryPanel from "@/components/grading/GradeEstimatorHistoryPanel";
+
+// Lazy-load the heavy submission builder only when the tab is active
+const SubmissionsTabContent = dynamic(
+  () => import("@/components/grading/SubmissionsTabContent"),
+  { ssr: false, loading: () => <div className="py-12 text-center text-sm text-gray-400">Loading submissions…</div> }
+);
 
 const playfair = Playfair_Display({ subsets: ["latin"], weight: ["400", "600"] });
 
@@ -20,7 +27,7 @@ type CreditStatus = {
   nextGrantAt: string | null;
 };
 
-type Tab = "scan" | "batch" | "history";
+type Tab = "scan" | "batch" | "history" | "submissions";
 
 function formatTimeUntil(iso: string | null): string {
   if (!iso) return "";
@@ -59,6 +66,7 @@ export default function GradeHubPage() {
     { key: "scan", label: "Scan a card", show: true },
     { key: "batch", label: "Batch scan", show: isBusiness },
     { key: "history", label: "History", show: true },
+    { key: "submissions", label: "Submissions", show: true },
   ];
 
   return (
@@ -420,8 +428,13 @@ export default function GradeHubPage() {
             </div>
           )}
 
+          {/* ── Tab: Submissions ──────────────────────────────────────── */}
+          {activeTab === "submissions" && (
+            <SubmissionsTabContent />
+          )}
+
           {/* Recent scans preview on scan/batch tabs */}
-          {activeTab !== "history" && (
+          {activeTab !== "history" && activeTab !== "submissions" && (
             <div>
               <div className="flex items-center justify-between mb-4">
                 <h2

@@ -316,7 +316,7 @@ function ConsultantReportView({
 
       {isAnswerMode && report.answer && (
         <div className="rounded-[16px] border border-white/10 bg-white/[0.03] px-5 py-4 space-y-3">
-          <p className="text-sm leading-7 text-[var(--biz-text)]">{report.answer}</p>
+          <p className="whitespace-pre-line text-sm leading-7 text-[var(--biz-text)]">{report.answer}</p>
           {report.key_points.length > 0 && (
             <ul className="space-y-1.5 border-t border-white/10 pt-3">
               {report.key_points.map((point, idx) => (
