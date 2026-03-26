@@ -4,7 +4,7 @@ import { requireBusinessOwnerContext } from "@/lib/business/context";
 import {
   getMessagingOverview,
 } from "@/lib/messaging/service";
-import { isEbayConnected } from "@/lib/messaging/adapters/ebay";
+import { clearEbayMessagingCache, isEbayConnected } from "@/lib/messaging/adapters/ebay";
 import type { ThreadFilter } from "@/lib/messaging/types";
 
 const VALID_FILTERS: ThreadFilter[] = [
@@ -25,6 +25,7 @@ export async function GET(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  console.info("[dbg:messages_api] auth_ok", { hasUser: true, ts: Date.now() });
   try {
     await requireBusinessOwnerContext(user.id);
   } catch (error) {
@@ -40,10 +41,28 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Invalid filter" }, { status: 400 });
   }
 
-  const [overview, ebayConnected] = await Promise.all([
+  let [overview, ebayConnected] = await Promise.all([
     getMessagingOverview(user.id, filter),
     isEbayConnected(user.id),
   ]);
+
+  if (ebayConnected && overview.stats.total_threads === 0 && overview.threads.length === 0) {
+    clearEbayMessagingCache(user.id);
+    overview = await getMessagingOverview(user.id, filter);
+    console.info("[dbg:messages_api] retried_after_empty", {
+      filter,
+      totalThreads: overview.stats.total_threads,
+      returnedThreads: overview.threads.length,
+      ts: Date.now(),
+    });
+  }
+  console.info("[dbg:messages_api] overview", {
+    filter,
+    ebayConnected,
+    totalThreads: overview.stats.total_threads,
+    returnedThreads: overview.threads.length,
+    ts: Date.now(),
+  });
 
   return NextResponse.json({
     stats: overview.stats,

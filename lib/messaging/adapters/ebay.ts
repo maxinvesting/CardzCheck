@@ -8,7 +8,7 @@
  * Falls back gracefully if a scope is not granted on the current token.
  */
 
-import { ebayFetch } from "@/lib/ebay/selling/client";
+import { ebayFetch, getValidToken } from "@/lib/ebay/selling/client";
 import type {
   MessageThread,
   Message,
@@ -24,6 +24,8 @@ type CacheEntry<T> = {
 
 const THREADS_TTL_MS = 30_000;
 const MEMBER_EXCHANGES_TTL_MS = 20_000;
+const EMPTY_THREADS_TTL_MS = 2_000;
+const EMPTY_MEMBER_EXCHANGES_TTL_MS = 2_000;
 const memberExchangeCache = new Map<string, CacheEntry<ParsedMemberMessage[]>>();
 const threadCache = new Map<string, CacheEntry<MessageThread[]>>();
 
@@ -50,6 +52,10 @@ function setCachedValue<T>(
 function invalidateUserMessagingCaches(userId: string) {
   memberExchangeCache.delete(userId);
   threadCache.delete(userId);
+}
+
+export function clearEbayMessagingCache(userId: string) {
+  invalidateUserMessagingCaches(userId);
 }
 
 // ─── Post Order API types ─────────────────────────────────────────────────────
@@ -313,18 +319,32 @@ async function fetchPostOrderInquiries(
     );
 
     if (res.status === 403 || res.status === 401) {
-      // Scope not granted — silently return empty
-      console.info("[ebay/messaging] Post Order scope not granted, skipping inquiries");
-      return [];
+      // Scope not granted for this endpoint on this token.
+      // Continue other statuses and rely on Trading API messages if available.
+      console.info("[ebay/messaging] Post Order scope not granted for status", {
+        status,
+        code: res.status,
+      });
+      continue;
     }
-      if (!res.ok) continue;
+      if (!res.ok) {
+        console.info("[ebay/messaging] Post Order request failed", {
+          status,
+          code: res.status,
+        });
+        continue;
+      }
 
     const data = (await res.json()) as EbayInquiryListResponse;
       for (const inquiry of data.inquiries ?? []) {
         const mapped = mapInquiryToThread(inquiry, userId);
         merged.set(mapped.id, mapped);
       }
-    } catch {
+    } catch (error) {
+      console.info("[ebay/messaging] Post Order request error", {
+        status,
+        error: error instanceof Error ? error.message : "unknown",
+      });
       continue;
     }
   }
@@ -493,7 +513,9 @@ async function fetchMemberMessageExchanges(
       memberExchangeCache,
       userId,
       exchanges,
-      MEMBER_EXCHANGES_TTL_MS
+      exchanges.length > 0
+        ? MEMBER_EXCHANGES_TTL_MS
+        : EMPTY_MEMBER_EXCHANGES_TTL_MS
     );
   } catch (err) {
     console.warn("[ebay/messaging] GetMemberMessages error:", err);
@@ -618,16 +640,19 @@ async function getSellerEbayUsername(userId: string): Promise<string | null> {
 // Helper: get raw access token for Trading API
 async function getValidTokenForUser(userId: string): Promise<string | null> {
   try {
-    const { createClient } = await import("@/lib/supabase/server");
-    const supabase = await createClient();
-    const { data } = await supabase
-      .from("ebay_accounts")
-      .select("access_token, is_active")
-      .eq("user_id", userId)
-      .eq("is_active", true)
-      .maybeSingle();
-    return data?.access_token ?? null;
+    const token = await getValidToken(userId);
+    const hasToken = !!token;
+    console.info("[dbg:ebay_token] lookup", {
+      userIdSuffix: userId.slice(-6),
+      hasToken,
+      ts: Date.now(),
+    });
+    return token ?? null;
   } catch {
+    console.info("[dbg:ebay_token] lookup_error", {
+      userIdSuffix: userId.slice(-6),
+      ts: Date.now(),
+    });
     return null;
   }
 }
@@ -653,7 +678,14 @@ export async function isEbayConnected(userId: string): Promise<boolean> {
 
 export async function getEbayThreads(userId: string): Promise<MessageThread[]> {
   const cached = getCachedValue(threadCache, userId);
-  if (cached) return cached;
+  if (cached) {
+    console.info("[dbg:ebay_threads] cache_hit", {
+      userIdSuffix: userId.slice(-6),
+      cachedCount: cached.length,
+      ts: Date.now(),
+    });
+    return cached;
+  }
 
   // Fetch from both APIs in parallel; combine results
   const [inquiries, memberMessages] = await Promise.all([
@@ -666,7 +698,19 @@ export async function getEbayThreads(userId: string): Promise<MessageThread[]> {
   const sorted = all.sort(
     (a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime()
   );
-  return setCachedValue(threadCache, userId, sorted, THREADS_TTL_MS);
+  console.info("[dbg:ebay_threads] fetched", {
+    userIdSuffix: userId.slice(-6),
+    inquiryCount: inquiries.length,
+    memberMessageCount: memberMessages.length,
+    totalCount: sorted.length,
+    ts: Date.now(),
+  });
+  return setCachedValue(
+    threadCache,
+    userId,
+    sorted,
+    sorted.length > 0 ? THREADS_TTL_MS : EMPTY_THREADS_TTL_MS
+  );
 }
 
 export async function getEbayThread(

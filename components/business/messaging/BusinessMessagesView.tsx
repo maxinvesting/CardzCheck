@@ -93,7 +93,9 @@ export default function BusinessMessagesView({
     setGeneratedReply(null);
     setSendError(null);
     try {
-      const res = await fetch(`/api/business/messages/${threadId}`);
+      const res = await fetch(`/api/business/messages/${threadId}`, {
+        cache: "no-store",
+      });
       if (res.ok) {
         const data = await res.json();
         setSelectedThread(data.thread);
@@ -125,7 +127,9 @@ export default function BusinessMessagesView({
       setSelectedThread(null);
       setMessages([]);
       try {
-        const res = await fetch(`/api/business/messages?filter=${f}`);
+        const res = await fetch(`/api/business/messages?filter=${f}`, {
+          cache: "no-store",
+        });
         if (res.ok) {
           const data = await res.json();
           setThreads(data.threads);
@@ -145,7 +149,9 @@ export default function BusinessMessagesView({
   const refreshThreadList = useCallback(async () => {
     setListRefreshing(true);
     try {
-      const res = await fetch(`/api/business/messages?filter=${filter}`);
+      const res = await fetch(`/api/business/messages?filter=${filter}`, {
+        cache: "no-store",
+      });
       if (!res.ok) return;
       const data = await res.json();
       setThreads(data.threads);
