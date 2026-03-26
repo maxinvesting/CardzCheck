@@ -17,6 +17,7 @@ function BusinessMessagesContent() {
   const [ebayConnected, setEbayConnected] = useState<boolean | null>(null);
   const [msgError, setMsgError] = useState<string | null>(null);
   const [businessName, setBusinessName] = useState<string | null>(null);
+  const [syncRetriedAfterEmpty, setSyncRetriedAfterEmpty] = useState(false);
 
   const loadData = useCallback(async () => {
     setMsgError(null);
@@ -68,6 +69,7 @@ function BusinessMessagesContent() {
         setStats(data.stats);
         setThreads(data.threads);
         setEbayConnected(data.ebayConnected ?? false);
+        setSyncRetriedAfterEmpty(Boolean(data?.sync?.retriedAfterEmpty));
       } else {
         setMsgError(`Failed to load messages (${msgRes.status})`);
       }
@@ -199,6 +201,7 @@ function BusinessMessagesContent() {
           initialStats={stats}
           initialThreads={threads}
           businessName={businessName}
+          initialSyncRetriedAfterEmpty={syncRetriedAfterEmpty}
         />
       </main>
     </AuthenticatedLayout>

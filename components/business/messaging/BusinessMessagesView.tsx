@@ -16,12 +16,14 @@ interface Props {
   initialStats: MessagingStats;
   initialThreads: MessageThread[];
   businessName?: string | null;
+  initialSyncRetriedAfterEmpty?: boolean;
 }
 
 export default function BusinessMessagesView({
   initialStats,
   initialThreads,
   businessName,
+  initialSyncRetriedAfterEmpty = false,
 }: Props) {
   const [stats] = useState<MessagingStats>(initialStats);
   const [threads, setThreads] = useState<MessageThread[]>(initialThreads);
@@ -44,6 +46,9 @@ export default function BusinessMessagesView({
   const [unreadOnly, setUnreadOnly] = useState(false);
   const [pinnedThreadIds, setPinnedThreadIds] = useState<string[]>([]);
   const [listRefreshing, setListRefreshing] = useState(false);
+  const [syncRetriedAfterEmpty, setSyncRetriedAfterEmpty] = useState(
+    initialSyncRetriedAfterEmpty
+  );
   const selectedThreadMeta = useMemo(
     () => threads.find((thread) => thread.id === selectedId) ?? null,
     [threads, selectedId]
@@ -133,6 +138,7 @@ export default function BusinessMessagesView({
         if (res.ok) {
           const data = await res.json();
           setThreads(data.threads);
+          setSyncRetriedAfterEmpty(Boolean(data?.sync?.retriedAfterEmpty));
           const first = data.threads?.[0];
           if (first?.id) {
             setSelectedId(first.id);
@@ -155,6 +161,7 @@ export default function BusinessMessagesView({
       if (!res.ok) return;
       const data = await res.json();
       setThreads(data.threads);
+      setSyncRetriedAfterEmpty(Boolean(data?.sync?.retriedAfterEmpty));
       const selectedStillExists = data.threads.some((thread: MessageThread) => thread.id === selectedId);
       if (!selectedStillExists && data.threads[0]?.id) {
         setSelectedId(data.threads[0].id);
@@ -294,6 +301,13 @@ export default function BusinessMessagesView({
           </p>
         </div>
       </div>
+      {syncRetriedAfterEmpty ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-2.5">
+          <p className="text-xs text-amber-800">
+            We hit a temporary inbox sync hiccup and automatically retried. If messages still look incomplete, click refresh.
+          </p>
+        </div>
+      ) : null}
 
       {/* Outlook-style control row */}
       <div className="rounded-2xl border border-[var(--biz-border)] bg-white px-4 py-3 shadow-sm">
