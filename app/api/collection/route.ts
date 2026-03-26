@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { LIMITS, type AcquisitionType, type CollectionItem } from "@/types";
 import { isTestMode } from "@/lib/test-mode";
-import { calculateCardCmv, isCmvStale } from "@/lib/cmv";
+import { calculateCardCmv } from "@/lib/cmv";
 import { logDebug, redactId } from "@/lib/logging";
 import { normalizeHttpUrl, resolveStoredImagePath, uniqueHttpUrls } from "@/lib/collection-images";
 import { hasBusinessAccess } from "@/lib/access";
@@ -181,61 +181,13 @@ export async function GET() {
       });
     });
 
-    const updatedItems = await Promise.all(
-      (items || []).map(async (item: CollectionItem) => {
-        const itemWithImage = {
-          ...item,
-          primary_image: primaryImageMap.get(item.id) || null,
-        };
+    const hydratedItems = (items || []).map((item: CollectionItem) => ({
+      ...item,
+      primary_image: primaryImageMap.get(item.id) || null,
+    }));
 
-        const stale = isCmvStale(item);
-        logDebug("🔍 CMV staleness check", {
-          id: redactId(item.id),
-          player: item.player_name,
-          stale,
-          cmv_confidence: (item as any).cmv_confidence ?? "MISSING",
-          cmv_last_updated: (item as any).cmv_last_updated ?? "MISSING",
-          estimated_cmv: (item as any).estimated_cmv ?? "MISSING",
-          est_cmv: (item as any).est_cmv ?? "MISSING",
-        });
-
-        if (!stale) {
-          return itemWithImage;
-        }
-
-        try {
-          const cmvResult = await calculateCardCmv(item);
-          logDebug("🔄 CMV recalculated", {
-            id: redactId(item.id),
-            result_estimated_cmv: cmvResult.estimated_cmv,
-            result_confidence: cmvResult.cmv_confidence,
-          });
-
-          const { data: updated, error: updateError } = await supabase
-            .from("collection_items")
-            .update(cmvResult)
-            .eq("id", item.id)
-            .eq("user_id", user.id)
-            .select("*")
-            .single();
-
-          if (updateError) {
-            console.error("Failed to update CMV for item:", redactId(item.id), updateError);
-            return itemWithImage;
-          }
-          return {
-            ...updated,
-            primary_image: primaryImageMap.get(item.id) || null,
-          };
-        } catch (cmvError) {
-          console.error("CMV calculation failed for item:", redactId(item.id), cmvError);
-          return itemWithImage;
-        }
-      })
-    );
-
-    if (updatedItems.length > 0) {
-      const first = updatedItems[0] as any;
+    if (hydratedItems.length > 0) {
+      const first = hydratedItems[0] as any;
       logDebug("💰 GET collection first row CMV", {
         id: redactId(first.id),
         player: first.player_name,
@@ -245,7 +197,7 @@ export async function GET() {
       });
     }
 
-    return NextResponse.json({ items: updatedItems });
+    return NextResponse.json({ items: hydratedItems });
   } catch (error) {
     console.error("Collection fetch error:", error);
     return NextResponse.json(

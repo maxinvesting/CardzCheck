@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { getCurrentUserCached } from "@/lib/current-user-client";
 
 const MAIN_TABS = [
   { name: "Home", href: "/dashboard", icon: HomeIcon },
@@ -95,19 +95,10 @@ export default function BottomTabBar() {
   const [isAdminUser, setIsAdminUser] = useState(false);
 
   useEffect(() => {
-    const supabase = createClient();
-    supabase.auth.getUser().then(({ data: { user: authUser } }) => {
-      if (!authUser) return;
-      supabase
-        .from("users")
-        .select("app_role")
-        .eq("id", authUser.id)
-        .single()
-        .then(({ data }) => {
-          if (data?.app_role === "admin" || data?.app_role === "owner") {
-            setIsAdminUser(true);
-          }
-        });
+    getCurrentUserCached().then((user) => {
+      if (user?.app_role === "admin" || user?.app_role === "owner") {
+        setIsAdminUser(true);
+      }
     });
   }, []);
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import CompactMetricsRow from "@/components/dashboard/CompactMetricsRow";
@@ -14,7 +14,6 @@ import PaywallModal from "@/components/PaywallModal";
 import { createClient } from "@/lib/supabase/client";
 import type { User, CollectionItem } from "@/types";
 import { isTestMode, getTestUser } from "@/lib/test-mode";
-import { getEstCmv } from "@/lib/values";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -27,6 +26,9 @@ export default function DashboardPage() {
     type: "success" | "error";
     message: string;
   } | null>(null);
+  const refreshInFlightRef = useRef(false);
+  const lastRefreshAtRef = useRef(0);
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Auto-dismiss toast
   useEffect(() => {
@@ -85,6 +87,11 @@ export default function DashboardPage() {
   const refreshCollection = useCallback(async () => {
     // Don't hit API when we're not logged in (avoids 401 / "Failed to fetch" on focus)
     if (!user && !isTestMode()) return;
+    const now = Date.now();
+    if (refreshInFlightRef.current || now - lastRefreshAtRef.current < 1500) {
+      return;
+    }
+    refreshInFlightRef.current = true;
     try {
       const response = await fetch("/api/collection", {
         cache: "no-store",
@@ -100,47 +107,40 @@ export default function DashboardPage() {
       }
     } catch (error) {
       console.error("Failed to refresh collection:", error);
+    } finally {
+      lastRefreshAtRef.current = Date.now();
+      refreshInFlightRef.current = false;
     }
   }, [user]);
 
   useEffect(() => {
+    const scheduleRefresh = () => {
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+      }
+      refreshTimerRef.current = setTimeout(() => {
+        refreshCollection();
+      }, 120);
+    };
+
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
-        refreshCollection();
+        scheduleRefresh();
       }
     };
     const handleFocus = () => {
-      refreshCollection();
+      scheduleRefresh();
     };
     window.addEventListener("focus", handleFocus);
     document.addEventListener("visibilitychange", handleVisibility);
     return () => {
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+      }
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, [refreshCollection]);
-
-  const needsCmvRefresh = useMemo(() => {
-    return collectionItems.some((item) => {
-      const compsCount = (item as { comps_count?: number | null }).comps_count;
-      return typeof compsCount === "number" && compsCount > 0 && getEstCmv(item) === null;
-    });
-  }, [collectionItems]);
-
-  useEffect(() => {
-    if (!needsCmvRefresh) return;
-    let attempts = 0;
-    const maxAttempts = 6;
-    const interval = setInterval(async () => {
-      attempts += 1;
-      await refreshCollection();
-      if (attempts >= maxAttempts) {
-        clearInterval(interval);
-      }
-    }, 10000);
-
-    return () => clearInterval(interval);
-  }, [needsCmvRefresh, refreshCollection]);
 
   const userName = user?.name || (user?.email ? user.email.split("@")[0] : "");
 

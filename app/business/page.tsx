@@ -152,7 +152,6 @@ function BusinessDashboardContent() {
 
   const loadUserProfile = useCallback(async () => {
     const supabase = createClient();
-    await supabase.auth.refreshSession();
     const {
       data: { user },
     } = await supabase.auth.getUser();

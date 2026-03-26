@@ -130,6 +130,29 @@ async function checkRateLimit(
 // Middleware entry point
 // ---------------------------------------------------------------------------
 export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  // API routes already perform auth checks in their handlers.
+  // Skipping session refresh here avoids an extra auth round-trip per API request.
+  if (pathname.startsWith("/api/")) {
+    const apiRateLimit = await checkRateLimit(request, null);
+    if (apiRateLimit.limited) {
+      return NextResponse.json(
+        {
+          error: "Rate limit exceeded",
+          message: "Too many requests. Please retry after a short wait.",
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(apiRateLimit.retryAfterSeconds || 60),
+          },
+        }
+      );
+    }
+    return NextResponse.next();
+  }
+
   const { response, userId } = await updateSession(request);
   const rateLimit = await checkRateLimit(request, userId);
 

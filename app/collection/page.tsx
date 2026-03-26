@@ -56,6 +56,9 @@ export default function CollectionPage() {
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const refreshInFlightRef = useRef(false);
+  const lastRefreshAtRef = useRef(0);
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Auto-dismiss toast after 3 seconds
   useEffect(() => {
@@ -125,25 +128,49 @@ export default function CollectionPage() {
   };
 
   const refreshCollection = useCallback(async () => {
-    const response = await fetch("/api/collection", { cache: "no-store" });
-    const data = await response.json();
-    if (data.items) {
-      setItems(data.items);
+    const now = Date.now();
+    if (refreshInFlightRef.current || now - lastRefreshAtRef.current < 1500) {
+      return;
+    }
+    refreshInFlightRef.current = true;
+    try {
+      const response = await fetch("/api/collection", { cache: "no-store" });
+      const data = await response.json();
+      if (data.items) {
+        setItems(data.items);
+      }
+    } catch (error) {
+      console.error("Failed to refresh collection:", error);
+    } finally {
+      lastRefreshAtRef.current = Date.now();
+      refreshInFlightRef.current = false;
     }
   }, []);
 
   useEffect(() => {
+    const scheduleRefresh = () => {
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+      }
+      refreshTimerRef.current = setTimeout(() => {
+        refreshCollection();
+      }, 120);
+    };
+
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
-        refreshCollection();
+        scheduleRefresh();
       }
     };
     const handleFocus = () => {
-      refreshCollection();
+      scheduleRefresh();
     };
     window.addEventListener("focus", handleFocus);
     document.addEventListener("visibilitychange", handleVisibility);
     return () => {
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+      }
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
@@ -473,28 +500,6 @@ export default function CollectionPage() {
     }
     return sorted;
   }, [items, filterQuery, searchQuery, sortBy]);
-
-  const needsCmvRefresh = useMemo(() => {
-    return items.some((item) => {
-      const compsCount = (item as { comps_count?: number | null }).comps_count;
-      return typeof compsCount === "number" && compsCount > 0 && getEstCmv(item) === null;
-    });
-  }, [items]);
-
-  useEffect(() => {
-    if (!needsCmvRefresh) return;
-    let attempts = 0;
-    const maxAttempts = 6;
-    const interval = setInterval(async () => {
-      attempts += 1;
-      await refreshCollection();
-      if (attempts >= maxAttempts) {
-        clearInterval(interval);
-      }
-    }, 10000);
-
-    return () => clearInterval(interval);
-  }, [needsCmvRefresh, refreshCollection]);
 
   const handleAddFromPicker = async (card: CardPickerSelection) => {
     setCardPickerError(null);

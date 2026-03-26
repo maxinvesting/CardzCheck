@@ -3,9 +3,9 @@
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import type { User } from "@/types";
 import PricingModal from "@/components/PricingModal";
+import { getCurrentUserCached } from "@/lib/current-user-client";
 
 type NavItem = {
   name: string;
@@ -253,28 +253,16 @@ export default function Sidebar() {
 
   useEffect(() => {
     async function loadUser() {
-      const supabase = createClient();
-      const {
-        data: { user: authUser },
-      } = await supabase.auth.getUser();
-
-      if (!authUser) {
+      const currentUser = await getCurrentUserCached();
+      if (!currentUser) {
         setUser(null);
         setRemainingSearches(null);
         return;
       }
 
-      const { data } = await supabase
-        .from("users")
-        .select("*")
-        .eq("id", authUser.id)
-        .single();
-
-      if (!data) return;
-
-      setUser(data);
-      if (!data.is_paid) {
-        setRemainingSearches(3 - (data.free_searches_used || 0));
+      setUser(currentUser);
+      if (!currentUser.is_paid) {
+        setRemainingSearches(3 - (currentUser.free_searches_used || 0));
       } else {
         setRemainingSearches(null);
       }
