@@ -442,7 +442,7 @@ function ConsultantReportView({
 
 // ─── Main component ──────────────────────────────────────────────────────────
 
-export default function BusinessConsultantPanel() {
+export default function BusinessConsultantPanel({ initialPrompt }: { initialPrompt?: string } = {}) {
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>("chat");
@@ -472,6 +472,14 @@ export default function BusinessConsultantPanel() {
       clearTimeout(acknowledgeTimeoutRef.current);
       acknowledgeTimeoutRef.current = null;
     }
+  }, []);
+
+  // Pre-fill prompt from URL param (passed from ledger action buttons)
+  useEffect(() => {
+    if (initialPrompt?.trim()) {
+      setPrompt(initialPrompt.trim());
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadConsultations = useCallback(async () => {

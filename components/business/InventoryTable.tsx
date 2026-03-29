@@ -103,6 +103,8 @@ interface Props {
   ebayTopRated?: boolean;
   /** Whether an active eBay account is connected — gates the List eBay button */
   ebayConnected?: boolean;
+  /** List-view mode: hides Channel, Storage, Acquired columns and colors Est. MV cell */
+  listView?: boolean;
 }
 
 const STATUS_OPTIONS = ["unlisted", "listed", "pending_sale", "sold", "returned"] as const;
@@ -227,6 +229,7 @@ export default function InventoryTable({
   perfEnabled = false,
   ebayTopRated = false,
   ebayConnected = false,
+  listView = false,
 }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
@@ -248,6 +251,14 @@ export default function InventoryTable({
   const [sortKey, setSortKey] = useState<SortableColumnKey | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
+
+  const displayColumns = useMemo(
+    () =>
+      listView
+        ? COLUMNS.filter((c) => !["channel", "location", "acquisition_date"].includes(c.key))
+        : COLUMNS,
+    [listView]
+  );
 
   const handleFetchCmv = async (item: BusinessInventoryItem) => {
     if (item.current_market_value_cents != null && item.current_market_value_cents > 0) return;
@@ -489,6 +500,16 @@ export default function InventoryTable({
         return <span className="italic text-[var(--biz-muted)] text-xs">{emptyPlaceholder(field)}</span>;
       }
       return <span className="tabular-nums">{formatted}</span>;
+    }
+    if (field === "current_market_value_cents" && listView) {
+      const mv = item.current_market_value_cents;
+      const cost = item.cost_basis_total_cents;
+      const color = mv == null || mv <= 0 ? "#AAA" : mv > cost ? "#2D7A4F" : "#CC4444";
+      return (
+        <span style={{ color }} className="tabular-nums font-medium">
+          {fmtCents(mv) || "—"}
+        </span>
+      );
     }
     if (field === "current_market_value_cents") {
       const formatted = fmtCents(val);
@@ -850,7 +871,7 @@ export default function InventoryTable({
           className="rounded border-[var(--biz-border)] text-emerald-600 focus:ring-emerald-500"
         />
       </th>
-      {COLUMNS.map((col) => {
+      {displayColumns.map((col) => {
         const isSortable = Boolean(col.sortable);
         const isActiveSort = isSortable && sortKey === col.key;
         const ariaSort = isSortable
@@ -902,7 +923,7 @@ export default function InventoryTable({
           className="rounded border-[var(--biz-border)] text-emerald-600 focus:ring-emerald-500"
         />
       </td>
-      {COLUMNS.map((col) => (
+      {displayColumns.map((col) => (
         <td
           key={`${item.id}-${col.key}`}
           className={`border-l border-[var(--biz-border)] px-3 py-2 text-[var(--biz-text)] ${col.width} ${col.alignRight ? "text-right tabular-nums" : ""}`}
