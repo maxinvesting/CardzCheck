@@ -324,7 +324,14 @@ export default function Sidebar() {
             CardzCheck
           </span>
           {isBusinessWorkspace && (
-            <span className="mt-1 rounded border border-[color:var(--biz-border)] bg-[#F3F4F6] px-2 py-0.5 text-[10px] font-semibold text-[var(--biz-primary)]">
+            <span
+              className="mt-1 rounded px-2 py-0.5 text-[10px] font-bold tracking-wide"
+              style={{
+                background: "rgba(240,180,41,0.1)",
+                border: "1px solid rgba(240,180,41,0.2)",
+                color: "#f0b429",
+              }}
+            >
               Business
             </span>
           )}
@@ -338,30 +345,65 @@ export default function Sidebar() {
                 key={item.href}
                 href={item.href}
                 onClick={() => setIsOpen(false)}
-                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
                   isActive(item)
                     ? item.href.includes("/shop")
                       ? "bg-cyan-600 text-white"
                       : isBusinessWorkspace
-                      ? "border border-[color:var(--biz-border)] border-l-2 border-l-[var(--biz-primary)] bg-[#F3F4F6] text-[var(--biz-text)]"
+                      ? "text-[var(--biz-text)]"
                       : "bg-blue-600 text-white"
                     : isBusinessWorkspace
-                      ? "text-[var(--biz-muted)] hover:bg-[#F9FAFB] hover:text-[var(--biz-text)]"
+                      ? "text-[var(--biz-muted)] hover:bg-white/[0.04] hover:text-[var(--biz-text)]"
                       : "text-gray-400 hover:text-white hover:bg-gray-800"
                 }`}
+                style={
+                  isActive(item) && isBusinessWorkspace
+                    ? {
+                        background: "rgba(255,255,255,0.06)",
+                        borderLeft: "2px solid var(--biz-primary)",
+                        paddingLeft: "14px",
+                      }
+                    : {}
+                }
               >
                 {item.icon}
                 <span className="font-medium">{item.name}</span>
+                {/* AI sparkle for Business Consultant */}
+                {item.name === "Business Consultant" && isBusinessWorkspace && (
+                  <svg
+                    className="w-3.5 h-3.5 ml-1 shrink-0 opacity-60"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="#a78bfa"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M12 2l2 7h7l-6 4.5 2.3 7L12 17l-5.3 3.5L9 13 3 8.5h7z" />
+                  </svg>
+                )}
                 {item.badge && !isProFeature && (
-                  <span className={`ml-auto px-1.5 py-0.5 text-xs font-medium rounded ${
-                    item.badge === "Featured"
-                      ? isBusinessWorkspace
-                        ? "border border-amber-200 bg-amber-50 text-[var(--biz-warning)]"
-                        : "bg-blue-500/20 text-blue-400"
-                      : isBusinessWorkspace
-                        ? "border border-[color:var(--biz-border)] text-[var(--biz-muted)]"
-                        : "bg-blue-500/20 text-blue-400"
-                  }`}>
+                  <span
+                    className="ml-auto rounded px-1.5 py-0.5 text-[10px] font-bold"
+                    style={
+                      item.badge === "Featured" && isBusinessWorkspace
+                        ? {
+                            background: "rgba(240,180,41,0.12)",
+                            border: "1px solid rgba(240,180,41,0.25)",
+                            color: "#f0b429",
+                          }
+                        : isBusinessWorkspace
+                        ? {
+                            background: "rgba(255,255,255,0.06)",
+                            border: "1px solid rgba(255,255,255,0.1)",
+                            color: "#64748b",
+                          }
+                        : {
+                            background: "rgba(59,130,246,0.2)",
+                            color: "#60a5fa",
+                          }
+                    }
+                  >
                     {item.badge}
                   </span>
                 )}
@@ -393,23 +435,31 @@ export default function Sidebar() {
                   key={item.href}
                   href={item.href}
                   onClick={() => setIsOpen(false)}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                  className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
                     pathname === item.href || pathname.startsWith(`${item.href}/`)
                       ? isBusinessWorkspace
-                        ? "border border-orange-200 border-l-2 border-l-orange-500 bg-orange-50 text-orange-700"
+                        ? "text-orange-400"
                         : "bg-orange-600 text-white"
                       : isBusinessWorkspace
-                        ? "text-[var(--biz-muted)] hover:bg-[#F9FAFB] hover:text-[var(--biz-text)]"
+                        ? "text-[var(--biz-muted)] hover:bg-white/[0.04] hover:text-[var(--biz-text)]"
                         : "text-gray-400 hover:text-white hover:bg-gray-800"
                   }`}
+                  style={
+                    (pathname === item.href || pathname.startsWith(`${item.href}/`)) && isBusinessWorkspace
+                      ? { background: "rgba(251,146,60,0.08)", borderLeft: "2px solid #f97316", paddingLeft: "14px" }
+                      : {}
+                  }
                 >
                   {item.icon}
                   <span className="font-medium">{item.name}</span>
-                  <span className={`ml-auto px-1.5 py-0.5 text-[10px] font-semibold rounded ${
-                    isBusinessWorkspace
-                      ? "bg-orange-50 border border-orange-200 text-orange-600"
-                      : "bg-orange-500/20 text-orange-400"
-                  }`}>
+                  <span
+                    className="ml-auto rounded px-1.5 py-0.5 text-[10px] font-semibold"
+                    style={
+                      isBusinessWorkspace
+                        ? { background: "rgba(251,146,60,0.1)", border: "1px solid rgba(251,146,60,0.2)", color: "#fb923c" }
+                        : { background: "rgba(249,115,22,0.2)", color: "#fb923c" }
+                    }
+                  >
                     Admin
                   </span>
                 </Link>
