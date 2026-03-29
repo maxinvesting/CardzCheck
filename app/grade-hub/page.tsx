@@ -11,7 +11,8 @@ const playfair = Playfair_Display({ subsets: ["latin"], weight: ["400", "600"] }
 
 // CardzCheck blue = blue-600 (#2563eb)
 const CC_BLUE = "#2563eb";
-const GOLD = "#c8a951";
+const NAVY = "#0B1829";
+const GOLD = "#B9A96A";
 
 type CreditStatus = {
   tier: "free" | "pro" | "business";
@@ -154,7 +155,7 @@ export default function GradeHubPage() {
             </p>
             <h1
               className={playfair.className}
-              style={{ fontSize: 26, fontWeight: 600, color: CC_BLUE, lineHeight: 1.2 }}
+              style={{ fontSize: 26, fontWeight: 600, color: NAVY, lineHeight: 1.2 }}
             >
               Estimate your grade odds.
             </h1>
@@ -167,52 +168,78 @@ export default function GradeHubPage() {
           {(activeTab === "scan" || activeTab === "batch") && (
             <>
               {/* Upload zone */}
-              <div
-                style={{
-                  background: "#fff",
-                  border: "1px solid #d0d5dd",
-                  borderTop: `3px solid ${CC_BLUE}`,
-                  borderRadius: 2,
-                }}
-              >
-                {/* Main drop area */}
-                <div className="flex flex-col items-center gap-4 px-8 py-10">
-                  {/* Upload icon circle */}
-                  <div
-                    style={{
-                      width: 56,
-                      height: 56,
-                      borderRadius: "50%",
-                      border: `2px solid ${CC_BLUE}`,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: CC_BLUE,
-                    }}
-                  >
-                    <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
-                        d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-                    </svg>
-                  </div>
+              <div>
+                {/* Navy dual-slot card */}
+                <div style={{ background: NAVY, borderRadius: 2, padding: "24px" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1px 1fr" }}>
+                    {/* Front slot */}
+                    <div style={{ padding: "0 16px 0 0", display: "flex", flexDirection: "column" }}>
+                      <div
+                        style={{
+                          border: "1px dashed rgba(255,255,255,0.12)",
+                          borderRadius: 2,
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: 10,
+                          padding: "36px 16px",
+                          flex: 1,
+                        }}
+                      >
+                        <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: "rgba(255,255,255,0.28)" }}>
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6}
+                            d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                        </svg>
+                        <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px", color: "rgba(255,255,255,0.75)", margin: 0 }}>
+                          Front of card
+                        </p>
+                        <p style={{ fontSize: 11, color: "rgba(255,255,255,0.32)", textAlign: "center", margin: 0, lineHeight: 1.4 }}>
+                          Drop image or click to browse
+                        </p>
+                      </div>
+                    </div>
 
-                  <div className="text-center space-y-1.5">
-                    <p className={`${playfair.className}`} style={{ fontSize: 17, fontWeight: 600, color: "#111827" }}>
-                      Drop card images here
-                    </p>
-                    <p style={{ fontSize: 13, color: "#6b7280", lineHeight: 1.5, maxWidth: 420 }}>
-                      Upload front &amp; back for a full grade probability breakdown across PSA &amp; BGS scales.
-                    </p>
-                  </div>
+                    {/* Vertical divider */}
+                    <div style={{ background: "rgba(255,255,255,0.08)", margin: "8px 0" }} />
 
-                  {/* Factor row */}
+                    {/* Back slot */}
+                    <div style={{ padding: "0 0 0 16px", display: "flex", flexDirection: "column" }}>
+                      <div
+                        style={{
+                          border: "1px dashed rgba(255,255,255,0.12)",
+                          borderRadius: 2,
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: 10,
+                          padding: "36px 16px",
+                          flex: 1,
+                        }}
+                      >
+                        <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: "rgba(255,255,255,0.28)" }}>
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6}
+                            d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                        </svg>
+                        <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px", color: "rgba(255,255,255,0.75)", margin: 0 }}>
+                          Back of card
+                        </p>
+                        <p style={{ fontSize: 11, color: "rgba(255,255,255,0.32)", textAlign: "center", margin: 0, lineHeight: 1.4 }}>
+                          Drop image or click to browse
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Grade category pills — kept AS-IS */}
+                <div style={{ marginTop: 16 }}>
                   <div
                     style={{
                       border: "1px solid #d0d5dd",
                       borderRadius: 2,
                       display: "flex",
-                      width: "100%",
-                      maxWidth: 420,
                       overflow: "hidden",
                     }}
                   >
@@ -235,60 +262,63 @@ export default function GradeHubPage() {
                       </div>
                     ))}
                   </div>
+                </div>
 
-                  {/* CTA buttons */}
-                  <div className="flex items-center gap-3">
+                {/* CTA buttons */}
+                <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+                  <button
+                    onClick={() => canScan
+                      ? router.push(activeTab === "batch" ? "/grade-hub/scan?slots=3" : "/grade-hub/scan?slots=1")
+                      : router.push("/settings")
+                    }
+                    style={{
+                      width: "100%",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.6px",
+                      borderRadius: 2,
+                      border: "none",
+                      color: "#fff",
+                      background: canScan ? NAVY : "#9ca3af",
+                      padding: "11px 20px",
+                      cursor: canScan ? "pointer" : "not-allowed",
+                    }}
+                  >
+                    {canScan ? "Analyze Card" : "No scans left"}
+                  </button>
+                  {isBusiness && activeTab === "scan" && (
                     <button
-                      onClick={() => canScan
-                        ? router.push(activeTab === "batch" ? "/grade-hub/scan?slots=3" : "/grade-hub/scan?slots=1")
-                        : router.push("/settings")
-                      }
+                      onClick={() => canScan ? router.push("/grade-hub/scan?slots=3") : undefined}
                       style={{
+                        width: "100%",
                         fontSize: 12,
                         fontWeight: 700,
                         textTransform: "uppercase",
                         letterSpacing: "0.6px",
                         borderRadius: 2,
-                        border: "none",
-                        color: "#fff",
-                        background: canScan ? CC_BLUE : "#9ca3af",
-                        padding: "9px 20px",
+                        border: `1px solid ${NAVY}`,
+                        color: NAVY,
+                        background: "transparent",
+                        padding: "11px 20px",
                         cursor: canScan ? "pointer" : "not-allowed",
+                        opacity: canScan ? 1 : 0.5,
                       }}
                     >
-                      {canScan ? "Choose files" : "No scans left"}
+                      Batch Scan
                     </button>
-                    {isBusiness && activeTab === "scan" && (
-                      <button
-                        onClick={() => canScan ? router.push("/grade-hub/scan?slots=3") : undefined}
-                        style={{
-                          fontSize: 12,
-                          fontWeight: 700,
-                          textTransform: "uppercase",
-                          letterSpacing: "0.6px",
-                          borderRadius: 2,
-                          border: `1px solid ${CC_BLUE}`,
-                          color: CC_BLUE,
-                          background: "transparent",
-                          padding: "9px 20px",
-                          opacity: canScan ? 1 : 0.5,
-                        }}
-                      >
-                        Batch scan
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Fine print */}
-                  <p style={{ fontSize: 10, color: "#d1d5db" }}>
-                    {isBusiness
-                      ? "Business plan · Up to 3 cards per batch · Unlimited scans"
-                      : isUnlimited
-                      ? "Unlimited scans"
-                      : `${remaining} scan${remaining !== 1 ? "s" : ""} remaining${credits?.nextGrantAt ? ` · +1 in ${formatTimeUntil(credits.nextGrantAt)}` : ""}`
-                    }
-                  </p>
+                  )}
                 </div>
+
+                {/* Fine print */}
+                <p style={{ fontSize: 10, color: "#9ca3af", marginTop: 10, textAlign: "center" }}>
+                  {isBusiness
+                    ? "Business plan · Up to 3 cards per batch · Unlimited scans"
+                    : isUnlimited
+                    ? "Unlimited scans"
+                    : `${remaining} scan${remaining !== 1 ? "s" : ""} remaining${credits?.nextGrantAt ? ` · +1 in ${formatTimeUntil(credits.nextGrantAt)}` : ""}`
+                  }
+                </p>
               </div>
 
               {/* Stats strip */}
@@ -296,7 +326,7 @@ export default function GradeHubPage() {
                 style={{
                   display: "grid",
                   gridTemplateColumns: "repeat(4, 1fr)",
-                  border: "1px solid #d0d5dd",
+                  border: "1px solid #e5e7eb",
                   borderRadius: 2,
                   background: "#fff",
                   overflow: "hidden",
@@ -312,7 +342,7 @@ export default function GradeHubPage() {
                     key={stat.label}
                     style={{
                       padding: "14px 16px",
-                      borderRight: i < 3 ? "1px solid #d0d5dd" : "none",
+                      borderRight: i < 3 ? "1px solid #e5e7eb" : "none",
                     }}
                   >
                     <p
@@ -329,7 +359,7 @@ export default function GradeHubPage() {
                     </p>
                     <p
                       className={playfair.className}
-                      style={{ fontSize: 22, fontWeight: 600, color: CC_BLUE, lineHeight: 1.1 }}
+                      style={{ fontSize: 22, fontWeight: 600, color: NAVY, lineHeight: 1.1 }}
                     >
                       {stat.value}
                     </p>
@@ -358,16 +388,14 @@ export default function GradeHubPage() {
               <div className="flex items-center justify-between mb-4">
                 <h2
                   className={playfair.className}
-                  style={{ fontSize: 16, fontWeight: 600, color: CC_BLUE }}
+                  style={{ fontSize: 16, fontWeight: 600, color: NAVY }}
                 >
                   Recent scans
                 </h2>
                 <button
                   style={{
                     fontSize: 10,
-                    fontWeight: 700,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.6px",
+                    fontWeight: 500,
                     color: GOLD,
                     background: "none",
                     border: "none",
@@ -381,7 +409,7 @@ export default function GradeHubPage() {
               {/* History panel wrapped in table-styled container */}
               <div
                 style={{
-                  border: "1px solid #d0d5dd",
+                  border: "1px solid #e5e7eb",
                   borderRadius: 2,
                   overflow: "hidden",
                 }}
@@ -391,7 +419,7 @@ export default function GradeHubPage() {
                   style={{
                     display: "grid",
                     gridTemplateColumns: "48px 1fr 120px 100px 80px 36px",
-                    background: CC_BLUE,
+                    background: NAVY,
                     padding: "10px 16px",
                     gap: 8,
                   }}
@@ -426,7 +454,7 @@ export default function GradeHubPage() {
               <div className="flex items-center justify-between mb-4">
                 <h2
                   className={playfair.className}
-                  style={{ fontSize: 16, fontWeight: 600, color: CC_BLUE }}
+                  style={{ fontSize: 16, fontWeight: 600, color: NAVY }}
                 >
                   Recent scans
                 </h2>
@@ -434,9 +462,7 @@ export default function GradeHubPage() {
                   onClick={() => setActiveTab("history")}
                   style={{
                     fontSize: 10,
-                    fontWeight: 700,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.6px",
+                    fontWeight: 500,
                     color: GOLD,
                     background: "none",
                     border: "none",
@@ -448,7 +474,7 @@ export default function GradeHubPage() {
               </div>
               <div
                 style={{
-                  border: "1px solid #d0d5dd",
+                  border: "1px solid #e5e7eb",
                   borderRadius: 2,
                   overflow: "hidden",
                 }}
@@ -457,7 +483,7 @@ export default function GradeHubPage() {
                   style={{
                     display: "grid",
                     gridTemplateColumns: "48px 1fr 120px 100px 80px 36px",
-                    background: CC_BLUE,
+                    background: NAVY,
                     padding: "10px 16px",
                     gap: 8,
                   }}
