@@ -9,14 +9,15 @@ import {
   useRef,
   Profiler,
   type ProfilerOnRenderCallback,
+  type CSSProperties,
   startTransition,
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import BusinessPaywall from "@/components/business/BusinessPaywall";
-import BusinessLedgerView from "@/components/business/BusinessLedgerView";
 import BusinessMigrationBanner from "@/components/business/BusinessMigrationBanner";
 import InventoryTable from "@/components/business/InventoryTable";
+import InventoryCardGrid from "@/components/business/InventoryCardGrid";
 import ItemDetailDrawer from "@/components/business/ItemDetailDrawer";
 import SalesTable, { type SalesFilters } from "@/components/business/SalesTable";
 import SaleFormModal from "@/components/business/SaleFormModal";
@@ -151,6 +152,60 @@ function buildPerfMockInventory(count = PERF_MOCK_ITEM_COUNT): BusinessInventory
   });
 }
 
+// ── Rail action card ─────────────────────────────────────────────────────────
+function RailActionCard({
+  label,
+  count,
+  countLabel,
+  badgeBg,
+  badgeColor,
+  onClick,
+}: {
+  label: string;
+  count?: number;
+  countLabel?: string;
+  badgeBg: string;
+  badgeColor: string;
+  onClick: () => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const displayCount = countLabel ?? (count != null ? String(count) : "—");
+  return (
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        border: "1px solid #E8E5E0",
+        borderRadius: 7,
+        padding: 10,
+        cursor: "pointer",
+        background: hovered ? "#FAFAF8" : "#FFF",
+        marginBottom: 8,
+        transition: "background 0.1s",
+      }}
+    >
+      <span style={{ fontSize: 11, color: "#444" }}>{label}</span>
+      <span
+        style={{
+          fontSize: 11,
+          fontWeight: 600,
+          padding: "2px 7px",
+          borderRadius: 10,
+          background: badgeBg,
+          color: badgeColor,
+          fontVariantNumeric: "tabular-nums",
+        }}
+      >
+        {displayCount}
+      </span>
+    </div>
+  );
+}
+
 function LedgerPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -199,6 +254,13 @@ function LedgerPageContent() {
   const [ebayTopRated, setEbayTopRated] = useState(false);
   const [whatnotStorefront, setWhatnotStorefront] = useState<UserStorefront | null>(null);
   const [websiteStorefront, setWebsiteStorefront] = useState<UserStorefront | null>(null);
+  const [viewMode, setViewMode] = useState<"grid" | "list">(() =>
+    typeof window !== "undefined"
+      ? ((localStorage.getItem("ledger_view") as "grid" | "list") ?? "grid")
+      : "grid"
+  );
+  const [gridSearch, setGridSearch] = useState("");
+  const [activePills, setActivePills] = useState<Set<string>>(new Set(["all"]));
   const perfEnabled = useMemo(() => isPerfEnabled(), []);
   const perfMockMode = useMemo(
     () => perfEnabled && searchParams.get("perfMock") === "1",
@@ -235,6 +297,91 @@ function LedgerPageContent() {
   const ebayStoreHref = useMemo(
     () => buildEbayStoreHref(ebayStoreUrl),
     [ebayStoreUrl]
+  );
+
+  const avgHoldDays = useMemo(() => {
+    const active = items.filter(
+      (it) => it.status !== "sold" && it.status !== "returned" && it.acquisition_date
+    );
+    if (!active.length) return null;
+    const now = Date.now();
+    const sum = active.reduce((acc, it) => {
+      return acc + Math.floor((now - new Date(it.acquisition_date!).getTime()) / 86_400_000);
+    }, 0);
+    return Math.round(sum / active.length);
+  }, [items]);
+
+  const gridFilteredItems = useMemo(() => {
+    let result = items.filter((it) => it.status !== "sold" && it.status !== "returned");
+    if (!activePills.has("all")) {
+      if (activePills.has("Listed")) result = result.filter((it) => it.status === "listed");
+      if (activePills.has("Unlisted")) result = result.filter((it) => it.status === "unlisted");
+      if (activePills.has("Raw")) result = result.filter((it) => it.condition_status === "raw");
+      if (activePills.has("Graded")) result = result.filter((it) => it.condition_status === "graded");
+    }
+    if (gridSearch.trim()) {
+      const q = gridSearch.toLowerCase();
+      result = result.filter((it) => it.title?.toLowerCase().includes(q));
+    }
+    return result;
+  }, [items, activePills, gridSearch]);
+
+  const activeItemCount = useMemo(
+    () => items.filter((it) => it.status !== "sold" && it.status !== "returned").length,
+    [items]
+  );
+
+  const needsActionCount = useMemo(() => {
+    const now = Date.now();
+    return items.filter((it) => {
+      if (it.status === "sold" || it.status === "returned") return false;
+      if (it.status === "unlisted") return true;
+      if (it.status === "listed" && it.acquisition_date) {
+        const days = Math.floor((now - new Date(it.acquisition_date).getTime()) / 86_400_000);
+        return days > 21;
+      }
+      return false;
+    }).length;
+  }, [items]);
+
+  const unlistedCount = useMemo(
+    () => items.filter((it) => it.status === "unlisted").length,
+    [items]
+  );
+
+  const mvCoveragePct = useMemo(() => {
+    const active = items.filter((it) => it.status !== "sold" && it.status !== "returned");
+    if (!active.length) return null;
+    const withMv = active.filter(
+      (it) => it.current_market_value_cents != null && it.current_market_value_cents > 0
+    );
+    return Math.round((withMv.length / active.length) * 100);
+  }, [items]);
+
+  const handleViewModeChange = useCallback((next: "grid" | "list") => {
+    setViewMode(next);
+    if (typeof window !== "undefined") localStorage.setItem("ledger_view", next);
+  }, []);
+
+  const handlePillToggle = useCallback((pill: string) => {
+    if (pill === "all") {
+      setActivePills(new Set(["all"]));
+      return;
+    }
+    setActivePills((prev) => {
+      const next = new Set(prev);
+      next.delete("all");
+      if (next.has(pill)) next.delete(pill);
+      else next.add(pill);
+      return next.size === 0 ? new Set(["all"]) : next;
+    });
+  }, []);
+
+  const openConsultant = useCallback(
+    (prompt: string) => {
+      router.push(`/business/consultant?prompt=${encodeURIComponent(prompt)}`);
+    },
+    [router]
   );
 
   const handleFilteredChange = useCallback((filtered: BusinessInventoryItem[]) => {
@@ -1074,15 +1221,15 @@ function LedgerPageContent() {
   if (loading) {
     return (
       <AuthenticatedLayout>
-        <main className="max-w-7xl mx-auto px-4 py-4">
-          <div className="animate-pulse space-y-4">
-            <div className="h-8 w-48 rounded bg-[#E5E7EB]" />
-            <div className="grid grid-cols-5 gap-4">
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="h-20 rounded-xl bg-[#E5E7EB]" />
+        <main style={{ background: "#F7F5F2", minHeight: "100vh" }}>
+          <div className="animate-pulse p-6 space-y-4">
+            <div className="h-8 w-48 rounded" style={{ background: "#E5E2DD" }} />
+            <div className="flex gap-4">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="h-16 flex-1 rounded" style={{ background: "#E5E2DD" }} />
               ))}
             </div>
-            <div className="h-64 rounded-xl bg-[#E5E7EB]" />
+            <div className="h-64 rounded" style={{ background: "#E5E2DD" }} />
           </div>
         </main>
       </AuthenticatedLayout>
@@ -1092,213 +1239,721 @@ function LedgerPageContent() {
   if (hasAccess === false) {
     return (
       <AuthenticatedLayout>
-        <main className="max-w-7xl mx-auto px-4 py-4">
+        <main style={{ background: "#F7F5F2", minHeight: "100vh" }} className="px-4 py-4">
           <BusinessPaywall />
         </main>
       </AuthenticatedLayout>
     );
   }
 
+  // ── Stat strip formatted values ───────────────────────────────────────────
+  const portfolioValue = inventorySummary?.totalCmvCents
+    ? `$${Math.round(inventorySummary.totalCmvCents / 100).toLocaleString("en-US")}`
+    : "—";
+  const portfolioSub = inventorySummary
+    ? `${inventorySummary.itemCount} items · $${Math.round(inventorySummary.totalCostCents / 100).toLocaleString("en-US")} basis`
+    : "—";
+  const revenueYtd =
+    metrics && metrics.revenueYtd > 0
+      ? `$${Math.round(metrics.revenueYtd / 100).toLocaleString("en-US")}`
+      : "—";
+  const revenueYtdSub =
+    metrics && metrics.salesCountYtd > 0 ? `${metrics.salesCountYtd} sales closed` : "—";
+  const avgMargin =
+    metrics && metrics.revenueYtd > 0
+      ? `${((metrics.profitYtd / metrics.revenueYtd) * 100).toFixed(1)}%`
+      : "—";
+  const avgHoldStr = avgHoldDays != null ? `${avgHoldDays}d` : "—";
+
+  // ── Right-rail MTD values ─────────────────────────────────────────────────
+  const mtdRevenue =
+    metrics && metrics.revenueMtd > 0
+      ? `$${Math.round(metrics.revenueMtd / 100).toLocaleString("en-US")}`
+      : "—";
+  const mtdMargin =
+    metrics && metrics.revenueMtd > 0
+      ? `${((metrics.profitMtd / metrics.revenueMtd) * 100).toFixed(1)}%`
+      : "—";
+  const mtdAvgSale =
+    metrics && metrics.salesCountMtd > 0
+      ? `$${Math.round(metrics.revenueMtd / metrics.salesCountMtd / 100).toLocaleString("en-US")}`
+      : "—";
+
+  // ── Filter pills config ───────────────────────────────────────────────────
+  const PILLS = [
+    { key: "all", label: `All ${activeItemCount}` },
+    { key: "Listed", label: "Listed" },
+    { key: "Unlisted", label: "Unlisted" },
+    { key: "Raw", label: "Raw" },
+    { key: "Graded", label: "Graded" },
+  ];
+
+  const activeTabBtnStyle = {
+    color: "#1A1A1A",
+    paddingBottom: 8,
+    paddingTop: 8,
+    paddingLeft: 4,
+    paddingRight: 4,
+    fontSize: 13,
+    fontWeight: 500,
+    background: "transparent",
+    border: "none",
+    borderBottom: "2px solid #1A1A1A",
+    cursor: "pointer",
+  } as CSSProperties;
+
+  const inactiveTabBtnStyle = {
+    paddingBottom: 8,
+    paddingTop: 8,
+    paddingLeft: 4,
+    paddingRight: 4,
+    fontSize: 13,
+    fontWeight: 400,
+    color: "#888",
+    background: "transparent",
+    border: "none",
+    borderBottom: "2px solid transparent",
+    cursor: "pointer",
+  } as CSSProperties;
+
   return (
     <AuthenticatedLayout>
-      <main className="mx-auto max-w-7xl px-4 py-4">
-        <BusinessLedgerView
-          businessName={businessName}
-          ebayStoreHref={ebayStoreHref}
-          ebayConnected={ebayConnected}
-          whatnotConnected={Boolean(whatnotStorefront)}
-          whatnotUrl={whatnotStorefront?.store_url ?? null}
-          websiteConnected={Boolean(websiteStorefront)}
-          websiteUrl={websiteStorefront?.store_url ?? null}
-          metrics={metrics}
-          metricsLoading={metricsLoading}
-          inventorySummary={inventorySummary}
-          totalItemCount={items.length}
-          activeTab={activeTab}
-          onTabChange={handleTabChange}
-          needsMigration={needsMigration}
-          items={items}
-          showAddDropdown={showAddDropdown}
-          onToggleAddDropdown={() => setShowAddDropdown((prev) => !prev)}
-          onAddInventory={openAddInventoryModal}
-          onAddWax={() => setShowAddWaxModal(true)}
-          onManualAdd={() => setShowAddModal(true)}
-        >
-          {/* Migration banner */}
-          {needsMigration && (
-            <div className="mt-3">
-              <BusinessMigrationBanner
-                onRetry={() => {
-                  setLoading(true);
-                  loadInventory();
-                }}
-              />
-            </div>
-          )}
+      <main
+        style={{ background: "#F7F5F2", minHeight: "100vh", display: "flex" }}
+      >
+        {/* ── CENTER COLUMN ─────────────────────────────────────────────── */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
 
-          {/* Inventory tab */}
-          {!needsMigration && activeTab === "inventory" && (
-            <Surface className="p-5">
-              {perfEnabled ? (
-                <Profiler
-                  id="BusinessInventoryTable"
-                  onRender={handleInventoryProfilerRender}
-                >
-                  <InventoryTable
-                    items={items}
-                    selectedItemId={selectedItem?.id ?? null}
-                    onItemClick={setSelectedItem}
-                    onInlineUpdate={handleInlineUpdate}
-                    onBulkAction={handleBulkAction}
-                    onDelete={handleDelete}
-                    onMarkSold={handleMarkSold}
-                    onFilteredChange={handleFilteredChange}
-                    ebayConnected={ebayConnected}
-                    ebayTopRated={ebayTopRated}
-                    dense
-                    perfEnabled={perfEnabled}
-                  />
-                </Profiler>
-              ) : (
-                <InventoryTable
-                  items={items}
-                  selectedItemId={selectedItem?.id ?? null}
-                  onItemClick={setSelectedItem}
-                  onInlineUpdate={handleInlineUpdate}
-                  onBulkAction={handleBulkAction}
-                  onDelete={handleDelete}
-                  onMarkSold={handleMarkSold}
-                  onFilteredChange={handleFilteredChange}
-                  ebayConnected={ebayConnected}
-                  ebayTopRated={ebayTopRated}
-                  dense
-                />
-              )}
-            </Surface>
-          )}
-
-          {/* Sales tab */}
-          {!needsMigration && activeTab === "sales" && (
-            <EbayOrderSyncBanner />
-          )}
-          {!needsMigration && activeTab === "sales" && (
-            <Surface className="p-5">
-              <SalesTable
-                sales={sales}
-                loading={salesLoading}
-                filters={salesFilters}
-                onFiltersChange={(next) => {
-                  setSalesFilters(next);
-                  setSalesPage(1);
-                }}
-                onEditSale={handleUpdateSale}
-                onDeleteSale={handleDeleteSale}
-                page={salesPage}
-                pageSize={salesPageSize}
-                total={salesTotal}
-                onPageChange={(next) => setSalesPage(next)}
-                storeTier={storeTier}
-              />
-            </Surface>
-          )}
-        </BusinessLedgerView>
-
-        {/* Item detail drawer */}
-        {selectedItem && (
-          <ItemDetailDrawer
-            item={selectedItem}
-            onClose={() => setSelectedItem(null)}
-            onSave={handleSaveItem}
-          />
-        )}
-
-        {/* Add modals */}
-        <AddInventoryModal
-          isOpen={showAddModal}
-          onClose={() => setShowAddModal(false)}
-          onAdd={handleAddItem}
-        />
-
-        <AddCardModalNew
-          isOpen={showAddCardModal}
-          onClose={() => setShowAddCardModal(false)}
-          onSuccess={() => {}}
-          onLimitReached={() => {}}
-          addMode="business"
-          modalTitle="Add Card to Inventory"
-          onOpenSmartSearch={() => {
-            setShowAddCardModal(false);
-            setShowCardPicker(true);
-          }}
-          onCardSelected={handleCardIdentified}
-        />
-
-        <CardPickerModal
-          isOpen={showCardPicker}
-          title="Add Card to Inventory"
-          mode="collection"
-          onClose={() => setShowCardPicker(false)}
-          onSelect={handleCardPickerSelect}
-          quantityEnabled
-        />
-
-        <AddCardToInventoryModal
-          isOpen={showAddCardToInventory}
-          card={pendingInventoryCard}
-          onClose={() => {
-            setShowAddCardToInventory(false);
-            setPendingInventoryCard(null);
-          }}
-          onSuccess={handleCardAdded}
-        />
-
-        <AddWaxModal
-          isOpen={showAddWaxModal}
-          onClose={() => setShowAddWaxModal(false)}
-          onAdd={handleAddWax}
-        />
-
-        <SaleFormModal
-          isOpen={Boolean(markSoldItem)}
-          title={markSoldItem ? `Mark as sold: ${markSoldItem.title}` : "Mark as sold"}
-          submitLabel="Record sale"
-          defaults={
-            markSoldItem
-              ? {
-                  inventory_item_id: markSoldItem.id,
-                  channel: markSoldItem.channel,
-                  sold_at: new Date().toISOString(),
-                  cogs_cents: markSoldItem.cost_basis_total_cents,
-                }
-              : undefined
-          }
-          onClose={() => setMarkSoldItem(null)}
-          onSubmit={async (payload) => {
-            await handleCreateSale(payload as unknown as Record<string, unknown>);
-            setMarkSoldItem(null);
-          }}
-          showCogsField={false}
-          storeTier={storeTier}
-        />
-
-        {/* Toast notification */}
-        {toast && (
+          {/* TOPBAR */}
           <div
-            className={`fixed bottom-4 right-4 z-50 flex items-center gap-3 rounded-lg border p-4 ${
-              toast.type === "success"
-                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                : "border-red-200 bg-red-50 text-red-700"
-            }`}
+            style={{
+              background: "#F7F5F2",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "20px 24px 12px",
+            }}
           >
-            <span>{toast.message}</span>
-            <button type="button" onClick={() => setToast(null)} className="hover:opacity-75">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+            <div>
+              <p
+                style={{
+                  fontSize: 10,
+                  color: "#AAA",
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  margin: 0,
+                }}
+              >
+                INVENTORY
+              </p>
+              <h1
+                style={{
+                  fontSize: 22,
+                  fontWeight: 500,
+                  letterSpacing: "-0.02em",
+                  color: "#1A1A1A",
+                  margin: "2px 0 0",
+                }}
+              >
+                Ledger
+              </h1>
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                type="button"
+                style={{
+                  padding: "6px 12px",
+                  fontSize: 12,
+                  border: "1px solid #E5E2DD",
+                  borderRadius: 7,
+                  background: "transparent",
+                  color: "#1A1A1A",
+                  cursor: "pointer",
+                }}
+              >
+                Export
+              </button>
+              <button
+                type="button"
+                onClick={openAddInventoryModal}
+                style={{
+                  padding: "6px 12px",
+                  fontSize: 12,
+                  borderRadius: 7,
+                  background: "#1A1A1A",
+                  color: "#F0EDE8",
+                  border: "none",
+                  cursor: "pointer",
+                }}
+              >
+                Add card
+              </button>
+            </div>
+          </div>
+
+          {/* STAT STRIP */}
+          <div
+            style={{
+              borderBottom: "1px solid #E5E2DD",
+              display: "flex",
+              padding: "0 0 14px",
+            }}
+          >
+            {/* Stat 1: Portfolio value */}
+            <div
+              style={{
+                flex: 1,
+                padding: "14px 20px 0 24px",
+                borderRight: "1px solid #E5E2DD",
+              }}
+            >
+              <div style={{ fontSize: 20, fontWeight: 500, color: "#1A1A1A", fontVariantNumeric: "tabular-nums" }}>
+                {portfolioValue}
+              </div>
+              <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>Portfolio value</div>
+              <div style={{ fontSize: 10, color: "#AAA", marginTop: 1 }}>{portfolioSub}</div>
+            </div>
+
+            {/* Stat 2: Revenue YTD */}
+            <div
+              style={{
+                flex: 1,
+                padding: "14px 20px 0",
+                borderRight: "1px solid #E5E2DD",
+              }}
+            >
+              <div style={{ fontSize: 20, fontWeight: 500, color: "#2D7A4F", fontVariantNumeric: "tabular-nums" }}>
+                {revenueYtd}
+              </div>
+              <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>Revenue YTD</div>
+              <div style={{ fontSize: 10, color: "#AAA", marginTop: 1 }}>{revenueYtdSub}</div>
+            </div>
+
+            {/* Stat 3: Avg margin */}
+            <div
+              style={{
+                flex: 1,
+                padding: "14px 20px 0",
+                borderRight: "1px solid #E5E2DD",
+              }}
+            >
+              <div style={{ fontSize: 20, fontWeight: 500, color: "#2D7A4F", fontVariantNumeric: "tabular-nums" }}>
+                {avgMargin}
+              </div>
+              <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>Avg margin</div>
+              <div style={{ fontSize: 10, color: "#AAA", marginTop: 1 }}>gross, YTD</div>
+            </div>
+
+            {/* Stat 4: Avg hold time */}
+            <div
+              style={{
+                flex: 1,
+                padding: "14px 20px 0",
+              }}
+            >
+              <div style={{ fontSize: 20, fontWeight: 500, color: "#1A1A1A", fontVariantNumeric: "tabular-nums" }}>
+                {avgHoldStr}
+              </div>
+              <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>Avg hold time</div>
+              <div style={{ fontSize: 10, color: "#AAA", marginTop: 1 }}>across active items</div>
+            </div>
+          </div>
+
+          {/* TAB SWITCHER */}
+          <div
+            style={{
+              display: "flex",
+              gap: 16,
+              padding: "0 24px",
+              borderBottom: "1px solid #E5E2DD",
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => handleTabChange("inventory")}
+              style={activeTab === "inventory" ? activeTabBtnStyle : inactiveTabBtnStyle}
+            >
+              Inventory
+            </button>
+            <button
+              type="button"
+              onClick={() => handleTabChange("sales")}
+              style={activeTab === "sales" ? activeTabBtnStyle : inactiveTabBtnStyle}
+            >
+              Sales
             </button>
           </div>
-        )}
+
+          {/* ── INVENTORY TAB ──────────────────────────────────────────── */}
+          {activeTab === "inventory" && (
+            <>
+              {needsMigration && (
+                <div style={{ padding: "16px 24px" }}>
+                  <BusinessMigrationBanner
+                    onRetry={() => {
+                      setLoading(true);
+                      loadInventory();
+                    }}
+                  />
+                </div>
+              )}
+
+              {!needsMigration && (
+                <>
+                  {/* TOOLBAR */}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 12,
+                      padding: "14px 24px 10px",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      {/* Search */}
+                      <input
+                        type="text"
+                        value={gridSearch}
+                        onChange={(e) => setGridSearch(e.target.value)}
+                        placeholder="Search inventory..."
+                        style={{
+                          maxWidth: 320,
+                          background: "#FFF",
+                          border: "1px solid #E5E2DD",
+                          borderRadius: 7,
+                          padding: "7px 12px",
+                          fontSize: 12,
+                          color: "#1A1A1A",
+                          outline: "none",
+                        }}
+                      />
+                      {/* Filter pills */}
+                      {PILLS.map((pill) => {
+                        const isActive = activePills.has(pill.key);
+                        return (
+                          <button
+                            key={pill.key}
+                            type="button"
+                            onClick={() => handlePillToggle(pill.key)}
+                            style={{
+                              padding: "5px 10px",
+                              fontSize: 12,
+                              borderRadius: 20,
+                              border: "1px solid #E5E2DD",
+                              background: isActive ? "#1A1A1A" : "#FFF",
+                              color: isActive ? "#F0EDE8" : "#777",
+                              cursor: "pointer",
+                              fontWeight: isActive ? 500 : 400,
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {pill.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* View toggle */}
+                    <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                      <button
+                        type="button"
+                        onClick={() => handleViewModeChange("grid")}
+                        title="Grid view"
+                        style={{
+                          padding: "5px 7px",
+                          border: "1px solid #E5E2DD",
+                          borderRadius: 6,
+                          background: viewMode === "grid" ? "#1A1A1A" : "#FFF",
+                          color: viewMode === "grid" ? "#F0EDE8" : "#AAA",
+                          cursor: "pointer",
+                          lineHeight: 1,
+                        }}
+                      >
+                        <svg width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+                          <rect x="1" y="1" width="6" height="6" rx="1" />
+                          <rect x="9" y="1" width="6" height="6" rx="1" />
+                          <rect x="1" y="9" width="6" height="6" rx="1" />
+                          <rect x="9" y="9" width="6" height="6" rx="1" />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleViewModeChange("list")}
+                        title="List view"
+                        style={{
+                          padding: "5px 7px",
+                          border: "1px solid #E5E2DD",
+                          borderRadius: 6,
+                          background: viewMode === "list" ? "#1A1A1A" : "#FFF",
+                          color: viewMode === "list" ? "#F0EDE8" : "#AAA",
+                          cursor: "pointer",
+                          lineHeight: 1,
+                        }}
+                      >
+                        <svg width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+                          <rect x="1" y="2" width="14" height="2" rx="1" />
+                          <rect x="1" y="7" width="14" height="2" rx="1" />
+                          <rect x="1" y="12" width="14" height="2" rx="1" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* GRID VIEW */}
+                  {viewMode === "grid" && (
+                    <InventoryCardGrid
+                      items={gridFilteredItems}
+                      onAddCard={openAddInventoryModal}
+                      onConsultant={openConsultant}
+                    />
+                  )}
+
+                  {/* LIST VIEW */}
+                  {viewMode === "list" && (
+                    <div style={{ padding: "0 24px 24px" }}>
+                      <Surface className="p-5">
+                        {perfEnabled ? (
+                          <Profiler
+                            id="BusinessInventoryTable"
+                            onRender={handleInventoryProfilerRender}
+                          >
+                            <InventoryTable
+                              items={items}
+                              selectedItemId={selectedItem?.id ?? null}
+                              onItemClick={setSelectedItem}
+                              onInlineUpdate={handleInlineUpdate}
+                              onBulkAction={handleBulkAction}
+                              onDelete={handleDelete}
+                              onMarkSold={handleMarkSold}
+                              onFilteredChange={handleFilteredChange}
+                              ebayConnected={ebayConnected}
+                              ebayTopRated={ebayTopRated}
+                              dense
+                              perfEnabled={perfEnabled}
+                              listView
+                            />
+                          </Profiler>
+                        ) : (
+                          <InventoryTable
+                            items={items}
+                            selectedItemId={selectedItem?.id ?? null}
+                            onItemClick={setSelectedItem}
+                            onInlineUpdate={handleInlineUpdate}
+                            onBulkAction={handleBulkAction}
+                            onDelete={handleDelete}
+                            onMarkSold={handleMarkSold}
+                            onFilteredChange={handleFilteredChange}
+                            ebayConnected={ebayConnected}
+                            ebayTopRated={ebayTopRated}
+                            dense
+                            listView
+                          />
+                        )}
+                      </Surface>
+                    </div>
+                  )}
+                </>
+              )}
+            </>
+          )}
+
+          {/* ── SALES TAB ─────────────────────────────────────────────── */}
+          {activeTab === "sales" && (
+            <>
+              <EbayOrderSyncBanner />
+              <div style={{ padding: "16px 24px 24px" }}>
+                <Surface className="p-5">
+                  <SalesTable
+                    sales={sales}
+                    loading={salesLoading}
+                    filters={salesFilters}
+                    onFiltersChange={(next) => {
+                      setSalesFilters(next);
+                      setSalesPage(1);
+                    }}
+                    onEditSale={handleUpdateSale}
+                    onDeleteSale={handleDeleteSale}
+                    page={salesPage}
+                    pageSize={salesPageSize}
+                    total={salesTotal}
+                    onPageChange={(next) => setSalesPage(next)}
+                    storeTier={storeTier}
+                  />
+                </Surface>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* ── RIGHT RAIL ────────────────────────────────────────────────── */}
+        <div
+          className="hidden lg:flex flex-col shrink-0"
+          style={{
+            width: 220,
+            background: "#FFFFFF",
+            borderLeft: "1px solid #E5E2DD",
+          }}
+        >
+          {/* SECTION 1: NEEDS ACTION */}
+          <div style={{ borderBottom: "1px solid #F0EDE8", padding: 16 }}>
+            <p
+              style={{
+                fontSize: 10,
+                color: "#AAA",
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                margin: "0 0 10px",
+              }}
+            >
+              NEEDS ACTION
+            </p>
+
+            {/* List or reprice */}
+            <RailActionCard
+              label="List or reprice"
+              count={needsActionCount}
+              badgeBg="#FBF5E8"
+              badgeColor="#8A5C0A"
+              onClick={() =>
+                openConsultant(
+                  "Show me all cards I should list or reprice right now, sorted by margin potential."
+                )
+              }
+            />
+
+            {/* Unlisted */}
+            <RailActionCard
+              label="Unlisted"
+              count={unlistedCount}
+              badgeBg="#F2EFE9"
+              badgeColor="#777"
+              onClick={() => {
+                handleTabChange("inventory");
+                handlePillToggle("Unlisted");
+              }}
+            />
+
+            {/* MV coverage */}
+            <RailActionCard
+              label="MV coverage"
+              countLabel={mvCoveragePct != null ? `${mvCoveragePct}%` : "—"}
+              badgeBg="#F0F8F4"
+              badgeColor="#2D7A4F"
+              onClick={() =>
+                openConsultant(
+                  `My market value coverage is ${mvCoveragePct ?? "—"}%. What should I focus on next?`
+                )
+              }
+            />
+          </div>
+
+          {/* SECTION 2: MONTH TO DATE */}
+          <div style={{ borderBottom: "1px solid #F0EDE8", padding: 16 }}>
+            <p
+              style={{
+                fontSize: 10,
+                color: "#AAA",
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                margin: "0 0 8px",
+              }}
+            >
+              MONTH TO DATE
+            </p>
+            {[
+              { label: "Sales", value: metrics?.salesCountMtd ?? "—", color: "#1A1A1A" },
+              { label: "Revenue", value: mtdRevenue, color: "#2D7A4F" },
+              { label: "Margin", value: mtdMargin, color: "#2D7A4F" },
+              { label: "Avg sale", value: mtdAvgSale, color: "#1A1A1A" },
+              {
+                label: "Avg hold",
+                value: avgHoldDays != null ? `${avgHoldDays}d` : "—",
+                color:
+                  avgHoldDays != null && avgHoldDays > 21 ? "#C08A20" : "#1A1A1A",
+              },
+            ].map((row, idx, arr) => (
+              <div
+                key={row.label}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "6px 0",
+                  borderBottom: idx < arr.length - 1 ? "1px solid #F5F2EE" : "none",
+                }}
+              >
+                <span style={{ fontSize: 11, color: "#888" }}>{row.label}</span>
+                <span
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 500,
+                    color: row.color,
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
+                  {row.value}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* SECTION 3: QUICK ACTIONS */}
+          <div style={{ padding: 16 }}>
+            <p
+              style={{
+                fontSize: 10,
+                color: "#AAA",
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                margin: "0 0 10px",
+              }}
+            >
+              QUICK ACTIONS
+            </p>
+            <button
+              type="button"
+              onClick={() =>
+                openConsultant(
+                  "Run a full analysis of my inventory. What should I act on this week?"
+                )
+              }
+              style={{
+                display: "block",
+                width: "100%",
+                textAlign: "left",
+                marginBottom: 6,
+                padding: "8px 10px",
+                fontSize: 11,
+                border: "1px solid #E5E2DD",
+                borderRadius: 6,
+                background: "#FFF",
+                color: "#1A1A1A",
+                cursor: "pointer",
+              }}
+            >
+              AI inventory review ↗
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                openConsultant(
+                  "Which cards in my inventory are best candidates for PSA grading right now?"
+                )
+              }
+              style={{
+                display: "block",
+                width: "100%",
+                textAlign: "left",
+                padding: "8px 10px",
+                fontSize: 11,
+                border: "1px solid #E5E2DD",
+                borderRadius: 6,
+                background: "#FFF",
+                color: "#1A1A1A",
+                cursor: "pointer",
+              }}
+            >
+              Grading candidates ↗
+            </button>
+          </div>
+        </div>
       </main>
+
+      {/* ── MODALS ────────────────────────────────────────────────────────── */}
+
+      {selectedItem && (
+        <ItemDetailDrawer
+          item={selectedItem}
+          onClose={() => setSelectedItem(null)}
+          onSave={handleSaveItem}
+        />
+      )}
+
+      <AddInventoryModal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onAdd={handleAddItem}
+      />
+
+      <AddCardModalNew
+        isOpen={showAddCardModal}
+        onClose={() => setShowAddCardModal(false)}
+        onSuccess={() => {}}
+        onLimitReached={() => {}}
+        addMode="business"
+        modalTitle="Add Card to Inventory"
+        onOpenSmartSearch={() => {
+          setShowAddCardModal(false);
+          setShowCardPicker(true);
+        }}
+        onCardSelected={handleCardIdentified}
+      />
+
+      <CardPickerModal
+        isOpen={showCardPicker}
+        title="Add Card to Inventory"
+        mode="collection"
+        onClose={() => setShowCardPicker(false)}
+        onSelect={handleCardPickerSelect}
+        quantityEnabled
+      />
+
+      <AddCardToInventoryModal
+        isOpen={showAddCardToInventory}
+        card={pendingInventoryCard}
+        onClose={() => {
+          setShowAddCardToInventory(false);
+          setPendingInventoryCard(null);
+        }}
+        onSuccess={handleCardAdded}
+      />
+
+      <AddWaxModal
+        isOpen={showAddWaxModal}
+        onClose={() => setShowAddWaxModal(false)}
+        onAdd={handleAddWax}
+      />
+
+      <SaleFormModal
+        isOpen={Boolean(markSoldItem)}
+        title={markSoldItem ? `Mark as sold: ${markSoldItem.title}` : "Mark as sold"}
+        submitLabel="Record sale"
+        defaults={
+          markSoldItem
+            ? {
+                inventory_item_id: markSoldItem.id,
+                channel: markSoldItem.channel,
+                sold_at: new Date().toISOString(),
+                cogs_cents: markSoldItem.cost_basis_total_cents,
+              }
+            : undefined
+        }
+        onClose={() => setMarkSoldItem(null)}
+        onSubmit={async (payload) => {
+          await handleCreateSale(payload as unknown as Record<string, unknown>);
+          setMarkSoldItem(null);
+        }}
+        showCogsField={false}
+        storeTier={storeTier}
+      />
+
+      {toast && (
+        <div
+          className={`fixed bottom-4 right-4 z-50 flex items-center gap-3 rounded-lg border p-4 ${
+            toast.type === "success"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+              : "border-red-200 bg-red-50 text-red-700"
+          }`}
+        >
+          <span>{toast.message}</span>
+          <button type="button" onClick={() => setToast(null)} className="hover:opacity-75">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
     </AuthenticatedLayout>
   );
 }
@@ -1308,15 +1963,15 @@ export default function LedgerPage() {
     <Suspense
       fallback={
         <AuthenticatedLayout>
-          <main className="max-w-7xl mx-auto px-4 py-4">
-            <div className="animate-pulse space-y-4">
-              <div className="h-8 w-48 rounded bg-[#E5E7EB]" />
-              <div className="grid grid-cols-5 gap-4">
-                {[...Array(5)].map((_, i) => (
-                  <div key={i} className="h-20 rounded-xl bg-[#E5E7EB]" />
+          <main style={{ background: "#F7F5F2", minHeight: "100vh" }}>
+            <div className="animate-pulse p-6 space-y-4">
+              <div className="h-8 w-48 rounded" style={{ background: "#E5E2DD" }} />
+              <div className="flex gap-4">
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="h-16 flex-1 rounded" style={{ background: "#E5E2DD" }} />
                 ))}
               </div>
-              <div className="h-64 rounded-xl bg-[#E5E7EB]" />
+              <div className="h-64 rounded" style={{ background: "#E5E2DD" }} />
             </div>
           </main>
         </AuthenticatedLayout>
