@@ -29,10 +29,93 @@ export interface Subscription {
   updated_at: string;
 }
 
+export type BusinessRole = "owner" | "manager" | "employee";
+
+export interface BusinessAccount {
+  id: string;
+  owner_user_id: string;
+  name: string | null;
+  billing_interval: "monthly";
+  subscription_status: string;
+  current_period_end: string | null;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+  stripe_subscription_item_id: string | null;
+  seats_included: number;
+  seat_quantity: number;
+  purchased_seats: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BusinessMembership {
+  id: string;
+  business_account_id: string;
+  user_id: string;
+  role: BusinessRole;
+  status: "active" | "inactive";
+  invited_by: string | null;
+  joined_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BusinessInvite {
+  id: string;
+  business_account_id: string;
+  email: string;
+  email_normalized: string;
+  role: Exclude<BusinessRole, "owner">;
+  token_hash: string;
+  invited_by: string | null;
+  expires_at: string;
+  accepted_at: string | null;
+  accepted_by: string | null;
+  revoked_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BusinessSeatSummary {
+  seatsIncluded: number;
+  seatQuantity: number;
+  purchasedSeats: number;
+  activeMembers: number;
+  pendingInvites: number;
+  usedSeats: number;
+  reservedSeats: number;
+  availableSeats: number;
+}
+
+export interface BusinessContext {
+  businessAccountId: string;
+  membershipId: string;
+  role: BusinessRole;
+  ownerUserId: string;
+  accountName: string | null;
+  subscriptionStatus: string;
+  currentPeriodEnd: string | null;
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
+  stripeSubscriptionItemId: string | null;
+  seats: BusinessSeatSummary;
+  permissions: {
+    canAccessBusiness: boolean;
+    canManageOperations: boolean;
+    canManageTeam: boolean;
+    canManageBilling: boolean;
+    canInviteMembers: boolean;
+    canManageSeats: boolean;
+    canChangeMemberRoles: boolean;
+    canRemoveMembers: boolean;
+  };
+}
+
 // Business inventory item
 export interface BusinessInventoryItem {
   id: string;
   user_id: string;
+  business_account_id: string;
   card_id: string | null;
   title: string;
   quantity: number;
@@ -64,6 +147,7 @@ export interface BusinessSale {
   id: string;
   user_id: string;
   business_id: string;
+  business_account_id: string;
   inventory_item_id: string | null;
   channel: "ebay" | "whatnot" | "instagram" | "show" | "local" | "other";
   sold_at: string;
@@ -203,6 +287,16 @@ export interface Comp {
   link: string;
   image?: string;
   source: "ebay";
+  included?: boolean;
+  category?: "exact" | "similar" | "support" | "rejected";
+  include_reason_codes?: string[];
+  exclude_reason_codes?: string[];
+  include_reasons_text?: string[];
+  exclude_reasons_text?: string[];
+  match_confidence?: number;
+  identity_confidence?: number;
+  valuation_weight?: number;
+  quality_score?: number;
 }
 
 export interface CompsStats {
@@ -280,6 +374,33 @@ export interface SearchResult {
     expectedDiscountConfidence: "high" | "medium" | "low" | null;
     cardFingerprint: string;
     queryText: string;
+  };
+  _compEvaluation?: {
+    exactComps: Comp[];
+    similarComps: Comp[];
+    supportComps: Comp[];
+    rejectedComps: Comp[];
+    confidenceScore: number;
+    confidenceBand: "high" | "medium" | "low" | "very_low";
+    confidenceExplanation: string;
+    valuationSource:
+      | "exact_sold"
+      | "mixed_sold"
+      | "active_directional"
+      | "insufficient_exact_comps";
+    usedCompCount: number;
+    exactCompCount: number;
+    similarCompCount: number;
+    supportCompCount: number;
+    rejectedCompCount: number;
+    spreadPct: number | null;
+    rangeLow: number | null;
+    rangeHigh: number | null;
+    midpoint: number | null;
+    disclaimerStates: string[];
+    disclaimerMessages: string[];
+    includeReasonSummary: string[];
+    excludeReasonSummary: string[];
   };
 }
 
@@ -758,6 +879,7 @@ export interface AnalystError {
 export interface BusinessConsultation {
   id: string;
   user_id: string;
+  business_account_id: string;
   title: string;
   prompt: string;
   response: string;
@@ -828,6 +950,8 @@ export interface EbayAccountStatus {
   access_token_expires_at: string | null;
   /** eBay store subscription tier — drives the FVF rate in EbayProfitEngine. */
   store_tier: import("@/lib/business/EbayProfitEngine").StoreTier;
+  /** OAuth scopes granted by the user — used to detect scope gaps (e.g. buy.order.readonly). */
+  scopes: string[];
 }
 
 // =============================================

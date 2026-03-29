@@ -19,6 +19,7 @@ import {
 } from "@/lib/dev/perf";
 import EbayListingBadge from "./EbayListingBadge";
 import EbayListingModal from "./EbayListingModal";
+import { buildEbaySoldUrl } from "@/lib/ebay/comps-url";
 
 function fmtCents(cents: number | null): string {
   if (cents === null) return "";
@@ -29,7 +30,7 @@ function fmtCents(cents: number | null): string {
 function emptyPlaceholder(field: string): string {
   switch (field) {
     case "list_price_cents": return "Not listed";
-    case "current_market_value_cents": return "No comps — click to set";
+    case "current_market_value_cents": return "No estimate — click to set";
     case "location": return "Add storage";
     default: return "—";
   }
@@ -100,9 +101,14 @@ interface Props {
   perfEnabled?: boolean;
   /** Whether the connected eBay account is Top Rated Plus (affects fee preview) */
   ebayTopRated?: boolean;
+  /** Whether an active eBay account is connected — gates the List eBay button */
+  ebayConnected?: boolean;
+  /** List-view mode: hides Channel, Storage, Acquired columns and colors Est. MV cell */
+  listView?: boolean;
 }
 
 const STATUS_OPTIONS = ["unlisted", "listed", "pending_sale", "sold", "returned"] as const;
+const ACTIVE_STATUS_OPTIONS = ["unlisted", "listed", "pending_sale"] as const;
 const CHANNEL_OPTIONS = ["ebay", "whatnot", "instagram", "show", "local", "other"] as const;
 const CONDITION_OPTIONS = ["raw", "graded"] as const;
 const VIRTUALIZE_THRESHOLD = 200;
@@ -222,10 +228,14 @@ export default function InventoryTable({
   dense = false,
   perfEnabled = false,
   ebayTopRated = false,
+  ebayConnected = false,
+  listView = false,
 }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState("");
+  // Default to "active" so marking an item sold moves it out of the inventory view
+  // and into the Sales tab.
+  const [filterStatus, setFilterStatus] = useState<"active" | "all" | BusinessInventoryItem["status"]>("active");
   const [filterChannel, setFilterChannel] = useState("");
   const [filterCondition, setFilterCondition] = useState("");
   const [activeTab, setActiveTab] = useState<"all" | "cards" | "wax">("all");
@@ -241,6 +251,14 @@ export default function InventoryTable({
   const [sortKey, setSortKey] = useState<SortableColumnKey | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
+
+  const displayColumns = useMemo(
+    () =>
+      listView
+        ? COLUMNS.filter((c) => !["channel", "location", "acquisition_date"].includes(c.key))
+        : COLUMNS,
+    [listView]
+  );
 
   const handleFetchCmv = async (item: BusinessInventoryItem) => {
     if (item.current_market_value_cents != null && item.current_market_value_cents > 0) return;
@@ -290,7 +308,11 @@ export default function InventoryTable({
         buildDisplayTitle(it).toLowerCase().includes(q)
       );
     }
-    if (filterStatus) result = result.filter((it) => it.status === filterStatus);
+    if (filterStatus === "active") {
+      result = result.filter((it) => ACTIVE_STATUS_OPTIONS.includes(it.status as any));
+    } else if (filterStatus !== "all") {
+      result = result.filter((it) => it.status === filterStatus);
+    }
     if (filterChannel) result = result.filter((it) => it.channel === filterChannel);
     if (filterCondition)
       result = result.filter((it) => it.condition_status === filterCondition);
@@ -479,6 +501,16 @@ export default function InventoryTable({
       }
       return <span className="tabular-nums">{formatted}</span>;
     }
+    if (field === "current_market_value_cents" && listView) {
+      const mv = item.current_market_value_cents;
+      const cost = item.cost_basis_total_cents;
+      const color = mv == null || mv <= 0 ? "#AAA" : mv > cost ? "#2D7A4F" : "#CC4444";
+      return (
+        <span style={{ color }} className="tabular-nums font-medium">
+          {fmtCents(mv) || "—"}
+        </span>
+      );
+    }
     if (field === "current_market_value_cents") {
       const formatted = fmtCents(val);
       const isEmpty = !formatted || val == null || val <= 0;
@@ -548,6 +580,17 @@ export default function InventoryTable({
         return <span className="text-[10px] text-[var(--biz-muted)]">Recorded</span>;
       }
       const hasEbayListing = !!(item as any).ebay_item_id;
+      // status === "sold" already handled by early return above; only check remaining terminal states
+      const canListOnEbay =
+        ebayConnected &&
+        !hasEbayListing &&
+        item.status !== "returned" &&
+        item.status !== "pending_sale";
+      const compsUrl = buildEbaySoldUrl({
+        title: item.title,
+        grade: item.grade,
+        gradingCompany: item.grading_company,
+      });
       return (
         <div className="flex flex-col items-start gap-1">
           <button
@@ -560,7 +603,7 @@ export default function InventoryTable({
           >
             Mark Sold
           </button>
-          {!hasEbayListing && (item.status as string) !== "sold" && (
+          {canListOnEbay && (
             <button
               type="button"
               onClick={(e) => {
@@ -572,6 +615,15 @@ export default function InventoryTable({
               List eBay
             </button>
           )}
+          <a
+            href={compsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="rounded border border-[var(--biz-border)] bg-[#F9FAFB] px-2 py-0.5 text-[10px] font-medium text-[var(--biz-primary)] hover:bg-[#F3F4F6] transition-colors"
+          >
+            Get Comps
+          </a>
         </div>
       );
     }
@@ -619,9 +671,40 @@ export default function InventoryTable({
         </div>
       );
     }
+    if (channel === "whatnot") {
+      return (
+        <span className="inline-flex items-center gap-1 rounded border border-purple-200 bg-purple-50 px-1.5 py-0.5 text-[10px] font-medium text-purple-700">
+          Whatnot
+        </span>
+      );
+    }
+    if (channel === "show") {
+      return (
+        <span className="inline-flex items-center gap-1 rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+          Show
+        </span>
+      );
+    }
+    if (channel === "local") {
+      return (
+        <span className="inline-flex items-center rounded border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium text-sky-700">
+          Local
+        </span>
+      );
+    }
+    if (channel === "instagram") {
+      return (
+        <span className="inline-flex items-center rounded border border-pink-200 bg-pink-50 px-1.5 py-0.5 text-[10px] font-medium text-pink-700">
+          Instagram
+        </span>
+      );
+    }
+    const label = channel
+      ? channel.charAt(0).toUpperCase() + channel.slice(1)
+      : "—";
     return (
-      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-[#F9FAFB] text-[var(--biz-muted)]">
-        {channel}
+      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-[#F9FAFB] text-[var(--biz-muted)] border border-[var(--biz-border)]">
+        {label}
       </span>
     );
   };
@@ -788,7 +871,7 @@ export default function InventoryTable({
           className="rounded border-[var(--biz-border)] text-emerald-600 focus:ring-emerald-500"
         />
       </th>
-      {COLUMNS.map((col) => {
+      {displayColumns.map((col) => {
         const isSortable = Boolean(col.sortable);
         const isActiveSort = isSortable && sortKey === col.key;
         const ariaSort = isSortable
@@ -840,7 +923,7 @@ export default function InventoryTable({
           className="rounded border-[var(--biz-border)] text-emerald-600 focus:ring-emerald-500"
         />
       </td>
-      {COLUMNS.map((col) => (
+      {displayColumns.map((col) => (
         <td
           key={`${item.id}-${col.key}`}
           className={`border-l border-[var(--biz-border)] px-3 py-2 text-[var(--biz-text)] ${col.width} ${col.alignRight ? "text-right tabular-nums" : ""}`}
@@ -963,11 +1046,12 @@ export default function InventoryTable({
             value={filterStatus}
             onChange={(e) => {
               if (perfEnabled) setPerfInteraction("filter");
-              setFilterStatus(e.target.value);
+              setFilterStatus(e.target.value as any);
             }}
             className="min-h-[44px] flex-1 shrink-0 rounded-md border border-[var(--biz-border)] bg-white px-2.5 py-2.5 text-xs text-[var(--biz-text)] sm:min-h-0 sm:flex-none sm:py-1.5"
           >
-            <option value="">All Status</option>
+            <option value="active">Active (unlisted/listed/pending_sale)</option>
+            <option value="all">All Statuses</option>
             {STATUS_OPTIONS.map((s) => (
               <option key={s} value={s}>{s}</option>
             ))}
@@ -1150,9 +1234,10 @@ export default function InventoryTable({
           isTopRated={ebayTopRated}
           onClose={() => setEbayListingItem(null)}
           onSuccess={(listingId, listingUrl) => {
-            // Update the item's ebay_item_id in the local items list via inline update
+            // Update item state locally: mark listed, set channel=ebay, set ebay_item_id
             onInlineUpdate(ebayListingItem.id, "ebay_item_id", listingId);
             onInlineUpdate(ebayListingItem.id, "status", "listed");
+            onInlineUpdate(ebayListingItem.id, "channel", "ebay");
             setEbayListingItem(null);
           }}
         />

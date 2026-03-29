@@ -9,6 +9,7 @@ interface CompsTableProps {
   canAddToCollection?: boolean;
   isCurrentListings?: boolean; // If true, shows "Listed" instead of "Sold"
   addingLink?: string | null; // Link of item currently being added
+  showReasoning?: boolean;
 }
 
 function formatPrice(price: number): string {
@@ -32,7 +33,30 @@ function formatDate(dateStr: string): string {
 type SortField = "price" | "date";
 type SortDirection = "asc" | "desc";
 
-export default function CompsTable({ comps, onAddToCollection, canAddToCollection = true, isCurrentListings = false, addingLink = null }: CompsTableProps) {
+function categoryChip(category: Comp["category"]): { label: string; className: string } {
+  if (category === "exact") {
+    return { label: "Exact", className: "bg-emerald-900/30 text-emerald-300 border border-emerald-700/60" };
+  }
+  if (category === "similar") {
+    return { label: "Similar", className: "bg-amber-900/30 text-amber-300 border border-amber-700/60" };
+  }
+  if (category === "support") {
+    return { label: "Support", className: "bg-blue-900/30 text-blue-300 border border-blue-700/60" };
+  }
+  if (category === "rejected") {
+    return { label: "Rejected", className: "bg-rose-900/30 text-rose-300 border border-rose-700/60" };
+  }
+  return { label: "Comp", className: "bg-gray-800 text-gray-300 border border-gray-700" };
+}
+
+export default function CompsTable({
+  comps,
+  onAddToCollection,
+  canAddToCollection = true,
+  isCurrentListings = false,
+  addingLink = null,
+  showReasoning = true,
+}: CompsTableProps) {
   const [sortField, setSortField] = useState<SortField>("date");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
 
@@ -105,6 +129,11 @@ export default function CompsTable({ comps, onAddToCollection, canAddToCollectio
                   <SortIcon field="date" />
                 </span>
               </th>
+              {showReasoning && (
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Match
+                </th>
+              )}
               {onAddToCollection && (
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Action
@@ -116,7 +145,7 @@ export default function CompsTable({ comps, onAddToCollection, canAddToCollectio
             {sortedComps.map((comp, index) => (
               <tr
                 key={index}
-                className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+                className={`hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${comp.included === false ? "opacity-70" : ""}`}
               >
                 <td className="px-4 py-3">
                   <a
@@ -133,9 +162,16 @@ export default function CompsTable({ comps, onAddToCollection, canAddToCollectio
                         loading="lazy"
                       />
                     )}
-                    <span className="text-sm text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 line-clamp-2">
-                      {comp.title}
-                    </span>
+                    <div className="min-w-0">
+                      <span className="text-sm text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 line-clamp-2 block">
+                        {comp.title}
+                      </span>
+                      {showReasoning && (
+                        <span className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 mt-1 block">
+                          {(comp.include_reasons_text?.[0] || comp.exclude_reasons_text?.[0] || "Reason unavailable")}
+                        </span>
+                      )}
+                    </div>
                   </a>
                 </td>
                 <td className="px-4 py-3">
@@ -148,11 +184,25 @@ export default function CompsTable({ comps, onAddToCollection, canAddToCollectio
                     {formatDate(comp.date)}
                   </span>
                 </td>
+                {showReasoning && (
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <span className={`inline-flex px-2 py-1 rounded-full text-[11px] font-medium ${categoryChip(comp.category).className}`}>
+                        {categoryChip(comp.category).label}
+                      </span>
+                      {typeof comp.match_confidence === "number" && (
+                        <span className="text-xs text-gray-500">
+                          {Math.round(comp.match_confidence * 100)}%
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                )}
                 {onAddToCollection && (
                   <td className="px-4 py-3 text-right">
                     <button
                       onClick={() => onAddToCollection(comp)}
-                      disabled={!canAddToCollection || addingLink === comp.link}
+                      disabled={!canAddToCollection || addingLink === comp.link || comp.included === false}
                       className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
                     >
                       {addingLink === comp.link ? (

@@ -379,8 +379,8 @@ export default function CardPicker({
       : mode === "collection"
       ? "Pick the exact card to add"
       : mode === "dashboard"
-      ? "Pick a card to search comps"
-      : "Pick a card to run comps";
+      ? "Pick a card to search pricing data"
+      : "Pick a card to run a pricing search";
 
   return (
     <div className="space-y-5">

@@ -1,6 +1,7 @@
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { isTestMode } from "@/lib/test-mode";
 import { getScanCreditStatus } from "@/lib/grading/scanCredits";
+import { hasBusinessWorkspaceAccess } from "@/lib/business/workspace-access";
 import type { Subscription, Usage } from "@/types";
 
 export interface AccessCheck {
@@ -38,6 +39,10 @@ export async function checkProAccess(userId: string): Promise<AccessCheck> {
   }
 
   const supabase = await createClient();
+  const businessWorkspaceAccess = await hasBusinessWorkspaceAccess(
+    supabase as any,
+    userId
+  );
 
   const { data: subscription } = await supabase
     .from("subscriptions")
@@ -46,6 +51,18 @@ export async function checkProAccess(userId: string): Promise<AccessCheck> {
     .single();
 
   if (!subscription) {
+    if (businessWorkspaceAccess) {
+      return {
+        hasAccess: true,
+        isPro: true,
+        isBusiness: true,
+        isActivated: true,
+        subscriptionStatus: "active",
+        periodEnd: null,
+        tier: "business",
+      };
+    }
+
     return {
       hasAccess: false,
       isPro: false,
@@ -58,21 +75,23 @@ export async function checkProAccess(userId: string): Promise<AccessCheck> {
   }
 
   const sub = subscription as Subscription;
-  const isPro = sub.tier === "pro" || sub.tier === "business";
-  const isBusiness = sub.tier === "business";
+  const isProBySubscription = sub.tier === "pro" || sub.tier === "business";
+  const isBusiness = businessWorkspaceAccess;
+  const isPro = isProBySubscription || businessWorkspaceAccess;
   const isActive = sub.status === "active";
   const notExpired =
     !sub.current_period_end ||
     new Date(sub.current_period_end) > new Date();
+  const hasSubscriptionAccess = isProBySubscription && isActive && notExpired;
 
   return {
-    hasAccess: isPro && isActive && notExpired,
+    hasAccess: hasSubscriptionAccess || businessWorkspaceAccess,
     isPro,
-    isBusiness: isBusiness && isActive && notExpired,
+    isBusiness,
     isActivated: sub.activation_paid,
-    subscriptionStatus: sub.status,
-    periodEnd: sub.current_period_end,
-    tier: sub.tier,
+    subscriptionStatus: businessWorkspaceAccess ? "active" : sub.status,
+    periodEnd: businessWorkspaceAccess ? null : sub.current_period_end,
+    tier: businessWorkspaceAccess ? "business" : sub.tier,
   };
 }
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { requireBusinessAccess } from "@/lib/business/actions";
+import { requireBusinessOwnerContext } from "@/lib/business/context";
 import type { StorefrontPlatform, UserStorefront, StorefrontPlatformSettings } from "@/types";
 import { STOREFRONT_PLATFORMS, getDefaultPlatformSettings } from "@/types";
 
@@ -28,7 +28,7 @@ export async function GET(): Promise<NextResponse> {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    await requireBusinessAccess(user.id);
+    await requireBusinessOwnerContext(user.id);
 
     const { data, error } = await supabase
       .from("user_storefronts")
@@ -59,7 +59,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    await requireBusinessAccess(user.id);
+    await requireBusinessOwnerContext(user.id);
 
     const body = await request.json();
     const { platform, display_name, store_url, is_primary, notes, platform_settings } = body as {

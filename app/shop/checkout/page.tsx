@@ -95,7 +95,7 @@ export default function ShopCheckoutPage() {
             href="/shop"
             className="rounded-lg bg-cyan-600 px-6 py-3 font-medium text-white hover:bg-cyan-500"
           >
-            Back to marketplace
+            Back to deals
           </Link>
           <button
             onClick={() => setStatus("idle")}

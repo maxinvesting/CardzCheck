@@ -23,6 +23,7 @@ function AccountContent() {
   const [loading, setLoading] = useState(true);
   const [upgradeLoading, setUpgradeLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [hasBusinessWorkspace, setHasBusinessWorkspace] = useState(false);
 
   useEffect(() => {
     if (searchParams.get("success") === "true") {
@@ -67,6 +68,26 @@ function AccountContent() {
       }
       setSubscription(subscriptionData ?? null);
 
+      const legacyBusinessAccess =
+        Boolean(userData?.is_paid) && hasActiveBusinessTier(subscriptionData);
+      let membershipBusinessAccess = false;
+      const { data: membershipRows, error: membershipError } = await supabase
+        .from("business_memberships")
+        .select("business_account_id")
+        .eq("user_id", authUser.id)
+        .eq("status", "active")
+        .limit(1);
+
+      if (!membershipError) {
+        membershipBusinessAccess = (membershipRows?.length ?? 0) > 0;
+      } else if (
+        !["42P01", "42703", "PGRST205"].includes(membershipError.code || "")
+      ) {
+        console.warn("Failed to resolve business membership access:", membershipError);
+      }
+
+      setHasBusinessWorkspace(legacyBusinessAccess || membershipBusinessAccess);
+
       setLoading(false);
     }
 
@@ -109,7 +130,7 @@ function AccountContent() {
     );
   }
 
-  const isBusinessMember = Boolean(user?.is_paid) && hasActiveBusinessTier(subscription);
+  const isBusinessMember = hasBusinessWorkspace;
 
   return (
     <AuthenticatedLayout>
@@ -179,7 +200,7 @@ function AccountContent() {
                   </p>
                   <p className="text-sm text-gray-500 dark:text-gray-400">
                     {isBusinessMember
-                      ? "Inventory, sales analytics, and all Pro features"
+                      ? "Team inventory and sales workspace with role-based access"
                       : "Unlimited searches and collection"}
                   </p>
                 </div>

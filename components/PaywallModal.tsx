@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { LIMITS } from "@/types";
+import { PRO_MONTHLY_PRICE, formatPrice } from "@/lib/pricing";
 
 interface PaywallModalProps {
   isOpen: boolean;
@@ -83,9 +84,9 @@ export default function PaywallModal({ isOpen, onClose, type }: PaywallModalProp
         <div className="p-6">
           <div className="text-center mb-6">
             <p className="text-4xl font-bold text-gray-900 dark:text-white">
-              $20
+              {formatPrice(PRO_MONTHLY_PRICE)}
             </p>
-            <p className="text-gray-500 dark:text-gray-400">one-time payment</p>
+            <p className="text-gray-500 dark:text-gray-400">monthly subscription</p>
           </div>
 
           <ul className="space-y-3 mb-6">
@@ -122,8 +123,7 @@ export default function PaywallModal({ isOpen, onClose, type }: PaywallModalProp
           </ul>
 
           <div className="text-center text-sm text-gray-500 dark:text-gray-400 mb-6">
-            <p>Card Ladder charges $200/year.</p>
-            <p className="font-medium text-gray-700 dark:text-gray-300">We charge $20. Once.</p>
+            <p>Cancel anytime from your billing settings.</p>
           </div>
 
           <div className="space-y-3">

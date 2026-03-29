@@ -21,6 +21,8 @@ import {
 } from "@/lib/grading/scanPhotos";
 import { buildGradeVerdict, type GradeVerdict } from "@/lib/grading/verdict";
 import { SpeakButton } from "@/components/ui/SpeakButton";
+import { buildCompsLinks } from "@/lib/ebay/comps-url";
+import PreSubmissionAnalysisSection from "@/components/grading/PreSubmissionAnalysisSection";
 
 interface GradeProbabilityPanelProps {
   estimate: GradeEstimate;
@@ -29,11 +31,17 @@ interface GradeProbabilityPanelProps {
     year?: string;
     set_name?: string;
     parallel_type?: string;
+    card_number?: string;
+    variation?: string;
+    insert?: string;
   } | null;
   primaryImageUrl?: string | null;
   imageUrls?: string[] | null;
   scanPhotos?: GradeScanPhoto[] | null;
   showPreliminaryBadge?: boolean;
+  compact?: boolean;
+  /** Correction text applied during a refinement re-run — shows a "Refined" badge */
+  appliedRefinement?: string | null;
 }
 
 const PSA_ORDER = ["PSA 10", "PSA 9", "PSA 8", "PSA 7 or lower"];
@@ -382,13 +390,15 @@ export default function GradeProbabilityPanel({
   imageUrls,
   scanPhotos,
   showPreliminaryBadge,
+  compact = false,
+  appliedRefinement,
 }: GradeProbabilityPanelProps) {
   const confidence = estimate.grade_probabilities?.confidence;
 
+  const [selectedPhotoIdx, setSelectedPhotoIdx] = useState(0);
   const [showBgsDistribution, setShowBgsDistribution] = useState(false);
-  const [showAnalysisDetails, setShowAnalysisDetails] = useState(
-    () => confidence === "low"
-  );
+  const [evidenceOpen, setEvidenceOpen] = useState(false);
+  const [verdictOpen, setVerdictOpen] = useState(false);
   const [exportingPng, setExportingPng] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
 
@@ -466,6 +476,9 @@ export default function GradeProbabilityPanel({
     primaryImageUrl ||
     undefined;
 
+  const selectedPhotoUrl =
+    normalizedScanPhotos[selectedPhotoIdx]?.url ?? primaryUrl;
+
   const handleExportPng = async () => {
     if (!printRef.current || exportingPng) return;
     setExportingPng(true);
@@ -508,152 +521,108 @@ export default function GradeProbabilityPanel({
 
   return (
     <>
+      {/* ── DARK GALLERY VIEWER ─────────────────────────────────────────── */}
       <div
         ref={panelRef}
-        className="overflow-hidden rounded-xl border border-[var(--biz-border)] bg-[var(--biz-surface)]"
+        className="flex flex-col lg:flex-row overflow-hidden rounded-xl border border-white/8 bg-[#111]"
+        style={{ minHeight: 560 }}
       >
-        {/* ── HERO STRIP ─────────────────────────────────────────────── */}
-        <div className="border-b border-[var(--biz-border)] px-5 py-4">
-          <div className="flex items-center gap-4">
-            {/* Card thumbnails — front prominent, back dimmed */}
-            {frontBackUrls.length > 0 ? (
-              <div className="flex shrink-0 items-end gap-1.5">
-                <div className="h-[68px] w-[49px] overflow-hidden rounded-lg ring-1 ring-[color:var(--biz-border)]">
-                  <img
-                    src={frontBackUrls[0]}
-                    alt="Card front"
-                    className="h-full w-full object-cover"
-                  />
-                </div>
-                {frontBackUrls[1] ? (
-                  <div className="h-[52px] w-[37px] overflow-hidden rounded-md opacity-60 ring-1 ring-[color:var(--biz-border)]">
-                    <img
-                      src={frontBackUrls[1]}
-                      alt="Card back"
-                      className="h-full w-full object-cover"
-                    />
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
 
-            {/* Identity + headline grade */}
-            <div className="min-w-0 flex-1">
-              <div className="mb-1 flex flex-wrap items-center gap-2">
-                <span className="text-[9px] font-semibold uppercase tracking-widest text-[var(--biz-muted)]">
-                  {gradingCopy.panel.title}
+        {/* ══ LEFT INFO PANEL ══════════════════════════════════════════════ */}
+        <div className="w-full lg:w-[268px] shrink-0 flex flex-col border-b lg:border-b-0 lg:border-r border-white/8 overflow-y-auto">
+
+          {/* Brand label */}
+          <div className="px-5 pt-5 pb-3">
+            <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-[#c8a951]">
+              CardzCheck · AI Estimate
+            </p>
+            {showPreliminaryBadge && (
+              <span className="mt-1 inline-flex items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-400">
+                Preliminary
+              </span>
+            )}
+            {appliedRefinement && (
+              <span
+                title={`Refined with: "${appliedRefinement}"`}
+                className="mt-1 inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-400 cursor-help"
+              >
+                ✦ Refined</span>
+            )}
+          </div>
+
+          {/* Grade hero */}
+          <div className="px-5 pb-5">
+            {psaTotal > 0 && likely ? (
+              <div className="flex items-baseline gap-2.5">
+                <span className="text-[52px] font-black leading-none tracking-tight text-white">
+                  {likely.label}
                 </span>
-                {showPreliminaryBadge ? (
-                  <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-700">
-                    Preliminary
-                  </span>
-                ) : null}
-                {cardLabel ? (
-                  <span className="hidden max-w-[300px] truncate text-xs text-[var(--biz-muted)] sm:inline">
-                    {cardLabel}
-                  </span>
-                ) : null}
+                <span className="text-[22px] font-bold leading-none text-blue-400">
+                  {formatPercent(likely.probability)}
+                </span>
               </div>
+            ) : (
+              <span className="text-[52px] font-black leading-none text-white/20">--</span>
+            )}
 
-              <div className="flex flex-wrap items-end gap-x-4 gap-y-0.5">
-                {psaTotal > 0 && likely ? (
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-[28px] font-bold leading-none tracking-tight text-[var(--biz-text)]">
-                      {likely.label}
-                    </span>
-                    <span className="text-lg font-semibold text-blue-600">
-                      {formatPercent(likely.probability)}
-                    </span>
-                  </div>
-                ) : (
-                  <span className="text-[28px] font-bold leading-none text-[var(--biz-muted)]">--</span>
-                )}
-                <div className="flex items-baseline gap-1">
-                  <span className="text-[9px] font-medium uppercase tracking-widest text-[var(--biz-muted)]">
-                    EV
-                  </span>
-                  <span className="text-sm font-semibold text-[var(--biz-muted)]">{evLabel}</span>
-                </div>
-              </div>
-
-              {cardLabel ? (
-                <p className="mt-0.5 truncate text-xs text-[var(--biz-muted)] sm:hidden">
-                  {cardLabel}
-                </p>
-              ) : null}
+            <div className="mt-1.5 flex items-center gap-1.5">
+              <span className="text-[9px] font-bold uppercase tracking-widest text-white/25">EV</span>
+              <span className="text-sm font-semibold text-white/35">{evLabel}</span>
             </div>
 
-            {/* Badges column */}
-            <div className="flex shrink-0 flex-col items-end gap-1.5">
-              <span
-                className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${RECOMMENDATION_CLASSES[verdict.recommendation]}`}
-              >
+            {cardLabel && (
+              <p className="mt-3 text-[11px] leading-snug text-white/45">{cardLabel}</p>
+            )}
+
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${RECOMMENDATION_CLASSES[verdict.recommendation]}`}>
                 {verdict.recommendation}
               </span>
-              {confidence && confidencePillClass ? (
-                <span
-                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${confidencePillClass}`}
-                >
+              {confidence && confidencePillClass && (
+                <span className={`text-[9px] font-semibold uppercase tracking-wide ${confidencePillClass}`}>
                   {confidence} conf.
                 </span>
-              ) : null}
-              <span className="text-[10px] font-medium text-[var(--biz-muted)]">
-                → {verdict.suggestedGrader}
-              </span>
+              )}
+              <span className="text-[9px] text-white/25">→ {verdict.suggestedGrader}</span>
             </div>
           </div>
-        </div>
 
-        {/* ── INLINE ALERT BANNER (warnings / low confidence / visibility notes) */}
-        {inlineBanner ? (
-          <div className="border-b border-amber-200/50 bg-amber-50/60 px-5 py-2">
-            <p className="text-[11px] leading-snug text-amber-700">{inlineBanner}</p>
-          </div>
-        ) : null}
-
-        {/* ── MAIN 2-COLUMN WORKSPACE ───────────────────────────────── */}
-        <div className="grid grid-cols-1 divide-y divide-[var(--biz-border)] lg:grid-cols-2 lg:divide-x lg:divide-y-0">
-
-          {/* LEFT: Probability distribution + Verdict */}
-          <div className="flex flex-col gap-5 px-5 py-5">
-
-            {/* PSA distribution */}
-            <div>
-              <div className="mb-3">
-                <SectionLabel>{gradingCopy.panel.distributionTitle} — PSA</SectionLabel>
-              </div>
-              <div className="space-y-2.5">
-                {psaOutcomes.map((outcome) => (
-                  <ProbabilityBar
-                    key={outcome.label}
-                    label={outcome.label}
-                    probability={outcome.probability}
-                    isHighlighted={outcome.label === likely?.label}
-                    accentColor="blue"
-                  />
-                ))}
-              </div>
+          {/* Warning banner */}
+          {inlineBanner && (
+            <div className="mx-5 mb-4 rounded-lg border border-amber-500/20 bg-amber-500/8 px-3 py-2">
+              <p className="text-[10px] leading-snug text-amber-400">{inlineBanner}</p>
             </div>
+          )}
 
-            {/* BGS toggle */}
-            {bgsOutcomes ? (
-              <div>
+          {/* Grade Probability Distribution */}
+          <div className="px-5 pt-4 pb-5 border-t border-white/8">
+            <p className="text-[9px] font-semibold uppercase tracking-widest text-white/30 mb-3">
+              Grade Probability · PSA
+            </p>
+            <div className="space-y-2.5">
+              {psaOutcomes.map((outcome) => (
+                <ProbabilityBar
+                  key={outcome.label}
+                  label={outcome.label}
+                  probability={outcome.probability}
+                  isHighlighted={outcome.label === likely?.label}
+                  accentColor="blue"
+                />
+              ))}
+            </div>
+            {bgsOutcomes && (
+              <div className="mt-3">
                 <button
                   type="button"
                   onClick={() => setShowBgsDistribution((prev) => !prev)}
-                  className="flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-widest text-[var(--biz-muted)] transition-colors hover:text-[var(--biz-text)]"
+                  className="flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-widest text-white/25 transition-colors hover:text-white/60"
                 >
-                  <svg
-                    className={`h-3 w-3 transition-transform duration-200 ${showBgsDistribution ? "rotate-180" : ""}`}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
+                  <svg className={`h-3 w-3 transition-transform duration-200 ${showBgsDistribution ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
                   BGS Distribution
                 </button>
-                {showBgsDistribution ? (
+                {showBgsDistribution && (
                   <div className="mt-2.5 space-y-2.5">
                     {BGS_ORDER.map((label) => {
                       const outcome = bgsOutcomes.find((item) => item.label === label);
@@ -668,325 +637,258 @@ export default function GradeProbabilityPanel({
                       );
                     })}
                   </div>
-                ) : null}
-              </div>
-            ) : null}
-
-            {/* Divider before verdict */}
-            <div className="border-t border-[var(--biz-border)]" />
-
-            {/* Verdict 2×2 stat grid */}
-            <div>
-              <div className="mb-2.5 flex items-center justify-between gap-2">
-                <SectionLabel>The Verdict</SectionLabel>
-                <SpeakButton
-                  text={[
-                    likely
-                      ? `Most likely grade: ${likely.label} with ${Math.round(likely.probability * 100)} percent probability.`
-                      : "",
-                    `Recommendation: ${verdict.recommendation}.`,
-                    `Suggested grader: ${verdict.suggestedGrader}.`,
-                    `Expected outcome: ${verdict.expectedOutcome}.`,
-                    `Strategy: ${verdict.strategyTip}.`,
-                    verdict.reasoning ? `Reasoning: ${verdict.reasoning}.` : "",
-                    estimate.centering ? `Centering: ${estimate.centering}.` : "",
-                    estimate.corners ? `Corners: ${estimate.corners}.` : "",
-                    estimate.surface ? `Surface: ${estimate.surface}.` : "",
-                    estimate.edges ? `Edges: ${estimate.edges}.` : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                  size="sm"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-1.5">
-                <VerdictStat label="Recommendation" value={verdict.recommendation} />
-                <VerdictStat label="Suggested Grader" value={verdict.suggestedGrader} />
-                <VerdictStat label="Expected Outcome" value={verdict.expectedOutcome} />
-                <VerdictStat label="Strategy" value={verdict.strategyTip} />
-              </div>
-            </div>
-
-            {/* Reasoning insight panel */}
-            {verdict.reasoning ? (
-              <div className="rounded-md border border-[var(--biz-border)] bg-[color:var(--biz-surface-soft)] px-3 py-2.5">
-                <p className="mb-1 text-[9px] font-semibold uppercase tracking-widest text-[var(--biz-muted)]">
-                  Reasoning
-                </p>
-                <p className="text-[11px] leading-relaxed text-[var(--biz-muted)]">
-                  {verdict.reasoning}
-                </p>
-              </div>
-            ) : null}
-          </div>
-
-          {/* RIGHT: Evidence + Notes + Close-ups */}
-          <div className="flex flex-col gap-4 px-5 py-5">
-
-            {/* Evidence header */}
-            <div className="flex items-center justify-between gap-2">
-              <SectionLabel>{gradingCopy.panel.evidenceTitle}</SectionLabel>
-              <p className="max-w-[160px] text-right text-[9px] leading-snug text-[var(--biz-muted)]">
-                {gradingCopy.panel.evidenceNote}
-              </p>
-            </div>
-
-            {/* Evidence 2×2 grid */}
-            <div className="grid grid-cols-2 gap-2">
-              <EvidenceBlock
-                icon={
-                  <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
-                    />
-                  </svg>
-                }
-                label={gradingCopy.panel.evidenceLabels.centering}
-                text={estimate.centering}
-                detail={
-                  centeringMeta
-                    ? `L/R ${centeringMeta.left_right_ratio ?? "-"} · T/B ${centeringMeta.top_bottom_ratio ?? "-"}`
-                    : undefined
-                }
-              />
-              <EvidenceBlock
-                icon={
-                  <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
-                    />
-                  </svg>
-                }
-                label={gradingCopy.panel.evidenceLabels.corners}
-                text={estimate.corners}
-                detail={cornerEvidenceSource ? `Source: ${cornerEvidenceSource}` : undefined}
-              />
-              <EvidenceBlock
-                icon={
-                  <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"
-                    />
-                  </svg>
-                }
-                label={gradingCopy.panel.evidenceLabels.surface}
-                text={estimate.surface}
-                detail={combineDetails(
-                  topSurfaceFindings.length > 0
-                    ? topSurfaceFindings
-                        .map((f) => `${f.issue_type.replace(/_/g, " ")} sev ${f.severity_0_3}/3`)
-                        .join(" | ")
-                    : undefined,
-                  surfaceEvidenceSource ? `Source: ${surfaceEvidenceSource}` : undefined
                 )}
-              />
-              <EvidenceBlock
-                icon={
-                  <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"
-                    />
-                  </svg>
-                }
-                label={gradingCopy.panel.evidenceLabels.edges}
-                text={estimate.edges}
-                detail={edgeEvidenceSource ? `Source: ${edgeEvidenceSource}` : undefined}
-              />
-            </div>
-
-            {/* Grade notes */}
-            {estimate.grade_notes ? (
-              <div className="rounded-md border border-[var(--biz-border)] bg-[color:var(--biz-surface-soft)] px-3 py-2.5">
-                <p className="mb-1 text-[9px] font-semibold uppercase tracking-widest text-[var(--biz-muted)]">
-                  {gradingCopy.panel.notesLabel}
-                </p>
-                <p className="text-[11px] leading-relaxed text-[var(--biz-muted)]">
-                  {estimate.grade_notes}
-                </p>
               </div>
-            ) : null}
-
-            {/* Close-up photo strip */}
-            {closeupPhotos.length > 0 ? (
-              <div>
-                <p className="mb-2 text-[9px] font-semibold uppercase tracking-widest text-[var(--biz-muted)]">
-                  Close-ups
-                </p>
-                <div className="flex gap-2 overflow-x-auto pb-1">
-                  {closeupPhotos.map((photo, index) => {
-                    const kind = photo.kind as GradeScanPhotoKind;
-                    return (
-                      <div key={`${photo.url}-${index}`} className="shrink-0 w-[68px]">
-                        <div className="h-[85px] overflow-hidden rounded-md border border-[var(--biz-border)]">
-                          <img
-                            src={photo.url}
-                            alt={GRADE_SCAN_KIND_LABELS[kind] ?? "Close-up"}
-                            className="h-full w-full object-cover"
-                          />
-                        </div>
-                        <p className="mt-0.5 truncate text-center text-[9px] text-[var(--biz-muted)]">
-                          {GRADE_SCAN_KIND_LABELS[kind] ?? kind}
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : null}
+            )}
           </div>
-        </div>
 
-        {/* ── FOOTER ──────────────────────────────────────────────────── */}
-        <div className="border-t border-[var(--biz-border)]">
-
-          {/* Expandable: Image Quality & Confidence Analysis */}
-          <div className="px-5 py-3">
+          {/* Evidence (collapsible) */}
+          <div className="border-t border-white/8">
             <button
               type="button"
-              onClick={() => setShowAnalysisDetails((prev) => !prev)}
-              className="flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-widest text-[var(--biz-muted)] transition-colors hover:text-[var(--biz-text)]"
+              onClick={() => setEvidenceOpen((p) => !p)}
+              className="w-full flex items-center justify-between px-5 py-3 text-[9px] font-semibold uppercase tracking-widest text-white/30 hover:text-white/60 transition-colors"
             >
-              <svg
-                className={`h-3 w-3 transition-transform duration-200 ${showAnalysisDetails ? "rotate-180" : ""}`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
+              Evidence from Photos
+              <svg className={`h-3 w-3 transition-transform duration-200 ${evidenceOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
-              Image Quality &amp; Confidence Analysis
-              {confidence === "low" ? (
-                <span className="ml-1 font-normal normal-case text-amber-600">
-                  · Low confidence detected
-                </span>
-              ) : null}
             </button>
-
-            {showAnalysisDetails ? (
-              <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-2">
-                <div className="rounded-md border border-[var(--biz-border)] bg-[color:var(--biz-surface-soft)] p-3">
-                  <p className="mb-1.5 text-[9px] uppercase tracking-widest text-[var(--biz-muted)]">
-                    Image Quality
-                  </p>
-                  <p className="text-base font-semibold text-[var(--biz-text)]">
-                    {imageQuality?.overall_image_score ?? "-"}
-                    <span className="text-xs font-normal text-[var(--biz-muted)]">/100</span>
-                  </p>
-                  {imageQuality?.subscores ? (
-                    <div className="mt-1.5 space-y-0.5 text-[11px] text-[var(--biz-muted)]">
-                      <p>Focus: {imageQuality.subscores.focus_sharpness}/25</p>
-                      <p>Glare: {imageQuality.subscores.lighting_glare_control}/25</p>
-                      <p>Coverage: {imageQuality.subscores.coverage_angles}/25</p>
-                      <p>Resolution: {imageQuality.subscores.resolution_distance}/25</p>
-                    </div>
-                  ) : null}
-                </div>
-                <div className="rounded-md border border-[var(--biz-border)] bg-[color:var(--biz-surface-soft)] p-3">
-                  <p className="mb-1.5 text-[9px] uppercase tracking-widest text-[var(--biz-muted)]">
-                    Model Confidence
-                  </p>
-                  <p className="text-base font-semibold text-[var(--biz-text)]">
-                    {confidenceMeta?.overall_confidence_score ?? "-"}
-                    <span className="text-xs font-normal text-[var(--biz-muted)]">/100</span>
-                  </p>
-                  {(confidenceMeta?.limiting_factors?.length ?? 0) > 0 ? (
-                    <ul className="mt-1.5 list-inside list-disc space-y-0.5 text-[11px] text-[var(--biz-muted)]">
-                      {confidenceMeta?.limiting_factors.slice(0, 4).map((factor, idx) => (
-                        <li key={`${factor}-${idx}`}>{factor}</li>
-                      ))}
-                    </ul>
-                  ) : null}
-                </div>
+            {evidenceOpen && (
+              <div
+                className="px-5 pb-5 space-y-2"
+                style={{
+                  "--biz-border": "rgba(255,255,255,0.08)",
+                  "--biz-surface": "#1c1c1c",
+                  "--biz-surface-soft": "#161616",
+                  "--biz-hover": "#222",
+                  "--biz-muted": "rgba(255,255,255,0.40)",
+                  "--biz-text": "#fff",
+                } as React.CSSProperties}
+              >
+                <EvidenceBlock
+                  icon={<svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>}
+                  label="Centering"
+                  text={estimate.centering}
+                  detail={centeringMeta ? `L/R ${centeringMeta.left_right_ratio ?? "-"} · T/B ${centeringMeta.top_bottom_ratio ?? "-"}` : undefined}
+                />
+                <EvidenceBlock
+                  icon={<svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>}
+                  label="Corners"
+                  text={estimate.corners}
+                  detail={cornerEvidenceSource ? `Source: ${cornerEvidenceSource}` : undefined}
+                />
+                <EvidenceBlock
+                  icon={<svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" /></svg>}
+                  label="Surface"
+                  text={estimate.surface}
+                  detail={combineDetails(
+                    topSurfaceFindings.length > 0 ? topSurfaceFindings.map((f) => `${f.issue_type.replace(/_/g, " ")} sev ${f.severity_0_3}/3`).join(" | ") : undefined,
+                    surfaceEvidenceSource ? `Source: ${surfaceEvidenceSource}` : undefined
+                  )}
+                />
+                <EvidenceBlock
+                  icon={<svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" /></svg>}
+                  label="Edges"
+                  text={estimate.edges}
+                  detail={edgeEvidenceSource ? `Source: ${edgeEvidenceSource}` : undefined}
+                />
+                {estimate.grade_notes && (
+                  <div className="rounded-lg border border-white/8 bg-white/3 p-2.5">
+                    <p className="text-[9px] font-semibold uppercase tracking-widest text-white/30 mb-1">Notes</p>
+                    <p className="text-[10px] leading-relaxed text-white/40">{estimate.grade_notes}</p>
+                  </div>
+                )}
               </div>
-            ) : null}
+            )}
           </div>
 
-          {/* Disclaimer + export actions */}
-          <div
-            className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--biz-border)] px-5 py-3"
-          >
-            <p
-              className="max-w-prose text-[10px] leading-relaxed text-[var(--biz-muted)]"
-              data-export-disclaimer="true"
+          {/* Verdict (collapsible) */}
+          <div className="border-t border-white/8">
+            <button
+              type="button"
+              onClick={() => setVerdictOpen((p) => !p)}
+              className="w-full flex items-center justify-between px-5 py-3 text-[9px] font-semibold uppercase tracking-widest text-white/30 hover:text-white/60 transition-colors"
             >
-              {gradingCopy.panel.disclaimer}
-            </p>
+              The Verdict
+              <svg className={`h-3 w-3 transition-transform duration-200 ${verdictOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {verdictOpen && (
+              <div
+                className="px-5 pb-5 space-y-2"
+                style={{
+                  "--biz-border": "rgba(255,255,255,0.08)",
+                  "--biz-surface": "#1c1c1c",
+                  "--biz-surface-soft": "#161616",
+                  "--biz-hover": "#222",
+                  "--biz-muted": "rgba(255,255,255,0.40)",
+                  "--biz-text": "#fff",
+                } as React.CSSProperties}
+              >
+                <div className="grid grid-cols-2 gap-1.5">
+                  <VerdictStat label="Recommendation" value={verdict.recommendation} />
+                  <VerdictStat label="Suggested Grader" value={verdict.suggestedGrader} />
+                  <VerdictStat label="Expected Outcome" value={verdict.expectedOutcome} />
+                  <VerdictStat label="Strategy" value={verdict.strategyTip} />
+                </div>
+                {verdict.reasoning && (
+                  <div className="rounded-md border border-white/8 bg-white/3 px-3 py-2.5">
+                    <p className="mb-1 text-[9px] font-semibold uppercase tracking-widest text-white/30">Reasoning</p>
+                    <p className="text-[10px] leading-relaxed text-white/40">{verdict.reasoning}</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Footer — export + TTS + disclaimer */}
+          <div className="mt-auto border-t border-white/8 px-5 py-4">
             <div className="flex items-center gap-2" data-export-ignore="true">
               <button
                 type="button"
                 onClick={handleExportPdf}
-                className="inline-flex items-center gap-1.5 rounded-md border border-[var(--biz-border)] bg-[var(--biz-surface)] px-3 py-1.5 text-xs font-medium text-[var(--biz-text)] transition-colors hover:bg-[var(--biz-hover)]"
+                className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md border border-white/12 bg-white/5 px-3 py-1.5 text-[11px] font-medium text-white/50 transition-colors hover:bg-white/10 hover:text-white/80"
               >
-                <svg
-                  className="h-3.5 w-3.5 shrink-0"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
-                  />
-                </svg>
                 PDF
               </button>
               <button
                 type="button"
                 onClick={handleExportPng}
                 disabled={exportingPng}
-                className="inline-flex items-center gap-1.5 rounded-md border border-[var(--biz-border)] bg-[var(--biz-surface)] px-3 py-1.5 text-xs font-medium text-[var(--biz-text)] transition-colors hover:bg-[var(--biz-hover)] disabled:opacity-40"
+                className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md border border-white/12 bg-white/5 px-3 py-1.5 text-[11px] font-medium text-white/50 transition-colors hover:bg-white/10 hover:text-white/80 disabled:opacity-40"
               >
-                <svg
-                  className="h-3.5 w-3.5 shrink-0"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                  />
-                </svg>
-                {exportingPng ? "Exporting..." : "PNG"}
+                {exportingPng ? "…" : "PNG"}
               </button>
+              <SpeakButton
+                text={[
+                  likely ? `Most likely grade: ${likely.label} with ${Math.round(likely.probability * 100)} percent probability.` : "",
+                  `Recommendation: ${verdict.recommendation}.`,
+                  `Suggested grader: ${verdict.suggestedGrader}.`,
+                  estimate.centering ? `Centering: ${estimate.centering}.` : "",
+                  estimate.corners ? `Corners: ${estimate.corners}.` : "",
+                  estimate.surface ? `Surface: ${estimate.surface}.` : "",
+                  estimate.edges ? `Edges: ${estimate.edges}.` : "",
+                ].filter(Boolean).join(" ")}
+                size="sm"
+              />
             </div>
+            {exportError && (
+              <p className="mt-2 text-[10px] text-rose-400">{exportError}</p>
+            )}
+            <p className="mt-3 text-[9px] leading-relaxed text-white/18" data-export-disclaimer="true">
+              {gradingCopy.panel.disclaimer}
+            </p>
           </div>
-
-          {exportError ? (
-            <div className="px-5 pb-3">
-              <p className="text-xs text-rose-600">{exportError}</p>
-            </div>
-          ) : null}
         </div>
+
+        {/* ══ CENTER — CARD IMAGE ══════════════════════════════════════════ */}
+        <div
+          className="flex-1 flex items-center justify-center bg-[#0a0a0a] p-8"
+          style={{ minHeight: 420 }}
+        >
+          {selectedPhotoUrl ? (
+            <img
+              src={selectedPhotoUrl}
+              alt="Card"
+              className="max-w-full object-contain rounded-lg"
+              style={{
+                maxHeight: 580,
+                filter: "drop-shadow(0 0 48px rgba(0,0,0,0.9))",
+              }}
+            />
+          ) : (
+            <div className="text-white/15 text-sm">No image</div>
+          )}
+        </div>
+
+        {/* ══ RIGHT — THUMBNAIL STRIP ═════════════════════════════════════ */}
+        {normalizedScanPhotos.length > 1 && (
+          <div className="flex flex-row lg:flex-col gap-2 p-2.5 bg-[#0a0a0a] border-t lg:border-t-0 lg:border-l border-white/8 lg:w-[76px] overflow-x-auto lg:overflow-x-visible lg:overflow-y-auto">
+            {normalizedScanPhotos.map((photo, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => setSelectedPhotoIdx(i)}
+                className={`shrink-0 rounded-md overflow-hidden border-2 transition-all ${
+                  selectedPhotoIdx === i
+                    ? "border-blue-500 opacity-100"
+                    : "border-white/10 opacity-50 hover:opacity-80 hover:border-white/30"
+                }`}
+              >
+                <img
+                  src={photo.url}
+                  alt={GRADE_SCAN_KIND_LABELS[photo.kind as GradeScanPhotoKind] ?? `Photo ${i + 1}`}
+                  className="w-[52px] h-[68px] object-cover"
+                />
+              </button>
+            ))}
+          </div>
+        )}
       </div>
+
+      {/* ── VERIFY COMPS ─────────────────────────────────────────────────── */}
+      {cardIdentity && (cardIdentity.player_name || cardIdentity.set_name) && (() => {
+        const { psa10Url, psa9Url, rawUrl } = buildCompsLinks({
+          player: cardIdentity.player_name,
+          year: cardIdentity.year,
+          setName: cardIdentity.set_name,
+          parallel: cardIdentity.parallel_type,
+        });
+        return (
+          <div className="mt-3 rounded-lg border border-white/[0.07] bg-[#0d1b2a] px-4 py-3">
+            <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.18em] text-blue-400/70">
+              Verify Comps on eBay
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <a
+                href={psa10Url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 rounded border border-blue-900/40 bg-blue-950/40 px-2.5 py-1 text-[11px] font-medium text-blue-300 hover:bg-blue-900/50 transition-colors"
+              >
+                PSA 10 sold →
+              </a>
+              <a
+                href={psa9Url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 rounded border border-blue-900/40 bg-blue-950/40 px-2.5 py-1 text-[11px] font-medium text-blue-300 hover:bg-blue-900/50 transition-colors"
+              >
+                PSA 9 sold →
+              </a>
+              <a
+                href={rawUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 rounded border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-white/50 hover:text-white/70 hover:bg-white/[0.07] transition-colors"
+              >
+                Raw sold →
+              </a>
+            </div>
+            <p className="mt-2 text-[9px] text-white/25">
+              Click to verify current eBay sold prices
+            </p>
+          </div>
+        );
+      })()}
+
+      {cardIdentity && cardIdentity.player_name ? (
+        <PreSubmissionAnalysisSection estimate={estimate} cardIdentity={cardIdentity} />
+      ) : null}
 
       {/* Off-screen print target */}
       <div
         ref={printRef}
         aria-hidden="true"
         style={{
-          position: "absolute",
-          left: -9999,
-          top: -9999,
+          position: "fixed",
+          left: -10000,
+          top: 0,
           width: 794,
-          visibility: "hidden",
           pointerEvents: "none",
+          zIndex: -1,
         }}
       >
         <GradeReportPrint

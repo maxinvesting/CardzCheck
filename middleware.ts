@@ -119,9 +119,9 @@ async function checkRateLimit(
     }
   } else if (process.env.NODE_ENV === "production") {
     // Surface clearly in Vercel logs so the operator knows to fix it
-    console.warn(
-      "[ratelimit] WARNING: In-memory rate limiting is not distributed across Vercel instances. " +
-      "Set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN for production-grade limiting."
+    console.error(
+      "[SECURITY][ratelimit] CRITICAL: Rate limiting is in-memory only. " +
+      "Configure UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN for distributed rate limiting."
     );
   }
 
@@ -132,6 +132,29 @@ async function checkRateLimit(
 // Middleware entry point
 // ---------------------------------------------------------------------------
 export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  // API routes already perform auth checks in their handlers.
+  // Skipping session refresh here avoids an extra auth round-trip per API request.
+  if (pathname.startsWith("/api/")) {
+    const apiRateLimit = await checkRateLimit(request, null);
+    if (apiRateLimit.limited) {
+      return NextResponse.json(
+        {
+          error: "Rate limit exceeded",
+          message: "Too many requests. Please retry after a short wait.",
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(apiRateLimit.retryAfterSeconds || 60),
+          },
+        }
+      );
+    }
+    return NextResponse.next();
+  }
+
   const { response, userId } = await updateSession(request);
   const rateLimit = await checkRateLimit(request, userId);
 

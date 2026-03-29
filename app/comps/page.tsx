@@ -7,6 +7,7 @@ import CardPicker, { type CardPickerSelection } from "@/components/CardPicker";
 import CompsStats from "@/components/CompsStats";
 import CompsTable from "@/components/CompsTable";
 import FeaturedSearchCard from "@/components/FeaturedSearchCard";
+import ValuationCautions from "@/components/ValuationCautions";
 import PaywallModal from "@/components/PaywallModal";
 import PlanSelectionModal from "@/components/PlanSelectionModal";
 import WelcomeToast from "@/components/WelcomeToast";
@@ -528,13 +529,13 @@ function CompsPageContent() {
         {/* Page Header */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-2">
-            <h1 className="text-3xl font-bold text-white">Comps</h1>
+            <h1 className="text-3xl font-bold text-gray-900">Compare Listings</h1>
             <span className="px-2 py-0.5 bg-amber-500/20 text-amber-400 text-xs font-medium rounded">
               Beta
             </span>
           </div>
           <p className="text-gray-400">
-            Find comparable listings and market values for any trading card
+            Review listing history and estimated values for any trading card
           </p>
         </div>
 
@@ -815,23 +816,6 @@ function CompsPageContent() {
               }
               return (
                 <>
-                  {/* Fallback banner — only shown when we have results but used a broader search pass */}
-                  {results._passUsed && results._passUsed !== "strict" && (
-                    <div className="p-4 bg-yellow-900/20 border border-yellow-800/50 rounded-lg">
-                      <div className="flex items-start gap-3">
-                        <svg className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <div>
-                          <p className="text-yellow-200 text-sm font-medium">No exact matches — showing closest comps</p>
-                          <p className="text-yellow-300/70 text-xs mt-1">
-                            We expanded your search to find similar listings. Results may include cards from different years or variations.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
                   {/* Most relevant result — click to expand for CMV, recent sales, Add to Watchlist */}
                   <FeaturedSearchCard
                     results={results}
@@ -842,12 +826,62 @@ function CompsPageContent() {
                     userLoggedIn={!!user}
                   />
 
-                  {/* Current Listings */}
-                  <div className="space-y-3">
-                    <h2 className="text-xl font-semibold text-white">
-                      Current Listings ({results._forSale?.count ?? results.comps?.length ?? 0})
-                    </h2>
-                    {results._forSale && results._forSale.count > 0 ? (
+                  <ValuationCautions
+                    confidenceBand={results._compEvaluation?.confidenceBand}
+                    confidenceScore={results._compEvaluation?.confidenceScore}
+                    confidenceExplanation={results._compEvaluation?.confidenceExplanation}
+                    disclaimerMessages={results._compEvaluation?.disclaimerMessages ?? results._disclaimers}
+                    includeReasonSummary={results._compEvaluation?.includeReasonSummary}
+                    excludeReasonSummary={results._compEvaluation?.excludeReasonSummary}
+                  />
+
+                  <div className="space-y-5">
+                    {results._compEvaluation && results._compEvaluation.exactComps.length > 0 && (
+                      <div className="space-y-3">
+                        <h2 className="text-xl font-semibold text-white">
+                          Exact Matches ({results._compEvaluation.exactComps.length})
+                        </h2>
+                        <CompsTable
+                          isCurrentListings
+                          comps={results._compEvaluation.exactComps.filter((c) => !addedToCollection.has(c.link))}
+                          onAddToCollection={user ? handleAddToCollection : undefined}
+                          canAddToCollection={user?.is_paid || (user ? LIMITS.FREE_COLLECTION - addedToCollection.size > 0 : false)}
+                          addingLink={addingToCollection}
+                        />
+                      </div>
+                    )}
+
+                    {results._compEvaluation && results._compEvaluation.similarComps.length > 0 && (
+                      <div className="space-y-3">
+                        <h2 className="text-xl font-semibold text-white">
+                          Similar Support Matches ({results._compEvaluation.similarComps.length})
+                        </h2>
+                        <CompsTable
+                          isCurrentListings
+                          comps={results._compEvaluation.similarComps.filter((c) => !addedToCollection.has(c.link))}
+                          onAddToCollection={user ? handleAddToCollection : undefined}
+                          canAddToCollection={user?.is_paid || (user ? LIMITS.FREE_COLLECTION - addedToCollection.size > 0 : false)}
+                          addingLink={addingToCollection}
+                        />
+                      </div>
+                    )}
+
+                    {results._compEvaluation && results._compEvaluation.supportComps.length > 0 && (
+                      <div className="space-y-3">
+                        <h2 className="text-xl font-semibold text-white">
+                          Fallback Active Support ({results._compEvaluation.supportComps.length})
+                        </h2>
+                        <CompsTable
+                          isCurrentListings
+                          comps={results._compEvaluation.supportComps.filter((c) => !addedToCollection.has(c.link))}
+                          onAddToCollection={user ? handleAddToCollection : undefined}
+                          canAddToCollection={user?.is_paid || (user ? LIMITS.FREE_COLLECTION - addedToCollection.size > 0 : false)}
+                          addingLink={addingToCollection}
+                        />
+                      </div>
+                    )}
+
+                    {!results._compEvaluation && results._forSale && results._forSale.count > 0 && (
                       <CompsTable
                         isCurrentListings
                         comps={results._forSale.items
@@ -864,7 +898,9 @@ function CompsPageContent() {
                         canAddToCollection={user?.is_paid || (user ? LIMITS.FREE_COLLECTION - addedToCollection.size > 0 : false)}
                         addingLink={addingToCollection}
                       />
-                    ) : (
+                    )}
+
+                    {!results._compEvaluation && (!results._forSale || results._forSale.count === 0) && (
                       <CompsTable
                         comps={(results.comps ?? []).filter((c) => !addedToCollection.has(c.link))}
                         onAddToCollection={user ? handleAddToCollection : undefined}
@@ -872,11 +908,27 @@ function CompsPageContent() {
                         addingLink={addingToCollection}
                       />
                     )}
+
+                    {results._compEvaluation && results._compEvaluation.rejectedComps.length > 0 && (
+                      <details className="rounded-lg border border-gray-700/60 bg-gray-900/20 p-3">
+                        <summary className="cursor-pointer text-sm text-gray-300">
+                          Hidden weak/rejected matches ({results._compEvaluation.rejectedComps.length})
+                        </summary>
+                        <div className="mt-3">
+                          <CompsTable
+                            isCurrentListings
+                            comps={results._compEvaluation.rejectedComps}
+                            canAddToCollection={false}
+                            showReasoning
+                          />
+                        </div>
+                      </details>
+                    )}
                   </div>
 
                   {results._disclaimers && results._disclaimers.length > 0 && (
                     <div className="p-3 bg-gray-800/30 border border-gray-700/50 rounded-lg">
-                      <p className="text-xs text-gray-500">{results._disclaimers.slice(0, 2).join(" • ")}</p>
+                      <p className="text-xs text-gray-500">{results._disclaimers.slice(0, 3).join(" • ")}</p>
                     </div>
                   )}
                 </>

@@ -59,7 +59,10 @@ function BusinessDashboardContent() {
   );
 
   const inventorySummary = useMemo((): InventoryValueSummary | null => {
-    return computeInventoryValueSummary(items);
+    const activeItems = items.filter(
+      (it) => it.status !== "sold" && it.status !== "returned"
+    );
+    return computeInventoryValueSummary(activeItems);
   }, [items]);
 
   const loadInventory = useCallback(async () => {
@@ -149,7 +152,6 @@ function BusinessDashboardContent() {
 
   const loadUserProfile = useCallback(async () => {
     const supabase = createClient();
-    await supabase.auth.refreshSession();
     const {
       data: { user },
     } = await supabase.auth.getUser();

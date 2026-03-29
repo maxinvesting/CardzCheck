@@ -25,10 +25,13 @@ export async function POST(request: NextRequest) {
   try {
     // Verify cron secret
     const authHeader = request.headers.get("authorization");
-    const cronSecret = process.env.CRON_SECRET;
-
-    // In production, require CRON_SECRET
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+    const cronSecret = process.env.CRON_SECRET?.trim();
+    if (!cronSecret) {
+      if (process.env.NODE_ENV === "production") {
+        console.error("[watchlist/update-prices] CRON_SECRET is missing in production");
+        return NextResponse.json({ error: "Server misconfigured" }, { status: 500 });
+      }
+    } else if (authHeader !== `Bearer ${cronSecret}`) {
       console.error("Unauthorized cron request");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

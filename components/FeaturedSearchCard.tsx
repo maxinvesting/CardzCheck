@@ -68,6 +68,7 @@ export default function FeaturedSearchCard({
   const est = results._estimatedSaleRange;
   const hasEstimate = est?.pricingAvailable && est.estimatedSaleRange;
   const modeled = results._marketDiscount;
+  const evaluation = results._compEvaluation;
   const cmv = modeled?.cmv ?? results.stats?.cmv ?? null;
   const hasModeledRange =
     modeled?.rangeLow !== null &&
@@ -120,6 +121,7 @@ export default function FeaturedSearchCard({
               ` · Est. ${formatPrice(modeled!.rangeLow)}–${formatPrice(modeled!.rangeHigh)}`}
             {!hasModeledRange && hasEstimate &&
               ` · Est. ${formatPrice(est!.estimatedSaleRange!.low)}–${formatPrice(est!.estimatedSaleRange!.high)}`}
+            {evaluation?.confidenceBand && ` · ${evaluation.confidenceBand.replace("_", " ")} confidence`}
             {!expanded && " · Click to expand"}
           </p>
         </div>
@@ -148,7 +150,17 @@ export default function FeaturedSearchCard({
             {cmv !== null && (
               <div className="p-4 bg-gray-900/50 rounded-xl">
                 <h3 className="text-sm font-medium text-gray-400 mb-2">
-                  Est. Market Value ({modeled?.method === "sold_median" ? "sold median" : "listing-adjusted"})
+                  Est. Market Value (
+                  {evaluation?.valuationSource === "exact_sold"
+                    ? "exact sold matches"
+                    : evaluation?.valuationSource === "mixed_sold"
+                    ? "mixed sold support"
+                    : evaluation?.valuationSource === "active_directional"
+                    ? "active directional"
+                    : modeled?.method === "sold_median"
+                    ? "sold median"
+                    : "listing-adjusted"}
+                  )
                 </h3>
                 <div className="flex flex-wrap items-baseline gap-3">
                   <span className="text-2xl font-bold text-white">
@@ -165,7 +177,8 @@ export default function FeaturedSearchCard({
                   </span>
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  {modeled?.confidence ?? est?.estimatedSaleRange?.confidence ?? "low"} confidence
+                  {evaluation?.confidenceExplanation ??
+                    `${modeled?.confidence ?? est?.estimatedSaleRange?.confidence ?? "low"} confidence`}
                 </p>
               </div>
             )}

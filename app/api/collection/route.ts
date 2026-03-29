@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { LIMITS, type AcquisitionType, type CollectionItem } from "@/types";
 import { isTestMode } from "@/lib/test-mode";
-import { calculateCardCmv, isCmvStale } from "@/lib/cmv";
+import { calculateCardCmv } from "@/lib/cmv";
 import { logDebug, redactId } from "@/lib/logging";
 import { normalizeHttpUrl, resolveStoredImagePath, uniqueHttpUrls } from "@/lib/collection-images";
 import { hasBusinessAccess } from "@/lib/access";
@@ -91,6 +91,11 @@ function parseQuantity(value: unknown): number | null {
   if (!Number.isInteger(parsed)) return null;
   if (parsed < 1) return null;
   return parsed;
+}
+
+function stripHtml(str: string | null | undefined): string | null {
+  if (!str) return null;
+  return str.replace(/<[^>]*>/g, "").trim() || null;
 }
 
 function getErrorCode(error: unknown): string | null {
@@ -224,62 +229,13 @@ export async function GET() {
       });
     });
 
-    const updatedItems = await withConcurrency(
-      (items || []).map((item: CollectionItem) => async () => {
-        const itemWithImage = {
-          ...item,
-          primary_image: primaryImageMap.get(item.id) || null,
-        };
+    const hydratedItems = (items || []).map((item: CollectionItem) => ({
+      ...item,
+      primary_image: primaryImageMap.get(item.id) || null,
+    }));
 
-        const stale = isCmvStale(item);
-        logDebug("🔍 CMV staleness check", {
-          id: redactId(item.id),
-          player: item.player_name,
-          stale,
-          cmv_confidence: item.cmv_confidence ?? "MISSING",
-          cmv_last_updated: item.cmv_last_updated ?? "MISSING",
-          estimated_cmv: item.estimated_cmv ?? "MISSING",
-          est_cmv: item.est_cmv ?? "MISSING",
-        });
-
-        if (!stale) {
-          return itemWithImage;
-        }
-
-        try {
-          const cmvResult = await calculateCardCmv(item);
-          logDebug("🔄 CMV recalculated", {
-            id: redactId(item.id),
-            result_estimated_cmv: cmvResult.estimated_cmv,
-            result_confidence: cmvResult.cmv_confidence,
-          });
-
-          const { data: updated, error: updateError } = await supabase
-            .from("collection_items")
-            .update(cmvResult)
-            .eq("id", item.id)
-            .eq("user_id", user.id)
-            .select("*")
-            .single();
-
-          if (updateError) {
-            console.error("Failed to update CMV for item:", redactId(item.id), updateError);
-            return itemWithImage;
-          }
-          return {
-            ...updated,
-            primary_image: primaryImageMap.get(item.id) || null,
-          };
-        } catch (cmvError) {
-          console.error("CMV calculation failed for item:", redactId(item.id), cmvError);
-          return itemWithImage;
-        }
-      }),
-      CMV_MAX_CONCURRENT
-    );
-
-    if (updatedItems.length > 0) {
-      const first = updatedItems[0] as CollectionItem;
+    if (hydratedItems.length > 0) {
+      const first = hydratedItems[0] as any;
       logDebug("💰 GET collection first row CMV", {
         id: redactId(first.id),
         player: first.player_name,
@@ -289,7 +245,7 @@ export async function GET() {
       });
     }
 
-    return NextResponse.json({ items: updatedItems });
+    return NextResponse.json({ items: hydratedItems });
   } catch (error) {
     console.error("Collection fetch error:", error);
     return NextResponse.json(
@@ -429,10 +385,16 @@ export async function POST(request: NextRequest) {
       normalizedImageUrls[0] ||
       null;
 
-    // players and insert_type now have first-class columns (migration 20260314).
-    // The schema-fallback retry loop in insertCollectionItemWithFallback will
-    // gracefully drop them if the migration hasn't been applied yet.
-    const combinedNotes = notes || null;
+    // Store players array and insert in notes if DB columns don't exist yet
+    // TODO: Add migration for players (JSONB) and insert (text) columns
+    const sanitizedNotes = stripHtml(notes);
+    const notesParts: string[] = [];
+    if (sanitizedNotes) notesParts.push(sanitizedNotes);
+    if (insert) notesParts.push(`[INSERT:${insert}]`);
+    if (players && players.length > 1) {
+      notesParts.push(`[PLAYERS:${JSON.stringify(players)}]`);
+    }
+    const combinedNotes = stripHtml(notesParts.length > 0 ? notesParts.join(" | ") : null);
 
     logDebug("📦 Inserting collection item", {
       userId: redactId(user.id),

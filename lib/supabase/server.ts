@@ -1,4 +1,5 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { isTestMode } from "@/lib/test-mode";
 import {
@@ -59,30 +60,27 @@ export async function createClient() {
 }
 
 export async function createServiceClient() {
-  const cookieStore = await cookies();
+  if (process.env.NODE_ENV === "production") {
+    console.warn("[supabase][service-role] Service client created — RLS bypassed", {
+      stack: new Error().stack?.split("\n")[2]?.trim(), // caller info
+    });
+  }
   const { url } = requireSupabasePublicEnv();
   const serviceRoleKey = getSupabaseServiceRoleKey();
   if (!serviceRoleKey) {
     throw new Error("Supabase service role env var is missing. Set SUPABASE_SERVICE_ROLE_KEY and restart the dev server.");
   }
 
-  return createServerClient(
+  // Service-role operations must not inherit end-user auth cookies,
+  // otherwise Supabase applies the user JWT and RLS blocks admin writes.
+  return createSupabaseClient(
     url,
     serviceRoleKey,
     {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        setAll(cookiesToSet: CookieToSet[]) {
-          try {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            );
-          } catch {
-            // Ignored
-          }
-        },
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+        detectSessionInUrl: false,
       },
     }
   );
