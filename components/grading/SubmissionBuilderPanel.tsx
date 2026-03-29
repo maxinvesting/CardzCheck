@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PricingModal from "@/components/PricingModal";
 import { useAuth } from "@/contexts/AuthContext";
 import type { CardIdentificationResult, GradeEstimate } from "@/types";
@@ -42,7 +42,7 @@ type SubmissionListRow = {
   created_at: string;
 };
 
-type SubmissionDetailItem = {
+export type SubmissionDetailItem = {
   id: string;
   source_type: "collection" | "watchlist" | "manual";
   source_id: string | null;
@@ -116,6 +116,10 @@ interface SubmissionBuilderPanelProps {
   gradeEstimate: GradeEstimate | null;
   uploadPanel?: ReactNode;
   recentRunsPanel?: ReactNode;
+  /** Render additional content below each item row (e.g. AI walkthrough) */
+  renderItemExtra?: (item: SubmissionDetailItem) => ReactNode;
+  /** Called whenever a submission's items are loaded or refreshed */
+  onItemsLoaded?: (items: SubmissionDetailItem[]) => void;
 }
 
 type SubmissionFetchStatus = "idle" | "loading" | "success" | "error";
@@ -198,9 +202,15 @@ export default function SubmissionBuilderPanel({
   gradeEstimate,
   uploadPanel,
   recentRunsPanel,
+  renderItemExtra,
+  onItemsLoaded,
 }: SubmissionBuilderPanelProps) {
   const { authUser, loading: authLoading } = useAuth();
   const authUserId = authUser?.id ?? null;
+
+  // Stable ref so loadSubmissionDetail (deps=[]) can call the latest onItemsLoaded
+  const onItemsLoadedRef = useRef(onItemsLoaded);
+  onItemsLoadedRef.current = onItemsLoaded;
   const [submissionsState, setSubmissionsState] = useState<{
     status: SubmissionFetchStatus;
     data: SubmissionListRow[];
@@ -452,6 +462,7 @@ export default function SubmissionBuilderPanel({
 
         const payload = (await response.json()) as SubmissionDetail;
         setSelectedDetail(payload);
+        onItemsLoadedRef.current?.(payload.items);
         setCostShipping(centsToUsdInput(payload.submission.shipping_cents));
         setCostInsurance(centsToUsdInput(payload.submission.insurance_cents));
         setCostFeesEstimate(centsToUsdInput(payload.submission.fees_estimate_cents));
@@ -1424,30 +1435,39 @@ export default function SubmissionBuilderPanel({
                     </thead>
                     <tbody>
                       {filteredItems.map((item) => (
-                        <tr key={item.id} className="border-b border-gray-800 align-top">
-                          <td className="py-2 pr-2 text-white">
-                            {item.title}
-                            {item.risk_flags.includes("value_unavailable") ? (
-                              <p className="text-[11px] text-amber-300">value unavailable</p>
-                            ) : null}
-                          </td>
-                          <td className="py-2 pr-2 text-gray-300">{item.source_type}</td>
-                          <td className="py-2 pr-2 text-gray-300">
-                            {((item.predicted_distribution?.["10"] ?? 0) * 100).toFixed(1)}%
-                          </td>
-                          <td className="py-2 pr-2 text-gray-300">
-                            {`${(item.predicted_distribution["10"] * 100).toFixed(0)}/${
-                              (item.predicted_distribution["9"] * 100).toFixed(0)
-                            }/${(item.predicted_distribution["8"] * 100).toFixed(0)}/${
-                              (item.predicted_distribution["7_or_lower"] * 100).toFixed(0)
-                            }`}
-                          </td>
-                          <td className="py-2 pr-2 text-gray-300">{formatMoney(item.expected_value_cents)}</td>
-                          <td className="py-2 pr-2 text-gray-300">{formatMoney(item.expected_profit_cents)}</td>
-                          <td className="py-2 pr-2 text-gray-300">
-                            {formatPercent(item.below_break_even_probability)}
-                          </td>
-                        </tr>
+                        <>
+                          <tr key={item.id} className="border-b border-gray-800 align-top">
+                            <td className="py-2 pr-2 text-white">
+                              {item.title}
+                              {item.risk_flags.includes("value_unavailable") ? (
+                                <p className="text-[11px] text-amber-300">value unavailable</p>
+                              ) : null}
+                            </td>
+                            <td className="py-2 pr-2 text-gray-300">{item.source_type}</td>
+                            <td className="py-2 pr-2 text-gray-300">
+                              {((item.predicted_distribution?.["10"] ?? 0) * 100).toFixed(1)}%
+                            </td>
+                            <td className="py-2 pr-2 text-gray-300">
+                              {`${(item.predicted_distribution["10"] * 100).toFixed(0)}/${
+                                (item.predicted_distribution["9"] * 100).toFixed(0)
+                              }/${(item.predicted_distribution["8"] * 100).toFixed(0)}/${
+                                (item.predicted_distribution["7_or_lower"] * 100).toFixed(0)
+                              }`}
+                            </td>
+                            <td className="py-2 pr-2 text-gray-300">{formatMoney(item.expected_value_cents)}</td>
+                            <td className="py-2 pr-2 text-gray-300">{formatMoney(item.expected_profit_cents)}</td>
+                            <td className="py-2 pr-2 text-gray-300">
+                              {formatPercent(item.below_break_even_probability)}
+                            </td>
+                          </tr>
+                          {renderItemExtra && (
+                            <tr key={`${item.id}-ai`}>
+                              <td colSpan={7} className="pb-1 pt-0 px-0">
+                                {renderItemExtra(item)}
+                              </td>
+                            </tr>
+                          )}
+                        </>
                       ))}
                     </tbody>
                   </table>

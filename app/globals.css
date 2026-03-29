@@ -53,6 +53,13 @@
   --biz-accent-amber: var(--biz-warning);
 }
 
+html {
+  /* Scale down on small phones and up on large monitors. */
+  font-size: clamp(14px, 0.25vw + 13px, 18px);
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     --foreground: #ededed;

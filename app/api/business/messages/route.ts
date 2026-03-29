@@ -46,9 +46,11 @@ export async function GET(req: NextRequest) {
     isEbayConnected(user.id),
   ]);
 
+  let retriedAfterEmpty = false;
   if (ebayConnected && overview.stats.total_threads === 0 && overview.threads.length === 0) {
     clearEbayMessagingCache(user.id);
     overview = await getMessagingOverview(user.id, filter);
+    retriedAfterEmpty = true;
     console.info("[dbg:messages_api] retried_after_empty", {
       filter,
       totalThreads: overview.stats.total_threads,
@@ -68,5 +70,8 @@ export async function GET(req: NextRequest) {
     stats: overview.stats,
     threads: overview.threads,
     ebayConnected,
+    sync: {
+      retriedAfterEmpty,
+    },
   });
 }
