@@ -16,7 +16,7 @@ export default function BusinessConsultantPage() {
 
   const shellClassName =
     "relative min-h-screen overflow-hidden bg-[#080b11] text-slate-100";
-  const contentClassName = "relative mx-auto max-w-[96rem] px-4 py-4 sm:px-5 lg:px-8";
+  const contentClassName = "relative w-full px-4 py-4 sm:px-5 lg:px-8";
 
   const loadAccess = useCallback(async () => {
     try {
