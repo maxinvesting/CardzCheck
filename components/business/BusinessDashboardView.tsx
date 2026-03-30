@@ -192,7 +192,7 @@ const MARKET_SIGNALS = [
 const fadeUp = (delay = 0) => ({
   initial: { opacity: 0, y: 14 },
   animate: { opacity: 1, y: 0 },
-  transition: { duration: 0.45, ease: "easeOut", delay },
+  transition: { duration: 0.45, ease: "easeOut" as const, delay },
 });
 
 /* ── Main component ──────────────────────────────────────────────────────── */
@@ -448,7 +448,7 @@ export default function BusinessDashboardView({
                   key={signal.type}
                   initial={{ opacity: 0, y: 16 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.18 + i * 0.09, duration: 0.42, ease: "easeOut" }}
+                  transition={{ delay: 0.18 + i * 0.09, duration: 0.42, ease: "easeOut" as const }}
                   className="signal-card relative flex flex-col gap-3 rounded-xl p-5"
                   style={{
                     background: "rgba(255,255,255,0.025)",
