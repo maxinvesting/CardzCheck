@@ -105,11 +105,9 @@ export default function ItemDetailDrawer({
         const imageUrls = images
           .map((img: { url?: string }) => img?.url)
           .filter((u: unknown): u is string => typeof u === "string" && u.length > 0);
-        if (imageUrls.length === 0 && (card.image_url || card.user_image_url || card.stock_image_url || card.ebay_image_url)) {
+        if (imageUrls.length === 0 && (card.image_url || card.user_image_url)) {
           if (card.image_url) imageUrls.push(card.image_url);
           if (card.user_image_url) imageUrls.push(card.user_image_url);
-          if (card.stock_image_url) imageUrls.push(card.stock_image_url);
-          if (card.ebay_image_url) imageUrls.push(card.ebay_image_url);
         }
         const cardIdentity: GradeEstimatorCardInput = {
           player_name: card.player_name ?? "",

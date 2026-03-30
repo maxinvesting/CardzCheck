@@ -123,8 +123,7 @@ function CardTile({
 }) {
   const [hovered, setHovered] = useState(false);
 
-  const imageUrl =
-    item.user_image_url ?? item.stock_image_url ?? item.ebay_image_url ?? null;
+  const imageUrl = item.user_image_url ?? null;
   const badge = getGradeBadge(item);
   const mv = item.current_market_value_cents;
   const cost = item.cost_basis_total_cents;

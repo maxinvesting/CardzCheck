@@ -37,11 +37,9 @@ function CardItem({ item, onDelete }: CardItemProps) {
       uniqueHttpUrls([
         item.primary_image?.url,
         item.user_image_url,
-        item.stock_image_url,
-        item.ebay_image_url,
         item.image_url,
       ]),
-    [item.primary_image?.url, item.user_image_url, item.stock_image_url, item.ebay_image_url, item.image_url]
+    [item.primary_image?.url, item.user_image_url, item.image_url]
   );
   const [imageIndex, setImageIndex] = useState(0);
 
@@ -95,11 +93,6 @@ function CardItem({ item, onDelete }: CardItemProps) {
                 });
               }}
             />
-            {!item.primary_image && normalizeHttpUrl(item.stock_image_url || item.ebay_image_url || item.image_url) && (
-              <span className="absolute bottom-2 left-2 px-1.5 py-0.5 bg-black/60 text-white text-[10px] font-medium rounded">
-                Stock
-              </span>
-            )}
           </>
         ) : (
           <div className="w-full h-full flex items-center justify-center">
