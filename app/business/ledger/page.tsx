@@ -1143,7 +1143,7 @@ function LedgerPageContent() {
   const handleCardPickerSelect = (card: CardPickerSelection) => {
     setShowCardPicker(false);
     setPendingInventoryCard({
-      card_id: card.id,
+      card_id: card.id || undefined,
       player_name: card.player_name,
       year: card.year,
       set_name: card.set_name,

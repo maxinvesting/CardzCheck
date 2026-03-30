@@ -273,7 +273,7 @@ function BusinessDashboardContent() {
   if (loading) {
     return (
       <AuthenticatedLayout>
-        <main className="mx-auto max-w-7xl px-4 py-3">
+        <main className="mx-auto max-w-7xl px-4 py-2">
           <div className="animate-pulse space-y-4">
             <div className="h-8 w-48 rounded bg-[#E5E7EB]" />
             <div className="grid grid-cols-4 gap-4">
@@ -294,7 +294,7 @@ function BusinessDashboardContent() {
   if (hasAccess === false) {
     return (
       <AuthenticatedLayout>
-        <main className="mx-auto max-w-7xl px-4 py-3">
+        <main className="mx-auto max-w-7xl px-4 py-2">
           <BusinessPaywall />
         </main>
       </AuthenticatedLayout>
@@ -303,7 +303,7 @@ function BusinessDashboardContent() {
 
   return (
     <AuthenticatedLayout>
-      <main className="mx-auto max-w-7xl px-4 py-3">
+      <main className="mx-auto max-w-7xl px-4 py-2">
         <BusinessDashboardView
           businessName={businessName}
           metrics={metrics}
@@ -327,7 +327,7 @@ export default function BusinessDashboardPage() {
     <Suspense
       fallback={
         <AuthenticatedLayout>
-          <main className="mx-auto max-w-7xl px-4 py-3">
+          <main className="mx-auto max-w-7xl px-4 py-2">
             <div className="animate-pulse space-y-4">
               <div className="h-8 w-48 rounded bg-[#E5E7EB]" />
               <div className="grid grid-cols-4 gap-4">

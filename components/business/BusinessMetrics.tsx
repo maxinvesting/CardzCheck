@@ -149,11 +149,11 @@ export default function BusinessMetrics({
   ] as const;
 
   return (
-    <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+    <div className="grid grid-cols-2 gap-1.5 lg:grid-cols-4">
       {cards.map(({ label, renderValue, sub, valueColor, accentColor }) => (
         <div
           key={label}
-          className={compact ? "rounded-xl border bg-white px-3 py-2.5" : "rounded-xl border bg-white p-5"}
+          className={compact ? "rounded-xl border bg-white px-3 py-2" : "rounded-xl border bg-white p-5"}
           style={{ borderColor: "var(--biz-border)" }}
         >
           {loading ? (
@@ -174,7 +174,7 @@ export default function BusinessMetrics({
                 />
               </div>
               <p
-                className={`font-semibold tabular-nums ${compact ? "text-[24px] lg:text-[26px]" : "text-[32px]"}`}
+                className={`font-semibold tabular-nums ${compact ? "text-[22px] lg:text-[24px]" : "text-[32px]"}`}
                 style={{ color: valueColor, lineHeight: 1.1 }}
               >
                 {renderValue()}

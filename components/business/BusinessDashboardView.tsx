@@ -173,7 +173,7 @@ export default function BusinessDashboardView({
         (a, b) =>
           (b.current_market_value_cents ?? 0) - (a.current_market_value_cents ?? 0)
       )
-      .slice(0, 3);
+      .slice(0, 2);
 
     const bestOpportunity = [...unlistedItems]
       .filter((item) => (item.current_market_value_cents ?? 0) > 0)
@@ -223,7 +223,7 @@ export default function BusinessDashboardView({
           (a, b) =>
             new Date(b.sold_at).getTime() - new Date(a.sold_at).getTime()
         )
-        .slice(0, 3),
+        .slice(0, 2),
     [recentSales]
   );
 
@@ -399,8 +399,8 @@ export default function BusinessDashboardView({
   }
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-col gap-2.5 xl:flex-row xl:items-start xl:justify-between">
+    <div className="space-y-2.5">
+      <div className="flex flex-col gap-2 xl:flex-row xl:items-start xl:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-[1.7rem] font-semibold tracking-tight text-[var(--biz-text)]">
@@ -413,18 +413,18 @@ export default function BusinessDashboardView({
           <p className="mt-0.5 text-sm text-slate-700">
             At-a-glance view for inventory, pricing decisions, and sell-through.
           </p>
-          <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-medium text-slate-700">
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-medium text-slate-700">
             <span
-              className={`rounded-full px-2 py-1 ${
+              className={`rounded-full px-2 py-0.5 ${
                 ebayAccount?.connected ? "bg-emerald-50 text-emerald-800" : "bg-slate-100 text-slate-700"
               }`}
             >
               eBay {ebayAccount?.connected ? "connected" : "not connected"}
             </span>
-            <span className={`rounded-full px-2 py-1 ${hasWhatnotStorefront ? "bg-violet-50 text-violet-800" : "bg-slate-100 text-slate-700"}`}>
+            <span className={`rounded-full px-2 py-0.5 ${hasWhatnotStorefront ? "bg-violet-50 text-violet-800" : "bg-slate-100 text-slate-700"}`}>
               Whatnot {hasWhatnotStorefront ? "configured" : "not configured"}
             </span>
-            <span className={`rounded-full px-2 py-1 ${hasWebsiteStorefront ? "bg-sky-50 text-sky-800" : "bg-slate-100 text-slate-700"}`}>
+            <span className={`rounded-full px-2 py-0.5 ${hasWebsiteStorefront ? "bg-sky-50 text-sky-800" : "bg-slate-100 text-slate-700"}`}>
               Website {hasWebsiteStorefront ? "configured" : "not configured"}
             </span>
             <Link
@@ -569,12 +569,12 @@ export default function BusinessDashboardView({
 
       {!needsMigration && (
         <>
-          <div className="grid gap-2 xl:grid-cols-3">
+          <div className="grid gap-1.5 xl:grid-cols-3">
             {signalCards.map((signal) => {
               const styles = SIGNAL_STYLES[signal.tone];
               return (
-                <Surface key={signal.label} className={`p-3.5 ${styles.border}`}>
-                  <div className="flex h-full flex-col gap-2.5">
+                <Surface key={signal.label} className={`p-3 ${styles.border}`}>
+                  <div className="flex h-full flex-col gap-2">
                     <div className="flex items-center justify-between gap-2">
                       <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${styles.badge}`}>
                         {signal.label}
@@ -587,10 +587,10 @@ export default function BusinessDashboardView({
                       </Link>
                     </div>
                     <div>
-                      <p className="text-sm font-semibold leading-snug text-[var(--biz-text)]">
+                      <p className="text-[13px] font-semibold leading-snug text-[var(--biz-text)]">
                         {signal.title}
                       </p>
-                      <p className="mt-1 text-[13px] leading-5 text-slate-700">{signal.detail}</p>
+                      <p className="mt-1 text-[12px] leading-5 text-slate-700">{signal.detail}</p>
                     </div>
                     <p className="mt-auto text-[11px] text-slate-600">{signal.meta}</p>
                   </div>
@@ -599,8 +599,8 @@ export default function BusinessDashboardView({
             })}
           </div>
 
-          <div className="grid gap-2 xl:grid-cols-[0.92fr_1fr_1.08fr]">
-            <Surface className="p-3.5">
+          <div className="grid gap-1.5 xl:grid-cols-[0.92fr_1fr_1.08fr]">
+            <Surface className="p-3">
               <div className="flex items-center justify-between gap-2">
                 <SectionLabel>Inventory Funnel</SectionLabel>
                 <Link href="/business/ledger" className="text-[11px] font-semibold text-[var(--biz-primary)] hover:underline">
@@ -613,7 +613,7 @@ export default function BusinessDashboardView({
                   Add inventory to start tracking list rate, sell-through, and stale capital.
                 </p>
               ) : (
-                <div className="mt-3 space-y-3">
+                <div className="mt-2.5 space-y-2.5">
                   {[
                     {
                       label: "Unlisted",
@@ -645,7 +645,7 @@ export default function BusinessDashboardView({
                     </div>
                   ))}
 
-                  <div className="grid grid-cols-2 gap-2 border-t border-[var(--biz-border)] pt-3">
+                  <div className="grid grid-cols-2 gap-1.5 border-t border-[var(--biz-border)] pt-2.5">
                     <div className="rounded-lg bg-[var(--biz-surface-soft)] px-2.5 py-2">
                       <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-600">List Rate</p>
                       <p className="mt-0.5 text-lg font-semibold tabular-nums text-[var(--biz-text)]">{listRate}%</p>
@@ -656,7 +656,7 @@ export default function BusinessDashboardView({
                     </div>
                   </div>
 
-                  <div className="border-t border-[var(--biz-border)] pt-3">
+                  <div className="border-t border-[var(--biz-border)] pt-2.5">
                     <div className="flex items-start justify-between gap-3 rounded-lg border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-3 py-2.5">
                       <div className="min-w-0">
                         <SectionLabel>Grading Insight</SectionLabel>
@@ -683,7 +683,7 @@ export default function BusinessDashboardView({
               )}
             </Surface>
 
-            <Surface className="p-3.5">
+            <Surface className="p-3">
               <div className="flex items-center justify-between gap-2">
                 <SectionLabel>Recent Sales</SectionLabel>
                 <Link href="/business/ledger?tab=sales" className="text-[11px] font-semibold text-[var(--biz-primary)] hover:underline">
@@ -692,9 +692,9 @@ export default function BusinessDashboardView({
               </div>
 
               {recentSalesLoading ? (
-                <div className="mt-3 space-y-2">
+                <div className="mt-2.5 space-y-1.5">
                   {[0, 1, 2].map((index) => (
-                    <div key={index} className="h-12 animate-pulse rounded-lg bg-[var(--biz-surface-soft)]" />
+                    <div key={index} className="h-10 animate-pulse rounded-lg bg-[var(--biz-surface-soft)]" />
                   ))}
                 </div>
               ) : recentSalesList.length === 0 ? (
@@ -702,14 +702,14 @@ export default function BusinessDashboardView({
                   No sales recorded in the last 30 days. Record sales from the ledger to track velocity.
                 </p>
               ) : (
-                <div className="mt-2.5 space-y-2">
+                <div className="mt-2 space-y-1.5">
                   {recentSalesList.map((sale) => {
                     const profit = sale.profit_cents ?? 0;
                     const profitColor = profit >= 0 ? "text-emerald-700" : "text-red-700";
                     return (
                       <div
                         key={sale.id}
-                        className="rounded-lg border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-3 py-2"
+                        className="rounded-lg border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-3 py-1.5"
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
@@ -736,7 +736,7 @@ export default function BusinessDashboardView({
                 </div>
               )}
 
-              <div className="mt-3 grid grid-cols-2 gap-2 border-t border-[var(--biz-border)] pt-3">
+              <div className="mt-2.5 grid grid-cols-2 gap-1.5 border-t border-[var(--biz-border)] pt-2.5">
                 <div className="rounded-lg bg-[var(--biz-surface-soft)] px-2.5 py-2">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-600">Gross (30d)</p>
                   <p className="mt-0.5 text-lg font-semibold tabular-nums text-[var(--biz-text)]">
@@ -752,7 +752,7 @@ export default function BusinessDashboardView({
               </div>
             </Surface>
 
-            <Surface className="p-3.5">
+            <Surface className="p-3">
               <div className="flex items-center justify-between gap-2">
                 <SectionLabel>Top Movers</SectionLabel>
                 <Link href="/business/ledger" className="text-[11px] font-semibold text-[var(--biz-primary)] hover:underline">
@@ -765,13 +765,13 @@ export default function BusinessDashboardView({
                   Add market values in the ledger to surface your highest-value inventory here.
                 </p>
               ) : (
-                <div className="mt-2.5 space-y-2">
+                <div className="mt-2 space-y-1.5">
                   {dashboardData.topInventory.map((item) => {
                     const age = daysSince(item.acquisition_date);
                     return (
                       <div
                         key={item.id}
-                        className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-3 py-2"
+                        className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-3 py-1.5"
                       >
                         <div className="min-w-0">
                           <Link
@@ -803,45 +803,27 @@ export default function BusinessDashboardView({
                 </div>
               )}
 
-              <div className="mt-3 border-t border-[var(--biz-border)] pt-3">
-                <div className="flex items-center justify-between gap-2">
-                  <SectionLabel>Channel Status</SectionLabel>
+              <div className="mt-2.5 flex items-center justify-between gap-3 border-t border-[var(--biz-border)] pt-2.5">
+                <div className="min-w-0">
+                  <SectionLabel>Channel Pulse</SectionLabel>
+                  <p className="mt-0.5 text-[12px] text-slate-700">
+                    {ebayAccount?.connected
+                      ? `${ebayKpis.activeEbayListings} eBay listings live • ${ebayKpis.salesCount} eBay sales in 30d`
+                      : "Connect eBay to sync listings and recent sales into the dashboard."}
+                  </p>
+                </div>
+                {ebayAccount?.connected ? (
+                  <p className="shrink-0 text-right text-[13px] font-semibold tabular-nums text-[var(--biz-text)]">
+                    {fmt(ebayKpis.profitCents)}
+                  </p>
+                ) : (
                   <Link
                     href="/business/settings?section=storefronts"
-                    className="text-[11px] font-semibold text-[var(--biz-primary)] hover:underline"
+                    className="shrink-0 text-[11px] font-semibold text-[var(--biz-primary)] hover:underline"
                   >
                     Manage
                   </Link>
-                </div>
-                <div className="mt-2 grid gap-2 sm:grid-cols-3">
-                  <div className="rounded-lg border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-2.5 py-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-600">eBay</p>
-                    <p className="mt-1 text-xs font-semibold text-slate-900">
-                      {ebayAccount?.connected ? "Connected" : "Needs setup"}
-                    </p>
-                    <p className="mt-0.5 text-[11px] text-slate-700">
-                      {ebayAccount?.connected ? `${ebayKpis.activeEbayListings} live listings` : "Connect to sync listings"}
-                    </p>
-                  </div>
-                  <div className="rounded-lg border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-2.5 py-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-600">Whatnot</p>
-                    <p className="mt-1 text-xs font-semibold text-slate-900">
-                      {hasWhatnotStorefront ? "Configured" : "Needs setup"}
-                    </p>
-                    <p className="mt-0.5 text-[11px] text-slate-700">
-                      {hasWhatnotStorefront ? "Included in channel mix" : "Add storefront when ready"}
-                    </p>
-                  </div>
-                  <div className="rounded-lg border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-2.5 py-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-600">Website</p>
-                    <p className="mt-1 text-xs font-semibold text-slate-900">
-                      {hasWebsiteStorefront ? "Configured" : "Needs setup"}
-                    </p>
-                    <p className="mt-0.5 text-[11px] text-slate-700">
-                      {hasWebsiteStorefront ? "Direct channel is available" : "Add a direct storefront"}
-                    </p>
-                  </div>
-                </div>
+                )}
               </div>
             </Surface>
           </div>
