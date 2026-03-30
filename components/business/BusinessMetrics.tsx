@@ -149,37 +149,37 @@ export default function BusinessMetrics({
   ] as const;
 
   return (
-    <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+    <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
       {cards.map(({ label, renderValue, sub, valueColor, accentColor }) => (
         <div
           key={label}
-          className={compact ? "rounded-xl border bg-white p-4" : "rounded-xl border bg-white p-5"}
+          className={compact ? "rounded-xl border bg-white px-3 py-2.5" : "rounded-xl border bg-white p-5"}
           style={{ borderColor: "var(--biz-border)" }}
         >
           {loading ? (
-            <div className="space-y-2.5">
-              <div className="h-2.5 w-20 animate-pulse rounded bg-slate-200" />
-              <div className="h-8 w-28 animate-pulse rounded bg-slate-200" />
-              <div className="h-2.5 w-24 animate-pulse rounded bg-slate-100" />
+            <div className="space-y-2">
+              <div className="h-2 w-16 animate-pulse rounded bg-slate-200" />
+              <div className="h-7 w-24 animate-pulse rounded bg-slate-200" />
+              <div className="h-2 w-20 animate-pulse rounded bg-slate-100" />
             </div>
           ) : (
             <>
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+              <div className="mb-1.5 flex items-center justify-between gap-2">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-600">
                   {label}
                 </p>
                 <span
-                  className="h-2.5 w-2.5 rounded-full"
+                  className="h-2 w-2 rounded-full"
                   style={{ backgroundColor: accentColor }}
                 />
               </div>
               <p
-                className={`font-semibold tabular-nums ${compact ? "text-[28px]" : "text-[32px]"}`}
+                className={`font-semibold tabular-nums ${compact ? "text-[24px] lg:text-[26px]" : "text-[32px]"}`}
                 style={{ color: valueColor, lineHeight: 1.1 }}
               >
                 {renderValue()}
               </p>
-              <p className="mt-1.5 text-[11px] text-slate-500">{sub}</p>
+              <p className="mt-1 text-[11px] text-slate-600">{sub}</p>
             </>
           )}
         </div>
