@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import type { BusinessInventoryItem } from "@/types";
 
@@ -123,10 +124,12 @@ function CardTile({
 }) {
   const [hovered, setHovered] = useState(false);
 
-  const imageUrl = item.user_image_url ?? null;
+  const imageUrl =
+    item.user_image_url ?? item.stock_image_url ?? item.ebay_image_url ?? null;
   const badge = getGradeBadge(item);
   const mv = item.current_market_value_cents;
   const cost = item.cost_basis_total_cents;
+  const profileHref = `/card/${item.id}?from=business`;
   const mvColor =
     mv == null
       ? "#1A1A1A"
@@ -147,7 +150,6 @@ function CardTile({
         border: "1px solid #E8E5E0",
         borderRadius: 10,
         overflow: "hidden",
-        cursor: "pointer",
         transform: hovered ? "translateY(-1px)" : "translateY(0)",
         boxShadow: hovered
           ? "0 4px 16px rgba(0,0,0,0.08)"
@@ -157,87 +159,97 @@ function CardTile({
         flexDirection: "column",
       }}
     >
-      {/* TOP IMAGE SECTION */}
-      <div
-        style={{
-          height: 88,
-          position: "relative",
-          background: "#F2EFE9",
-          flexShrink: 0,
-          overflow: "hidden",
-        }}
+      <Link
+        href={profileHref}
+        aria-label={`Open card profile for ${item.title || "Untitled"}`}
+        style={{ color: "inherit", textDecoration: "none" }}
       >
-        {imageUrl ? (
-          <img
-            src={imageUrl}
-            alt={item.title}
-            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-          />
-        ) : (
-          <div
-            style={{
-              width: "100%",
-              height: "100%",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
+        {/* TOP IMAGE SECTION */}
+        <div
+          style={{
+            height: 88,
+            position: "relative",
+            background: "#F2EFE9",
+            flexShrink: 0,
+            overflow: "hidden",
+          }}
+        >
+          {imageUrl ? (
+            <img
+              src={imageUrl}
+              alt={item.title}
+              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+            />
+          ) : (
             <div
               style={{
-                width: 52,
-                height: 72,
-                background: "#E5E2DC",
-                borderRadius: 4,
+                width: "100%",
+                height: "100%",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <span style={{ fontSize: 9, color: "#AAA" }}>No photo</span>
+              <div
+                style={{
+                  width: 52,
+                  height: 72,
+                  background: "#E5E2DC",
+                  borderRadius: 4,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <span style={{ fontSize: 9, color: "#AAA" }}>No photo</span>
+              </div>
             </div>
-          </div>
-        )}
-        {/* Grade badge */}
-        {badge && (
-          <span
-            style={{
-              position: "absolute",
-              top: 6,
-              right: 6,
-              fontSize: 9,
-              fontWeight: 500,
-              padding: "2px 5px",
-              borderRadius: 4,
-              background: badge.style.background,
-              color: badge.style.color,
-              whiteSpace: "nowrap",
-              lineHeight: 1.4,
-            }}
-          >
-            {badge.label}
-          </span>
-        )}
-      </div>
+          )}
+          {/* Grade badge */}
+          {badge && (
+            <span
+              style={{
+                position: "absolute",
+                top: 6,
+                right: 6,
+                fontSize: 9,
+                fontWeight: 500,
+                padding: "2px 5px",
+                borderRadius: 4,
+                background: badge.style.background,
+                color: badge.style.color,
+                whiteSpace: "nowrap",
+                lineHeight: 1.4,
+              }}
+            >
+              {badge.label}
+            </span>
+          )}
+        </div>
+      </Link>
 
       {/* BOTTOM INFO SECTION */}
       <div style={{ padding: "9px 10px 10px", display: "flex", flexDirection: "column", gap: 5, flex: 1 }}>
         {/* Card name */}
-        <p
-          style={{
-            fontSize: 11,
-            fontWeight: 500,
-            color: "#1A1A1A",
-            lineHeight: 1.4,
-            margin: 0,
-            display: "-webkit-box",
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: "vertical" as const,
-            overflow: "hidden",
-          }}
-        >
-          {item.title || "Untitled"}
-        </p>
+        <Link href={profileHref} style={{ textDecoration: "none" }}>
+          <p
+            style={{
+              fontSize: 11,
+              fontWeight: 600,
+              color: "#0B7A4B",
+              lineHeight: 1.4,
+              margin: 0,
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical" as const,
+              overflow: "hidden",
+              textDecoration: hovered ? "underline" : "none",
+              textUnderlineOffset: 2,
+            }}
+          >
+            {item.title || "Untitled"}
+          </p>
+        </Link>
 
         {/* Price row */}
         <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
@@ -279,29 +291,46 @@ function CardTile({
           )}
         </div>
 
-        {/* Action button */}
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onConsultant(action.prompt);
-          }}
-          style={{
-            width: "100%",
-            marginTop: 2,
-            fontSize: 10,
-            fontWeight: 500,
-            padding: "5px 0",
-            borderRadius: 5,
-            cursor: "pointer",
-            background: action.style.background,
-            color: action.style.color,
-            border: action.style.border,
-            textAlign: "center",
-          }}
-        >
-          {action.label}
-        </button>
+        {/* Action buttons */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginTop: 2 }}>
+          <Link
+            href={profileHref}
+            style={{
+              fontSize: 10,
+              fontWeight: 600,
+              padding: "5px 0",
+              borderRadius: 5,
+              background: "#F0F8F4",
+              color: "#0B7A4B",
+              border: "1px solid #C8E6D6",
+              textAlign: "center",
+              textDecoration: "none",
+            }}
+          >
+            View card
+          </Link>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onConsultant(action.prompt);
+            }}
+            style={{
+              width: "100%",
+              fontSize: 10,
+              fontWeight: 500,
+              padding: "5px 0",
+              borderRadius: 5,
+              cursor: "pointer",
+              background: action.style.background,
+              color: action.style.color,
+              border: action.style.border,
+              textAlign: "center",
+            }}
+          >
+            {action.label}
+          </button>
+        </div>
       </div>
     </div>
   );

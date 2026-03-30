@@ -191,7 +191,7 @@ const COLUMNS: ColumnDef[] = [
     editable: true,
     width: "w-24 shrink-0",
   },
-  { key: "_view", label: "Profile", editable: false, width: "w-20 shrink-0" },
+  { key: "_view", label: "Open", editable: false, width: "w-24 shrink-0" },
   { key: "_grade", label: "", editable: false, width: "w-16 shrink-0" },
   { key: "_actions", label: "", editable: false, width: "w-20 shrink-0" },
 ];
@@ -474,23 +474,26 @@ export default function InventoryTable({
     if (field === "title") {
       const isWax = item.notes?.includes("[WAX]");
       const titleStr = buildDisplayTitle(item);
-      const titleContent = (
-        <>
+      return (
+        <Link
+          href={`/card/${item.id}?from=business`}
+          onClick={(e) => e.stopPropagation()}
+          className="group/title flex min-w-0 items-center gap-2 rounded-md py-0.5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+        >
           {isWax && (
             <span className="inline-flex shrink-0 items-center rounded border border-amber-200 bg-amber-50 px-1 py-0.5 text-[10px] font-semibold whitespace-nowrap text-amber-700">
               WAX
             </span>
           )}
-          <span className="truncate" title={titleStr}>{titleStr}</span>
-        </>
-      );
-      return (
-        <Link
-          href={`/card/${item.id}?from=business`}
-          onClick={(e) => e.stopPropagation()}
-          className="flex min-w-0 items-center gap-1.5 text-[var(--biz-text)] hover:underline"
-        >
-          {titleContent}
+          <span
+            className="min-w-0 truncate text-sm font-semibold text-[var(--biz-primary)] underline-offset-2 group-hover/row:underline"
+            title={titleStr}
+          >
+            {titleStr}
+          </span>
+          <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 transition-colors group-hover/title:bg-emerald-100">
+            View card
+          </span>
         </Link>
       );
     }
@@ -554,9 +557,12 @@ export default function InventoryTable({
         <Link
           href={`/card/${item.id}?from=business`}
           onClick={(e) => e.stopPropagation()}
-          className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-[var(--biz-primary)] hover:underline"
+          className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700 transition-colors hover:bg-emerald-100"
         >
-          Profile
+          View card
+          <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
         </Link>
       );
     }
@@ -710,7 +716,7 @@ export default function InventoryTable({
   };
 
   // ── Mobile card component (< 640px) ──────────────────────────────────────
-  const MobileInventoryCard = ({ item, idx }: { item: BusinessInventoryItem; idx: number }) => {
+  const MobileInventoryCard = ({ item }: { item: BusinessInventoryItem }) => {
     const days = getDaysHeld(item.acquisition_date);
     const daysColor = getDaysHeldColor(days);
     const titleStr = buildDisplayTitle(item);
@@ -741,18 +747,27 @@ export default function InventoryTable({
             className="mt-0.5 min-h-[18px] min-w-[18px] rounded border-[var(--biz-border)] text-emerald-600 focus:ring-emerald-500"
           />
           <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 mb-0.5">
-              {isWaxItem && (
-                <span className="inline-flex shrink-0 items-center rounded border border-amber-200 bg-amber-50 px-1 py-0.5 text-[10px] font-semibold whitespace-nowrap text-amber-700">
-                  WAX
-                </span>
-              )}
+            <div className="mb-0.5 flex items-start justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-1.5">
+                {isWaxItem && (
+                  <span className="inline-flex shrink-0 items-center rounded border border-amber-200 bg-amber-50 px-1 py-0.5 text-[10px] font-semibold whitespace-nowrap text-amber-700">
+                    WAX
+                  </span>
+                )}
+                <Link
+                  href={`/card/${item.id}?from=business`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="block min-h-[44px] min-w-0 truncate text-sm font-semibold text-[var(--biz-primary)] underline-offset-2 hover:underline"
+                >
+                  {titleStr || "Untitled"}
+                </Link>
+              </div>
               <Link
                 href={`/card/${item.id}?from=business`}
                 onClick={(e) => e.stopPropagation()}
-                className="block min-h-[44px] truncate text-sm font-medium text-[var(--biz-text)] hover:underline"
+                className="inline-flex shrink-0 items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700 transition-colors hover:bg-emerald-100"
               >
-                {titleStr || "Untitled"}
+                View
               </Link>
             </div>
           </div>
@@ -853,7 +868,7 @@ export default function InventoryTable({
   };
 
   const rowClass = (item: BusinessInventoryItem, idx: number): string =>
-    `transition-colors cursor-pointer ${
+    `group/row transition-colors ${
       selectedItemId === item.id
         ? "bg-emerald-50 ring-inset"
         : idx % 2 === 1
@@ -928,7 +943,7 @@ export default function InventoryTable({
           key={`${item.id}-${col.key}`}
           className={`border-l border-[var(--biz-border)] px-3 py-2 text-[var(--biz-text)] ${col.width} ${col.alignRight ? "text-right tabular-nums" : ""}`}
           onClick={() => {
-            if (col.key === "_actions" || col.key === "_grade" || col.key === "_view") {
+            if (col.key === "title" || col.key === "_actions" || col.key === "_grade" || col.key === "_view") {
               return;
             }
             if (editingCell?.id === item.id && editingCell?.field === col.key) {
@@ -1152,8 +1167,8 @@ export default function InventoryTable({
           </div>
         ) : (
           <div className="space-y-2">
-            {filtered.map((item, idx) => (
-              <MobileInventoryCard key={item.id} item={item} idx={idx} />
+            {filtered.map((item) => (
+              <MobileInventoryCard key={item.id} item={item} />
             ))}
           </div>
         )}
