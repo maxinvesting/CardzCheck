@@ -32,6 +32,8 @@ export interface ShopListing {
   publish_state: "draft" | "published";
   featured: boolean;
   is_premium: boolean;
+  /** When true, listing appears in "Offers only" filter and shows an offers badge */
+  accepts_offers: boolean;
   shipping_method: string;
   shipping_cost: number;
   notes: string | null;

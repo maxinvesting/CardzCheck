@@ -84,7 +84,12 @@ export default function ShopListingCard({
   return (
     <article className="group flex h-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white transition-shadow duration-200 hover:shadow-[0_16px_38px_rgba(15,23,42,0.08)]">
       <Link href={detailHref} className="block">
-        <div className="aspect-[4/5] overflow-hidden bg-slate-100">
+        <div className="relative aspect-[4/5] overflow-hidden bg-slate-100">
+          {listing.accepts_offers && (
+            <span className="absolute left-2 top-2 z-10 rounded-full bg-amber-500/95 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white shadow-sm">
+              Offers OK
+            </span>
+          )}
           {imgUrl ? (
             <img
               src={imgUrl}
