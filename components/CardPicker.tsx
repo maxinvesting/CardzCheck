@@ -11,7 +11,7 @@ import {
 export type CardPickerMode = "comps" | "collection" | "watchlist" | "dashboard";
 
 export interface CardPickerSelection {
-  id: string;
+  id?: string;
   player_name: string;
   year?: string;
   brand?: string;
@@ -143,6 +143,7 @@ export default function CardPicker({
   const hasOptionalFilters = Boolean(
     year || parallel || grader || grade || cardNumber
   );
+  const allowManualEntry = mode === "collection" || mode === "watchlist";
 
   const formattedGrade = useMemo(
     () => formatGraderGrade(grader || undefined, grade || undefined),
@@ -356,6 +357,20 @@ export default function CardPicker({
       user_image_url: card.user_image_url ?? undefined,
       stock_image_url: card.stock_image_url ?? undefined,
       ebay_image_url: card.ebay_image_url ?? undefined,
+    });
+  };
+
+  const handleManualEntry = () => {
+    if (!resolvedPlayer || !resolvedSet) return;
+    onSelect({
+      player_name: playerQuery.trim() || resolvedPlayer,
+      year: year.trim() || undefined,
+      brand: undefined,
+      set_name: setQuery.trim() || resolvedSet,
+      variant: parallel.trim() || undefined,
+      grader: grader.trim() || undefined,
+      grade: grade.trim() || undefined,
+      card_number: normalizeCardNumber(cardNumber || undefined),
     });
   };
 
@@ -586,17 +601,6 @@ export default function CardPicker({
         )}
       </div>
 
-      {hasSearched && hasOptionalFilters && results.length === 0 && !relaxOptional && (
-        <button
-          type="button"
-          onClick={() => handleSearch({ relax: true })}
-          disabled={loading}
-          className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
-        >
-          Relax optional filters
-        </button>
-      )}
-
       {searchError && (
         <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
           <p className="text-sm text-red-600 dark:text-red-400">{searchError}</p>
@@ -605,9 +609,34 @@ export default function CardPicker({
 
       {hasSearched && !loading && !searchError && results.length === 0 && (
         <div className="p-4 bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-800 rounded-lg">
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            No results found. Try adjusting your filters.
+          <p className="text-sm font-medium text-gray-900 dark:text-white">
+            No exact match found.
           </p>
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+            You can relax filters or keep the details above and add the card manually.
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {hasOptionalFilters && !relaxOptional && (
+              <button
+                type="button"
+                onClick={() => handleSearch({ relax: true })}
+                disabled={loading}
+                className="inline-flex items-center rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300 dark:hover:bg-blue-900/30"
+              >
+                Relax optional filters
+              </button>
+            )}
+            {allowManualEntry && (
+              <button
+                type="button"
+                onClick={handleManualEntry}
+                disabled={disabled}
+                className="inline-flex items-center rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 disabled:opacity-50 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300 dark:hover:bg-emerald-900/30"
+              >
+                Add manually
+              </button>
+            )}
+          </div>
         </div>
       )}
 
