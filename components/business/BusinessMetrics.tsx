@@ -6,14 +6,6 @@ import type { InventoryValueSummary } from "@/lib/business/inventory-value";
 import type { BusinessMetrics as Metrics } from "@/types";
 
 function fmtCurrency(dollars: number): string {
-  if (Math.abs(dollars) >= 1000) {
-    return dollars.toLocaleString("en-US", {
-      style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    });
-  }
   return dollars.toLocaleString("en-US", {
     style: "currency",
     currency: "USD",
@@ -22,7 +14,6 @@ function fmtCurrency(dollars: number): string {
   });
 }
 
-/** Animates a dollar-cents value from 0 to target with ease-out spring */
 function CountUpDollars({
   valueCents,
   duration = 1.3,
@@ -31,27 +22,30 @@ function CountUpDollars({
   duration?: number;
 }) {
   const ref = useRef<HTMLSpanElement>(null);
+
   useEffect(() => {
     if (!ref.current) return;
     if (valueCents === 0) {
       ref.current.textContent = "$0";
       return;
     }
+
     const controls = animate(0, valueCents / 100, {
       duration,
       ease: [0.16, 1, 0.3, 1],
-      onUpdate(v) {
+      onUpdate(value) {
         if (ref.current) {
-          ref.current.textContent = fmtCurrency(v);
+          ref.current.textContent = fmtCurrency(value);
         }
       },
     });
+
     return controls.stop;
-  }, [valueCents, duration]);
+  }, [duration, valueCents]);
+
   return <span ref={ref}>$0</span>;
 }
 
-/** Animates a plain integer from 0 to target */
 function CountUpInt({
   value,
   duration = 1.0,
@@ -60,21 +54,25 @@ function CountUpInt({
   duration?: number;
 }) {
   const ref = useRef<HTMLSpanElement>(null);
+
   useEffect(() => {
     if (!ref.current) return;
     if (value === 0) {
       ref.current.textContent = "0";
       return;
     }
+
     const controls = animate(0, value, {
       duration,
       ease: [0.16, 1, 0.3, 1],
-      onUpdate(v) {
-        if (ref.current) ref.current.textContent = String(Math.round(v));
+      onUpdate(next) {
+        if (ref.current) ref.current.textContent = String(Math.round(next));
       },
     });
+
     return controls.stop;
-  }, [value, duration]);
+  }, [duration, value]);
+
   return <span ref={ref}>0</span>;
 }
 
@@ -83,7 +81,6 @@ interface Props {
   loading: boolean;
   inventorySummary?: InventoryValueSummary | null;
   totalItemCount?: number;
-  compact?: boolean;
 }
 
 export default function BusinessMetrics({
@@ -116,42 +113,21 @@ export default function BusinessMetrics({
   const cards = [
     {
       label: "Sales MTD",
-      renderValue: () =>
-        metrics ? (
-          <CountUpDollars valueCents={revenueMtd} />
-        ) : (
-          <span>—</span>
-        ),
+      renderValue: () => (metrics ? <CountUpDollars valueCents={revenueMtd} /> : <span>—</span>),
       sub: `YTD ${revenueYtd}`,
-      valueColor: "#f8fafc",
-      accentColor: "#3b82f6",
-      glowColor: null,
+      valueColor: "var(--biz-text)",
     },
     {
       label: "Net Earnings MTD",
-      renderValue: () =>
-        metrics ? (
-          <CountUpDollars valueCents={profitMtd} />
-        ) : (
-          <span>—</span>
-        ),
+      renderValue: () => (metrics ? <CountUpDollars valueCents={profitMtd} /> : <span>—</span>),
       sub: `YTD ${profitYtd}`,
-      valueColor: profitPositive ? "#10b981" : "#ef4444",
-      accentColor: profitPositive ? "#10b981" : "#ef4444",
-      glowColor: profitPositive ? "rgba(16,185,129,0.35)" : null,
+      valueColor: profitPositive ? "#1D9E75" : "#E24B4A",
     },
     {
       label: "Active Inventory",
-      renderValue: () =>
-        metrics ? (
-          <CountUpInt value={activeCount} />
-        ) : (
-          <span>—</span>
-        ),
+      renderValue: () => (metrics ? <CountUpInt value={activeCount} /> : <span>—</span>),
       sub: `${totalCount} total items`,
-      valueColor: "#f8fafc",
-      accentColor: "#a855f7",
-      glowColor: null,
+      valueColor: "var(--biz-text)",
     },
     {
       label: "Inventory Value",
@@ -162,78 +138,39 @@ export default function BusinessMetrics({
           <span>—</span>
         ),
       sub: costBasisLine,
-      valueColor: "#f8fafc",
-      accentColor: "#f0b429",
-      glowColor: null,
+      valueColor: "var(--biz-text)",
     },
   ] as const;
 
   return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-      {cards.map(({ label, renderValue, sub, valueColor, accentColor, glowColor }) => (
+    <div
+      className="grid grid-cols-2 overflow-hidden rounded-lg border lg:grid-cols-4"
+      style={{ borderColor: "var(--biz-border)" }}
+    >
+      {cards.map(({ label, renderValue, sub, valueColor }) => (
         <div
           key={label}
-          style={{
-            background: "rgba(255,255,255,0.03)",
-            border: "1px solid rgba(255,255,255,0.07)",
-            borderLeft: `3px solid ${accentColor}`,
-            borderRadius: "12px",
-            padding: "16px 18px",
-          }}
+          className="border-r px-5 py-4 last:border-r-0"
+          style={{ borderColor: "rgba(0,0,0,0.06)" }}
         >
           {loading ? (
-            <div className="space-y-2.5">
-              <div
-                className="h-2.5 w-20 rounded animate-pulse"
-                style={{ background: "rgba(255,255,255,0.07)" }}
-              />
-              <div
-                className="h-8 w-28 rounded animate-pulse"
-                style={{ background: "rgba(255,255,255,0.07)" }}
-              />
-              <div
-                className="h-2.5 w-24 rounded animate-pulse"
-                style={{ background: "rgba(255,255,255,0.05)" }}
-              />
+            <div className="space-y-2">
+              <div className="h-2 w-16 animate-pulse rounded bg-slate-200" />
+              <div className="h-7 w-24 animate-pulse rounded bg-slate-200" />
+              <div className="h-2 w-20 animate-pulse rounded bg-slate-100" />
             </div>
           ) : (
             <>
-              <p
-                style={{
-                  fontSize: "10px",
-                  fontWeight: 700,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.1em",
-                  color: "#64748b",
-                  marginBottom: "6px",
-                  fontFamily: "'JetBrains Mono', monospace",
-                }}
-              >
+              <p className="text-[9px] font-normal uppercase tracking-[0.08em] text-slate-500">
                 {label}
               </p>
               <p
-                style={{
-                  fontSize: "26px",
-                  fontWeight: 700,
-                  lineHeight: 1.1,
-                  color: valueColor,
-                  fontFamily: "'JetBrains Mono', monospace",
-                  fontVariantNumeric: "tabular-nums",
-                  ...(glowColor ? { textShadow: `0 0 16px ${glowColor}` } : {}),
-                }}
+                className="mt-1.5 text-[22px] font-medium tabular-nums"
+                style={{ color: valueColor, lineHeight: 1.1 }}
               >
                 {renderValue()}
               </p>
-              <p
-                style={{
-                  fontSize: "11px",
-                  color: "#475569",
-                  marginTop: "5px",
-                  fontFamily: "'JetBrains Mono', monospace",
-                }}
-              >
-                {sub}
-              </p>
+              <p className="mt-1 text-[11px] font-normal text-slate-500">{sub}</p>
             </>
           )}
         </div>

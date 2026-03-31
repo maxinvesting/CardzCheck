@@ -192,7 +192,7 @@ function PERSONAL_NAV_ITEMS(): NavItem[] {
   return [
     { name: "Dashboard", href: "/dashboard", icon: <HomeIcon />, exact: true },
     { name: "Collection", href: "/collection", icon: <CollectionIcon /> },
-    { name: "Grade Probability Engine", href: "/grade-hub", icon: <BadgeIcon />, badge: "Featured" },
+    { name: "Grade Probability Engine", href: "/grade-hub", icon: <BadgeIcon />, badge: "dot" },
     { name: "News & Updates", href: "/news", icon: <NewsIcon />, badge: "New" },
     { name: "Bulk Mode", href: "/bulk", icon: <BulkIcon /> },
     { name: "Watchlist", href: "/watchlist", icon: <EyeIcon />, isPro: true, badge: "Pro" },
@@ -222,7 +222,7 @@ function BUSINESS_NAV_ITEMS(): NavItem[] {
     { name: "Dashboard", href: "/business", icon: <HomeIcon />, exact: true },
     { name: "Ledger", href: "/business/ledger", icon: <LedgerIcon /> },
     { name: "Customer Service", href: "/business/messages", icon: <MessagesIcon />, badge: "New" },
-    { name: "Grade Probability Engine", href: "/grade-hub", icon: <BadgeIcon />, badge: "Featured" },
+    { name: "Grade Probability Engine", href: "/grade-hub", icon: <BadgeIcon />, badge: "dot" },
     { name: "News & Updates", href: "/business/news", icon: <NewsIcon />, badge: "New" },
     { name: "Compare Listings", href: "/business/comps", icon: <ChartIcon />, badge: "Beta" },
     { name: "Business Consultant", href: "/business/consultant", icon: <AnalystIcon /> },
@@ -383,29 +383,30 @@ export default function Sidebar() {
                   </svg>
                 )}
                 {item.badge && !isProFeature && (
-                  <span
-                    className="ml-auto rounded px-1.5 py-0.5 text-[10px] font-bold"
-                    style={
-                      item.badge === "Featured" && isBusinessWorkspace
-                        ? {
-                            background: "rgba(240,180,41,0.12)",
-                            border: "1px solid rgba(240,180,41,0.25)",
-                            color: "#f0b429",
-                          }
-                        : isBusinessWorkspace
-                        ? {
-                            background: "rgba(255,255,255,0.06)",
-                            border: "1px solid rgba(255,255,255,0.1)",
-                            color: "#64748b",
-                          }
-                        : {
-                            background: "rgba(59,130,246,0.2)",
-                            color: "#60a5fa",
-                          }
-                    }
-                  >
-                    {item.badge}
-                  </span>
+                  item.badge === "dot" ? (
+                    <span
+                      className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full opacity-70"
+                      style={{ backgroundColor: "#1D9E75" }}
+                    />
+                  ) : (
+                    <span
+                      className="ml-auto rounded px-1.5 py-0.5 text-[10px] font-bold"
+                      style={
+                        isBusinessWorkspace
+                          ? {
+                              background: "rgba(255,255,255,0.06)",
+                              border: "1px solid rgba(255,255,255,0.1)",
+                              color: "#64748b",
+                            }
+                          : {
+                              background: "rgba(59,130,246,0.2)",
+                              color: "#60a5fa",
+                            }
+                      }
+                    >
+                      {item.badge}
+                    </span>
+                  )
                 )}
                 {isProFeature && (
                   <svg className="w-4 h-4 ml-auto" fill="currentColor" viewBox="0 0 20 20">
