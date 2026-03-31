@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useDeferredValue } from "react";
 import type {
   MessageThread,
   Message,
@@ -8,6 +8,7 @@ import type {
   NegotiationAnalysis,
   ThreadFilter,
 } from "@/lib/messaging/types";
+import type { MarketplaceReplyDraftResult, MarketplaceReplyAction } from "@/lib/messaging/reply-drafts";
 import MessagingStatsBar from "./MessagingStatsBar";
 import ThreadList from "./ThreadList";
 import ConversationView from "./ConversationView";
@@ -22,7 +23,6 @@ interface Props {
 export default function BusinessMessagesView({
   initialStats,
   initialThreads,
-  businessName,
   initialSyncRetriedAfterEmpty = false,
 }: Props) {
   const [stats] = useState<MessagingStats>(initialStats);
@@ -35,9 +35,9 @@ export default function BusinessMessagesView({
   const [messages, setMessages] = useState<Message[]>([]);
   const [negotiation, setNegotiation] = useState<NegotiationAnalysis | null>(null);
   const [threadLoading, setThreadLoading] = useState(false);
-  const [generatedReply, setGeneratedReply] = useState<string | null>(null);
-  const [replySource, setReplySource] = useState<"ai" | "fallback" | null>(null);
+  const [draftResult, setDraftResult] = useState<MarketplaceReplyDraftResult | null>(null);
   const [replyLoading, setReplyLoading] = useState(false);
+  const [replyError, setReplyError] = useState<string | null>(null);
   const [sendLoading, setSendLoading] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [mobileShowThread, setMobileShowThread] = useState(false);
@@ -49,12 +49,13 @@ export default function BusinessMessagesView({
   const [syncRetriedAfterEmpty, setSyncRetriedAfterEmpty] = useState(
     initialSyncRetriedAfterEmpty
   );
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const selectedThreadMeta = useMemo(
     () => threads.find((thread) => thread.id === selectedId) ?? null,
     [threads, selectedId]
   );
   const visibleThreads = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
+    const query = deferredSearchQuery.trim().toLowerCase();
     let next = [...threads];
     if (unreadOnly) {
       next = next.filter((thread) => thread.unread_count > 0);
@@ -90,12 +91,13 @@ export default function BusinessMessagesView({
       return 0;
     });
     return next;
-  }, [threads, unreadOnly, searchQuery, sortMode, pinnedThreadIds]);
+  }, [threads, unreadOnly, deferredSearchQuery, sortMode, pinnedThreadIds]);
 
   // Load thread detail
   const loadThread = useCallback(async (threadId: string) => {
     setThreadLoading(true);
-    setGeneratedReply(null);
+    setDraftResult(null);
+    setReplyError(null);
     setSendError(null);
     try {
       const res = await fetch(`/api/business/messages/${threadId}`, {
@@ -190,24 +192,29 @@ export default function BusinessMessagesView({
 
   // Generate AI reply
   const handleGenerateReply = useCallback(
-    async (tone: string, hint?: string) => {
+    async (action: MarketplaceReplyAction, sellerNote?: string) => {
       if (!selectedId) return;
       setReplyLoading(true);
-      setGeneratedReply(null);
-      setReplySource(null);
+      setDraftResult(null);
+      setReplyError(null);
       try {
         const res = await fetch(`/api/business/messages/${selectedId}/ai-reply`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tone, hint: hint?.trim() || undefined }),
+          body: JSON.stringify({
+            action,
+            sellerNote: sellerNote?.trim() || undefined,
+          }),
         });
-        if (res.ok) {
-          const data = await res.json();
-          setGeneratedReply(data.reply);
-          setReplySource(data.source ?? null);
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          setReplyError(data.error ?? "Couldn't generate a draft right now.");
+          return;
         }
+        const data = (await res.json()) as MarketplaceReplyDraftResult;
+        setDraftResult(data);
       } catch {
-        // fail silently
+        setReplyError("Unable to draft right now. Please try again.");
       } finally {
         setReplyLoading(false);
       }
@@ -272,10 +279,10 @@ export default function BusinessMessagesView({
       <div className="flex items-center justify-between gap-4 rounded-2xl border border-[var(--biz-border)] bg-gradient-to-r from-emerald-50 via-white to-cyan-50 px-5 py-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-[var(--biz-text)]">
-            Customer Service
+            Buyer Inbox
           </h1>
           <p className="mt-0.5 text-sm text-[var(--biz-muted)]">
-            Buyer support, offers, and follow-ups in one place
+            Offers, questions, and follow-ups in one place
           </p>
         </div>
         <div className="flex items-center gap-2 rounded-full border border-emerald-200 bg-white/80 px-3 py-1.5 shadow-sm backdrop-blur">
@@ -296,8 +303,8 @@ export default function BusinessMessagesView({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
           </svg>
           <p className="text-xs text-emerald-800">
-            <span className="font-semibold">AI handles the drafting — you handle the sending.</span>
-            {" "}Open any conversation and click <span className="font-medium">AI Reply Assistant</span> to generate context-aware replies. Review, edit if needed, then send.
+            <span className="font-semibold">Suggested replies stay private.</span>
+            {" "}Pick a move, review the draft, edit anything you want, and send it as yourself.
           </p>
         </div>
       </div>
@@ -411,15 +418,14 @@ export default function BusinessMessagesView({
                   thread={selectedThreadMeta ?? selectedThread}
                   messages={messages}
                   negotiation={negotiation}
-                  onGenerateReply={handleGenerateReply}
-                  generatedReply={generatedReply}
-                  replySource={replySource}
+                    onGenerateReply={handleGenerateReply}
+                  draftResult={draftResult}
                   replyLoading={replyLoading}
+                  replyError={replyError}
                   onSendMessage={handleSendMessage}
                   sendLoading={sendLoading}
                   sendError={sendError}
                   onUpdateThreadStatus={handleUpdateThreadStatus}
-                  businessName={businessName}
                 />
               </>
             ) : (
