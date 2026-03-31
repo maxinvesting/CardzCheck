@@ -8,7 +8,7 @@ import {
   forwardRef,
   type ComponentPropsWithoutRef,
 } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { TableVirtuoso } from "react-virtuoso";
 import type { BusinessInventoryItem } from "@/types";
 import {
@@ -231,6 +231,7 @@ export default function InventoryTable({
   ebayConnected = false,
   listView = false,
 }: Props) {
+  const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   // Default to "active" so marking an item sold moves it out of the inventory view
@@ -380,6 +381,10 @@ export default function InventoryTable({
     setEditValue(currentValue?.toString() ?? "");
   };
 
+  const openProfile = (itemId: string) => {
+    router.push(`/card/${itemId}?from=business`);
+  };
+
   const commitEdit = (overrideValue?: string) => {
     if (!editingCell) return;
     const { id, field } = editingCell;
@@ -475,10 +480,13 @@ export default function InventoryTable({
       const isWax = item.notes?.includes("[WAX]");
       const titleStr = buildDisplayTitle(item);
       return (
-        <Link
-          href={`/card/${item.id}?from=business`}
-          onClick={(e) => e.stopPropagation()}
-          className="group/title flex min-w-0 items-center gap-2 rounded-md py-0.5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            openProfile(item.id);
+          }}
+          className="group/title flex min-w-0 cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent p-0 py-0.5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
         >
           {isWax && (
             <span className="inline-flex shrink-0 items-center rounded border border-amber-200 bg-amber-50 px-1 py-0.5 text-[10px] font-semibold whitespace-nowrap text-amber-700">
@@ -494,7 +502,7 @@ export default function InventoryTable({
           <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 transition-colors group-hover/title:bg-emerald-100">
             View card
           </span>
-        </Link>
+        </button>
       );
     }
     if (field === "list_price_cents") {
@@ -554,16 +562,19 @@ export default function InventoryTable({
     }
     if (field === "_view") {
       return (
-        <Link
-          href={`/card/${item.id}?from=business`}
-          onClick={(e) => e.stopPropagation()}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            openProfile(item.id);
+          }}
           className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700 transition-colors hover:bg-emerald-100"
         >
           View card
           <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
-        </Link>
+        </button>
       );
     }
     if (field === "_grade") {
@@ -754,21 +765,27 @@ export default function InventoryTable({
                     WAX
                   </span>
                 )}
-                <Link
-                  href={`/card/${item.id}?from=business`}
-                  onClick={(e) => e.stopPropagation()}
-                  className="block min-h-[44px] min-w-0 truncate text-sm font-semibold text-[var(--biz-primary)] underline-offset-2 hover:underline"
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openProfile(item.id);
+                  }}
+                  className="block min-h-[44px] min-w-0 cursor-pointer border-0 bg-transparent p-0 truncate text-left text-sm font-semibold text-[var(--biz-primary)] underline-offset-2 hover:underline"
                 >
                   {titleStr || "Untitled"}
-                </Link>
+                </button>
               </div>
-              <Link
-                href={`/card/${item.id}?from=business`}
-                onClick={(e) => e.stopPropagation()}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openProfile(item.id);
+                }}
                 className="inline-flex shrink-0 items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700 transition-colors hover:bg-emerald-100"
               >
                 View
-              </Link>
+              </button>
             </div>
           </div>
         </div>
@@ -1235,10 +1252,10 @@ export default function InventoryTable({
         {filtered.length} item{filtered.length !== 1 ? "s" : ""}
         {filtered.length !== items.length && ` (of ${items.length} total)`}
         <span className="hidden sm:inline">
-          {" \u00B7 Click cell to edit \u00B7 Double-click row to open detail"}
+          {" \u00B7 Click title or Open to view profile \u00B7 Click cell to edit"}
         </span>
         <span className="sm:hidden">
-          {" \u00B7 Tap card to open detail"}
+          {" \u00B7 Tap View or title to open profile"}
         </span>
       </div>
 

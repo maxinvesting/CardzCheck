@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import type { BusinessInventoryItem } from "@/types";
 
 interface Props {
@@ -122,6 +122,7 @@ function CardTile({
   item: BusinessInventoryItem;
   onConsultant: (prompt: string) => void;
 }) {
+  const router = useRouter();
   const [hovered, setHovered] = useState(false);
 
   const imageUrl =
@@ -140,6 +141,7 @@ function CardTile({
       : "#1A1A1A";
   const days = getDaysHeld(item.acquisition_date);
   const action = getAction(item);
+  const openProfile = () => router.push(profileHref);
 
   return (
     <div
@@ -159,10 +161,19 @@ function CardTile({
         flexDirection: "column",
       }}
     >
-      <Link
-        href={profileHref}
+      <button
+        type="button"
+        onClick={openProfile}
         aria-label={`Open card profile for ${item.title || "Untitled"}`}
-        style={{ color: "inherit", textDecoration: "none" }}
+        style={{
+          color: "inherit",
+          textDecoration: "none",
+          cursor: "pointer",
+          border: "none",
+          background: "transparent",
+          padding: 0,
+          width: "100%",
+        }}
       >
         {/* TOP IMAGE SECTION */}
         <div
@@ -226,12 +237,23 @@ function CardTile({
             </span>
           )}
         </div>
-      </Link>
+      </button>
 
       {/* BOTTOM INFO SECTION */}
       <div style={{ padding: "9px 10px 10px", display: "flex", flexDirection: "column", gap: 5, flex: 1 }}>
         {/* Card name */}
-        <Link href={profileHref} style={{ textDecoration: "none" }}>
+        <button
+          type="button"
+          onClick={openProfile}
+          style={{
+            textDecoration: "none",
+            cursor: "pointer",
+            textAlign: "left",
+            border: "none",
+            background: "transparent",
+            padding: 0,
+          }}
+        >
           <p
             style={{
               fontSize: 11,
@@ -249,7 +271,7 @@ function CardTile({
           >
             {item.title || "Untitled"}
           </p>
-        </Link>
+        </button>
 
         {/* Price row */}
         <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
@@ -293,8 +315,9 @@ function CardTile({
 
         {/* Action buttons */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginTop: 2 }}>
-          <Link
-            href={profileHref}
+          <button
+            type="button"
+            onClick={openProfile}
             style={{
               fontSize: 10,
               fontWeight: 600,
@@ -305,10 +328,11 @@ function CardTile({
               border: "1px solid #C8E6D6",
               textAlign: "center",
               textDecoration: "none",
+              cursor: "pointer",
             }}
           >
             View card
-          </Link>
+          </button>
           <button
             type="button"
             onClick={(e) => {
