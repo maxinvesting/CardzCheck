@@ -7,11 +7,11 @@ import type { ReactNode } from "react";
 import Header from "@/components/Header";
 import SportsCardBackground from "@/components/SportsCardBackground";
 import { createClient } from "@/lib/supabase/client";
-import { hasActiveBusinessTier } from "@/lib/subscription-tier";
+import { hasBusinessWorkspaceAccess } from "@/lib/business/workspace-access";
 import {
   ANNUAL_SAVINGS,
-  BUSINESS_ANNUAL_PRICE,
-  BUSINESS_ANNUAL_SAVINGS,
+  BUSINESS_ADDITIONAL_SEAT_MONTHLY_PRICE,
+  BUSINESS_INCLUDED_SEATS,
   BUSINESS_MONTHLY_PRICE,
   PRO_ANNUAL_PRICE,
   PRO_MONTHLY_PRICE,
@@ -68,13 +68,12 @@ export default function Home() {
       const { data: { user } } = await supabase.auth.getUser();
 
       if (user) {
-        const { data: subscription } = await supabase
-          .from("subscriptions")
-          .select("tier, status, current_period_end")
-          .eq("user_id", user.id)
-          .maybeSingle();
+        const hasBusinessAccess = await hasBusinessWorkspaceAccess(
+          supabase as any,
+          user.id
+        );
 
-        if (hasActiveBusinessTier(subscription)) {
+        if (hasBusinessAccess) {
           router.replace("/business");
           return;
         }
@@ -111,8 +110,8 @@ export default function Home() {
             </h1>
 
             <p className="mt-5 max-w-3xl text-base text-gray-300 sm:text-lg">
-              Grade probability, live comps, collection tracking, and full business operations — in
-              one platform built for collectors and dealers alike.
+              Grade probability, pricing estimates, collection tracking, and full business
+              operations — in one platform built for collectors and dealers alike.
             </p>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
@@ -134,13 +133,13 @@ export default function Home() {
               <div className="rounded-lg border border-gray-800 bg-gray-950/40 p-4">
                 <p className="text-xs uppercase tracking-wide text-gray-500">Free Start</p>
                 <p className="mt-1 text-sm font-semibold text-gray-100">
-                  {LIMITS.FREE_SEARCHES} comp searches + {LIMITS.FREE_COLLECTION} saved cards
+                  {LIMITS.FREE_SEARCHES} card searches + {LIMITS.FREE_COLLECTION} saved cards
                 </p>
               </div>
               <div className="rounded-lg border border-gray-800 bg-gray-950/40 p-4">
                 <p className="text-xs uppercase tracking-wide text-gray-500">Core Engines</p>
                 <p className="mt-1 text-sm font-semibold text-gray-100">
-                  Grade Probability Engine, Live Comps, and Analyst AI
+                  Grade Probability Engine, Pricing Insights, and Analyst AI
                 </p>
               </div>
               <div className="rounded-lg border border-gray-800 bg-gray-950/40 p-4">
@@ -166,15 +165,14 @@ export default function Home() {
               <p className="text-xs uppercase tracking-wide text-emerald-300">Business Mode</p>
               <h2 className="mt-2 text-2xl font-semibold text-white">Run inventory like a real desk.</h2>
               <p className="mt-3 text-sm text-gray-400">
-                Manage inventory, track sales and fees, and monitor take-home profit across
-                channels from a single dashboard.
+                Manage inventory, sales, and pricing with your team in one workspace built for card operations.
               </p>
             </article>
           </section>
 
           <section id="features" className="mt-10">
             <h2 className="mb-4 text-2xl font-semibold text-white sm:text-3xl">What You Can Do</h2>
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <FeatureCard
                 title="Know the Grade Before You Submit"
                 description="Upload card photos and get PSA and BGS grade probabilities with confidence levels — before you pay for a submission."
@@ -197,9 +195,9 @@ export default function Home() {
               />
               <FeatureCard
                 title="Price with Confidence"
-                description="Run comps with real market data and get valuation clarity before you buy, list, or flip."
+                description="Review listing trends and estimated value ranges before you buy, list, or flip."
                 points={[
-                  "Live market comps and CMV tracking",
+                  "Estimated market value and trend tracking",
                   "Card photo identification to reduce manual entry",
                   "Saved searches and quick repeat workflows",
                 ]}
@@ -219,6 +217,7 @@ export default function Home() {
                 description="Manage inventory, track P&L, and sell across eBay and Whatnot from a single business dashboard."
                 points={[
                   "Inventory, ledger, and sales tracking",
+                  "Owner, manager, and employee seat roles",
                   "eBay and Whatnot channel integration",
                   "Business Consultant and Analyst workflows",
                 ]}
@@ -233,6 +232,92 @@ export default function Home() {
                   </svg>
                 )}
               />
+              <FeatureCard
+                title="Shop Below Our eBay Price"
+                description="Paid subscribers get exclusive access to CardzCheck inventory priced at least 13.5% below our eBay storefront."
+                badge="Subscriber Deal"
+                points={[
+                  "Always 13.5%+ below our eBay storefront",
+                  "Loyalty discounts up to 10% for repeat buyers",
+                  "Extra 1% off every order for Business members",
+                ]}
+                icon={(
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 7H4l1-7z"
+                    />
+                  </svg>
+                )}
+              />
+            </div>
+          </section>
+
+          {/* CardzCheck Deals spotlight */}
+          <section className="mt-10 overflow-hidden rounded-2xl border border-cyan-500/30 bg-gradient-to-br from-cyan-950/60 via-gray-900/80 to-gray-900/80">
+            <div className="flex flex-col gap-8 p-6 sm:p-8 lg:flex-row lg:items-center">
+              <div className="flex-1">
+                <p className="text-xs font-semibold uppercase tracking-wider text-cyan-400">
+                  Subscriber Exclusive
+                </p>
+                <h2 className="mt-2 text-2xl font-semibold text-white sm:text-3xl">
+                  CardzCheck Deals
+                </h2>
+                <p className="mt-3 max-w-xl text-gray-300">
+                  Every paid subscriber gets access to our curated storefront — CardzCheck inventory
+                  priced at least <span className="font-semibold text-cyan-300">13.5% below our eBay storefront</span>.
+                  Some deals also come in below market comps. Not a peer-to-peer marketplace.
+                  Sold directly by CardzCheck.
+                </p>
+                <ul className="mt-5 space-y-2 text-sm text-gray-300">
+                  {[
+                    "Exclusive subscriber-only pricing on every listing",
+                    "Loyalty discounts unlock at 5 and 10 purchases (up to 10% off)",
+                    "Business plan members get an extra 1% off every deal",
+                    "Every 5th purchase (15, 20, 25…) earns a milestone discount",
+                  ].map((point) => (
+                    <li key={point} className="flex items-start gap-2">
+                      <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-cyan-400" />
+                      <span>{point}</span>
+                    </li>
+                  ))}
+                </ul>
+                <Link
+                  href="/shop"
+                  className="mt-6 inline-flex items-center gap-2 rounded-lg bg-cyan-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-cyan-500"
+                >
+                  Browse subscriber deals
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </Link>
+              </div>
+              <div className="shrink-0 lg:w-64">
+                <div className="rounded-xl border border-cyan-500/20 bg-cyan-950/40 p-5">
+                  <p className="text-xs uppercase tracking-wide text-cyan-400">Pricing vs. our eBay</p>
+                  <div className="mt-3 space-y-3">
+                    {[
+                      { label: "Our eBay storefront", value: "$179", muted: true },
+                      { label: "Subscriber price", value: "$155", highlight: true },
+                      { label: "You save", value: "$24 (13.5%)", green: true },
+                    ].map(({ label, value, muted, highlight, green }) => (
+                      <div key={label} className="flex items-center justify-between gap-2">
+                        <span className={`text-sm ${muted ? "text-gray-500 line-through" : "text-gray-300"}`}>
+                          {label}
+                        </span>
+                        <span className={`text-sm font-semibold tabular-nums ${highlight ? "text-white" : green ? "text-cyan-300" : "text-gray-500"}`}>
+                          {value}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="mt-4 text-[11px] text-gray-500">
+                    Example based on a $179 eBay listing. Business members save an additional 1%.
+                  </p>
+                </div>
+              </div>
             </div>
           </section>
 
@@ -248,7 +333,7 @@ export default function Home() {
                 <p className="mt-4 text-3xl font-bold text-white">$0</p>
                 <p className="text-sm text-gray-400">forever</p>
                 <ul className="mt-5 space-y-2 text-sm text-gray-300">
-                  <li>{LIMITS.FREE_SEARCHES} comp searches</li>
+                  <li>{LIMITS.FREE_SEARCHES} card searches</li>
                   <li>{LIMITS.FREE_COLLECTION} collection cards</li>
                   <li>Basic dashboard access</li>
                 </ul>
@@ -266,9 +351,10 @@ export default function Home() {
                 <p className="mt-4 text-3xl font-bold text-white">{formatPrice(PRO_MONTHLY_PRICE)}/mo</p>
                 <p className="text-sm text-blue-200">or {formatPrice(PRO_ANNUAL_PRICE)}/year (save {formatPrice(ANNUAL_SAVINGS)})</p>
                 <ul className="mt-5 space-y-2 text-sm text-blue-100">
-                  <li>Unlimited comp searches</li>
+                  <li>Unlimited card searches</li>
                   <li>Full collection tracking</li>
                   <li>Analyst AI + Grade Probability Engine</li>
+                  <li>Subscriber deals (13.5%+ below our eBay)</li>
                 </ul>
                 <Link
                   href="/signup"
@@ -279,15 +365,16 @@ export default function Home() {
               </article>
 
               <article className="rounded-xl border border-emerald-500/50 bg-emerald-500/10 p-6">
-                <p className="text-xs font-semibold uppercase tracking-wide text-emerald-200">For Sellers</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-emerald-200">For Card Teams</p>
                 <h3 className="mt-2 text-lg font-semibold text-white">Business</h3>
                 <p className="mt-4 text-3xl font-bold text-white">{formatPrice(BUSINESS_MONTHLY_PRICE)}/mo</p>
                 <p className="text-sm text-emerald-200">
-                  or {formatPrice(BUSINESS_ANNUAL_PRICE)}/year (save {formatPrice(BUSINESS_ANNUAL_SAVINGS)})
+                  Includes {BUSINESS_INCLUDED_SEATS} user · Add team members for {formatPrice(BUSINESS_ADDITIONAL_SEAT_MONTHLY_PRICE)}/month each
                 </p>
                 <ul className="mt-5 space-y-2 text-sm text-emerald-100">
                   <li>Everything in Pro</li>
-                  <li>Inventory + sales + ledger workflows</li>
+                  <li>Shared inventory, sales, and ledger workflows</li>
+                  <li>Role-based team access and seat controls</li>
                   <li>Profit-focused business dashboard</li>
                 </ul>
                 <Link

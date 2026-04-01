@@ -68,9 +68,9 @@ function mapPsaToBgs(psa: GradeProbabilities["psa"]): GradeProbabilities["bgs"] 
 function derivePhotoQuality(stats: ImageStats): number {
   if (stats.count === 0) return 0.35;
 
-  const countScore = clamp((stats.count - 1) / 4, 0, 1);
+  const countScore = clamp(stats.count / 5, 0, 1);
   const sizeScore = clamp(stats.avgBytes / (1.2 * 1024 * 1024), 0, 1);
-  return clamp(0.45 * countScore + 0.55 * sizeScore, 0, 1);
+  return clamp(0.35 * countScore + 0.65 * sizeScore, 0, 1);
 }
 
 function deriveConfidence(quality: number): "high" | "medium" | "low" {
@@ -113,10 +113,10 @@ function fallbackCenteringDetail(label: GradeProbabilities["confidence"]): Grade
   }
   if (label === "medium") {
     return {
-      left_right_ratio: "58/42",
-      top_bottom_ratio: "59/41",
+      left_right_ratio: "55/45",
+      top_bottom_ratio: "56/44",
       centering_confidence_score: 56,
-      centering_severity_0_3: 2,
+      centering_severity_0_3: 1,
       centering_notes: "Centering read is uncertain; better photos could change this assessment.",
     };
   }

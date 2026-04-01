@@ -12,6 +12,8 @@ const RATE_LIMITS: Record<string, { limit: number; windowSec: number }> = {
   "/api/identify-card":        { limit: 10, windowSec: 60 },
   "/api/grade-estimate":       { limit: 10, windowSec: 60 },
   "/api/analyst":              { limit: 20, windowSec: 60 },
+  // Collection writes — prevents automated scraping of collection-add endpoint
+  "/api/collection":           { limit: 30, windowSec: 60 },
   // Bulk Mode — generous limits since processing is batched server-side
   "/api/bulk/batches":         { limit: 30, windowSec: 60 },   // list + create
   "/api/bulk/batches/process": { limit: 5,  windowSec: 60 },   // AI-heavy; tight limit
@@ -117,9 +119,9 @@ async function checkRateLimit(
     }
   } else if (process.env.NODE_ENV === "production") {
     // Surface clearly in Vercel logs so the operator knows to fix it
-    console.warn(
-      "[ratelimit] WARNING: In-memory rate limiting is not distributed across Vercel instances. " +
-      "Set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN for production-grade limiting."
+    console.error(
+      "[SECURITY][ratelimit] CRITICAL: Rate limiting is in-memory only. " +
+      "Configure UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN for distributed rate limiting."
     );
   }
 
@@ -130,6 +132,29 @@ async function checkRateLimit(
 // Middleware entry point
 // ---------------------------------------------------------------------------
 export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  // API routes already perform auth checks in their handlers.
+  // Skipping session refresh here avoids an extra auth round-trip per API request.
+  if (pathname.startsWith("/api/")) {
+    const apiRateLimit = await checkRateLimit(request, null);
+    if (apiRateLimit.limited) {
+      return NextResponse.json(
+        {
+          error: "Rate limit exceeded",
+          message: "Too many requests. Please retry after a short wait.",
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(apiRateLimit.retryAfterSeconds || 60),
+          },
+        }
+      );
+    }
+    return NextResponse.next();
+  }
+
   const { response, userId } = await updateSession(request);
   const rateLimit = await checkRateLimit(request, userId);
 

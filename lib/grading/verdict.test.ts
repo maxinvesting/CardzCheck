@@ -117,9 +117,9 @@ describe("buildGradeVerdict", () => {
     const modern = buildGradeVerdict(
       makeEstimate({
         grade_probabilities: {
-          ...makeEstimate().grade_probabilities!,
           confidence: "medium",
           psa: { "10": 0.18, "9": 0.45, "8": 0.27, "7_or_lower": 0.1 },
+          bgs: { "9.5": 0.05, "9": 0.50, "8.5": 0.30, "8_or_lower": 0.15 },
         },
       }),
       { year: "2023" },

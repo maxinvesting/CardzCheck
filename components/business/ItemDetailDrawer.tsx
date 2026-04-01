@@ -11,6 +11,8 @@ import { gradingCopy } from "@/copy/grading";
 import { formatEbayTitle, calculateEbayParityPrice, EBAY_FEE_RATES } from "@/lib/ebay/parity-price";
 import type { EbayFeeRateKey } from "@/lib/ebay/parity-price";
 import EbayListingModal from "@/components/business/EbayListingModal";
+import GetCompsButton from "@/components/ui/GetCompsButton";
+import { compsParamsFromTitle } from "@/lib/ebay/comps-url";
 
 function fmtCents(cents: number | null): string {
   if (cents === null) return "";
@@ -103,11 +105,9 @@ export default function ItemDetailDrawer({
         const imageUrls = images
           .map((img: { url?: string }) => img?.url)
           .filter((u: unknown): u is string => typeof u === "string" && u.length > 0);
-        if (imageUrls.length === 0 && (card.image_url || card.user_image_url || card.stock_image_url || card.ebay_image_url)) {
+        if (imageUrls.length === 0 && (card.image_url || card.user_image_url)) {
           if (card.image_url) imageUrls.push(card.image_url);
           if (card.user_image_url) imageUrls.push(card.user_image_url);
-          if (card.stock_image_url) imageUrls.push(card.stock_image_url);
-          if (card.ebay_image_url) imageUrls.push(card.ebay_image_url);
         }
         const cardIdentity: GradeEstimatorCardInput = {
           player_name: card.player_name ?? "",
@@ -332,6 +332,20 @@ export default function ItemDetailDrawer({
                   <span>List on eBay</span>
                 </button>
               )}
+              <GetCompsButton
+                params={
+                  cardForGrade?.cardIdentity
+                    ? {
+                        player: cardForGrade.cardIdentity.player_name,
+                        year: cardForGrade.cardIdentity.year?.toString(),
+                        setName: cardForGrade.cardIdentity.set_name,
+                        parallel: cardForGrade.cardIdentity.parallel_type,
+                        grade: form.grade || item.grade,
+                        gradingCompany: form.grading_company || item.grading_company,
+                      }
+                    : compsParamsFromTitle(item.title, form.grade || item.grade, form.grading_company || item.grading_company)
+                }
+              />
               {item.id && (
                 <Link
                   href={`/card/${item.id}?from=business`}
@@ -619,7 +633,7 @@ export default function ItemDetailDrawer({
                       </p>
                       {valueLoading && (
                         <span className="text-[10px] text-gray-400">
-                          Analyzing comps…
+                          Analyzing pricing data…
                         </span>
                       )}
                     </div>

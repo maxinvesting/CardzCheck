@@ -1,7 +1,20 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { NextRequest } from "next/server";
-import { hasActiveBusinessTier } from "@/lib/subscription-tier";
+import { hasBusinessWorkspaceAccess } from "@/lib/business/workspace-access";
+
+function sanitizeNextPath(nextParam: string | null): string | null {
+  if (!nextParam) return null;
+  if (!nextParam.startsWith("/") || nextParam.startsWith("//")) return null;
+
+  try {
+    const parsed = new URL(nextParam, "http://localhost");
+    if (parsed.origin !== "http://localhost") return null;
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return null;
+  }
+}
 
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
@@ -13,7 +26,7 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
-      let next = nextParam ?? "/dashboard";
+      let next = sanitizeNextPath(nextParam) ?? "/dashboard";
 
       if (!nextParam) {
         const {
@@ -21,13 +34,11 @@ export async function GET(request: NextRequest) {
         } = await supabase.auth.getUser();
 
         if (user) {
-          const { data: sub } = await supabase
-            .from("subscriptions")
-            .select("tier, status, current_period_end")
-            .eq("user_id", user.id)
-            .maybeSingle();
-
-          if (hasActiveBusinessTier(sub)) {
+          const hasBusinessAccess = await hasBusinessWorkspaceAccess(
+            supabase as any,
+            user.id
+          );
+          if (hasBusinessAccess) {
             next = "/business";
           }
         }

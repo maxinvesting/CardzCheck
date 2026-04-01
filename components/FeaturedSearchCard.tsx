@@ -152,7 +152,7 @@ export default function FeaturedSearchCard({
                 <h3 className="text-sm font-medium text-gray-400 mb-2">
                   Est. Market Value (
                   {evaluation?.valuationSource === "exact_sold"
-                    ? "exact sold comps"
+                    ? "exact sold matches"
                     : evaluation?.valuationSource === "mixed_sold"
                     ? "mixed sold support"
                     : evaluation?.valuationSource === "active_directional"

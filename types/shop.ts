@@ -19,20 +19,54 @@ export interface ShopListing {
   sport: string; // category/game label (e.g., Football, Pokemon, One Piece)
   price: number;
   cmv: number | null;
+  // Public: our eBay storefront price for this card. Subscriber deals are always ≥13.5% below this.
+  ebay_storefront_price: number | null;
   cost_basis?: number | null; // admin only, excluded from public API
   ebay_sold_comp?: number | null; // admin only — reference eBay sold comp price
+  ebay_comp_url?: string | null; // direct URL to an eBay sold listing used as a comp
   quantity: number;
   quantity_sold: number;
   image_urls: string[];
   thumbnail_url: string | null;
-  status: "active" | "sold" | "reserved" | "delisted";
+  status: "active" | "sold" | "reserved" | "delisted" | "archived";
   publish_state: "draft" | "published";
   featured: boolean;
   is_premium: boolean;
+  /** When true, listing appears in "Offers only" filter and shows an offers badge */
+  accepts_offers: boolean;
   shipping_method: string;
   shipping_cost: number;
   notes: string | null;
   tags: string[];
+  // AI-generated cache fields (populated lazily via /api/shop/listings/[id]/ai-insight and grade-analysis)
+  ai_insight: string | null;
+  ai_insight_at: string | null;
+  grade_analysis: ShopListingGradeAnalysis | null;
+  grade_analysis_at: string | null;
+}
+
+/** Cached grade probability output stored in shop_listings.grade_analysis */
+export interface ShopListingGradeAnalysis {
+  status: "ok" | "low_confidence" | "unable";
+  estimated_grade_low: number;
+  estimated_grade_high: number;
+  grade_notes: string;
+  confidence: {
+    overall_confidence_score: number;
+    confidence_label: "high" | "medium" | "low";
+    limiting_factors: string[];
+  };
+  centering: {
+    left_right_ratio: string;
+    top_bottom_ratio: string;
+    centering_severity_0_3: number;
+    centering_notes: string;
+  };
+  surface: string;
+  corners: string;
+  edges: string;
+  probabilities: Array<{ label: string; probability: number }>;
+  analyzed_image_url: string | null;
 }
 
 export interface ShopOrder {
@@ -47,7 +81,7 @@ export interface ShopOrder {
   total: number | null;
   stripe_checkout_session_id: string | null;
   stripe_payment_intent_id: string | null;
-  payment_status: "pending" | "paid" | "failed" | "refunded";
+  payment_status: "pending" | "paid" | "failed" | "refunded" | "cancelled";
   fulfillment_status: "unfulfilled" | "shipped" | "delivered";
   tracking_number: string | null;
   tracking_carrier: string | null;

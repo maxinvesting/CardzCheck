@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import "../styles/businessTheme.css";
 import { AuthProvider } from "@/contexts/AuthContext";
@@ -6,7 +6,13 @@ import { AuthProvider } from "@/contexts/AuthContext";
 export const metadata: Metadata = {
   title: "CardzCheck — The Intelligence Platform for Sports Card Collectors and Businesses",
   description:
-    "Grade probability, live comps, collection tracking, and full business operations in one platform.",
+    "Grade probability, pricing estimates, collection tracking, and full business operations in one platform.",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

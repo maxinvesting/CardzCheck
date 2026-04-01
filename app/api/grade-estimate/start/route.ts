@@ -29,6 +29,7 @@ type GradeEstimateStartPayload = {
   closeups?: Array<{ url?: string; kind?: string; sort_order?: number }>;
   scanPhotos?: GradeScanPhoto[];
   card?: GradeEstimatorCardInput;
+  preScanNotes?: string;
 };
 
 export async function POST(request: NextRequest) {
@@ -142,6 +143,7 @@ export async function POST(request: NextRequest) {
       {
         scanPhotos,
         card: body.card ?? null,
+        preScanNotes: body.preScanNotes?.trim() || undefined,
       },
       deps
     );

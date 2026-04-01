@@ -1134,6 +1134,9 @@ export default function GradeEstimatorPage() {
                               year: identifiedCard.year,
                               set_name: identifiedCard.set_name,
                               parallel_type: identifiedCard.parallel_type,
+                              card_number: identifiedCard.card_number,
+                              variation: identifiedCard.variation,
+                              insert: identifiedCard.insert,
                             } : null}
                             primaryImageUrl={
                               identifiedCard?.imageUrl || identifiedCard?.imageUrls?.[0] || null

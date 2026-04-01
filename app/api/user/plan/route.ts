@@ -48,16 +48,16 @@ export async function POST(request: NextRequest) {
     } catch (err) {
       console.error("Exception checking if user exists:", err);
       return NextResponse.json(
-        { error: "Failed to check user record", details: err instanceof Error ? err.message : "Unknown error" },
+        { error: "Failed to check user record" },
         { status: 500 }
       );
     }
     
     // If fetchError exists and it's NOT "record not found", that's a real error
     if (fetchError && fetchError.code !== "PGRST116") {
-      console.error("Error checking if user exists:", fetchError);
+      console.error("Error checking if user exists:", { code: fetchError.code, message: fetchError.message, hint: fetchError.hint });
       return NextResponse.json(
-        { error: "Failed to check user record", details: fetchError.message, code: fetchError.code },
+        { error: "Failed to check user record" },
         { status: 500 }
       );
     }
@@ -101,11 +101,7 @@ export async function POST(request: NextRequest) {
     } catch (err) {
       console.error("Exception during database operation:", err);
       return NextResponse.json(
-        { 
-          error: "Database operation failed", 
-          details: err instanceof Error ? err.message : "Unknown error",
-          type: err instanceof Error ? err.constructor.name : typeof err
-        },
+        { error: "Database operation failed" },
         { status: 500 }
       );
     }
@@ -146,14 +142,9 @@ export async function POST(request: NextRequest) {
       }
 
       if (fallbackResult.error) {
-        console.error("Fallback update/insert also failed:", fallbackResult.error);
+        console.error("Fallback update/insert also failed:", { code: fallbackResult.error.code, message: fallbackResult.error.message });
         return NextResponse.json(
-          { 
-            error: "Database schema issue", 
-            details: "The plan_selected column is missing. Please add it to your database.",
-            sql: "ALTER TABLE users ADD COLUMN plan_selected BOOLEAN DEFAULT FALSE;",
-            originalError: error.message
-          },
+          { error: "Failed to save plan selection" },
           { status: 500 }
         );
       }
@@ -167,24 +158,9 @@ export async function POST(request: NextRequest) {
     }
 
     if (error) {
-      console.error("Error saving user plan:", {
-        error,
-        userId: user.id,
-        plan,
-        existingUser: !!existingUser,
-        errorCode: error.code,
-        errorMessage: error.message,
-        errorDetails: error.details,
-        errorHint: error.hint,
-        fullError: JSON.stringify(error, null, 2),
-      });
+      console.error("[plan] DB error:", { code: error.code, message: error.message, hint: error.hint });
       return NextResponse.json(
-        { 
-          error: "Failed to save plan selection", 
-          details: error.message || "Unknown database error",
-          code: error.code,
-          hint: error.hint
-        },
+        { error: "Failed to save plan selection" },
         { status: 500 }
       );
     }
@@ -197,15 +173,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Plan selection error (catch block):", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    const errorStack = error instanceof Error ? error.stack : undefined;
-    console.error("Error stack:", errorStack);
     return NextResponse.json(
-      { 
-        error: "Internal server error",
-        details: errorMessage,
-        type: error instanceof Error ? error.constructor.name : typeof error
-      },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }
