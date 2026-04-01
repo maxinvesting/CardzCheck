@@ -5,10 +5,11 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { requireBusinessAccess } from "@/lib/business/actions";
+import { requireBusinessOwnerContext } from "@/lib/business/context";
 import { createListing } from "@/lib/ebay/selling/inventory-api";
 import { handleEbayListingCreated } from "@/lib/ebay/selling/event-handlers";
 import { businessInventoryProvider } from "@/lib/inventory/business-inventory-provider";
+import { getEbayListingCategoryId } from "@/lib/cards/market-category";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +23,7 @@ export async function GET(): Promise<NextResponse> {
     } = await supabase.auth.getUser();
 
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    await requireBusinessAccess(user.id);
+    await requireBusinessOwnerContext(user.id);
 
     const { data, error } = await supabase
       .from("ebay_listings")
@@ -49,7 +50,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     } = await supabase.auth.getUser();
 
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    await requireBusinessAccess(user.id);
+    await requireBusinessOwnerContext(user.id);
 
     const body = await req.json();
     const {
@@ -57,7 +58,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       title,
       description,
       condition = "LIKE_NEW",
-      category_id = "261328", // Sports Trading Cards
+      category_id,
       price_cents,
       quantity = 1,
       image_urls = [],
@@ -65,6 +66,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       payment_policy_id,
       return_policy_id,
       merchant_location_key,
+      game,
+      sport,
+      set_name,
+      player_name,
+      keywords,
     } = body;
 
     if (!inventory_item_id || !title || !price_cents) {
@@ -84,13 +90,27 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ error: "Cannot list a sold item on eBay" }, { status: 400 });
     }
 
+    const resolvedCategoryId =
+      typeof category_id === "string" && category_id.trim().length > 0
+        ? category_id.trim()
+        : getEbayListingCategoryId({
+            game: typeof game === "string" ? game : null,
+            sport: typeof sport === "string" ? sport : null,
+            title: title,
+            set: typeof set_name === "string" ? set_name : null,
+            player: typeof player_name === "string" ? player_name : null,
+            keywords: Array.isArray(keywords)
+              ? keywords.filter((value: unknown): value is string => typeof value === "string")
+              : null,
+          });
+
     // Push to eBay
     const result = await createListing(user.id, {
       inventoryItemId: inventory_item_id,
       title,
       description: description ?? title,
       condition,
-      categoryId: category_id,
+      categoryId: resolvedCategoryId,
       priceCents: price_cents,
       quantity,
       imageUrls: image_urls,
@@ -109,7 +129,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         ebay_sku: result.sku,
         title,
         listed_price_cents: price_cents,
-        ebay_category_id: category_id,
+        ebay_category_id: resolvedCategoryId,
         listing_url: result.listingUrl,
       },
       businessInventoryProvider

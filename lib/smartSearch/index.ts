@@ -5,6 +5,7 @@ import type { Comp, ParsedSearch } from "@/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { logDebug } from "@/lib/logging";
+import { inferShopCategoryLabel } from "@/lib/cards/market-category";
 import { parseQuery } from "./parseQuery";
 import {
   extractBrandAndLine,
@@ -222,8 +223,19 @@ function buildEbayParamsFromParsed(
   // Always fall back to the raw query if parser couldn't find a player.
   const player = parsed.player_name?.trim() ? parsed.player_name : query;
 
+  const inferredCategory = inferShopCategoryLabel(
+    {
+      title: query,
+      set: parsed.set_name,
+      player: player,
+      keywords: parsed.unparsed_tokens,
+    },
+    "Football"
+  );
+
   return {
     player,
+    sport: inferredCategory,
     year: parsed.year,
     set: parsed.set_name,
     grade: parsed.grade,

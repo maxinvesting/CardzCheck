@@ -2,6 +2,7 @@ import { scrapeEbaySoldListings } from "@/lib/ebay/scraper";
 import { normalizeGrade } from "@/lib/ebay/utils";
 import { normalizeText } from "@/lib/smartSearch/normalize";
 import type { EbaySearchParams, CompItem } from "@/lib/ebay/types";
+import { inferShopCategoryLabel } from "@/lib/cards/market-category";
 import type { GradeCmv, GradeProbabilities, WorthGradingResult } from "@/types";
 import { cacheGradeCmv, getCachedGradeCmv } from "./cache";
 import { DEFAULT_COMPS_WINDOW_DAYS, DEFAULT_GRADE_FEES } from "./constants";
@@ -10,6 +11,8 @@ type GradeKey = "raw" | "psa10" | "psa9" | "psa8" | "bgs95" | "bgs9" | "bgs85";
 
 export interface GradeEstimatorCardInput {
   player_name: string;
+  game?: string;
+  sport?: string;
   year?: string;
   set_name?: string;
   card_number?: string;
@@ -114,8 +117,20 @@ function buildFingerprint(card: GradeEstimatorCardInput): string {
 }
 
 function buildSearchParams(card: GradeEstimatorCardInput, grade?: string): EbaySearchParams {
+  const inferredCategory = inferShopCategoryLabel(
+    {
+      game: card.game,
+      sport: card.sport,
+      set: card.set_name,
+      player: card.player_name,
+      keywords: card.insert ? [card.insert] : undefined,
+    },
+    "Football"
+  );
+
   return {
     player: card.player_name,
+    sport: inferredCategory,
     year: card.year,
     set: card.set_name,
     grade,

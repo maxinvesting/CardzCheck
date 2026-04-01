@@ -2,10 +2,54 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { LIMITS, type AcquisitionType, type CollectionItem } from "@/types";
 import { isTestMode } from "@/lib/test-mode";
-import { calculateCardCmv, isCmvStale } from "@/lib/cmv";
+import { calculateCardCmv } from "@/lib/cmv";
 import { logDebug, redactId } from "@/lib/logging";
 import { normalizeHttpUrl, resolveStoredImagePath, uniqueHttpUrls } from "@/lib/collection-images";
 import { hasBusinessAccess } from "@/lib/access";
+
+// ---------------------------------------------------------------------------
+// Simple async concurrency limiter — avoids hammering external APIs (eBay,
+// Anthropic) when many collection items are CMV-stale at the same time.
+// ---------------------------------------------------------------------------
+function withConcurrency<T>(
+  tasks: (() => Promise<T>)[],
+  maxConcurrent: number
+): Promise<T[]> {
+  return new Promise((resolve, reject) => {
+    const results: T[] = new Array(tasks.length);
+    let started = 0;
+    let completed = 0;
+    let failed = false;
+
+    function runNext() {
+      if (failed) return;
+      if (started >= tasks.length) return;
+
+      const index = started++;
+      tasks[index]()
+        .then((result) => {
+          results[index] = result;
+          completed++;
+          if (completed === tasks.length) {
+            resolve(results);
+          } else {
+            runNext();
+          }
+        })
+        .catch((err) => {
+          failed = true;
+          reject(err);
+        });
+    }
+
+    const initialBatch = Math.min(maxConcurrent, tasks.length);
+    for (let i = 0; i < initialBatch; i++) {
+      runNext();
+    }
+  });
+}
+
+const CMV_MAX_CONCURRENT = 3;
 
 const ACQUISITION_TYPES: readonly AcquisitionType[] = [
   "pulled",
@@ -47,6 +91,11 @@ function parseQuantity(value: unknown): number | null {
   if (!Number.isInteger(parsed)) return null;
   if (parsed < 1) return null;
   return parsed;
+}
+
+function stripHtml(str: string | null | undefined): string | null {
+  if (!str) return null;
+  return str.replace(/<[^>]*>/g, "").trim() || null;
 }
 
 function getErrorCode(error: unknown): string | null {
@@ -94,10 +143,12 @@ function deriveBusinessTitle(input: {
   return display || input.player_name || "Untitled card";
 }
 
+type InsertedRow = Record<string, unknown>;
+
 async function insertCollectionItemWithFallback(
   supabase: Awaited<ReturnType<typeof createClient>>,
   insertPayload: Record<string, unknown>
-): Promise<{ item: any | null; error: unknown | null; removedColumns: string[] }> {
+): Promise<{ item: InsertedRow | null; error: unknown | null; removedColumns: string[] }> {
   const payload = { ...insertPayload };
   const removedColumns: string[] = [];
 
@@ -163,9 +214,11 @@ export async function GET() {
       .in("card_id", cardIds)
       .eq("position", 0);
 
+    type CardImage = { card_id: string; storage_path: string; [key: string]: unknown };
+
     // Create a map of card_id -> primary_image
-    const primaryImageMap = new Map();
-    (primaryImages || []).forEach((img: any) => {
+    const primaryImageMap = new Map<string, CardImage & { url: string | null }>();
+    (primaryImages || []).forEach((img: CardImage) => {
       const resolvedUrl = resolveStoredImagePath(
         img.storage_path,
         (path) => supabase.storage.from("card-images").getPublicUrl(path).data.publicUrl
@@ -176,61 +229,13 @@ export async function GET() {
       });
     });
 
-    const updatedItems = await Promise.all(
-      (items || []).map(async (item: CollectionItem) => {
-        const itemWithImage = {
-          ...item,
-          primary_image: primaryImageMap.get(item.id) || null,
-        };
+    const hydratedItems = (items || []).map((item: CollectionItem) => ({
+      ...item,
+      primary_image: primaryImageMap.get(item.id) || null,
+    }));
 
-        const stale = isCmvStale(item);
-        logDebug("🔍 CMV staleness check", {
-          id: redactId(item.id),
-          player: item.player_name,
-          stale,
-          cmv_confidence: (item as any).cmv_confidence ?? "MISSING",
-          cmv_last_updated: (item as any).cmv_last_updated ?? "MISSING",
-          estimated_cmv: (item as any).estimated_cmv ?? "MISSING",
-          est_cmv: (item as any).est_cmv ?? "MISSING",
-        });
-
-        if (!stale) {
-          return itemWithImage;
-        }
-
-        try {
-          const cmvResult = await calculateCardCmv(item);
-          logDebug("🔄 CMV recalculated", {
-            id: redactId(item.id),
-            result_estimated_cmv: cmvResult.estimated_cmv,
-            result_confidence: cmvResult.cmv_confidence,
-          });
-
-          const { data: updated, error: updateError } = await supabase
-            .from("collection_items")
-            .update(cmvResult)
-            .eq("id", item.id)
-            .eq("user_id", user.id)
-            .select("*")
-            .single();
-
-          if (updateError) {
-            console.error("Failed to update CMV for item:", redactId(item.id), updateError);
-            return itemWithImage;
-          }
-          return {
-            ...updated,
-            primary_image: primaryImageMap.get(item.id) || null,
-          };
-        } catch (cmvError) {
-          console.error("CMV calculation failed for item:", redactId(item.id), cmvError);
-          return itemWithImage;
-        }
-      })
-    );
-
-    if (updatedItems.length > 0) {
-      const first = updatedItems[0] as any;
+    if (hydratedItems.length > 0) {
+      const first = hydratedItems[0] as any;
       logDebug("💰 GET collection first row CMV", {
         id: redactId(first.id),
         player: first.player_name,
@@ -240,7 +245,7 @@ export async function GET() {
       });
     }
 
-    return NextResponse.json({ items: updatedItems });
+    return NextResponse.json({ items: hydratedItems });
   } catch (error) {
     console.error("Collection fetch error:", error);
     return NextResponse.json(
@@ -312,6 +317,8 @@ export async function POST(request: NextRequest) {
       parallel_type,
       card_number,
       grade,
+      cert_number,
+      grading_company,
       est_cmv,
       estimated_cmv,
       acquisition_type,
@@ -382,13 +389,14 @@ export async function POST(request: NextRequest) {
 
     // Store players array and insert in notes if DB columns don't exist yet
     // TODO: Add migration for players (JSONB) and insert (text) columns
+    const sanitizedNotes = stripHtml(notes);
     const notesParts: string[] = [];
-    if (notes) notesParts.push(notes);
+    if (sanitizedNotes) notesParts.push(sanitizedNotes);
     if (insert) notesParts.push(`[INSERT:${insert}]`);
     if (players && players.length > 1) {
       notesParts.push(`[PLAYERS:${JSON.stringify(players)}]`);
     }
-    const combinedNotes = notesParts.length > 0 ? notesParts.join(" | ") : null;
+    const combinedNotes = stripHtml(notesParts.length > 0 ? notesParts.join(" | ") : null);
 
     logDebug("📦 Inserting collection item", {
       userId: redactId(user.id),
@@ -435,6 +443,8 @@ export async function POST(request: NextRequest) {
       user_id: user.id,
       item_kind: isBusinessUser ? "inventory" : "owned",
       player_name,
+      players: Array.isArray(players) && players.length > 1 ? players : null,
+      insert_type: typeof insert === "string" && insert.trim() ? insert.trim() : null,
       title: isBusinessUser
         ? deriveBusinessTitle({ player_name, year: year || null, set_name: set_name || null, grade: grade || null })
         : null,
@@ -443,6 +453,8 @@ export async function POST(request: NextRequest) {
       parallel_type: parallel_type || null,
       card_number: card_number || null,
       grade: grade || null,
+      cert_number: cert_number || null,
+      grading_company: grading_company || null,
       acquisition_type: acquisitionType,
       purchase_price: acquisitionType === "pulled" ? null : normalizedPurchasePrice,
       purchase_date: normalizedPurchaseDate,
@@ -472,7 +484,9 @@ export async function POST(request: NextRequest) {
 
     // Insert with schema fallback so older DBs without new columns still work.
     const insertResult = await insertCollectionItemWithFallback(supabase, insertPayload);
-    const item = insertResult.item;
+    // Cast to CollectionItem: the schema-fallback function returns the raw Supabase row
+    // which matches the CollectionItem shape once inserted successfully.
+    const item = insertResult.item as CollectionItem | null;
     const error = insertResult.error;
 
     if (error || !item) {
@@ -496,10 +510,10 @@ export async function POST(request: NextRequest) {
     // Verify the row has CMV after insert
     logDebug("✅ Inserted row CMV check", {
       id: redactId(item.id),
-      estimated_cmv: (item as any).estimated_cmv ?? "MISSING",
-      est_cmv: (item as any).est_cmv ?? "MISSING",
-      cmv_confidence: (item as any).cmv_confidence ?? "MISSING",
-      cmv_last_updated: (item as any).cmv_last_updated ?? "MISSING",
+      estimated_cmv: item.estimated_cmv ?? "MISSING",
+      est_cmv: item.est_cmv ?? "MISSING",
+      cmv_confidence: item.cmv_confidence ?? "MISSING",
+      cmv_last_updated: item.cmv_last_updated ?? "MISSING",
     });
 
     // Persist user + fallback image URLs for stable rendering across refreshes.

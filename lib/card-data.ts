@@ -1,4 +1,4 @@
-// Popular sports card sets and brands
+// Popular trading card sets and brands
 export const CARD_SETS = [
   // Basketball
   { name: "Panini Prizm", sport: "basketball", years: "2012-Present" },
@@ -47,6 +47,25 @@ export const CARD_SETS = [
   { name: "Panini Prizm Premier League", sport: "soccer", years: "2019-Present" },
   { name: "Topps Chrome UEFA", sport: "soccer", years: "2015-Present" },
   { name: "Panini Select FIFA", sport: "soccer", years: "2015-Present" },
+
+  // Pokemon TCG
+  { name: "Pokemon Scarlet & Violet", sport: "pokemon", years: "2023-Present" },
+  { name: "Pokemon Sword & Shield", sport: "pokemon", years: "2020-2023" },
+  { name: "Pokemon Sun & Moon", sport: "pokemon", years: "2017-2020" },
+  { name: "Pokemon XY", sport: "pokemon", years: "2014-2017" },
+  { name: "Pokemon 151", sport: "pokemon", years: "2023-Present" },
+  { name: "Pokemon Evolving Skies", sport: "pokemon", years: "2021-Present" },
+  { name: "Pokemon Crown Zenith", sport: "pokemon", years: "2023-Present" },
+
+  // One Piece Card Game
+  { name: "One Piece Romance Dawn OP-01", sport: "one piece", years: "2022-Present" },
+  { name: "One Piece Paramount War OP-02", sport: "one piece", years: "2023-Present" },
+  { name: "One Piece Pillars of Strength OP-03", sport: "one piece", years: "2023-Present" },
+  { name: "One Piece Kingdoms of Intrigue OP-04", sport: "one piece", years: "2023-Present" },
+  { name: "One Piece Awakening of the New Era OP-05", sport: "one piece", years: "2023-Present" },
+  { name: "One Piece Wings of the Captain OP-06", sport: "one piece", years: "2024-Present" },
+  { name: "One Piece 500 Years in the Future OP-07", sport: "one piece", years: "2024-Present" },
+  { name: "One Piece Two Legends OP-08", sport: "one piece", years: "2024-Present" },
 ];
 
 // Card grading companies and grades
@@ -146,6 +165,16 @@ export const CARD_VARIANTS = [
   "Lazer",
   "Wave",
   "Holo",
+  "Reverse Holo",
+  "Full Art",
+  "Illustration Rare",
+  "Special Illustration Rare",
+  "Secret Rare",
+  "Hyper Rare",
+  "Alt Art",
+  "Manga Rare",
+  "Leader",
+  "DON!!",
   "Stained Glass",
 ];
 
@@ -221,6 +250,27 @@ export const POPULAR_PLAYERS = [
   { name: "Cristiano Ronaldo", sport: "soccer", active: true },
   { name: "Kylian Mbappé", sport: "soccer", active: true },
   { name: "Erling Haaland", sport: "soccer", active: true },
+
+  // Pokemon
+  { name: "Pikachu", sport: "pokemon", active: true },
+  { name: "Charizard", sport: "pokemon", active: true },
+  { name: "Mew", sport: "pokemon", active: true },
+  { name: "Mewtwo", sport: "pokemon", active: true },
+  { name: "Eevee", sport: "pokemon", active: true },
+  { name: "Umbreon", sport: "pokemon", active: true },
+  { name: "Rayquaza", sport: "pokemon", active: true },
+  { name: "Gengar", sport: "pokemon", active: true },
+  { name: "Lugia", sport: "pokemon", active: true },
+
+  // One Piece
+  { name: "Monkey D. Luffy", sport: "one piece", active: true },
+  { name: "Roronoa Zoro", sport: "one piece", active: true },
+  { name: "Nami", sport: "one piece", active: true },
+  { name: "Portgas D. Ace", sport: "one piece", active: true },
+  { name: "Shanks", sport: "one piece", active: true },
+  { name: "Sanji", sport: "one piece", active: true },
+  { name: "Trafalgar Law", sport: "one piece", active: true },
+  { name: "Boa Hancock", sport: "one piece", active: true },
 ];
 
 // Helper function to search players

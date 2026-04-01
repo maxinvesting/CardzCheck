@@ -105,17 +105,23 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
       // Find the CardzCheck user by their eBay user ID
       const supabase = await createClient();
-      const { data: account } = await supabase
+      const { data: accounts } = await supabase
         .from("ebay_accounts")
         .select("user_id")
         .eq("ebay_user_id", ebayUserId)
-        .eq("is_active", true)
-        .maybeSingle();
+        .eq("is_active", true);
 
-      if (!account) {
+      if (!accounts || accounts.length === 0) {
         // Order for a user who doesn't have CardzCheck connected — safe to ignore
         return NextResponse.json({ processed: false, reason: "user_not_found" });
       }
+
+      if (accounts.length > 1) {
+        console.error("[ebay-webhook] Multiple CardzCheck accounts share eBay user ID — skipping", { ebayUserId });
+        return NextResponse.json({ processed: true }); // ambiguous, skip safely
+      }
+
+      const account = accounts[0];
 
       // Fetch full order details from Fulfillment API
       const order = await getOrder(account.user_id, orderId);

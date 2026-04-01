@@ -29,10 +29,93 @@ export interface Subscription {
   updated_at: string;
 }
 
+export type BusinessRole = "owner" | "manager" | "employee";
+
+export interface BusinessAccount {
+  id: string;
+  owner_user_id: string;
+  name: string | null;
+  billing_interval: "monthly";
+  subscription_status: string;
+  current_period_end: string | null;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+  stripe_subscription_item_id: string | null;
+  seats_included: number;
+  seat_quantity: number;
+  purchased_seats: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BusinessMembership {
+  id: string;
+  business_account_id: string;
+  user_id: string;
+  role: BusinessRole;
+  status: "active" | "inactive";
+  invited_by: string | null;
+  joined_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BusinessInvite {
+  id: string;
+  business_account_id: string;
+  email: string;
+  email_normalized: string;
+  role: Exclude<BusinessRole, "owner">;
+  token_hash: string;
+  invited_by: string | null;
+  expires_at: string;
+  accepted_at: string | null;
+  accepted_by: string | null;
+  revoked_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BusinessSeatSummary {
+  seatsIncluded: number;
+  seatQuantity: number;
+  purchasedSeats: number;
+  activeMembers: number;
+  pendingInvites: number;
+  usedSeats: number;
+  reservedSeats: number;
+  availableSeats: number;
+}
+
+export interface BusinessContext {
+  businessAccountId: string;
+  membershipId: string;
+  role: BusinessRole;
+  ownerUserId: string;
+  accountName: string | null;
+  subscriptionStatus: string;
+  currentPeriodEnd: string | null;
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
+  stripeSubscriptionItemId: string | null;
+  seats: BusinessSeatSummary;
+  permissions: {
+    canAccessBusiness: boolean;
+    canManageOperations: boolean;
+    canManageTeam: boolean;
+    canManageBilling: boolean;
+    canInviteMembers: boolean;
+    canManageSeats: boolean;
+    canChangeMemberRoles: boolean;
+    canRemoveMembers: boolean;
+  };
+}
+
 // Business inventory item
 export interface BusinessInventoryItem {
   id: string;
   user_id: string;
+  business_account_id: string;
   card_id: string | null;
   title: string;
   quantity: number;
@@ -64,6 +147,7 @@ export interface BusinessSale {
   id: string;
   user_id: string;
   business_id: string;
+  business_account_id: string;
   inventory_item_id: string | null;
   channel: "ebay" | "whatnot" | "instagram" | "show" | "local" | "other";
   sold_at: string;
@@ -203,6 +287,16 @@ export interface Comp {
   link: string;
   image?: string;
   source: "ebay";
+  included?: boolean;
+  category?: "exact" | "similar" | "support" | "rejected";
+  include_reason_codes?: string[];
+  exclude_reason_codes?: string[];
+  include_reasons_text?: string[];
+  exclude_reasons_text?: string[];
+  match_confidence?: number;
+  identity_confidence?: number;
+  valuation_weight?: number;
+  quality_score?: number;
 }
 
 export interface CompsStats {
@@ -281,6 +375,33 @@ export interface SearchResult {
     cardFingerprint: string;
     queryText: string;
   };
+  _compEvaluation?: {
+    exactComps: Comp[];
+    similarComps: Comp[];
+    supportComps: Comp[];
+    rejectedComps: Comp[];
+    confidenceScore: number;
+    confidenceBand: "high" | "medium" | "low" | "very_low";
+    confidenceExplanation: string;
+    valuationSource:
+      | "exact_sold"
+      | "mixed_sold"
+      | "active_directional"
+      | "insufficient_exact_comps";
+    usedCompCount: number;
+    exactCompCount: number;
+    similarCompCount: number;
+    supportCompCount: number;
+    rejectedCompCount: number;
+    spreadPct: number | null;
+    rangeLow: number | null;
+    rangeHigh: number | null;
+    midpoint: number | null;
+    disclaimerStates: string[];
+    disclaimerMessages: string[];
+    includeReasonSummary: string[];
+    excludeReasonSummary: string[];
+  };
 }
 
 // Grade estimation from AI analysis
@@ -337,6 +458,8 @@ export interface GradeEstimateCenteringDetail {
 
 export interface GradeEstimateAnalysisMetadata {
   feature_version?: string;
+  grading_profile?: string;
+  card_category?: "sports" | "pokemon" | "one_piece" | "other_tcg";
   centering_score?: number;
   surface_score?: number;
   corners_score?: number;
@@ -557,7 +680,7 @@ export type CardIdentity = {
   brand: string | null; // e.g., Panini, Topps, Upper Deck
   setName: string | null; // e.g., Mosaic, Prizm, Donruss Optic, Bowman Chrome
   subset: string | null; // e.g., Base, Silver Prizm, Green Mosaic, Purple Prizm
-  sport: string | null; // e.g., Football, Basketball, Baseball, Hockey, Soccer
+  sport: string | null; // category/game, e.g., Football, Basketball, Pokemon, One Piece
   league: string | null; // e.g., NFL, NBA, MLB, NHL, NCAA, UEFA
   cardNumber: string | null;
   rookie: boolean | null;
@@ -756,6 +879,7 @@ export interface AnalystError {
 export interface BusinessConsultation {
   id: string;
   user_id: string;
+  business_account_id: string;
   title: string;
   prompt: string;
   response: string;
@@ -824,4 +948,140 @@ export interface EbayAccountStatus {
   ebay_username: string | null;
   top_rated_seller: boolean;
   access_token_expires_at: string | null;
+  /** eBay store subscription tier — drives the FVF rate in EbayProfitEngine. */
+  store_tier: import("@/lib/business/EbayProfitEngine").StoreTier;
+  /** OAuth scopes granted by the user — used to detect scope gaps (e.g. buy.order.readonly). */
+  scopes: string[];
 }
+
+// =============================================
+// User Storefronts
+// =============================================
+
+export type StorefrontPlatform =
+  | "ebay"
+  | "whatnot"
+  | "website"
+  | "shopify"
+  | "mercari"
+  | "comc"
+  | "myslabs"
+  | "custom";
+
+export interface UserStorefront {
+  id: string;
+  user_id: string;
+  platform: StorefrontPlatform;
+  display_name: string;
+  store_url: string;
+  is_primary: boolean;
+  notes: string | null;
+  platform_settings: StorefrontPlatformSettings;
+  created_at: string;
+  updated_at: string;
+}
+
+// Platform-specific settings stored as JSONB.
+// Each platform type gets its own shape; unknown platforms fall back to base.
+
+export interface StorefrontSettingsBase {
+  fee_rate_percent?: number | null;
+  payment_processing_percent?: number | null;
+}
+
+export interface WhatnotStorefrontSettings extends StorefrontSettingsBase {
+  seller_fee_percent?: number | null;
+  shipping_fee_percent?: number | null;
+  buyer_premium_percent?: number | null;
+}
+
+export interface WebsiteStorefrontSettings extends StorefrontSettingsBase {
+  payment_processor?: string | null;
+  payment_flat_fee_cents?: number | null;
+  monthly_ad_spend_cents?: number | null;
+  ad_platforms?: string[] | null;
+  monthly_hosting_cents?: number | null;
+  monthly_other_costs_cents?: number | null;
+  other_costs_label?: string | null;
+}
+
+export interface ShopifyStorefrontSettings extends StorefrontSettingsBase {
+  monthly_plan_cents?: number | null;
+  transaction_fee_percent?: number | null;
+}
+
+export interface MercariStorefrontSettings extends StorefrontSettingsBase {
+  seller_fee_percent?: number | null;
+}
+
+export type StorefrontPlatformSettings =
+  | WhatnotStorefrontSettings
+  | WebsiteStorefrontSettings
+  | ShopifyStorefrontSettings
+  | MercariStorefrontSettings
+  | StorefrontSettingsBase;
+
+export const WHATNOT_DEFAULTS: WhatnotStorefrontSettings = {
+  seller_fee_percent: 9.5,
+  payment_processing_percent: 2.9,
+  shipping_fee_percent: 0,
+  buyer_premium_percent: 3,
+};
+
+export const WEBSITE_DEFAULTS: WebsiteStorefrontSettings = {
+  payment_processing_percent: 2.9,
+  payment_processor: "Stripe",
+  payment_flat_fee_cents: 30,
+  monthly_ad_spend_cents: 0,
+  ad_platforms: [],
+  monthly_hosting_cents: 0,
+  monthly_other_costs_cents: 0,
+  other_costs_label: null,
+};
+
+export const MERCARI_DEFAULTS: MercariStorefrontSettings = {
+  seller_fee_percent: 10,
+  payment_processing_percent: 2.9,
+};
+
+export const SHOPIFY_DEFAULTS: ShopifyStorefrontSettings = {
+  transaction_fee_percent: 0,
+  payment_processing_percent: 2.9,
+  monthly_plan_cents: 3900,
+};
+
+export function getDefaultPlatformSettings(platform: StorefrontPlatform): StorefrontPlatformSettings {
+  switch (platform) {
+    case "whatnot": return { ...WHATNOT_DEFAULTS };
+    case "website": return { ...WEBSITE_DEFAULTS };
+    case "mercari": return { ...MERCARI_DEFAULTS };
+    case "shopify": return { ...SHOPIFY_DEFAULTS };
+    default: return {};
+  }
+}
+
+export const AD_PLATFORM_OPTIONS = [
+  "Google Ads",
+  "Meta (Facebook/Instagram)",
+  "TikTok Ads",
+  "Twitter/X Ads",
+  "eBay Promoted Listings",
+  "Whatnot Promoted",
+  "Other",
+] as const;
+
+export const STOREFRONT_PLATFORMS: {
+  value: StorefrontPlatform;
+  label: string;
+  placeholder: string;
+  icon: string;
+}[] = [
+  { value: "ebay", label: "eBay", placeholder: "https://www.ebay.com/str/yourstore", icon: "ebay" },
+  { value: "whatnot", label: "Whatnot", placeholder: "https://www.whatnot.com/user/yourname", icon: "whatnot" },
+  { value: "website", label: "Website", placeholder: "https://yourstore.com", icon: "globe" },
+  { value: "shopify", label: "Shopify", placeholder: "https://yourstore.myshopify.com", icon: "shopify" },
+  { value: "mercari", label: "Mercari", placeholder: "https://www.mercari.com/u/yourname", icon: "mercari" },
+  { value: "comc", label: "COMC", placeholder: "https://www.comc.com/Users/yourname", icon: "comc" },
+  { value: "myslabs", label: "MySlabs", placeholder: "https://myslabs.com/shop/yourname", icon: "myslabs" },
+  { value: "custom", label: "Other Platform", placeholder: "https://your-storefront-url.com", icon: "custom" },
+];

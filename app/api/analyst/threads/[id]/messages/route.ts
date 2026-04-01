@@ -55,7 +55,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
         thread_id: threadId,
         user_id: "test-user",
         role: "assistant",
-        content: "This is a test response from the Analyst. In production, this would be an AI-generated response about sports cards.",
+        content: "This is a test response from the Analyst. In production, this would be an AI-generated response about trading cards.",
         created_at: now,
       };
       return NextResponse.json({

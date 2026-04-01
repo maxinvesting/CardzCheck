@@ -1,18 +1,19 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import CompactMetricsRow from "@/components/dashboard/CompactMetricsRow";
 import CompactTopPerformers from "@/components/dashboard/CompactTopPerformers";
 import CompactQuickActions from "@/components/dashboard/CompactQuickActions";
 import ActivityFeed from "@/components/dashboard/ActivityFeed";
+import LoyaltyPerksWidget from "@/components/dashboard/LoyaltyPerksWidget";
+import { Surface } from "@/components/ui/Surface";
 import AddCardModalNew from "@/components/AddCardModalNew";
 import PaywallModal from "@/components/PaywallModal";
 import { createClient } from "@/lib/supabase/client";
 import type { User, CollectionItem } from "@/types";
 import { isTestMode, getTestUser } from "@/lib/test-mode";
-import { getEstCmv } from "@/lib/values";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -25,6 +26,9 @@ export default function DashboardPage() {
     type: "success" | "error";
     message: string;
   } | null>(null);
+  const refreshInFlightRef = useRef(false);
+  const lastRefreshAtRef = useRef(0);
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Auto-dismiss toast
   useEffect(() => {
@@ -83,6 +87,11 @@ export default function DashboardPage() {
   const refreshCollection = useCallback(async () => {
     // Don't hit API when we're not logged in (avoids 401 / "Failed to fetch" on focus)
     if (!user && !isTestMode()) return;
+    const now = Date.now();
+    if (refreshInFlightRef.current || now - lastRefreshAtRef.current < 1500) {
+      return;
+    }
+    refreshInFlightRef.current = true;
     try {
       const response = await fetch("/api/collection", {
         cache: "no-store",
@@ -98,71 +107,78 @@ export default function DashboardPage() {
       }
     } catch (error) {
       console.error("Failed to refresh collection:", error);
+    } finally {
+      lastRefreshAtRef.current = Date.now();
+      refreshInFlightRef.current = false;
     }
   }, [user]);
 
   useEffect(() => {
+    const scheduleRefresh = () => {
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+      }
+      refreshTimerRef.current = setTimeout(() => {
+        refreshCollection();
+      }, 120);
+    };
+
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
-        refreshCollection();
+        scheduleRefresh();
       }
     };
     const handleFocus = () => {
-      refreshCollection();
+      scheduleRefresh();
     };
     window.addEventListener("focus", handleFocus);
     document.addEventListener("visibilitychange", handleVisibility);
     return () => {
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+      }
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, [refreshCollection]);
 
-  const needsCmvRefresh = useMemo(() => {
-    return collectionItems.some((item) => {
-      const compsCount = (item as { comps_count?: number | null }).comps_count;
-      return typeof compsCount === "number" && compsCount > 0 && getEstCmv(item) === null;
-    });
-  }, [collectionItems]);
-
-  useEffect(() => {
-    if (!needsCmvRefresh) return;
-    let attempts = 0;
-    const maxAttempts = 6;
-    const interval = setInterval(async () => {
-      attempts += 1;
-      await refreshCollection();
-      if (attempts >= maxAttempts) {
-        clearInterval(interval);
-      }
-    }, 10000);
-
-    return () => clearInterval(interval);
-  }, [needsCmvRefresh, refreshCollection]);
-
   const userName = user?.name || (user?.email ? user.email.split("@")[0] : "");
 
   return (
     <AuthenticatedLayout>
-      <div className="p-4 sm:p-6 max-w-6xl mx-auto">
+      <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
         {/* Greeting */}
-        <div className="mb-4">
-          <h1 className="text-xl font-bold text-white">
+        <header className="mb-4 sm:mb-6">
+          <h1 className="text-xl font-semibold leading-snug text-[var(--biz-text)]">
             Welcome back{userName ? `, ${userName}` : ""}
           </h1>
-        </div>
+          <p className="mt-1 text-sm text-[var(--biz-muted)]">
+            Overview of your collection value and recent activity.
+          </p>
+        </header>
 
-        {/* Compact Metrics Row */}
-        <div className="mb-4">
-          <CompactMetricsRow items={collectionItems} loading={loading} />
-        </div>
+        {/* Metrics band */}
+        <section className="mb-4 sm:mb-6">
+          <Surface>
+            <CompactMetricsRow items={collectionItems} loading={loading} />
+          </Surface>
+        </section>
 
-        {/* Compact Single Column Layout */}
-        <div className="space-y-4 mb-4">
-          <CompactTopPerformers items={collectionItems} loading={loading} />
-          <ActivityFeed recentCards={collectionItems.slice(0, 5)} />
-          <CompactQuickActions onAddCard={() => setShowAddModal(true)} />
-        </div>
+        {/* Loyalty perks progress */}
+        <section className="mb-4 sm:mb-6">
+          <LoyaltyPerksWidget />
+        </section>
+
+        {/* Secondary layout: performers, activity, quick actions */}
+        <section className="space-y-4">
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(260px,1fr)]">
+            <div className="space-y-4">
+              <CompactTopPerformers items={collectionItems} loading={loading} />
+              <ActivityFeed recentCards={collectionItems.slice(0, 5)} />
+            </div>
+            <CompactQuickActions onAddCard={() => setShowAddModal(true)} />
+          </div>
+        </section>
 
         {/* Add Card Modal */}
         <AddCardModalNew
@@ -249,7 +265,7 @@ export default function DashboardPage() {
             </button>
           </div>
         )}
-      </div>
+      </main>
     </AuthenticatedLayout>
   );
 }

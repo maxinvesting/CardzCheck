@@ -1,44 +1,25 @@
 "use client";
 
-import { useCallback, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import ShopListingCard from "./ShopListingCard";
 import ShopFilterBar, {
   type SortValue,
   type PriceRangeValue,
 } from "./ShopFilterBar";
-import ShopSectionCarousel from "./ShopSectionCarousel";
 import type { ShopListing } from "@/types/shop";
 import type { ShopStats } from "@/lib/shop/server";
+import type { SubscriptionTier } from "@/lib/subscription-tier";
 
 interface ShopStorefrontProps {
   initialListings: ShopListing[];
   stats: ShopStats;
   isAdmin?: boolean;
+  userTier?: SubscriptionTier | null;
 }
 
-type MerchandisingPreset = "featured" | "below-cmv" | "premium";
-
 const CATALOG_ID = "shop-catalog";
-const WAITLIST_ID = "shop-waitlist";
 const PAGE_SIZE = 24;
-const CURATED_ROW_SIZE = 8;
-const SKELETON_COUNT = 8;
-
-const EMPTY_FEATURES = [
-  {
-    title: "Verified slabs",
-    description: "High-resolution photos and cert-forward listing details.",
-  },
-  {
-    title: "Transparent pricing",
-    description: "Live CardzCheck Market Value context shown on every listing.",
-  },
-  {
-    title: "Fast shipping",
-    description: "Orders packed securely and shipped quickly with tracking.",
-  },
-] as const;
 
 function applyPriceRange(
   list: ShopListing[],
@@ -56,31 +37,41 @@ function applyPriceRange(
   return list;
 }
 
-function discountRatio(listing: ShopListing): number {
-  if (listing.cmv == null || listing.cmv <= 0) return -Infinity;
-  return (listing.cmv - listing.price) / listing.cmv;
+function sortListings(list: ShopListing[], sort: SortValue) {
+  switch (sort) {
+    case "price_asc":
+      list.sort((a, b) => a.price - b.price);
+      break;
+    case "price_desc":
+      list.sort((a, b) => b.price - a.price);
+      break;
+    default:
+      list.sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+  }
 }
 
 export default function ShopStorefront({
   initialListings,
   stats,
   isAdmin,
+  userTier,
 }: ShopStorefrontProps) {
+  const isBusiness = userTier === "business";
+  const isLocked = !userTier || userTier === "free";
   const [search, setSearch] = useState("");
-  const [sportFilter, setSportFilter] = useState<string | null>(null);
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [gradeFilter, setGradeFilter] = useState<string | null>(null);
   const [priceRange, setPriceRange] = useState<PriceRangeValue>("");
-  const [belowCmvOnly, setBelowCmvOnly] = useState(false);
   const [sort, setSort] = useState<SortValue>("newest");
+  const [offersOnly, setOffersOnly] = useState(false);
   const [catalogPage, setCatalogPage] = useState(1);
-  const [waitlistEmail, setWaitlistEmail] = useState("");
-  const [waitlistStatus, setWaitlistStatus] = useState<
-    "idle" | "loading" | "success" | "error"
-  >("idle");
 
-  const sports = useMemo(() => {
-    const sportSet = new Set(initialListings.map((l) => l.sport).filter(Boolean));
-    return Array.from(sportSet).sort();
+  const categories = useMemo(() => {
+    const categorySet = new Set(initialListings.map((l) => l.sport).filter(Boolean));
+    return Array.from(categorySet).sort();
   }, [initialListings]);
 
   const grades = useMemo(() => {
@@ -109,57 +100,28 @@ export default function ShopStorefront({
       });
     }
 
-    if (sportFilter) {
-      list = list.filter((listing) => listing.sport === sportFilter);
+    if (categoryFilter) {
+      list = list.filter((listing) => listing.sport === categoryFilter);
     }
 
     if (gradeFilter) {
       list = list.filter((listing) => listing.grade === gradeFilter);
     }
 
+    if (offersOnly) {
+      list = list.filter((listing) => listing.accepts_offers === true);
+    }
+
     list = applyPriceRange(list, priceRange);
-
-    if (belowCmvOnly) {
-      list = list.filter(
-        (listing) =>
-          listing.cmv != null && listing.cmv > 0 && listing.price < listing.cmv
-      );
-    }
-
-    switch (sort) {
-      case "featured":
-        list.sort((a, b) => {
-          const featuredDelta = Number(b.featured) - Number(a.featured);
-          if (featuredDelta !== 0) return featuredDelta;
-          return (
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-          );
-        });
-        break;
-      case "price_asc":
-        list.sort((a, b) => a.price - b.price);
-        break;
-      case "price_desc":
-        list.sort((a, b) => b.price - a.price);
-        break;
-      case "discount":
-        list.sort((a, b) => discountRatio(b) - discountRatio(a));
-        break;
-      default:
-        list.sort(
-          (a, b) =>
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
-    }
-
+    sortListings(list, sort);
     return list;
   }, [
     initialListings,
     searchLower,
-    sportFilter,
+    categoryFilter,
     gradeFilter,
+    offersOnly,
     priceRange,
-    belowCmvOnly,
     sort,
   ]);
 
@@ -172,49 +134,20 @@ export default function ShopStorefront({
     catalogPage * PAGE_SIZE
   );
 
-  const featuredListings = useMemo(
-    () =>
-      initialListings
-        .filter((listing) => listing.featured)
-        .slice(0, CURATED_ROW_SIZE),
-    [initialListings]
-  );
-
-  const belowCmvDeals = useMemo(
-    () =>
-      [...initialListings]
-        .filter(
-          (listing) =>
-            listing.cmv != null && listing.cmv > 0 && listing.price < listing.cmv
-        )
-        .sort((a, b) => discountRatio(b) - discountRatio(a))
-        .slice(0, CURATED_ROW_SIZE),
-    [initialListings]
-  );
-
-  const premiumListings = useMemo(
-    () =>
-      [...initialListings]
-        .filter((listing) => listing.price >= 200 || listing.is_premium)
-        .sort((a, b) => b.price - a.price)
-        .slice(0, CURATED_ROW_SIZE),
-    [initialListings]
-  );
-
   const hasActiveFilters =
     Boolean(search) ||
-    Boolean(sportFilter) ||
+    Boolean(categoryFilter) ||
     Boolean(gradeFilter) ||
     Boolean(priceRange) ||
-    belowCmvOnly ||
+    offersOnly ||
     sort !== "newest";
 
   const clearFilters = useCallback(() => {
     setSearch("");
-    setSportFilter(null);
+    setCategoryFilter(null);
     setGradeFilter(null);
     setPriceRange("");
-    setBelowCmvOnly(false);
+    setOffersOnly(false);
     setSort("newest");
     setCatalogPage(1);
   }, []);
@@ -226,313 +159,211 @@ export default function ShopStorefront({
     }
   }, []);
 
-  const scrollToWaitlist = useCallback(() => {
-    const target = document.getElementById(WAITLIST_ID);
-    if (target) {
-      target.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  }, []);
-
-  const applyMerchandisingPreset = useCallback(
-    (preset: MerchandisingPreset) => {
-      setSearch("");
-      setSportFilter(null);
-      setGradeFilter(null);
-      setCatalogPage(1);
-
-      if (preset === "featured") {
-        setPriceRange("");
-        setBelowCmvOnly(false);
-        setSort("featured");
-      }
-
-      if (preset === "below-cmv") {
-        setPriceRange("");
-        setBelowCmvOnly(true);
-        setSort("discount");
-      }
-
-      if (preset === "premium") {
-        setPriceRange("200+");
-        setBelowCmvOnly(false);
-        setSort("price_desc");
-      }
-
-      scrollToCatalog();
-    },
-    [scrollToCatalog]
-  );
-
-  const handleWaitlistSubmit = async (event: FormEvent) => {
-    event.preventDefault();
-
-    if (!waitlistEmail.trim()) return;
-
-    setWaitlistStatus("loading");
-
-    try {
-      const response = await fetch("/api/shop/waitlist", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: waitlistEmail.trim() }),
-      });
-
-      if (response.ok) {
-        setWaitlistStatus("success");
-        setWaitlistEmail("");
-      } else {
-        setWaitlistStatus("error");
-      }
-    } catch {
-      setWaitlistStatus("error");
-    }
-  };
-
   const isEmpty = initialListings.length === 0;
+  const heroBadges = ["Below Comps", "eBay-Verified Pricing", "New Drops"];
 
   return (
     <div className="space-y-0">
-      <section className="relative overflow-hidden border-b border-slate-200 bg-white">
-        <div className="absolute inset-0 bg-gradient-to-r from-white via-white/96 to-slate-100/80" />
-
-        <div className="relative mx-auto grid max-w-7xl items-center gap-10 px-4 py-14 lg:grid-cols-[1.1fr_0.9fr] lg:py-20">
-          <div className="max-w-2xl space-y-5">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-              CardzCheck Marketplace
-            </p>
-
-            {isEmpty ? (
-              <>
-                <h1 className="text-4xl font-semibold tracking-tight text-slate-900 md:text-5xl">
-                  CardzCheck Marketplace
-                </h1>
-                <p className="text-base text-slate-600 md:text-lg">
-                  Next drop landing soon. Join the waitlist for early access.
-                </p>
-              </>
-            ) : (
-              <>
-                <h1 className="text-4xl font-semibold tracking-tight text-slate-900 md:text-5xl">
-                  CardzCheck Marketplace
-                </h1>
-                <p className="text-base text-slate-600 md:text-lg">
-                  Curated slabs with live CardzCheck Market Value (CMV) and transparent deltas.
-                </p>
-                <p className="text-sm text-slate-500">
-                  {stats.activeCount} active listings with transparent market context.
-                </p>
-              </>
-            )}
-
-            <div className="flex flex-wrap items-center gap-3 pt-1">
-              <button
-                onClick={scrollToCatalog}
-                className="rounded-lg bg-cyan-600 px-5 py-3 min-h-[44px] text-sm font-medium text-white transition-colors hover:bg-cyan-500"
-              >
-                Browse inventory
-              </button>
-              <button
-                onClick={scrollToWaitlist}
-                className="rounded-lg border border-slate-300 bg-white px-5 py-3 min-h-[44px] text-sm font-medium text-slate-700 transition-colors hover:border-slate-400 hover:text-slate-900"
-              >
-                Join waitlist
-              </button>
-            </div>
-          </div>
-
-          <div className="relative hidden h-full min-h-[360px] overflow-hidden rounded-3xl bg-slate-950 lg:block">
-            {/* Deep navy backdrop */}
-            <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950" />
-
-            {/* Soft cyan spotlight, inspired by slab lighting */}
-            <div className="absolute -right-10 top-10 h-56 w-56 rounded-full bg-cyan-500/35 blur-3xl" />
-            <div className="absolute -left-16 bottom-0 h-48 w-48 rounded-full bg-sky-500/25 blur-3xl" />
-
-            {/* Blurred slab silhouettes */}
-            <div className="absolute -left-6 bottom-4 h-52 w-32 rounded-xl border border-slate-600/40 bg-slate-900/80 shadow-[0_0_40px_rgba(15,23,42,0.7)] blur-[1px]" />
-            <div className="absolute left-16 bottom-10 h-56 w-34 rounded-xl border border-slate-500/45 bg-slate-900/90 shadow-[0_0_38px_rgba(15,23,42,0.6)] blur-[1.5px]" />
-            <div className="absolute left-32 bottom-16 h-60 w-36 rounded-xl border border-slate-400/45 bg-slate-900/95 shadow-[0_0_42px_rgba(15,23,42,0.75)] blur-[2px]" />
-
-            {/* Far background slabs */}
-            <div className="absolute right-6 top-10 h-40 w-26 rounded-lg border border-slate-700/40 bg-slate-900/80 blur-[1.5px]" />
-            <div className="absolute right-20 bottom-16 h-44 w-28 rounded-lg border border-slate-600/35 bg-slate-900/85 blur-[1.5px]" />
-
-            {/* Fine noise overlay to keep it from feeling flat */}
-            <div
-              className="absolute inset-0 opacity-[0.18]"
-              style={{
-                backgroundImage:
-                  "radial-gradient(circle at 0 0, rgba(148,163,184,0.24) 0, transparent 50%), radial-gradient(circle at 100% 100%, rgba(15,23,42,0.9) 0, transparent 55%)",
-              }}
-            />
-          </div>
-        </div>
-      </section>
-
-      <section id={WAITLIST_ID} className="mx-auto max-w-7xl border-b border-slate-200 px-4 py-12">
-        <div className="grid gap-8 lg:grid-cols-[1fr_auto] lg:items-end">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-              Get first access
-            </p>
-            <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-900 md:text-4xl">
-              Join the next release window.
-            </h2>
-            <p className="mt-2 max-w-2xl text-sm text-slate-600 md:text-base">
-              Get early notice on incoming inventory, certified slabs, and below-market opportunities.
-            </p>
-          </div>
-
-          <form
-            onSubmit={handleWaitlistSubmit}
-            className="flex w-full max-w-xl flex-col gap-2 sm:flex-row"
-          >
-            <input
-              type="email"
-              value={waitlistEmail}
-              onChange={(event) => setWaitlistEmail(event.target.value)}
-              placeholder="you@email.com"
-              className="h-11 flex-1 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-500 focus:border-cyan-500 focus:outline-none"
-              required
-            />
-            <button
-              type="submit"
-              disabled={waitlistStatus === "loading"}
-              className="h-11 rounded-lg bg-cyan-600 px-5 text-sm font-medium text-white transition-colors hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {waitlistStatus === "loading"
-                ? "Joining..."
-                : waitlistStatus === "success"
-                ? "Joined"
-                : "Join waitlist"}
-            </button>
-          </form>
-        </div>
-
-        {waitlistStatus === "error" && (
-          <p className="mt-3 text-sm text-rose-600">
-            Something went wrong while joining the waitlist.
-          </p>
-        )}
-      </section>
-
-      {isEmpty ? (
-        <>
-          <section className="mx-auto max-w-7xl px-4 py-12">
-            <div className="grid gap-5 md:grid-cols-3">
-              {EMPTY_FEATURES.map((feature) => (
-                <article key={feature.title} className="space-y-2">
-                  <h3 className="text-lg font-semibold text-slate-900">{feature.title}</h3>
-                  <p className="text-sm text-slate-600">{feature.description}</p>
-                </article>
+      <section className="border-b border-slate-200 bg-white">
+        <div className="mx-auto max-w-7xl px-4 py-10 md:py-12">
+          <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-cyan-50/50 p-6 md:p-9">
+            <div className="flex flex-wrap gap-2">
+              {heroBadges.map((badge) => (
+                <span
+                  key={badge}
+                  className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-600"
+                >
+                  {badge}
+                </span>
               ))}
             </div>
-          </section>
 
-          <section id={CATALOG_ID} className="shop-section-alt border-y border-slate-200 scroll-mt-28">
-            <div className="mx-auto max-w-7xl px-4 py-12">
-              <div className="mb-6">
-                <h2 className="text-2xl font-semibold text-slate-900">Featured preview</h2>
-                <p className="mt-1 text-sm text-slate-600">
-                  Inventory placeholders for the upcoming drop.
-                </p>
+            <h1 className="mt-4 text-3xl font-semibold tracking-tight text-slate-900 md:text-4xl">
+              CardzCheck Deals
+            </h1>
+            <p className="mt-3 max-w-2xl text-slate-600">
+              Exclusive sports card deals for paid CardzCheck subscribers. Shop
+              curated CardzCheck inventory priced at least 13.5% below our eBay
+              storefront. Some deals may also come in below market comps.
+            </p>
+            <p className="mt-2 max-w-2xl text-sm text-slate-500">
+              All listings are published directly by CardzCheck. This is a
+              buyer-focused storefront, not a peer-to-peer marketplace.
+            </p>
+
+            {/* Trust strip */}
+            <div className="mt-5 flex flex-wrap gap-4 border-t border-slate-100 pt-5">
+              <div className="flex items-center gap-2 text-xs text-slate-600">
+                <svg className="h-4 w-4 shrink-0 text-cyan-600" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Subscriber-exclusive pricing
               </div>
-
-              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {Array.from({ length: SKELETON_COUNT }).map((_, index) => (
-                  <ShopListingCard key={`skeleton-${index}`} skeleton />
-                ))}
+              <div className="flex items-center gap-2 text-xs text-slate-600">
+                <svg className="h-4 w-4 shrink-0 text-cyan-600" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                At least 13.5% below our eBay storefront
+              </div>
+              <div className="flex items-center gap-2 text-xs text-slate-600">
+                <svg className="h-4 w-4 shrink-0 text-cyan-600" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                5% off every 15th purchase
               </div>
             </div>
-          </section>
 
-          {isAdmin && (
-            <div className="mx-auto max-w-7xl px-4 pt-6">
-              <Link
-                href="/admin/shop"
-                className="text-sm text-slate-600 transition-colors hover:text-cyan-700"
+            {/* Business tier callout / pro upsell */}
+            {isBusiness ? (
+              <div className="mt-5 flex items-center gap-2 rounded-lg border border-cyan-200 bg-cyan-50 px-4 py-3">
+                <svg className="h-4 w-4 shrink-0 text-cyan-600" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span className="text-sm font-medium text-cyan-800">
+                  Business plan active — free shipping applied to every order automatically.
+                </span>
+              </div>
+            ) : userTier === "pro" ? (
+              <div className="mt-5 flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                <svg className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+                </svg>
+                <p className="text-sm text-slate-600">
+                  <span className="font-medium text-slate-800">Business plan members also get free shipping on every order.</span>{" "}
+                  <a href="/upgrade" className="ml-1 font-medium text-cyan-700 hover:underline">Upgrade to Business →</a>
+                </p>
+              </div>
+            ) : null}
+
+            {!isEmpty && (
+              <p className="mt-4 text-sm text-slate-500">
+                {stats.activeCount} subscriber {stats.activeCount === 1 ? "deal" : "deals"} live now
+              </p>
+            )}
+            {!isEmpty && (
+              <button
+                onClick={scrollToCatalog}
+                className="mt-4 rounded-lg bg-cyan-600 px-5 py-3 min-h-[44px] text-sm font-medium text-white transition-colors hover:bg-cyan-500"
               >
-                Add listings in Marketplace Admin
-              </Link>
+                Shop exclusive deals
+              </button>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* Business free-shipping banner */}
+      {isBusiness && (
+        <section className="border-b border-cyan-100 bg-cyan-50 px-4 py-2.5">
+          <div className="mx-auto flex max-w-7xl items-center gap-2 text-sm text-cyan-800">
+            <svg className="h-4 w-4 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
+            </svg>
+            <span>
+              <strong className="font-semibold">Business plan active</strong> — free shipping applied to every order automatically.
+            </span>
+          </div>
+        </section>
+      )}
+
+      {/* Free / unauthenticated user upgrade banner */}
+      {isLocked && (
+        <section className="border-b border-amber-100 bg-amber-50 px-4 py-3">
+          <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-sm text-amber-800">
+              <svg className="h-4 w-4 shrink-0 text-amber-500" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clipRule="evenodd" />
+              </svg>
+              <span>
+                <strong className="font-semibold">You&apos;re browsing as a free member.</strong>{" "}
+                Subscribe to access exclusive pricing on all deals.
+              </span>
             </div>
-          )}
-        </>
-      ) : (
-        <>
-          <section className="shop-section-alt border-y border-slate-200">
-            <div className="mx-auto max-w-7xl space-y-8 px-4 py-12">
-              <div>
-                <h2 className="text-2xl font-semibold text-slate-900">Curated inventory</h2>
-                <p className="mt-1 text-sm text-slate-600">
-                  Featured cards, discounts versus Est. Market Value, and premium picks.
-                </p>
-                <p className="mt-2 text-sm text-slate-500">
-                  Prices are benchmarked against CardzCheck Market Value. {" "}
+            <a
+              href="/upgrade"
+              className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-amber-400"
+            >
+              Subscribe now →
+            </a>
+          </div>
+        </section>
+      )}
+
+      {/* Loyalty perks info */}
+      {!isLocked && (
+        <section className="border-b border-slate-100 bg-slate-50 px-4 py-3">
+          <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-6 gap-y-1 text-xs text-slate-500">
+            <span className="font-medium text-slate-700">Repeat Buyer Perks</span>
+            <span>Every 15th purchase = <strong className="text-slate-700">5% off</strong> your order (15, 30, 45…)</span>
+            {isBusiness && <span>Business members get <strong className="text-slate-700">free shipping</strong> on all orders.</span>}
+          </div>
+        </section>
+      )}
+
+      <section
+        id={CATALOG_ID}
+        className="scroll-mt-28 border-b border-slate-200 bg-white"
+      >
+        <div className="mx-auto max-w-7xl space-y-6 px-4 py-12">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="text-2xl font-semibold text-slate-900">Live Deals</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Sold directly by CardzCheck from in-house inventory. Priced at least 13.5% below our eBay storefront.
+              </p>
+            </div>
+            {hasActiveFilters && (
+              <button
+                onClick={clearFilters}
+                className="text-sm text-slate-600 transition-colors hover:text-cyan-700 min-h-[44px] px-1"
+              >
+                Reset filters
+              </button>
+            )}
+          </div>
+
+          {isEmpty ? (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-6 py-10 text-center">
+              <p className="font-medium text-slate-900">No live deals right now.</p>
+              <p className="mx-auto mt-2 max-w-xl text-sm text-slate-600">
+                New subscriber deals appear here as CardzCheck publishes them.
+                All deals are priced at least 13.5% below our eBay storefront.
+                Check back soon.
+              </p>
+              <div className="mt-5 flex flex-wrap items-center justify-center gap-4">
+                <Link
+                  href="/"
+                  className="text-sm text-slate-600 transition-colors hover:text-cyan-700"
+                >
+                  Return to Main App
+                </Link>
+                {isAdmin && (
                   <Link
-                    href="/comps"
-                    className="text-cyan-700 transition-colors hover:text-cyan-600"
+                    href="/admin/shop"
+                    className="text-sm text-slate-600 transition-colors hover:text-cyan-700"
                   >
-                    Learn how Est. Market Value works
+                    Publish deals in Shop Admin
                   </Link>
-                  .
-                </p>
-              </div>
-
-              <ShopSectionCarousel
-                title="Featured"
-                subtitle="Featured inventory from the current drop."
-                listings={featuredListings}
-                onSeeAll={() => applyMerchandisingPreset("featured")}
-              />
-
-              <ShopSectionCarousel
-                title="Below market deals"
-                subtitle="Sorted by largest discount to market value."
-                listings={belowCmvDeals}
-                onSeeAll={() => applyMerchandisingPreset("below-cmv")}
-              />
-
-              <ShopSectionCarousel
-                title="Premium"
-                subtitle="High-end slabs and flagship cards."
-                listings={premiumListings}
-                onSeeAll={() => applyMerchandisingPreset("premium")}
-              />
-            </div>
-          </section>
-
-          <section
-            id={CATALOG_ID}
-            className="scroll-mt-28 border-b border-slate-200 bg-white"
-          >
-            <div className="mx-auto max-w-7xl space-y-6 px-4 py-12">
-              <div className="flex items-center justify-between gap-3">
-                <h2 className="text-2xl font-semibold text-slate-900">Browse inventory</h2>
-                {hasActiveFilters && (
-                  <button
-                    onClick={clearFilters}
-                    className="text-sm text-slate-600 transition-colors hover:text-cyan-700 min-h-[44px] px-1"
-                  >
-                    Reset filters
-                  </button>
                 )}
               </div>
-
+            </div>
+          ) : (
+            <>
               <ShopFilterBar
                 search={search}
-                sports={sports}
+                categories={categories}
                 grades={grades}
-                sportFilter={sportFilter}
+                categoryFilter={categoryFilter}
                 gradeFilter={gradeFilter}
                 priceRange={priceRange}
-                belowCmvOnly={belowCmvOnly}
                 sort={sort}
+                offersOnly={offersOnly}
                 onSearchChange={(value) => {
                   setSearch(value);
                   setCatalogPage(1);
                 }}
-                onSportChange={(value) => {
-                  setSportFilter(value);
+                onCategoryChange={(value) => {
+                  setCategoryFilter(value);
                   setCatalogPage(1);
                 }}
                 onGradeChange={(value) => {
@@ -543,12 +374,12 @@ export default function ShopStorefront({
                   setPriceRange(value);
                   setCatalogPage(1);
                 }}
-                onBelowCmvChange={(value) => {
-                  setBelowCmvOnly(value);
-                  setCatalogPage(1);
-                }}
                 onSortChange={(value) => {
                   setSort(value);
+                  setCatalogPage(1);
+                }}
+                onOffersOnlyChange={(value) => {
+                  setOffersOnly(value);
                   setCatalogPage(1);
                 }}
                 resultCount={catalogFiltered.length}
@@ -556,27 +387,19 @@ export default function ShopStorefront({
 
               {catalogFiltered.length === 0 ? (
                 <div className="border-t border-slate-200 py-14 text-center">
-                  <p className="text-slate-600">No listings match these filters.</p>
-                  <div className="mt-4 flex items-center justify-center gap-3">
-                    <button
-                      onClick={clearFilters}
-                      className="rounded-lg bg-cyan-600 px-4 py-2.5 min-h-[44px] text-sm font-medium text-white transition-colors hover:bg-cyan-500"
-                    >
-                      Clear filters
-                    </button>
-                    <button
-                      onClick={() => applyMerchandisingPreset("featured")}
-                      className="rounded-lg border border-slate-300 px-4 py-2.5 min-h-[44px] text-sm font-medium text-slate-700 transition-colors hover:border-slate-400 hover:text-slate-900"
-                    >
-                      View featured
-                    </button>
-                  </div>
+                  <p className="text-slate-600">No deals match these filters.</p>
+                  <button
+                    onClick={clearFilters}
+                    className="mt-4 rounded-lg bg-cyan-600 px-4 py-2.5 min-h-[44px] text-sm font-medium text-white transition-colors hover:bg-cyan-500"
+                  >
+                    Clear filters
+                  </button>
                 </div>
               ) : (
                 <>
                   <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     {catalogPageItems.map((listing) => (
-                      <ShopListingCard key={listing.id} listing={listing} />
+                      <ShopListingCard key={listing.id} listing={listing} userTier={userTier} />
                     ))}
                   </div>
 
@@ -605,10 +428,93 @@ export default function ShopStorefront({
                   )}
                 </>
               )}
+            </>
+          )}
+        </div>
+      </section>
+
+      {/* Loyalty / repeat-buyer perks section
+          TODO: wire to real purchase_count once order history API is available.
+          Thresholds: 0-2 purchases = standard subscriber pricing,
+                      3+ = extra discount unlocked, 5+ = priority drops.
+      */}
+      <section className="border-b border-slate-200 bg-slate-50">
+        <div className="mx-auto max-w-7xl px-4 py-10">
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 md:p-8">
+            <div className="flex items-start gap-4">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-cyan-50 text-cyan-600">
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 11.25v8.25a1.5 1.5 0 01-1.5 1.5H5.25a1.5 1.5 0 01-1.5-1.5v-8.25M12 4.875A2.625 2.625 0 109.375 7.5H12m0-2.625V7.5m0-2.625A2.625 2.625 0 1114.625 7.5H12m0 0V21m-8.625-9.75h18c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125h-18c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-base font-semibold text-slate-900">
+                  Repeat buyer perks
+                </h3>
+                <p className="mt-1 text-sm text-slate-600">
+                  Complete purchases to unlock additional savings. The more you
+                  buy, the better your pricing gets.
+                  {isBusiness && (
+                    <span className="ml-1 font-medium text-cyan-700">Your business plan includes free shipping on every order.</span>
+                  )}
+                </p>
+                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  {[
+                    {
+                      threshold: "Subscriber",
+                      label: "Subscriber pricing",
+                      description: "13.5% below our eBay storefront — unlocked with any paid plan",
+                      active: true,
+                    },
+                    {
+                      threshold: "15th purchase",
+                      label: "5% milestone bonus",
+                      description: "Every 15th completed purchase (15, 30, 45…) earns 5% off that order",
+                      active: false,
+                    },
+                    {
+                      threshold: "30th purchase",
+                      label: "5% milestone bonus",
+                      description: "Milestone perks stack — keep buying to hit your next reward",
+                      active: false,
+                    },
+                    {
+                      threshold: "Business plan",
+                      label: "Free shipping",
+                      description: "Business subscribers get free shipping on every order, always",
+                      active: isBusiness,
+                    },
+                  ].map((tier) => (
+                    <div
+                      key={tier.threshold}
+                      className={`rounded-xl border p-4 ${
+                        tier.active
+                          ? "border-cyan-200 bg-cyan-50"
+                          : "border-slate-200 bg-slate-50 opacity-60"
+                      }`}
+                    >
+                      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                        {tier.threshold}
+                      </div>
+                      <div className="mt-1 text-sm font-semibold text-slate-900">
+                        {tier.label}
+                      </div>
+                      <div className="mt-0.5 text-xs text-slate-600">
+                        {tier.description}
+                      </div>
+                      {!tier.active && (
+                        <div className="mt-2 text-[10px] font-medium uppercase tracking-wide text-slate-400">
+                          Locked
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
-          </section>
-        </>
-      )}
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

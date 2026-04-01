@@ -12,11 +12,9 @@ const PRICE_RANGES = [
 ] as const;
 
 const SORTS = [
-  { value: "featured", label: "Featured" },
   { value: "newest", label: "Newest" },
   { value: "price_asc", label: "Price: Low-High" },
   { value: "price_desc", label: "Price: High-Low" },
-  { value: "discount", label: "Biggest Discount" },
 ] as const;
 
 export type SortValue = (typeof SORTS)[number]["value"];
@@ -24,60 +22,60 @@ export type PriceRangeValue = (typeof PRICE_RANGES)[number]["value"];
 
 export interface ShopFilterBarProps {
   search: string;
-  sports: string[];
+  categories: string[];
   grades: string[];
-  sportFilter: string | null;
+  categoryFilter: string | null;
   gradeFilter: string | null;
   priceRange: PriceRangeValue;
-  belowCmvOnly: boolean;
   sort: SortValue;
+  offersOnly: boolean;
   onSearchChange: (value: string) => void;
-  onSportChange: (value: string | null) => void;
+  onCategoryChange: (value: string | null) => void;
   onGradeChange: (value: string | null) => void;
   onPriceRangeChange: (value: PriceRangeValue) => void;
-  onBelowCmvChange: (value: boolean) => void;
   onSortChange: (value: SortValue) => void;
+  onOffersOnlyChange: (value: boolean) => void;
   resultCount: number;
 }
 
 function FilterControls({
   search,
-  sports,
+  categories,
   grades,
-  sportFilter,
+  categoryFilter,
   gradeFilter,
   priceRange,
-  belowCmvOnly,
   sort,
+  offersOnly,
   onSearchChange,
-  onSportChange,
+  onCategoryChange,
   onGradeChange,
   onPriceRangeChange,
-  onBelowCmvChange,
   onSortChange,
+  onOffersOnlyChange,
 }: Omit<ShopFilterBarProps, "resultCount">) {
   const baseSelect =
     "h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:border-cyan-500 focus:outline-none";
 
   return (
-    <div className="grid gap-2 md:grid-cols-[minmax(220px,1.3fr)_repeat(5,minmax(0,1fr))]">
+    <div className="grid gap-2 md:grid-cols-[minmax(220px,1.3fr)_repeat(4,minmax(0,1fr))_auto]">
       <input
         type="search"
         value={search}
         onChange={(event) => onSearchChange(event.target.value)}
-        placeholder="Search player, set, year, tags..."
+        placeholder="Search card, set, year, tags..."
         className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 placeholder:text-slate-500 focus:border-cyan-500 focus:outline-none"
       />
 
       <select
-        value={sportFilter ?? ""}
-        onChange={(event) => onSportChange(event.target.value || null)}
+        value={categoryFilter ?? ""}
+        onChange={(event) => onCategoryChange(event.target.value || null)}
         className={baseSelect}
       >
-        <option value="">Sport</option>
-        {sports.map((sport) => (
-          <option key={sport} value={sport}>
-            {sport}
+        <option value="">Category</option>
+        {categories.map((category) => (
+          <option key={category} value={category}>
+            {category}
           </option>
         ))}
       </select>
@@ -107,16 +105,6 @@ function FilterControls({
         ))}
       </select>
 
-      <label className="flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700">
-        <input
-          type="checkbox"
-          checked={belowCmvOnly}
-          onChange={(event) => onBelowCmvChange(event.target.checked)}
-          className="h-4 w-4 rounded border-slate-300 text-cyan-500 focus:ring-cyan-500/30"
-        />
-        <span>Below Est. MV</span>
-      </label>
-
       <select
         value={sort}
         onChange={(event) => onSortChange(event.target.value as SortValue)}
@@ -128,25 +116,35 @@ function FilterControls({
           </option>
         ))}
       </select>
+
+      <label className="flex h-10 cursor-pointer items-center gap-2 whitespace-nowrap rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800">
+        <input
+          type="checkbox"
+          checked={offersOnly}
+          onChange={(event) => onOffersOnlyChange(event.target.checked)}
+          className="h-4 w-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
+        />
+        Offers only
+      </label>
     </div>
   );
 }
 
 export default function ShopFilterBar({
   search,
-  sports,
+  categories,
   grades,
-  sportFilter,
+  categoryFilter,
   gradeFilter,
   priceRange,
-  belowCmvOnly,
   sort,
+  offersOnly,
   onSearchChange,
-  onSportChange,
+  onCategoryChange,
   onGradeChange,
   onPriceRangeChange,
-  onBelowCmvChange,
   onSortChange,
+  onOffersOnlyChange,
   resultCount,
 }: ShopFilterBarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -157,23 +155,23 @@ export default function ShopFilterBar({
         <div className="w-full">
           <FilterControls
             search={search}
-            sports={sports}
+            categories={categories}
             grades={grades}
-            sportFilter={sportFilter}
+            categoryFilter={categoryFilter}
             gradeFilter={gradeFilter}
             priceRange={priceRange}
-            belowCmvOnly={belowCmvOnly}
             sort={sort}
+            offersOnly={offersOnly}
             onSearchChange={onSearchChange}
-            onSportChange={onSportChange}
+            onCategoryChange={onCategoryChange}
             onGradeChange={onGradeChange}
             onPriceRangeChange={onPriceRangeChange}
-            onBelowCmvChange={onBelowCmvChange}
             onSortChange={onSortChange}
+            onOffersOnlyChange={onOffersOnlyChange}
           />
         </div>
         <span className="shrink-0 text-sm tabular-nums text-slate-500">
-          {resultCount} listings
+          {resultCount} deals
         </span>
       </div>
 
@@ -197,7 +195,7 @@ export default function ShopFilterBar({
           </svg>
           Filters
         </button>
-        <span className="text-sm tabular-nums text-slate-500">{resultCount} listings</span>
+        <span className="text-sm tabular-nums text-slate-500">{resultCount} deals</span>
       </div>
 
       {mobileOpen && (
@@ -240,19 +238,19 @@ export default function ShopFilterBar({
                 type="search"
                 value={search}
                 onChange={(event) => onSearchChange(event.target.value)}
-                placeholder="Search player, set, year, tags..."
+                placeholder="Search card, set, year, tags..."
                 className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 placeholder:text-slate-500 focus:border-cyan-500 focus:outline-none"
               />
 
               <select
-                value={sportFilter ?? ""}
-                onChange={(event) => onSportChange(event.target.value || null)}
+                value={categoryFilter ?? ""}
+                onChange={(event) => onCategoryChange(event.target.value || null)}
                 className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:border-cyan-500 focus:outline-none"
               >
-                <option value="">Sport</option>
-                {sports.map((sport) => (
-                  <option key={sport} value={sport}>
-                    {sport}
+                <option value="">Category</option>
+                {categories.map((category) => (
+                  <option key={category} value={category}>
+                    {category}
                   </option>
                 ))}
               </select>
@@ -284,16 +282,6 @@ export default function ShopFilterBar({
                 ))}
               </select>
 
-              <label className="flex h-11 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={belowCmvOnly}
-                  onChange={(event) => onBelowCmvChange(event.target.checked)}
-                  className="h-4 w-4 rounded border-slate-300 text-cyan-500 focus:ring-cyan-500/30"
-                />
-                <span>Below Est. MV</span>
-              </label>
-
               <select
                 value={sort}
                 onChange={(event) => onSortChange(event.target.value as SortValue)}
@@ -305,6 +293,16 @@ export default function ShopFilterBar({
                   </option>
                 ))}
               </select>
+
+              <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800">
+                <input
+                  type="checkbox"
+                  checked={offersOnly}
+                  onChange={(event) => onOffersOnlyChange(event.target.checked)}
+                  className="h-4 w-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
+                />
+                Offers only
+              </label>
             </div>
 
             <button

@@ -8,7 +8,7 @@ import {
   forwardRef,
   type ComponentPropsWithoutRef,
 } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { TableVirtuoso } from "react-virtuoso";
 import type { BusinessInventoryItem } from "@/types";
 import {
@@ -19,6 +19,7 @@ import {
 } from "@/lib/dev/perf";
 import EbayListingBadge from "./EbayListingBadge";
 import EbayListingModal from "./EbayListingModal";
+import { buildEbaySoldUrl } from "@/lib/ebay/comps-url";
 
 function fmtCents(cents: number | null): string {
   if (cents === null) return "";
@@ -29,7 +30,7 @@ function fmtCents(cents: number | null): string {
 function emptyPlaceholder(field: string): string {
   switch (field) {
     case "list_price_cents": return "Not listed";
-    case "current_market_value_cents": return "No comps — click to set";
+    case "current_market_value_cents": return "No estimate — click to set";
     case "location": return "Add storage";
     default: return "—";
   }
@@ -100,9 +101,14 @@ interface Props {
   perfEnabled?: boolean;
   /** Whether the connected eBay account is Top Rated Plus (affects fee preview) */
   ebayTopRated?: boolean;
+  /** Whether an active eBay account is connected — gates the List eBay button */
+  ebayConnected?: boolean;
+  /** List-view mode: hides Channel, Storage, Acquired columns and colors Est. MV cell */
+  listView?: boolean;
 }
 
 const STATUS_OPTIONS = ["unlisted", "listed", "pending_sale", "sold", "returned"] as const;
+const ACTIVE_STATUS_OPTIONS = ["unlisted", "listed", "pending_sale"] as const;
 const CHANNEL_OPTIONS = ["ebay", "whatnot", "instagram", "show", "local", "other"] as const;
 const CONDITION_OPTIONS = ["raw", "graded"] as const;
 const VIRTUALIZE_THRESHOLD = 200;
@@ -185,7 +191,7 @@ const COLUMNS: ColumnDef[] = [
     editable: true,
     width: "w-24 shrink-0",
   },
-  { key: "_view", label: "Profile", editable: false, width: "w-20 shrink-0" },
+  { key: "_view", label: "Open", editable: false, width: "w-24 shrink-0" },
   { key: "_grade", label: "", editable: false, width: "w-16 shrink-0" },
   { key: "_actions", label: "", editable: false, width: "w-20 shrink-0" },
 ];
@@ -222,10 +228,15 @@ export default function InventoryTable({
   dense = false,
   perfEnabled = false,
   ebayTopRated = false,
+  ebayConnected = false,
+  listView = false,
 }: Props) {
+  const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState("");
+  // Default to "active" so marking an item sold moves it out of the inventory view
+  // and into the Sales tab.
+  const [filterStatus, setFilterStatus] = useState<"active" | "all" | BusinessInventoryItem["status"]>("active");
   const [filterChannel, setFilterChannel] = useState("");
   const [filterCondition, setFilterCondition] = useState("");
   const [activeTab, setActiveTab] = useState<"all" | "cards" | "wax">("all");
@@ -241,6 +252,14 @@ export default function InventoryTable({
   const [sortKey, setSortKey] = useState<SortableColumnKey | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
+
+  const displayColumns = useMemo(
+    () =>
+      listView
+        ? COLUMNS.filter((c) => !["channel", "location", "acquisition_date"].includes(c.key))
+        : COLUMNS,
+    [listView]
+  );
 
   const handleFetchCmv = async (item: BusinessInventoryItem) => {
     if (item.current_market_value_cents != null && item.current_market_value_cents > 0) return;
@@ -290,7 +309,11 @@ export default function InventoryTable({
         buildDisplayTitle(it).toLowerCase().includes(q)
       );
     }
-    if (filterStatus) result = result.filter((it) => it.status === filterStatus);
+    if (filterStatus === "active") {
+      result = result.filter((it) => ACTIVE_STATUS_OPTIONS.includes(it.status as any));
+    } else if (filterStatus !== "all") {
+      result = result.filter((it) => it.status === filterStatus);
+    }
     if (filterChannel) result = result.filter((it) => it.channel === filterChannel);
     if (filterCondition)
       result = result.filter((it) => it.condition_status === filterCondition);
@@ -356,6 +379,10 @@ export default function InventoryTable({
   const startEdit = (id: string, field: string, currentValue: any) => {
     setEditingCell({ id, field });
     setEditValue(currentValue?.toString() ?? "");
+  };
+
+  const openProfile = (itemId: string) => {
+    router.push(`/card/${itemId}?from=business`);
   };
 
   const commitEdit = (overrideValue?: string) => {
@@ -452,24 +479,30 @@ export default function InventoryTable({
     if (field === "title") {
       const isWax = item.notes?.includes("[WAX]");
       const titleStr = buildDisplayTitle(item);
-      const titleContent = (
-        <>
+      return (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            openProfile(item.id);
+          }}
+          className="group/title flex min-w-0 cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent p-0 py-0.5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+        >
           {isWax && (
             <span className="inline-flex shrink-0 items-center rounded border border-amber-200 bg-amber-50 px-1 py-0.5 text-[10px] font-semibold whitespace-nowrap text-amber-700">
               WAX
             </span>
           )}
-          <span className="truncate" title={titleStr}>{titleStr}</span>
-        </>
-      );
-      return (
-        <Link
-          href={`/card/${item.id}?from=business`}
-          onClick={(e) => e.stopPropagation()}
-          className="flex min-w-0 items-center gap-1.5 text-[var(--biz-text)] hover:underline"
-        >
-          {titleContent}
-        </Link>
+          <span
+            className="min-w-0 truncate text-sm font-semibold text-[var(--biz-primary)] underline-offset-2 group-hover/row:underline"
+            title={titleStr}
+          >
+            {titleStr}
+          </span>
+          <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 transition-colors group-hover/title:bg-emerald-100">
+            View card
+          </span>
+        </button>
       );
     }
     if (field === "list_price_cents") {
@@ -478,6 +511,16 @@ export default function InventoryTable({
         return <span className="italic text-[var(--biz-muted)] text-xs">{emptyPlaceholder(field)}</span>;
       }
       return <span className="tabular-nums">{formatted}</span>;
+    }
+    if (field === "current_market_value_cents" && listView) {
+      const mv = item.current_market_value_cents;
+      const cost = item.cost_basis_total_cents;
+      const color = mv == null || mv <= 0 ? "#AAA" : mv > cost ? "#2D7A4F" : "#CC4444";
+      return (
+        <span style={{ color }} className="tabular-nums font-medium">
+          {fmtCents(mv) || "—"}
+        </span>
+      );
     }
     if (field === "current_market_value_cents") {
       const formatted = fmtCents(val);
@@ -519,13 +562,19 @@ export default function InventoryTable({
     }
     if (field === "_view") {
       return (
-        <Link
-          href={`/card/${item.id}?from=business`}
-          onClick={(e) => e.stopPropagation()}
-          className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-[var(--biz-primary)] hover:underline"
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            openProfile(item.id);
+          }}
+          className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700 transition-colors hover:bg-emerald-100"
         >
-          Profile
-        </Link>
+          View card
+          <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
       );
     }
     if (field === "_grade") {
@@ -548,6 +597,17 @@ export default function InventoryTable({
         return <span className="text-[10px] text-[var(--biz-muted)]">Recorded</span>;
       }
       const hasEbayListing = !!(item as any).ebay_item_id;
+      // status === "sold" already handled by early return above; only check remaining terminal states
+      const canListOnEbay =
+        ebayConnected &&
+        !hasEbayListing &&
+        item.status !== "returned" &&
+        item.status !== "pending_sale";
+      const compsUrl = buildEbaySoldUrl({
+        title: item.title,
+        grade: item.grade,
+        gradingCompany: item.grading_company,
+      });
       return (
         <div className="flex flex-col items-start gap-1">
           <button
@@ -560,7 +620,7 @@ export default function InventoryTable({
           >
             Mark Sold
           </button>
-          {!hasEbayListing && (item.status as string) !== "sold" && (
+          {canListOnEbay && (
             <button
               type="button"
               onClick={(e) => {
@@ -572,6 +632,15 @@ export default function InventoryTable({
               List eBay
             </button>
           )}
+          <a
+            href={compsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="rounded border border-[var(--biz-border)] bg-[#F9FAFB] px-2 py-0.5 text-[10px] font-medium text-[var(--biz-primary)] hover:bg-[#F3F4F6] transition-colors"
+          >
+            Get Comps
+          </a>
         </div>
       );
     }
@@ -619,15 +688,46 @@ export default function InventoryTable({
         </div>
       );
     }
+    if (channel === "whatnot") {
+      return (
+        <span className="inline-flex items-center gap-1 rounded border border-purple-200 bg-purple-50 px-1.5 py-0.5 text-[10px] font-medium text-purple-700">
+          Whatnot
+        </span>
+      );
+    }
+    if (channel === "show") {
+      return (
+        <span className="inline-flex items-center gap-1 rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+          Show
+        </span>
+      );
+    }
+    if (channel === "local") {
+      return (
+        <span className="inline-flex items-center rounded border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium text-sky-700">
+          Local
+        </span>
+      );
+    }
+    if (channel === "instagram") {
+      return (
+        <span className="inline-flex items-center rounded border border-pink-200 bg-pink-50 px-1.5 py-0.5 text-[10px] font-medium text-pink-700">
+          Instagram
+        </span>
+      );
+    }
+    const label = channel
+      ? channel.charAt(0).toUpperCase() + channel.slice(1)
+      : "—";
     return (
-      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-[#F9FAFB] text-[var(--biz-muted)]">
-        {channel}
+      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-[#F9FAFB] text-[var(--biz-muted)] border border-[var(--biz-border)]">
+        {label}
       </span>
     );
   };
 
   // ── Mobile card component (< 640px) ──────────────────────────────────────
-  const MobileInventoryCard = ({ item, idx }: { item: BusinessInventoryItem; idx: number }) => {
+  const MobileInventoryCard = ({ item }: { item: BusinessInventoryItem }) => {
     const days = getDaysHeld(item.acquisition_date);
     const daysColor = getDaysHeldColor(days);
     const titleStr = buildDisplayTitle(item);
@@ -658,19 +758,34 @@ export default function InventoryTable({
             className="mt-0.5 min-h-[18px] min-w-[18px] rounded border-[var(--biz-border)] text-emerald-600 focus:ring-emerald-500"
           />
           <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 mb-0.5">
-              {isWaxItem && (
-                <span className="inline-flex shrink-0 items-center rounded border border-amber-200 bg-amber-50 px-1 py-0.5 text-[10px] font-semibold whitespace-nowrap text-amber-700">
-                  WAX
-                </span>
-              )}
-              <Link
-                href={`/card/${item.id}?from=business`}
-                onClick={(e) => e.stopPropagation()}
-                className="block min-h-[44px] truncate text-sm font-medium text-[var(--biz-text)] hover:underline"
+            <div className="mb-0.5 flex items-start justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-1.5">
+                {isWaxItem && (
+                  <span className="inline-flex shrink-0 items-center rounded border border-amber-200 bg-amber-50 px-1 py-0.5 text-[10px] font-semibold whitespace-nowrap text-amber-700">
+                    WAX
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openProfile(item.id);
+                  }}
+                  className="block min-h-[44px] min-w-0 cursor-pointer border-0 bg-transparent p-0 truncate text-left text-sm font-semibold text-[var(--biz-primary)] underline-offset-2 hover:underline"
+                >
+                  {titleStr || "Untitled"}
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openProfile(item.id);
+                }}
+                className="inline-flex shrink-0 items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700 transition-colors hover:bg-emerald-100"
               >
-                {titleStr || "Untitled"}
-              </Link>
+                View
+              </button>
             </div>
           </div>
         </div>
@@ -770,7 +885,7 @@ export default function InventoryTable({
   };
 
   const rowClass = (item: BusinessInventoryItem, idx: number): string =>
-    `transition-colors cursor-pointer ${
+    `group/row transition-colors ${
       selectedItemId === item.id
         ? "bg-emerald-50 ring-inset"
         : idx % 2 === 1
@@ -788,7 +903,7 @@ export default function InventoryTable({
           className="rounded border-[var(--biz-border)] text-emerald-600 focus:ring-emerald-500"
         />
       </th>
-      {COLUMNS.map((col) => {
+      {displayColumns.map((col) => {
         const isSortable = Boolean(col.sortable);
         const isActiveSort = isSortable && sortKey === col.key;
         const ariaSort = isSortable
@@ -840,12 +955,12 @@ export default function InventoryTable({
           className="rounded border-[var(--biz-border)] text-emerald-600 focus:ring-emerald-500"
         />
       </td>
-      {COLUMNS.map((col) => (
+      {displayColumns.map((col) => (
         <td
           key={`${item.id}-${col.key}`}
           className={`border-l border-[var(--biz-border)] px-3 py-2 text-[var(--biz-text)] ${col.width} ${col.alignRight ? "text-right tabular-nums" : ""}`}
           onClick={() => {
-            if (col.key === "_actions" || col.key === "_grade" || col.key === "_view") {
+            if (col.key === "title" || col.key === "_actions" || col.key === "_grade" || col.key === "_view") {
               return;
             }
             if (editingCell?.id === item.id && editingCell?.field === col.key) {
@@ -963,11 +1078,12 @@ export default function InventoryTable({
             value={filterStatus}
             onChange={(e) => {
               if (perfEnabled) setPerfInteraction("filter");
-              setFilterStatus(e.target.value);
+              setFilterStatus(e.target.value as any);
             }}
             className="min-h-[44px] flex-1 shrink-0 rounded-md border border-[var(--biz-border)] bg-white px-2.5 py-2.5 text-xs text-[var(--biz-text)] sm:min-h-0 sm:flex-none sm:py-1.5"
           >
-            <option value="">All Status</option>
+            <option value="active">Active (unlisted/listed/pending_sale)</option>
+            <option value="all">All Statuses</option>
             {STATUS_OPTIONS.map((s) => (
               <option key={s} value={s}>{s}</option>
             ))}
@@ -1068,8 +1184,8 @@ export default function InventoryTable({
           </div>
         ) : (
           <div className="space-y-2">
-            {filtered.map((item, idx) => (
-              <MobileInventoryCard key={item.id} item={item} idx={idx} />
+            {filtered.map((item) => (
+              <MobileInventoryCard key={item.id} item={item} />
             ))}
           </div>
         )}
@@ -1136,10 +1252,10 @@ export default function InventoryTable({
         {filtered.length} item{filtered.length !== 1 ? "s" : ""}
         {filtered.length !== items.length && ` (of ${items.length} total)`}
         <span className="hidden sm:inline">
-          {" \u00B7 Click cell to edit \u00B7 Double-click row to open detail"}
+          {" \u00B7 Click title or Open to view profile \u00B7 Click cell to edit"}
         </span>
         <span className="sm:hidden">
-          {" \u00B7 Tap card to open detail"}
+          {" \u00B7 Tap View or title to open profile"}
         </span>
       </div>
 
@@ -1150,9 +1266,10 @@ export default function InventoryTable({
           isTopRated={ebayTopRated}
           onClose={() => setEbayListingItem(null)}
           onSuccess={(listingId, listingUrl) => {
-            // Update the item's ebay_item_id in the local items list via inline update
+            // Update item state locally: mark listed, set channel=ebay, set ebay_item_id
             onInlineUpdate(ebayListingItem.id, "ebay_item_id", listingId);
             onInlineUpdate(ebayListingItem.id, "status", "listed");
+            onInlineUpdate(ebayListingItem.id, "channel", "ebay");
             setEbayListingItem(null);
           }}
         />

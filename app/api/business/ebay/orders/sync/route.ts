@@ -6,7 +6,7 @@
 
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { requireBusinessAccess } from "@/lib/business/actions";
+import { requireBusinessOwnerContext } from "@/lib/business/context";
 import { syncOrders } from "@/lib/ebay/selling/sync";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +24,22 @@ export async function POST(): Promise<NextResponse> {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    await requireBusinessAccess(user.id);
+    await requireBusinessOwnerContext(user.id);
+
+    // Ensure there is an active eBay account before attempting sync
+    const { data: account, error: accountError } = await supabase
+      .from("ebay_accounts")
+      .select("id, is_active")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (accountError) throw accountError;
+    if (!account?.is_active) {
+      return NextResponse.json(
+        { error: "No active eBay account connected." },
+        { status: 400 }
+      );
+    }
 
     const result = await syncOrders(user.id);
 

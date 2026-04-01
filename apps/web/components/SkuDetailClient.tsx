@@ -71,8 +71,9 @@ export function SkuDetailClient({ skuId }: { skuId: string }) {
           await Promise.all([
             supabase
               .from("skus")
-              .select("id, sku_id, name, details, image_url, created_at")
+              .select("id, sku_id, name, details, image_url, status, created_at")
               .eq("sku_id", skuId)
+              .eq("status", "active")
               .maybeSingle(),
             supabase
               .from("peg_updates")

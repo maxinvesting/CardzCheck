@@ -103,3 +103,25 @@ export type SubmissionComparisonRow = {
   actual_grade: string | null;
   predicted_probability: number | null;
 };
+
+// ─── AI Walkthrough ──────────────────────────────────────────────────────────
+
+export type SubmissionAIWalkthroughVerdict = "SUBMIT" | "BORDERLINE" | "SKIP";
+
+export type SubmissionAIWalkthroughResult = {
+  pros: string[];
+  cons: string[];
+  verdict: SubmissionAIWalkthroughVerdict;
+  keyNumbers: {
+    profitPsa9: number;
+    profitPsa10: number;
+    breakEvenGrade: string;
+  };
+  summary: string;
+};
+
+export type SubmissionAIWalkthroughState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "done"; data: SubmissionAIWalkthroughResult }
+  | { status: "error"; message: string };

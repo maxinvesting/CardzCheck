@@ -16,7 +16,10 @@ export type GradeScanFeatureVector = Record<
 >;
 
 export type GradeScanCardMeta = {
+  game?: string | null;
   sport?: string | null;
+  player_name?: string | null;
+  title?: string | null;
   year?: string | number | null;
   set_name?: string | null;
   chrome?: boolean | null;
@@ -90,14 +93,19 @@ export function ratioDeviation(ratio: string): number | null {
 
 function hasAssessmentBlockedLanguage(text: string): boolean {
   const lower = text.toLowerCase();
-  return (
-    lower.includes("unable") ||
-    lower.includes("unassessable") ||
-    lower.includes("cannot assess") ||
-    lower.includes("difficult to assess") ||
-    lower.includes("blocked by glare") ||
-    lower.includes("blur")
-  );
+  const blockedPhrases = [
+    "unable to assess",
+    "unassessable",
+    "cannot assess",
+    "cannot be assessed",
+    "difficult to assess",
+    "blocked by glare",
+    "obscured by glare",
+    "too blurry to assess",
+    "image blur prevents",
+    "not visible due to",
+  ];
+  return blockedPhrases.some((phrase) => lower.includes(phrase));
 }
 
 export function scoreFromFindings(
@@ -107,7 +115,7 @@ export function scoreFromFindings(
 ): number {
   if (findings.length === 0) {
     return hasAssessmentBlockedLanguage(summaryText)
-      ? baselineScore - 20
+      ? baselineScore - 10
       : baselineScore;
   }
 
@@ -130,7 +138,7 @@ export function scoreCentering(
       ratioDeviation(centering.left_right_ratio) ?? 50,
       ratioDeviation(centering.top_bottom_ratio) ?? 50
     );
-  const axisPenalty = clamp((worstAxis - 50) * 6, 0, 70);
+  const axisPenalty = clamp((worstAxis - 50) * 4, 0, 60);
   const severityPenalty = centering.centering_severity_0_3 * 9;
   const confidenceBoost = (centering.centering_confidence_score - 50) * 0.25;
   return clamp(100 - axisPenalty - severityPenalty + confidenceBoost, 5, 100);
@@ -279,8 +287,8 @@ export function getGradeScanFeatureVector(
     readScoreFromEstimate(estimate, "calibrated_score") ??
     clamp(
       weightedEvidenceScore +
-        (imageOverallScore - 50) * 0.12 +
-        (confidenceScore - 50) * 0.12,
+        (imageOverallScore - 50) * 0.05 +
+        (confidenceScore - 50) * 0.06,
       0,
       100
     );
@@ -386,6 +394,9 @@ export function getGradeScanFeatureVector(
 
   if (cardMeta?.sport) {
     featureVector.v1_card_meta_sport = cardMeta.sport;
+  }
+  if (cardMeta?.game) {
+    featureVector.v1_card_meta_game = cardMeta.game;
   }
   if (cardYear !== null) {
     featureVector.v1_card_meta_year = cardYear;

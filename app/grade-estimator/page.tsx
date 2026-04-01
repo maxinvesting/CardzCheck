@@ -532,6 +532,8 @@ export default function GradeEstimatorPage() {
           card: identifiedCard
             ? {
                 player_name: identifiedCard.player_name,
+                game: identifiedCard.cardIdentity?.sport ?? undefined,
+                sport: identifiedCard.cardIdentity?.sport ?? undefined,
                 year: identifiedCard.year,
                 set_name: identifiedCard.set_name,
                 card_number: identifiedCard.card_number,
@@ -596,6 +598,8 @@ export default function GradeEstimatorPage() {
         body: JSON.stringify({
           card: {
             player_name: identifiedCard.player_name,
+            game: identifiedCard.cardIdentity?.sport ?? undefined,
+            sport: identifiedCard.cardIdentity?.sport ?? undefined,
             year: identifiedCard.year,
             set_name: identifiedCard.set_name,
             card_number: identifiedCard.card_number,
@@ -1130,6 +1134,9 @@ export default function GradeEstimatorPage() {
                               year: identifiedCard.year,
                               set_name: identifiedCard.set_name,
                               parallel_type: identifiedCard.parallel_type,
+                              card_number: identifiedCard.card_number,
+                              variation: identifiedCard.variation,
+                              insert: identifiedCard.insert,
                             } : null}
                             primaryImageUrl={
                               identifiedCard?.imageUrl || identifiedCard?.imageUrls?.[0] || null

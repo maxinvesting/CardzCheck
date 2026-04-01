@@ -5,13 +5,15 @@
  * the existing createSale() call — no profit math is reimplemented here.
  *
  * Fee schedule reference (as of early 2026):
- *   - Standard seller: 13.25% FVF + $0.30/order (Sports Trading Cards category)
+ *   - Standard seller: 13.25% FVF + $0.30/order (trading card categories)
  *   - Top Rated Plus: 12.35% FVF + $0.30/order (10% discount on FVF)
  *   - Insertion fee: $0 for standard store / first 250 free listings
  *   - Promoted listings: optional % of final sale price (0% if not promoted)
  *
  * eBay category IDs for trading cards:
  *   261328 — Sports Trading Cards (parent)
+ *   183454 — CCG Individual Cards (Pokemon / One Piece / other TCG)
+ *   183050 — Non-Sport Trading Cards
  *   261333 — Football Cards
  *   261334 — Baseball Cards
  *   261335 — Basketball Cards

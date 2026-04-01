@@ -49,6 +49,16 @@ function matchSerialNumber(tokens: string[]): {
 
   for (const token of tokens) {
     if (!serial_number && serialPattern.test(token)) {
+      const slashMatch = token.match(/^(\d{1,4})\/(\d{1,4})$/);
+      if (slashMatch) {
+        const denominator = Number(slashMatch[2]);
+        // TCG cards commonly use card numbers like 151/165 or 23/102.
+        // Treat high denominators as likely card numbers, not serial numbering.
+        if (Number.isFinite(denominator) && denominator >= 100) {
+          remaining.push(token);
+          continue;
+        }
+      }
       // Normalize common "1/1" casing/formatting
       serial_number = token;
     } else {
@@ -133,6 +143,10 @@ function matchCardNumber(tokens: string[]): {
   const isLikelyCardNumberToken = (t: string): boolean => {
     const token = t.replace(/^no\./i, "no").trim();
     if (token.startsWith("#")) return token.length > 1;
+    // TCG numbering patterns (Pokemon / One Piece / etc)
+    if (/^\d{1,3}\/\d{2,3}$/i.test(token)) return true;
+    if (/^(op|st|eb)\d{2}-\d{3}$/i.test(token)) return true;
+    if (/^(op|st|eb)-\d{2,3}$/i.test(token)) return true;
     // Be conservative: only common card-number shapes to avoid stealing player/set tokens.
     // Examples:
     // - "RC-1", "SP-10"
@@ -159,6 +173,14 @@ function matchCardNumber(tokens: string[]): {
 
     if (token === "#" && tokens[i + 1] && /\d{1,4}[a-z]{0,2}$/i.test(tokens[i + 1])) {
       card_number = `#${tokens[i + 1]}`;
+      i++; // skip next
+      continue;
+    }
+
+    // Handle split One Piece style numbering after token normalization:
+    // "OP05-119" can become ["op05", "119"].
+    if (/^(op|st|eb)\d{2}$/i.test(token) && tokens[i + 1] && /^\d{2,3}$/i.test(tokens[i + 1])) {
+      card_number = `#${token.toUpperCase()}-${tokens[i + 1]}`;
       i++; // skip next
       continue;
     }

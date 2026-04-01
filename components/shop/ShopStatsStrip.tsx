@@ -25,7 +25,7 @@ export default function ShopStatsStrip({
 
   const statItems: StatItem[] = [
     {
-      label: "Active listings",
+      label: "Live deals",
       value: isEmpty ? "0" : stats.activeCount.toString(),
       valueClassName: "text-slate-900",
     },
@@ -76,7 +76,7 @@ export default function ShopStatsStrip({
             href="/admin/shop"
             className="text-sm text-slate-600 transition-colors hover:text-cyan-700"
           >
-            Add listings in Marketplace Admin →
+            Publish deals in Shop Admin →
           </Link>
         </div>
       )}

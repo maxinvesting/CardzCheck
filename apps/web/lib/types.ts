@@ -4,7 +4,16 @@ export type SkuRow = {
   name: string;
   details: Record<string, unknown> | null;
   image_url: string | null;
+  status?: "active" | "paused";
+  card_year?: string | null;
+  set_name?: string | null;
+  player_name?: string | null;
+  card_number?: string | null;
+  parallel?: string | null;
+  grade?: string | null;
+  notes?: string | null;
   created_at: string;
+  updated_at?: string;
 };
 
 export type SoldCompRow = {
@@ -29,4 +38,31 @@ export type PegUpdateRow = {
   nonce: string;
   tx_hash: string | null;
   created_at: string;
+};
+
+export type AdminListingRow = {
+  id: string;
+  skuId: `0x${string}`;
+  name: string;
+  imageUrl: string | null;
+  status: "active" | "paused";
+  year: string;
+  set: string;
+  player: string;
+  cardNo: string;
+  parallel: string;
+  grade: string;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  availableQuantity: string;
+  currentPegPrice: string;
+  observedAt: string | null;
+  nonce: string | null;
+};
+
+export type AdminListingDetail = {
+  listing: AdminListingRow;
+  recentComps: SoldCompRow[];
+  recentPegUpdates: PegUpdateRow[];
 };

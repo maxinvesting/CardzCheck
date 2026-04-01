@@ -19,6 +19,8 @@
 
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { isTestMode } from "@/lib/test-mode";
+import { getScanCreditStatus } from "@/lib/grading/scanCredits";
+import { hasBusinessWorkspaceAccess } from "@/lib/business/workspace-access";
 import type { Subscription, Usage } from "@/types";
 
 export interface AccessCheck {
@@ -56,6 +58,10 @@ export async function checkProAccess(userId: string): Promise<AccessCheck> {
   }
 
   const supabase = await createClient();
+  const businessWorkspaceAccess = await hasBusinessWorkspaceAccess(
+    supabase as any,
+    userId
+  );
 
   const { data: subscription } = await supabase
     .from("subscriptions")
@@ -64,6 +70,18 @@ export async function checkProAccess(userId: string): Promise<AccessCheck> {
     .single();
 
   if (!subscription) {
+    if (businessWorkspaceAccess) {
+      return {
+        hasAccess: true,
+        isPro: true,
+        isBusiness: true,
+        isActivated: true,
+        subscriptionStatus: "active",
+        periodEnd: null,
+        tier: "business",
+      };
+    }
+
     return {
       hasAccess: false,
       isPro: false,
@@ -76,21 +94,23 @@ export async function checkProAccess(userId: string): Promise<AccessCheck> {
   }
 
   const sub = subscription as Subscription;
-  const isPro = sub.tier === "pro" || sub.tier === "business";
-  const isBusiness = sub.tier === "business";
+  const isProBySubscription = sub.tier === "pro" || sub.tier === "business";
+  const isBusiness = businessWorkspaceAccess;
+  const isPro = isProBySubscription || businessWorkspaceAccess;
   const isActive = sub.status === "active";
   const notExpired =
     !sub.current_period_end ||
     new Date(sub.current_period_end) > new Date();
+  const hasSubscriptionAccess = isProBySubscription && isActive && notExpired;
 
   return {
-    hasAccess: isPro && isActive && notExpired,
+    hasAccess: hasSubscriptionAccess || businessWorkspaceAccess,
     isPro,
-    isBusiness: isBusiness && isActive && notExpired,
+    isBusiness,
     isActivated: sub.activation_paid,
-    subscriptionStatus: sub.status,
-    periodEnd: sub.current_period_end,
-    tier: sub.tier,
+    subscriptionStatus: businessWorkspaceAccess ? "active" : sub.status,
+    periodEnd: businessWorkspaceAccess ? null : sub.current_period_end,
+    tier: businessWorkspaceAccess ? "business" : sub.tier,
   };
 }
 
@@ -131,9 +151,15 @@ export async function checkLegacyProAccess(userId: string): Promise<boolean> {
 }
 
 /**
- * Get usage stats for a user
+ * Get usage stats for a user.
+ *
+ * Pass a pre-fetched `isPro` value when you already have it to avoid a
+ * redundant subscription query (e.g. from inside canAccessFeature).
  */
-export async function getUsage(userId: string): Promise<UsageCheck> {
+export async function getUsage(
+  userId: string,
+  isPro?: boolean
+): Promise<UsageCheck> {
   // In test mode, return unlimited access
   if (isTestMode()) {
     return {
@@ -152,9 +178,9 @@ export async function getUsage(userId: string): Promise<UsageCheck> {
     .eq("user_id", userId)
     .single();
 
-  const isPro = await checkLegacyProAccess(userId);
+  const proAccess = isPro !== undefined ? isPro : await checkLegacyProAccess(userId);
 
-  if (isPro) {
+  if (proAccess) {
     return {
       searchesUsed: usage?.searches_used || 0,
       aiMessagesUsed: usage?.ai_messages_used || 0,
@@ -175,60 +201,40 @@ export async function getUsage(userId: string): Promise<UsageCheck> {
 }
 
 /**
- * Increment search usage count
+ * Increment search usage count.
+ *
+ * Uses a Postgres RPC function (increment_search_usage) that executes an
+ * INSERT … ON CONFLICT DO UPDATE SET searches_used = searches_used + 1
+ * in a single round-trip, eliminating the read-then-write race condition
+ * that the previous read → compute → write pattern had.
+ *
+ * Migration: supabase/migrations/20260314_usage_increment_fns.sql
  */
 export async function incrementSearchUsage(userId: string): Promise<void> {
   if (isTestMode()) return;
 
   const supabase = await createServiceClient();
+  const { error } = await supabase.rpc("increment_search_usage", { p_user_id: userId });
 
-  // Upsert usage record with incremented search count
-  const { data: existing } = await supabase
-    .from("usage")
-    .select("searches_used")
-    .eq("user_id", userId)
-    .single();
-
-  if (existing) {
-    await supabase
-      .from("usage")
-      .update({ searches_used: (existing.searches_used || 0) + 1 })
-      .eq("user_id", userId);
-  } else {
-    await supabase.from("usage").insert({
-      user_id: userId,
-      searches_used: 1,
-      ai_messages_used: 0,
-    });
+  if (error) {
+    console.error("[access] incrementSearchUsage RPC failed:", error);
   }
 }
 
 /**
- * Increment AI message usage count
+ * Increment AI message usage count.
+ *
+ * Uses the same atomic RPC pattern as incrementSearchUsage.
+ * Migration: supabase/migrations/20260314_usage_increment_fns.sql
  */
 export async function incrementAIUsage(userId: string): Promise<void> {
   if (isTestMode()) return;
 
   const supabase = await createServiceClient();
+  const { error } = await supabase.rpc("increment_ai_usage", { p_user_id: userId });
 
-  // Upsert usage record with incremented AI message count
-  const { data: existing } = await supabase
-    .from("usage")
-    .select("ai_messages_used")
-    .eq("user_id", userId)
-    .single();
-
-  if (existing) {
-    await supabase
-      .from("usage")
-      .update({ ai_messages_used: (existing.ai_messages_used || 0) + 1 })
-      .eq("user_id", userId);
-  } else {
-    await supabase.from("usage").insert({
-      user_id: userId,
-      searches_used: 0,
-      ai_messages_used: 1,
-    });
+  if (error) {
+    console.error("[access] incrementAIUsage RPC failed:", error);
   }
 }
 
@@ -260,7 +266,8 @@ export async function canAccessFeature(
     return { allowed: true };
   }
 
-  const usage = await getUsage(userId);
+  // Pass isPro=false so getUsage skips its own subscription query.
+  const usage = await getUsage(userId, false);
 
   switch (feature) {
     case "search":
@@ -295,12 +302,15 @@ export async function canAccessFeature(
       return { allowed: true };
 
     case "grade_estimator": {
-      const businessAccess = await hasBusinessAccess(userId);
-      if (businessAccess) return { allowed: true };
+      // Pro and Business subscribers have full access
+      if (isPro) return { allowed: true };
+      // Free users get 2 lifetime credits + 1/week — check remaining
+      const credits = await getScanCreditStatus(userId);
+      if (credits.remaining > 0) return { allowed: true };
       return {
         allowed: false,
         reason:
-          "Grade Probability Engine is a Pro feature. Upgrade to get AI-based grade probabilities (not guaranteed).",
+          "You've used all your free scans. Upgrade to Pro for unlimited grade analysis.",
         upgradeRequired: true,
       };
     }

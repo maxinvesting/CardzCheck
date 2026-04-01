@@ -161,4 +161,54 @@ describe("grade estimate job", () => {
     expect(job.steps.post_grading_value.status).toBe("error");
     expect(job.error).toBeNull();
   });
+
+  it("falls back to input card game/sport when OCR sport is missing", async () => {
+    const job = createGradeEstimateJobState({ jobId: "job-4", now: Date.now() });
+    let observedCardMeta: { game?: string | null; sport?: string | null } | null = null;
+    const deps = buildDeps({
+      runOcrIdentity: async () => ({
+        ...baseIdentity,
+        sport: null,
+      }),
+      parseModelOutput: async (options) => {
+        observedCardMeta = {
+          game: options.cardMeta?.game ?? null,
+          sport: options.cardMeta?.sport ?? null,
+        };
+        return {
+          estimate: baseEstimate,
+          probabilities: [
+            { label: "PSA 10", probability: 0.2 },
+            { label: "PSA 9", probability: 0.5 },
+          ],
+          evidence: {
+            centering: baseEstimate.centering,
+            corners: baseEstimate.corners,
+            surface: baseEstimate.surface,
+            edges: baseEstimate.edges,
+            grade_notes: baseEstimate.grade_notes,
+          },
+          preliminaryRange: "PSA 8-9",
+        };
+      },
+    });
+
+    await runGradeEstimateJob(
+      job,
+      {
+        scanPhotos: baseScanPhotos,
+        card: {
+          player_name: "Pikachu",
+          game: "Pokemon",
+          sport: "Pokemon",
+          year: "2023",
+          set_name: "Pokemon 151",
+        },
+      },
+      deps
+    );
+
+    expect(observedCardMeta?.game).toBe("Pokemon");
+    expect(observedCardMeta?.sport).toBe("Pokemon");
+  });
 });
