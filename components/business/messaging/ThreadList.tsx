@@ -102,7 +102,7 @@ export default function ThreadList({
                 key={thread.id}
                 type="button"
                 onClick={() => onSelectThread(thread.id)}
-                className={`w-full border-b border-[var(--biz-border)] px-4 py-3.5 text-left transition-all ${
+                className={`w-full border-b border-[var(--biz-border)] px-4 py-3 text-left transition-all ${
                   isSelected
                     ? "bg-[linear-gradient(135deg,#eefaf4_0%,#ffffff_72%)] shadow-[inset_3px_0_0_0_var(--biz-primary)]"
                     : "bg-transparent hover:bg-white"
@@ -144,32 +144,22 @@ export default function ThreadList({
                         ) : null}
                       </div>
 
-                      <div className="flex shrink-0 flex-col items-end gap-1.5">
+                      <div className="flex shrink-0 flex-col items-end gap-1">
                         <span className="text-[10px] font-medium tabular-nums text-[var(--biz-muted)]">
                           {relativeTime(thread.last_message_at)}
                         </span>
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            onTogglePin(thread.id);
-                          }}
-                          className="rounded-full border border-[var(--biz-border)] bg-white px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-[var(--biz-muted)] transition-colors hover:bg-[#F8FAFC]"
-                        >
-                          {isPinned ? "Unpin" : "Pin"}
-                        </button>
                       </div>
                     </div>
 
                     <p
-                      className={`mt-2 line-clamp-2 text-[13px] leading-relaxed ${
+                      className={`mt-1.5 line-clamp-1 text-[13px] leading-relaxed ${
                         hasUnread ? "text-[var(--biz-text)]" : "text-[var(--biz-muted)]"
                       }`}
                     >
                       {thread.last_message_preview}
                     </p>
 
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <div className="mt-2.5 flex flex-wrap items-center gap-2">
                       <span
                         className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${STATUS_STYLES[thread.status]}`}
                       >
@@ -184,6 +174,18 @@ export default function ThreadList({
                           {thread.platform === "ebay" ? "eBay" : thread.platform}
                         </span>
                       )}
+                      {isSelected ? (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onTogglePin(thread.id);
+                          }}
+                          className="rounded-full border border-[var(--biz-border)] bg-white px-2 py-0.5 text-[10px] font-semibold text-[var(--biz-muted)] transition-colors hover:bg-[#F8FAFC]"
+                        >
+                          {isPinned ? "Unpin" : "Pin"}
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                 </div>

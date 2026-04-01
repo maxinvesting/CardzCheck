@@ -94,11 +94,11 @@ export default function ConversationView({
 
   return (
     <div className="flex h-full flex-col bg-[#FCFDFC]">
-      <div className="border-b border-[var(--biz-border)] bg-[linear-gradient(135deg,#ffffff_0%,#f5fbf7_65%,#eef8fb_100%)] px-5 py-4">
+      <div className="border-b border-[var(--biz-border)] bg-[linear-gradient(135deg,#ffffff_0%,#f5fbf7_65%,#eef8fb_100%)] px-5 py-3.5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
             <div className="flex items-start gap-3">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-emerald-100 bg-emerald-50 text-sm font-semibold text-emerald-700">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-emerald-100 bg-emerald-50 text-sm font-semibold text-emerald-700">
                 {getAvatarLabel(thread)}
               </div>
               <div className="min-w-0">
@@ -122,7 +122,7 @@ export default function ConversationView({
                   ) : null}
                 </div>
                 {thread.item_title ? (
-                  <p className="mt-3 max-w-3xl text-sm font-medium leading-snug text-[var(--biz-text)]">
+                  <p className="mt-2 max-w-3xl text-sm font-medium leading-snug text-[var(--biz-text)]">
                     {thread.item_title}
                   </p>
                 ) : null}
@@ -134,14 +134,14 @@ export default function ConversationView({
             <button
               type="button"
               onClick={() => onUpdateThreadStatus(thread.id, "resolved")}
-              className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] font-semibold text-emerald-700 transition-colors hover:bg-emerald-100"
+              className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[12px] font-semibold text-emerald-700 transition-colors hover:bg-emerald-100"
             >
               Mark resolved
             </button>
             <button
               type="button"
               onClick={() => onUpdateThreadStatus(thread.id, "archived")}
-              className="rounded-xl border border-[var(--biz-border)] bg-white px-3 py-2 text-[12px] font-semibold text-[var(--biz-muted)] transition-colors hover:bg-[#F8FAFC]"
+              className="rounded-xl border border-[var(--biz-border)] bg-white px-3 py-1.5 text-[12px] font-semibold text-[var(--biz-muted)] transition-colors hover:bg-[#F8FAFC]"
             >
               Archive
             </button>
@@ -155,7 +155,7 @@ export default function ConversationView({
         recommendation={recommendation}
       />
 
-      <div className="flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top_left,#effaf4_0%,#ffffff_38%)] px-5 py-5">
+      <div className="flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top_left,#effaf4_0%,#ffffff_38%)] px-5 py-4">
         <div className="mx-auto flex max-w-3xl flex-col gap-4">
           {messages.map((message) => {
             const isOutbound = message.direction === "outbound";
@@ -193,8 +193,8 @@ export default function ConversationView({
         </div>
       </div>
 
-      <div className="border-t border-[var(--biz-border)] bg-white px-5 py-4">
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
+      <div className="border-t border-[var(--biz-border)] bg-white px-5 py-3">
+        <div className="space-y-3">
           <AIActionsPanel
             context={replyContext}
             recommendation={recommendation}
@@ -205,8 +205,8 @@ export default function ConversationView({
             onInsertReply={(text) => setReplyText(text)}
           />
 
-          <div className="rounded-[24px] border border-[var(--biz-border)] bg-[#FCFCFD] p-4 shadow-[0_12px_30px_rgba(15,23,42,0.05)]">
-            <div className="flex items-center justify-between gap-3">
+          <div className="rounded-[20px] border border-[var(--biz-border)] bg-[#FCFCFD] p-3 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--biz-muted)]">
                   Reply
@@ -230,11 +230,11 @@ export default function ConversationView({
               value={replyText}
               onChange={(event) => setReplyText(event.target.value)}
               placeholder="Write the final message you'll send to the buyer."
-              rows={8}
-              className="mt-4 w-full resize-none rounded-[18px] border border-[var(--biz-border)] bg-white px-3.5 py-3 text-sm text-[var(--biz-text)] placeholder-[var(--biz-muted)] focus:border-[var(--biz-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--biz-primary)]"
+              rows={4}
+              className="mt-3 w-full resize-y rounded-[16px] border border-[var(--biz-border)] bg-white px-3.5 py-3 text-sm text-[var(--biz-text)] placeholder-[var(--biz-muted)] focus:border-[var(--biz-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--biz-primary)]"
             />
 
-            <div className="mt-3 flex items-center justify-between gap-3">
+            <div className="mt-2.5 flex flex-wrap items-center justify-between gap-3">
               <p className="text-[11px] leading-relaxed text-[var(--biz-muted)]">
                 Review and edit anything you want before it goes out.
               </p>
@@ -242,7 +242,7 @@ export default function ConversationView({
                 type="button"
                 onClick={handleSend}
                 disabled={!replyText.trim() || sendLoading}
-                className="rounded-xl bg-[linear-gradient(135deg,#18a06f_0%,#117d58_100%)] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_12px_30px_rgba(17,125,88,0.24)] transition-all hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-45"
+                className="rounded-xl bg-[linear-gradient(135deg,#18a06f_0%,#117d58_100%)] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(17,125,88,0.22)] transition-all hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-45"
               >
                 {sendLoading ? "Sending..." : "Send reply"}
               </button>
