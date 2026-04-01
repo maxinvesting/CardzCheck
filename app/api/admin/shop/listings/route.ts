@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminAuth } from "@/lib/admin";
 import { createServiceClient } from "@/lib/supabase/server";
+import {
+  inferShopCategoryLabel,
+  normalizeShopCategoryLabel,
+  SHOP_CATEGORY_OPTIONS,
+} from "@/lib/cards/market-category";
 
-type ListingStatus = "active" | "sold" | "reserved" | "delisted";
+type ListingStatus = "active" | "sold" | "reserved" | "delisted" | "archived";
 type PublishState = "draft" | "published";
 type ListingCondition = "raw" | "graded" | "sealed";
 
@@ -11,12 +16,12 @@ const ALLOWED_STATUS: ListingStatus[] = [
   "sold",
   "reserved",
   "delisted",
-  "draft",
+  "archived",
 ];
 const ALLOWED_PUBLISH_STATES: PublishState[] = ["draft", "published"];
 const ALLOWED_CONDITIONS: ListingCondition[] = ["raw", "graded", "sealed"];
 
-const ALLOWED_SPORTS = new Set(["Football", "Basketball", "Baseball", "Other"]);
+const ALLOWED_SPORTS = new Set<string>(SHOP_CATEGORY_OPTIONS);
 
 function asString(value: unknown): string | null {
   if (typeof value !== "string") return null;
@@ -98,10 +103,21 @@ function asImageUrls(value: unknown): string[] {
     .filter((url) => /^https?:\/\//i.test(url));
 }
 
-function sanitizeSport(value: unknown): string {
+function hasOwn(value: unknown, key: string): boolean {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      Object.prototype.hasOwnProperty.call(value, key)
+  );
+}
+
+function sanitizeSport(value: unknown, fallback: string = "Other"): string {
+  const normalized = normalizeShopCategoryLabel(value);
+  if (normalized) return normalized;
+
   const sport = asString(value);
-  if (!sport) return "Football";
-  return ALLOWED_SPORTS.has(sport) ? sport : "Other";
+  if (!sport) return fallback;
+  return ALLOWED_SPORTS.has(sport) ? sport : fallback;
 }
 
 function parseYearFromText(value: string | null): number | null {
@@ -254,12 +270,20 @@ export async function PATCH(request: NextRequest) {
     filtered.is_premium = asBoolean(updates.is_premium);
   }
 
+  if ("accepts_offers" in updates) {
+    filtered.accepts_offers = asBoolean(updates.accepts_offers);
+  }
+
   if ("tags" in updates) {
     filtered.tags = asTags(updates.tags);
   }
 
   if ("notes" in updates) {
     filtered.notes = asNullableString(updates.notes);
+  }
+
+  if ("ebay_comp_url" in updates) {
+    filtered.ebay_comp_url = asNullableString(updates.ebay_comp_url);
   }
 
   if ("quantity" in updates) {
@@ -346,37 +370,63 @@ export async function POST(request: NextRequest) {
   const ebaySoldComp = asNumber(body?.ebay_sold_comp);
   const shippingCost = asNumber(body?.shipping_cost);
   const imageUrls = asImageUrls(body?.image_urls);
+  const inventoryItemId = asNullableString(body?.inventory_item_id);
+  const parallelVariant = asNullableString(body?.parallel_variant);
+  const cardNumber = asNullableString(body?.card_number);
+  const certNumber = asNullableString(body?.cert_number);
+  const description = asNullableString(body?.description);
+  const thumbnailUrl = asNullableString(body?.thumbnail_url) ?? imageUrls[0] ?? null;
+  const tags = asTags(body?.tags);
+  const notes = asNullableString(body?.notes);
 
-  const insert = {
-    title,
-    inventory_item_id: asNullableString(body?.inventory_item_id),
+  const insert: Record<string, unknown> = {
     player_name: playerName,
     year: Math.trunc(year),
     set_brand: setBrand,
-    parallel_variant: asNullableString(body?.parallel_variant),
-    card_number: asNullableString(body?.card_number),
     grade,
-    cert_number: asNullableString(body?.cert_number),
-    condition: asCondition(body?.condition, "graded"),
-    sport: sanitizeSport(body?.sport),
+    sport: inferShopCategoryLabel(
+      {
+        sport: asString(body?.sport),
+        game: asString(body?.game),
+        title,
+        set: setBrand,
+        player: playerName,
+      },
+      "Other"
+    ),
     price,
-    cmv,
-    cost_basis: costBasis,
-    ebay_sold_comp: ebaySoldComp,
-    description: asNullableString(body?.description),
     quantity: quantity != null ? Math.max(1, Math.trunc(quantity)) : 1,
     status: asStatus(body?.status, "active"),
-    publish_state: asPublishState(body?.publish_state, "published"),
     shipping_method: asNullableString(body?.shipping_method) ?? "bmwt",
     shipping_cost: shippingCost != null ? Math.max(0, shippingCost) : 4,
     image_urls: imageUrls,
-    thumbnail_url:
-      asNullableString(body?.thumbnail_url) ?? imageUrls[0] ?? null,
+    thumbnail_url: thumbnailUrl,
     featured: asBoolean(body?.featured),
     is_premium: asBoolean(body?.is_premium),
-    tags: asTags(body?.tags),
-    notes: asNullableString(body?.notes),
+    accepts_offers: asBoolean(body?.accepts_offers),
+    tags,
   };
+
+  if (title) insert.title = title;
+  if (inventoryItemId) insert.inventory_item_id = inventoryItemId;
+  if (parallelVariant) insert.parallel_variant = parallelVariant;
+  if (cardNumber) insert.card_number = cardNumber;
+  if (certNumber) insert.cert_number = certNumber;
+  if (cmv != null) insert.cmv = cmv;
+  if (costBasis != null) insert.cost_basis = costBasis;
+  if (ebaySoldComp != null) insert.ebay_sold_comp = ebaySoldComp;
+  if (description != null) insert.description = description;
+  if (notes != null) insert.notes = notes;
+  const ebayCompUrl = asNullableString(body?.ebay_comp_url);
+  if (ebayCompUrl != null) insert.ebay_comp_url = ebayCompUrl;
+
+  if (hasOwn(body, "condition")) {
+    insert.condition = asCondition(body?.condition, "graded");
+  }
+
+  if (hasOwn(body, "publish_state")) {
+    insert.publish_state = asPublishState(body?.publish_state, "published");
+  }
 
   const supabase = await createServiceClient();
   const { data, error } = await supabase
@@ -387,8 +437,9 @@ export async function POST(request: NextRequest) {
 
   if (error) {
     console.error("Admin shop listings create error:", error);
+    const message = asString(error.message) ?? "Failed to create listing";
     return NextResponse.json(
-      { error: "Failed to create listing" },
+      { error: message },
       { status: 500 }
     );
   }

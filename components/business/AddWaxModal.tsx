@@ -23,7 +23,7 @@ const PRODUCT_TYPES = [
   "Other",
 ] as const;
 
-const SPORTS = [
+const CATEGORIES = [
   "Football",
   "Basketball",
   "Baseball",
@@ -31,6 +31,9 @@ const SPORTS = [
   "Soccer",
   "UFC",
   "Wrestling",
+  "Pokemon",
+  "One Piece",
+  "Other TCG",
   "Other",
 ] as const;
 
@@ -98,7 +101,7 @@ export default function AddWaxModal({ isOpen, onClose, onAdd }: Props) {
         : null,
       notes: [
         `[WAX]`,
-        `Sport: ${form.sport}`,
+        `Category: ${form.sport}`,
         `Product: ${form.product_type}`,
         form.notes,
       ]
@@ -172,7 +175,7 @@ export default function AddWaxModal({ isOpen, onClose, onAdd }: Props) {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
+      <div className="bg-[#111827] border border-white/[0.08] rounded-2xl w-full max-w-lg shadow-none max-h-[90vh] overflow-y-auto">
         <div className="p-6 border-b border-gray-800 flex items-start justify-between">
           <div>
             <h2 className="text-lg font-bold text-white flex items-center gap-2">
@@ -200,7 +203,7 @@ export default function AddWaxModal({ isOpen, onClose, onAdd }: Props) {
 
           <div className="grid grid-cols-2 gap-4">
             {inp("Year *", "year", "text", undefined, "2024")}
-            {inp("Sport", "sport", "select", SPORTS)}
+            {inp("Category / game", "sport", "select", CATEGORIES)}
           </div>
           <div className="grid grid-cols-2 gap-4">
             {inp("Brand", "brand", "text", undefined, "Panini")}

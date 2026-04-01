@@ -8,7 +8,7 @@ import {
   forwardRef,
   type ComponentPropsWithoutRef,
 } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { TableVirtuoso } from "react-virtuoso";
 import type { BusinessInventoryItem } from "@/types";
 import {
@@ -17,6 +17,9 @@ import {
   deactivatePerfBucket,
   recordDomMetrics,
 } from "@/lib/dev/perf";
+import EbayListingBadge from "./EbayListingBadge";
+import EbayListingModal from "./EbayListingModal";
+import { buildEbaySoldUrl } from "@/lib/ebay/comps-url";
 
 function fmtCents(cents: number | null): string {
   if (cents === null) return "";
@@ -27,7 +30,7 @@ function fmtCents(cents: number | null): string {
 function emptyPlaceholder(field: string): string {
   switch (field) {
     case "list_price_cents": return "Not listed";
-    case "current_market_value_cents": return "No comps — click to set";
+    case "current_market_value_cents": return "No estimate — click to set";
     case "location": return "Add storage";
     default: return "—";
   }
@@ -103,6 +106,7 @@ interface Props {
 }
 
 const STATUS_OPTIONS = ["unlisted", "listed", "pending_sale", "sold", "returned"] as const;
+const ACTIVE_STATUS_OPTIONS = ["unlisted", "listed", "pending_sale"] as const;
 const CHANNEL_OPTIONS = ["ebay", "whatnot", "instagram", "show", "local", "other"] as const;
 const CONDITION_OPTIONS = ["raw", "graded"] as const;
 const VIRTUALIZE_THRESHOLD = 200;
@@ -131,10 +135,10 @@ function getDaysHeld(acquisitionDate: string | null | undefined): number | null 
 }
 
 function getDaysHeldColor(days: number | null): string {
-  if (days === null) return "text-gray-500";
-  if (days < 30) return "text-emerald-400";
-  if (days <= 60) return "text-amber-400";
-  return "text-red-400";
+  if (days === null) return "text-[var(--biz-muted)]";
+  if (days < 30) return "text-emerald-700";
+  if (days <= 60) return "text-amber-700";
+  return "text-red-600";
 }
 
 const COLUMNS: ColumnDef[] = [
@@ -185,7 +189,7 @@ const COLUMNS: ColumnDef[] = [
     editable: true,
     width: "w-24 shrink-0",
   },
-  { key: "_view", label: "Profile", editable: false, width: "w-20 shrink-0" },
+  { key: "_view", label: "Open", editable: false, width: "w-24 shrink-0" },
   { key: "_grade", label: "", editable: false, width: "w-16 shrink-0" },
   { key: "_actions", label: "", editable: false, width: "w-20 shrink-0" },
 ];
@@ -224,9 +228,12 @@ export default function InventoryTable({
   perfEnabled = false,
   ebayConnected = false,
 }: Props) {
+  const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState("");
+  // Default to "active" so marking an item sold moves it out of the inventory view
+  // and into the Sales tab.
+  const [filterStatus, setFilterStatus] = useState<"active" | "all" | BusinessInventoryItem["status"]>("active");
   const [filterChannel, setFilterChannel] = useState("");
   const [filterCondition, setFilterCondition] = useState("");
   const [activeTab, setActiveTab] = useState<"all" | "cards" | "wax">("all");
@@ -238,9 +245,18 @@ export default function InventoryTable({
   const [bulkAction, setBulkAction] = useState("");
   const [bulkPayload, setBulkPayload] = useState("");
   const [fetchingCmvId, setFetchingCmvId] = useState<string | null>(null);
+  const [ebayListingItem, setEbayListingItem] = useState<BusinessInventoryItem | null>(null);
   const [sortKey, setSortKey] = useState<SortableColumnKey | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
+
+  const displayColumns = useMemo(
+    () =>
+      listView
+        ? COLUMNS.filter((c) => !["channel", "location", "acquisition_date"].includes(c.key))
+        : COLUMNS,
+    [listView]
+  );
 
   const handleFetchCmv = async (item: BusinessInventoryItem) => {
     if (item.current_market_value_cents != null && item.current_market_value_cents > 0) return;
@@ -290,7 +306,11 @@ export default function InventoryTable({
         buildDisplayTitle(it).toLowerCase().includes(q)
       );
     }
-    if (filterStatus) result = result.filter((it) => it.status === filterStatus);
+    if (filterStatus === "active") {
+      result = result.filter((it) => ACTIVE_STATUS_OPTIONS.includes(it.status as any));
+    } else if (filterStatus !== "all") {
+      result = result.filter((it) => it.status === filterStatus);
+    }
     if (filterChannel) result = result.filter((it) => it.channel === filterChannel);
     if (filterCondition)
       result = result.filter((it) => it.condition_status === filterCondition);
@@ -358,6 +378,10 @@ export default function InventoryTable({
     setEditValue(currentValue?.toString() ?? "");
   };
 
+  const openProfile = (itemId: string) => {
+    router.push(`/card/${itemId}?from=business`);
+  };
+
   const commitEdit = (overrideValue?: string) => {
     if (!editingCell) return;
     const { id, field } = editingCell;
@@ -404,7 +428,7 @@ export default function InventoryTable({
             onBlur={() => setEditingCell(null)}
             onClick={(e) => e.stopPropagation()}
             autoFocus
-            className="w-full bg-gray-800 border border-emerald-500 rounded px-1 py-0.5 text-xs text-white"
+            className="w-full rounded border border-[var(--biz-border)] bg-white px-2 py-1 text-xs text-[var(--biz-text)]"
           >
             {STATUS_OPTIONS.map((s) => (
               <option key={s} value={s}>{s}</option>
@@ -424,7 +448,7 @@ export default function InventoryTable({
             onBlur={() => setEditingCell(null)}
             onClick={(e) => e.stopPropagation()}
             autoFocus
-            className="w-full bg-gray-800 border border-emerald-500 rounded px-1 py-0.5 text-xs text-white"
+            className="w-full rounded border border-[var(--biz-border)] bg-white px-2 py-1 text-xs text-[var(--biz-text)]"
           >
             {CHANNEL_OPTIONS.map((c) => (
               <option key={c} value={c}>{c}</option>
@@ -443,7 +467,7 @@ export default function InventoryTable({
             if (e.key === "Escape") setEditingCell(null);
           }}
           autoFocus
-          className="w-full bg-gray-800 border border-emerald-500 rounded px-1 py-0.5 text-xs text-white"
+          className="w-full rounded border border-[var(--biz-border)] bg-white px-2 py-1 text-xs text-[var(--biz-text)]"
         />
       );
     }
@@ -452,32 +476,48 @@ export default function InventoryTable({
     if (field === "title") {
       const isWax = item.notes?.includes("[WAX]");
       const titleStr = buildDisplayTitle(item);
-      const titleContent = (
-        <>
+      return (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            openProfile(item.id);
+          }}
+          className="group/title flex min-w-0 cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent p-0 py-0.5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+        >
           {isWax && (
-            <span className="inline-flex items-center px-1 py-0.5 rounded text-[10px] font-semibold bg-amber-900/40 text-amber-400 whitespace-nowrap shrink-0">
+            <span className="inline-flex shrink-0 items-center rounded border border-amber-200 bg-amber-50 px-1 py-0.5 text-[10px] font-semibold whitespace-nowrap text-amber-700">
               WAX
             </span>
           )}
-          <span className="truncate" title={titleStr}>{titleStr}</span>
-        </>
-      );
-      return (
-        <Link
-          href={`/card/${item.id}?from=business`}
-          onClick={(e) => e.stopPropagation()}
-          className="flex items-center gap-1.5 min-w-0 text-gray-300 hover:text-white hover:underline"
-        >
-          {titleContent}
-        </Link>
+          <span
+            className="min-w-0 truncate text-sm font-semibold text-[var(--biz-primary)] underline-offset-2 group-hover/row:underline"
+            title={titleStr}
+          >
+            {titleStr}
+          </span>
+          <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 transition-colors group-hover/title:bg-emerald-100">
+            View card
+          </span>
+        </button>
       );
     }
     if (field === "list_price_cents") {
       const formatted = fmtCents(val);
       if (!formatted) {
-        return <span className="italic text-gray-500 text-xs">{emptyPlaceholder(field)}</span>;
+        return <span className="italic text-[var(--biz-muted)] text-xs">{emptyPlaceholder(field)}</span>;
       }
       return <span className="tabular-nums">{formatted}</span>;
+    }
+    if (field === "current_market_value_cents" && listView) {
+      const mv = item.current_market_value_cents;
+      const cost = item.cost_basis_total_cents;
+      const color = mv == null || mv <= 0 ? "#AAA" : mv > cost ? "#2D7A4F" : "#CC4444";
+      return (
+        <span style={{ color }} className="tabular-nums font-medium">
+          {fmtCents(mv) || "—"}
+        </span>
+      );
     }
     if (field === "current_market_value_cents") {
       const formatted = fmtCents(val);
@@ -489,7 +529,7 @@ export default function InventoryTable({
             className="flex items-center gap-1.5"
             onClick={(e) => e.stopPropagation()}
           >
-            <span className="italic text-gray-500 text-xs">
+            <span className="italic text-[var(--biz-muted)] text-xs">
               {emptyPlaceholder(field)}
             </span>
             <button
@@ -499,7 +539,7 @@ export default function InventoryTable({
                 handleFetchCmv(item);
               }}
               disabled={isFetching || !item.title?.trim()}
-              className="shrink-0 px-1.5 py-0.5 text-[10px] font-medium bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded text-gray-300"
+              className="shrink-0 rounded border border-[var(--biz-border)] bg-[#F9FAFB] px-1.5 py-0.5 text-[10px] font-medium text-[var(--biz-text)] hover:bg-[#F3F4F6] disabled:opacity-50"
             >
               {isFetching ? "…" : "Get"}
             </button>
@@ -519,13 +559,19 @@ export default function InventoryTable({
     }
     if (field === "_view") {
       return (
-        <Link
-          href={`/card/${item.id}?from=business`}
-          onClick={(e) => e.stopPropagation()}
-          className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium text-blue-400 hover:text-blue-300 hover:underline rounded"
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            openProfile(item.id);
+          }}
+          className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700 transition-colors hover:bg-emerald-100"
         >
-          Profile
-        </Link>
+          View card
+          <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
       );
     }
     if (field === "_grade") {
@@ -537,7 +583,7 @@ export default function InventoryTable({
             e.stopPropagation();
             onItemClick(item);
           }}
-          className="px-1.5 py-0.5 text-[10px] font-medium bg-blue-900/60 hover:bg-blue-800 text-blue-300 rounded"
+          className="rounded border border-[var(--biz-border)] bg-[#F9FAFB] px-1.5 py-0.5 text-[10px] font-medium text-[var(--biz-primary)] hover:bg-[#F3F4F6]"
         >
           Grade
         </button>
@@ -545,25 +591,60 @@ export default function InventoryTable({
     }
     if (field === "_actions") {
       if (item.status === "sold") {
-        return <span className="text-[10px] text-gray-500">Recorded</span>;
+        return <span className="text-[10px] text-[var(--biz-muted)]">Recorded</span>;
       }
+      const hasEbayListing = !!(item as any).ebay_item_id;
+      // status === "sold" already handled by early return above; only check remaining terminal states
+      const canListOnEbay =
+        ebayConnected &&
+        !hasEbayListing &&
+        item.status !== "returned" &&
+        item.status !== "pending_sale";
+      const compsUrl = buildEbaySoldUrl({
+        title: item.title,
+        grade: item.grade,
+        gradingCompany: item.grading_company,
+      });
       return (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onMarkSold?.(item);
-          }}
-          className="rounded bg-emerald-900/50 px-2 py-0.5 text-[10px] font-medium text-emerald-300 hover:bg-emerald-800/60"
-        >
-          Mark Sold
-        </button>
+        <div className="flex flex-col items-start gap-1">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onMarkSold?.(item);
+            }}
+            className="rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 hover:bg-emerald-100"
+          >
+            Mark Sold
+          </button>
+          {canListOnEbay && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setEbayListingItem(item);
+              }}
+              className="rounded border border-[var(--biz-border)] bg-[#F9FAFB] px-2 py-0.5 text-[10px] font-medium text-[var(--biz-primary)] hover:bg-[#F3F4F6]"
+            >
+              List eBay
+            </button>
+          )}
+          <a
+            href={compsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="rounded border border-[var(--biz-border)] bg-[#F9FAFB] px-2 py-0.5 text-[10px] font-medium text-[var(--biz-primary)] hover:bg-[#F3F4F6] transition-colors"
+          >
+            Get Comps
+          </a>
+        </div>
       );
     }
     if (field === "location") {
       const str = val?.toString()?.trim() || "";
       if (!str) {
-        return <span className="italic text-gray-500 text-xs">{emptyPlaceholder(field)}</span>;
+        return <span className="italic text-[var(--biz-muted)] text-xs">{emptyPlaceholder(field)}</span>;
       }
       return str;
     }
@@ -576,11 +657,11 @@ export default function InventoryTable({
 
   const statusColor = (status: string) => {
     switch (status) {
-      case "sold": return "bg-emerald-900/50 text-emerald-400";
-      case "listed": return "bg-blue-900/50 text-blue-400";
-      case "pending_sale": return "bg-yellow-900/50 text-yellow-400";
-      case "returned": return "bg-red-900/50 text-red-400";
-      default: return "bg-gray-800 text-gray-400";
+      case "sold": return "border border-emerald-200 bg-emerald-50 text-emerald-700";
+      case "listed": return "border border-blue-200 bg-blue-50 text-blue-700";
+      case "pending_sale": return "border border-amber-200 bg-amber-50 text-amber-700";
+      case "returned": return "border border-red-200 bg-red-50 text-red-700";
+      default: return "border border-[var(--biz-border)] bg-[#F9FAFB] text-[var(--biz-muted)]";
     }
   };
 
@@ -604,15 +685,39 @@ export default function InventoryTable({
       }
       return badge;
     }
+    if (channel === "show") {
+      return (
+        <span className="inline-flex items-center gap-1 rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+          Show
+        </span>
+      );
+    }
+    if (channel === "local") {
+      return (
+        <span className="inline-flex items-center rounded border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium text-sky-700">
+          Local
+        </span>
+      );
+    }
+    if (channel === "instagram") {
+      return (
+        <span className="inline-flex items-center rounded border border-pink-200 bg-pink-50 px-1.5 py-0.5 text-[10px] font-medium text-pink-700">
+          Instagram
+        </span>
+      );
+    }
+    const label = channel
+      ? channel.charAt(0).toUpperCase() + channel.slice(1)
+      : "—";
     return (
-      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-800 text-gray-400">
-        {channel}
+      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-[#F9FAFB] text-[var(--biz-muted)] border border-[var(--biz-border)]">
+        {label}
       </span>
     );
   };
 
   // ── Mobile card component (< 640px) ──────────────────────────────────────
-  const MobileInventoryCard = ({ item, idx }: { item: BusinessInventoryItem; idx: number }) => {
+  const MobileInventoryCard = ({ item }: { item: BusinessInventoryItem }) => {
     const days = getDaysHeld(item.acquisition_date);
     const daysColor = getDaysHeldColor(days);
     const titleStr = buildDisplayTitle(item);
@@ -626,8 +731,8 @@ export default function InventoryTable({
         onClick={() => onItemClick(item)}
         className={`rounded-lg border p-3 transition-colors cursor-pointer ${
           selectedItemId === item.id
-            ? "border-emerald-700/60 bg-emerald-900/20"
-            : "border-gray-800 bg-[#0c1a2e] hover:bg-[#0f1f35]"
+            ? "border-emerald-700/60 bg-emerald-50"
+            : "border-[var(--biz-border)] bg-white hover:bg-[#F3F4F6]"
         }`}
       >
         {/* Top row: checkbox + title */}
@@ -640,22 +745,37 @@ export default function InventoryTable({
               toggleOne(item.id);
             }}
             onClick={(e) => e.stopPropagation()}
-            className="mt-0.5 rounded border-gray-600 text-emerald-500 focus:ring-emerald-500 min-w-[18px] min-h-[18px]"
+            className="mt-0.5 min-h-[18px] min-w-[18px] rounded border-[var(--biz-border)] text-emerald-600 focus:ring-emerald-500"
           />
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5 mb-0.5">
-              {isWaxItem && (
-                <span className="inline-flex items-center px-1 py-0.5 rounded text-[10px] font-semibold bg-amber-900/40 text-amber-400 whitespace-nowrap shrink-0">
-                  WAX
-                </span>
-              )}
-              <Link
-                href={`/card/${item.id}?from=business`}
-                onClick={(e) => e.stopPropagation()}
-                className="text-sm font-medium text-[#e2eaf3] hover:text-white hover:underline truncate block min-h-[44px] flex items-center"
+            <div className="mb-0.5 flex items-start justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-1.5">
+                {isWaxItem && (
+                  <span className="inline-flex shrink-0 items-center rounded border border-amber-200 bg-amber-50 px-1 py-0.5 text-[10px] font-semibold whitespace-nowrap text-amber-700">
+                    WAX
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openProfile(item.id);
+                  }}
+                  className="block min-h-[44px] min-w-0 cursor-pointer border-0 bg-transparent p-0 truncate text-left text-sm font-semibold text-[var(--biz-primary)] underline-offset-2 hover:underline"
+                >
+                  {titleStr || "Untitled"}
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openProfile(item.id);
+                }}
+                className="inline-flex shrink-0 items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700 transition-colors hover:bg-emerald-100"
               >
-                {titleStr || "Untitled"}
-              </Link>
+                View
+              </button>
             </div>
           </div>
         </div>
@@ -663,13 +783,13 @@ export default function InventoryTable({
         {/* Key fields in 2x2 grid */}
         <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs mb-2.5">
           <div className="flex items-center justify-between">
-            <span className="text-[#3a5068]">Days Held</span>
+            <span className="text-[var(--biz-muted)]">Days Held</span>
             <span className={`font-medium tabular-nums ${daysColor}`}>
               {days !== null ? `${days}d` : "\u2014"}
             </span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-[#3a5068]">Est. MV</span>
+            <span className="text-[var(--biz-muted)]">Est. MV</span>
             {cmvEmpty ? (
               <button
                 type="button"
@@ -678,23 +798,23 @@ export default function InventoryTable({
                   handleFetchCmv(item);
                 }}
                 disabled={isFetching || !item.title?.trim()}
-                className="px-1.5 py-0.5 text-[10px] font-medium bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded text-gray-300 min-h-[28px]"
+                className="min-h-[28px] rounded border border-[var(--biz-border)] bg-[#F9FAFB] px-1.5 py-0.5 text-[10px] font-medium text-[var(--biz-text)] hover:bg-[#F3F4F6] disabled:opacity-50"
               >
                 {isFetching ? "\u2026" : "Get MV"}
               </button>
             ) : (
-              <span className="font-medium tabular-nums text-[#e2eaf3]">{cmvFormatted}</span>
+              <span className="font-medium tabular-nums text-[var(--biz-text)]">{cmvFormatted}</span>
             )}
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-[#3a5068]">Cost</span>
-            <span className="font-medium tabular-nums text-[#e2eaf3]">
+            <span className="text-[var(--biz-muted)]">Cost</span>
+            <span className="font-medium tabular-nums text-[var(--biz-text)]">
               {fmtCents(item.cost_basis_total_cents) || "\u2014"}
             </span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-[#3a5068]">List $</span>
-            <span className="font-medium tabular-nums text-[#e2eaf3]">
+            <span className="text-[var(--biz-muted)]">List $</span>
+            <span className="font-medium tabular-nums text-[var(--biz-text)]">
               {fmtCents(item.list_price_cents) || "\u2014"}
             </span>
           </div>
@@ -727,7 +847,7 @@ export default function InventoryTable({
                   e.stopPropagation();
                   onItemClick(item);
                 }}
-                className="px-2 py-1 text-[11px] font-medium bg-blue-900/60 hover:bg-blue-800 text-blue-300 rounded min-h-[32px] min-w-[44px]"
+                className="min-h-[32px] min-w-[44px] rounded border border-[var(--biz-border)] bg-[#F9FAFB] px-2 py-1 text-[11px] font-medium text-[var(--biz-primary)] hover:bg-[#F3F4F6]"
               >
                 Grade
               </button>
@@ -739,12 +859,12 @@ export default function InventoryTable({
                   e.stopPropagation();
                   onMarkSold?.(item);
                 }}
-                className="rounded bg-emerald-900/50 px-2 py-1 text-[11px] font-medium text-emerald-300 hover:bg-emerald-800/60 min-h-[32px] min-w-[44px]"
+                className="min-h-[32px] min-w-[44px] rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100"
               >
                 Sold
               </button>
             ) : (
-              <span className="text-[10px] text-gray-500">Recorded</span>
+              <span className="text-[10px] text-[var(--biz-muted)]">Recorded</span>
             )}
           </div>
         </div>
@@ -768,25 +888,25 @@ export default function InventoryTable({
   };
 
   const rowClass = (item: BusinessInventoryItem, idx: number): string =>
-    `transition-colors cursor-pointer ${
+    `group/row transition-colors ${
       selectedItemId === item.id
-        ? "bg-emerald-900/30 ring-inset"
+        ? "bg-emerald-50 ring-inset"
         : idx % 2 === 1
-        ? "bg-gray-900/30 hover:bg-gray-800/60"
-        : "hover:bg-gray-800/60"
+        ? "bg-white hover:bg-[#F3F4F6]"
+        : "hover:bg-[#F3F4F6]"
     }`;
 
   const renderHeader = () => (
     <tr>
-      <th className={`w-8 shrink-0 ${dense ? "px-2 py-1" : "px-2 py-1.5"}`}>
+      <th className={`w-8 shrink-0 ${dense ? "px-3 py-2" : "px-3 py-2"}`}>
         <input
           type="checkbox"
           checked={sortedItems.length > 0 && selected.size === sortedItems.length}
           onChange={toggleAll}
-          className="rounded border-gray-600 text-emerald-500 focus:ring-emerald-500"
+          className="rounded border-[var(--biz-border)] text-emerald-600 focus:ring-emerald-500"
         />
       </th>
-      {COLUMNS.map((col) => {
+      {displayColumns.map((col) => {
         const isSortable = Boolean(col.sortable);
         const isActiveSort = isSortable && sortKey === col.key;
         const ariaSort = isSortable
@@ -801,13 +921,13 @@ export default function InventoryTable({
           <th
             key={col.key}
             aria-sort={ariaSort}
-            className={`px-2 ${dense ? "py-1" : "py-1.5"} text-[10px] font-medium text-gray-500 uppercase tracking-wider ${col.width} ${col.alignRight ? "text-right" : ""}`}
+            className={`border-l border-[var(--biz-border)] px-3 py-2 text-[10px] font-semibold uppercase tracking-normal text-[var(--biz-muted)] ${col.width} ${col.alignRight ? "text-right" : ""}`}
           >
             {isSortable ? (
               <button
                 type="button"
                 onClick={() => handleSortToggle(col.key as SortableColumnKey)}
-                className={`inline-flex items-center gap-1 ${col.alignRight ? "ml-auto" : ""} cursor-pointer select-none hover:text-gray-300 focus:outline-none focus-visible:text-gray-200`}
+                className={`inline-flex cursor-pointer select-none items-center gap-1 ${col.alignRight ? "ml-auto" : ""} hover:text-[var(--biz-text)] focus:outline-none focus-visible:text-[var(--biz-text)]`}
               >
                 <span>{col.label}</span>
                 {isActiveSort ? (
@@ -828,22 +948,22 @@ export default function InventoryTable({
   const renderRowCells = (item: BusinessInventoryItem) => (
     <>
       <td
-        className={`px-2 ${dense ? "py-0.5" : "py-1"}`}
+        className={`px-3 py-2`}
         onClick={(e) => e.stopPropagation()}
       >
         <input
           type="checkbox"
           checked={selected.has(item.id)}
           onChange={() => toggleOne(item.id)}
-          className="rounded border-gray-600 text-emerald-500 focus:ring-emerald-500"
+          className="rounded border-[var(--biz-border)] text-emerald-600 focus:ring-emerald-500"
         />
       </td>
-      {COLUMNS.map((col) => (
+      {displayColumns.map((col) => (
         <td
           key={`${item.id}-${col.key}`}
-          className={`px-2 ${dense ? "py-0.5" : "py-1"} text-gray-300 ${col.width} ${col.alignRight ? "text-right tabular-nums" : ""}`}
+          className={`border-l border-[var(--biz-border)] px-3 py-2 text-[var(--biz-text)] ${col.width} ${col.alignRight ? "text-right tabular-nums" : ""}`}
           onClick={() => {
-            if (col.key === "_actions" || col.key === "_grade" || col.key === "_view") {
+            if (col.key === "title" || col.key === "_actions" || col.key === "_grade" || col.key === "_view") {
               return;
             }
             if (editingCell?.id === item.id && editingCell?.field === col.key) {
@@ -886,7 +1006,7 @@ export default function InventoryTable({
   return (
     <div>
       {/* Tabs */}
-      <div className="flex items-center gap-1 mb-2 border-b border-gray-800 overflow-x-auto">
+      <div className="flex items-center gap-1 mb-2 border-b border-[var(--biz-border)] overflow-x-auto">
         {(
           [
             { id: "all", label: "All", count: items.length },
@@ -903,9 +1023,9 @@ export default function InventoryTable({
             className={`flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] text-xs font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
               activeTab === tab.id
                 ? tab.id === "wax"
-                  ? "border-amber-500 text-amber-400"
-                  : "border-emerald-500 text-emerald-400"
-                : "border-transparent text-gray-500 hover:text-gray-300"
+                  ? "border-amber-600 text-amber-700"
+                  : "border-emerald-600 text-emerald-700"
+                : "border-transparent text-[var(--biz-muted)] hover:text-[var(--biz-text)]"
             }`}
           >
             {tab.id === "wax" && (
@@ -923,9 +1043,9 @@ export default function InventoryTable({
               className={`text-xs px-1.5 py-0.5 rounded-full ${
                 activeTab === tab.id
                   ? tab.id === "wax"
-                    ? "bg-amber-900/50 text-amber-300"
-                    : "bg-emerald-900/50 text-emerald-300"
-                  : "bg-gray-800 text-gray-500"
+                    ? "bg-amber-100 text-amber-700"
+                    : "bg-emerald-100 text-emerald-700"
+                  : "bg-[#F9FAFB] text-[var(--biz-muted)]"
               }`}
             >
               {tab.count}
@@ -939,7 +1059,7 @@ export default function InventoryTable({
         {/* Search */}
         <div className="relative flex-1 w-full min-w-0">
           <div className="absolute inset-y-0 left-0 flex items-center pl-2.5 pointer-events-none">
-            <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-3.5 h-3.5 text-[var(--biz-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
           </div>
@@ -951,7 +1071,7 @@ export default function InventoryTable({
               setSearch(e.target.value);
             }}
             placeholder="Search inventory..."
-            className="w-full pl-8 pr-2.5 py-2.5 sm:py-1.5 min-h-[44px] sm:min-h-0 bg-gray-900 border border-gray-800 rounded-md text-sm sm:text-xs text-white placeholder-gray-500 focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+            className="min-h-[44px] w-full rounded-md border border-[var(--biz-border)] bg-white py-2.5 pl-8 pr-2.5 text-sm text-[var(--biz-text)] placeholder:text-[var(--biz-muted)] focus:border-transparent focus:ring-2 focus:ring-emerald-500 sm:min-h-0 sm:py-1.5 sm:text-xs"
           />
         </div>
 
@@ -961,11 +1081,12 @@ export default function InventoryTable({
             value={filterStatus}
             onChange={(e) => {
               if (perfEnabled) setPerfInteraction("filter");
-              setFilterStatus(e.target.value);
+              setFilterStatus(e.target.value as any);
             }}
-            className="px-2.5 py-2.5 sm:py-1.5 min-h-[44px] sm:min-h-0 bg-gray-900 border border-gray-800 rounded-md text-xs text-white shrink-0 flex-1 sm:flex-none"
+            className="min-h-[44px] flex-1 shrink-0 rounded-md border border-[var(--biz-border)] bg-white px-2.5 py-2.5 text-xs text-[var(--biz-text)] sm:min-h-0 sm:flex-none sm:py-1.5"
           >
-            <option value="">All Status</option>
+            <option value="active">Active (unlisted/listed/pending_sale)</option>
+            <option value="all">All Statuses</option>
             {STATUS_OPTIONS.map((s) => (
               <option key={s} value={s}>{s}</option>
             ))}
@@ -977,7 +1098,7 @@ export default function InventoryTable({
               if (perfEnabled) setPerfInteraction("filter");
               setFilterChannel(e.target.value);
             }}
-            className="px-2.5 py-2.5 sm:py-1.5 min-h-[44px] sm:min-h-0 bg-gray-900 border border-gray-800 rounded-md text-xs text-white shrink-0 flex-1 sm:flex-none"
+            className="min-h-[44px] flex-1 shrink-0 rounded-md border border-[var(--biz-border)] bg-white px-2.5 py-2.5 text-xs text-[var(--biz-text)] sm:min-h-0 sm:flex-none sm:py-1.5"
           >
             <option value="">All Channels</option>
             {CHANNEL_OPTIONS.map((c) => (
@@ -991,7 +1112,7 @@ export default function InventoryTable({
               if (perfEnabled) setPerfInteraction("filter");
               setFilterCondition(e.target.value);
             }}
-            className="px-2.5 py-2.5 sm:py-1.5 min-h-[44px] sm:min-h-0 bg-gray-900 border border-gray-800 rounded-md text-xs text-white shrink-0 flex-1 sm:flex-none"
+            className="min-h-[44px] flex-1 shrink-0 rounded-md border border-[var(--biz-border)] bg-white px-2.5 py-2.5 text-xs text-[var(--biz-text)] sm:min-h-0 sm:flex-none sm:py-1.5"
           >
             <option value="">Raw & Graded</option>
             {CONDITION_OPTIONS.map((c) => (
@@ -1003,14 +1124,14 @@ export default function InventoryTable({
 
       {/* Bulk actions bar */}
       {selected.size > 0 && (
-        <div className="flex flex-wrap items-center gap-2 mb-3 p-2 bg-emerald-900/20 border border-emerald-800 rounded-md">
-          <span className="text-sm text-emerald-300 font-medium">
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 p-2">
+          <span className="text-sm font-medium text-emerald-700">
             {selected.size} selected
           </span>
           <select
             value={bulkAction}
             onChange={(e) => setBulkAction(e.target.value)}
-            className="px-2 py-2 sm:py-1 min-h-[44px] sm:min-h-0 bg-gray-900 border border-gray-700 rounded text-sm text-white"
+            className="min-h-[44px] rounded border border-[var(--biz-border)] bg-white px-2 py-2 text-sm text-[var(--biz-text)] sm:min-h-0 sm:py-1"
           >
             <option value="">Bulk action...</option>
             <option value="set_status">Set status</option>
@@ -1021,7 +1142,7 @@ export default function InventoryTable({
             <select
               value={bulkPayload}
               onChange={(e) => setBulkPayload(e.target.value)}
-              className="px-2 py-2 sm:py-1 min-h-[44px] sm:min-h-0 bg-gray-900 border border-gray-700 rounded text-sm text-white"
+              className="min-h-[44px] rounded border border-[var(--biz-border)] bg-white px-2 py-2 text-sm text-[var(--biz-text)] sm:min-h-0 sm:py-1"
             >
               <option value="">Choose status...</option>
               {STATUS_OPTIONS.map((s) => (
@@ -1035,19 +1156,19 @@ export default function InventoryTable({
               value={bulkPayload}
               onChange={(e) => setBulkPayload(e.target.value)}
               placeholder="Storage"
-              className="px-2 py-2 sm:py-1 min-h-[44px] sm:min-h-0 bg-gray-900 border border-gray-700 rounded text-sm text-white"
+              className="min-h-[44px] rounded border border-[var(--biz-border)] bg-white px-2 py-2 text-sm text-[var(--biz-text)] placeholder:text-[var(--biz-muted)] sm:min-h-0 sm:py-1"
             />
           )}
           <button
             onClick={handleBulkExecute}
             disabled={!bulkAction || (bulkAction !== "delete" && !bulkPayload)}
-            className="px-3 py-2 sm:py-1 min-h-[44px] sm:min-h-0 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm rounded font-medium"
+            className="cc-btn-primary min-h-[44px] rounded px-3 py-2 text-sm font-medium text-white disabled:opacity-50 sm:min-h-0 sm:py-1"
           >
             Apply
           </button>
           <button
             onClick={() => setSelected(new Set())}
-            className="px-3 py-2 sm:py-1 min-h-[44px] sm:min-h-0 text-gray-400 hover:text-white text-sm"
+            className="min-h-[44px] px-3 py-2 text-sm text-[var(--biz-muted)] hover:text-[var(--biz-text)] sm:min-h-0 sm:py-1"
           >
             Clear
           </button>
@@ -1057,7 +1178,7 @@ export default function InventoryTable({
       {/* Mobile card list (< 640px) */}
       <div className="sm:hidden">
         {filtered.length === 0 ? (
-          <div className="px-4 py-8 text-center text-xs text-[#3a5068]">
+          <div className="px-4 py-8 text-center text-xs text-[var(--biz-muted)]">
             {activeTab === "wax"
               ? "No wax / sealed products found. Use Add Wax to track boxes and cases."
               : activeTab === "cards"
@@ -1066,8 +1187,8 @@ export default function InventoryTable({
           </div>
         ) : (
           <div className="space-y-2">
-            {filtered.map((item, idx) => (
-              <MobileInventoryCard key={item.id} item={item} idx={idx} />
+            {filtered.map((item) => (
+              <MobileInventoryCard key={item.id} item={item} />
             ))}
           </div>
         )}
@@ -1076,7 +1197,7 @@ export default function InventoryTable({
       {/* Desktop table (>= 640px) — ledger style: tight rows, right-align money */}
       <div
         ref={tableContainerRef}
-        className="hidden sm:block border border-gray-800 rounded-lg overflow-hidden"
+        className="hidden sm:block border border-[var(--biz-border)] rounded-lg overflow-hidden"
         onScrollCapture={() => {
           if (perfEnabled) setPerfInteraction("scroll");
         }}
@@ -1085,7 +1206,7 @@ export default function InventoryTable({
         }}
       >
         {filtered.length === 0 ? (
-          <div className="px-4 py-8 text-center text-xs text-gray-500">
+          <div className="px-4 py-8 text-center text-xs text-[var(--biz-muted)]">
             {activeTab === "wax"
               ? "No wax / sealed products found. Use Add Wax to track boxes and cases."
               : activeTab === "cards"
@@ -1100,9 +1221,9 @@ export default function InventoryTable({
               Scroller: VirtuosoScroller,
               Table: (props) => <table {...props} className="w-full text-xs text-left" />,
               TableHead: (props) => (
-                <thead {...props} className="bg-gray-900 border-b border-gray-800" />
+                <thead {...props} className="bg-[#F9FAFB] border-b border-[var(--biz-border)]" />
               ),
-              TableBody: (props) => <tbody {...props} className="divide-y divide-gray-800/80" />,
+              TableBody: (props) => <tbody {...props} className="divide-y divide-[var(--biz-border)]" />,
               TableRow: ({ item, context: _context, ...props }) => (
                 <tr {...props} className={rowClass(item, props["data-index"])} />
               ),
@@ -1115,10 +1236,10 @@ export default function InventoryTable({
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs text-left">
-              <thead className="bg-gray-900 border-b border-gray-800">
+              <thead className="sticky top-0 z-10 bg-[#F9FAFB] border-b border-[var(--biz-border)]">
                 {renderHeader()}
               </thead>
-              <tbody className="divide-y divide-gray-800/80">
+              <tbody className="divide-y divide-[var(--biz-border)]">
                 {sortedItems.map((item, idx) => (
                   <tr key={item.id} className={rowClass(item, idx)}>
                     {renderRowCells(item)}
@@ -1130,16 +1251,32 @@ export default function InventoryTable({
         )}
       </div>
 
-      <div className="mt-1.5 text-[10px] text-[#3a5068]">
+      <div className="mt-1.5 text-[10px] text-[var(--biz-muted)]">
         {filtered.length} item{filtered.length !== 1 ? "s" : ""}
         {filtered.length !== items.length && ` (of ${items.length} total)`}
         <span className="hidden sm:inline">
-          {" \u00B7 Click cell to edit \u00B7 Double-click row to open detail"}
+          {" \u00B7 Click title or Open to view profile \u00B7 Click cell to edit"}
         </span>
         <span className="sm:hidden">
-          {" \u00B7 Tap card to open detail"}
+          {" \u00B7 Tap View or title to open profile"}
         </span>
       </div>
+
+      {/* eBay Listing Modal — opened via "List eBay" button in _actions cell */}
+      {ebayListingItem && (
+        <EbayListingModal
+          item={ebayListingItem}
+          isTopRated={ebayTopRated}
+          onClose={() => setEbayListingItem(null)}
+          onSuccess={(listingId, listingUrl) => {
+            // Update item state locally: mark listed, set channel=ebay, set ebay_item_id
+            onInlineUpdate(ebayListingItem.id, "ebay_item_id", listingId);
+            onInlineUpdate(ebayListingItem.id, "status", "listed");
+            onInlineUpdate(ebayListingItem.id, "channel", "ebay");
+            setEbayListingItem(null);
+          }}
+        />
+      )}
     </div>
   );
 }

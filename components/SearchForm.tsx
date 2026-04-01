@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import type { SearchFormData } from "@/types";
 import Autocomplete from "./Autocomplete";
 import { searchPlayers, searchCardSets, GRADING_OPTIONS } from "@/lib/card-data";
+import { MicButton } from "@/components/ui/MicButton";
 
 interface SearchFormProps {
   initialData?: SearchFormData;
@@ -46,10 +47,17 @@ export default function SearchForm({ initialData, onSearch, loading, disabled }:
   // Memoize search callbacks to prevent infinite loops
   const handlePlayerSearch = useCallback((query: string) => {
     const players = searchPlayers(query);
+    const formatCategory = (value: string) =>
+      value
+        .replace(/[_-]+/g, " ")
+        .split(/\s+/)
+        .filter(Boolean)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(" ");
     return players.map(p => ({
       value: p.name,
       label: p.name,
-      metadata: p.sport.charAt(0).toUpperCase() + p.sport.slice(1)
+      metadata: formatCategory(p.sport)
     }));
   }, []);
 
@@ -82,16 +90,21 @@ export default function SearchForm({ initialData, onSearch, loading, disabled }:
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="md:col-span-2">
-          <Autocomplete
-            id="playerName"
-            value={playerName}
-            onChange={setPlayerName}
-            onSearch={handlePlayerSearch}
-            placeholder="e.g., Michael Jordan"
-            label="Player Name"
-            required
-            disabled={disabled}
-          />
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
+              <Autocomplete
+                id="playerName"
+                value={playerName}
+                onChange={setPlayerName}
+                onSearch={handlePlayerSearch}
+                placeholder="e.g., Michael Jordan, Pikachu, Monkey D. Luffy"
+                label="Card / Player Name"
+                required
+                disabled={disabled}
+              />
+            </div>
+            <MicButton onResult={setPlayerName} />
+          </div>
         </div>
 
         <div>
@@ -118,7 +131,7 @@ export default function SearchForm({ initialData, onSearch, loading, disabled }:
             value={setName}
             onChange={setSetName}
             onSearch={handleSetSearch}
-            placeholder="e.g., Panini Prizm"
+            placeholder="e.g., Panini Prizm, Pokemon 151, OP-01"
             label="Set / Brand"
             disabled={disabled}
           />

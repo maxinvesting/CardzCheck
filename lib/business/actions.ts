@@ -1,11 +1,25 @@
 import { createClient } from "@/lib/supabase/server";
-import { hasBusinessAccess } from "@/lib/access";
+import {
+  hasRole,
+  requireBusinessContext,
+  type BusinessContext,
+  type BusinessRole,
+} from "@/lib/business/context";
 import type { BusinessInventoryItem, BusinessSale, BusinessMetrics } from "@/types";
 import { computeNetPayout, computeProfit } from "@/lib/business/sales-utils";
 
 // Uses unified collection_items table with item_kind = 'inventory'
 const BUSINESS_TABLE = "collection_items" as const;
 const BUSINESS_ITEM_KIND = "inventory" as const;
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function assertUUIDs(ids: string[]): void {
+  for (const id of ids) {
+    if (!UUID_REGEX.test(id)) {
+      throw new Error(`Invalid UUID in filter: ${id}`);
+    }
+  }
+}
 
 type BusinessInventoryRow = {
   id: string;
@@ -39,23 +53,22 @@ type BusinessInventoryRow = {
 /**
  * Require Business access, throwing a structured error if not.
  */
-export async function requireBusinessAccess(userId: string): Promise<void> {
-  const ok = await hasBusinessAccess(userId);
-  if (!ok) {
-    const err = new Error("Business subscription required");
-    (err as any).status = 403;
+export async function requireBusinessAccess(
+  userId: string
+): Promise<BusinessContext> {
+  return requireBusinessContext(userId);
+}
+
+function requireRole(
+  context: BusinessContext,
+  roles: ReadonlyArray<BusinessRole>,
+  message: string
+): void {
+  if (!hasRole(context, roles)) {
+    const err = new Error(message);
+    (err as { status?: number }).status = 403;
     throw err;
   }
-}
-
-function dollarsToCents(value: number | null | undefined): number | null {
-  if (typeof value !== "number" || !Number.isFinite(value)) return null;
-  return Math.round(value * 100);
-}
-
-function centsToDollars(value: number | null | undefined): number | null {
-  if (typeof value !== "number" || !Number.isFinite(value)) return null;
-  return value / 100;
 }
 
 function normalizeAcquisitionType(
@@ -206,7 +219,11 @@ function toBusinessInventoryItem(row: BusinessInventoryRow): BusinessInventoryIt
 
 function buildInventoryInsertPayload(
   userId: string,
-  item: Omit<BusinessInventoryItem, "id" | "user_id" | "created_at" | "updated_at">
+  businessAccountId: string,
+  item: Omit<
+    BusinessInventoryItem,
+    "id" | "user_id" | "business_account_id" | "created_at" | "updated_at"
+  >
 ): Record<string, unknown> {
   const title = item.title || "Untitled item";
   return {
@@ -239,7 +256,10 @@ function buildInventoryInsertPayload(
 
 function buildInventoryUpdatePayload(
   updates: Partial<
-    Omit<BusinessInventoryItem, "id" | "user_id" | "created_at" | "updated_at">
+    Omit<
+      BusinessInventoryItem,
+      "id" | "user_id" | "business_account_id" | "created_at" | "updated_at"
+    >
   >
 ): Record<string, unknown> {
   const payload: Record<string, unknown> = {};
@@ -293,7 +313,7 @@ export async function listInventory(
     search?: string;
   }
 ): Promise<BusinessInventoryItem[]> {
-  await requireBusinessAccess(userId);
+  const context = await requireBusinessAccess(userId);
   const supabase = await createClient();
 
   let query = supabase
@@ -326,7 +346,7 @@ export async function getInventoryItem(
   userId: string,
   itemId: string
 ): Promise<BusinessInventoryItem | null> {
-  await requireBusinessAccess(userId);
+  const context = await requireBusinessAccess(userId);
   const supabase = await createClient();
 
   const { data, error } = await supabase
@@ -344,14 +364,17 @@ export async function getInventoryItem(
 
 export async function createInventoryItem(
   userId: string,
-  item: Omit<BusinessInventoryItem, "id" | "user_id" | "created_at" | "updated_at">
+  item: Omit<
+    BusinessInventoryItem,
+    "id" | "user_id" | "business_account_id" | "created_at" | "updated_at"
+  >
 ): Promise<BusinessInventoryItem> {
-  await requireBusinessAccess(userId);
+  const context = await requireBusinessAccess(userId);
   const supabase = await createClient();
 
   const { data, error } = await supabase
     .from(BUSINESS_TABLE)
-    .insert(buildInventoryInsertPayload(userId, item))
+    .insert(buildInventoryInsertPayload(userId, context.businessAccountId, item))
     .select("*")
     .single();
 
@@ -362,9 +385,14 @@ export async function createInventoryItem(
 export async function updateInventoryItem(
   userId: string,
   itemId: string,
-  updates: Partial<Omit<BusinessInventoryItem, "id" | "user_id" | "created_at" | "updated_at">>
+  updates: Partial<
+    Omit<
+      BusinessInventoryItem,
+      "id" | "user_id" | "business_account_id" | "created_at" | "updated_at"
+    >
+  >
 ): Promise<BusinessInventoryItem> {
-  await requireBusinessAccess(userId);
+  const context = await requireBusinessAccess(userId);
   const supabase = await createClient();
 
   const { data, error } = await supabase
@@ -384,7 +412,12 @@ export async function deleteInventoryItems(
   userId: string,
   itemIds: string[]
 ): Promise<void> {
-  await requireBusinessAccess(userId);
+  const context = await requireBusinessAccess(userId);
+  requireRole(
+    context,
+    ["owner", "manager"],
+    "Only owners and managers can remove inventory items"
+  );
   const supabase = await createClient();
 
   const { error } = await supabase
@@ -430,7 +463,7 @@ export async function bulkUpdateInventory(
   itemIds: string[],
   updates: { status?: string; location?: string }
 ): Promise<void> {
-  await requireBusinessAccess(userId);
+  const context = await requireBusinessAccess(userId);
   const supabase = await createClient();
 
   const payload: Record<string, unknown> = {};
@@ -454,23 +487,31 @@ export async function bulkUpdateInventory(
 type BusinessSaleRow = {
   id: string;
   user_id: string;
-  business_id: string;
-  inventory_item_id: string | null;
-  channel: string | null;
-  sold_at: string;
-  sold_price_cents: number | null;
-  shipping_charged_cents: number | null;
-  platform_fees_cents: number | null;
-  shipping_cost_cents: number | null;
-  tax_cents: number | null;
-  net_payout_cents: number | null;
-  cogs_cents: number | null;
-  profit_cents: number | null;
-  notes: string | null;
-  external_order_id: string | null;
-  is_deleted: boolean | null;
-  created_at: string;
-  updated_at: string;
+  business_id?: string | null;
+  business_account_id?: string | null;
+  inventory_item_id?: string | null;
+  channel?: string | null;
+  sold_at?: string | null;
+  sold_price_cents?: number | null;
+  shipping_charged_cents?: number | null;
+  platform_fees_cents?: number | null;
+  shipping_cost_cents?: number | null;
+  tax_cents?: number | null;
+  net_payout_cents?: number | null;
+  cogs_cents?: number | null;
+  profit_cents?: number | null;
+  notes?: string | null;
+  external_order_id?: string | null;
+  is_deleted?: boolean | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  // Legacy business_sales columns
+  sale_date?: string | null;
+  sale_price_cents?: number | null;
+  shipping_paid_cents?: number | null;
+  other_costs_cents?: number | null;
+  net_proceeds_cents?: number | null;
+  order_id?: string | null;
 };
 
 type SaleWriteInput = {
@@ -487,6 +528,48 @@ type SaleWriteInput = {
   notes?: string | null;
   external_order_id?: string | null;
 };
+
+function getDbErrorMeta(error: unknown): {
+  code: string;
+  message: string;
+  details: string;
+  combined: string;
+} {
+  const code = String((error as { code?: string })?.code ?? "");
+  const message = String((error as { message?: string })?.message ?? "");
+  const details = String((error as { details?: string })?.details ?? "");
+  return {
+    code,
+    message,
+    details,
+    combined: `${message} ${details}`.toLowerCase(),
+  };
+}
+
+/**
+ * Detect "mixed schema" environments where sales code is querying upgraded columns
+ * but the DB still has legacy sales fields (or vice versa).
+ */
+function isBusinessSalesSchemaMismatch(error: unknown): boolean {
+  const { code, combined } = getDbErrorMeta(error);
+  const mentionsSales =
+    combined.includes("business_sales") ||
+    /(business_id|business_account_id|is_deleted|sold_at|sold_price_cents|shipping_cost_cents|tax_cents|net_payout_cents|cogs_cents|external_order_id|sale_date|sale_price_cents|shipping_paid_cents|other_costs_cents|net_proceeds_cents|order_id)/.test(
+      combined
+    );
+  if (!mentionsSales) return false;
+
+  if (code === "42703" || code === "42P01" || code === "PGRST204" || code === "PGRST205") {
+    return true;
+  }
+
+  return (
+    combined.includes("column") &&
+    /(business_id|business_account_id|is_deleted|sold_at|sold_price_cents|shipping_cost_cents|tax_cents|net_payout_cents|cogs_cents|external_order_id|sale_date|sale_price_cents|shipping_paid_cents|other_costs_cents|net_proceeds_cents|order_id)/.test(
+      combined
+    )
+  );
+}
 
 /**
  * Map known Supabase/Postgres errors from sale creation into structured errors
@@ -542,6 +625,14 @@ function normalizeBusinessSaleError(error: unknown): never {
     throw err;
   }
 
+  if (isBusinessSalesSchemaMismatch(error)) {
+    const err = new Error(
+      "Sales table schema mismatch detected. Please run the latest business sales migration."
+    );
+    (err as any).status = 400;
+    throw err;
+  }
+
   throw error;
 }
 
@@ -562,15 +653,20 @@ function normalizeSaleDateTime(value: string | null | undefined): string {
   return dt.toISOString();
 }
 
+function isUUID(value: string): boolean {
+  return UUID_REGEX.test(value);
+}
+
 function toBusinessSale(row: BusinessSaleRow): BusinessSale {
-  const soldPriceCents = toInt(row.sold_price_cents);
+  const soldPriceCents = toInt(row.sold_price_cents ?? row.sale_price_cents);
   const shippingChargedCents = toInt(row.shipping_charged_cents);
   const platformFeesCents = toInt(row.platform_fees_cents);
-  const shippingCostCents = toInt(row.shipping_cost_cents);
-  const taxCents = toInt(row.tax_cents);
-  const cogsCents = toInt(row.cogs_cents);
+  const shippingCostCents = toInt(row.shipping_cost_cents ?? row.shipping_paid_cents);
+  const taxCents = toInt(row.tax_cents ?? row.other_costs_cents);
+
   const netPayoutCents = toInt(
     row.net_payout_cents ??
+      row.net_proceeds_cents ??
       computeNetPayout({
         sold_price_cents: soldPriceCents,
         shipping_charged_cents: shippingChargedCents,
@@ -580,15 +676,32 @@ function toBusinessSale(row: BusinessSaleRow): BusinessSale {
       })
   );
 
+  const cogsFromProfit =
+    row.cogs_cents == null && row.profit_cents != null
+      ? netPayoutCents - toInt(row.profit_cents)
+      : row.cogs_cents;
+  const cogsCents = toInt(cogsFromProfit);
   const grossRevenueCents = soldPriceCents + shippingChargedCents;
+  const soldAt = normalizeSaleDateTime(row.sold_at ?? row.sale_date);
+
+  const createdAt =
+    typeof row.created_at === "string" && row.created_at.trim()
+      ? row.created_at
+      : soldAt;
+  const updatedAt =
+    typeof row.updated_at === "string" && row.updated_at.trim()
+      ? row.updated_at
+      : createdAt;
 
   return {
     id: row.id,
     user_id: row.user_id,
     business_id: row.business_id || row.user_id,
-    inventory_item_id: row.inventory_item_id,
+    business_account_id:
+      row.business_account_id || row.business_id || row.user_id,
+    inventory_item_id: row.inventory_item_id ?? null,
     channel: normalizeChannel(row.channel),
-    sold_at: row.sold_at,
+    sold_at: soldAt,
     sold_price_cents: soldPriceCents,
     shipping_charged_cents: shippingChargedCents,
     platform_fees_cents: platformFeesCents,
@@ -601,17 +714,17 @@ function toBusinessSale(row: BusinessSaleRow): BusinessSale {
       row.profit_cents != null
         ? toInt(row.profit_cents)
         : computeProfit({ net_payout_cents: netPayoutCents, cogs_cents: cogsCents }),
-    external_order_id: row.external_order_id,
-    notes: row.notes,
+    external_order_id: row.external_order_id ?? row.order_id ?? null,
+    notes: row.notes ?? null,
     is_deleted: Boolean(row.is_deleted),
     inventory_item: null,
-    created_at: row.created_at,
-    updated_at: row.updated_at,
+    created_at: createdAt,
+    updated_at: updatedAt,
   };
 }
 
 async function attachInventoryTitles(
-  userId: string,
+  businessAccountId: string,
   sales: BusinessSale[]
 ): Promise<BusinessSale[]> {
   const inventoryIds = Array.from(
@@ -623,13 +736,15 @@ async function attachInventoryTitles(
   );
 
   if (inventoryIds.length === 0) return sales;
+  const validInventoryIds = inventoryIds.filter(isUUID);
+  if (validInventoryIds.length === 0) return sales;
 
   const supabase = await createClient();
   const { data, error } = await supabase
     .from(BUSINESS_TABLE)
     .select("id, title")
-    .in("id", inventoryIds)
-    .eq("user_id", userId);
+    .in("id", validInventoryIds)
+    .eq("business_account_id", businessAccountId);
   if (error) return sales;
 
   const titleById = new Map<string, string>();
@@ -650,8 +765,50 @@ async function attachInventoryTitles(
   }));
 }
 
-async function getInventoryContextForSale(
+/**
+ * Ensure a minimal collection_items mirror row exists for inventory-backed sales.
+ * This supports deployments where business_sales.inventory_item_id references collection_items(id).
+ */
+async function ensureCollectionItemMirrorForSale(
+  supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string,
+  inventoryContext: { id: string; title: string | null } | null
+): Promise<void> {
+  if (!inventoryContext) return;
+
+  const label = inventoryContext.title?.trim() || "Inventory Item";
+  const collection = supabase.from("collection_items") as {
+    upsert?: (
+      values: Record<string, unknown>,
+      options: { onConflict: string; ignoreDuplicates: boolean }
+    ) => Promise<{ error: unknown }>;
+  };
+
+  if (typeof collection.upsert !== "function") return;
+
+  const { error } = await collection.upsert(
+    {
+      id: inventoryContext.id,
+      user_id: userId,
+      player_name: label,
+      notes: "Auto-linked from business inventory for sale record consistency",
+    },
+    { onConflict: "id", ignoreDuplicates: true }
+  );
+
+  if (!error) return;
+
+  const { code, message, details } = getDbErrorMeta(error);
+  // Mirror row is best-effort; never block sale writes on mirror schema mismatches.
+  console.warn("Skipping collection mirror for sale:", {
+    code,
+    message,
+    details,
+  });
+}
+
+async function getInventoryContextForSale(
+  businessAccountId: string,
   inventoryItemId?: string | null
 ): Promise<{ id: string; title: string | null; channel: string | null; cost_basis_total_cents: number | null } | null> {
   if (!inventoryItemId) return null;
@@ -660,7 +817,7 @@ async function getInventoryContextForSale(
     .from(BUSINESS_TABLE)
     .select("id, title, channel, cost_basis_total_cents")
     .eq("id", inventoryItemId)
-    .eq("user_id", userId)
+    .eq("business_account_id", businessAccountId)
     .maybeSingle();
 
   if (error) throw error;
@@ -689,10 +846,12 @@ async function ensureCollectionItemMirrorForSale(
 
 function buildComputedSalePayload(args: {
   userId: string;
+  businessAccountId: string;
+  legacyBusinessOwnerId: string;
   base: SaleWriteInput;
   inventoryContext: { id: string; channel: string | null; cost_basis_total_cents: number | null } | null;
 }) {
-  const { userId, base, inventoryContext } = args;
+  const { userId, businessAccountId, legacyBusinessOwnerId, base, inventoryContext } = args;
 
   const soldPriceCents = toInt(base.sold_price_cents);
   const shippingChargedCents = toInt(base.shipping_charged_cents);
@@ -720,7 +879,8 @@ function buildComputedSalePayload(args: {
 
   return {
     user_id: userId,
-    business_id: userId,
+    business_id: legacyBusinessOwnerId,
+    business_account_id: businessAccountId,
     inventory_item_id: inventoryContext?.id ?? base.inventory_item_id ?? null,
     channel: normalizedChannel,
     sold_at: soldAt,
@@ -735,6 +895,103 @@ function buildComputedSalePayload(args: {
     notes: base.notes?.trim() || null,
     external_order_id: base.external_order_id?.trim() || null,
     is_deleted: false,
+  };
+}
+
+function buildLegacySalePayload(
+  payload: ReturnType<typeof buildComputedSalePayload>
+): Record<string, unknown> {
+  const inventoryItemId =
+    typeof payload.inventory_item_id === "string" && payload.inventory_item_id.trim()
+      ? payload.inventory_item_id
+      : null;
+  if (!inventoryItemId) {
+    const err = new Error(
+      "Inventory item is required to record sales in this business schema"
+    );
+    (err as any).status = 400;
+    throw err;
+  }
+
+  const soldAt = normalizeSaleDateTime(
+    typeof payload.sold_at === "string" ? payload.sold_at : null
+  );
+  return {
+    user_id: payload.user_id,
+    inventory_item_id: inventoryItemId,
+    sale_date: soldAt.slice(0, 10),
+    sale_price_cents: toInt(payload.sold_price_cents as number),
+    platform_fees_cents: toInt(payload.platform_fees_cents as number),
+    shipping_charged_cents: toInt(payload.shipping_charged_cents as number),
+    shipping_paid_cents: toInt(payload.shipping_cost_cents as number),
+    other_costs_cents: toInt(payload.tax_cents as number),
+    net_proceeds_cents: toInt(payload.net_payout_cents as number),
+    profit_cents: toInt(payload.profit_cents as number),
+    order_id:
+      typeof payload.external_order_id === "string" &&
+      payload.external_order_id.trim()
+        ? payload.external_order_id.trim()
+        : null,
+    notes:
+      typeof payload.notes === "string" && payload.notes.trim()
+        ? payload.notes.trim()
+        : null,
+  };
+}
+
+async function listLegacySales(args: {
+  supabase: Awaited<ReturnType<typeof createClient>>;
+  ownerUserId: string;
+  page: number;
+  pageSize: number;
+  from?: string;
+  to?: string;
+  inventoryItemId?: string;
+  search?: string;
+}): Promise<{ data: BusinessSaleRow[]; count: number }> {
+  const { supabase, ownerUserId, page, pageSize, from, to, inventoryItemId, search } =
+    args;
+  let query = supabase
+    .from("business_sales")
+    .select("*", { count: "exact" })
+    .eq("user_id", ownerUserId)
+    .order("sale_date", { ascending: false })
+    .range((page - 1) * pageSize, page * pageSize - 1);
+
+  if (inventoryItemId) query = query.eq("inventory_item_id", inventoryItemId);
+  if (from) query = query.gte("sale_date", normalizeSaleDateTime(from).slice(0, 10));
+  if (to) query = query.lte("sale_date", normalizeSaleDateTime(to).slice(0, 10));
+
+  if (search) {
+    const q = search.replace(/,/g, " ").trim();
+    if (q.length > 0) {
+      const { data: inventoryMatches } = await supabase
+        .from(BUSINESS_TABLE)
+        .select("id")
+        .eq("user_id", ownerUserId)
+        .ilike("title", `%${q}%`);
+
+      const inventoryIds = (inventoryMatches ?? [])
+        .map((row: { id: string | null }) => row.id)
+        .filter((value: string | null): value is string => Boolean(value));
+      const escapedQ = q.replace(/%/g, "\\%").replace(/,/g, " ");
+
+      if (inventoryIds.length > 0) {
+        assertUUIDs(inventoryIds);
+        query = query.or(
+          `notes.ilike.%${escapedQ}%,order_id.ilike.%${escapedQ}%,inventory_item_id.in.(${inventoryIds.join(",")})`
+        );
+      } else {
+        query = query.or(`notes.ilike.%${escapedQ}%,order_id.ilike.%${escapedQ}%`);
+      }
+    }
+  }
+
+  const { data, error, count } = await query;
+  if (error) throw error;
+  return {
+    data: (data ?? []) as BusinessSaleRow[],
+    count: count ?? 0,
   };
 }
 
@@ -757,7 +1014,7 @@ export async function listSales(
   pageSize: number;
   total: number;
 }> {
-  await requireBusinessAccess(userId);
+  const context = await requireBusinessAccess(userId);
   const supabase = await createClient();
 
   const page = Math.max(filters?.page ?? 1, 1);
@@ -767,17 +1024,24 @@ export async function listSales(
 
   let query = supabase
     .from("business_sales")
-    .select(
-      "id,user_id,business_id,inventory_item_id,channel,sold_at,sold_price_cents,shipping_charged_cents,platform_fees_cents,shipping_cost_cents,tax_cents,net_payout_cents,cogs_cents,profit_cents,notes,external_order_id,is_deleted,created_at,updated_at",
-      { count: "exact" }
-    )
-    .eq("business_id", userId)
+    .select("*", { count: "exact" })
+    .eq("business_account_id", context.businessAccountId)
     .eq("is_deleted", false)
     .order("sold_at", { ascending: false })
     .range((page - 1) * pageSize, page * pageSize - 1);
 
-  if (filters?.inventoryItemId)
+  if (filters?.inventoryItemId) {
+    const { data: ownerCheck } = await supabase
+      .from(BUSINESS_TABLE)
+      .select("id")
+      .eq("id", filters.inventoryItemId)
+      .eq("business_account_id", context.businessAccountId)
+      .maybeSingle();
+    if (!ownerCheck) {
+      throw new Error("Unauthorized: inventoryItemId does not belong to user");
+    }
     query = query.eq("inventory_item_id", filters.inventoryItemId);
+  }
   if (from) query = query.gte("sold_at", normalizeSaleDateTime(from));
   if (to) {
     const toDate = /^\d{4}-\d{2}-\d{2}$/.test(to)
@@ -792,9 +1056,8 @@ export async function listSales(
       const { data: inventoryMatches } = await supabase
         .from(BUSINESS_TABLE)
         .select("id")
-        .eq("user_id", userId)
-        .ilike("title", `%${q}%`)
-        .limit(200);
+        .eq("business_account_id", context.businessAccountId)
+        .ilike("title", `%${q}%`);
 
       const inventoryIds = (inventoryMatches ?? [])
         .map((row: { id: string | null }) => row.id)
@@ -802,6 +1065,7 @@ export async function listSales(
       const escapedQ = q.replace(/%/g, "\\%").replace(/,/g, " ");
 
       if (inventoryIds.length > 0) {
+        assertUUIDs(inventoryIds);
         query = query.or(
           `notes.ilike.%${escapedQ}%,external_order_id.ilike.%${escapedQ}%,inventory_item_id.in.(${inventoryIds.join(",")})`
         );
@@ -814,17 +1078,36 @@ export async function listSales(
   }
 
   const { data, error, count } = await query;
-  if (error) throw error;
+
+  let salesRows: BusinessSaleRow[] = (data ?? []) as BusinessSaleRow[];
+  let total = count ?? 0;
+
+  if (error) {
+    if (!isBusinessSalesSchemaMismatch(error)) throw error;
+    const legacy = await listLegacySales({
+      supabase,
+      ownerUserId: context.ownerUserId,
+      page,
+      pageSize,
+      from,
+      to,
+      inventoryItemId: filters?.inventoryItemId,
+      search: filters?.search,
+    });
+    salesRows = legacy.data;
+    total = legacy.count;
+  }
+
   const mappedSales = await attachInventoryTitles(
-    userId,
-    ((data ?? []) as BusinessSaleRow[]).map(toBusinessSale)
+    context.businessAccountId,
+    salesRows.map(toBusinessSale)
   );
 
   return {
     sales: mappedSales,
     page,
     pageSize,
-    total: count ?? 0,
+    total,
   };
 }
 
@@ -832,11 +1115,11 @@ export async function createSale(
   userId: string,
   sale: SaleWriteInput
 ): Promise<BusinessSale> {
-  await requireBusinessAccess(userId);
+  const context = await requireBusinessAccess(userId);
   const supabase = await createClient();
 
   const inventoryContext = await getInventoryContextForSale(
-    userId,
+    context.businessAccountId,
     sale.inventory_item_id
   );
 
@@ -846,24 +1129,40 @@ export async function createSale(
     throw err;
   }
 
+  await ensureCollectionItemMirrorForSale(supabase, userId, inventoryContext);
+
   const insertPayload = buildComputedSalePayload({
     userId,
+    businessAccountId: context.businessAccountId,
+    legacyBusinessOwnerId: context.ownerUserId,
     base: sale,
     inventoryContext,
   });
 
   try {
-    await ensureCollectionItemMirrorForSale(supabase, userId, inventoryContext);
+    let created: BusinessSaleRow | null = null;
 
     const { data, error } = await supabase
       .from("business_sales")
       .insert(insertPayload)
-      .select(
-        "id,user_id,business_id,inventory_item_id,channel,sold_at,sold_price_cents,shipping_charged_cents,platform_fees_cents,shipping_cost_cents,tax_cents,net_payout_cents,cogs_cents,profit_cents,notes,external_order_id,is_deleted,created_at,updated_at"
-      )
+      .select("*")
       .single();
 
-    if (error) normalizeBusinessSaleError(error);
+    if (error) {
+      if (!isBusinessSalesSchemaMismatch(error)) {
+        normalizeBusinessSaleError(error);
+      }
+      const legacyPayload = buildLegacySalePayload(insertPayload);
+      const { data: legacyData, error: legacyError } = await supabase
+        .from("business_sales")
+        .insert(legacyPayload)
+        .select("*")
+        .single();
+      if (legacyError) normalizeBusinessSaleError(legacyError);
+      created = legacyData as BusinessSaleRow;
+    } else {
+      created = data as BusinessSaleRow;
+    }
 
     // Mark the linked inventory row as sold if present.
     if (insertPayload.inventory_item_id) {
@@ -871,12 +1170,18 @@ export async function createSale(
         .from(BUSINESS_TABLE)
         .update({ status: "sold" })
         .eq("id", insertPayload.inventory_item_id)
-        .eq("user_id", userId);
+        .eq("business_account_id", context.businessAccountId);
       if (updateError) normalizeBusinessSaleError(updateError);
     }
 
-    const [withTitles] = await attachInventoryTitles(userId, [
-      toBusinessSale(data as BusinessSaleRow),
+    if (!created) {
+      const err = new Error("Failed to create sale");
+      (err as any).status = 500;
+      throw err;
+    }
+
+    const [withTitles] = await attachInventoryTitles(context.businessAccountId, [
+      toBusinessSale(created),
     ]);
     return withTitles;
   } catch (e) {
@@ -889,18 +1194,34 @@ export async function updateSale(
   saleId: string,
   updates: SaleWriteInput
 ): Promise<BusinessSale> {
-  await requireBusinessAccess(userId);
+  const context = await requireBusinessAccess(userId);
   const supabase = await createClient();
+  let useLegacySchema = false;
 
-  const { data: existing, error: existingError } = await supabase
+  let existing: BusinessSaleRow | null = null;
+  const { data: existingData, error: existingError } = await supabase
     .from("business_sales")
     .select("*")
     .eq("id", saleId)
-    .eq("business_id", userId)
+    .eq("business_account_id", context.businessAccountId)
     .eq("is_deleted", false)
     .maybeSingle();
 
-  if (existingError) throw existingError;
+  if (existingError) {
+    if (!isBusinessSalesSchemaMismatch(existingError)) throw existingError;
+    useLegacySchema = true;
+    const { data: legacyExisting, error: legacyExistingError } = await supabase
+      .from("business_sales")
+      .select("*")
+      .eq("id", saleId)
+      .eq("user_id", context.ownerUserId)
+      .maybeSingle();
+    if (legacyExistingError) throw legacyExistingError;
+    existing = (legacyExisting as BusinessSaleRow | null) ?? null;
+  } else {
+    existing = (existingData as BusinessSaleRow | null) ?? null;
+  }
+
   if (!existing) {
     const err = new Error("Sale not found");
     (err as any).status = 404;
@@ -910,71 +1231,112 @@ export async function updateSale(
   const mergedBase: SaleWriteInput = {
     inventory_item_id: updates.inventory_item_id ?? existing.inventory_item_id,
     channel: updates.channel ?? existing.channel,
-    sold_at: updates.sold_at ?? existing.sold_at,
-    sold_price_cents: updates.sold_price_cents ?? existing.sold_price_cents,
+    sold_at: updates.sold_at ?? existing.sold_at ?? existing.sale_date,
+    sold_price_cents: updates.sold_price_cents ?? existing.sold_price_cents ?? existing.sale_price_cents,
     shipping_charged_cents:
       updates.shipping_charged_cents ?? existing.shipping_charged_cents,
     platform_fees_cents:
       updates.platform_fees_cents ?? existing.platform_fees_cents,
-    shipping_cost_cents: updates.shipping_cost_cents ?? existing.shipping_cost_cents,
-    tax_cents: updates.tax_cents ?? existing.tax_cents,
+    shipping_cost_cents:
+      updates.shipping_cost_cents ?? existing.shipping_cost_cents ?? existing.shipping_paid_cents,
+    tax_cents: updates.tax_cents ?? existing.tax_cents ?? existing.other_costs_cents,
     net_payout_cents: updates.net_payout_cents ?? undefined,
     cogs_cents: updates.cogs_cents ?? existing.cogs_cents,
     notes: updates.notes ?? existing.notes,
-    external_order_id: updates.external_order_id ?? existing.external_order_id,
+    external_order_id: updates.external_order_id ?? existing.external_order_id ?? existing.order_id,
   };
 
   const inventoryContext = await getInventoryContextForSale(
-    userId,
+    context.businessAccountId,
     mergedBase.inventory_item_id
   );
 
+  await ensureCollectionItemMirrorForSale(supabase, userId, inventoryContext);
+
   const payload = buildComputedSalePayload({
     userId,
+    businessAccountId: context.businessAccountId,
+    legacyBusinessOwnerId: context.ownerUserId,
     base: mergedBase,
     inventoryContext,
   });
 
-  await ensureCollectionItemMirrorForSale(supabase, userId, inventoryContext);
+  let updated: BusinessSaleRow | null = null;
+  if (!useLegacySchema) {
+    const { data, error } = await supabase
+      .from("business_sales")
+      .update(payload)
+      .eq("id", saleId)
+      .eq("business_account_id", context.businessAccountId)
+      .eq("is_deleted", false)
+      .select("*")
+      .single();
 
-  const { data, error } = await supabase
-    .from("business_sales")
-    .update(payload)
-    .eq("id", saleId)
-    .eq("business_id", userId)
-    .eq("is_deleted", false)
-    .select(
-      "id,user_id,business_id,inventory_item_id,channel,sold_at,sold_price_cents,shipping_charged_cents,platform_fees_cents,shipping_cost_cents,tax_cents,net_payout_cents,cogs_cents,profit_cents,notes,external_order_id,is_deleted,created_at,updated_at"
-    )
-    .single();
+    if (error) {
+      if (!isBusinessSalesSchemaMismatch(error)) throw error;
+      useLegacySchema = true;
+    } else {
+      updated = data as BusinessSaleRow;
+    }
+  }
 
-  if (error) throw error;
+  if (useLegacySchema) {
+    const legacyPayload = buildLegacySalePayload(payload);
+    const { data, error } = await supabase
+      .from("business_sales")
+      .update(legacyPayload)
+      .eq("id", saleId)
+      .eq("user_id", context.ownerUserId)
+      .select("*")
+      .single();
+    if (error) throw error;
+    updated = data as BusinessSaleRow;
+  }
 
   if (payload.inventory_item_id) {
     await supabase
       .from(BUSINESS_TABLE)
       .update({ status: "sold" })
       .eq("id", payload.inventory_item_id)
-      .eq("user_id", userId);
+      .eq("business_account_id", context.businessAccountId);
   }
 
-  const [withTitles] = await attachInventoryTitles(userId, [
-    toBusinessSale(data as BusinessSaleRow),
+  if (!updated) {
+    const err = new Error("Sale not found");
+    (err as any).status = 404;
+    throw err;
+  }
+
+  const [withTitles] = await attachInventoryTitles(context.businessAccountId, [
+    toBusinessSale(updated),
   ]);
   return withTitles;
 }
 
 export async function deleteSale(userId: string, saleId: string): Promise<void> {
-  await requireBusinessAccess(userId);
+  const context = await requireBusinessAccess(userId);
+  requireRole(
+    context,
+    ["owner", "manager"],
+    "Only owners and managers can delete sales"
+  );
   const supabase = await createClient();
 
   const { error } = await supabase
     .from("business_sales")
     .update({ is_deleted: true })
     .eq("id", saleId)
-    .eq("business_id", userId);
+    .eq("business_account_id", context.businessAccountId);
 
-  if (error) throw error;
+  if (error) {
+    if (!isBusinessSalesSchemaMismatch(error)) throw error;
+    const { error: legacyDeleteError } = await supabase
+      .from("business_sales")
+      .delete()
+      .eq("id", saleId)
+      .eq("user_id", context.ownerUserId);
+    if (legacyDeleteError) throw legacyDeleteError;
+  }
 }
 
 // =============================================
@@ -988,14 +1350,14 @@ export async function deleteSale(userId: string, saleId: string): Promise<void> 
  */
 async function aggregateSalesKpis(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  businessId: string,
+  businessAccountId: string,
   from: string,
   to: string
 ): Promise<{ revenue_cents: number; profit_cents: number; sales_count: number }> {
   const { data, error } = await supabase
     .from("business_sales")
     .select("sold_price_cents, shipping_charged_cents, profit_cents")
-    .eq("business_id", businessId)
+    .eq("business_account_id", businessAccountId)
     .eq("is_deleted", false)
     .gte("sold_at", from)
     .lt("sold_at", to);
@@ -1017,8 +1379,40 @@ async function aggregateSalesKpis(
   };
 }
 
+async function aggregateLegacySalesKpis(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  ownerUserId: string,
+  from: string,
+  to: string
+): Promise<{ revenue_cents: number; profit_cents: number; sales_count: number }> {
+  const fromDate = from.slice(0, 10);
+  const toDate = to.slice(0, 10);
+  const { data, error } = await supabase
+    .from("business_sales")
+    .select("sale_price_cents, shipping_charged_cents, profit_cents")
+    .eq("user_id", ownerUserId)
+    .gte("sale_date", fromDate)
+    .lte("sale_date", toDate);
+
+  if (error) throw error;
+
+  const rows = data ?? [];
+  let revenueCents = 0;
+  let profitCents = 0;
+  for (const row of rows) {
+    revenueCents += toInt(row.sale_price_cents) + toInt(row.shipping_charged_cents);
+    profitCents += toInt(row.profit_cents);
+  }
+
+  return {
+    revenue_cents: revenueCents,
+    profit_cents: profitCents,
+    sales_count: rows.length,
+  };
+}
+
 export async function getBusinessMetrics(userId: string): Promise<BusinessMetrics> {
-  await requireBusinessAccess(userId);
+  const context = await requireBusinessAccess(userId);
   const supabase = await createClient();
 
   const now = new Date();
@@ -1026,28 +1420,56 @@ export async function getBusinessMetrics(userId: string): Promise<BusinessMetric
   const yearStart = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
   const rangeEnd = new Date(now.getTime() + 1000);
 
-  const [mtdAgg, ytdAgg] = await Promise.all([
-    supabase.rpc("get_business_kpis_agg", {
-      p_business_id: userId,
-      p_from: monthStart.toISOString(),
-      p_to: rangeEnd.toISOString(),
-    }),
-    supabase.rpc("get_business_kpis_agg", {
-      p_business_id: userId,
-      p_from: yearStart.toISOString(),
-      p_to: rangeEnd.toISOString(),
-    }),
-  ]);
+  const zeroAgg = {
+    revenue_cents: 0,
+    profit_cents: 0,
+    sales_count: 0,
+  } as { revenue_cents: number; profit_cents: number; sales_count: number };
 
-  // If RPC is missing or fails (e.g. migration not run), use zeros so active inventory still loads
-  const mtd =
-    mtdAgg.error || !mtdAgg.data?.[0]
-      ? ({ revenue_cents: 0, profit_cents: 0, sales_count: 0 } as { revenue_cents: number; profit_cents: number; sales_count: number })
-      : (mtdAgg.data[0] as { revenue_cents: number; profit_cents: number; sales_count: number });
-  const ytd =
-    ytdAgg.error || !ytdAgg.data?.[0]
-      ? ({ revenue_cents: 0, profit_cents: 0, sales_count: 0 } as { revenue_cents: number; profit_cents: number; sales_count: number })
-      : (ytdAgg.data[0] as { revenue_cents: number; profit_cents: number; sales_count: number });
+  let mtd = zeroAgg;
+  let ytd = zeroAgg;
+
+  try {
+    [mtd, ytd] = await Promise.all([
+      aggregateSalesKpis(
+        supabase,
+        context.businessAccountId,
+        monthStart.toISOString(),
+        rangeEnd.toISOString()
+      ),
+      aggregateSalesKpis(
+        supabase,
+        context.businessAccountId,
+        yearStart.toISOString(),
+        rangeEnd.toISOString()
+      ),
+    ]);
+  } catch (error) {
+    if (isBusinessSalesSchemaMismatch(error)) {
+      try {
+        [mtd, ytd] = await Promise.all([
+          aggregateLegacySalesKpis(
+            supabase,
+            context.ownerUserId,
+            monthStart.toISOString(),
+            rangeEnd.toISOString()
+          ),
+          aggregateLegacySalesKpis(
+            supabase,
+            context.ownerUserId,
+            yearStart.toISOString(),
+            rangeEnd.toISOString()
+          ),
+        ]);
+      } catch {
+        mtd = zeroAgg;
+        ytd = zeroAgg;
+      }
+    } else {
+      mtd = zeroAgg;
+      ytd = zeroAgg;
+    }
+  }
 
   // Active inventory count
   const { count: activeCount } = await supabase

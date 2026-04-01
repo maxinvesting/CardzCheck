@@ -1,69 +1,82 @@
+/**
+ * Next.js Edge Middleware
+ *
+ * Responsibilities:
+ *  1. Session refresh  — keeps Supabase auth cookies valid (updateSession)
+ *  2. Auth enforcement — updateSession redirects unauthenticated users to /login
+ *  3. Workspace routing — updateSession redirects business users to /business/*
+ *  4. Rate limiting    — distributed sliding-window limits via Upstash Redis
+ *
+ * RATE LIMITING:
+ *   Primary: Upstash Redis (lib/rate-limit.ts) — distributed across all Vercel
+ *   instances, atomic, survives redeploys. Requires UPSTASH_REDIS_REST_URL and
+ *   UPSTASH_REDIS_REST_TOKEN env vars.
+ *
+ *   Fallback: In-memory sliding window (below) — used automatically when Upstash
+ *   is not configured (e.g. local development). Per-instance only.
+ *
+ * IP SPOOFING:
+ *   On Vercel, x-forwarded-for is set by the platform and cannot be injected by
+ *   clients — trusting the first entry is safe. When Upstash is configured, limits
+ *   are keyed by user ID (authenticated) or IP (anonymous), preventing bypass via
+ *   proxy rotation.
+ */
+
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
-// Rate limiting is implemented inline below (middleware uses its own config shape)
+import {
+  checkDistributedRateLimit,
+  buildRateLimitHeaders,
+  ENDPOINT_RATE_LIMITS,
+} from "@/lib/rate-limit";
 
-// Endpoints that need rate limiting
-const RATE_LIMITED_ENDPOINTS = [
-  "/api/identify-card",
-  "/api/grade-estimate",
-  "/api/analyst",
-  "/api/search",
-];
+// ---------------------------------------------------------------------------
+// In-memory fallback limiter
+// Used when Upstash is not configured (local dev / CI).
+// Per-instance and not distributed — do NOT rely on this in production.
+// ---------------------------------------------------------------------------
 
-function getClientIP(request: NextRequest): string {
-  // Vercel/Cloudflare provide these headers
-  const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded) {
-    return forwarded.split(",")[0].trim();
-  }
+type InMemoryConfig = { limit: number; windowMs: number };
 
-  const realIP = request.headers.get("x-real-ip");
-  if (realIP) {
-    return realIP;
-  }
-
-  // Fallback for local development
-  return "127.0.0.1";
-}
-
-type RateLimitConfig = {
-  limit: number;
-  windowMs: number;
+// Mirrors the limits in lib/rate-limit.ts — keep in sync
+const INMEMORY_RATE_LIMITS: Record<string, InMemoryConfig> = {
+  "/api/search":              { limit: 60, windowMs: 60_000 },
+  "/api/identify-card":       { limit: 10, windowMs: 60_000 },
+  "/api/grade-estimate":      { limit: 10, windowMs: 60_000 },
+  "/api/grade-estimate/start":{ limit: 10, windowMs: 60_000 },
+  "/api/analyst":             { limit: 20, windowMs: 60_000 },
+  "/api/business/consultant": { limit: 20, windowMs: 60_000 },
 };
 
-type RateLimitResult = {
-  limited: boolean;
-  retryAfterSeconds?: number;
-};
+// Sliding-window store: "endpoint:ip:userId" → sorted array of request timestamps
+const INMEMORY_STORE = new Map<string, number[]>();
 
-const RATE_LIMITS: Record<string, RateLimitConfig> = {
-  "/api/search": { limit: 60, windowMs: 60_000 },
-  "/api/identify-card": { limit: 10, windowMs: 60_000 },
-  "/api/grade-estimate": { limit: 10, windowMs: 60_000 },
-  "/api/analyst": { limit: 20, windowMs: 60_000 },
-};
-
-const RATE_LIMIT_STORE = new Map<string, number[]>();
-
-function getClientIp(request: NextRequest) {
+function getClientIp(request: NextRequest): string {
+  // On Vercel, x-forwarded-for is set by the platform — safe to trust
   const forwardedFor = request.headers.get("x-forwarded-for");
   if (forwardedFor) {
-    return forwardedFor.split(",")[0]?.trim();
+    return forwardedFor.split(",")[0]?.trim() ?? "unknown";
   }
   return request.headers.get("x-real-ip") ?? "unknown";
 }
 
-function checkRateLimit(request: NextRequest, userId: string | null): RateLimitResult {
-  const config = RATE_LIMITS[request.nextUrl.pathname];
-  if (!config) {
-    return { limited: false };
-  }
+type InMemoryResult = { limited: boolean; retryAfterSeconds: number };
+
+function checkInMemoryRateLimit(
+  pathname: string,
+  ip: string,
+  userId: string | null
+): InMemoryResult {
+  const config = INMEMORY_RATE_LIMITS[pathname];
+  if (!config) return { limited: false, retryAfterSeconds: 0 };
 
   const now = Date.now();
-  const key = `${getClientIp(request)}:${userId ?? "anon"}`;
+  // Key includes endpoint so limits don't bleed across different routes
+  const key = `${pathname}:${ip}:${userId ?? "anon"}`;
   const windowStart = now - config.windowMs;
-  const timestamps = RATE_LIMIT_STORE.get(key) ?? [];
-  const recent = timestamps.filter((timestamp) => timestamp > windowStart);
+
+  const timestamps = INMEMORY_STORE.get(key) ?? [];
+  const recent = timestamps.filter((t) => t > windowStart);
 
   if (recent.length >= config.limit) {
     const oldest = recent[0] ?? now;
@@ -72,33 +85,69 @@ function checkRateLimit(request: NextRequest, userId: string | null): RateLimitR
   }
 
   recent.push(now);
-  RATE_LIMIT_STORE.set(key, recent);
-  return { limited: false };
+  INMEMORY_STORE.set(key, recent);
+  return { limited: false, retryAfterSeconds: 0 };
 }
 
+// ---------------------------------------------------------------------------
+// Middleware
+// ---------------------------------------------------------------------------
+
 export async function middleware(request: NextRequest) {
+  // 1. Update Supabase session (handles auth + workspace routing)
   const { response, userId } = await updateSession(request);
-  const rateLimit = checkRateLimit(request, userId);
 
-  if (rateLimit.limited) {
-    const limitedResponse = NextResponse.json(
-      {
-        error: "Rate limit exceeded",
-        message: "Too many requests. Please retry after a short wait.",
-      },
-      {
-        status: 429,
-        headers: {
-          "Retry-After": String(rateLimit.retryAfterSeconds ?? 60),
+  const pathname = request.nextUrl.pathname;
+  const ip = getClientIp(request);
+
+  // 2. Check rate limits only for configured endpoints
+  const isRateLimitedEndpoint =
+    pathname in ENDPOINT_RATE_LIMITS ||
+    pathname in INMEMORY_RATE_LIMITS;
+
+  if (isRateLimitedEndpoint) {
+    // Try distributed limiter first (Upstash)
+    const distributed = await checkDistributedRateLimit(pathname, ip, userId);
+
+    let limited = !distributed.allowed;
+    let retryAfterSecs = distributed.retryAfterSecs;
+
+    // If Upstash isn't configured, fall back to in-memory
+    if (distributed.usingFallback) {
+      const fallback = checkInMemoryRateLimit(pathname, ip, userId);
+      limited = fallback.limited;
+      retryAfterSecs = fallback.retryAfterSeconds;
+    }
+
+    if (limited) {
+      const headers = distributed.usingFallback
+        ? { "Retry-After": String(retryAfterSecs) }
+        : buildRateLimitHeaders(distributed, pathname);
+
+      const limitedResponse = NextResponse.json(
+        {
+          error: "rate_limit_exceeded",
+          message: `Too many requests. Please retry after ${retryAfterSecs} seconds.`,
+          retryAfter: retryAfterSecs,
         },
-      }
-    );
+        { status: 429, headers }
+      );
 
-    response.cookies.getAll().forEach((cookie) => {
-      limitedResponse.cookies.set(cookie);
-    });
+      // Forward session cookies so auth state isn't lost on retry
+      response.cookies.getAll().forEach((cookie) => {
+        limitedResponse.cookies.set(cookie);
+      });
 
-    return limitedResponse;
+      return limitedResponse;
+    }
+
+    // Attach rate limit headers to successful responses so clients can backoff gracefully
+    if (!distributed.usingFallback) {
+      const rlHeaders = buildRateLimitHeaders(distributed, pathname);
+      Object.entries(rlHeaders).forEach(([key, value]) => {
+        response.headers.set(key, String(value));
+      });
+    }
   }
 
   return response;
@@ -108,10 +157,10 @@ export const config = {
   matcher: [
     /*
      * Match all request paths except:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public files (public folder)
+     * - _next/static  (static files)
+     * - _next/image   (image optimization)
+     * - favicon.ico
+     * - public files  (*.svg, *.png, *.jpg, etc.)
      */
     "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],

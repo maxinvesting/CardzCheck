@@ -1,6 +1,16 @@
 import "server-only";
 
 import { buildImageStats, type ImageStats } from "@/lib/grading/fallbackEstimate";
+import {
+  GRADE_SCAN_MAX_CLOSEUPS,
+  GRADE_SCAN_MAX_TOTAL_PHOTOS,
+  GRADE_SCAN_REQUIRED_KINDS,
+  buildGradeScanPhotosFromUrls,
+  isCloseupKind,
+  isGradeScanPhotoKind,
+  normalizeGradeScanPhotos,
+} from "@/lib/grading/scanPhotos";
+import type { GradeScanPhoto, GradeScanPhotoKind } from "@/types";
 
 export const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
 export const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
@@ -10,6 +20,8 @@ export type ResolvedGradeEstimateImage = {
   mediaType: "image/jpeg" | "image/png" | "image/gif" | "image/webp";
   bytes: number;
   source: "url" | "base64";
+  kind: GradeScanPhotoKind;
+  originalUrl: string;
 };
 
 function validateBase64Image(dataUrl: string): {
@@ -82,6 +94,10 @@ function validateFetchedImage(
 }
 
 export function extractImageUrls(body: unknown): string[] {
+  return extractScanPhotos(body).map((photo) => photo.url);
+}
+
+function extractLegacyImageUrls(body: unknown): string[] {
   const imageUrls = Array.isArray((body as { imageUrls?: unknown })?.imageUrls)
     ? ((body as { imageUrls?: unknown[] }).imageUrls ?? []).filter(
         (value): value is string => typeof value === "string"
@@ -96,22 +112,91 @@ export function extractImageUrls(body: unknown): string[] {
   return imageUrl ? [imageUrl] : [];
 }
 
-export async function resolveGradeEstimateImages(
-  imageUrls: string[]
-): Promise<{ resolvedImages: ResolvedGradeEstimateImage[]; imageStats: ImageStats }> {
-  if (imageUrls.length === 0) {
-    throw new Error("Missing image URL");
+export function extractScanPhotos(body: unknown): GradeScanPhoto[] {
+  const scanPhotos = normalizeGradeScanPhotos(
+    (body as { scanPhotos?: unknown })?.scanPhotos
+  );
+  if (scanPhotos.length > 0) {
+    return scanPhotos;
   }
 
-  if (imageUrls.length > 8) {
-    throw new Error("Too many images");
+  const frontUrl =
+    typeof (body as { front_url?: unknown })?.front_url === "string"
+      ? (body as { front_url: string }).front_url.trim()
+      : "";
+  const backUrl =
+    typeof (body as { back_url?: unknown })?.back_url === "string"
+      ? (body as { back_url: string }).back_url.trim()
+      : "";
+  const closeupsRaw = Array.isArray((body as { closeups?: unknown })?.closeups)
+    ? ((body as { closeups?: unknown[] }).closeups ?? [])
+    : [];
+
+  if (frontUrl && backUrl) {
+    const closeups = closeupsRaw
+      .map((entry, index): GradeScanPhoto | null => {
+        if (!entry || typeof entry !== "object") return null;
+        const row = entry as Record<string, unknown>;
+        const url = typeof row.url === "string" ? row.url.trim() : "";
+        if (!url) return null;
+        const kind =
+          isGradeScanPhotoKind(row.kind) && row.kind !== "front" && row.kind !== "back"
+            ? row.kind
+            : "other";
+        const sortOrderRaw =
+          typeof row.sort_order === "number" && Number.isFinite(row.sort_order)
+            ? Math.round(row.sort_order)
+            : index;
+        return { url, kind, sort_order: Math.max(0, sortOrderRaw) };
+      })
+      .filter((photo): photo is GradeScanPhoto => photo !== null)
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+      .slice(0, GRADE_SCAN_MAX_CLOSEUPS);
+
+    return [
+      { url: frontUrl, kind: "front", sort_order: 0 },
+      { url: backUrl, kind: "back", sort_order: 1 },
+      ...closeups.map((photo, index) => ({
+        ...photo,
+        sort_order: index + 2,
+      })),
+    ];
   }
+
+  return buildGradeScanPhotosFromUrls(extractLegacyImageUrls(body));
+}
+
+function validateScanPhotos(scanPhotos: GradeScanPhoto[]) {
+  if (scanPhotos.length === 0) {
+    throw new Error("Missing image URL");
+  }
+  if (scanPhotos.length > GRADE_SCAN_MAX_TOTAL_PHOTOS) {
+    throw new Error(`Too many images. Maximum ${GRADE_SCAN_MAX_TOTAL_PHOTOS} allowed.`);
+  }
+
+  for (const requiredKind of GRADE_SCAN_REQUIRED_KINDS) {
+    if (!scanPhotos.some((photo) => photo.kind === requiredKind)) {
+      throw new Error("Front and back images are required.");
+    }
+  }
+
+  const closeupCount = scanPhotos.filter((photo) => isCloseupKind(photo.kind)).length;
+  if (closeupCount > GRADE_SCAN_MAX_CLOSEUPS) {
+    throw new Error(`Too many close-up images. Maximum ${GRADE_SCAN_MAX_CLOSEUPS} allowed.`);
+  }
+}
+
+export async function resolveGradeEstimateImages(
+  scanPhotos: GradeScanPhoto[]
+): Promise<{ resolvedImages: ResolvedGradeEstimateImage[]; imageStats: ImageStats }> {
+  validateScanPhotos(scanPhotos);
 
   const resolvedImages: ResolvedGradeEstimateImage[] = [];
   const imageSizes: number[] = [];
 
-  for (let i = 0; i < imageUrls.length; i += 1) {
-    const imageUrl = imageUrls[i];
+  for (let i = 0; i < scanPhotos.length; i += 1) {
+    const photo = scanPhotos[i];
+    const imageUrl = photo.url;
     try {
       let base64Image: string;
       let mediaType: ResolvedGradeEstimateImage["mediaType"];
@@ -126,7 +211,14 @@ export async function resolveGradeEstimateImages(
         base64Image = validation.base64Data!;
         mediaType = validation.mimeType as ResolvedGradeEstimateImage["mediaType"];
         bytes = validation.size ?? Math.ceil((base64Image.length * 3) / 4);
-        resolvedImages.push({ base64Image, mediaType, bytes, source: "base64" });
+        resolvedImages.push({
+          base64Image,
+          mediaType,
+          bytes,
+          source: "base64",
+          kind: photo.kind,
+          originalUrl: imageUrl,
+        });
       } else {
         const urlValidation = validateImageUrl(imageUrl);
         if (!urlValidation.valid) {
@@ -155,7 +247,14 @@ export async function resolveGradeEstimateImages(
         base64Image = Buffer.from(imageBuffer).toString("base64");
         mediaType = (contentType?.split(";")[0] || "image/jpeg") as ResolvedGradeEstimateImage["mediaType"];
         bytes = imageBuffer.byteLength;
-        resolvedImages.push({ base64Image, mediaType, bytes, source: "url" });
+        resolvedImages.push({
+          base64Image,
+          mediaType,
+          bytes,
+          source: "url",
+          kind: photo.kind,
+          originalUrl: imageUrl,
+        });
       }
 
       imageSizes.push(bytes);

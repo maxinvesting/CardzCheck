@@ -1,9 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isTestMode } from "@/lib/test-mode";
-import type { GradeEstimatorHistoryRun } from "@/types";
+import type { GradeEstimate, GradeEstimatorHistoryRun, GradeScanLabel } from "@/types";
+import {
+  isGradeScanPhotoKind,
+  normalizeGradeScanPhotos,
+} from "@/lib/grading/scanPhotos";
+import {
+  GRADE_FEATURE_VERSION,
+  getGradeScanFeatureVector,
+} from "@/lib/grading/gradeFeatures";
 
 const MAX_GRADE_ESTIMATOR_RUNS = 25;
+
+function isMissingColumnError(
+  error: { code?: string | null; message?: string | null } | null,
+  columnNames: string[]
+): boolean {
+  if (!error) return false;
+  const code = String(error.code || "");
+  const message = String(error.message || "").toLowerCase();
+  if (code === "42703" || code === "PGRST204") return true;
+  return columnNames.some((columnName) =>
+    message.includes(String(columnName).toLowerCase())
+  );
+}
 
 function isDataUrl(value?: string | null): boolean {
   if (!value) return false;
@@ -33,6 +54,17 @@ function sanitizeHistoryCard(
   }
   // Preserve imageUrls (front + back) for stacked display; omit data URLs to keep payload small
   sanitized.imageUrls = imageUrls.length > 0 ? imageUrls : undefined;
+
+  const rawScanPhotos = normalizeGradeScanPhotos(
+    (sanitized as { scanPhotos?: unknown }).scanPhotos
+  )
+    .filter((photo) => !isDataUrl(photo.url))
+    .map((photo, index) => ({
+      url: photo.url,
+      kind: isGradeScanPhotoKind(photo.kind) ? photo.kind : "other",
+      sort_order: index,
+    }));
+  sanitized.scanPhotos = rawScanPhotos.length > 0 ? rawScanPhotos : undefined;
   return sanitized;
 }
 
@@ -67,7 +99,110 @@ export async function GET() {
       );
     }
 
-    return NextResponse.json({ runs: (runs ?? []) as GradeEstimatorHistoryRun[] });
+    const runRows = (runs ?? []) as GradeEstimatorHistoryRun[];
+    const runIds = runRows.map((run) => run.id).filter((id) => typeof id === "string");
+    let photoByScanId = new Map<string, Array<{ url: string; kind: string; sort_order: number }>>();
+    let labelsByScanId = new Map<string, GradeScanLabel[]>();
+
+    if (runIds.length > 0) {
+      try {
+        const { data: photos, error: photoError } = await supabase
+          .from("grade_scan_photos")
+          .select("scan_id,url,kind,sort_order")
+          .in("scan_id", runIds)
+          .order("sort_order", { ascending: true });
+
+        if (!photoError && Array.isArray(photos)) {
+          photoByScanId = photos.reduce((map, photo) => {
+            const key = typeof photo.scan_id === "string" ? photo.scan_id : "";
+            if (!key) return map;
+            const row = map.get(key) ?? [];
+            row.push({
+              url: typeof photo.url === "string" ? photo.url : "",
+              kind: typeof photo.kind === "string" ? photo.kind : "other",
+              sort_order:
+                typeof photo.sort_order === "number" && Number.isFinite(photo.sort_order)
+                  ? Math.round(photo.sort_order)
+                  : row.length,
+            });
+            map.set(key, row);
+            return map;
+          }, new Map<string, Array<{ url: string; kind: string; sort_order: number }>>());
+        }
+      } catch {
+        // Ignore if migration has not been applied yet.
+      }
+
+      try {
+        const { data: labels, error: labelError } = await supabase
+          .from("grade_scan_labels")
+          .select("id,scan_id,user_id,grader,label_text,label_grade_numeric,evidence_url,created_at")
+          .in("scan_id", runIds)
+          .order("created_at", { ascending: false });
+
+        if (!labelError && Array.isArray(labels)) {
+          labelsByScanId = labels.reduce((map, label) => {
+            const scanId = typeof label.scan_id === "string" ? label.scan_id : "";
+            if (!scanId) return map;
+
+            const rows = map.get(scanId) ?? [];
+            rows.push({
+              id: String(label.id),
+              scan_id: scanId,
+              user_id: String(label.user_id),
+              grader:
+                label.grader === "psa" ||
+                label.grader === "bgs" ||
+                label.grader === "sgc" ||
+                label.grader === "tag" ||
+                label.grader === "other"
+                  ? label.grader
+                  : "other",
+              label_text:
+                typeof label.label_text === "string" ? label.label_text : "",
+              label_grade_numeric:
+                typeof label.label_grade_numeric === "number"
+                  ? label.label_grade_numeric
+                  : typeof label.label_grade_numeric === "string" &&
+                    Number.isFinite(Number(label.label_grade_numeric))
+                  ? Number(label.label_grade_numeric)
+                  : null,
+              evidence_url:
+                typeof label.evidence_url === "string" ? label.evidence_url : null,
+              created_at: String(label.created_at),
+            });
+            map.set(scanId, rows);
+            return map;
+          }, new Map<string, GradeScanLabel[]>());
+        }
+      } catch {
+        // Ignore if migration has not been applied yet.
+      }
+    }
+
+    const runsWithPhotos = runRows.map((run) => {
+      const card = sanitizeHistoryCard(
+        run.card as unknown as Record<string, unknown> | null | undefined
+      ) as Record<string, unknown> | null | undefined;
+      const normalizedCard = (card ?? run.card ?? {}) as Record<string, unknown>;
+      const tablePhotos = photoByScanId.get(run.id) ?? [];
+      const rowScanPhotos = normalizeGradeScanPhotos(
+        (run as { scan_photos?: unknown }).scan_photos
+      );
+      if (rowScanPhotos.length > 0 && !Array.isArray(normalizedCard.scanPhotos)) {
+        normalizedCard.scanPhotos = rowScanPhotos;
+      }
+      if (tablePhotos.length > 0 && !Array.isArray(normalizedCard.scanPhotos)) {
+        normalizedCard.scanPhotos = tablePhotos;
+      }
+      return {
+        ...run,
+        card: normalizedCard,
+        labels: labelsByScanId.get(run.id) ?? [],
+      };
+    });
+
+    return NextResponse.json({ runs: runsWithPhotos });
   } catch (error) {
     console.error("Grade estimator history GET error:", error);
     return NextResponse.json(
@@ -178,20 +313,56 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { data: run, error } = await supabase
+    const baseRunPayload = {
+      user_id: user.id,
+      job_id: jobId,
+      card: sanitizedCard,
+      scan_photos: normalizeGradeScanPhotos(
+        (sanitizedCard as { scanPhotos?: unknown } | null)?.scanPhotos
+      ),
+      estimate,
+      post_grading_value: postGradingValue ?? null,
+    };
+
+    let { data: run, error } = await supabase
       .from("grade_estimator_runs")
       .upsert(
         {
-          user_id: user.id,
-          job_id: jobId,
-          card: sanitizedCard,
-          estimate,
-          post_grading_value: postGradingValue ?? null,
+          ...baseRunPayload,
+          actual_grade_psa:
+            typeof estimate?.actual_grade_psa === "string"
+              ? estimate.actual_grade_psa
+              : null,
+          model_version_used:
+            typeof estimate?.model_version_used === "string"
+              ? estimate.model_version_used
+              : null,
+          feature_version_used:
+            typeof estimate?.feature_version_used === "string"
+              ? estimate.feature_version_used
+              : null,
         },
         { onConflict: "user_id,job_id" }
       )
       .select()
       .single();
+
+    if (
+      error &&
+      isMissingColumnError(error, [
+        "actual_grade_psa",
+        "model_version_used",
+        "feature_version_used",
+      ])
+    ) {
+      const retry = await supabase
+        .from("grade_estimator_runs")
+        .upsert(baseRunPayload, { onConflict: "user_id,job_id" })
+        .select()
+        .single();
+      run = retry.data;
+      error = retry.error;
+    }
 
     if (error) {
       console.error("Error saving grade estimator run:", error);
@@ -199,6 +370,85 @@ export async function POST(request: NextRequest) {
         { error: "Failed to save grade estimator run" },
         { status: 500 }
       );
+    }
+
+    const scanPhotos = normalizeGradeScanPhotos(
+      (sanitizedCard as { scanPhotos?: unknown } | null)?.scanPhotos
+    )
+      .filter((photo) => !isDataUrl(photo.url))
+      .map((photo, index) => ({
+        scan_id: run.id,
+        user_id: user.id,
+        url: photo.url,
+        kind: photo.kind,
+        sort_order: index,
+      }));
+
+    if (scanPhotos.length > 0) {
+      try {
+        await supabase.from("grade_scan_photos").delete().eq("scan_id", run.id).eq("user_id", user.id);
+        const { error: photoInsertError } = await supabase.from("grade_scan_photos").insert(scanPhotos);
+        if (photoInsertError) {
+          console.warn("Failed to persist grade scan photos:", photoInsertError.message);
+        }
+      } catch {
+        // Ignore when grade_scan_photos table is unavailable.
+      }
+    }
+
+    try {
+      const scanPhotoKinds = normalizeGradeScanPhotos(
+        (sanitizedCard as { scanPhotos?: unknown } | null)?.scanPhotos
+      ).map((photo) => photo.kind);
+      const estimateRow = estimate as GradeEstimate;
+      const featureVersion =
+        typeof estimateRow.feature_version_used === "string" &&
+        estimateRow.feature_version_used.trim().length > 0
+          ? estimateRow.feature_version_used
+          : GRADE_FEATURE_VERSION;
+      const featureVector = getGradeScanFeatureVector({
+        estimate: estimateRow,
+        imageQuality: estimateRow.image_quality,
+        centeringDetail: estimateRow.centering_detail,
+        findings: {
+          surface: estimateRow.surface_findings,
+          corners: estimateRow.corners_findings,
+          edges: estimateRow.edges_findings,
+        },
+        scanPhotoKinds,
+        parseIncompleteFlag: estimateRow.analysis_metadata?.parse_incomplete_flag,
+        limitedVisibilityFlag: estimateRow.analysis_metadata?.limited_visibility_flag,
+        analysisStatus: estimateRow.analysis_status,
+        cardMeta: {
+          year:
+            typeof sanitizedCard?.year === "string" ||
+            typeof sanitizedCard?.year === "number"
+              ? sanitizedCard.year
+              : undefined,
+          set_name:
+            typeof sanitizedCard?.set_name === "string"
+              ? sanitizedCard.set_name
+              : undefined,
+        },
+        featureVersion,
+      });
+
+      const { error: featureError } = await supabase
+        .from("grade_scan_features")
+        .upsert(
+          {
+            scan_id: run.id,
+            user_id: user.id,
+            feature_version: featureVersion,
+            features_json: featureVector,
+          },
+          { onConflict: "scan_id,feature_version" }
+        );
+      if (featureError) {
+        console.warn("Failed to persist grade scan features:", featureError.message);
+      }
+    } catch (featureError) {
+      console.warn("Failed to compute or store grade scan features:", featureError);
     }
 
     return NextResponse.json({ run });

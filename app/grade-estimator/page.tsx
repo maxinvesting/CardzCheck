@@ -8,6 +8,7 @@ import GradeProbabilityPanel from "@/components/grading/GradeProbabilityPanel";
 import GradeEstimateProgressPanel from "@/components/grading/GradeEstimateProgressPanel";
 import GradeEstimatorValuePanel from "@/components/GradeEstimatorValuePanel";
 import GradeEstimatorHistoryPanel from "@/components/grading/GradeEstimatorHistoryPanel";
+import { GradeScanLabelPanel } from "@/components/grading/GradeScanLabelPanel";
 import SubmissionBuilderPanel from "@/components/grading/SubmissionBuilderPanel";
 import GradeAnalysisAnimation from "@/components/grading/GradeAnalysisAnimation";
 import ConfirmAddCardModal from "@/components/ConfirmAddCardModal";
@@ -21,6 +22,7 @@ import {
   NeedsConfirmationPill,
   InlineNotice,
 } from "@/components/ui";
+import { Surface } from "@/components/ui/Surface";
 import { needsYearConfirmation } from "@/lib/card-identity/ui";
 import type {
   CardIdentificationResult,
@@ -28,12 +30,14 @@ import type {
   WorthGradingResult,
   GradeEstimatorHistoryRun,
   GradeEstimatorHistoryCardSnapshot,
+  GradeScanPhoto,
 } from "@/types";
 import type {
   GradeEstimateJobStatusResponse,
   GradeEstimateJobSteps,
 } from "@/lib/grading/gradeEstimateJob";
 import { confidencePillClasses } from "@/theme/tokens";
+import { normalizeGradeScanPhotos } from "@/lib/grading/scanPhotos";
 
 const HISTORY_CARD_STORAGE_KEY = "gradeEstimateHistoryCard";
 
@@ -45,6 +49,25 @@ type StoredHistoryCard = {
 function isDataUrl(value?: string | null): boolean {
   if (!value) return false;
   return value.trim().startsWith("data:");
+}
+
+function sanitizeScanPhotosForHistory(
+  photos?: GradeScanPhoto[],
+  options?: { allowDataUrls?: boolean }
+): GradeScanPhoto[] | undefined {
+  const allowDataUrls = options?.allowDataUrls ?? false;
+  const sanitized = normalizeGradeScanPhotos(photos)
+    .filter((photo) => {
+      if (!photo.url?.trim()) return false;
+      if (allowDataUrls) return true;
+      return !isDataUrl(photo.url);
+    })
+    .map((photo, index) => ({
+      url: photo.url.trim(),
+      kind: photo.kind,
+      sort_order: index,
+    }));
+  return sanitized.length > 0 ? sanitized : undefined;
 }
 
 async function downscaleDataUrl(
@@ -90,10 +113,20 @@ async function buildHistoryCacheCardSnapshot(
     const sanitized = { ...card };
     delete sanitized.imageUrl;
     delete sanitized.imageUrls;
+    sanitized.scanPhotos = sanitizeScanPhotosForHistory(card.scanPhotos, {
+      allowDataUrls: false,
+    });
     return sanitized;
   }
   if (!isDataUrl(source)) {
-    return { ...card, imageUrl: source, imageUrls: undefined };
+    return {
+      ...card,
+      imageUrl: source,
+      imageUrls: undefined,
+      scanPhotos: sanitizeScanPhotosForHistory(card.scanPhotos, {
+        allowDataUrls: false,
+      }),
+    };
   }
   const thumbnail = await downscaleDataUrl(source, {
     maxWidth: 120,
@@ -104,9 +137,19 @@ async function buildHistoryCacheCardSnapshot(
     const sanitized = { ...card };
     delete sanitized.imageUrl;
     delete sanitized.imageUrls;
+    sanitized.scanPhotos = sanitizeScanPhotosForHistory(card.scanPhotos, {
+      allowDataUrls: false,
+    });
     return sanitized;
   }
-  return { ...card, imageUrl: thumbnail, imageUrls: undefined };
+  return {
+    ...card,
+    imageUrl: thumbnail,
+    imageUrls: undefined,
+    scanPhotos: sanitizeScanPhotosForHistory(card.scanPhotos, {
+      allowDataUrls: false,
+    }),
+  };
 }
 
 function sanitizeHistoryCardSnapshot(
@@ -122,6 +165,9 @@ function sanitizeHistoryCardSnapshot(
   } else {
     delete sanitized.imageUrl;
   }
+  sanitized.scanPhotos = sanitizeScanPhotosForHistory(card.scanPhotos, {
+    allowDataUrls: false,
+  });
   delete sanitized.imageUrls;
   return sanitized;
 }
@@ -166,6 +212,7 @@ function clearStoredHistoryCard(jobId?: string | null) {
 const SCANNER_TIPS = [
   "Use flat, even lighting — avoid glare, shadows, or direct flash.",
   "Include both front and back for the most accurate analysis.",
+  "Add close-ups for corners, edges, and surface to improve confidence.",
   "Fill the frame and keep the card sharp — blurry edges reduce confidence.",
 ];
 
@@ -177,7 +224,7 @@ function ScannerTips() {
     <div className="flex items-start gap-3">
       {/* Icon */}
       <svg
-        className="w-3.5 h-3.5 mt-0.5 text-[#3a5068] shrink-0"
+        className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--muted)]"
         fill="none"
         stroke="currentColor"
         viewBox="0 0 24 24"
@@ -194,9 +241,9 @@ function ScannerTips() {
       <div className="flex-1 min-w-0">
         <button
           onClick={() => setOpen((prev) => !prev)}
-          className="flex items-center gap-1.5 text-xs text-[#3a5068] hover:text-[#7a91a8] transition-colors group"
+          className="group flex items-center gap-1.5 text-xs text-[var(--muted)] transition-colors hover:text-[var(--biz-text)]"
         >
-          <span className="font-medium uppercase tracking-wider">Scanner tips</span>
+          <span className="font-medium">Scanner tips</span>
           <svg
             className={`w-3 h-3 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
             fill="none"
@@ -211,8 +258,8 @@ function ScannerTips() {
         {open ? (
           <ul className="mt-2 space-y-1.5">
             {SCANNER_TIPS.map((tip, i) => (
-              <li key={i} className="flex items-start gap-2 text-xs text-[#7a91a8]">
-                <span className="mt-px text-[#3a5068] shrink-0 font-mono text-[10px]">
+              <li key={i} className="flex items-start gap-2 text-xs text-[var(--muted)]">
+                <span className="mt-px shrink-0 font-mono text-[10px] text-[var(--muted)]">
                   {String(i + 1).padStart(2, "0")}
                 </span>
                 {tip}
@@ -247,6 +294,11 @@ export default function GradeEstimatorPage() {
   const [toast, setToast] = useState<{ type: "success"; message: string } | null>(null);
   const [historyRefreshToken, setHistoryRefreshToken] = useState(0);
   const [lastSavedJobId, setLastSavedJobId] = useState<string | null>(null);
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const [labelsEnabledByRole, setLabelsEnabledByRole] = useState(false);
+  const labelsEnabledByEnv =
+    process.env.NEXT_PUBLIC_ENABLE_GRADING_LABELS === "true";
+  const gradingLabelsEnabled = labelsEnabledByEnv || labelsEnabledByRole;
 
   const buildQueuedSteps = (): GradeEstimateJobSteps => ({
     ocr_identity: { status: "queued" },
@@ -267,6 +319,7 @@ export default function GradeEstimatorPage() {
       grade: card.grade,
       imageUrl: card.imageUrl,
       imageUrls: card.imageUrls,
+      scanPhotos: card.scanPhotos,
       confidence: card.confidence,
     }),
     []
@@ -287,6 +340,7 @@ export default function GradeEstimatorPage() {
     setElapsedLabel(null);
     setShowMarketAnalysis(false);
     setShowAnimation(false);
+    setActiveRunId(null);
     if (typeof window !== "undefined") {
       sessionStorage.removeItem("gradeEstimateJobId");
       sessionStorage.removeItem("gradeEstimateJobStart");
@@ -315,6 +369,7 @@ export default function GradeEstimatorPage() {
         };
         upsertCachedHistoryRun(fallbackRun);
         setLastSavedJobId(options.jobId);
+        setActiveRunId(fallbackRun.id);
         setHistoryRefreshToken((prev) => prev + 1);
         return true;
       }
@@ -354,6 +409,7 @@ export default function GradeEstimatorPage() {
 
         upsertCachedHistoryRun(fallbackRun);
         setLastSavedJobId(options.jobId);
+        setActiveRunId(fallbackRun.id);
         setHistoryRefreshToken((prev) => prev + 1);
         return true;
       } catch (error) {
@@ -369,6 +425,7 @@ export default function GradeEstimatorPage() {
         };
         upsertCachedHistoryRun(fallbackRun);
         setLastSavedJobId(options.jobId);
+        setActiveRunId(fallbackRun.id);
         setHistoryRefreshToken((prev) => prev + 1);
         return true;
       }
@@ -377,7 +434,11 @@ export default function GradeEstimatorPage() {
   );
 
   const handleHistorySelect = useCallback((run: GradeEstimatorHistoryRun) => {
-    const imageUrl = run.card.imageUrl || run.card.imageUrls?.[0] || "";
+    const fallbackImageUrls =
+      run.card.imageUrls && run.card.imageUrls.length > 0
+        ? run.card.imageUrls
+        : run.card.scanPhotos?.map((photo) => photo.url) ?? [];
+    const imageUrl = run.card.imageUrl || fallbackImageUrls[0] || "";
     setIdentifiedCard({
       player_name: run.card.player_name,
       year: run.card.year,
@@ -388,7 +449,8 @@ export default function GradeEstimatorPage() {
       insert: run.card.insert,
       grade: run.card.grade,
       imageUrl,
-      imageUrls: run.card.imageUrls,
+      imageUrls: fallbackImageUrls.length > 0 ? fallbackImageUrls : undefined,
+      scanPhotos: run.card.scanPhotos,
       confidence: run.card.confidence ?? "medium",
     });
     setGradeEstimate(run.estimate);
@@ -404,6 +466,7 @@ export default function GradeEstimatorPage() {
     setElapsedLabel(null);
     setShowMarketAnalysis(false);
     setShowAnimation(false);
+    setActiveRunId(run.id);
     if (typeof window !== "undefined") {
       sessionStorage.removeItem("gradeEstimateJobId");
       sessionStorage.removeItem("gradeEstimateJobStart");
@@ -411,12 +474,30 @@ export default function GradeEstimatorPage() {
   }, []);
 
   const handleEstimateGrade = async () => {
-    const imageUrls = identifiedCard?.imageUrls?.length
+    const fallbackImageUrls = identifiedCard?.imageUrls?.length
       ? identifiedCard.imageUrls
       : identifiedCard?.imageUrl
       ? [identifiedCard.imageUrl]
       : [];
-    if (imageUrls.length === 0) return;
+    const fallbackScanPhotos = fallbackImageUrls.map((url, index): GradeScanPhoto => ({
+      url,
+      kind: index === 0 ? "front" : index === 1 ? "back" : "other",
+      sort_order: index,
+    }));
+    const scanPhotos = normalizeGradeScanPhotos(
+      identifiedCard?.scanPhotos?.length
+        ? identifiedCard.scanPhotos
+        : fallbackScanPhotos
+    );
+    const frontPhoto = scanPhotos.find((photo) => photo.kind === "front");
+    const backPhoto = scanPhotos.find((photo) => photo.kind === "back");
+    const closeups = scanPhotos.filter(
+      (photo) => photo.kind !== "front" && photo.kind !== "back"
+    );
+    if (!frontPhoto || !backPhoto) {
+      setEstimateError("Front and back photos are required before analysis.");
+      return;
+    }
 
     setEstimatingGrade(true);
     setEstimateAttempted(true);
@@ -431,41 +512,37 @@ export default function GradeEstimatorPage() {
     setElapsedLabel(null);
     setShowMarketAnalysis(false);
     setShowAnimation(true);
+    setActiveRunId(null);
     try {
       const response = await fetch("/api/grade-estimate/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          imageUrls.length > 1
+        body: JSON.stringify({
+          front_url: frontPhoto.url,
+          back_url: backPhoto.url,
+          closeups: closeups.map((photo, index) => ({
+            url: photo.url,
+            kind: photo.kind,
+            sort_order: index,
+          })),
+          scanPhotos: scanPhotos.map((photo, index) => ({
+            ...photo,
+            sort_order: index,
+          })),
+          card: identifiedCard
             ? {
-                imageUrls,
-                card: identifiedCard
-                  ? {
-                      player_name: identifiedCard.player_name,
-                      year: identifiedCard.year,
-                      set_name: identifiedCard.set_name,
-                      card_number: identifiedCard.card_number,
-                      parallel_type: identifiedCard.parallel_type,
-                      variation: identifiedCard.variation,
-                      insert: identifiedCard.insert,
-                    }
-                  : undefined,
+                player_name: identifiedCard.player_name,
+                game: identifiedCard.cardIdentity?.sport ?? undefined,
+                sport: identifiedCard.cardIdentity?.sport ?? undefined,
+                year: identifiedCard.year,
+                set_name: identifiedCard.set_name,
+                card_number: identifiedCard.card_number,
+                parallel_type: identifiedCard.parallel_type,
+                variation: identifiedCard.variation,
+                insert: identifiedCard.insert,
               }
-            : {
-                imageUrl: imageUrls[0],
-                card: identifiedCard
-                  ? {
-                      player_name: identifiedCard.player_name,
-                      year: identifiedCard.year,
-                      set_name: identifiedCard.set_name,
-                      card_number: identifiedCard.card_number,
-                      parallel_type: identifiedCard.parallel_type,
-                      variation: identifiedCard.variation,
-                      insert: identifiedCard.insert,
-                    }
-                  : undefined,
-              }
-        ),
+            : undefined,
+        }),
       });
 
       if (!response.ok) {
@@ -521,6 +598,8 @@ export default function GradeEstimatorPage() {
         body: JSON.stringify({
           card: {
             player_name: identifiedCard.player_name,
+            game: identifiedCard.cardIdentity?.sport ?? undefined,
+            sport: identifiedCard.cardIdentity?.sport ?? undefined,
             year: identifiedCard.year,
             set_name: identifiedCard.set_name,
             card_number: identifiedCard.card_number,
@@ -558,6 +637,37 @@ export default function GradeEstimatorPage() {
       }
     }
   }, [gradeJobId]);
+
+  useEffect(() => {
+    if (labelsEnabledByEnv) {
+      setLabelsEnabledByRole(false);
+      return;
+    }
+    if (!authUser || authLoading) {
+      setLabelsEnabledByRole(false);
+      return;
+    }
+
+    let cancelled = false;
+    const loadRole = async () => {
+      try {
+        const response = await fetch("/api/user/name", { cache: "no-store" });
+        const payload = await response.json().catch(() => null);
+        if (cancelled) return;
+        const role = typeof payload?.app_role === "string" ? payload.app_role : null;
+        setLabelsEnabledByRole(role === "admin" || role === "owner");
+      } catch {
+        if (!cancelled) {
+          setLabelsEnabledByRole(false);
+        }
+      }
+    };
+
+    void loadRole();
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, authUser, labelsEnabledByEnv]);
 
   useEffect(() => {
     if (!gradeJobId) return;
@@ -683,6 +793,11 @@ export default function GradeEstimatorPage() {
     const storedCard = readStoredHistoryCard(gradeJobId);
     if (!storedCard) return;
     setIdentifiedCard({
+      imageUrl:
+        storedCard.imageUrl ||
+        storedCard.imageUrls?.[0] ||
+        storedCard.scanPhotos?.[0]?.url ||
+        "",
       player_name: storedCard.player_name,
       year: storedCard.year,
       set_name: storedCard.set_name,
@@ -691,8 +806,11 @@ export default function GradeEstimatorPage() {
       variation: storedCard.variation,
       insert: storedCard.insert,
       grade: storedCard.grade,
-      imageUrl: storedCard.imageUrl || storedCard.imageUrls?.[0] || "",
-      imageUrls: storedCard.imageUrls,
+      imageUrls:
+        storedCard.imageUrls && storedCard.imageUrls.length > 0
+          ? storedCard.imageUrls
+          : storedCard.scanPhotos?.map((photo) => photo.url),
+      scanPhotos: storedCard.scanPhotos,
       confidence: storedCard.confidence ?? "medium",
     });
   }, [gradeJobId, identifiedCard]);
@@ -760,14 +878,14 @@ export default function GradeEstimatorPage() {
 
   return (
     <AuthenticatedLayout>
-      <main className="max-w-3xl lg:max-w-5xl mx-auto px-4 py-10">
+      <main className="mx-auto max-w-3xl px-4 py-8 lg:max-w-5xl">
 
         {/* ── Page header ───────────────────────────────────────────── */}
         <div className="mb-10">
-          <h1 className="text-2xl font-semibold tracking-tight text-[#e2eaf3]">
+          <h1 className="text-2xl font-semibold text-[var(--biz-text)]">
             {gradingCopy.page.title}
           </h1>
-          <p className="text-sm text-[#3a5068] mt-1.5 leading-relaxed">
+          <p className="mt-2 text-sm leading-relaxed text-[var(--muted)]">
             {gradingCopy.page.subtitle}
           </p>
         </div>
@@ -777,35 +895,39 @@ export default function GradeEstimatorPage() {
 
             {/* ── Scanner Bay (Dual Upload: Front + Back Required) ── */}
             <section>
-              <DualCardUploader
-                onIdentified={(data: CardIdentificationResult) => {
-                  setIdentifiedCard(data);
-                }}
-                onStart={() => {
-                  setIdentifiedCard(null);
-                  setGradeEstimate(null);
-                  setValueResult(null);
-                  setValueError(null);
-                  setEstimateError(null);
-                  setEstimateAttempted(false);
-                  setGradeJob(null);
-                  setGradeJobId(null);
-                }}
-                onReset={() => {
-                  setIdentifiedCard(null);
-                  setGradeEstimate(null);
-                  setValueResult(null);
-                  setValueError(null);
-                  setGradeJob(null);
-                  setGradeJobId(null);
-                }}
-                disabled={false}
-              />
+              <Surface className="p-6">
+                <DualCardUploader
+                  onIdentified={(data: CardIdentificationResult) => {
+                    setIdentifiedCard(data);
+                  }}
+                  onStart={() => {
+                    setIdentifiedCard(null);
+                    setGradeEstimate(null);
+                    setValueResult(null);
+                    setValueError(null);
+                    setEstimateError(null);
+                    setEstimateAttempted(false);
+                    setGradeJob(null);
+                    setGradeJobId(null);
+                    setActiveRunId(null);
+                  }}
+                  onReset={() => {
+                    setIdentifiedCard(null);
+                    setGradeEstimate(null);
+                    setValueResult(null);
+                    setValueError(null);
+                    setGradeJob(null);
+                    setGradeJobId(null);
+                    setActiveRunId(null);
+                  }}
+                  disabled={false}
+                />
 
-              {/* Scanner Tips — anchored beneath the dropzone */}
-              <div className="mt-4 px-1">
-                <ScannerTips />
-              </div>
+                {/* Scanner Tips — anchored beneath the dropzone */}
+                <div className="mt-4 px-1">
+                  <ScannerTips />
+                </div>
+              </Surface>
             </section>
 
             {/* ── Recent Scans ─────────────────────────────────────── */}
@@ -815,30 +937,30 @@ export default function GradeEstimatorPage() {
             />
 
             {/* ── Submission Builder (collapsed by default) ─────────── */}
-            <div className="rounded-xl border border-white/[0.06] bg-[#07111d] p-4">
+            <Surface className="p-5">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-sm font-medium text-[#e2eaf3]">Submission Builder</h3>
-                  <p className="text-xs text-[#3a5068] mt-0.5">
+                  <h3 className="text-sm font-medium text-[var(--biz-text)]">Submission Builder</h3>
+                  <p className="mt-1 text-xs text-[var(--muted)]">
                     Plan PSA submissions after your grade analysis.
                   </p>
                 </div>
                 <button
                   onClick={() => setShowSubmissionBuilder((prev) => !prev)}
-                  className="rounded-lg border border-white/[0.08] px-3 py-1.5 text-xs text-[#7a91a8] hover:bg-white/[0.04] hover:text-[#e2eaf3] transition-colors"
+                  className="cc-btn-secondary rounded-lg px-3 py-1.5 text-xs"
                 >
                   {showSubmissionBuilder ? "Hide" : "Show"}
                 </button>
               </div>
               {showSubmissionBuilder ? (
-                <div className="mt-4 pt-4 border-t border-white/[0.06]">
+                <div className="mt-4 border-t border-[color:var(--border)] pt-4">
                   <SubmissionBuilderPanel
                     identifiedCard={identifiedCard}
                     gradeEstimate={gradeEstimate}
                   />
                 </div>
               ) : null}
-            </div>
+            </Surface>
           </div>
         ) : (
           <>
@@ -850,16 +972,16 @@ export default function GradeEstimatorPage() {
               />
             </div>
 
-            <div className="space-y-6">
+            <div className="space-y-8">
               {/* ── Identified Card Preview ───────────────────────── */}
-              <div className="rounded-xl border border-white/[0.06] bg-[#07111d] p-6">
+              <Surface className="p-6">
                 <div className="flex items-start gap-5">
                   {identifiedCard.imageUrl ? (
                     <div className="shrink-0 flex flex-col items-start gap-2">
                       <img
                         src={identifiedCard.imageUrl}
                         alt={identifiedCard.player_name}
-                        className="w-28 h-40 object-cover rounded-lg ring-1 ring-white/10 shadow-lg"
+                        className="h-40 w-28 rounded-lg border border-[color:var(--border)] object-cover"
                       />
                       {identifiedCard.imageUrls && identifiedCard.imageUrls.length > 1 ? (
                         <div className="flex flex-wrap gap-1.5 max-w-[112px]">
@@ -868,13 +990,13 @@ export default function GradeEstimatorPage() {
                               key={`${url}-${index}`}
                               src={url}
                               alt={`${identifiedCard.player_name} ${index + 2}`}
-                              className="w-8 h-11 object-cover rounded ring-1 ring-white/[0.08]"
+                              className="h-11 w-8 rounded border border-[color:var(--border)] object-cover"
                             />
                           ))}
                         </div>
                       ) : null}
                       {identifiedCard.imageUrls && identifiedCard.imageUrls.length > 1 ? (
-                        <p className="text-[10px] text-[#3a5068]">
+                        <p className="text-[10px] text-[var(--biz-muted)]">
                           {identifiedCard.imageUrls.length} photos
                         </p>
                       ) : null}
@@ -882,7 +1004,7 @@ export default function GradeEstimatorPage() {
                   ) : null}
 
                   <div className="flex-1 min-w-0">
-                    <h2 className="text-xl font-semibold text-[#e2eaf3] leading-tight">
+                    <h2 className="text-xl font-semibold text-[var(--biz-text)] leading-tight">
                       {identifiedCard.player_name ?? ""}
                     </h2>
                     <div className="mt-1">
@@ -898,7 +1020,7 @@ export default function GradeEstimatorPage() {
                               }
                             : null)
                         }
-                        className="text-sm text-[#7a91a8]"
+                        className="text-sm text-[var(--muted)]"
                       />
                     </div>
 
@@ -930,7 +1052,7 @@ export default function GradeEstimatorPage() {
                       <button
                         onClick={handleEstimateGrade}
                         disabled={estimatingGrade || !!gradeEstimate || !!identifiedCard.grade}
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="cc-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         {estimatingGrade ? (
                           <>
@@ -951,20 +1073,20 @@ export default function GradeEstimatorPage() {
                       </button>
                       <button
                         onClick={() => setShowConfirmModal(true)}
-                        className="inline-flex items-center gap-2 px-4 py-2 border border-white/[0.10] text-[#e2eaf3] text-sm font-medium rounded-lg hover:bg-white/[0.04] transition-colors"
+                        className="cc-btn-secondary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium"
                       >
                         {gradingCopy.actions.addToCollection}
                       </button>
                       <button
                         onClick={handleReset}
-                        className="inline-flex items-center gap-2 px-4 py-2 text-[#3a5068] text-sm font-medium rounded-lg hover:text-[#7a91a8] transition-colors"
+                        className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-[var(--muted)] transition-colors hover:text-[var(--biz-text)]"
                       >
                         {gradingCopy.actions.uploadNewCard}
                       </button>
                     </div>
                   </div>
                 </div>
-              </div>
+              </Surface>
 
               {/* ── Grade Estimate ────────────────────────────────── */}
               {gradeEstimate || gradeJob ? (
@@ -1012,24 +1134,33 @@ export default function GradeEstimatorPage() {
                               year: identifiedCard.year,
                               set_name: identifiedCard.set_name,
                               parallel_type: identifiedCard.parallel_type,
+                              card_number: identifiedCard.card_number,
+                              variation: identifiedCard.variation,
+                              insert: identifiedCard.insert,
                             } : null}
                             primaryImageUrl={
                               identifiedCard?.imageUrl || identifiedCard?.imageUrls?.[0] || null
                             }
                             imageUrls={identifiedCard?.imageUrls ?? null}
+                            scanPhotos={identifiedCard?.scanPhotos ?? null}
                             showPreliminaryBadge={showPreliminaryBadge}
                           />
                         ) : null}
 
+                        <GradeScanLabelPanel
+                          enabled={gradingLabelsEnabled}
+                          scanId={activeRunId}
+                        />
+
                         {gradeEstimate && (valueLoading || valueResult || valueError) ? (
                           <div className="space-y-2">
                             <div className="flex flex-wrap items-center justify-between gap-2">
-                              <span className="text-[10px] font-medium text-[#3a5068] uppercase tracking-wider">
+                              <span className="text-[10px] font-medium text-[var(--biz-muted)] uppercase tracking-normal">
                                 {gradingCopy.valuePanel.marketAnalysisLabel}
                               </span>
                               <button
                                 onClick={() => setShowMarketAnalysis((prev) => !prev)}
-                                className="text-xs font-medium text-blue-400 hover:text-blue-300 transition-colors"
+                                className="text-xs font-medium text-[var(--biz-primary)] hover:underline"
                               >
                                 {showMarketAnalysis
                                   ? gradingCopy.valuePanel.hideMarketImpact
@@ -1043,7 +1174,7 @@ export default function GradeEstimatorPage() {
                                     <p>{valueError}</p>
                                     <button
                                       onClick={fetchValue}
-                                      className="mt-2 px-3 py-1.5 text-xs font-medium bg-amber-500/10 text-amber-300 rounded-lg hover:bg-amber-500/15 transition-colors"
+                                      className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 transition-colors hover:bg-amber-100"
                                     >
                                       Retry
                                     </button>
@@ -1084,16 +1215,16 @@ export default function GradeEstimatorPage() {
                         ) : null}
 
                         {gradeJob?.status === "error" && !gradeEstimate ? (
-                          <div className="rounded-xl border border-amber-500/15 bg-amber-500/5 p-5">
+                          <div className="rounded-xl border border-amber-200 bg-amber-50 p-5">
                             <div className="flex items-start gap-3">
-                              <svg className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <svg className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                               </svg>
                               <div>
-                                <p className="text-sm font-medium text-amber-300">
+                                <p className="text-sm font-medium text-amber-700">
                                   {gradingCopy.status.estimateUnavailableTitle}
                                 </p>
-                                <p className="text-xs text-amber-400/70 mt-0.5">
+                                <p className="text-xs text-amber-600 mt-0.5">
                                   {estimateError || gradingCopy.status.estimateUnavailableBody}
                                 </p>
                               </div>
@@ -1105,32 +1236,32 @@ export default function GradeEstimatorPage() {
                   </AnimatePresence>
                 </div>
               ) : identifiedCard.grade ? (
-                <div className="rounded-xl border border-white/[0.06] bg-[#07111d] p-5">
+                <Surface className="p-5">
                   <div className="flex items-start gap-3">
                     <svg className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     <div>
-                      <p className="text-sm font-medium text-[#e2eaf3]">
+                      <p className="text-sm font-medium text-[var(--biz-text)]">
                         {gradingCopy.status.alreadyGradedTitle}
                       </p>
-                      <p className="text-xs text-[#7a91a8] mt-0.5">
+                      <p className="text-xs text-[var(--biz-muted)] mt-0.5">
                         {gradingCopy.status.alreadyGradedBody(identifiedCard.grade)}
                       </p>
                     </div>
                   </div>
-                </div>
+                </Surface>
               ) : estimateAttempted && !estimatingGrade && !gradeJob ? (
-                <div className="rounded-xl border border-amber-500/15 bg-amber-500/5 p-5">
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-5">
                   <div className="flex items-start gap-3">
-                    <svg className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                     </svg>
                     <div>
-                      <p className="text-sm font-medium text-amber-300">
+                      <p className="text-sm font-medium text-amber-700">
                         {gradingCopy.status.estimateUnavailableTitle}
                       </p>
-                      <p className="text-xs text-amber-400/70 mt-0.5">
+                      <p className="text-xs text-amber-600 mt-0.5">
                         {estimateError || gradingCopy.status.estimateUnavailableBody}
                       </p>
                     </div>
@@ -1139,30 +1270,30 @@ export default function GradeEstimatorPage() {
               ) : null}
 
               {/* ── Submission Builder ────────────────────────────── */}
-              <div className="rounded-xl border border-white/[0.06] bg-[#07111d] p-4">
+              <Surface className="p-5">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <h3 className="text-sm font-medium text-[#e2eaf3]">Submission Builder</h3>
-                    <p className="text-xs text-[#3a5068] mt-0.5">
+                    <h3 className="text-sm font-medium text-[var(--biz-text)]">Submission Builder</h3>
+                    <p className="mt-1 text-xs text-[var(--muted)]">
                       Plan a PSA submission using this analysis.
                     </p>
                   </div>
                   <button
                     onClick={() => setShowSubmissionBuilder((prev) => !prev)}
-                    className="rounded-lg border border-white/[0.08] px-3 py-1.5 text-xs text-[#7a91a8] hover:bg-white/[0.04] hover:text-[#e2eaf3] transition-colors"
+                    className="cc-btn-secondary rounded-lg px-3 py-1.5 text-xs"
                   >
                     {showSubmissionBuilder ? "Hide" : "Show"}
                   </button>
                 </div>
                 {showSubmissionBuilder ? (
-                  <div className="mt-4 pt-4 border-t border-white/[0.06]">
+                  <div className="mt-4 border-t border-[color:var(--border)] pt-4">
                     <SubmissionBuilderPanel
                       identifiedCard={identifiedCard}
                       gradeEstimate={gradeEstimate}
                     />
                   </div>
                 ) : null}
-              </div>
+              </Surface>
             </div>
           </>
         )}
@@ -1200,14 +1331,14 @@ export default function GradeEstimatorPage() {
 
         {/* ── Toast ─────────────────────────────────────────────────── */}
         {toast ? (
-          <div className="fixed bottom-5 right-5 flex items-center gap-3 px-4 py-3 rounded-xl shadow-xl bg-[#0f1f35] border border-emerald-500/20 text-[#e2eaf3] z-50">
-            <svg className="w-4 h-4 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="fixed bottom-5 right-5 z-50 flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-700">
+            <svg className="w-4 h-4 text-emerald-700 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
             <span className="text-sm">{toast.message}</span>
             <button
               onClick={() => setToast(null)}
-              className="ml-1 text-[#3a5068] hover:text-[#7a91a8] transition-colors"
+              className="ml-1 text-[var(--biz-muted)] transition-colors hover:text-[var(--biz-text)]"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

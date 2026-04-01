@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export const metadata = {
   title: "Terms of Service - CardzCheck",
-  description: "Terms of Service for CardzCheck sports card price lookup",
+  description: "Terms of Service for CardzCheck trading card price lookup",
 };
 
 export default function TermsPage() {
@@ -52,7 +52,7 @@ export default function TermsPage() {
               2. Description of Service
             </h2>
             <p className="text-gray-300">
-              CardzCheck provides sports card price lookup, collection tracking,
+              CardzCheck provides trading card price lookup, collection tracking,
               and related tools. Our service includes:
             </p>
             <ul className="list-disc list-inside text-gray-300 space-y-2">

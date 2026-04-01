@@ -7,6 +7,7 @@ import { formatCardSubtitle } from "@/lib/card-identity/display";
 import { formatCurrency, formatPct, computeGainLoss } from "@/lib/formatters";
 import { getEstCmv, getQuantity } from "@/lib/values";
 import { normalizeHttpUrl, uniqueHttpUrls } from "@/lib/collection-images";
+import { buildEbaySoldUrl } from "@/lib/ebay/comps-url";
 
 interface CollectionGridProps {
   items: CollectionItem[];
@@ -36,11 +37,9 @@ function CardItem({ item, onDelete }: CardItemProps) {
       uniqueHttpUrls([
         item.primary_image?.url,
         item.user_image_url,
-        item.stock_image_url,
-        item.ebay_image_url,
         item.image_url,
       ]),
-    [item.primary_image?.url, item.user_image_url, item.stock_image_url, item.ebay_image_url, item.image_url]
+    [item.primary_image?.url, item.user_image_url, item.image_url]
   );
   const [imageIndex, setImageIndex] = useState(0);
 
@@ -94,11 +93,6 @@ function CardItem({ item, onDelete }: CardItemProps) {
                 });
               }}
             />
-            {!item.primary_image && normalizeHttpUrl(item.stock_image_url || item.ebay_image_url || item.image_url) && (
-              <span className="absolute bottom-2 left-2 px-1.5 py-0.5 bg-black/60 text-white text-[10px] font-medium rounded">
-                Stock
-              </span>
-            )}
           </>
         ) : (
           <div className="w-full h-full flex items-center justify-center">
@@ -188,7 +182,7 @@ function CardItem({ item, onDelete }: CardItemProps) {
             <p className="text-xs text-gray-400 dark:text-gray-500">
               {isRecentlyAdded && item.cmv_confidence !== "unavailable"
                 ? "Market value is being calculated"
-                : "Add comps (Beta) to calculate value"}
+                : "Run a search (Beta) to calculate value"}
             </p>
           )}
           {gainLoss && (
@@ -211,6 +205,30 @@ function CardItem({ item, onDelete }: CardItemProps) {
         <p className="text-xs text-gray-400 dark:text-gray-500 mt-3">
           Added {formatDate(item.created_at)}
         </p>
+
+        {/* Get Comps action */}
+        <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
+          <a
+            href={buildEbaySoldUrl({
+              player: item.player_name,
+              year: item.year,
+              setName: item.set_name,
+              parallel: item.parallel_type,
+              cardNumber: item.card_number,
+              grade: item.grade,
+              gradingCompany: item.grading_company,
+            })}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="flex items-center justify-center gap-1.5 w-full py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
+          >
+            <svg className="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            Get Comps on eBay
+          </a>
+        </div>
       </div>
 
       {/* Delete confirmation */}

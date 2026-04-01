@@ -1,8 +1,9 @@
 import type { CardIdentity } from "@/lib/card-identity/types";
 import type { GradeOutcome } from "@/lib/grading/gradeProbability";
-import type { GradeEstimate, WorthGradingResult } from "@/types";
+import type { GradeEstimate, GradeScanPhoto, WorthGradingResult } from "@/types";
 import type { GradeEstimatorCardInput } from "@/lib/grade-estimator/value";
 import type { ImageStats } from "@/lib/grading/fallbackEstimate";
+import type { GradeScanCardMeta } from "@/lib/grading/gradeFeatures";
 
 export type GradeEstimateJobStatus = "queued" | "running" | "done" | "error";
 export type GradeEstimateJobStepStatus =
@@ -64,25 +65,37 @@ export type ResolvedGradeEstimateImage = {
   mediaType: "image/jpeg" | "image/png" | "image/gif" | "image/webp";
   bytes: number;
   source: "url" | "base64";
+  kind: GradeScanPhoto["kind"];
+  originalUrl: string;
 };
 
 export type GradeEstimateJobInput = {
-  imageUrls: string[];
+  scanPhotos: GradeScanPhoto[];
   card?: GradeEstimatorCardInput | null;
+  /** User observations typed before the scan — injected into the AI prompt as initial context */
+  preScanNotes?: string;
+  /** User-supplied correction text to inject into the grade model prompt */
+  correctionText?: string;
+  /** Skip OCR identity step — use priorIdentity instead (for refinement re-runs) */
+  skipOcrIdentity?: boolean;
+  /** Pre-known identity to inject when skipOcrIdentity is true */
+  priorIdentity?: CardIdentity;
 };
 
 export type GradeEstimateJobDependencies = {
   resolveImages: (
-    imageUrls: string[]
+    scanPhotos: GradeScanPhoto[]
   ) => Promise<{
     resolvedImages: ResolvedGradeEstimateImage[];
     imageStats: ImageStats;
   }>;
   runOcrIdentity: (images: ResolvedGradeEstimateImage[]) => Promise<CardIdentity>;
-  runGradeModel: (images: ResolvedGradeEstimateImage[]) => Promise<string | null>;
+  runGradeModel: (images: ResolvedGradeEstimateImage[], identity?: CardIdentity | null, correctionText?: string, preScanNotes?: string) => Promise<string | null>;
   parseModelOutput: (options: {
     modelText: string | null;
     imageStats: ImageStats;
+    scanPhotoKinds: GradeScanPhoto["kind"][];
+    cardMeta?: GradeScanCardMeta | null;
   }) => Promise<{
     estimate: GradeEstimate;
     probabilities: GradeOutcome[] | null;
@@ -184,6 +197,8 @@ function mapCardInput(identity?: CardIdentity): GradeEstimatorCardInput | null {
   if (!identity?.player) return null;
   return {
     player_name: identity.player,
+    sport: identity.sport ?? undefined,
+    game: identity.sport ?? undefined,
     year: identity.year ? String(identity.year) : undefined,
     set_name: identity.setName ?? undefined,
     card_number: identity.cardNumber ?? undefined,
@@ -201,29 +216,50 @@ export async function runGradeEstimateJob(
   updateTimestamp(job);
 
   // Step 1: OCR identity + image prep
-  const ocrStart = startStep(job, "ocr_identity");
-  try {
-    const { resolvedImages, imageStats } = await deps.resolveImages(input.imageUrls);
-    job.internal.resolvedImages = resolvedImages;
-    job.internal.imageStats = imageStats;
+  if (input.skipOcrIdentity && input.priorIdentity) {
+    // Refinement path: skip OCR, resolve images only, inject prior identity
+    const ocrStart = startStep(job, "ocr_identity");
+    try {
+      const { resolvedImages, imageStats } = await deps.resolveImages(input.scanPhotos);
+      job.internal.resolvedImages = resolvedImages;
+      job.internal.imageStats = imageStats;
+      job.partial.identity = input.priorIdentity;
+      skipStep(job, "ocr_identity", "Skipped for refinement");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to resolve images";
+      finishStep(job, "ocr_identity", ocrStart, "error", message);
+      job.status = "error";
+      job.error = message;
+      updateTimestamp(job);
+      return;
+    }
+  } else {
+    const ocrStart = startStep(job, "ocr_identity");
+    try {
+      const { resolvedImages, imageStats } = await deps.resolveImages(input.scanPhotos);
+      job.internal.resolvedImages = resolvedImages;
+      job.internal.imageStats = imageStats;
 
-    const identity = await deps.runOcrIdentity(resolvedImages);
-    job.partial.identity = identity;
-    finishStep(job, "ocr_identity", ocrStart, "done");
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to extract identity";
-    finishStep(job, "ocr_identity", ocrStart, "error", message);
-    job.status = "error";
-    job.error = message;
-    updateTimestamp(job);
-    return;
+      const identity = await deps.runOcrIdentity(resolvedImages);
+      job.partial.identity = identity;
+      finishStep(job, "ocr_identity", ocrStart, "done");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to extract identity";
+      finishStep(job, "ocr_identity", ocrStart, "error", message);
+      job.status = "error";
+      job.error = message;
+      updateTimestamp(job);
+      return;
+    }
   }
 
   // Step 2: grade model
   const gradeStart = startStep(job, "grade_model");
   try {
     const resolvedImages = job.internal.resolvedImages ?? [];
-    const modelText = await deps.runGradeModel(resolvedImages);
+    // Pass identity so the grade model can apply card-type context (chrome, vintage, etc.)
+    // Pass correctionText when refining and preScanNotes when the user typed pre-scan context.
+    const modelText = await deps.runGradeModel(resolvedImages, job.partial.identity, input.correctionText, input.preScanNotes);
     job.internal.modelText = modelText;
     finishStep(job, "grade_model", gradeStart, "done");
   } catch (error) {
@@ -243,6 +279,34 @@ export async function runGradeEstimateJob(
     const parsed = await deps.parseModelOutput({
       modelText: job.internal.modelText ?? null,
       imageStats,
+      scanPhotoKinds: input.scanPhotos.map((photo) => photo.kind),
+      cardMeta: {
+        game:
+          job.partial.identity?.sport ??
+          input.card?.game ??
+          input.card?.sport ??
+          null,
+        sport:
+          job.partial.identity?.sport ??
+          input.card?.sport ??
+          input.card?.game ??
+          null,
+        player_name:
+          job.partial.identity?.player ?? input.card?.player_name ?? null,
+        year:
+          job.partial.identity?.year ??
+          (input.card?.year && Number.isFinite(Number(input.card.year))
+            ? Number(input.card.year)
+            : null),
+        set_name: job.partial.identity?.setName ?? input.card?.set_name ?? null,
+        chrome: job.partial.identity
+          ? job.partial.identity.cardStock === "chromium"
+          : null,
+        title:
+          [input.card?.year, input.card?.set_name, input.card?.player_name]
+            .filter(Boolean)
+            .join(" ") || null,
+      },
     });
     job.partial.preliminaryRange = parsed.preliminaryRange;
     job.partial.probabilities = parsed.probabilities;

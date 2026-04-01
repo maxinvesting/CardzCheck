@@ -118,7 +118,7 @@ export default function GradeEstimatorHistoryPanel({
       {/* Section toggle */}
       <button
         onClick={() => setIsExpanded((prev) => !prev)}
-        className="flex w-full items-center gap-2 text-xs font-medium text-[#3a5068] hover:text-[#7a91a8] transition-colors uppercase tracking-wider"
+        className="flex w-full items-center gap-2 text-xs font-medium text-[var(--muted)] transition-colors hover:text-[var(--biz-text)]"
       >
         <svg
           className="w-3.5 h-3.5"
@@ -136,7 +136,7 @@ export default function GradeEstimatorHistoryPanel({
         </svg>
         <span>Recent Scans</span>
         {runCountLabel > 0 ? (
-          <span className="text-[#3a5068]">({runCountLabel})</span>
+          <span className="text-[var(--muted)]">({runCountLabel})</span>
         ) : null}
         <svg
           className={`w-3.5 h-3.5 ml-auto transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}
@@ -155,25 +155,25 @@ export default function GradeEstimatorHistoryPanel({
       </button>
 
       {isExpanded ? (
-        <div className={`mt-3 rounded-xl border border-white/[0.06] bg-[#07111d] ${compact ? "p-3" : "p-4"}`}>
+        <div className={`cc-surface mt-3 ${compact ? "p-3" : "p-4"}`}>
           {loading ? (
             <div className={`space-y-2 ${compact ? "" : "py-1"}`}>
               {[1, 2, 3].map((i) => (
-                <div key={i} className="h-14 bg-white/[0.03] rounded-lg animate-pulse" />
+                <div key={i} className="h-14 rounded-lg bg-[color:var(--biz-hover)] animate-pulse" />
               ))}
             </div>
           ) : runs.length === 0 ? (
             <div className="py-2">
-              <p className="text-sm text-[#7a91a8]">No scans yet.</p>
-              <p className="text-xs text-[#3a5068] mt-1">
+              <p className="text-sm text-[var(--biz-text)]">No scans yet.</p>
+              <p className="mt-1 text-xs text-[var(--muted)]">
                 Upload a card photo to run your first analysis.
               </p>
               {error ? (
                 <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <p className="text-xs text-amber-400">{error}</p>
+                  <p className="text-xs text-amber-700">{error}</p>
                   <button
                     onClick={() => void loadRuns()}
-                    className="text-xs font-medium text-blue-400 hover:text-blue-300 transition-colors"
+                    className="text-xs font-medium text-[var(--biz-primary)] hover:underline"
                   >
                     Retry
                   </button>
@@ -209,31 +209,31 @@ export default function GradeEstimatorHistoryPanel({
                         onSelect(run);
                       }
                     }}
-                    className="group flex items-center gap-3 w-full text-left px-3 py-3 rounded-lg hover:bg-white/[0.04] transition-colors"
+                    className="group flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors hover:bg-[color:var(--biz-hover)]"
                   >
                     {/* Card thumbnail */}
                     {imageUrl ? (
                       <img
                         src={imageUrl}
                         alt={title}
-                        className="w-9 h-12 object-cover rounded-md shrink-0 ring-1 ring-white/10"
+                        className="h-12 w-9 shrink-0 rounded-md border border-[color:var(--border)] object-cover"
                       />
                     ) : (
-                      <div className="w-9 h-12 rounded-md bg-white/[0.04] ring-1 ring-white/[0.06] shrink-0" />
+                      <div className="h-12 w-9 shrink-0 rounded-md border border-[color:var(--border)] bg-[color:var(--biz-surface-soft)]" />
                     )}
 
                     {/* Content */}
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-[#e2eaf3] truncate leading-snug">{title}</p>
+                      <p className="truncate text-sm font-medium leading-snug text-[var(--biz-text)]">{title}</p>
                       {meta ? (
-                        <p className="text-xs text-[#3a5068] truncate mt-0.5">{meta}</p>
+                        <p className="mt-0.5 truncate text-xs text-[var(--muted)]">{meta}</p>
                       ) : null}
                       <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                        <span className="text-[10px] text-[#3a5068]">
+                        <span className="text-[10px] text-[var(--muted)]">
                           {formatTimeAgo(run.created_at)}
                         </span>
                         {rangeLabel ? (
-                          <span className="text-[10px] font-medium text-[#7a91a8]">{rangeLabel}</span>
+                          <span className="text-[10px] font-medium text-[var(--muted)]">{rangeLabel}</span>
                         ) : null}
                         {confidence && pillClass ? (
                           <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold uppercase tracking-wide ${pillClass}`}>
@@ -247,7 +247,7 @@ export default function GradeEstimatorHistoryPanel({
                     <div className="flex items-center gap-1 shrink-0">
                       <button
                         onClick={(e) => void handleDeleteRun(run.id, e)}
-                        className="p-1.5 text-[#3a5068] hover:text-rose-400 opacity-0 group-hover:opacity-100 transition-all rounded"
+                        className="rounded p-1.5 text-[var(--muted)] opacity-0 transition-all group-hover:opacity-100 hover:text-rose-400"
                         title="Delete this scan"
                         aria-label="Delete this scan"
                       >
@@ -256,7 +256,7 @@ export default function GradeEstimatorHistoryPanel({
                         </svg>
                       </button>
                       <svg
-                        className="w-4 h-4 text-[#3a5068] group-hover:text-[#7a91a8] transition-colors"
+                        className="h-4 w-4 text-[var(--muted)] transition-colors group-hover:text-[var(--biz-text)]"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"

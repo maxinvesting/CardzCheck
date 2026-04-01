@@ -1,14 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const createClientMock = vi.fn();
-const hasBusinessAccessMock = vi.fn();
+const requireBusinessContextMock = vi.fn();
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: createClientMock,
 }));
 
-vi.mock("@/lib/access", () => ({
-  hasBusinessAccess: hasBusinessAccessMock,
+vi.mock("@/lib/business/context", () => ({
+  requireBusinessContext: requireBusinessContextMock,
+  hasRole: (context: { role?: string }, roles: string[]) =>
+    roles.includes(context.role || ""),
 }));
 
 function buildSupabaseMock() {
@@ -115,7 +117,33 @@ describe("POST /api/business/sales", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.resetModules();
-    hasBusinessAccessMock.mockResolvedValue(true);
+    requireBusinessContextMock.mockResolvedValue({
+      businessAccountId: "acct-1",
+      ownerUserId: "user-1",
+      role: "owner",
+      subscriptionStatus: "active",
+      currentPeriodEnd: null,
+      seats: {
+        seatsIncluded: 1,
+        seatQuantity: 1,
+        purchasedSeats: 0,
+        activeMembers: 1,
+        pendingInvites: 0,
+        usedSeats: 1,
+        reservedSeats: 1,
+        availableSeats: 0,
+      },
+      permissions: {
+        canAccessBusiness: true,
+        canManageOperations: true,
+        canManageTeam: true,
+        canManageBilling: true,
+        canInviteMembers: true,
+        canManageSeats: true,
+        canChangeMemberRoles: true,
+        canRemoveMembers: true,
+      },
+    });
   });
 
   it("validates required fields", async () => {
@@ -161,6 +189,7 @@ describe("POST /api/business/sales", () => {
     expect(insertedPayloads[0]).toMatchObject({
       user_id: "user-1",
       business_id: "user-1",
+      business_account_id: "acct-1",
       inventory_item_id: "inv-1",
       sold_price_cents: 20000,
       net_payout_cents: 17000,
@@ -185,8 +214,46 @@ describe("POST /api/business/sales", () => {
     expect(body.gross_revenue_cents).toBe(20500);
   });
 
+  it("falls back to legacy business_sales schema when upgraded columns are missing", async () => {
+    const { client, insertedPayloads } = buildSupabaseMock();
+    createClientMock.mockResolvedValue(client);
+    client.nextInsertError.current = {
+      code: "42703",
+      message: 'column "business_id" of relation "business_sales" does not exist',
+    };
+
+    const response = await callPost(
+      new Request("http://localhost/api/business/sales", {
+        method: "POST",
+        body: JSON.stringify({
+          inventory_item_id: "11111111-1111-1111-1111-111111111111",
+          sold_price_cents: 15000,
+          shipping_charged_cents: 500,
+          platform_fees_cents: 1200,
+          shipping_cost_cents: 400,
+          tax_cents: 100,
+          channel: "ebay",
+        }),
+        headers: { "Content-Type": "application/json" },
+      }) as any
+    );
+
+    expect(response.status).toBe(201);
+    expect(insertedPayloads).toHaveLength(2);
+    expect(insertedPayloads[0]).toHaveProperty("business_id");
+    expect(insertedPayloads[1]).toMatchObject({
+      sale_price_cents: 15000,
+      sale_date: expect.any(String),
+      shipping_paid_cents: 400,
+      other_costs_cents: 100,
+    });
+    expect(insertedPayloads[1]).not.toHaveProperty("business_id");
+  });
+
   it("returns 403 when user has no business subscription", async () => {
-    hasBusinessAccessMock.mockResolvedValue(false);
+    const error = new Error("Business subscription required");
+    (error as { status?: number }).status = 403;
+    requireBusinessContextMock.mockRejectedValue(error);
     const { client } = buildSupabaseMock();
     createClientMock.mockResolvedValue(client);
 

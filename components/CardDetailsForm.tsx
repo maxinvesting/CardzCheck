@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { MicButton } from "@/components/ui/MicButton";
 import { CollectionItem, CONDITION_OPTIONS, type AcquisitionType } from "@/types";
 import { formatCurrency, formatPct, computeGainLoss } from "@/lib/formatters";
 import { getEstCmv } from "@/lib/values";
+import { usePsaLookup, type PsaLookupResult } from "@/hooks/usePsaLookup";
 
 interface CardDetailsFormProps {
   card: CollectionItem;
@@ -20,7 +22,13 @@ export default function CardDetailsForm({
   saving = false,
 }: CardDetailsFormProps) {
   const [isEditing, setIsEditing] = useState(false);
+  const [pendingPsaResult, setPendingPsaResult] = useState<PsaLookupResult | null>(null);
+  const { lookup, lookupImmediate, isLoading: psaLoading, result: psaResult, error: psaError, clearResult: clearPsa } = usePsaLookup();
   const router = useRouter();
+
+  useEffect(() => {
+    if (psaResult) setPendingPsaResult(psaResult);
+  }, [psaResult]);
 
   const cmv = getEstCmv(card);
   const gainLoss = computeGainLoss(cmv, card.purchase_price);
@@ -32,7 +40,7 @@ export default function CardDetailsForm({
   };
 
   if (!isEditing) {
-    const handleRunComps = () => {
+    const handleRunSearch = () => {
       const params = new URLSearchParams();
       params.set("player", card.player_name);
       if (card.year) params.set("year", card.year);
@@ -50,10 +58,10 @@ export default function CardDetailsForm({
           </h2>
           <div className="flex items-center gap-2">
             <button
-              onClick={handleRunComps}
+              onClick={handleRunSearch}
               className="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-white rounded-lg text-sm font-medium transition-colors"
             >
-              Run Comps
+              Run Search
             </button>
             <button
               onClick={() => setIsEditing(true)}
@@ -92,7 +100,7 @@ export default function CardDetailsForm({
             }
           />
           <DetailRow
-            label="Current Market Value"
+            label="Est. Market Value"
             value={formatCurrency(cmv)}
             className={cmv ? "font-semibold" : ""}
           />
@@ -184,12 +192,84 @@ export default function CardDetailsForm({
               value: opt.value,
             }))}
           />
-          <FormField
-            label="Cert Number"
-            value={card.cert_number || ""}
-            onChange={(cert_number) => onUpdate({ cert_number })}
-            placeholder="Certification number"
-          />
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Cert Number
+              </label>
+              {card.cert_number && (
+                <button
+                  type="button"
+                  onClick={() => lookupImmediate(card.cert_number!)}
+                  className="text-xs text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                >
+                  Lookup ↗
+                </button>
+              )}
+            </div>
+            <input
+              type="text"
+              value={card.cert_number || ""}
+              onChange={(e) => {
+                onUpdate({ cert_number: e.target.value });
+                if (pendingPsaResult || psaError) {
+                  setPendingPsaResult(null);
+                  clearPsa();
+                }
+                lookup(e.target.value);
+              }}
+              onBlur={(e) => lookup(e.target.value)}
+              placeholder="Certification number"
+              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {psaLoading && (
+              <p className="mt-1 flex items-center gap-1 text-[11px] text-gray-400 dark:text-gray-500">
+                <span className="inline-block h-3 w-3 rounded-full border border-gray-400 border-t-transparent animate-spin" />
+                Looking up cert...
+              </p>
+            )}
+            {psaError && (
+              <p className="mt-1 text-[11px] text-[#E24B4A]">
+                Cert not found. Check the number and try again.
+              </p>
+            )}
+            {pendingPsaResult && (
+              <div className="mt-2 p-3 rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 space-y-2">
+                <p className="text-xs text-green-700 dark:text-green-400 font-medium">
+                  PSA lookup found: {pendingPsaResult.player_name}
+                  {pendingPsaResult.grade ? `, ${pendingPsaResult.grade}` : ""}
+                </p>
+                <p className="text-[11px] text-green-600 dark:text-green-500">Update these fields?</p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const updates: Partial<CollectionItem> = { grading_company: "PSA" };
+                      if (pendingPsaResult.player_name) updates.player_name = pendingPsaResult.player_name;
+                      if (pendingPsaResult.year) updates.year = pendingPsaResult.year;
+                      if (pendingPsaResult.set_name) updates.set_name = pendingPsaResult.set_name;
+                      if (pendingPsaResult.card_number) updates.card_number = pendingPsaResult.card_number;
+                      if (pendingPsaResult.grade) updates.grade = pendingPsaResult.grade;
+                      if (pendingPsaResult.parallel_type) updates.parallel_type = pendingPsaResult.parallel_type;
+                      onUpdate(updates);
+                      setPendingPsaResult(null);
+                      clearPsa();
+                    }}
+                    className="px-3 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded-md font-medium"
+                  >
+                    Apply
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setPendingPsaResult(null); clearPsa(); }}
+                    className="px-3 py-1 text-xs border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 rounded-md"
+                  >
+                    Keep existing
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -236,6 +316,7 @@ export default function CardDetailsForm({
           onChange={(notes) => onUpdate({ notes })}
           placeholder="Additional notes about this card..."
           rows={4}
+          onVoiceInput={(text) => onUpdate({ notes: text })}
         />
       </div>
 
@@ -353,18 +434,23 @@ function FormTextArea({
   onChange,
   placeholder = "",
   rows = 3,
+  onVoiceInput,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
   rows?: number;
+  onVoiceInput?: (text: string) => void;
 }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-        {label}
-      </label>
+      <div className="flex items-center justify-between mb-1">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+          {label}
+        </label>
+        {onVoiceInput && <MicButton onResult={onVoiceInput} size="sm" />}
+      </div>
       <textarea
         value={value}
         onChange={(e) => onChange(e.target.value)}

@@ -5,6 +5,13 @@
   "scripts": {
     "dev": "next dev --webpack",
     "dev:turbo": "next dev",
+    "dev:web": "pnpm --filter @cardzcheck/web dev",
+    "oracle:sign": "pnpm --filter @cardzcheck/oracle oracle:sign",
+    "contracts:test": "cd contracts && forge test",
+    "contracts:deploy": "cd contracts && forge script script/Deploy.s.sol:Deploy --rpc-url $RPC_URL --broadcast",
+    "grading:export-training": "node scripts/export_training_data.mjs",
+    "grading:train-calibrator": "python3 scripts/train_psa_calibrator.py",
+    "grading:upload-model": "node scripts/upload_model_version.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -16,6 +23,8 @@
     "@sentry/nextjs": "^10.38.0",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.47.10",
+    "@upstash/ratelimit": "^2.0.8",
+    "@upstash/redis": "^1.36.3",
     "autoprefixer": "^10.4.23",
     "cheerio": "^1.0.0",
     "framer-motion": "^12.34.5",
@@ -26,7 +35,8 @@
     "react-virtuoso": "^4.18.1",
     "recharts": "^3.7.0",
     "sharp": "^0.33.3",
-    "stripe": "^17.5.0"
+    "stripe": "^17.5.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/node": "^20",

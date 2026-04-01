@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Build the system prompt with card context
-    let systemPrompt = `You are a sports card market analyst for CardzCheck. You help users understand card values, investment potential, and market trends.
+    let systemPrompt = `You are a trading card market analyst for CardzCheck. You help users understand card values, investment potential, and market trends across sports cards and TCG cards (including Pokemon and One Piece).
 
 ${userName ? `The user's name is ${userName}. Address them by name when appropriate, but don't overuse it - keep it natural and conversational.` : ""}
 
@@ -169,7 +169,7 @@ Current card context:
     } else {
       systemPrompt += `
 
-No specific card selected. Answer general sports card market questions.`;
+No specific card selected. Answer general trading card market questions.`;
     }
 
     if (isTestMode()) {

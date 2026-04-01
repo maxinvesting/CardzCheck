@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { getCurrentUserCached } from "@/lib/current-user-client";
 
 const MAIN_TABS = [
   { name: "Home", href: "/dashboard", icon: HomeIcon },
@@ -13,10 +14,13 @@ const MAIN_TABS = [
 ] as const;
 
 const MORE_LINKS = [
+  { name: "News & Updates", href: "/news" },
   { name: "Watchlist", href: "/watchlist" },
-  { name: "Comps", href: "/comps" },
-  { name: "Grade Engine", href: "/grade-probability" },
+  { name: "Compare Listings", href: "/comps" },
+  { name: "Grade Engine", href: "/grade-hub" },
+  { name: "Bulk Mode", href: "/bulk" },
   { name: "Analyst", href: "/analyst" },
+  { name: "Help & FAQ", href: "/help" },
   { name: "Settings", href: "/settings" },
 ];
 
@@ -25,11 +29,16 @@ const TAB_BASE_PATHS = [
   "/collection",
   "/analytics",
   "/shop",
+  "/admin/shop",
   "/watchlist",
   "/comps",
+  "/grade-hub",
   "/grade-probability",
   "/grade-estimator",
   "/analyst",
+  "/bulk",
+  "/help",
+  "/news",
   "/settings",
 ];
 
@@ -83,6 +92,15 @@ function MoreIcon({ className }: { className?: string }) {
 export default function BottomTabBar() {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
+  const [isAdminUser, setIsAdminUser] = useState(false);
+
+  useEffect(() => {
+    getCurrentUserCached().then((user) => {
+      if (user?.app_role === "admin" || user?.app_role === "owner") {
+        setIsAdminUser(true);
+      }
+    });
+  }, []);
 
   if (!isTabRoute(pathname)) return null;
 
@@ -152,6 +170,17 @@ export default function BottomTabBar() {
                   </Link>
                 </li>
               ))}
+              {isAdminUser && (
+                <li key="/admin">
+                  <Link
+                    href="/admin"
+                    onClick={() => setMoreOpen(false)}
+                    className="block px-4 py-3 rounded-lg text-cyan-400 hover:bg-gray-800 transition-colors font-medium"
+                  >
+                    Admin
+                  </Link>
+                </li>
+              )}
             </ul>
           </div>
         </>

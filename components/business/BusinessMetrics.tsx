@@ -1,9 +1,20 @@
 "use client";
 
-import type { BusinessMetrics as Metrics } from "@/types";
+import { useEffect, useRef } from "react";
+import { animate } from "framer-motion";
 import type { InventoryValueSummary } from "@/lib/business/inventory-value";
+import type { BusinessMetrics as Metrics } from "@/types";
 
-function fmt(cents: number): string {
+function fmtCurrency(dollars: number): string {
+  return dollars.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(cents / 100);
+}
+
+function fmtFull(cents: number): string {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
@@ -14,12 +25,24 @@ function fmt(cents: number): string {
 interface Props {
   metrics: Metrics | null;
   loading: boolean;
-  /** Filter-aware inventory value; when provided, shows Inventory Value card */
   inventorySummary?: InventoryValueSummary | null;
-  /** Total item count (all items) for "X of Y" when filtered */
   totalItemCount?: number;
-  /** Compact/dense layout (Business mode) */
   compact?: boolean;
+}
+
+const STRIP_STYLE: CSSProperties = {
+  background:
+    "linear-gradient(180deg, rgba(255,255,255,0.99) 0%, rgba(249,250,251,0.97) 100%)",
+  border: "1px solid var(--biz-border)",
+  borderRadius: "14px",
+};
+
+interface CellDef {
+  label: string;
+  primary: string;
+  secondary?: string;
+  primaryClass: string;
+  tag?: string;
 }
 
 export default function BusinessMetrics({
@@ -29,109 +52,110 @@ export default function BusinessMetrics({
   totalItemCount,
   compact = false,
 }: Props) {
-  const cards = [
+  const cells: CellDef[] = [
     {
-      label: "Revenue MTD",
-      value: metrics ? fmt(metrics.revenueMtd) : "—",
-      color: "text-white",
+      label: "Revenue",
+      primary: metrics ? fmt(metrics.revenueMtd) : "—",
+      secondary: metrics ? `${fmt(metrics.revenueYtd)} YTD` : undefined,
+      primaryClass: "text-[var(--biz-text)]",
+      tag: "MTD",
     },
     {
-      label: "Revenue YTD",
-      value: metrics ? fmt(metrics.revenueYtd) : "—",
-      color: "text-white",
+      label: "Profit",
+      primary: metrics ? fmt(metrics.profitMtd) : "—",
+      secondary: metrics ? `${fmt(metrics.profitYtd)} YTD` : undefined,
+      primaryClass:
+        metrics && metrics.profitMtd >= 0 ? "text-emerald-600" : "text-red-500",
+      tag: "MTD",
     },
     {
-      label: "Profit MTD",
-      value: metrics ? fmt(metrics.profitMtd) : "—",
-      color:
-        metrics && metrics.profitMtd >= 0 ? "text-emerald-400" : "text-red-400",
-    },
-    {
-      label: "Profit YTD",
-      value: metrics ? fmt(metrics.profitYtd) : "—",
-      color:
-        metrics && metrics.profitYtd >= 0 ? "text-emerald-400" : "text-red-400",
-    },
-    {
-      label: "Sales MTD",
-      value: metrics ? String(metrics.salesCountMtd) : "—",
-      color: "text-white",
-    },
-    {
-      label: "Sales YTD",
-      value: metrics ? String(metrics.salesCountYtd) : "—",
-      color: "text-white",
+      label: "Sales",
+      primary: metrics ? String(metrics.salesCountMtd) : "—",
+      secondary: metrics ? `${metrics.salesCountYtd} YTD` : undefined,
+      primaryClass: "text-[var(--biz-text)]",
+      tag: "MTD",
     },
     {
       label: "Active Inventory",
-      value: metrics ? String(metrics.activeInventoryCount) : "—",
-      color: "text-white",
+      primary: metrics ? String(metrics.activeInventoryCount) : "—",
+      primaryClass: "text-[var(--biz-text)]",
     },
   ];
 
-  const cardClass = compact
-    ? "bg-gray-900 border border-gray-800 rounded-lg p-2"
-    : "bg-gray-900 border border-gray-800 rounded-lg p-2.5";
+  if (inventorySummary) {
+    const isFiltered =
+      totalItemCount != null &&
+      inventorySummary.itemCount !== totalItemCount;
+    const hasCmv = inventorySummary.itemsWithCmv > 0;
+    cells.push({
+      label: isFiltered ? "Inventory Value (Filtered)" : "Inventory Value",
+      primary:
+        inventorySummary.itemCount === 0
+          ? fmt(0)
+          : hasCmv
+          ? fmtFull(inventorySummary.totalCmvCents)
+          : fmtFull(inventorySummary.totalCostCents),
+      secondary: hasCmv
+        ? `Est. Market Value · ${inventorySummary.itemCount} item${inventorySummary.itemCount !== 1 ? "s" : ""}`
+        : `Cost Basis · ${inventorySummary.itemCount} item${inventorySummary.itemCount !== 1 ? "s" : ""}`,
+      primaryClass: "text-[var(--biz-text)]",
+    });
+  }
 
-  // Inventory Value card: show when we have summary (filter-aware)
-  const inventoryValueDisplay = inventorySummary ? (
-      <div className={cardClass}>
-        <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">
-          Inventory Value
-          {totalItemCount != null &&
-            inventorySummary.itemCount !== totalItemCount && (
-              <span className="ml-1 font-normal normal-case text-gray-500">
-                (filtered)
-              </span>
-            )}
-        </p>
-        {loading ? (
-          <div className="h-5 w-20 bg-gray-800 rounded animate-pulse" />
-        ) : (
-          <>
-            <p className="text-base font-bold tabular-nums text-emerald-400">
-              {inventorySummary.itemCount === 0
-                ? fmt(0)
-                : inventorySummary.itemsWithCmv > 0
-                ? fmt(inventorySummary.totalCmvCents)
-                : fmt(inventorySummary.totalCostCents)}
-            </p>
-            <p className="text-[10px] text-gray-500 mt-0.5">
-              {inventorySummary.itemsWithCmv > 0
-                ? `Est. Market Value · ${inventorySummary.itemCount} item${inventorySummary.itemCount !== 1 ? "s" : ""}`
-                : `Cost basis · ${inventorySummary.itemCount} item${inventorySummary.itemCount !== 1 ? "s" : ""}`}
-            </p>
-            {inventorySummary.itemsWithCmv > 0 &&
-              inventorySummary.itemsWithCmv < inventorySummary.itemCount && (
-                <p className="text-[10px] text-gray-500">
-                  Cost: {fmt(inventorySummary.totalCostCents)}
-                </p>
-              )}
-          </>
-        )}
-      </div>
-    ) : null;
+  const colClass =
+    cells.length >= 5
+      ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-5"
+      : "grid-cols-2 sm:grid-cols-4";
 
   return (
-    <div className={`grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-8 ${compact ? "gap-2 mb-2" : "gap-2.5 mb-3"}`}>
-      {cards.map((c) => (
-        <div
-          key={c.label}
-          className={cardClass}
-        >
-          <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">
-            {c.label}
-          </p>
-          {loading ? (
-            <div className="h-5 w-20 bg-gray-800 rounded animate-pulse" />
-          ) : (
-            <p className={`text-base font-bold tabular-nums ${c.color}`}>
-              {c.value}
-            </p>
-          )}
+    <div className={compact ? "mb-2" : "mb-5"}>
+      <div style={STRIP_STYLE} className="overflow-hidden">
+        <div className={`grid ${colClass}`}>
+          {cells.map((cell, i) => (
+            <div
+              key={cell.label}
+              className={[
+                "flex flex-col justify-between gap-3",
+                compact ? "px-5 py-4" : "px-6 py-5",
+                "min-h-[92px] border-[color:var(--biz-border)]",
+                i > 0 ? "border-l" : "",
+                i >= 2 ? "border-t sm:border-t-0" : "",
+                cells.length >= 5 && i >= 3 ? "sm:border-t lg:border-t-0" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+            >
+              <div className="flex items-start justify-between gap-1">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--biz-muted)] leading-tight">
+                  {cell.label}
+                </p>
+                {cell.tag && (
+                  <span className="shrink-0 rounded bg-[var(--biz-border)] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[var(--biz-muted)]">
+                    {cell.tag}
+                  </span>
+                )}
+              </div>
+
+              {loading ? (
+                <div className="h-8 w-20 animate-pulse rounded-md bg-[var(--biz-skeleton)]" />
+              ) : (
+                <div>
+                  <p
+                    className={`text-2xl font-semibold tabular-nums leading-none tracking-tight ${cell.primaryClass}`}
+                  >
+                    {cell.primary}
+                  </p>
+                  {cell.secondary && (
+                    <p className="mt-1.5 text-[11px] text-[var(--biz-muted)] tabular-nums leading-tight">
+                      {cell.secondary}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       ))}
-      {inventoryValueDisplay}
     </div>
   );
 }

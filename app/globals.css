@@ -1,10 +1,63 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* ── Design tokens ──────────────────────────────────────────────────────────
+   Single source of truth for the Business UI visual language.
+   Calm, flat, professional — inspired by PSA/Beckett registry tools.
+   Light-mode values are placeholders; override when light mode is built.
+   ─────────────────────────────────────────────────────────────────────────── */
 :root {
+  /* Legacy Next.js defaults */
   --foreground: #171717;
   --background: #ffffff;
+
+  /* ── Business design tokens ─────────────────────────────────────────────
+     Dark intelligence platform aesthetic — deep navy base, gold accents,
+     emerald profit signals. JetBrains Mono for data, Sora for labels.
+     ─────────────────────────────────────────────────────────────────────── */
+  --biz-bg: #0a1628;
+  --biz-near-black: #060d1a;
+  --biz-surface: #101f36;
+  --biz-surface-card: rgba(255, 255, 255, 0.03);
+  --biz-border: rgba(255, 255, 255, 0.08);
+  --biz-border-subtle: rgba(255, 255, 255, 0.05);
+  --biz-text: #f8fafc;
+  --biz-muted: #64748b;
+  --biz-secondary: #94a3b8;
+  --biz-primary: #1D9E75;
+  --biz-primary-glow: rgba(29, 158, 117, 0.35);
+  --biz-gold: #f0b429;
+  --biz-gold-glow: rgba(240, 180, 41, 0.25);
+  --biz-warning: #f59e0b;
+  --biz-danger: #ef4444;
+  --biz-surface-soft: #0d1b2e;
+  --biz-hover: rgba(255, 255, 255, 0.04);
+  --biz-skeleton: rgba(255, 255, 255, 0.06);
+  --biz-radius: 12px;
+
+  /* Backward-compatible aliases */
+  --app-bg: var(--biz-bg);
+  --surface: var(--biz-surface);
+  --surface-2: var(--biz-surface);
+  --border: var(--biz-border);
+  --text: var(--biz-text);
+  --muted: var(--biz-muted);
+  --accent: var(--biz-primary);
+  --warning: var(--biz-warning);
+  --biz-app-bg: var(--biz-bg);
+  --biz-text-muted: var(--biz-muted);
+  --biz-accent: var(--biz-primary);
+  --biz-accent-amber: var(--biz-warning);
+}
+
+html {
+  /* Scale down on small phones and up on large monitors. */
+  font-size: clamp(14px, 0.25vw + 13px, 18px);
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -17,11 +70,102 @@
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
   }
+}
+
+@layer components {
+  .cc-surface {
+    background: var(--biz-surface);
+    border: 1px solid var(--biz-border);
+    border-radius: 8px;
+    box-shadow: none;
+  }
+
+  .cc-btn-primary {
+    border: 1px solid transparent;
+    background: var(--biz-primary);
+    color: #ffffff;
+    transition: background-color 160ms ease, transform 160ms ease;
+  }
+
+  .cc-btn-primary:hover {
+    background: #17896A;
+  }
+
+  .cc-btn-secondary {
+    border: 1px solid var(--biz-border);
+    background: transparent;
+    color: var(--biz-text);
+    transition: background-color 160ms ease, border-color 160ms ease;
+  }
+
+  .cc-btn-secondary:hover {
+    background: var(--biz-hover);
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+}
+
+/* ── Business dashboard animations ─────────────────────────────────────── */
+
+/* Pulsing live indicator dot */
+@keyframes pulse-live {
+  0%, 100% { opacity: 1; box-shadow: 0 0 6px #1D9E75; }
+  50%       { opacity: 0.6; box-shadow: 0 0 12px #1D9E75, 0 0 20px rgba(29, 158, 117, 0.3); }
+}
+
+.pulse-dot {
+  animation: pulse-live 2s ease-in-out infinite;
+}
+
+/* Signal card shimmer scan — feels "live" */
+@keyframes signal-shimmer {
+  0%   { transform: translateX(-120%); }
+  100% { transform: translateX(220%); }
+}
+
+.signal-card {
+  overflow: hidden;
+}
+
+.signal-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -50%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.025),
+    transparent
+  );
+  animation: signal-shimmer 5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Gold glow utility */
+.gold-glow {
+  box-shadow: 0 0 30px rgba(240, 180, 41, 0.12), 0 0 60px rgba(240, 180, 41, 0.05);
+}
+
+/* Green profit glow */
+.green-glow {
+  text-shadow: 0 0 12px rgba(29, 158, 117, 0.5);
+}
+
+/* Font utilities — Inter for all UI */
+.font-data {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+.font-ui {
+  font-family: 'Inter', system-ui, sans-serif;
 }

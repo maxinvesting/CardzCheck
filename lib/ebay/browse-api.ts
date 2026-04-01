@@ -12,6 +12,7 @@ import {
   INSERT_KEYWORDS,
 } from "./utils";
 import { classifyListingSet, matchesSelectedSet, resolveSetTaxonomy } from "./set-taxonomy";
+import { getEbayBrowseCategoryId } from "@/lib/cards/market-category";
 
 const LISTING_DEBUG = process.env.NODE_ENV === "development";
 
@@ -86,7 +87,14 @@ export async function searchBrowseAPI(params: EbaySearchParams): Promise<ForSale
   // Build search URL with filters
   const url = new URL(EBAY_BROWSE_API_URL);
   url.searchParams.set("q", query);
-  url.searchParams.set("category_ids", "212"); // Sports Trading Cards
+  const categoryId = getEbayBrowseCategoryId({
+    game: params.game,
+    sport: params.sport,
+    set: params.set,
+    player: params.player,
+    keywords: params.keywords,
+  });
+  url.searchParams.set("category_ids", categoryId);
   url.searchParams.set("limit", String(apiFetchLimit));
   // NOTE: No explicit sort — eBay defaults to "bestMatch" (relevance ranking).
   // This avoids the "sort by price ascending" bias that returns the cheapest
@@ -229,6 +237,8 @@ export async function searchBrowseAPIWithFallbacks(params: EbaySearchParams): Pr
   }
   const pass1Params: EbaySearchParams = {
     player: params.player,
+    game: params.game,
+    sport: params.sport,
     year: params.year,
     set: params.set,
     parallelType: simplifyParallelType(params.parallelType),
@@ -252,6 +262,8 @@ export async function searchBrowseAPIWithFallbacks(params: EbaySearchParams): Pr
   }
   const pass2Params: EbaySearchParams = {
     player: params.player,
+    game: params.game,
+    sport: params.sport,
     year: params.year,
     set: params.set,
     grade: params.grade,
@@ -275,6 +287,8 @@ export async function searchBrowseAPIWithFallbacks(params: EbaySearchParams): Pr
 
   const pass3Params: EbaySearchParams = {
     player: params.player,
+    game: params.game,
+    sport: params.sport,
     set: params.set,
     grade: params.grade,
     limit: params.limit,

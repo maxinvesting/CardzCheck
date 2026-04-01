@@ -46,6 +46,7 @@ export function normalizeIdentificationResult(
     relic: input.relic ?? undefined,
     imageUrl: input.imageUrl ?? "",
     imageUrls: input.imageUrls ?? undefined,
+    scanPhotos: input.scanPhotos ?? undefined,
     userImageUrl: input.userImageUrl ?? undefined,
     stockImageUrl: input.stockImageUrl ?? undefined,
     ebayImageUrl: input.ebayImageUrl ?? undefined,

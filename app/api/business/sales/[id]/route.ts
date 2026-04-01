@@ -36,6 +36,8 @@ export async function PATCH(
   } catch (err: any) {
     if (err?.status === 403)
       return NextResponse.json({ error: err.message }, { status: 403 });
+    if (err?.status === 400)
+      return NextResponse.json({ error: err.message }, { status: 400 });
     if (err?.status === 404)
       return NextResponse.json({ error: err.message }, { status: 404 });
     console.error("Business sales PATCH error:", err);
@@ -59,6 +61,8 @@ export async function DELETE(
   } catch (err: any) {
     if (err?.status === 403)
       return NextResponse.json({ error: err.message }, { status: 403 });
+    if (err?.status === 400)
+      return NextResponse.json({ error: err.message }, { status: 400 });
     console.error("Business sales DELETE error:", err);
     return NextResponse.json({ error: "Failed to delete sale" }, { status: 500 });
   }

@@ -2,6 +2,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { searchEbayDualSignal, type EbaySearchParams } from "@/lib/ebay";
 import type { ForSaleItem } from "@/lib/ebay/types";
 import { scrapeEbaySoldListings } from "@/lib/ebay/scraper";
+import { inferShopCategoryLabel } from "@/lib/cards/market-category";
 import { buildBucket, confidenceFromFactor, confidenceFromBucket } from "@/lib/market-discount/buckets";
 import { buildMarketFingerprint, buildQueryText } from "@/lib/market-discount/fingerprint";
 import { median, quantile, robustStats } from "@/lib/market-discount/robust-stats";
@@ -437,8 +438,18 @@ async function insertFactor(input: Omit<MarketDiscountFactorRecord, "id" | "comp
 }
 
 function buildEbayParams(query: MarketQueryInput): EbaySearchParams {
+  const inferredCategory = inferShopCategoryLabel(
+    {
+      set: query.set,
+      player: query.player,
+      keywords: query.keywords,
+    },
+    "Football"
+  );
+
   return {
     player: query.player,
+    sport: inferredCategory,
     year: query.year,
     set: query.set,
     grade: query.grade,

@@ -1,17 +1,24 @@
 import { describe, expect, it } from "vitest";
 import { parseGradeEstimateModelOutput } from "./gradeEstimateModel";
 import { buildImageStats } from "./fallbackEstimate";
+import type { GradeScanPhotoKind } from "@/types";
+import type { GradeScanCardMeta } from "@/lib/grading/gradeFeatures";
 
-function runParse(payload: unknown) {
+async function runParse(
+  payload: unknown,
+  options?: { scanPhotoKinds?: GradeScanPhotoKind[]; cardMeta?: GradeScanCardMeta | null }
+) {
   return parseGradeEstimateModelOutput({
     modelText: JSON.stringify(payload),
     imageStats: buildImageStats([250_000, 320_000, 410_000]),
+    scanPhotoKinds: options?.scanPhotoKinds ?? ["front", "back", "surface"],
+    cardMeta: options?.cardMeta ?? null,
   });
 }
 
 describe("parseGradeEstimateModelOutput", () => {
-  it("accepts the enhanced schema and extracts new fields", () => {
-    const parsed = runParse({
+  it("accepts the enhanced schema and extracts new fields", async () => {
+    const parsed = await runParse({
       status: "ok",
       reason: "Clear front/back with moderate glare",
       estimated_grade_low: 8,
@@ -75,8 +82,8 @@ describe("parseGradeEstimateModelOutput", () => {
     expect(parsed.estimate.surface_findings?.[0]?.issue_type).toBe("print_line");
   });
 
-  it("falls back to low_confidence defaults when schema is missing", () => {
-    const parsed = runParse({
+  it("falls back to low_confidence defaults when schema is missing", async () => {
+    const parsed = await runParse({
       status: "ok",
       reason: "Minimal output",
       estimated_grade_low: 8,
@@ -96,8 +103,8 @@ describe("parseGradeEstimateModelOutput", () => {
     expect(parsed.estimate.centering_detail).toBeTruthy();
   });
 
-  it("normalizes probabilities to sum to ~1.0", () => {
-    const parsed = runParse({
+  it("normalizes probabilities to sum to ~1.0", async () => {
+    const parsed = await runParse({
       status: "ok",
       reason: "Provided percentages",
       estimated_grade_low: 7,
@@ -156,8 +163,8 @@ describe("parseGradeEstimateModelOutput", () => {
     expect(bgsTotal).toBeLessThan(1.01);
   });
 
-  it("enforces centering gates for poor centering ratios", () => {
-    const parsed = runParse({
+  it("enforces centering gates for poor centering ratios", async () => {
+    const parsed = await runParse({
       status: "ok",
       reason: "Poor centering but otherwise clean",
       estimated_grade_low: 8,
@@ -205,8 +212,102 @@ describe("parseGradeEstimateModelOutput", () => {
     expect(parsed.estimate.grade_probabilities!.psa["9"]).toBeLessThanOrEqual(0.25);
   });
 
-  it("clamps image/confidence score bounds", () => {
-    const parsed = runParse({
+  it("applies strict Pokemon defect penalties to gem probabilities", async () => {
+    const parsed = await runParse(
+      {
+        status: "ok",
+        reason: "Visible edge whitening and print line",
+        estimated_grade_low: 8,
+        estimated_grade_high: 10,
+        grade_notes: "TCG test",
+        image_quality: {
+          overall_image_score: 88,
+          subscores: {
+            focus_sharpness: 22,
+            lighting_glare_control: 21,
+            coverage_angles: 22,
+            resolution_distance: 23,
+          },
+          key_issues: ["Tiny whitening on right edge"],
+          retake_tips: ["Better photos = more accurate grading."],
+        },
+        confidence: {
+          overall_confidence_score: 80,
+          confidence_label: "high",
+          limiting_factors: [],
+          what_was_clear: ["Edges and corners visible"],
+        },
+        centering: {
+          left_right_ratio: "54/46",
+          top_bottom_ratio: "53/47",
+          centering_confidence_score: 92,
+          centering_severity_0_3: 0,
+          centering_notes: "Within gem window.",
+        },
+        surface: "Light print line",
+        corners: "Small whitening on one corner",
+        edges: "Minor whitening on right edge",
+        surface_findings: [
+          {
+            issue_type: "print_line",
+            location: "mid holo",
+            severity_0_3: 1,
+            confidence_0_100: 82,
+            notes: "thin line",
+          },
+        ],
+        corners_findings: [
+          {
+            issue_type: "whitening",
+            location: "top right",
+            severity_0_3: 1,
+            confidence_0_100: 85,
+            notes: "small dot",
+          },
+        ],
+        edges_findings: [
+          {
+            issue_type: "whitening",
+            location: "right edge",
+            severity_0_3: 1,
+            confidence_0_100: 84,
+            notes: "light whitening",
+          },
+        ],
+        probabilities: [
+          { label: "PSA 10", probability: 0.62 },
+          { label: "PSA 9", probability: 0.27 },
+          { label: "PSA 8", probability: 0.08 },
+          { label: "PSA 7 or lower", probability: 0.03 },
+        ],
+        bgs_probabilities: [
+          { label: "BGS 9.5", probability: 0.62 },
+          { label: "BGS 9", probability: 0.27 },
+          { label: "BGS 8.5", probability: 0.08 },
+          { label: "BGS 8 or lower", probability: 0.03 },
+        ],
+      },
+      {
+        cardMeta: {
+          game: "Pokemon",
+          sport: "Pokemon",
+          player_name: "Pikachu",
+          set_name: "Pokemon 151",
+          year: 2023,
+        },
+      }
+    );
+
+    expect(parsed.estimate.analysis_metadata?.card_category).toBe("pokemon");
+    expect(parsed.estimate.analysis_metadata?.grading_profile).toBe(
+      "pokemon_strict"
+    );
+    expect(parsed.estimate.grade_probabilities!.psa["10"]).toBeLessThanOrEqual(0.12);
+    expect(parsed.estimate.model_version_used).toBe("rules:pokemon_strict");
+  });
+
+  it("clamps image/confidence score bounds", async () => {
+    const parsed = await runParse({
       status: "ok",
       reason: "Out-of-range scores",
       estimated_grade_low: 7,
@@ -258,8 +359,8 @@ describe("parseGradeEstimateModelOutput", () => {
     expect(parsed.estimate.centering_detail?.centering_severity_0_3).toBe(3);
   });
 
-  it("produces distinct probabilities for cards with different evidence profiles", () => {
-    const highQuality = runParse({
+  it("produces distinct probabilities for cards with different evidence profiles", async () => {
+    const highQuality = await runParse({
       status: "ok",
       reason: "Strong photos and clean card",
       estimated_grade_low: 8,
@@ -303,7 +404,7 @@ describe("parseGradeEstimateModelOutput", () => {
       ],
     });
 
-    const lowQuality = runParse({
+    const lowQuality = await runParse({
       status: "low_confidence",
       reason: "Blur and glare",
       estimated_grade_low: 7,
@@ -361,5 +462,55 @@ describe("parseGradeEstimateModelOutput", () => {
     expect(highDist["10"]).toBeGreaterThan(lowDist["10"]);
     expect(highDist["9"]).toBeGreaterThan(lowDist["9"]);
     expect(lowDist["7_or_lower"]).toBeGreaterThan(highDist["7_or_lower"]);
+  });
+
+  it("caps confidence when no close-up photos are provided", async () => {
+    const parsed = await runParse(
+      {
+        status: "ok",
+        reason: "Clear base photos",
+        estimated_grade_low: 8,
+        estimated_grade_high: 10,
+        grade_notes: "Clean card.",
+        image_quality: {
+          overall_image_score: 86,
+          subscores: {
+            focus_sharpness: 22,
+            lighting_glare_control: 21,
+            coverage_angles: 22,
+            resolution_distance: 21,
+          },
+          key_issues: [],
+          retake_tips: ["Better photos = more accurate grading."],
+        },
+        confidence: {
+          overall_confidence_score: 88,
+          confidence_label: "high",
+          limiting_factors: [],
+          what_was_clear: ["Centering", "General condition"],
+        },
+        centering: {
+          left_right_ratio: "51/49",
+          top_bottom_ratio: "52/48",
+          centering_confidence_score: 90,
+          centering_severity_0_3: 0,
+          centering_notes: "Strong centering.",
+        },
+        surface: "Looks clean.",
+        corners: "Looks sharp.",
+        edges: "Looks clean.",
+        probabilities: [
+          { label: "PSA 10", probability: 0.3 },
+          { label: "PSA 9", probability: 0.45 },
+          { label: "PSA 8", probability: 0.18 },
+          { label: "PSA 7 or lower", probability: 0.07 },
+        ],
+      },
+      { scanPhotoKinds: ["front", "back"] }
+    );
+
+    expect(parsed.estimate.confidence?.overall_confidence_score).toBeLessThanOrEqual(65);
+    expect(parsed.estimate.grade_probabilities?.confidence).not.toBe("high");
+    expect(parsed.estimate.visibility_notes?.join(" ")).toContain("Limited visibility");
   });
 });

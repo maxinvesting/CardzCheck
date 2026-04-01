@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { User } from "@/types";
 import { LIMITS } from "@/types";
 import { isTestMode, getTestUser } from "@/lib/test-mode";
+import { clearCurrentUserCache, getCurrentUserCached } from "@/lib/current-user-client";
 import CardPickerModal from "@/components/CardPickerModal";
 import PricingModal from "@/components/PricingModal";
 import type { CardPickerSelection } from "@/components/CardPicker";
@@ -32,20 +33,8 @@ export default function Header() {
         return;
       }
 
-      const supabase = createClient();
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-
-      if (authUser) {
-        const { data } = await supabase
-          .from("users")
-          .select("*")
-          .eq("id", authUser.id)
-          .single();
-
-        if (data) {
-          setUser(data);
-        }
-      }
+      const currentUser = await getCurrentUserCached();
+      setUser(currentUser);
       setAuthLoading(false);
     }
 
@@ -66,6 +55,7 @@ export default function Header() {
   }, []);
 
   const handleLogout = async () => {
+    clearCurrentUserCache();
     const supabase = createClient();
     await supabase.auth.signOut();
     router.push("/");
@@ -222,9 +212,26 @@ export default function Header() {
                       </button>
                     )}
 
-                    {/* Settings */}
+                    {/* Account (plan, email, logout) */}
                     <Link
                       href="/account"
+                      onClick={() => setShowDropdown(false)}
+                      className="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-800"
+                    >
+                      Account
+                    </Link>
+
+                    <Link
+                      href="/help"
+                      onClick={() => setShowDropdown(false)}
+                      className="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-800"
+                    >
+                      Help &amp; FAQ
+                    </Link>
+
+                    {/* Settings (personal or business by pathname) */}
+                    <Link
+                      href={pathname.startsWith("/business") ? "/business/settings" : "/settings"}
                       onClick={() => setShowDropdown(false)}
                       className="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-800"
                     >

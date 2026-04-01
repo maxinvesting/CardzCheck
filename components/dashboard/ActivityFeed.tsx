@@ -79,67 +79,69 @@ export default function ActivityFeed({ recentCards = [] }: ActivityFeedProps) {
   // Limit to 3 items for compact dashboard
   const displayItems = activities.slice(0, 3);
 
-  // Loading state
-  if (!mounted) {
-    return (
-      <div className="bg-gray-800/60 rounded-xl border border-white/5 overflow-hidden">
-        <div className="px-4 py-3 border-b border-white/5">
-          <h3 className="text-sm font-medium text-white">Recent Activity</h3>
-        </div>
-        <div className="p-2">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-12 bg-gray-700/30 rounded-lg animate-pulse mb-1.5 last:mb-0" />
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  // Empty state
-  if (displayItems.length === 0) {
-    return (
-      <div className="bg-gray-800/60 rounded-xl border border-white/5 overflow-hidden">
-        <div className="px-4 py-3 border-b border-white/5">
-          <h3 className="text-sm font-medium text-white">Recent Activity</h3>
-        </div>
-        <div className="py-8 text-center">
-          <div className="w-10 h-10 mx-auto mb-3 rounded-xl bg-gray-700/50 flex items-center justify-center">
-            <svg
-              className="w-5 h-5 text-gray-500"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.5}
-                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-          </div>
-          <p className="text-sm text-gray-400">No recent activity</p>
-          <p className="text-xs text-gray-500 mt-1">Your searches and cards will appear here</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
-      {/* Header */}
-      <div className="px-4 py-2.5 border-b border-gray-800 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-white">Recent Activity</h3>
-        {searches.length > 0 && (
+  const renderShell = (content: React.ReactNode, showSkeleton = false) => (
+    <section className="overflow-hidden rounded-xl border border-[color:var(--biz-border,#e5e7eb)] bg-[color:var(--biz-surface,#ffffff)]">
+      <div className="flex items-center justify-between border-b border-[color:var(--biz-border,#e5e7eb)] px-4 py-2.5">
+        <h2 className="text-sm font-semibold text-[color:var(--biz-text,#111827)]">
+          Recent activity
+        </h2>
+        {searches.length > 0 && !showSkeleton && (
           <button
             onClick={handleClearAll}
-            className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
+            className="text-xs font-medium text-[color:var(--biz-muted,#6b7280)] hover:text-[color:var(--biz-text,#111827)] transition-colors"
           >
             Clear searches
           </button>
         )}
       </div>
+      {content}
+    </section>
+  );
 
+  // Loading state
+  if (!mounted) {
+    return renderShell(
+      <div className="p-3">
+        {[1, 2, 3].map((i) => (
+          <div
+            key={i}
+            className="mb-2 h-10 rounded-full bg-[color:var(--biz-skeleton,#e5e7eb)] last:mb-0"
+          />
+        ))}
+      </div>,
+      true
+    );
+  }
+
+  // Empty state
+  if (displayItems.length === 0) {
+    return renderShell(
+      <div className="py-8 text-center">
+        <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-[color:var(--biz-surface-soft,#f9fafb)]">
+          <svg
+            className="h-5 w-5 text-[color:var(--biz-muted,#6b7280)]"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={1.5}
+              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+          </svg>
+        </div>
+        <p className="text-sm text-[color:var(--biz-muted,#6b7280)]">No recent activity</p>
+        <p className="mt-1 text-xs text-[color:var(--biz-muted,#9ca3af)]">
+          Your searches and cards will appear here.
+        </p>
+      </div>
+    );
+  }
+
+  return renderShell(
+    <div className="px-2 py-1">
       {/* Activity List */}
       <div className="p-1">
         {displayItems.map((item, index) => {
@@ -149,7 +151,7 @@ export default function ActivityFeed({ recentCards = [] }: ActivityFeedProps) {
               <button
                 key={`search-${search.timestamp}`}
                 onClick={() => handleSearchClick(search)}
-                className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-gray-700/50 transition-all duration-150 group"
+                className="group flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-[color:var(--biz-hover,#f3f4f6)]"
               >
                 {/* Icon */}
                 <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
@@ -169,15 +171,19 @@ export default function ActivityFeed({ recentCards = [] }: ActivityFeedProps) {
                 </div>
 
                 {/* Content */}
-                <div className="flex-1 min-w-0 text-left">
-                  <p className="text-sm text-white truncate">{search.query}</p>
-                  <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                <div className="min-w-0 flex-1 text-left">
+                  <p className="truncate text-xs font-medium text-[color:var(--biz-text,#111827)]">
+                    {search.query}
+                  </p>
+                  <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-[color:var(--biz-muted,#6b7280)]">
                     <span>{formatTimeAgo(search.timestamp)}</span>
                     {search.resultCount !== undefined && (
                       <>
-                        <span className="text-gray-600">·</span>
+                        <span className="text-gray-300">·</span>
                         {search.resultCount === 0 ? (
-                          <span className="text-amber-400">0 results - Try removing year or set</span>
+                          <span className="text-amber-600">
+                            0 results · Try removing year or set
+                          </span>
                         ) : (
                           <span>{search.resultCount} results</span>
                         )}
@@ -185,8 +191,10 @@ export default function ActivityFeed({ recentCards = [] }: ActivityFeedProps) {
                     )}
                     {search.cmv !== undefined && search.cmv !== null && (
                       <>
-                        <span className="text-gray-600">·</span>
-                        <span className="text-blue-400">Est. value: ${search.cmv.toLocaleString()}</span>
+                        <span className="text-gray-300">·</span>
+                        <span className="text-[color:var(--biz-primary,#0b7a4b)]">
+                          Est. value: ${search.cmv.toLocaleString()}
+                        </span>
                       </>
                     )}
                   </div>
@@ -203,9 +211,9 @@ export default function ActivityFeed({ recentCards = [] }: ActivityFeedProps) {
                       handleRemove(search.timestamp, e as unknown as React.MouseEvent);
                     }
                   }}
-                  className="flex-shrink-0 p-1 text-gray-600 hover:text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                  className="flex-shrink-0 cursor-pointer p-1 text-[color:var(--biz-muted,#9ca3af)] opacity-0 transition-opacity group-hover:opacity-100"
                 >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -223,10 +231,10 @@ export default function ActivityFeed({ recentCards = [] }: ActivityFeedProps) {
           return (
             <div
               key={`card-${card.id}`}
-              className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-700/50 transition-all duration-150"
+              className="flex items-center gap-3 rounded-lg px-2.5 py-2 transition-colors hover:bg-[color:var(--biz-hover,#f3f4f6)]"
             >
               {/* Thumbnail or icon */}
-              <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-blue-500/10 overflow-hidden">
+              <div className="flex-shrink-0 h-8 w-8 overflow-hidden rounded-lg bg-blue-500/10">
                 {card.image_url ? (
                   <img
                     src={card.image_url}
@@ -253,14 +261,18 @@ export default function ActivityFeed({ recentCards = [] }: ActivityFeedProps) {
               </div>
 
               {/* Content */}
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-white truncate">{card.player_name}</p>
-                <div className="flex items-center gap-1.5 text-xs text-gray-500">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-medium text-[color:var(--biz-text,#111827)]">
+                  {card.player_name}
+                </p>
+                <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-[color:var(--biz-muted,#6b7280)]">
                   <span>Added {formatTimeAgo(card.created_at)}</span>
                   {card.purchase_price && (
                     <>
-                      <span className="text-gray-600">·</span>
-                      <span className="text-blue-400">Paid: ${card.purchase_price.toLocaleString()}</span>
+                      <span className="text-gray-300">·</span>
+                      <span className="text-[color:var(--biz-primary,#0b7a4b)]">
+                        Paid: ${card.purchase_price.toLocaleString()}
+                      </span>
                     </>
                   )}
                 </div>

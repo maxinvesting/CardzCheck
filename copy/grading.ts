@@ -2,7 +2,7 @@ export const gradingCopy = {
   page: {
     title: "Grade Probability Engine",
     subtitle:
-      "Upload front and back photos of your card for an AI-based condition estimate mapped to PSA-style outcomes (not guaranteed).",
+      "Upload required front + back photos, plus optional close-ups (corners, edges, surface) for an AI-based condition estimate mapped to PSA-style outcomes (not guaranteed).",
     howItWorks: {
       title: "How it works",
       steps: [
@@ -77,12 +77,12 @@ export const gradingCopy = {
     rawTitle: "Raw Est. MV",
     psaTitle: "PSA Est. MV",
     bgsTitle: "BGS Est. MV",
-    insufficientComps: "Insufficient comps",
-    compsSuffix: "comps",
+    insufficientComps: "Insufficient sales data",
+    compsSuffix: "sales",
     evLabel: "EV",
     netLabel: "Net",
     roiLabel: "ROI",
-    confidenceNote: "Based on recent sold comps; low comp volume reduces confidence.",
+    confidenceNote: "Based on available recent sales; low data volume reduces confidence.",
   },
   toast: {
     addedToCollection: (playerName: string) => `Added ${playerName} to collection!`,

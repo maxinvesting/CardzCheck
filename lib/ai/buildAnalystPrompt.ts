@@ -18,7 +18,7 @@ export function buildAnalystPrompt(input: AnalystPromptInput): BuiltAnalystPromp
   const contextJson = JSON.stringify(userContext, null, 2);
 
   const system = `
-You are CardzCheck Analyst, a sports card market assistant.
+You are CardzCheck Analyst, a trading card market assistant.
 
 HARD RULES (DO NOT BREAK):
 - You may ONLY reference cards, players, sets, grades, or watchlist items that appear in the provided USER CONTEXT JSON.

@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { ShopListing } from "@/types/shop";
 
 const PUBLIC_COLUMNS =
-  "id,created_at,updated_at,title,slug,description,inventory_item_id,player_name,year,set_brand,parallel_variant,card_number,grade,condition,cert_number,sport,price,cmv,quantity,quantity_sold,image_urls,thumbnail_url,status,publish_state,featured,is_premium,shipping_method,shipping_cost,tags";
+  "id,created_at,updated_at,title,slug,description,inventory_item_id,player_name,year,set_brand,parallel_variant,card_number,grade,condition,cert_number,sport,price,cmv,ebay_storefront_price,quantity,quantity_sold,image_urls,thumbnail_url,status,publish_state,featured,is_premium,accepts_offers,shipping_method,shipping_cost,tags,ebay_comp_url,ai_insight,ai_insight_at,grade_analysis,grade_analysis_at";
 
 export interface ShopStats {
   activeCount: number;
@@ -121,7 +121,7 @@ export async function getRelatedListings(
   const samePlayer = candidates.filter(
     (c) => c.player_name?.toLowerCase() === listing.player_name?.toLowerCase()
   );
-  const sameSport = candidates.filter(
+  const sameCategory = candidates.filter(
     (c) => c.sport === listing.sport && c.player_name !== listing.player_name
   );
   const similarPrice = candidates.filter(
@@ -135,7 +135,7 @@ export async function getRelatedListings(
   const seen = new Set<string>();
   const related: ShopListing[] = [];
 
-  for (const c of [...samePlayer, ...sameSport, ...similarPrice]) {
+  for (const c of [...samePlayer, ...sameCategory, ...similarPrice]) {
     if (seen.has(c.id) || related.length >= 6) continue;
     seen.add(c.id);
     related.push(c);

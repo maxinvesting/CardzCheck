@@ -24,27 +24,29 @@ export default function CompactTopPerformers({ items, loading }: CompactTopPerfo
 
   if (loading) {
     return (
-      <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
-        <div className="animate-pulse">
-          <div className="h-4 bg-gray-800 rounded w-32 mb-3" />
+      <section className="rounded-xl border border-[color:var(--biz-border,#e5e7eb)] bg-[color:var(--biz-surface,#ffffff)] p-4">
+        <div className="animate-pulse space-y-3">
+          <div className="h-4 w-32 rounded-full bg-[color:var(--biz-skeleton,#e5e7eb)]" />
           <div className="space-y-2">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="h-12 bg-gray-800 rounded" />
+            {[...Array(3)].map((_, index) => (
+              <div key={index} className="h-10 rounded-full bg-[color:var(--biz-skeleton,#e5e7eb)]" />
             ))}
           </div>
         </div>
-      </div>
+      </section>
     );
   }
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold text-white">Top Performers</h3>
+    <section className="rounded-xl border border-[color:var(--biz-border,#e5e7eb)] bg-[color:var(--biz-surface,#ffffff)] p-4">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold text-[color:var(--biz-text,#111827)]">
+          Highest-Value Cards
+        </h2>
         {items.length > 0 && (
           <Link
             href="/collection"
-            className="text-xs text-blue-400 hover:text-blue-300"
+            className="text-xs font-medium text-[color:var(--biz-primary,#0b7a4b)] hover:underline"
           >
             View all
           </Link>
@@ -52,41 +54,45 @@ export default function CompactTopPerformers({ items, loading }: CompactTopPerfo
       </div>
 
       {performers.length === 0 ? (
-        <div className="text-center py-6">
-          <p className="text-xs text-gray-500">Add cards to track performance</p>
+        <div className="py-6 text-center">
+          <p className="text-xs text-[color:var(--biz-muted,#6b7280)]">
+            Add cards to see highest-value cards.
+          </p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="divide-y divide-[color:var(--biz-border,#e5e7eb)]">
           {performers.map((perf) => {
             const { item, estCmv, pctChange } = perf;
             return (
               <div
                 key={item.id}
-                className="flex items-center gap-3 p-2 bg-gray-800/50 rounded-lg"
+                className="flex items-center gap-3 py-2 first:pt-0 last:pb-0"
               >
                 {item.image_url && (
                   <img
                     src={item.image_url}
                     alt={item.player_name}
-                    className="w-8 h-11 object-cover rounded"
+                    className="h-11 w-8 rounded object-cover"
                   />
                 )}
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-white truncate">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs font-medium text-[color:var(--biz-text,#111827)]">
                     {item.player_name}
                   </p>
-                  <p className="text-[10px] text-gray-500 truncate">
+                  <p className="truncate text-[10px] text-[color:var(--biz-muted,#6b7280)]">
                     {[item.year, item.set_name].filter(Boolean).join(" • ")}
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-xs font-semibold text-white tabular-nums">
+                  <p className="text-xs font-semibold text-[color:var(--biz-text,#111827)] tabular-nums">
                     {formatCurrency(estCmv ?? null)}
                   </p>
                   {pctChange !== null && (
-                    <p className={`text-[10px] tabular-nums ${
+                    <p
+                      className={`text-[10px] tabular-nums ${
                       pctChange >= 0 ? "text-green-400" : "text-red-400"
-                    }`}>
+                    }`}
+                    >
                       {pctChange >= 0 ? "+" : ""}{(pctChange * 100).toFixed(0)}%
                     </p>
                   )}
@@ -96,6 +102,6 @@ export default function CompactTopPerformers({ items, loading }: CompactTopPerfo
           })}
         </div>
       )}
-    </div>
+    </section>
   );
 }

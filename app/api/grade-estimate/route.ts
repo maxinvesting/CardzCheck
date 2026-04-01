@@ -5,21 +5,33 @@ import {
   buildImageStats,
 } from "@/lib/grading/fallbackEstimate";
 import {
-  extractImageUrls,
+  extractScanPhotos,
   resolveGradeEstimateImages,
 } from "@/lib/grading/gradeEstimateImages";
 import { parseGradeEstimateModelOutput } from "@/lib/grading/gradeEstimateModel";
+import type { GradeScanCardMeta } from "@/lib/grading/gradeFeatures";
+import {
+  GRADE_SCAN_MAX_CLOSEUPS,
+  GRADE_SCAN_MAX_TOTAL_PHOTOS,
+  isCloseupKind,
+} from "@/lib/grading/scanPhotos";
+import {
+  buildCategoryPromptNote,
+  resolveGradingCategory,
+} from "@/lib/grading/grading-profile";
 
 function getAnthropicClient() {
-  return new Anthropic({
-    apiKey: process.env.ANTHROPIC_API_KEY,
-  });
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    throw new Error("ANTHROPIC_API_KEY is not configured");
+  }
+  return new Anthropic({ apiKey });
 }
 
 
-const SYSTEM_PROMPT = `You are a sports card grading specialist. Produce strict JSON only. Use conservative assumptions and never inflate high-grade odds when evidence is weak.`;
+const SYSTEM_PROMPT = `You are a trading card grading specialist. Handle sports cards and TCG cards (including Pokemon and One Piece). Produce strict JSON only. Use conservative assumptions and never inflate high-grade odds when evidence is weak.`;
 
-const USER_PROMPT = `Analyze these photos of the SAME RAW (unslabbed) sports trading card.
+const USER_PROMPT = `Analyze these photos of the SAME RAW (unslabbed) trading card.
 
 Use ALL provided images. Better images increase analysis accuracy; explicitly reflect this in image_quality and confidence.
 
@@ -37,6 +49,11 @@ Centering gate rules (must enforce):
 Surface rules (must enforce):
 - Extract explicit surface defects with location + severity.
 - If glare/blur blocks surface reading, say that clearly, lower confidence, and shift probabilities downward.
+
+TCG strict profile rules (must enforce when card is Pokemon, One Piece, or other TCG):
+- Edge whitening, edge chipping, corner whitening, rough cuts, and print lines are major gem-mint blockers.
+- If multiple moderate edge/corner whitening/chipping findings exist, keep PSA 10 probability very low.
+- Explain category-specific blockers explicitly in grade_notes and findings.
 
 Output ONLY valid JSON (no markdown, no prose) with this exact schema:
 {
@@ -120,23 +137,68 @@ Hard requirements:
 - Probabilities in each array must sum to 1.0.
 - If uncertain, widen range and shift probability mass lower (conservative).`;
 
+function readString(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function readYear(value: unknown): string | number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim().length > 0) return value.trim();
+  return null;
+}
+
 export async function POST(request: NextRequest) {
   let imageStats = buildImageStats([]);
 
   try {
     const body = await request.json();
-    const imageUrls = extractImageUrls(body);
+    const bodyCard = body?.card && typeof body.card === "object" ? body.card : null;
+    const cardMeta: GradeScanCardMeta = {
+      game: readString(body?.game) ?? readString(bodyCard?.game),
+      sport: readString(body?.sport) ?? readString(bodyCard?.sport),
+      player_name:
+        readString(body?.player_name) ?? readString(bodyCard?.player_name),
+      set_name: readString(body?.set_name) ?? readString(bodyCard?.set_name),
+      year: readYear(body?.year) ?? readYear(bodyCard?.year),
+      title: readString(body?.title) ?? null,
+      chrome: null,
+    };
 
-    if (imageUrls.length === 0) {
+    const scanPhotos = extractScanPhotos(body);
+
+    if (scanPhotos.length === 0) {
       return NextResponse.json(
-        { error: "Missing image URL" },
+        { error: "Missing card images" },
         { status: 400 }
       );
     }
 
-    if (imageUrls.length > 8) {
+    if (!scanPhotos.some((photo) => photo.kind === "front") || !scanPhotos.some((photo) => photo.kind === "back")) {
       return NextResponse.json(
-        { error: "Too many images", reason: "Maximum 8 images allowed" },
+        { error: "Front and back photos are required." },
+        { status: 400 }
+      );
+    }
+
+    const closeupCount = scanPhotos.filter((photo) => isCloseupKind(photo.kind)).length;
+    if (scanPhotos.length > GRADE_SCAN_MAX_TOTAL_PHOTOS) {
+      return NextResponse.json(
+        {
+          error: "Too many images",
+          reason: `Maximum ${GRADE_SCAN_MAX_TOTAL_PHOTOS} images allowed`,
+        },
+        { status: 400 }
+      );
+    }
+
+    if (closeupCount > GRADE_SCAN_MAX_CLOSEUPS) {
+      return NextResponse.json(
+        {
+          error: "Too many close-up images",
+          reason: `Maximum ${GRADE_SCAN_MAX_CLOSEUPS} close-up images allowed`,
+        },
         { status: 400 }
       );
     }
@@ -148,7 +210,7 @@ export async function POST(request: NextRequest) {
     }> = [];
 
     try {
-      const resolved = await resolveGradeEstimateImages(imageUrls);
+      const resolved = await resolveGradeEstimateImages(scanPhotos);
       resolvedImages = resolved.resolvedImages;
       imageStats = resolved.imageStats;
     } catch (error) {
@@ -161,6 +223,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const categoryNote = buildCategoryPromptNote(resolveGradingCategory(cardMeta));
+    const rolePrompt = `Photo role map:\n${scanPhotos
+      .map((photo, index) => `${index + 1}. ${photo.kind.replace(/_/g, " ")}`)
+      .join("\n")}\n${
+      closeupCount === 0
+        ? "\nNo close-up photos were provided. Treat corners/edges/surface visibility as limited and avoid high confidence."
+        : "\nUse matching close-up types as primary evidence for corners, edges, and surface."
+    }\n\n${categoryNote}`;
+
     // Process card image for grade estimation
     const anthropic = getAnthropicClient();
     const message = await anthropic.messages.create({
@@ -170,6 +241,10 @@ export async function POST(request: NextRequest) {
         {
           role: "user",
           content: [
+            {
+              type: "text",
+              text: rolePrompt,
+            },
             ...resolvedImages.map((image) => ({
               type: "image" as const,
               source: {
@@ -192,7 +267,12 @@ export async function POST(request: NextRequest) {
     const textContent = message.content.find((c) => c.type === "text");
     const modelText =
       textContent && textContent.type === "text" ? textContent.text : null;
-    const parsed = parseGradeEstimateModelOutput({ modelText, imageStats });
+    const parsed = await parseGradeEstimateModelOutput({
+      modelText,
+      imageStats,
+      scanPhotoKinds: scanPhotos.map((photo) => photo.kind),
+      cardMeta,
+    });
     return NextResponse.json(parsed.estimate);
   } catch (error) {
     console.error("Grade estimation error:", error);
