@@ -7,6 +7,7 @@ import {
   createGradeEstimateJob,
 } from "@/lib/grading/gradeEstimateJobStore";
 import { runGradeEstimateJob } from "@/lib/grading/gradeEstimateJob";
+import type { GradeEstimateJobStatusResponse } from "@/lib/grading/gradeEstimateJob";
 import { createGradeEstimateJobDependencies } from "@/lib/grading/gradeEstimateServer";
 import { checkGradeTokenBudget } from "@/lib/grading/tokenBudget";
 import { isTestMode } from "@/lib/test-mode";
@@ -17,6 +18,9 @@ import {
   GRADE_SCAN_MAX_TOTAL_PHOTOS,
 } from "@/lib/grading/scanPhotos";
 
+// Allow up to 5 minutes for the full grade analysis pipeline (OCR + grade model + value lookup).
+export const maxDuration = 300;
+
 type GradeEstimateStartPayload = {
   imageUrl?: string;
   imageUrls?: string[];
@@ -25,6 +29,7 @@ type GradeEstimateStartPayload = {
   closeups?: Array<{ url?: string; kind?: string; sort_order?: number }>;
   scanPhotos?: GradeScanPhoto[];
   card?: GradeEstimatorCardInput;
+  preScanNotes?: string;
 };
 
 export async function POST(request: NextRequest) {
@@ -129,16 +134,32 @@ export async function POST(request: NextRequest) {
     const job = createGradeEstimateJob();
     const deps = createGradeEstimateJobDependencies(user.id);
 
-    void runGradeEstimateJob(
+    // Run the full pipeline synchronously so the result is available in this
+    // response. The old fire-and-forget approach broke in serverless environments
+    // (Vercel) because the in-memory job store is not shared across function
+    // instances, causing polling to immediately return 404.
+    await runGradeEstimateJob(
       job,
       {
         scanPhotos,
         card: body.card ?? null,
+        preScanNotes: body.preScanNotes?.trim() || undefined,
       },
       deps
     );
 
-    return NextResponse.json({ jobId: job.jobId });
+    const response: GradeEstimateJobStatusResponse = {
+      jobId: job.jobId,
+      status: job.status,
+      startedAt: job.startedAt,
+      finishedAt: job.finishedAt,
+      steps: job.steps,
+      partial: job.partial,
+      final: job.final ?? null,
+      error: job.error ?? null,
+    };
+
+    return NextResponse.json(response);
   } catch (error) {
     console.error("Grade estimate job start error:", error);
     return NextResponse.json(

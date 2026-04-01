@@ -7,6 +7,7 @@ import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import PricingModal from "@/components/PricingModal";
 import EbayConnectSection from "@/components/business/settings/EbayConnectSection";
 import StorefrontsSection from "@/components/business/settings/StorefrontsSection";
+import TeamManagementSection from "@/components/business/settings/TeamManagementSection";
 import { createClient } from "@/lib/supabase/client";
 import { hasActiveBusinessTier } from "@/lib/subscription-tier";
 import type { User } from "@/types";
@@ -72,6 +73,7 @@ function SettingsContent() {
   const [pricingOpen, setPricingOpen] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [hasBusinessWorkspace, setHasBusinessWorkspace] = useState(false);
   const isBusinessSettings = pathname.startsWith("/business");
 
   useEffect(() => {
@@ -124,6 +126,26 @@ function SettingsContent() {
           .maybeSingle(),
       ]);
       setSubscription(subscriptionData ?? null);
+
+      const legacyBusinessAccess =
+        Boolean(userData?.is_paid) && hasActiveBusinessTier(subscriptionData);
+      let membershipBusinessAccess = false;
+      const { data: membershipRows, error: membershipError } = await supabase
+        .from("business_memberships")
+        .select("business_account_id")
+        .eq("user_id", authUser.id)
+        .eq("status", "active")
+        .limit(1);
+
+      if (!membershipError) {
+        membershipBusinessAccess = (membershipRows?.length ?? 0) > 0;
+      } else if (
+        !["42P01", "42703", "PGRST205"].includes(membershipError.code || "")
+      ) {
+        console.warn("Failed to resolve business membership access:", membershipError);
+      }
+
+      setHasBusinessWorkspace(legacyBusinessAccess || membershipBusinessAccess);
 
       const hasTableEbayStoreUrl =
         !!userData &&
@@ -238,18 +260,19 @@ function SettingsContent() {
     );
   }
 
-  const isBusinessMember = Boolean(user?.is_paid) && hasActiveBusinessTier(subscription);
-  const paidPlanName = isBusinessMember ? "Business Member" : "Pro Member";
+  const isBusinessMember = hasBusinessWorkspace;
+  const paidPlanName = isBusinessMember ? "Business Workspace" : "Pro Member";
   const paidPlanBadge = isBusinessMember ? "Business" : "Pro";
   const paidPlanDescription = isBusinessMember
-    ? "Inventory, sales analytics, and all Pro features included"
+    ? "Team workspace with inventory, sales analytics, and shared operations"
     : "Unlimited searches and collection tracking";
   const paidPlanFeatures = isBusinessMember
     ? [
-        "Spreadsheet-style inventory tracking",
+        "Business base includes 1 user",
+        "Add extra team seats for $12/month each",
+        "Shared inventory and sales workflows",
         "Revenue & profit dashboards",
-        "eBay integration tools",
-        "All Pro features included",
+        "Owner-managed billing and seat controls",
       ]
     : [
         "Unlimited searches",
@@ -259,13 +282,14 @@ function SettingsContent() {
 
   return (
     <AuthenticatedLayout>
-      <main className="max-w-3xl mx-auto px-4 py-8">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-8">
-          Settings
-        </h1>
+      <div className="min-h-screen bg-[#0b2347]">
+        <main className="max-w-4xl mx-auto px-4 py-10 text-white">
+          <h1 className="text-3xl font-bold text-white mb-8">
+            Settings
+          </h1>
 
         {showSuccess && (
-          <div className="mb-8 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl">
+          <div className="mb-8 p-4 bg-emerald-500/15 border border-emerald-300/30 rounded-xl">
             <div className="flex items-center gap-3">
               <svg
                 className="w-6 h-6 text-green-500"
@@ -281,10 +305,10 @@ function SettingsContent() {
                 />
               </svg>
               <div>
-                <p className="font-medium text-green-800 dark:text-green-200">
+                <p className="font-medium text-emerald-200">
                   Payment successful!
                 </p>
-                <p className="text-sm text-green-600 dark:text-green-400">
+                <p className="text-sm text-emerald-100/90">
                   You now have unlimited access to CardzCheck.
                 </p>
               </div>
@@ -294,13 +318,13 @@ function SettingsContent() {
 
         <div className="space-y-6">
           {/* Account Information */}
-          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+          <div className="bg-white/5 border border-white/15 rounded-2xl p-6 backdrop-blur-sm">
+            <h2 className="text-lg font-semibold text-white mb-4">
               Account Information
             </h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-white/85 mb-2">
                   Name
                 </label>
                 <div className="flex gap-2">
@@ -310,23 +334,23 @@ function SettingsContent() {
                     onChange={(e) => setName(e.target.value)}
                     placeholder="Your name"
                     maxLength={100}
-                    className="flex-1 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="flex-1 px-4 py-2 bg-[#10294a] border border-white/20 rounded-lg text-white placeholder:text-white/45 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent"
                   />
                   <button
                     onClick={handleNameUpdate}
                     disabled={nameLoading || name === (user?.name || "")}
-                    className="px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-4 py-2 bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {nameLoading ? "Saving..." : "Save"}
                   </button>
                 </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                <p className="text-xs text-white/60 mt-1">
                   This name will be used for personalization throughout the app
                 </p>
               </div>
               {isBusinessSettings && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <label className="block text-sm font-medium text-white/85 mb-2">
                     Business Name
                   </label>
                   <div className="flex gap-2">
@@ -336,7 +360,7 @@ function SettingsContent() {
                       onChange={(e) => setBusinessName(e.target.value)}
                       placeholder="Your business name"
                       maxLength={120}
-                      className="flex-1 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="flex-1 px-4 py-2 bg-[#10294a] border border-white/20 rounded-lg text-white placeholder:text-white/45 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent"
                     />
                     <button
                       onClick={handleBusinessNameUpdate}
@@ -344,35 +368,35 @@ function SettingsContent() {
                         businessNameLoading ||
                         businessName === (user?.business_name || "")
                       }
-                      className="px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="px-4 py-2 bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {businessNameLoading ? "Saving..." : "Save"}
                     </button>
                   </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  <p className="text-xs text-white/60 mt-1">
                     Used as your Business workspace title
                   </p>
                 </div>
               )}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-white/85 mb-2">
                   Email
                 </label>
                 <input
                   type="email"
                   value={email}
                   disabled
-                  className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white cursor-not-allowed"
+                  className="w-full px-4 py-2 bg-[#10294a]/80 border border-white/20 rounded-lg text-white/80 cursor-not-allowed"
                 />
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                <p className="text-xs text-white/60 mt-1">
                   Contact support to change your email address
                 </p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-white/85 mb-2">
                   Member Since
                 </label>
-                <p className="text-gray-900 dark:text-white">
+                <p className="text-white">
                   {user?.created_at
                     ? new Date(user.created_at).toLocaleDateString("en-US", {
                         month: "long",
@@ -400,8 +424,8 @@ function SettingsContent() {
                 eBay Integration
               </h2>
               <EbayConnectSection />
-              <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <div className="mt-4 pt-4 border-t border-white/15">
+                <label className="block text-sm font-medium text-white/85 mb-2">
                   eBay Fee Rate
                 </label>
                 <div className="flex gap-2">
@@ -413,7 +437,7 @@ function SettingsContent() {
                     className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium border transition-colors ${
                       ebayFeeRate === "standard"
                         ? "bg-blue-600 text-white border-blue-600"
-                        : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
+                        : "bg-[#10294a] text-white/85 border-white/20 hover:bg-[#14355f]"
                     }`}
                   >
                     Standard — 13%
@@ -426,13 +450,13 @@ function SettingsContent() {
                     className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium border transition-colors ${
                       ebayFeeRate === "top_rated_plus"
                         ? "bg-blue-600 text-white border-blue-600"
-                        : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
+                        : "bg-[#10294a] text-white/85 border-white/20 hover:bg-[#14355f]"
                     }`}
                   >
                     Top Rated Plus — 12%
                   </button>
                 </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                <p className="text-xs text-white/60 mt-1">
                   Used to calculate eBay Parity Price in your inventory and shop listings
                 </p>
               </div>
@@ -440,6 +464,7 @@ function SettingsContent() {
           )}
 
           {/* Current Plan */}
+          {!isBusinessSettings && (
           <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
               Current Plan
@@ -536,43 +561,44 @@ function SettingsContent() {
                     <li>• Unlimited searches</li>
                     <li>• Unlimited collection tracking</li>
                     <li>• Collection value tracking</li>
-                    <li>• One-time payment, lifetime access</li>
+                    <li>• Business workspace from $29/month (1 user included, +$12/seat)</li>
                   </ul>
                 </div>
               </div>
             )}
           </div>
+          )}
 
           {/* Password */}
-          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+          <div className="bg-white/5 border border-white/15 rounded-2xl p-6 backdrop-blur-sm">
+            <h2 className="text-lg font-semibold text-white mb-4">
               Password
             </h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+            <p className="text-sm text-white/70 mb-4">
               Password changes are not currently supported. Contact support if
               you need to reset your password.
             </p>
           </div>
 
           {/* Session */}
-          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+          <div className="bg-white/5 border border-white/15 rounded-2xl p-6 backdrop-blur-sm">
+            <h2 className="text-lg font-semibold text-white mb-4">
               Session
             </h2>
             <button
               onClick={handleLogout}
-              className="px-4 py-2 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              className="px-4 py-2 border border-white/30 text-white rounded-lg hover:bg-white/10 transition-colors"
             >
               Log out
             </button>
           </div>
 
           {/* Danger Zone */}
-          <div className="bg-white dark:bg-gray-900 border border-red-200 dark:border-red-800 rounded-xl p-6">
-            <h2 className="text-lg font-semibold text-red-600 dark:text-red-400 mb-4">
+          <div className="bg-red-500/10 border border-red-300/40 rounded-2xl p-6 backdrop-blur-sm">
+            <h2 className="text-lg font-semibold text-red-200 mb-4">
               Danger Zone
             </h2>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            <p className="text-sm text-white/75 mb-4">
               Once you delete your account, there is no going back. This action
               will permanently delete your account and all associated data.
             </p>
@@ -613,7 +639,8 @@ function SettingsContent() {
             </div>
           </div>
         )}
-      </main>
+        </main>
+      </div>
       <PricingModal isOpen={pricingOpen} onClose={() => setPricingOpen(false)} />
     </AuthenticatedLayout>
   );

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { requireBusinessAccess } from "@/lib/business/actions";
+import { requireBusinessOwnerContext } from "@/lib/business/context";
 import type { StorefrontPlatform } from "@/types";
 import { STOREFRONT_PLATFORMS } from "@/types";
 
@@ -32,7 +32,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    await requireBusinessAccess(user.id);
+    await requireBusinessOwnerContext(user.id);
 
     const { data: existing } = await supabase
       .from("user_storefronts")
@@ -170,7 +170,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    await requireBusinessAccess(user.id);
+    await requireBusinessOwnerContext(user.id);
 
     const { data: existing } = await supabase
       .from("user_storefronts")

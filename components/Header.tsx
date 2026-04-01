@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { User } from "@/types";
 import { LIMITS } from "@/types";
 import { isTestMode, getTestUser } from "@/lib/test-mode";
+import { clearCurrentUserCache, getCurrentUserCached } from "@/lib/current-user-client";
 import CardPickerModal from "@/components/CardPickerModal";
 import PricingModal from "@/components/PricingModal";
 import type { CardPickerSelection } from "@/components/CardPicker";
@@ -32,20 +33,8 @@ export default function Header() {
         return;
       }
 
-      const supabase = createClient();
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-
-      if (authUser) {
-        const { data } = await supabase
-          .from("users")
-          .select("*")
-          .eq("id", authUser.id)
-          .single();
-
-        if (data) {
-          setUser(data);
-        }
-      }
+      const currentUser = await getCurrentUserCached();
+      setUser(currentUser);
       setAuthLoading(false);
     }
 
@@ -66,6 +55,7 @@ export default function Header() {
   }, []);
 
   const handleLogout = async () => {
+    clearCurrentUserCache();
     const supabase = createClient();
     await supabase.auth.signOut();
     router.push("/");

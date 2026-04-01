@@ -1,113 +1,86 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import { useEffect, useRef } from "react";
+import { animate } from "framer-motion";
 import type { InventoryValueSummary } from "@/lib/business/inventory-value";
 import type { BusinessMetrics as Metrics } from "@/types";
 
-function fmt(cents: number): string {
-  return new Intl.NumberFormat("en-US", {
+function fmtCurrency(dollars: number): string {
+  return dollars.toLocaleString("en-US", {
     style: "currency",
     currency: "USD",
-    minimumFractionDigits: 2,
-  }).format(cents / 100);
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  });
 }
 
-function cx(...classes: Array<string | false | null | undefined>): string {
-  return classes.filter(Boolean).join(" ");
+function CountUpDollars({
+  valueCents,
+  duration = 1.3,
+}: {
+  valueCents: number;
+  duration?: number;
+}) {
+  const ref = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    if (!ref.current) return;
+    if (valueCents === 0) {
+      ref.current.textContent = "$0";
+      return;
+    }
+
+    const controls = animate(0, valueCents / 100, {
+      duration,
+      ease: [0.16, 1, 0.3, 1],
+      onUpdate(value) {
+        if (ref.current) {
+          ref.current.textContent = fmtCurrency(value);
+        }
+      },
+    });
+
+    return controls.stop;
+  }, [duration, valueCents]);
+
+  return <span ref={ref}>$0</span>;
+}
+
+function CountUpInt({
+  value,
+  duration = 1.0,
+}: {
+  value: number;
+  duration?: number;
+}) {
+  const ref = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    if (!ref.current) return;
+    if (value === 0) {
+      ref.current.textContent = "0";
+      return;
+    }
+
+    const controls = animate(0, value, {
+      duration,
+      ease: [0.16, 1, 0.3, 1],
+      onUpdate(next) {
+        if (ref.current) ref.current.textContent = String(Math.round(next));
+      },
+    });
+
+    return controls.stop;
+  }, [duration, value]);
+
+  return <span ref={ref}>0</span>;
 }
 
 interface Props {
   metrics: Metrics | null;
   loading: boolean;
-  /** Filter-aware inventory value; when provided, shows Inventory Value card */
   inventorySummary?: InventoryValueSummary | null;
-  /** Total item count (all items) for "X of Y" when filtered */
   totalItemCount?: number;
-  /** Compact/dense layout (Business mode) */
-  compact?: boolean;
-}
-
-interface MetricItem {
-  label: string;
-  value: string;
-  valueClass: string;
-  detail?: string;
-  secondaryDetail?: string;
-  emphasized?: boolean;
-}
-
-const KPI_STRIP_STYLE: CSSProperties = {
-  background:
-    "linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(249, 250, 251, 0.96) 100%)",
-  border: "1px solid var(--biz-border)",
-  borderRadius: "18px",
-};
-
-function metricDividerClasses(index: number): string {
-  return cx(
-    index >= 2 && "border-t",
-    index % 2 === 1 && "border-l",
-    index >= 3 ? "sm:border-t" : "sm:border-t-0",
-    index % 3 === 0 ? "sm:border-l-0" : "sm:border-l",
-    index >= 4 ? "md:border-t" : "md:border-t-0",
-    index % 4 === 0 ? "md:border-l-0" : "md:border-l",
-    "lg:border-t-0",
-    index === 0 ? "lg:border-l-0" : "lg:border-l"
-  );
-}
-
-function MetricCell({
-  item,
-  index,
-  loading,
-  compact,
-}: {
-  item: MetricItem;
-  index: number;
-  loading: boolean;
-  compact: boolean;
-}) {
-  return (
-    <div
-      className={cx(
-        "min-w-0 border-[color:var(--biz-border)]",
-        compact ? "px-4 py-4 sm:px-5" : "px-5 py-5",
-        "flex min-h-[104px] flex-col justify-between",
-        metricDividerClasses(index),
-        item.emphasized && "bg-white/55"
-      )}
-    >
-      <div className="space-y-2">
-        <p className="text-[10px] font-semibold uppercase leading-[1.15] tracking-[0.18em] text-[var(--biz-muted)]">
-          {item.label}
-        </p>
-        {loading ? (
-          <div className="h-10 w-24 animate-pulse rounded bg-[var(--biz-skeleton)]" />
-        ) : (
-          <p
-            className={cx(
-              "whitespace-nowrap text-[clamp(1.7rem,2.5vw,2.35rem)] font-semibold leading-none tracking-[-0.03em] tabular-nums",
-              item.valueClass,
-              item.emphasized && "text-[clamp(1.8rem,2.7vw,2.5rem)]"
-            )}
-          >
-            {item.value}
-          </p>
-        )}
-      </div>
-
-      {!loading && item.detail ? (
-        <div className="pt-2">
-          <p className="text-xs leading-tight text-[var(--biz-muted)]">{item.detail}</p>
-          {item.secondaryDetail ? (
-            <p className="pt-1 text-xs leading-tight text-[var(--biz-muted)]">
-              {item.secondaryDetail}
-            </p>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
-  );
 }
 
 export default function BusinessMetrics({
@@ -117,93 +90,92 @@ export default function BusinessMetrics({
   totalItemCount,
   compact = false,
 }: Props) {
-  const items: MetricItem[] = [
-    {
-      label: "Revenue MTD",
-      value: metrics ? fmt(metrics.revenueMtd) : "—",
-      valueClass: "text-[var(--biz-text)]",
-    },
-    {
-      label: "Revenue YTD",
-      value: metrics ? fmt(metrics.revenueYtd) : "—",
-      valueClass: "text-[var(--biz-text)]",
-    },
-    {
-      label: "Profit MTD",
-      value: metrics ? fmt(metrics.profitMtd) : "—",
-      valueClass: metrics && metrics.profitMtd >= 0 ? "text-emerald-700" : "text-red-600",
-    },
-    {
-      label: "Profit YTD",
-      value: metrics ? fmt(metrics.profitYtd) : "—",
-      valueClass: metrics && metrics.profitYtd >= 0 ? "text-emerald-700" : "text-red-600",
-    },
+  const profitPositive = !metrics || metrics.profitMtd >= 0;
+  const activeCount = metrics?.activeInventoryCount ?? 0;
+  const totalCount = totalItemCount ?? 0;
+
+  const inventoryValueCents =
+    inventorySummary && inventorySummary.itemCount > 0
+      ? inventorySummary.itemsWithCmv > 0
+        ? inventorySummary.totalCmvCents
+        : inventorySummary.totalCostCents
+      : 0;
+
+  const costBasisLine =
+    inventorySummary && inventorySummary.itemCount > 0
+      ? `Cost basis ${fmtCurrency(inventorySummary.totalCostCents / 100)}`
+      : "No cost data";
+
+  const revenueMtd = metrics?.revenueMtd ?? 0;
+  const profitMtd = metrics?.profitMtd ?? 0;
+  const revenueYtd = metrics ? fmtCurrency(metrics.revenueYtd / 100) : "—";
+  const profitYtd = metrics ? fmtCurrency(metrics.profitYtd / 100) : "—";
+
+  const cards = [
     {
       label: "Sales MTD",
-      value: metrics ? String(metrics.salesCountMtd) : "—",
-      valueClass: "text-[var(--biz-text)]",
+      renderValue: () => (metrics ? <CountUpDollars valueCents={revenueMtd} /> : <span>—</span>),
+      sub: `YTD ${revenueYtd}`,
+      valueColor: "var(--biz-text)",
     },
     {
-      label: "Sales YTD",
-      value: metrics ? String(metrics.salesCountYtd) : "—",
-      valueClass: "text-[var(--biz-text)]",
+      label: "Net Earnings MTD",
+      renderValue: () => (metrics ? <CountUpDollars valueCents={profitMtd} /> : <span>—</span>),
+      sub: `YTD ${profitYtd}`,
+      valueColor: profitPositive ? "#1D9E75" : "#E24B4A",
     },
     {
       label: "Active Inventory",
-      value: metrics ? String(metrics.activeInventoryCount) : "—",
-      valueClass: "text-[var(--biz-text)]",
+      renderValue: () => (metrics ? <CountUpInt value={activeCount} /> : <span>—</span>),
+      sub: `${totalCount} total items`,
+      valueColor: "var(--biz-text)",
     },
-  ];
-
-  if (inventorySummary) {
-    const itemCountLabel = `${inventorySummary.itemCount} item${inventorySummary.itemCount !== 1 ? "s" : ""}`;
-    const inventoryLabel =
-      totalItemCount != null && inventorySummary.itemCount !== totalItemCount
-        ? "Inventory Value (Filtered)"
-        : "Inventory Value";
-
-    items.push({
-      label: inventoryLabel,
-      value:
-        inventorySummary.itemCount === 0
-          ? fmt(0)
-          : inventorySummary.itemsWithCmv > 0
-            ? fmt(inventorySummary.totalCmvCents)
-            : fmt(inventorySummary.totalCostCents),
-      valueClass: "text-[var(--biz-text)]",
-      detail:
-        inventorySummary.itemsWithCmv > 0
-          ? `Est. Market Value · ${itemCountLabel}`
-          : `Cost Basis · ${itemCountLabel}`,
-      secondaryDetail:
-        inventorySummary.itemsWithCmv > 0 &&
-        inventorySummary.itemsWithCmv < inventorySummary.itemCount
-          ? `Cost: ${fmt(inventorySummary.totalCostCents)}`
-          : undefined,
-      emphasized: true,
-    });
-  }
+    {
+      label: "Inventory Value",
+      renderValue: () =>
+        inventorySummary && inventorySummary.itemCount > 0 ? (
+          <CountUpDollars valueCents={inventoryValueCents} />
+        ) : (
+          <span>—</span>
+        ),
+      sub: costBasisLine,
+      valueColor: "var(--biz-text)",
+    },
+  ] as const;
 
   return (
-    <div className={compact ? "mb-3 md:mb-4" : "mb-5"}>
-      <div style={KPI_STRIP_STYLE} className="overflow-hidden">
+    <div
+      className="grid grid-cols-2 overflow-hidden rounded-lg border lg:grid-cols-4"
+      style={{ borderColor: "var(--biz-border)" }}
+    >
+      {cards.map(({ label, renderValue, sub, valueColor }) => (
         <div
-          className={cx(
-            "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4",
-            items.length === 8 ? "lg:grid-cols-8" : "lg:grid-cols-7"
-          )}
+          key={label}
+          className="border-r px-5 py-4 last:border-r-0"
+          style={{ borderColor: "rgba(0,0,0,0.06)" }}
         >
-          {items.map((item, index) => (
-            <MetricCell
-              key={item.label}
-              item={item}
-              index={index}
-              loading={loading}
-              compact={compact}
-            />
-          ))}
+          {loading ? (
+            <div className="space-y-2">
+              <div className="h-2 w-16 animate-pulse rounded bg-slate-200" />
+              <div className="h-7 w-24 animate-pulse rounded bg-slate-200" />
+              <div className="h-2 w-20 animate-pulse rounded bg-slate-100" />
+            </div>
+          ) : (
+            <>
+              <p className="text-[9px] font-normal uppercase tracking-[0.08em] text-slate-500">
+                {label}
+              </p>
+              <p
+                className="mt-1.5 text-[22px] font-medium tabular-nums"
+                style={{ color: valueColor, lineHeight: 1.1 }}
+              >
+                {renderValue()}
+              </p>
+              <p className="mt-1 text-[11px] font-normal text-slate-500">{sub}</p>
+            </>
+          )}
         </div>
-      </div>
+      ))}
     </div>
   );
 }

@@ -10,13 +10,13 @@ export function isTestMode(): boolean {
   // Hard production guard — cannot be overridden by env var
   if (process.env.NODE_ENV === "production") {
     if (process.env.NEXT_PUBLIC_TEST_MODE === "true") {
-      // Log server-side only (this branch runs in both RSC and API routes)
+      const msg =
+        "[SECURITY] CRITICAL: NEXT_PUBLIC_TEST_MODE=true in production! " +
+        "Disable immediately. Test mode bypasses authentication checks.";
+      console.error(msg);
       if (typeof window === "undefined") {
-        console.error(
-          "[SECURITY] NEXT_PUBLIC_TEST_MODE=true detected in production. " +
-          "Test mode is permanently disabled in production. " +
-          "Remove this env var from your Vercel production environment immediately."
-        );
+        // Server-side: throw to halt the request
+        throw new Error(msg);
       }
     }
     return false;

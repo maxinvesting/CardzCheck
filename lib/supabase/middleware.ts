@@ -1,7 +1,7 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { isTestMode } from "@/lib/test-mode";
-import { hasActiveBusinessTier } from "@/lib/subscription-tier";
+import { hasBusinessWorkspaceAccess } from "@/lib/business/workspace-access";
 
 const PROTECTED_PATHS = [
   "/dashboard",
@@ -110,17 +110,19 @@ export async function updateSession(request: NextRequest) {
     matchesPrefix(pathname, "/business") ||
     PERSONAL_WORKSPACE_PATHS.some((path) => matchesPrefix(pathname, path));
 
+  // Allow invite acceptance flow before the user is a business member.
+  if (matchesPrefix(pathname, "/business/invite")) {
+    return { response: supabaseResponse, userId: user.id };
+  }
+
   if (!shouldResolveWorkspace) {
     return { response: supabaseResponse, userId: user.id };
   }
 
-  const { data: subscription } = await supabase
-    .from("subscriptions")
-    .select("tier, status, current_period_end")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  const hasBusinessTier = hasActiveBusinessTier(subscription);
+  const hasBusinessTier = await hasBusinessWorkspaceAccess(
+    supabase as any,
+    user.id
+  );
 
   if (hasBusinessTier) {
     const redirectPath = findRedirect(pathname, PERSONAL_TO_BUSINESS_REDIRECTS);
