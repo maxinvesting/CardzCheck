@@ -145,6 +145,15 @@ function CardTile({
 
   return (
     <div
+      role="link"
+      tabIndex={0}
+      onClick={openProfile}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          openProfile();
+        }
+      }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
@@ -159,11 +168,15 @@ function CardTile({
         transition: "transform 0.15s, box-shadow 0.15s",
         display: "flex",
         flexDirection: "column",
+        cursor: "pointer",
       }}
     >
       <button
         type="button"
-        onClick={openProfile}
+        onClick={(event) => {
+          event.stopPropagation();
+          openProfile();
+        }}
         aria-label={`Open card profile for ${item.title || "Untitled"}`}
         style={{
           color: "inherit",
@@ -244,7 +257,10 @@ function CardTile({
         {/* Card name */}
         <button
           type="button"
-          onClick={openProfile}
+          onClick={(event) => {
+            event.stopPropagation();
+            openProfile();
+          }}
           style={{
             textDecoration: "none",
             cursor: "pointer",
@@ -317,7 +333,10 @@ function CardTile({
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginTop: 2 }}>
           <button
             type="button"
-            onClick={openProfile}
+            onClick={(event) => {
+              event.stopPropagation();
+              openProfile();
+            }}
             style={{
               fontSize: 10,
               fontWeight: 600,

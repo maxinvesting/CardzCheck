@@ -6,7 +6,7 @@ import { hasActiveBusinessTier, hasActiveProTier, type SubscriptionTier } from "
 import type { ShopListing } from "@/types/shop";
 
 const PUBLIC_COLUMNS =
-  "id,created_at,updated_at,title,slug,description,inventory_item_id,player_name,year,set_brand,parallel_variant,card_number,grade,condition,cert_number,sport,price,cmv,quantity,quantity_sold,image_urls,thumbnail_url,status,publish_state,featured,is_premium,shipping_method,shipping_cost,tags,ebay_comp_url,ebay_storefront_price,ai_insight,ai_insight_at,grade_analysis,grade_analysis_at";
+  "id,created_at,updated_at,title,slug,description,inventory_item_id,player_name,year,set_brand,parallel_variant,card_number,grade,condition,cert_number,sport,price,cmv,quantity,quantity_sold,image_urls,thumbnail_url,status,publish_state,featured,is_premium,accepts_offers,shipping_method,shipping_cost,tags,ebay_comp_url,ebay_storefront_price,ai_insight,ai_insight_at,grade_analysis,grade_analysis_at";
 
 async function getListing(id: string): Promise<ShopListing | null> {
   const supabase = await createClient();

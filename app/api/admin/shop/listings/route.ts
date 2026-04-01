@@ -270,6 +270,10 @@ export async function PATCH(request: NextRequest) {
     filtered.is_premium = asBoolean(updates.is_premium);
   }
 
+  if ("accepts_offers" in updates) {
+    filtered.accepts_offers = asBoolean(updates.accepts_offers);
+  }
+
   if ("tags" in updates) {
     filtered.tags = asTags(updates.tags);
   }
@@ -399,6 +403,7 @@ export async function POST(request: NextRequest) {
     thumbnail_url: thumbnailUrl,
     featured: asBoolean(body?.featured),
     is_premium: asBoolean(body?.is_premium),
+    accepts_offers: asBoolean(body?.accepts_offers),
     tags,
   };
 

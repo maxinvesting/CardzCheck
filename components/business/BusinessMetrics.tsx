@@ -81,7 +81,6 @@ interface Props {
   loading: boolean;
   inventorySummary?: InventoryValueSummary | null;
   totalItemCount?: number;
-  compact?: boolean;
 }
 
 export default function BusinessMetrics({
@@ -117,22 +116,19 @@ export default function BusinessMetrics({
       label: "Sales MTD",
       renderValue: () => (metrics ? <CountUpDollars valueCents={revenueMtd} /> : <span>—</span>),
       sub: `YTD ${revenueYtd}`,
-      valueColor: "#0f172a",
-      accentColor: "#3b82f6",
+      valueColor: "var(--biz-text)",
     },
     {
       label: "Net Earnings MTD",
       renderValue: () => (metrics ? <CountUpDollars valueCents={profitMtd} /> : <span>—</span>),
       sub: `YTD ${profitYtd}`,
-      valueColor: profitPositive ? "#0b7a4b" : "#dc2626",
-      accentColor: profitPositive ? "#10b981" : "#ef4444",
+      valueColor: profitPositive ? "#1D9E75" : "#E24B4A",
     },
     {
       label: "Active Inventory",
       renderValue: () => (metrics ? <CountUpInt value={activeCount} /> : <span>—</span>),
       sub: `${totalCount} total items`,
-      valueColor: "#0f172a",
-      accentColor: "#0b7a4b",
+      valueColor: "var(--biz-text)",
     },
     {
       label: "Inventory Value",
@@ -143,18 +139,20 @@ export default function BusinessMetrics({
           <span>—</span>
         ),
       sub: costBasisLine,
-      valueColor: "#0f172a",
-      accentColor: "#f0b429",
+      valueColor: "var(--biz-text)",
     },
   ] as const;
 
   return (
-    <div className="grid grid-cols-2 gap-1.5 lg:grid-cols-4">
-      {cards.map(({ label, renderValue, sub, valueColor, accentColor }) => (
+    <div
+      className="grid grid-cols-2 overflow-hidden rounded-lg border lg:grid-cols-4"
+      style={{ borderColor: "var(--biz-border)" }}
+    >
+      {cards.map(({ label, renderValue, sub, valueColor }) => (
         <div
           key={label}
-          className={compact ? "rounded-xl border bg-white px-3 py-2" : "rounded-xl border bg-white p-5"}
-          style={{ borderColor: "var(--biz-border)" }}
+          className="border-r px-5 py-4 last:border-r-0"
+          style={{ borderColor: "rgba(0,0,0,0.06)" }}
         >
           {loading ? (
             <div className="space-y-2">
@@ -164,22 +162,16 @@ export default function BusinessMetrics({
             </div>
           ) : (
             <>
-              <div className="mb-1.5 flex items-center justify-between gap-2">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-600">
-                  {label}
-                </p>
-                <span
-                  className="h-2 w-2 rounded-full"
-                  style={{ backgroundColor: accentColor }}
-                />
-              </div>
+              <p className="text-[9px] font-normal uppercase tracking-[0.08em] text-slate-500">
+                {label}
+              </p>
               <p
-                className={`font-semibold tabular-nums ${compact ? "text-[22px] lg:text-[24px]" : "text-[32px]"}`}
+                className="mt-1.5 text-[22px] font-medium tabular-nums"
                 style={{ color: valueColor, lineHeight: 1.1 }}
               >
                 {renderValue()}
               </p>
-              <p className="mt-1 text-[11px] text-slate-600">{sub}</p>
+              <p className="mt-1 text-[11px] font-normal text-slate-500">{sub}</p>
             </>
           )}
         </div>

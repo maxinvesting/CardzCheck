@@ -303,6 +303,13 @@ export default function ShopListingDetail({
                   <p>{isBusiness ? "Free shipping" : shippingLabel} • Ships in 1-2 days</p>
                 </div>
 
+                {listing.accepts_offers && (
+                  <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+                    Offers welcome — contact CardzCheck if you&apos;d like to discuss price on this
+                    card.
+                  </p>
+                )}
+
                 {listing.ebay_comp_url && (
                   <a
                     href={listing.ebay_comp_url}
