@@ -12,7 +12,7 @@ export default function MessagingStatsBar({ stats, loading }: Props) {
     { label: "Total Threads", value: stats.total_threads, color: "text-[var(--biz-text)]" },
     { label: "Unread", value: stats.unread_count, color: stats.unread_count > 0 ? "text-red-600" : "text-[var(--biz-text)]" },
     { label: "Needs Reply", value: stats.needs_response, color: stats.needs_response > 0 ? "text-amber-600" : "text-[var(--biz-text)]" },
-    { label: "Open Offers", value: stats.open_offers, color: stats.open_offers > 0 ? "text-emerald-600" : "text-[var(--biz-text)]" },
+    { label: "Active Offers", value: stats.open_offers, color: stats.open_offers > 0 ? "text-emerald-600" : "text-[var(--biz-text)]" },
     { label: "Avg Response", value: stats.avg_response_time_hours != null ? `${stats.avg_response_time_hours}h` : "—", color: "text-[var(--biz-text)]" },
   ];
 

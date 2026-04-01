@@ -88,6 +88,7 @@ export default function BusinessMetrics({
   loading,
   inventorySummary,
   totalItemCount,
+  compact = false,
 }: Props) {
   const profitPositive = !metrics || metrics.profitMtd >= 0;
   const activeCount = metrics?.activeInventoryCount ?? 0;
