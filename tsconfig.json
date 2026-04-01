@@ -39,6 +39,9 @@
     "node_modules",
     "apps",
     "contracts",
-    ".claude"
+    ".claude",
+    "**/__tests__/**",
+    "**/*.spec.ts",
+    "**/*.test.ts"
   ]
 }

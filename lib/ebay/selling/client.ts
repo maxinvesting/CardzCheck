@@ -15,7 +15,7 @@ const EBAY_API_BASE =
     ? "https://api.sandbox.ebay.com"
     : "https://api.ebay.com";
 
-async function getValidToken(userId: string): Promise<string> {
+export async function getValidToken(userId: string): Promise<string> {
   const supabase = await createClient();
 
   const { data: account, error } = await supabase

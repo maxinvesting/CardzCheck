@@ -1,1 +1,5 @@
-export { default } from "@/app/grade-estimator/page";
+import { redirect } from "next/navigation";
+
+export default function GradeProbabilityPage() {
+  redirect("/grade-hub");
+}

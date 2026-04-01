@@ -30,7 +30,7 @@ Rules:
 `;
 
 const VISION_SYSTEM_PROMPT =
-  "You are a sports trading card identification expert. Be conservative and never guess a year.";
+  "You are a trading card identification expert. Handle sports cards and TCG cards (including Pokemon and One Piece). Be conservative and never guess a year.";
 
 const VISION_USER_PROMPT = `Identify the card metadata from these images.
 Return ONLY valid JSON with this structure:

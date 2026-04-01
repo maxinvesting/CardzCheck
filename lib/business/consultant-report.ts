@@ -26,10 +26,15 @@ export interface BusinessConsultantReportRecommendedAction {
   effort: BusinessConsultantReportEffort;
 }
 
+export type BusinessConsultantResponseMode = "report" | "answer";
+
 export interface BusinessConsultantReport {
+  response_mode: BusinessConsultantResponseMode;
   report_title: string;
   timestamp: string;
   data_coverage: BusinessConsultantReportDataCoverage;
+  answer: string | null;
+  key_points: string[];
   kpis: BusinessConsultantReportKpi[];
   high_risk_positions: BusinessConsultantReportHighRiskPosition[];
   recommended_actions: BusinessConsultantReportRecommendedAction[];
@@ -97,7 +102,11 @@ export function parseBusinessConsultantReport(
 
   const dataCoverageRaw = parsed.data_coverage ?? {};
 
+  const responseMode: BusinessConsultantResponseMode =
+    parsed.response_mode === "answer" ? "answer" : "report";
+
   const report: BusinessConsultantReport = {
+    response_mode: responseMode,
     report_title: coerceString(parsed.report_title, "Business Consultant Report"),
     timestamp: coerceString(parsed.timestamp, new Date().toISOString()),
     data_coverage: {
@@ -105,19 +114,21 @@ export function parseBusinessConsultantReport(
       sales_count: coerceNumber(dataCoverageRaw.sales_count, 0),
       missing: toArray<string>(dataCoverageRaw.missing).map((m) => coerceString(m)),
     },
-    kpis: toArray(parsed.kpis).map((kpi) => ({
+    answer: parsed.answer != null ? coerceString(parsed.answer) : null,
+    key_points: toArray<string>(parsed.key_points).map((p) => coerceString(p)),
+    kpis: toArray<Record<string, unknown>>(parsed.kpis).map((kpi) => ({
       label: coerceString(kpi.label),
       value: coerceString(kpi.value),
       hint: coerceString(kpi.hint),
     })),
-    high_risk_positions: toArray(parsed.high_risk_positions).map((pos) => ({
+    high_risk_positions: toArray<Record<string, unknown>>(parsed.high_risk_positions).map((pos) => ({
       item: coerceString(pos.item),
       cost_basis: coerceNumber(pos.cost_basis, 0),
       cmv: coerceNumber(pos.cmv, 0),
       delta_pct: coerceNumber(pos.delta_pct, 0),
       reason: coerceString(pos.reason),
     })),
-    recommended_actions: toArray(parsed.recommended_actions).map((act) => ({
+    recommended_actions: toArray<Record<string, unknown>>(parsed.recommended_actions).map((act) => ({
       action: coerceString(act.action),
       impact: coerceString(act.impact),
       effort: (act.effort === "low" || act.effort === "medium" || act.effort === "high"

@@ -69,7 +69,8 @@ export default function MarketplacePage() {
       const supabase = getBrowserSupabase();
       const { data, error: skuError } = await supabase
         .from("skus")
-        .select("id, sku_id, name, details, image_url, created_at")
+        .select("id, sku_id, name, details, image_url, status, created_at")
+        .eq("status", "active")
         .order("created_at", { ascending: false });
 
       if (skuError) {

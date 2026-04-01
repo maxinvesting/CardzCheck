@@ -21,7 +21,7 @@ export type CreateListingInput = {
   title: string;
   description: string;
   condition: "LIKE_NEW" | "VERY_GOOD" | "GOOD" | "ACCEPTABLE" | "FOR_PARTS_OR_NOT_WORKING";
-  /** eBay category ID. 261328 = Sports Trading Cards. */
+  /** eBay category ID (e.g., 261328 sports, 183454 CCG, 183050 non-sport). */
   categoryId: string;
   priceCents: number;
   quantity: number;

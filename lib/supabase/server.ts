@@ -1,4 +1,22 @@
+/**
+ * Server-side Supabase clients — SERVER ONLY.
+ * Do not import this file from client components ("use client").
+ *
+ * createClient()        — Uses the anon key + the user's session cookie.
+ *                         Subject to Row-Level Security (RLS) policies.
+ *                         Use for all normal user-scoped database operations.
+ *
+ * createServiceClient() — Uses the service role key, bypasses ALL RLS.
+ *                         Use only when:
+ *                           - No user session is available (Stripe/eBay webhooks)
+ *                           - Admin operations that intentionally cross user boundaries
+ *                           - Writing usage counters that need elevated access
+ *                         Do NOT use where the anon client + RLS would suffice.
+ *                         Do NOT expose service client results directly to user input.
+ */
+
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { isTestMode } from "@/lib/test-mode";
 import {
@@ -59,30 +77,27 @@ export async function createClient() {
 }
 
 export async function createServiceClient() {
-  const cookieStore = await cookies();
+  if (process.env.NODE_ENV === "production") {
+    console.warn("[supabase][service-role] Service client created — RLS bypassed", {
+      stack: new Error().stack?.split("\n")[2]?.trim(), // caller info
+    });
+  }
   const { url } = requireSupabasePublicEnv();
   const serviceRoleKey = getSupabaseServiceRoleKey();
   if (!serviceRoleKey) {
     throw new Error("Supabase service role env var is missing. Set SUPABASE_SERVICE_ROLE_KEY and restart the dev server.");
   }
 
-  return createServerClient(
+  // Service-role operations must not inherit end-user auth cookies,
+  // otherwise Supabase applies the user JWT and RLS blocks admin writes.
+  return createSupabaseClient(
     url,
     serviceRoleKey,
     {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        setAll(cookiesToSet: CookieToSet[]) {
-          try {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            );
-          } catch {
-            // Ignored
-          }
-        },
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+        detectSessionInUrl: false,
       },
     }
   );

@@ -1,4 +1,4 @@
-import { z } from "next/dist/compiled/zod";
+import { z } from "zod";
 import {
   SUBMISSION_GRADERS,
   SUBMISSION_MODES,

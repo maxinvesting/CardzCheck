@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import {
   createShopCheckoutSession,
   type ShopCheckoutItem,
 } from "@/lib/stripe";
+import { hasActiveBusinessTier, hasActiveProTier } from "@/lib/subscription-tier";
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,6 +23,43 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "Checkout is not configured" },
         { status: 503 }
+      );
+    }
+
+    // Check user tier — free/unauthenticated users cannot check out
+    let businessFreeShipping = false;
+    try {
+      const userClient = await createClient();
+      const { data: { user } } = await userClient.auth.getUser();
+      if (!user) {
+        return NextResponse.json(
+          { error: "You must be logged in to purchase" },
+          { status: 401 }
+        );
+      }
+
+      const serviceClient = await createServiceClient();
+      const { data: sub } = await serviceClient
+        .from("subscriptions")
+        .select("tier, status, current_period_end")
+        .eq("user_id", user.id)
+        .single();
+
+      const isActiveSub = hasActiveBusinessTier(sub) || hasActiveProTier(sub);
+      if (!isActiveSub) {
+        return NextResponse.json(
+          { error: "A Pro or Business subscription is required to purchase from the shop" },
+          { status: 403 }
+        );
+      }
+
+      if (hasActiveBusinessTier(sub)) {
+        businessFreeShipping = true;
+      }
+    } catch {
+      return NextResponse.json(
+        { error: "Could not verify subscription status" },
+        { status: 500 }
       );
     }
 
@@ -80,7 +118,7 @@ export async function POST(request: NextRequest) {
         listingId: listing.id,
         quantity,
         price: Number(listing.price),
-        shippingCost: Number(listing.shipping_cost ?? 4),
+        shippingCost: businessFreeShipping ? 0 : Number(listing.shipping_cost ?? 4),
         playerName: String(listing.player_name),
         year: Number(listing.year),
         setBrand: String(listing.set_brand),
@@ -91,7 +129,8 @@ export async function POST(request: NextRequest) {
     const session = await createShopCheckoutSession(
       checkoutItems,
       `${appUrl}/shop/order-confirmed?session_id={CHECKOUT_SESSION_ID}`,
-      `${appUrl}/shop`
+      `${appUrl}/shop`,
+      { businessFreeShipping }
     );
 
     if (!session.url) {
@@ -101,7 +140,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({ url: session.url });
+    return NextResponse.json({
+      url: session.url,
+    });
   } catch (error) {
     console.error("Shop checkout error:", error);
     return NextResponse.json(

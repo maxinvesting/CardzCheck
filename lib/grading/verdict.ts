@@ -90,7 +90,11 @@ function hasPhotoQualityFlags(estimate: GradeEstimate): boolean {
     "card is cropped",
     "card not visible",
   ];
-  return tokens.some((token) => noteText.includes(token));
+
+  return (
+    universalTokens.some((token) => allText.includes(token)) ||
+    negativeFieldOnlyTokens.some((token) => negativeFieldsText.includes(token))
+  );
 }
 
 function getPsaOutcomes(estimate: GradeEstimate): GradeOutcome[] {
@@ -112,10 +116,10 @@ function getPsaOutcomes(estimate: GradeEstimate): GradeOutcome[] {
   const rangeLabel = buildRangeLabel(estimate);
   if (!rangeLabel) {
     return normalizePsaDistribution([
-      { label: "PSA 10", probability: 0.08 },
-      { label: "PSA 9", probability: 0.32 },
-      { label: "PSA 8", probability: 0.34 },
-      { label: "PSA 7 or lower", probability: 0.26 },
+      { label: "PSA 10", probability: 0.10 },
+      { label: "PSA 9", probability: 0.38 },
+      { label: "PSA 8", probability: 0.28 },
+      { label: "PSA 7 or lower", probability: 0.24 },
     ]);
   }
   return normalizePsaDistribution(
@@ -140,6 +144,7 @@ function getSuggestedGrader(options: {
   vintageOverride?: boolean | null;
   preferTag?: boolean;
   p10: number;
+  bgs95: number;
   confidence: "high" | "medium" | "low";
   recommendation: VerdictRecommendation;
 }): VerdictGrader {
@@ -148,7 +153,10 @@ function getSuggestedGrader(options: {
     (options.vintageOverride !== false && options.year !== null && options.year <= 1989);
   if (isVintage) return "SGC";
 
-  if (options.p10 >= 0.3 && options.confidence !== "low") return "BGS";
+  // Suggest BGS when PSA 10 probability is meaningful OR BGS 9.5 probability is non-trivial.
+  // Old threshold (p10 >= 0.30) never triggered because PSA 10 was hard-capped at 18%.
+  // Now that the cap is evidence-based, we lower the trigger and also key off BGS 9.5 directly.
+  if ((options.p10 >= 0.20 || options.bgs95 >= 0.08) && options.confidence !== "low") return "BGS";
 
   const isModern = options.year !== null && options.year >= 2018;
   if (options.preferTag && isModern && options.recommendation !== "Rescan Needed") {
@@ -282,11 +290,13 @@ export function buildGradeVerdict(
   }
 
   const year = parseYear(cardIdentity);
+  const bgs95 = estimate.grade_probabilities?.bgs?.["9.5"] ?? 0;
   const suggestedGrader = getSuggestedGrader({
     year,
     vintageOverride: options?.vintageOverride ?? null,
     preferTag: options?.preferTag ?? false,
     p10,
+    bgs95,
     confidence,
     recommendation,
   });

@@ -2,6 +2,7 @@ import "server-only";
 
 import Anthropic from "@anthropic-ai/sdk";
 import { extractCardIdentityDetailed, type ImageInput } from "@/lib/card-identity";
+import type { CardIdentity } from "@/lib/card-identity/types";
 import {
   resolveGradeEstimateImages,
   type ResolvedGradeEstimateImage,
@@ -17,27 +18,49 @@ import {
   type GradeEstimatorCardInput,
 } from "@/lib/grade-estimator/value";
 import { DEFAULT_COMPS_WINDOW_DAYS } from "@/lib/grade-estimator/constants";
+import { recordGradeTokenUsage } from "@/lib/grading/tokenBudget";
+import {
+  buildCategoryPromptNote,
+  resolveGradingCategory,
+} from "@/lib/grading/grading-profile";
 
-const SYSTEM_PROMPT = `You are a sports card grading specialist. Produce strict JSON only. Use conservative(but still rational) assumptions and never inflate high-grade odds when evidence is weak.`;
+const SYSTEM_PROMPT = `You are an expert trading card grading specialist with comprehensive knowledge of PSA, BGS, SGC, and TAG grading standards. Support sports cards and TCG cards (including Pokemon and One Piece). Produce strict JSON only.
 
-const USER_PROMPT = `Analyze these photos of the SAME RAW (unslabbed) sports trading card.
+Be accurate — calibrate your probabilities to the actual evidence in front of you. Do not systematically inflate or deflate grades. When the evidence clearly shows a gem-quality card, reflect that with high PSA 10 probability. When evidence is ambiguous or weak, widen the grade range and lower confidence_label rather than defaulting probabilities to lower grades.
+
+CRITICAL: Grade the CARD, not the PHOTO. Photo quality issues (lighting, resolution, angle) should only affect your confidence_label and confidence_score — they must NOT directly lower your estimated_grade_low, estimated_grade_high, or shift probabilities toward lower grades. A card photographed in dim lighting is not a worse card.`;
+
+const USER_PROMPT = `Analyze these photos of the SAME RAW (unslabbed) trading card.
 
 Use ALL provided images. Better images increase analysis accuracy; explicitly reflect this in image_quality and confidence.
 
+PSA grade standards (these must directly calibrate your probabilities):
+- PSA 10 (Gem Mint): Near-perfect centering (55/45 or better on both axes), four sharp corners with no fraying, clean smooth surface with no scratches/stains/print lines, clean edges. ALL four categories must be exceptional.
+- PSA 9 (Mint): One minor flaw allowed — slight surface imperfection OR centering up to 65/35. Corners nearly sharp, edges clean.
+- PSA 8 (NM-MT): Slight wear on corners, one corner may show light fraying, light scratches visible on surface, centering up to 70/30.
+- PSA 7 or lower: Multiple defects, significant wear, heavy centering issues, or notable surface damage.
+
 Grading weighting rubric (must influence probabilities):
-- Centering: 30% (primary gate)
-- Surface: 30% (second-most important)
+- Centering: 30% (primary gate — worst axis determines the ceiling)
+- Surface: 30% (scratches, print lines, stains — most common PSA 10 killer)
 - Corners: 20%
 - Edges: 20%
 
 Centering gate rules (must enforce):
-- If centering is worse than 60/40 on either axis, PSA 10 must be very unlikely.
-- If centering is worse than 65/35 on either axis, PSA 9 must be unlikely.
+- If centering is worse than 55/45 on either axis: PSA 10 is unlikely but not impossible.
+- If centering is worse than 60/40 on either axis: PSA 10 must be very unlikely.
+- If centering is worse than 65/35 on either axis: PSA 9 must be unlikely.
 - Be quantitative and explicit with ratios.
 
 Surface rules (must enforce):
 - Extract explicit surface defects with location + severity.
-- If glare/blur blocks surface reading, say that clearly, lower confidence, and shift probabilities downward.
+- If glare/blur partially blocks surface reading, lower confidence and widen the grade range — but still grade what IS visible. Do not assume hidden defects exist; report only defects you can actually see.
+- Distinguish between actual card defects (scratches, print lines, dents) and photo artifacts (reflections, lighting). Photo artifacts should reduce confidence, NOT lower the predicted grade range.
+
+TCG strict profile rules (must enforce when card is Pokemon, One Piece, or other TCG):
+- Edge whitening, edge chipping, corner whitening, rough cuts, and print lines are major gem-mint blockers.
+- If multiple moderate edge/corner whitening/chipping findings exist, keep PSA 10 probability very low.
+- Explain category-specific blockers explicitly in grade_notes and findings.
 
 Close-up priority rules (must enforce when close-ups are available):
 - Corners evidence must prioritize corner_tl/corner_tr/corner_bl/corner_br close-ups.
@@ -131,7 +154,7 @@ Hard requirements:
 - Clamp: overall/confidence scores 0-100; subscores 0-25; severities 0-3.
 - Provide 1-5 key_issues and 2-5 retake_tips.
 - Probabilities in each array must sum to 1.0.
-- If uncertain, widen range and shift probability mass lower (conservative).`;
+- If uncertain, widen the grade range and lower confidence_label — do NOT systematically shift probabilities lower simply due to uncertainty.`;
 
 function getAnthropicClient() {
   return new Anthropic({
@@ -139,8 +162,45 @@ function getAnthropicClient() {
   });
 }
 
+function buildCardContextNote(cardIdentity?: CardIdentity | null): string {
+  if (!cardIdentity) return "";
+  const parts: string[] = [];
+  const category = resolveGradingCategory({
+    sport: cardIdentity.sport,
+    set_name: cardIdentity.setName,
+    player_name: cardIdentity.player,
+    year: cardIdentity.year,
+  });
+
+  parts.push(buildCategoryPromptNote(category));
+
+  if (cardIdentity.cardStock === "chromium") {
+    parts.push(
+      "Card type: Chromium/refractor/prizm. Prioritize detecting: foil roll (wavy surface warping), " +
+      "micro-scratches visible at angles under light, and surface contact marks. " +
+      "These are common PSA 10 disqualifiers that may be invisible in flat photography — " +
+      "lower surface confidence if no dedicated surface close-up is provided."
+    );
+  }
+
+  if (cardIdentity.year && cardIdentity.year <= 1989) {
+    parts.push(
+      `Era: Vintage (${cardIdentity.year}). Vintage cards were not produced to modern tolerances. ` +
+      "Moderate centering deviation and minor edge/corner wear are expected and should not " +
+      "disqualify PSA 8+ if the card is otherwise clean for its age."
+    );
+  }
+
+  if (parts.length === 0) return "";
+  return `\nCard-specific context (apply to your assessment):\n${parts.join("\n")}`;
+}
+
 async function runGradeModel(
-  images: ResolvedGradeEstimateImage[]
+  images: ResolvedGradeEstimateImage[],
+  cardIdentity?: CardIdentity | null,
+  userId?: string | null,
+  correctionText?: string | null,
+  preScanNotes?: string | null
 ): Promise<string | null> {
   const closeupCount = images.filter((image) => isCloseupKind(image.kind)).length;
   const photoRoles = images
@@ -153,16 +213,28 @@ async function runGradeModel(
         }`
     )
     .join("\n");
+  const cardContextNote = buildCardContextNote(cardIdentity);
+
+  // Pre-scan notes are injected before the photos so they prime the AI's attention
+  const preScanBlock = preScanNotes?.trim()
+    ? `\n\nOwner's observations before analysis (use these to guide your attention — treat as reliable context, but verify against the photos):\n"${preScanNotes.trim()}"`
+    : "";
+
   const photoRolePrompt = `Photo role map (use this for evidence attribution):\n${photoRoles}\n\nClose-up count: ${closeupCount}.\n${
     closeupCount === 0
       ? "No close-up photos were provided. Treat corners/edges/surface visibility as limited, include a limited visibility note, and avoid high confidence."
       : "Use close-up photos as primary evidence for the matching categories."
-  }`;
+  }${cardContextNote}${preScanBlock}`;
+
+  // Build the correction block when the user has supplied post-scan feedback
+  const correctionBlock = correctionText?.trim()
+    ? `\n\nUser correction (treat as ground truth — higher priority than your visual inference alone):\n"${correctionText.trim()}"\n\nRe-analyze the card taking this correction fully into account. Update your grade range, probabilities, findings, and grade_notes to reflect it.`
+    : "";
 
   const anthropic = getAnthropicClient();
   const message = await anthropic.messages.create({
     model: "claude-sonnet-4-20250514",
-    max_tokens: 2048,
+    max_tokens: 4096,
     messages: [
       {
         role: "user",
@@ -181,13 +253,20 @@ async function runGradeModel(
           })),
           {
             type: "text",
-            text: USER_PROMPT,
+            text: USER_PROMPT + correctionBlock,
           },
         ],
       },
     ],
     system: SYSTEM_PROMPT,
   });
+
+  // Fire-and-forget usage recording — never blocks the response.
+  if (userId) {
+    recordGradeTokenUsage(userId, message.usage.input_tokens, message.usage.output_tokens).catch(
+      (err) => console.error("[token-budget] recordGradeTokenUsage failed:", err)
+    );
+  }
 
   const textContent = message.content.find((c) => c.type === "text");
   return textContent && textContent.type === "text" ? textContent.text : null;
@@ -259,11 +338,13 @@ async function runPostGradingValue(options: {
   );
 }
 
-export function createGradeEstimateJobDependencies(): GradeEstimateJobDependencies {
+export function createGradeEstimateJobDependencies(userId?: string | null): GradeEstimateJobDependencies {
   return {
     resolveImages: resolveGradeEstimateImages,
     runOcrIdentity,
-    runGradeModel,
+    // Bind userId via closure so token usage is recorded against the requesting user.
+    // correctionText and preScanNotes are passed through at call time from the job input.
+    runGradeModel: (images, identity, correctionText, preScanNotes) => runGradeModel(images, identity, userId, correctionText, preScanNotes),
     parseModelOutput: async (options) => parseGradeEstimateModelOutput(options),
     runPostGradingValue,
   };

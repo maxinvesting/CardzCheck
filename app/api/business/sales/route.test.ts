@@ -1,14 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const createClientMock = vi.fn();
-const hasBusinessAccessMock = vi.fn();
+const requireBusinessContextMock = vi.fn();
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: createClientMock,
 }));
 
-vi.mock("@/lib/access", () => ({
-  hasBusinessAccess: hasBusinessAccessMock,
+vi.mock("@/lib/business/context", () => ({
+  requireBusinessContext: requireBusinessContextMock,
+  hasRole: (context: { role?: string }, roles: string[]) =>
+    roles.includes(context.role || ""),
 }));
 
 function buildSupabaseMock() {
@@ -115,7 +117,33 @@ describe("POST /api/business/sales", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.resetModules();
-    hasBusinessAccessMock.mockResolvedValue(true);
+    requireBusinessContextMock.mockResolvedValue({
+      businessAccountId: "acct-1",
+      ownerUserId: "user-1",
+      role: "owner",
+      subscriptionStatus: "active",
+      currentPeriodEnd: null,
+      seats: {
+        seatsIncluded: 1,
+        seatQuantity: 1,
+        purchasedSeats: 0,
+        activeMembers: 1,
+        pendingInvites: 0,
+        usedSeats: 1,
+        reservedSeats: 1,
+        availableSeats: 0,
+      },
+      permissions: {
+        canAccessBusiness: true,
+        canManageOperations: true,
+        canManageTeam: true,
+        canManageBilling: true,
+        canInviteMembers: true,
+        canManageSeats: true,
+        canChangeMemberRoles: true,
+        canRemoveMembers: true,
+      },
+    });
   });
 
   it("validates required fields", async () => {
@@ -161,6 +189,7 @@ describe("POST /api/business/sales", () => {
     expect(insertedPayloads[0]).toMatchObject({
       user_id: "user-1",
       business_id: "user-1",
+      business_account_id: "acct-1",
       inventory_item_id: "inv-1",
       sold_price_cents: 20000,
       net_payout_cents: 17000,
@@ -222,7 +251,9 @@ describe("POST /api/business/sales", () => {
   });
 
   it("returns 403 when user has no business subscription", async () => {
-    hasBusinessAccessMock.mockResolvedValue(false);
+    const error = new Error("Business subscription required");
+    (error as { status?: number }).status = 403;
+    requireBusinessContextMock.mockRejectedValue(error);
     const { client } = buildSupabaseMock();
     createClientMock.mockResolvedValue(client);
 

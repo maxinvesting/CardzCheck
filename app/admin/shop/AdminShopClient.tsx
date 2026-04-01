@@ -2,9 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import type { ShopListing } from "@/types/shop";
+import type { ShopListing, ShopOrder } from "@/types/shop";
+import {
+  SHOP_CATEGORY_OPTIONS,
+  type ShopCategoryLabel,
+} from "@/lib/cards/market-category";
 
-type ListingStatus = "active" | "delisted" | "sold";
+type ListingStatus = "active" | "delisted" | "sold" | "archived";
+
 type GradeOption =
   | "Raw"
   | "PSA 10"
@@ -35,15 +40,17 @@ interface ListingFormState {
   grade_choice: GradeOption;
   grade_other: string;
   cert_number: string;
-  sport: "Football" | "Basketball" | "Baseball" | "Other";
+  sport: ShopCategoryLabel;
   price: string;
   cmv: string;
   shipping_cost: string;
   status: ListingStatus;
   featured: boolean;
   is_premium: boolean;
+  accepts_offers: boolean;
   tags: string;
   notes: string;
+  ebay_comp_url: string;
 }
 
 const GRADE_OPTIONS: GradeOption[] = [
@@ -55,14 +62,9 @@ const GRADE_OPTIONS: GradeOption[] = [
   "Other",
 ];
 
-const SPORT_OPTIONS: ListingFormState["sport"][] = [
-  "Football",
-  "Basketball",
-  "Baseball",
-  "Other",
-];
+const SPORT_OPTIONS: ListingFormState["sport"][] = [...SHOP_CATEGORY_OPTIONS];
 
-const STATUS_OPTIONS: ListingStatus[] = ["active", "delisted", "sold"];
+const STATUS_OPTIONS: ListingStatus[] = ["active", "delisted", "sold", "archived"];
 
 const DEFAULT_FORM: ListingFormState = {
   player_name: "",
@@ -80,8 +82,10 @@ const DEFAULT_FORM: ListingFormState = {
   status: "active",
   featured: false,
   is_premium: false,
+  accepts_offers: false,
   tags: "",
   notes: "",
+  ebay_comp_url: "",
 };
 
 function createImageId() {
@@ -144,8 +148,10 @@ function listingToForm(listing: ShopListing): ListingFormState {
       : "active",
     featured: Boolean(listing.featured),
     is_premium: Boolean(listing.is_premium),
+    accepts_offers: Boolean(listing.accepts_offers),
     tags: Array.isArray(listing.tags) ? listing.tags.join(", ") : "",
     notes: listing.notes || "",
+    ebay_comp_url: listing.ebay_comp_url || "",
   };
 }
 
@@ -206,8 +212,10 @@ function formToPayload(form: ListingFormState) {
     status: form.status,
     featured: form.featured,
     is_premium: form.is_premium,
+    accepts_offers: form.accepts_offers,
     tags: parseTags(form.tags),
     notes: form.notes.trim() || null,
+    ebay_comp_url: form.ebay_comp_url.trim() || null,
   };
 }
 
@@ -235,6 +243,7 @@ function cloneListingForCreate(listing: ShopListing) {
     status: listing.status,
     featured: listing.featured,
     is_premium: listing.is_premium,
+    accepts_offers: listing.accepts_offers,
     tags: listing.tags,
     notes: listing.notes,
     image_urls: listing.image_urls,
@@ -411,7 +420,7 @@ function ListingFields({
   return (
     <div className="grid gap-3 md:grid-cols-2">
       <label className="space-y-1 text-sm">
-        <span className="text-gray-300">Player name *</span>
+        <span className="text-gray-300">Card / player name *</span>
         <input
           value={form.player_name}
           onChange={(event) =>
@@ -515,7 +524,7 @@ function ListingFields({
       </label>
 
       <div className="space-y-1 text-sm">
-        <span className="text-gray-300">Sport *</span>
+        <span className="text-gray-300">Category / game *</span>
         <select
           value={form.sport}
           onChange={(event) =>
@@ -620,6 +629,20 @@ function ListingFields({
         />
       </label>
 
+      <label className="space-y-1 text-sm md:col-span-2">
+        <span className="text-gray-300">eBay Comp URL</span>
+        <input
+          type="url"
+          value={form.ebay_comp_url}
+          onChange={(event) =>
+            setForm((previous) => ({ ...previous, ebay_comp_url: event.target.value }))
+          }
+          className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-white"
+          placeholder="https://www.ebay.com/itm/..."
+        />
+        <span className="text-xs text-gray-500">Direct link to a sold eBay listing used as a pricing comp. Shown publicly as &ldquo;View eBay comp →&rdquo;.</span>
+      </label>
+
       <label className="flex items-center gap-2 rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-300">
         <input
           type="checkbox"
@@ -642,6 +665,18 @@ function ListingFields({
           className="rounded border-gray-600"
         />
         Premium
+      </label>
+
+      <label className="flex items-center gap-2 rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-300 md:col-span-2">
+        <input
+          type="checkbox"
+          checked={form.accepts_offers}
+          onChange={(event) =>
+            setForm((previous) => ({ ...previous, accepts_offers: event.target.checked }))
+          }
+          className="rounded border-gray-600"
+        />
+        Accept offers (shows in shop &ldquo;Offers only&rdquo; filter)
       </label>
     </div>
   );
@@ -672,11 +707,64 @@ export default function AdminShopClient() {
         shipping_cost: string;
         status: ListingStatus;
         featured: boolean;
+        accepts_offers: boolean;
       }
     >
   >({});
 
   const [busyRow, setBusyRow] = useState<string | null>(null);
+
+  const [orders, setOrders] = useState<ShopOrder[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(true);
+  const [cancellingOrder, setCancellingOrder] = useState<string | null>(null);
+  const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
+
+  const loadOrders = useCallback(async () => {
+    setOrdersLoading(true);
+    try {
+      const res = await fetch("/api/admin/shop/orders", { cache: "no-store" });
+      const data = await res.json();
+      if (res.ok) setOrders(Array.isArray(data?.orders) ? data.orders : []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setOrdersLoading(false);
+    }
+  }, []);
+
+  const cancelOrder = async (orderId: string) => {
+    if (!confirm("Cancel this order and issue a full Stripe refund?")) return;
+    setCancellingOrder(orderId);
+    try {
+      const res = await fetch("/api/admin/shop/orders", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: orderId, action: "cancel" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Cancel failed");
+      await loadOrders();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to cancel order");
+    } finally {
+      setCancellingOrder(null);
+    }
+  };
+
+  const updateOrderFulfillment = async (orderId: string, fulfillment_status: string) => {
+    try {
+      const res = await fetch("/api/admin/shop/orders", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: orderId, fulfillment_status }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Update failed");
+      await loadOrders();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to update order");
+    }
+  };
 
   const loadListings = useCallback(async () => {
     setLoading(true);
@@ -702,6 +790,7 @@ export default function AdminShopClient() {
                 ? (listing.status as ListingStatus)
                 : "active",
               featured: Boolean(listing.featured),
+              accepts_offers: Boolean(listing.accepts_offers),
             },
           ])
         )
@@ -715,7 +804,8 @@ export default function AdminShopClient() {
 
   useEffect(() => {
     loadListings();
-  }, [loadListings]);
+    loadOrders();
+  }, [loadListings, loadOrders]);
 
   const uploadPendingImages = async (listingId: string, images: ImageItem[]) => {
     const urls: string[] = [];
@@ -866,6 +956,7 @@ export default function AdminShopClient() {
       shipping_cost: string;
       status: ListingStatus;
       featured: boolean;
+      accepts_offers: boolean;
     }>
   ) => {
     setInlineDrafts((previous) => ({
@@ -1039,12 +1130,13 @@ export default function AdminShopClient() {
               <thead>
                 <tr className="border-b border-gray-800 text-gray-400">
                   <th className="px-3 py-2 font-medium">Thumbnail</th>
-                  <th className="px-3 py-2 font-medium">Player / Year / Set</th>
+                  <th className="px-3 py-2 font-medium">Card / Year / Set</th>
                   <th className="px-3 py-2 font-medium">Grade</th>
                   <th className="px-3 py-2 font-medium">Price</th>
                   <th className="px-3 py-2 font-medium">Shipping</th>
                   <th className="px-3 py-2 font-medium">Status</th>
                   <th className="px-3 py-2 font-medium">Featured</th>
+                  <th className="px-3 py-2 font-medium">Offers</th>
                   <th className="px-3 py-2 font-medium">Created</th>
                   <th className="px-3 py-2 font-medium">Actions</th>
                 </tr>
@@ -1123,13 +1215,30 @@ export default function AdminShopClient() {
                         <label className="inline-flex items-center gap-2 text-xs text-gray-300">
                           <input
                             type="checkbox"
-                            checked={draft?.featured ?? false}
+                            checked={draft?.featured ?? Boolean(listing.featured)}
                             onChange={(event) => {
                               updateInlineDraft(listing.id, {
                                 featured: event.target.checked,
                               });
                               void runRowAction(listing.id, {
                                 featured: event.target.checked,
+                              });
+                            }}
+                          />
+                          Yes
+                        </label>
+                      </td>
+                      <td className="px-3 py-2">
+                        <label className="inline-flex items-center gap-2 text-xs text-gray-300">
+                          <input
+                            type="checkbox"
+                            checked={draft?.accepts_offers ?? Boolean(listing.accepts_offers)}
+                            onChange={(event) => {
+                              updateInlineDraft(listing.id, {
+                                accepts_offers: event.target.checked,
+                              });
+                              void runRowAction(listing.id, {
+                                accepts_offers: event.target.checked,
                               });
                             }}
                           />
@@ -1175,6 +1284,16 @@ export default function AdminShopClient() {
                           >
                             {listing.featured ? "Unfeature" : "Feature"}
                           </button>
+                          <button
+                            onClick={() =>
+                              runRowAction(listing.id, {
+                                status: listing.status === "archived" ? "active" : "archived",
+                              })
+                            }
+                            className="rounded border border-purple-800 px-2 py-1 text-xs text-purple-300 hover:border-purple-600"
+                          >
+                            {listing.status === "archived" ? "Unarchive" : "Archive"}
+                          </button>
                         </div>
                         {busyRow === listing.id && (
                           <div className="mt-1 text-[11px] text-gray-500">Saving...</div>
@@ -1183,6 +1302,128 @@ export default function AdminShopClient() {
                     </tr>
                   );
                 })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {/* Orders section */}
+      <section className="rounded-2xl border border-gray-800 bg-gray-900/50 p-5">
+        <div className="mb-4">
+          <h2 className="text-xl font-semibold text-white">Orders</h2>
+          <p className="text-sm text-gray-400">
+            {orders.length} total — {orders.filter((o) => o.payment_status === "paid").length} paid,{" "}
+            {orders.filter((o) => o.fulfillment_status === "unfulfilled" && o.payment_status === "paid").length} unfulfilled
+          </p>
+        </div>
+
+        {ordersLoading ? (
+          <p className="text-sm text-gray-400">Loading orders...</p>
+        ) : orders.length === 0 ? (
+          <p className="text-sm text-gray-400">No orders yet.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-gray-800 text-gray-400">
+                  <th className="px-3 py-2 font-medium">Date</th>
+                  <th className="px-3 py-2 font-medium">Buyer</th>
+                  <th className="px-3 py-2 font-medium">Total</th>
+                  <th className="px-3 py-2 font-medium">Payment</th>
+                  <th className="px-3 py-2 font-medium">Fulfillment</th>
+                  <th className="px-3 py-2 font-medium">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-800">
+                {orders.map((order) => (
+                  <tr key={order.id}>
+                    <td className="px-3 py-2 text-xs text-gray-400 whitespace-nowrap">
+                      {new Date(order.created_at).toLocaleDateString()}
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="font-medium text-white">{order.buyer_name}</div>
+                      <div className="text-xs text-gray-400">{order.buyer_email}</div>
+                    </td>
+                    <td className="px-3 py-2 text-gray-200">
+                      ${Number(order.total ?? 0).toFixed(2)}
+                    </td>
+                    <td className="px-3 py-2">
+                      <span
+                        className={`rounded px-2 py-0.5 text-xs font-medium ${
+                          order.payment_status === "paid"
+                            ? "bg-emerald-900/50 text-emerald-300"
+                            : order.payment_status === "cancelled"
+                            ? "bg-rose-900/50 text-rose-300"
+                            : order.payment_status === "refunded"
+                            ? "bg-orange-900/50 text-orange-300"
+                            : "bg-gray-800 text-gray-400"
+                        }`}
+                      >
+                        {order.payment_status}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2">
+                      {order.payment_status === "paid" ? (
+                        <select
+                          value={order.fulfillment_status}
+                          onChange={(e) => updateOrderFulfillment(order.id, e.target.value)}
+                          className="rounded border border-gray-700 bg-gray-900 px-2 py-1 text-xs text-white"
+                        >
+                          <option value="unfulfilled">Unfulfilled</option>
+                          <option value="shipped">Shipped</option>
+                          <option value="delivered">Delivered</option>
+                        </select>
+                      ) : (
+                        <span className="text-xs text-gray-500">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={() =>
+                            setExpandedOrder(expandedOrder === order.id ? null : order.id)
+                          }
+                          className="rounded border border-gray-700 px-2 py-1 text-xs text-gray-300 hover:border-gray-500"
+                        >
+                          {expandedOrder === order.id ? "Hide" : "Items"}
+                        </button>
+                        {order.payment_status === "paid" && (
+                          <button
+                            onClick={() => cancelOrder(order.id)}
+                            disabled={cancellingOrder === order.id}
+                            className="rounded border border-rose-800 px-2 py-1 text-xs text-rose-300 hover:border-rose-600 disabled:opacity-50"
+                          >
+                            {cancellingOrder === order.id ? "Cancelling…" : "Cancel & Refund"}
+                          </button>
+                        )}
+                      </div>
+                      {expandedOrder === order.id && (
+                        <div className="mt-2 space-y-1 rounded bg-gray-800 p-2 text-xs text-gray-300">
+                          {Array.isArray(order.items) && order.items.map((item, i) => (
+                            <div key={i} className="flex justify-between gap-4">
+                              <span>{item.player_name} {item.year} {item.set_brand} ({item.grade}) × {item.quantity}</span>
+                              <span>${Number(item.price).toFixed(2)}</span>
+                            </div>
+                          ))}
+                          <div className="border-t border-gray-700 pt-1 flex justify-between font-medium">
+                            <span>Subtotal</span>
+                            <span>${Number(order.subtotal ?? 0).toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between text-gray-400">
+                            <span>Shipping</span>
+                            <span>${Number(order.shipping_total ?? 0).toFixed(2)}</span>
+                          </div>
+                          {order.tracking_number && (
+                            <div className="text-gray-400">
+                              Tracking: {order.tracking_carrier ?? ""} {order.tracking_number}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

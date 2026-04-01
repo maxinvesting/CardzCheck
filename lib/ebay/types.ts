@@ -2,6 +2,8 @@
 
 export interface EbaySearchParams {
   player: string;
+  game?: string;
+  sport?: string;
   year?: string;
   set?: string;
   grade?: string;

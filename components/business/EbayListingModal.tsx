@@ -2,11 +2,14 @@
 
 import { useState } from "react";
 import { estimateEbayFees } from "@/lib/ebay/selling/fee-calculator";
+import { getEbayListingCategoryId } from "@/lib/cards/market-category";
 import type { BusinessInventoryItem } from "@/types";
 
 interface Props {
   item: BusinessInventoryItem;
   isTopRated?: boolean;
+  /** Optional explicit image URLs (e.g. from grade run). Falls back to item images when omitted. */
+  overrideImageUrls?: string[];
   onClose: () => void;
   onSuccess: (listingId: string, listingUrl: string) => void;
 }
@@ -20,11 +23,12 @@ const CONDITION_OPTIONS = [
 
 const CATEGORY_OPTIONS = [
   { value: "261328", label: "Sports Trading Cards" },
+  { value: "183454", label: "CCG Individual Cards (Pokemon / One Piece / TCG)" },
+  { value: "183050", label: "Non-Sport Trading Cards" },
   { value: "261333", label: "Football Cards" },
   { value: "261334", label: "Baseball Cards" },
   { value: "261335", label: "Basketball Cards" },
   { value: "261336", label: "Hockey Cards" },
-  { value: "261332", label: "Non-Sport Cards" },
 ];
 
 function fmt(cents: number): string {
@@ -35,8 +39,21 @@ function fmt(cents: number): string {
   }).format(cents / 100);
 }
 
-export default function EbayListingModal({ item, isTopRated = false, onClose, onSuccess }: Props) {
-  const defaultPrice = item.list_price_cents ?? item.cost_basis_total_cents ?? 0;
+export default function EbayListingModal({
+  item,
+  isTopRated = false,
+  overrideImageUrls,
+  onClose,
+  onSuccess,
+}: Props) {
+  const cmvCents = item.current_market_value_cents ?? null;
+  const defaultPrice =
+    item.list_price_cents ?? item.cost_basis_total_cents ?? cmvCents ?? 0;
+  const suggestedFromCmv =
+    typeof cmvCents === "number" && cmvCents > 0
+      ? Math.round(cmvCents * 1.1)
+      : null;
+  const defaultCategoryId = getEbayListingCategoryId({ title: item.title, sport: null });
 
   const [title, setTitle] = useState(item.title);
   const [priceCents, setPriceCents] = useState(defaultPrice);
@@ -44,7 +61,7 @@ export default function EbayListingModal({ item, isTopRated = false, onClose, on
   const [condition, setCondition] = useState(
     item.condition_status === "graded" ? "LIKE_NEW" : "VERY_GOOD"
   );
-  const [categoryId, setCategoryId] = useState("261328");
+  const [categoryId, setCategoryId] = useState(defaultCategoryId);
   const [description, setDescription] = useState(
     item.grade
       ? `${item.title}. ${item.grading_company ?? ""}${item.grade ? ` ${item.grade}` : ""}${item.cert_number ? ` #${item.cert_number}` : ""}.`
@@ -76,10 +93,14 @@ export default function EbayListingModal({ item, isTopRated = false, onClose, on
     setSubmitting(true);
 
     try {
-      const imageUrls: string[] = [];
-      if ((item as any).user_image_url) imageUrls.push((item as any).user_image_url);
-      if ((item as any).stock_image_url) imageUrls.push((item as any).stock_image_url);
-      if ((item as any).ebay_image_url) imageUrls.push((item as any).ebay_image_url);
+      const imageUrls: string[] =
+        overrideImageUrls && overrideImageUrls.length > 0
+          ? overrideImageUrls
+          : [
+              item.user_image_url,
+              item.stock_image_url,
+              item.ebay_image_url,
+            ].filter((u): u is string => typeof u === "string" && u.length > 0);
 
       const res = await fetch("/api/business/ebay/listings", {
         method: "POST",
@@ -184,6 +205,24 @@ export default function EbayListingModal({ item, isTopRated = false, onClose, on
                 className="w-full rounded-lg border border-white/10 bg-white/5 pl-7 pr-3 py-2 text-sm text-white focus:border-emerald-500/50 focus:outline-none"
               />
             </div>
+            {suggestedFromCmv && (
+              <div className="mt-1 flex items-center gap-2 text-[10px] text-white/40">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const dollars = (suggestedFromCmv / 100).toFixed(2);
+                    setPriceInput(dollars);
+                    setPriceCents(suggestedFromCmv);
+                  }}
+                  className="inline-flex items-center gap-1 rounded-full border border-emerald-400/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-300 hover:bg-emerald-500/20"
+                >
+                  Use suggestion · {fmt(suggestedFromCmv)}
+                </button>
+                <span>
+                  Based on {fmt(cmvCents!)} est. market value (~110%).
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Fee preview */}

@@ -218,13 +218,26 @@ export async function POST(request: NextRequest) {
     if (error || !insertedItems) throw error;
 
     if (insertedItems && insertedItems.length > 0) {
+      const cmvFailures: string[] = [];
       for (const item of insertedItems) {
-        const cmvResult = await calculateCardCmv(item);
-        await supabase
-          .from("collection_items")
-          .update(cmvResult)
-          .eq("id", item.id)
-          .eq("user_id", user.id);
+        try {
+          const cmvResult = await calculateCardCmv(item);
+          const { error: cmvUpdateError } = await supabase
+            .from("collection_items")
+            .update(cmvResult)
+            .eq("id", item.id)
+            .eq("user_id", user.id);
+          if (cmvUpdateError) {
+            console.error(`[bulk] CMV update failed for item ${item.id}:`, cmvUpdateError);
+            cmvFailures.push(item.id);
+          }
+        } catch (cmvError) {
+          console.error(`[bulk] CMV calculation failed for item ${item.id}:`, cmvError);
+          cmvFailures.push(item.id);
+        }
+      }
+      if (cmvFailures.length > 0) {
+        console.warn(`[bulk] CMV failed for ${cmvFailures.length}/${insertedItems.length} items`);
       }
     }
 

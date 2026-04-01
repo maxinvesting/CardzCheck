@@ -2,15 +2,17 @@ import { describe, expect, it } from "vitest";
 import { parseGradeEstimateModelOutput } from "./gradeEstimateModel";
 import { buildImageStats } from "./fallbackEstimate";
 import type { GradeScanPhotoKind } from "@/types";
+import type { GradeScanCardMeta } from "@/lib/grading/gradeFeatures";
 
 async function runParse(
   payload: unknown,
-  options?: { scanPhotoKinds?: GradeScanPhotoKind[] }
+  options?: { scanPhotoKinds?: GradeScanPhotoKind[]; cardMeta?: GradeScanCardMeta | null }
 ) {
   return parseGradeEstimateModelOutput({
     modelText: JSON.stringify(payload),
     imageStats: buildImageStats([250_000, 320_000, 410_000]),
     scanPhotoKinds: options?.scanPhotoKinds ?? ["front", "back", "surface"],
+    cardMeta: options?.cardMeta ?? null,
   });
 }
 
@@ -208,6 +210,100 @@ describe("parseGradeEstimateModelOutput", () => {
 
     expect(parsed.estimate.grade_probabilities!.psa["10"]).toBeLessThanOrEqual(0.02);
     expect(parsed.estimate.grade_probabilities!.psa["9"]).toBeLessThanOrEqual(0.25);
+  });
+
+  it("applies strict Pokemon defect penalties to gem probabilities", async () => {
+    const parsed = await runParse(
+      {
+        status: "ok",
+        reason: "Visible edge whitening and print line",
+        estimated_grade_low: 8,
+        estimated_grade_high: 10,
+        grade_notes: "TCG test",
+        image_quality: {
+          overall_image_score: 88,
+          subscores: {
+            focus_sharpness: 22,
+            lighting_glare_control: 21,
+            coverage_angles: 22,
+            resolution_distance: 23,
+          },
+          key_issues: ["Tiny whitening on right edge"],
+          retake_tips: ["Better photos = more accurate grading."],
+        },
+        confidence: {
+          overall_confidence_score: 80,
+          confidence_label: "high",
+          limiting_factors: [],
+          what_was_clear: ["Edges and corners visible"],
+        },
+        centering: {
+          left_right_ratio: "54/46",
+          top_bottom_ratio: "53/47",
+          centering_confidence_score: 92,
+          centering_severity_0_3: 0,
+          centering_notes: "Within gem window.",
+        },
+        surface: "Light print line",
+        corners: "Small whitening on one corner",
+        edges: "Minor whitening on right edge",
+        surface_findings: [
+          {
+            issue_type: "print_line",
+            location: "mid holo",
+            severity_0_3: 1,
+            confidence_0_100: 82,
+            notes: "thin line",
+          },
+        ],
+        corners_findings: [
+          {
+            issue_type: "whitening",
+            location: "top right",
+            severity_0_3: 1,
+            confidence_0_100: 85,
+            notes: "small dot",
+          },
+        ],
+        edges_findings: [
+          {
+            issue_type: "whitening",
+            location: "right edge",
+            severity_0_3: 1,
+            confidence_0_100: 84,
+            notes: "light whitening",
+          },
+        ],
+        probabilities: [
+          { label: "PSA 10", probability: 0.62 },
+          { label: "PSA 9", probability: 0.27 },
+          { label: "PSA 8", probability: 0.08 },
+          { label: "PSA 7 or lower", probability: 0.03 },
+        ],
+        bgs_probabilities: [
+          { label: "BGS 9.5", probability: 0.62 },
+          { label: "BGS 9", probability: 0.27 },
+          { label: "BGS 8.5", probability: 0.08 },
+          { label: "BGS 8 or lower", probability: 0.03 },
+        ],
+      },
+      {
+        cardMeta: {
+          game: "Pokemon",
+          sport: "Pokemon",
+          player_name: "Pikachu",
+          set_name: "Pokemon 151",
+          year: 2023,
+        },
+      }
+    );
+
+    expect(parsed.estimate.analysis_metadata?.card_category).toBe("pokemon");
+    expect(parsed.estimate.analysis_metadata?.grading_profile).toBe(
+      "pokemon_strict"
+    );
+    expect(parsed.estimate.grade_probabilities!.psa["10"]).toBeLessThanOrEqual(0.12);
+    expect(parsed.estimate.model_version_used).toBe("rules:pokemon_strict");
   });
 
   it("clamps image/confidence score bounds", async () => {

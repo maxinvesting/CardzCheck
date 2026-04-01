@@ -32,6 +32,71 @@ export interface MarketSnapshotRecord {
   meta: Record<string, unknown>;
 }
 
+// Item-level sold event scaffold for sold-first comps.
+// This is additive and coexists with aggregate snapshots during migration.
+export interface MarketSoldEvent {
+  id: string;
+  source: string;
+  external_listing_id: string | null;
+  card_fingerprint: string | null;
+  listing_url: string | null;
+  image_url: string | null;
+  title_raw: string;
+  title_normalized: string | null;
+  sold_price_cents: number;
+  sold_at: string;
+  player: string | null;
+  year: string | null;
+  brand: string | null;
+  set_name: string | null;
+  subset: string | null;
+  card_number: string | null;
+  parallel: string | null;
+  serial_number: string | null;
+  print_run: string | null;
+  autograph: boolean | null;
+  relic: boolean | null;
+  grading_company: string | null;
+  grade: string | null;
+  cert_number: string | null;
+  condition_type: string | null;
+  identity_confidence: number | null;
+  parse_version: string | null;
+  raw_payload: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MarketSoldEventIngestInput {
+  source: string;
+  externalListingId?: string;
+  cardFingerprint?: string;
+  listingUrl?: string;
+  imageUrl?: string;
+  titleRaw: string;
+  titleNormalized?: string;
+  soldPriceCents: number;
+  soldAt: string;
+  player?: string;
+  year?: string;
+  brand?: string;
+  setName?: string;
+  subset?: string;
+  cardNumber?: string;
+  parallel?: string;
+  serialNumber?: string;
+  printRun?: string;
+  autograph?: boolean;
+  relic?: boolean;
+  gradingCompany?: string;
+  grade?: string;
+  certNumber?: string;
+  conditionType?: string;
+  identityConfidence?: number;
+  parseVersion?: string;
+  rawPayload?: Record<string, unknown>;
+}
+
 export interface MarketDiscountFactorRecord {
   id: string;
   card_fingerprint: string;

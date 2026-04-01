@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { normalizeHttpUrl, resolveStoredImagePath } from "@/lib/collection-images";
+import { requireBusinessContext } from "@/lib/business/context";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -13,6 +14,11 @@ type ImageFields = {
   id?: string | null;
   card_id?: string | null;
   title?: string | null;
+  player_name?: string | null;
+  year?: string | null;
+  set_name?: string | null;
+  parallel_type?: string | null;
+  insert?: string | null;
   image_url?: string | null;
   user_image_url?: string | null;
   stock_image_url?: string | null;
@@ -27,6 +33,20 @@ function firstImageUrl(...values: Array<string | null | undefined>): string | nu
   return null;
 }
 
+function firstTextValue(...values: Array<string | null | undefined>): string | null {
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const trimmed = value.trim();
+    if (trimmed) return trimmed;
+  }
+  return null;
+}
+
+function isGradeOnlyLabel(value: string | null | undefined): boolean {
+  if (!value) return false;
+  return /^(PSA|BGS|SGC|CGC)?\s*\d+(\.\d+)?$/i.test(value.trim());
+}
+
 function hasAnyImage(item: ImageFields | null | undefined): boolean {
   return Boolean(
     firstImageUrl(
@@ -36,6 +56,17 @@ function hasAnyImage(item: ImageFields | null | undefined): boolean {
       item?.image_url
     )
   );
+}
+
+function hasWeakSearchIdentity(item: ImageFields | null | undefined): boolean {
+  if (!item) return true;
+  const hasStructuredIdentity = Boolean(
+    firstTextValue(item.player_name, item.year, item.set_name, item.parallel_type, item.insert)
+  );
+  if (hasStructuredIdentity) return false;
+  const title = firstTextValue(item.title);
+  if (!title) return true;
+  return isGradeOnlyLabel(title);
 }
 
 function mergeImageFields(
@@ -53,6 +84,24 @@ function mergeImageFields(
       firstImageUrl(base.ebay_image_url, linked?.ebay_image_url) ?? null,
     image_url:
       firstImageUrl(base.image_url, linked?.image_url, linkedCardImageUrl) ?? null,
+  };
+}
+
+function mergeIdentityFields(base: ImageFields, linked: ImageFields | null): ImageFields {
+  const baseTitle = firstTextValue(base.title);
+  const linkedTitle = firstTextValue(linked?.title);
+  const title =
+    !baseTitle || isGradeOnlyLabel(baseTitle)
+      ? firstTextValue(linkedTitle, baseTitle)
+      : baseTitle;
+
+  return {
+    title: title ?? null,
+    player_name: firstTextValue(base.player_name, linked?.player_name) ?? null,
+    year: firstTextValue(base.year, linked?.year) ?? null,
+    set_name: firstTextValue(base.set_name, linked?.set_name) ?? null,
+    parallel_type: firstTextValue(base.parallel_type, linked?.parallel_type) ?? null,
+    insert: firstTextValue(base.insert, linked?.insert) ?? null,
   };
 }
 
@@ -86,13 +135,15 @@ export async function GET(
     const supabase = await createClient();
 
     if (from === "business") {
+      const context = await requireBusinessContext(userId);
+
       // Load from business_inventory_items
       const { data: itemById, error: itemByIdErr } = isUuid(itemId)
         ? await supabase
             .from("business_inventory_items")
             .select("*")
             .eq("id", itemId)
-            .eq("user_id", userId)
+            .eq("business_account_id", context.businessAccountId)
             .maybeSingle()
         : { data: null, error: null };
 
@@ -106,7 +157,7 @@ export async function GET(
           .from("business_inventory_items")
           .select("*")
           .eq("card_id", itemId)
-          .eq("user_id", userId)
+          .eq("business_account_id", context.businessAccountId)
           .order("created_at", { ascending: false })
           .limit(1);
 
@@ -119,10 +170,13 @@ export async function GET(
       let hydratedItem: Record<string, unknown> = item as Record<string, unknown>;
       const baseItem = item as ImageFields;
 
-      // Business rows can miss image fields. Enrich from linked card data if needed.
-      if (!hasAnyImage(baseItem)) {
+      // Business rows can miss image fields and/or searchable identity fields.
+      // Enrich from linked collection card data when either is weak.
+      const needsImageHydration = !hasAnyImage(baseItem);
+      const needsIdentityHydration = hasWeakSearchIdentity(baseItem);
+      if (needsImageHydration || needsIdentityHydration) {
         const cardSelect =
-          "id,title,image_url,user_image_url,stock_image_url,ebay_image_url";
+          "id,title,player_name,year,set_name,parallel_type,insert,image_url,user_image_url,stock_image_url,ebay_image_url";
         let linkedCard: ImageFields | null = null;
 
         if (isUuid(baseItem.card_id)) {
@@ -150,7 +204,7 @@ export async function GET(
         }
 
         let linkedCardImageUrl: string | null = null;
-        if (linkedCard?.id) {
+        if (needsImageHydration && linkedCard?.id) {
           const { data: cardImages } = await supabase
             .from("card_images")
             .select("storage_path")
@@ -172,7 +226,12 @@ export async function GET(
 
         hydratedItem = {
           ...item,
-          ...mergeImageFields(baseItem, linkedCard, linkedCardImageUrl),
+          ...(needsImageHydration
+            ? mergeImageFields(baseItem, linkedCard, linkedCardImageUrl)
+            : {}),
+          ...(needsIdentityHydration
+            ? mergeIdentityFields(baseItem, linkedCard)
+            : {}),
         };
       }
 
@@ -182,7 +241,7 @@ export async function GET(
         .from("business_sales")
         .select("*")
         .eq("inventory_item_id", item.id)
-        .eq("business_id", userId)
+        .eq("business_account_id", context.businessAccountId)
         .eq("is_deleted", false)
         .order("sold_at", { ascending: false });
       if (!salesRes.error) sales = salesRes.data ?? [];
@@ -218,9 +277,10 @@ export async function GET(
     });
   } catch (err: any) {
     console.error("Card profile GET error:", err);
+    const status = err?.status ?? 500;
     return NextResponse.json(
-      { error: "Failed to load card profile" },
-      { status: 500 }
+      { error: err?.message || "Failed to load card profile" },
+      { status }
     );
   }
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAdminAuth } from "@/lib/admin";
 import { createServiceClient } from "@/lib/supabase/server";
+import { inferShopCategoryLabel } from "@/lib/cards/market-category";
 
 /**
  * Sync shop_listings from business_inventory_items.
@@ -97,7 +98,14 @@ export async function POST() {
         quantity: qty,
         status: "active",
         publish_state: "published",
-        sport: "Football",
+        sport: inferShopCategoryLabel(
+          {
+            title,
+            set: setBrand,
+            player: playerName,
+          },
+          "Other"
+        ),
         tags: inv.channel ? [inv.channel] : [],
       };
       const { error: insErr } = await supabase

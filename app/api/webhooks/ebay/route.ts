@@ -55,18 +55,24 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   // Read raw body for signature verification
   const rawBody = await req.text();
 
-  // Verify eBay HMAC signature
+  // Verify eBay HMAC-SHA256 signature.
+  // SECURITY: Both the presence and validity of the signature are required.
+  // Accepting requests without a signature would allow anyone to inject fake
+  // eBay events (e.g., fake order-sold or account-deletion notifications).
   const signatureHeader = req.headers.get("x-ebay-signature");
-  if (signatureHeader) {
-    const expectedSig = crypto
-      .createHmac("sha256", verificationToken)
-      .update(rawBody)
-      .digest("base64");
+  if (!signatureHeader) {
+    console.warn("[ebay/webhook] Request received without x-ebay-signature header — rejecting");
+    return NextResponse.json({ error: "Missing signature" }, { status: 401 });
+  }
 
-    if (signatureHeader !== expectedSig) {
-      console.warn("[ebay/webhook] Signature mismatch — possible replay attack");
-      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
-    }
+  const expectedSig = crypto
+    .createHmac("sha256", verificationToken)
+    .update(rawBody)
+    .digest("base64");
+
+  if (signatureHeader !== expectedSig) {
+    console.warn("[ebay/webhook] Signature mismatch — possible replay or spoofed request");
+    return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 
   let payload: Record<string, unknown>;
@@ -99,17 +105,23 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
       // Find the CardzCheck user by their eBay user ID
       const supabase = await createClient();
-      const { data: account } = await supabase
+      const { data: accounts } = await supabase
         .from("ebay_accounts")
         .select("user_id")
         .eq("ebay_user_id", ebayUserId)
-        .eq("is_active", true)
-        .maybeSingle();
+        .eq("is_active", true);
 
-      if (!account) {
+      if (!accounts || accounts.length === 0) {
         // Order for a user who doesn't have CardzCheck connected — safe to ignore
         return NextResponse.json({ processed: false, reason: "user_not_found" });
       }
+
+      if (accounts.length > 1) {
+        console.error("[ebay-webhook] Multiple CardzCheck accounts share eBay user ID — skipping", { ebayUserId });
+        return NextResponse.json({ processed: true }); // ambiguous, skip safely
+      }
+
+      const account = accounts[0];
 
       // Fetch full order details from Fulfillment API
       const order = await getOrder(account.user_id, orderId);

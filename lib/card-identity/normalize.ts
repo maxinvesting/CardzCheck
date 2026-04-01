@@ -22,6 +22,10 @@ const BRAND_KEYWORDS = [
   "leaf",
   "skybox",
   "sp",
+  "pokemon",
+  "nintendo",
+  "wizards",
+  "bandai",
 ];
 
 const SET_KEYWORDS = [
@@ -41,6 +45,15 @@ const SET_KEYWORDS = [
   "heritage",
   "topps update",
   "topps series",
+  "scarlet violet",
+  "sword shield",
+  "sun moon",
+  "pokemon 151",
+  "romance dawn",
+  "paramount war",
+  "awakening of the new era",
+  "wings of the captain",
+  "500 years in the future",
 ];
 
 const INSERT_KEYWORDS = [
@@ -51,6 +64,10 @@ const INSERT_KEYWORDS = [
   "case hit",
   "ssp",
   "sp",
+  "illustration rare",
+  "special illustration rare",
+  "alt art",
+  "manga rare",
 ];
 
 const CHROMIUM_KEYWORDS = ["chrome", "refractor", "prizm", "optic", "select", "mosaic"];
@@ -207,6 +224,20 @@ function extractPlayerCandidates(text: string): string[] {
       "BASEBALL",
       "HOCKEY",
       "SOCCER",
+      "POKEMON",
+      "ONE",
+      "PIECE",
+      "TCG",
+      "CCG",
+      "BANDAI",
+      "TRAINER",
+      "ENERGY",
+      "LEADER",
+      "DON",
+      "ROMANCE",
+      "DAWN",
+      "PARAMOUNT",
+      "WAR",
       "COURT",
       "KINGS",
     ]

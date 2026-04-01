@@ -3,10 +3,60 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import type { ReactNode } from "react";
 import Header from "@/components/Header";
 import SportsCardBackground from "@/components/SportsCardBackground";
 import { createClient } from "@/lib/supabase/client";
-import { hasActiveBusinessTier } from "@/lib/subscription-tier";
+import { hasBusinessWorkspaceAccess } from "@/lib/business/workspace-access";
+import {
+  ANNUAL_SAVINGS,
+  BUSINESS_ADDITIONAL_SEAT_MONTHLY_PRICE,
+  BUSINESS_INCLUDED_SEATS,
+  BUSINESS_MONTHLY_PRICE,
+  PRO_ANNUAL_PRICE,
+  PRO_MONTHLY_PRICE,
+  formatPrice,
+} from "@/lib/pricing";
+import { LIMITS } from "@/types";
+
+function FeatureCard({
+  icon,
+  title,
+  description,
+  points,
+  badge,
+}: {
+  icon: ReactNode;
+  title: string;
+  description: string;
+  points: string[];
+  badge?: string;
+}) {
+  return (
+    <article className="rounded-xl border border-gray-800 bg-gray-900/70 p-5">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-800 text-blue-300">
+          {icon}
+        </div>
+        {badge ? (
+          <span className="rounded-full border border-blue-500/40 bg-blue-500/10 px-2.5 py-0.5 text-xs font-medium text-blue-300">
+            {badge}
+          </span>
+        ) : null}
+      </div>
+      <h3 className="text-lg font-semibold text-white">{title}</h3>
+      <p className="mt-2 text-sm text-gray-400">{description}</p>
+      <ul className="mt-4 space-y-2 text-sm text-gray-300">
+        {points.map((point) => (
+          <li key={point} className="flex items-start gap-2">
+            <span className="mt-1 h-1.5 w-1.5 rounded-full bg-blue-400" />
+            <span>{point}</span>
+          </li>
+        ))}
+      </ul>
+    </article>
+  );
+}
 
 export default function Home() {
   const router = useRouter();
@@ -18,14 +68,12 @@ export default function Home() {
       const { data: { user } } = await supabase.auth.getUser();
 
       if (user) {
-        // Authenticated user - redirect by tier
-        const { data: subscription } = await supabase
-          .from("subscriptions")
-          .select("tier, status, current_period_end")
-          .eq("user_id", user.id)
-          .maybeSingle();
+        const hasBusinessAccess = await hasBusinessWorkspaceAccess(
+          supabase as any,
+          user.id
+        );
 
-        if (hasActiveBusinessTier(subscription)) {
+        if (hasBusinessAccess) {
           router.replace("/business");
           return;
         }
@@ -38,253 +86,319 @@ export default function Home() {
     checkAuth();
   }, [router]);
 
-  // Show loading while checking auth
   if (checkingAuth) {
     return (
       <div className="min-h-screen bg-[#0f1419] flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#0f1419] relative overflow-hidden">
+    <div className="relative min-h-screen overflow-hidden bg-[#0f1419]">
       <SportsCardBackground variant="hero" />
       <div className="relative z-10">
         <Header />
-
-        {/* Hero */}
-        <section className="max-w-6xl mx-auto px-4 py-20 text-center">
-        <h1 className="text-4xl md:text-6xl font-bold text-white leading-tight">
-          Card Ladder charges{" "}
-          <span className="line-through text-gray-400">$200/year</span>
-          <br />
-          We charge{" "}
-          <span className="text-[#3a7fff]">$20 once</span>
-        </h1>
-        <p className="mt-6 text-xl text-gray-300 max-w-2xl mx-auto">
-          Real-time eBay sold prices, card identification, and collection tracking.
-          Everything you need to know what your cards are worth.
-        </p>
-        <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
-          <Link
-            href="/comps"
-            className="px-8 py-4 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-colors text-lg"
-          >
-            Try It Free
-          </Link>
-          <Link
-            href="/signup"
-            className="px-8 py-4 border-2 border-gray-600 text-white font-semibold rounded-xl hover:border-gray-500 transition-colors text-lg"
-          >
-            Create Account
-          </Link>
-        </div>
-        <p className="mt-4 text-sm text-gray-400">
-          3 free searches, no credit card required
-        </p>
-      </section>
-
-      {/* Features */}
-      <section className="bg-white dark:bg-gray-900 py-20">
-        <div className="max-w-6xl mx-auto px-4">
-          <h2 className="text-3xl font-bold text-center text-gray-900 dark:text-white mb-12">
-            How It Works
-          </h2>
-          <div className="grid md:grid-cols-3 gap-8">
-            {/* Feature 1 */}
-            <div className="text-center">
-              <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <svg
-                  className="w-8 h-8 text-blue-600 dark:text-blue-400"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
-                  />
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
-                  />
-                </svg>
-              </div>
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                Photo ID
-              </h3>
-              <p className="text-gray-600 dark:text-gray-400">
-                Upload a photo of your card. We identify the player, year, set, and grade for you.
-              </p>
-            </div>
-
-            {/* Feature 2 */}
-            <div className="text-center">
-              <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <svg
-                  className="w-8 h-8 text-green-600 dark:text-green-400"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-                  />
-                </svg>
-              </div>
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2 flex items-center justify-center gap-2">
-                Real-Time Comps
-                <span className="px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-xs font-medium rounded">
-                  Beta
-                </span>
-              </h3>
-              <p className="text-gray-600 dark:text-gray-400">
-                See actual eBay listing prices. Get the Est. Market Value based on active listings.
-              </p>
-            </div>
-
-            {/* Feature 3 */}
-            <div className="text-center">
-              <div className="w-16 h-16 bg-purple-100 dark:bg-purple-900/30 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <svg
-                  className="w-8 h-8 text-purple-600 dark:text-purple-400"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
-                  />
-                </svg>
-              </div>
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                Track Your Collection
-              </h3>
-              <p className="text-gray-600 dark:text-gray-400">
-                Save cards to your collection. Track what you paid vs. current value. Know your collection.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Pricing */}
-      <section className="py-20">
-        <div className="max-w-6xl mx-auto px-4">
-          <h2 className="text-3xl font-bold text-center text-gray-900 dark:text-white mb-4">
-            Simple Pricing
-          </h2>
-          <p className="text-center text-gray-600 dark:text-gray-400 mb-12">
-            No subscriptions. No hidden fees. Pay once, use forever.
-          </p>
-
-          <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-            {/* Free */}
-            <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-8">
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-                Free
-              </h3>
-              <p className="text-4xl font-bold text-gray-900 dark:text-white mt-4">
-                $0
-              </p>
-              <p className="text-gray-500 dark:text-gray-400 mt-1">
-                forever
-              </p>
-              <ul className="mt-6 space-y-3">
-                <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                  <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  3 card searches
-                </li>
-                <li className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                  <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  5 cards in collection
-                </li>
-              </ul>
-              <Link
-                href="/signup"
-                className="block mt-8 w-full py-3 text-center border border-gray-300 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-              >
-                Get Started
-              </Link>
-            </div>
-
-            {/* Pro */}
-            <div className="bg-blue-600 rounded-2xl p-8 relative">
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-yellow-400 text-yellow-900 text-sm font-semibold rounded-full">
-                Best Value
-              </div>
-              <h3 className="text-xl font-semibold text-white">
-                Pro
-              </h3>
-              <p className="text-4xl font-bold text-white mt-4">
-                $20
-              </p>
-              <p className="text-blue-200 mt-1">
-                one-time payment
-              </p>
-              <ul className="mt-6 space-y-3">
-                <li className="flex items-center gap-2 text-white">
-                  <svg className="w-5 h-5 text-blue-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  Unlimited searches
-                </li>
-                <li className="flex items-center gap-2 text-white">
-                  <svg className="w-5 h-5 text-blue-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  Unlimited collection
-                </li>
-                <li className="flex items-center gap-2 text-white">
-                  <svg className="w-5 h-5 text-blue-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  Collection tracking
-                </li>
-              </ul>
-              <Link
-                href="/signup"
-                className="block mt-8 w-full py-3 text-center bg-white text-blue-600 rounded-lg font-semibold hover:bg-blue-50 transition-colors"
-              >
-                Upgrade
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
-
-        {/* Footer */}
-        <footer className="bg-[#0f1419]/80 border-t border-gray-800 py-8">
-          <div className="max-w-6xl mx-auto px-4 text-center text-gray-400 text-sm">
-            <div className="flex justify-center mb-4">
-              <span className="text-2xl font-bold text-white opacity-80">
-                CardzCheck
-              </span>
-            </div>
-            <p className="text-gray-400">Sports Card Price Comps (Beta) + Collection Tracker</p>
-            <p className="mt-2 text-gray-500">
-              Data sourced from eBay sold listings.
+        <main className="mx-auto max-w-6xl px-4 pb-16 pt-10 sm:pt-14">
+          <section className="rounded-2xl border border-gray-800 bg-gray-900/75 p-6 backdrop-blur-sm sm:p-10">
+            <p className="inline-flex items-center rounded-full border border-blue-500/40 bg-blue-500/10 px-3 py-1 text-xs font-medium uppercase tracking-wide text-blue-300">
+              COLLECTORS · FLIPPERS · DEALERS
             </p>
-            <div className="mt-4 flex flex-wrap justify-center gap-4 text-gray-400">
-              <Link href="/terms" className="hover:text-white transition-colors">
+
+            <h1 className="mt-5 text-4xl font-bold leading-tight text-white sm:text-5xl lg:text-6xl">
+              The intelligence platform for sports card collectors and businesses.
+            </h1>
+
+            <p className="mt-5 max-w-3xl text-base text-gray-300 sm:text-lg">
+              Grade probability, pricing estimates, collection tracking, and full business
+              operations — in one platform built for collectors and dealers alike.
+            </p>
+
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <Link
+                href="/signup"
+                className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-6 py-3 text-base font-semibold text-white transition-colors hover:bg-blue-700"
+              >
+                Start Free
+              </Link>
+              <Link
+                href="/#features"
+                className="inline-flex items-center justify-center rounded-lg border border-gray-700 bg-gray-900 px-6 py-3 text-base font-semibold text-gray-200 transition-colors hover:border-gray-600 hover:text-white"
+              >
+                See How It Works
+              </Link>
+            </div>
+
+            <div className="mt-8 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-lg border border-gray-800 bg-gray-950/40 p-4">
+                <p className="text-xs uppercase tracking-wide text-gray-500">Free Start</p>
+                <p className="mt-1 text-sm font-semibold text-gray-100">
+                  {LIMITS.FREE_SEARCHES} card searches + {LIMITS.FREE_COLLECTION} saved cards
+                </p>
+              </div>
+              <div className="rounded-lg border border-gray-800 bg-gray-950/40 p-4">
+                <p className="text-xs uppercase tracking-wide text-gray-500">Core Engines</p>
+                <p className="mt-1 text-sm font-semibold text-gray-100">
+                  Grade Probability Engine, Pricing Insights, and Analyst AI
+                </p>
+              </div>
+              <div className="rounded-lg border border-gray-800 bg-gray-950/40 p-4">
+                <p className="text-xs uppercase tracking-wide text-gray-500">Scale Path</p>
+                <p className="mt-1 text-sm font-semibold text-gray-100">
+                  Upgrade from collector mode to full business operations
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <section className="mt-10 grid gap-4 md:grid-cols-2">
+            <article className="rounded-xl border border-gray-800 bg-gray-900/70 p-6">
+              <p className="text-xs uppercase tracking-wide text-blue-300">Collector Mode</p>
+              <h2 className="mt-2 text-2xl font-semibold text-white">Know what your cards are doing.</h2>
+              <p className="mt-3 text-sm text-gray-400">
+                Track cost basis, current value, and movement over time. Focus your collection on
+                what is performing and cut what is stalling.
+              </p>
+            </article>
+
+            <article className="rounded-xl border border-gray-800 bg-gray-900/70 p-6">
+              <p className="text-xs uppercase tracking-wide text-emerald-300">Business Mode</p>
+              <h2 className="mt-2 text-2xl font-semibold text-white">Run inventory like a real desk.</h2>
+              <p className="mt-3 text-sm text-gray-400">
+                Manage inventory, sales, and pricing with your team in one workspace built for card operations.
+              </p>
+            </article>
+          </section>
+
+          <section id="features" className="mt-10">
+            <h2 className="mb-4 text-2xl font-semibold text-white sm:text-3xl">What You Can Do</h2>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <FeatureCard
+                title="Know the Grade Before You Submit"
+                description="Upload card photos and get PSA and BGS grade probabilities with confidence levels — before you pay for a submission."
+                badge="Featured"
+                points={[
+                  "Grade Probability Engine with confidence levels",
+                  "Pre-submit expected value modeling",
+                  "Submission ROI calculator",
+                ]}
+                icon={(
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"
+                    />
+                  </svg>
+                )}
+              />
+              <FeatureCard
+                title="Price with Confidence"
+                description="Review listing trends and estimated value ranges before you buy, list, or flip."
+                points={[
+                  "Estimated market value and trend tracking",
+                  "Card photo identification to reduce manual entry",
+                  "Saved searches and quick repeat workflows",
+                ]}
+                icon={(
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                    />
+                  </svg>
+                )}
+              />
+              <FeatureCard
+                title="Operate at Scale"
+                description="Manage inventory, track P&L, and sell across eBay and Whatnot from a single business dashboard."
+                points={[
+                  "Inventory, ledger, and sales tracking",
+                  "Owner, manager, and employee seat roles",
+                  "eBay and Whatnot channel integration",
+                  "Business Consultant and Analyst workflows",
+                ]}
+                icon={(
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 11H5m14 0a2 2 0 012 2v2a2 2 0 01-2 2H5a2 2 0 01-2-2v-2a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+                    />
+                  </svg>
+                )}
+              />
+              <FeatureCard
+                title="Shop Below Our eBay Price"
+                description="Paid subscribers get exclusive access to CardzCheck inventory priced at least 13.5% below our eBay storefront."
+                badge="Subscriber Deal"
+                points={[
+                  "Always 13.5%+ below our eBay storefront",
+                  "Loyalty discounts up to 10% for repeat buyers",
+                  "Extra 1% off every order for Business members",
+                ]}
+                icon={(
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 7H4l1-7z"
+                    />
+                  </svg>
+                )}
+              />
+            </div>
+          </section>
+
+          {/* CardzCheck Deals spotlight */}
+          <section className="mt-10 overflow-hidden rounded-2xl border border-cyan-500/30 bg-gradient-to-br from-cyan-950/60 via-gray-900/80 to-gray-900/80">
+            <div className="flex flex-col gap-8 p-6 sm:p-8 lg:flex-row lg:items-center">
+              <div className="flex-1">
+                <p className="text-xs font-semibold uppercase tracking-wider text-cyan-400">
+                  Subscriber Exclusive
+                </p>
+                <h2 className="mt-2 text-2xl font-semibold text-white sm:text-3xl">
+                  CardzCheck Deals
+                </h2>
+                <p className="mt-3 max-w-xl text-gray-300">
+                  Every paid subscriber gets access to our curated storefront — CardzCheck inventory
+                  priced at least <span className="font-semibold text-cyan-300">13.5% below our eBay storefront</span>.
+                  Some deals also come in below market comps. Not a peer-to-peer marketplace.
+                  Sold directly by CardzCheck.
+                </p>
+                <ul className="mt-5 space-y-2 text-sm text-gray-300">
+                  {[
+                    "Exclusive subscriber-only pricing on every listing",
+                    "Loyalty discounts unlock at 5 and 10 purchases (up to 10% off)",
+                    "Business plan members get an extra 1% off every deal",
+                    "Every 5th purchase (15, 20, 25…) earns a milestone discount",
+                  ].map((point) => (
+                    <li key={point} className="flex items-start gap-2">
+                      <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-cyan-400" />
+                      <span>{point}</span>
+                    </li>
+                  ))}
+                </ul>
+                <Link
+                  href="/shop"
+                  className="mt-6 inline-flex items-center gap-2 rounded-lg bg-cyan-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-cyan-500"
+                >
+                  Browse subscriber deals
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </Link>
+              </div>
+              <div className="shrink-0 lg:w-64">
+                <div className="rounded-xl border border-cyan-500/20 bg-cyan-950/40 p-5">
+                  <p className="text-xs uppercase tracking-wide text-cyan-400">Pricing vs. our eBay</p>
+                  <div className="mt-3 space-y-3">
+                    {[
+                      { label: "Our eBay storefront", value: "$179", muted: true },
+                      { label: "Subscriber price", value: "$155", highlight: true },
+                      { label: "You save", value: "$24 (13.5%)", green: true },
+                    ].map(({ label, value, muted, highlight, green }) => (
+                      <div key={label} className="flex items-center justify-between gap-2">
+                        <span className={`text-sm ${muted ? "text-gray-500 line-through" : "text-gray-300"}`}>
+                          {label}
+                        </span>
+                        <span className={`text-sm font-semibold tabular-nums ${highlight ? "text-white" : green ? "text-cyan-300" : "text-gray-500"}`}>
+                          {value}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="mt-4 text-[11px] text-gray-500">
+                    Example based on a $179 eBay listing. Business members save an additional 1%.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section className="mt-10 rounded-2xl border border-gray-800 bg-gray-900/75 p-6 sm:p-8">
+            <h2 className="text-2xl font-semibold text-white sm:text-3xl">Plans That Scale with You</h2>
+            <p className="mt-2 text-gray-400">
+              Start free. Upgrade when you want more depth or a full business workflow.
+            </p>
+
+            <div className="mt-6 grid gap-4 md:grid-cols-3">
+              <article className="rounded-xl border border-gray-800 bg-gray-950/40 p-6">
+                <h3 className="text-lg font-semibold text-white">Free</h3>
+                <p className="mt-4 text-3xl font-bold text-white">$0</p>
+                <p className="text-sm text-gray-400">forever</p>
+                <ul className="mt-5 space-y-2 text-sm text-gray-300">
+                  <li>{LIMITS.FREE_SEARCHES} card searches</li>
+                  <li>{LIMITS.FREE_COLLECTION} collection cards</li>
+                  <li>Basic dashboard access</li>
+                </ul>
+                <Link
+                  href="/signup"
+                  className="mt-6 inline-flex w-full items-center justify-center rounded-lg border border-gray-700 bg-gray-900 px-4 py-2.5 font-medium text-gray-200 transition-colors hover:border-gray-600 hover:text-white"
+                >
+                  Create Free Account
+                </Link>
+              </article>
+
+              <article className="rounded-xl border border-blue-500/50 bg-blue-500/10 p-6">
+                <p className="text-xs font-semibold uppercase tracking-wide text-blue-200">Most Popular</p>
+                <h3 className="mt-2 text-lg font-semibold text-white">Pro</h3>
+                <p className="mt-4 text-3xl font-bold text-white">{formatPrice(PRO_MONTHLY_PRICE)}/mo</p>
+                <p className="text-sm text-blue-200">or {formatPrice(PRO_ANNUAL_PRICE)}/year (save {formatPrice(ANNUAL_SAVINGS)})</p>
+                <ul className="mt-5 space-y-2 text-sm text-blue-100">
+                  <li>Unlimited card searches</li>
+                  <li>Full collection tracking</li>
+                  <li>Analyst AI + Grade Probability Engine</li>
+                  <li>Subscriber deals (13.5%+ below our eBay)</li>
+                </ul>
+                <Link
+                  href="/signup"
+                  className="mt-6 inline-flex w-full items-center justify-center rounded-lg bg-blue-600 px-4 py-2.5 font-semibold text-white transition-colors hover:bg-blue-700"
+                >
+                  Start Pro
+                </Link>
+              </article>
+
+              <article className="rounded-xl border border-emerald-500/50 bg-emerald-500/10 p-6">
+                <p className="text-xs font-semibold uppercase tracking-wide text-emerald-200">For Card Teams</p>
+                <h3 className="mt-2 text-lg font-semibold text-white">Business</h3>
+                <p className="mt-4 text-3xl font-bold text-white">{formatPrice(BUSINESS_MONTHLY_PRICE)}/mo</p>
+                <p className="text-sm text-emerald-200">
+                  Includes {BUSINESS_INCLUDED_SEATS} user · Add team members for {formatPrice(BUSINESS_ADDITIONAL_SEAT_MONTHLY_PRICE)}/month each
+                </p>
+                <ul className="mt-5 space-y-2 text-sm text-emerald-100">
+                  <li>Everything in Pro</li>
+                  <li>Shared inventory, sales, and ledger workflows</li>
+                  <li>Role-based team access and seat controls</li>
+                  <li>Profit-focused business dashboard</li>
+                </ul>
+                <Link
+                  href="/signup"
+                  className="mt-6 inline-flex w-full items-center justify-center rounded-lg bg-emerald-600 px-4 py-2.5 font-semibold text-white transition-colors hover:bg-emerald-700"
+                >
+                  Start Business
+                </Link>
+              </article>
+            </div>
+          </section>
+        </main>
+
+        <footer className="border-t border-gray-800 bg-[#0f1419]/80 py-8">
+          <div className="mx-auto max-w-6xl px-4 text-center text-sm text-gray-400">
+            <div className="mb-4 flex justify-center">
+              <span className="text-2xl font-bold tracking-tight text-white">CardzCheck</span>
+            </div>
+            <p>The intelligence platform for sports card collectors and businesses.</p>
+            <div className="mt-4 flex flex-wrap justify-center gap-4">
+              <Link href="/terms" className="transition-colors hover:text-white">
                 Terms
               </Link>
-              <Link href="/privacy" className="hover:text-white transition-colors">
+              <Link href="/privacy" className="transition-colors hover:text-white">
                 Privacy
               </Link>
             </div>
