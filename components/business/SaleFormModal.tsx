@@ -309,7 +309,9 @@ export default function SaleFormModal({
             </label>
           )}
 
-          {channel === "ebay" && (
+          {channel === "ebay" &&
+            (Number.parseFloat(soldPrice) <= ESE_MAX_ITEM_VALUE ||
+              !soldPrice.trim()) && (
             <div className="space-y-2 rounded border border-gray-700 bg-gray-900/60 px-3 py-2">
               <div className="flex items-center justify-between gap-2">
                 <div className="text-xs text-gray-300">
