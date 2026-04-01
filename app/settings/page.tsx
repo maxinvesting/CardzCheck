@@ -409,27 +409,18 @@ function SettingsContent() {
             </div>
           </div>
 
-          {isBusinessSettings && (
-            <div className="bg-white/5 border border-white/15 rounded-2xl p-6 backdrop-blur-sm">
-              <h2 className="text-lg font-semibold text-white mb-4">
-                Team Management
-              </h2>
-              <TeamManagementSection />
-            </div>
-          )}
-
-          {isBusinessSettings && (
-            <div className="bg-white/5 border border-white/15 rounded-2xl p-6 backdrop-blur-sm">
-              <h2 className="text-lg font-semibold text-white mb-4">
+          {isBusinessSettings && isBusinessMember && (
+            <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                 Storefronts
               </h2>
               <StorefrontsSection />
             </div>
           )}
 
-          {isBusinessSettings && (
-            <div className="bg-white/5 border border-white/15 rounded-2xl p-6 backdrop-blur-sm">
-              <h2 className="text-lg font-semibold text-white mb-4">
+          {isBusinessSettings && isBusinessMember && (
+            <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                 eBay Integration
               </h2>
               <EbayConnectSection />
