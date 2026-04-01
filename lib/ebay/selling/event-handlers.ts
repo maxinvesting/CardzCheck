@@ -175,10 +175,12 @@ export async function handleEbayListingCreated(
     { onConflict: "user_id,ebay_listing_id" }
   );
 
-  // Update denormalized ebay_item_id on the inventory item for quick badge lookups
+  // Update denormalized ebay_item_id and normalize channel='ebay' for consistent filtering/badges.
+  // channel may have been any value before listing — correct it here so the row accurately
+  // reflects the active listing destination.
   await supabase
     .from("business_inventory_items")
-    .update({ ebay_item_id: listingData.ebay_listing_id })
+    .update({ ebay_item_id: listingData.ebay_listing_id, channel: "ebay" })
     .eq("id", inventoryItemId)
     .eq("user_id", userId);
 }

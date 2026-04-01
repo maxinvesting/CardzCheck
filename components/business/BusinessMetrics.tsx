@@ -1,11 +1,12 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import { useEffect, useRef } from "react";
+import { animate } from "framer-motion";
 import type { InventoryValueSummary } from "@/lib/business/inventory-value";
 import type { BusinessMetrics as Metrics } from "@/types";
 
-function fmt(cents: number): string {
-  return new Intl.NumberFormat("en-US", {
+function fmtCurrency(dollars: number): string {
+  return dollars.toLocaleString("en-US", {
     style: "currency",
     currency: "USD",
     minimumFractionDigits: 0,
@@ -154,7 +155,7 @@ export default function BusinessMetrics({
             </div>
           ))}
         </div>
-      </div>
+      ))}
     </div>
   );
 }

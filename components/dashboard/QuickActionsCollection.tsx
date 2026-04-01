@@ -40,7 +40,7 @@ export default function QuickActionsCollection({
           </div>
         </button>
 
-        {/* Run Comps */}
+        {/* Run Search */}
         <Link
           href="/comps"
           className="w-full flex items-center gap-3 p-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
@@ -61,8 +61,8 @@ export default function QuickActionsCollection({
             </svg>
           </div>
           <div>
-            <p className="font-medium text-white text-sm">Run Comps</p>
-            <p className="text-xs text-gray-400">Search eBay sales data</p>
+            <p className="font-medium text-white text-sm">Run Search</p>
+            <p className="text-xs text-gray-400">Review listing and sales data</p>
           </div>
         </Link>
 

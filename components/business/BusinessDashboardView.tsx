@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import BusinessMetrics from "@/components/business/BusinessMetrics";
-import EbayImportWizard from "@/components/business/EbayImportWizard";
 import { Surface } from "@/components/ui/Surface";
 import type {
   BusinessInventoryItem,
@@ -23,12 +22,70 @@ function fmt(cents: number): string {
   }).format(cents / 100);
 }
 
-function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  });
+function timeAgo(iso: string): string {
+  const diffDays = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+  if (diffDays <= 0) return "Today";
+  if (diffDays === 1) return "1d ago";
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return `${Math.floor(diffDays / 7)}w ago`;
 }
+
+function daysSince(dateStr: string | null): number | null {
+  if (!dateStr) return null;
+  const timestamp = new Date(dateStr).getTime();
+  if (!Number.isFinite(timestamp)) return null;
+  return Math.floor((Date.now() - timestamp) / 86_400_000);
+}
+
+function clipTitle(title: string | null | undefined, max = 52): string {
+  const trimmed = (title ?? "").trim();
+  if (!trimmed) return "Untitled card";
+  if (trimmed.length <= max) return trimmed;
+  return `${trimmed.slice(0, max - 1).trimEnd()}…`;
+}
+
+function gradeLabel(item: BusinessInventoryItem): string {
+  if (item.grading_company && item.grade) return `${item.grading_company} ${item.grade}`;
+  if (item.grade) return item.grade;
+  return item.condition_status === "graded" ? "Graded" : "Raw";
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="text-[9px] font-normal uppercase tracking-[0.1em] text-slate-500">
+      {children}
+    </span>
+  );
+}
+
+function FunnelBar({ value, color }: { value: number; color: string }) {
+  return (
+    <div className="h-[3px] w-full overflow-hidden bg-[var(--biz-surface-soft)]" style={{ borderRadius: 0 }}>
+      <div
+        className="h-full transition-[width] duration-300"
+        style={{ width: `${Math.max(0, Math.min(100, value))}%`, backgroundColor: color, borderRadius: 0 }}
+      />
+    </div>
+  );
+}
+
+type SignalTone = "emerald" | "amber" | "red";
+
+type SignalCard = {
+  label: "Opportunity" | "Trend" | "Alert";
+  title: string;
+  detail: string;
+  meta: string;
+  ctaLabel: string;
+  ctaHref: string;
+  tone: SignalTone;
+};
+
+const SIGNAL_STYLES: Record<SignalTone, { tagBg: string; tagText: string; borderAccent: string }> = {
+  emerald: { tagBg: "#1D9E75", tagText: "#ffffff", borderAccent: "#1D9E75" },
+  amber:   { tagBg: "#FAEEDA", tagText: "#854F0B", borderAccent: "#854F0B" },
+  red:     { tagBg: "#FCEBEB", tagText: "#A32D2D", borderAccent: "#A32D2D" },
+};
 
 const CHANNEL_LABELS: Record<string, string> = {
   ebay: "eBay",
@@ -38,6 +95,12 @@ const CHANNEL_LABELS: Record<string, string> = {
   local: "Local",
   other: "Other",
 };
+
+const secondaryActionClass =
+  "inline-flex items-center gap-1.5 rounded-none border border-[0.5px] border-[var(--biz-border)] bg-transparent px-2.5 py-1.5 text-xs font-medium text-[var(--biz-text)] transition-colors hover:bg-[var(--biz-hover)]";
+
+const primaryActionClass =
+  "inline-flex items-center gap-1.5 rounded-none bg-[#1D9E75] px-2.5 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[#17896A]";
 
 interface Props {
   businessName: string | null;
@@ -70,66 +133,262 @@ export default function BusinessDashboardView({
   ebayAccount,
   storefronts = [],
 }: Props) {
-  const now = Date.now();
-  const MS_PER_DAY = 86_400_000;
-  const [showImportWizard, setShowImportWizard] = useState(false);
   const [showStorefrontDropdown, setShowStorefrontDropdown] = useState(false);
+  const [syncingEbayOrders, setSyncingEbayOrders] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
 
-  const primaryStorefront = storefronts.find((s) => s.is_primary) ?? storefronts[0] ?? null;
+  const primaryStorefront = storefronts.find((store) => store.is_primary) ?? storefronts[0] ?? null;
   const hasStorefronts = storefronts.length > 0;
+  const hasWhatnotStorefront = storefronts.some((store) => store.platform === "whatnot");
+  const hasWebsiteStorefront = storefronts.some(
+    (store) => store.platform === "website" || store.platform === "shopify"
+  );
 
   const dashboardData = useMemo(() => {
-    const activeItems = items.filter(
-      (it) => it.status !== "sold" && it.status !== "returned"
+    const activeItems = items.filter((item) => item.status !== "sold" && item.status !== "returned");
+    const listedItems = activeItems.filter(
+      (item) => item.status === "listed" || item.status === "pending_sale"
     );
+    const unlistedItems = activeItems.filter((item) => item.status === "unlisted");
+    const rawItems = activeItems.filter(
+      (item) => item.condition_status === "raw" || !item.grade?.trim()
+    );
+    const staleListedItems = listedItems
+      .map((item) => ({ item, days: daysSince(item.acquisition_date) }))
+      .filter((entry): entry is { item: BusinessInventoryItem; days: number } => entry.days != null)
+      .filter((entry) => entry.days >= 45)
+      .sort((a, b) => b.days - a.days);
 
-    const topMovers = [...activeItems]
-      .filter((it) => it.current_market_value_cents != null)
-      .sort((a, b) => (b.current_market_value_cents ?? 0) - (a.current_market_value_cents ?? 0))
-      .slice(0, 5);
+    const topInventory = [...activeItems]
+      .filter((item) => (item.current_market_value_cents ?? 0) > 0)
+      .sort(
+        (a, b) =>
+          (b.current_market_value_cents ?? 0) - (a.current_market_value_cents ?? 0)
+      )
+      .slice(0, 2);
 
-    const unlisted = activeItems.filter((it) => it.status === "unlisted");
-    const aged = activeItems.filter((it) => {
-      if (!it.acquisition_date) return false;
-      const acqMs = new Date(it.acquisition_date).getTime();
-      return (now - acqMs) / MS_PER_DAY > 60;
-    });
-    const noCmv = activeItems.filter((it) => it.current_market_value_cents == null);
+    const bestOpportunity = [...unlistedItems]
+      .filter((item) => (item.current_market_value_cents ?? 0) > 0)
+      .sort((a, b) => {
+        const marginA = (a.current_market_value_cents ?? 0) - (a.cost_basis_total_cents ?? 0);
+        const marginB = (b.current_market_value_cents ?? 0) - (b.cost_basis_total_cents ?? 0);
+        if (marginB !== marginA) return marginB - marginA;
+        return (b.current_market_value_cents ?? 0) - (a.current_market_value_cents ?? 0);
+      })[0] ?? null;
 
-    const listedCount = activeItems.filter(
-      (it) => it.status === "listed" || it.status === "pending_sale"
-    ).length;
+    const bestGradingCandidate = [...rawItems]
+      .filter((item) => (item.current_market_value_cents ?? 0) > 0)
+      .sort(
+        (a, b) =>
+          (b.current_market_value_cents ?? 0) - (a.current_market_value_cents ?? 0)
+      )[0] ?? null;
 
-    const recentlyAdded = [...items]
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-      .slice(0, 8);
-
-    return {
-      topMovers,
-      unlisted,
-      aged,
-      noCmv,
-      listedCount,
-      recentlyAdded,
-      activeCount: activeItems.length,
-    };
-  }, [items, now, MS_PER_DAY]);
-
-  const soldLast30Count = recentSales.length;
-  const itemsEmpty = items.length === 0;
-
-  const ebayKpis = useMemo(() => {
-    const ebaySales = recentSales.filter((s) => s.channel === "ebay");
-    const revenueCents = ebaySales.reduce(
-      (sum, s) => sum + (s.sold_price_cents ?? 0) + (s.shipping_charged_cents ?? 0),
+    const idleCapitalCents = unlistedItems.reduce(
+      (sum, item) => sum + (item.current_market_value_cents ?? item.cost_basis_total_cents ?? 0),
       0
     );
-    const profitCents = ebaySales.reduce((sum, s) => sum + (s.profit_cents ?? 0), 0);
-    const activeEbayListings = items.filter(
-      (it) => it.channel === "ebay" && it.status === "listed"
-    ).length;
-    return { revenueCents, profitCents, salesCount: ebaySales.length, activeEbayListings };
-  }, [recentSales, items]);
+
+    const staleCapitalCents = staleListedItems.reduce(
+      (sum, entry) =>
+        sum + (entry.item.current_market_value_cents ?? entry.item.list_price_cents ?? 0),
+      0
+    );
+
+    return {
+      activeItems,
+      listedItems,
+      unlistedItems,
+      rawItems,
+      staleListedItems,
+      topInventory,
+      bestOpportunity,
+      bestGradingCandidate,
+      idleCapitalCents,
+      staleCapitalCents,
+    };
+  }, [items]);
+
+  const recentSalesList = useMemo(
+    () =>
+      [...recentSales]
+        .sort(
+          (a, b) =>
+            new Date(b.sold_at).getTime() - new Date(a.sold_at).getTime()
+        )
+        .slice(0, 2),
+    [recentSales]
+  );
+
+  const recentSalesGrossCents = useMemo(
+    () => recentSales.reduce((sum, sale) => sum + (sale.gross_revenue_cents ?? 0), 0),
+    [recentSales]
+  );
+
+  const recentSalesProfitCents = useMemo(
+    () => recentSales.reduce((sum, sale) => sum + (sale.profit_cents ?? 0), 0),
+    [recentSales]
+  );
+
+  const topSalesChannel = useMemo(() => {
+    const totals = new Map<string, { count: number; revenue: number }>();
+    for (const sale of recentSales) {
+      const channel = sale.channel || "other";
+      const current = totals.get(channel) ?? { count: 0, revenue: 0 };
+      current.count += 1;
+      current.revenue += sale.gross_revenue_cents ?? 0;
+      totals.set(channel, current);
+    }
+
+    return [...totals.entries()]
+      .map(([channel, stats]) => ({ channel, ...stats }))
+      .sort((a, b) => {
+        if (b.count !== a.count) return b.count - a.count;
+        return b.revenue - a.revenue;
+      })[0] ?? null;
+  }, [recentSales]);
+
+  const soldLast30Count = recentSales.length;
+  const activeCount = dashboardData.activeItems.length;
+  const listedCount = dashboardData.listedItems.length;
+  const unlistedCount = dashboardData.unlistedItems.length;
+  const listRate = activeCount > 0 ? Math.round((listedCount / activeCount) * 100) : 0;
+  const sellThroughRate = listedCount > 0 ? Math.round((soldLast30Count / listedCount) * 100) : 0;
+
+  const signalCards = useMemo<SignalCard[]>(() => {
+    const opportunity = dashboardData.bestOpportunity;
+    const alertItem = dashboardData.staleListedItems[0]?.item ?? null;
+    const alertDays = dashboardData.staleListedItems[0]?.days ?? null;
+
+    const cards: SignalCard[] = [];
+
+    cards.push(
+      opportunity
+        ? {
+            label: "Opportunity",
+            title: `${clipTitle(opportunity.title, 58)} is ready to list`,
+            detail: `Est. MV ${fmt(opportunity.current_market_value_cents ?? 0)} vs cost ${fmt(
+              opportunity.cost_basis_total_cents ?? 0
+            )}`,
+            meta: `${gradeLabel(opportunity)} • ${daysSince(opportunity.acquisition_date) ?? 0}d held • ${unlistedCount} unlisted`,
+            ctaLabel: "Open Card",
+            ctaHref: `/card/${opportunity.id}?from=business`,
+            tone: "emerald",
+          }
+        : {
+            label: "Opportunity",
+            title: `${unlistedCount} cards are ready for pricing`,
+            detail: `${fmt(dashboardData.idleCapitalCents)} of inventory is not live yet`,
+            meta: activeCount > 0 ? `${listRate}% list rate across active inventory` : "Add inventory to start tracking opportunities",
+            ctaLabel: "Review Inventory",
+            ctaHref: "/business/ledger",
+            tone: "emerald",
+          }
+    );
+
+    cards.push(
+      topSalesChannel
+        ? {
+            label: "Trend",
+            title: `${CHANNEL_LABELS[topSalesChannel.channel] ?? topSalesChannel.channel} is leading your recent sell-through`,
+            detail: `${topSalesChannel.count} of the last ${Math.max(recentSales.length, 1)} sales • avg ${fmt(
+              Math.round(topSalesChannel.revenue / Math.max(topSalesChannel.count, 1))
+            )}`,
+            meta:
+              recentSalesList[0] != null
+                ? `${clipTitle(recentSalesList[0].inventory_item?.title, 40)} sold ${timeAgo(recentSalesList[0].sold_at)}`
+                : "Recent sales will surface channel momentum here",
+            ctaLabel: "Open Sales",
+            ctaHref: "/business/ledger?tab=sales",
+            tone: "amber",
+          }
+        : {
+            label: "Trend",
+            title: "No recent sales trend yet",
+            detail: "The last 30 days of sales will surface your strongest channel and average order value.",
+            meta: listedCount > 0 ? `${listedCount} active listings are ready to track` : "List cards to start collecting sell-through data",
+            ctaLabel: "View Ledger",
+            ctaHref: "/business/ledger",
+            tone: "amber",
+          }
+    );
+
+    cards.push(
+      alertItem && alertDays != null
+        ? {
+            label: "Alert",
+            title: `${dashboardData.staleListedItems.length} listings are stale`,
+            detail: `${fmt(dashboardData.staleCapitalCents)} is tied up in cards sitting 45+ days`,
+            meta: `${clipTitle(alertItem.title, 42)} has been live ${alertDays}d`,
+            ctaLabel: "Review Listings",
+            ctaHref: "/business/ledger",
+            tone: "red",
+          }
+        : {
+            label: "Alert",
+            title: unlistedCount > 0 ? `${unlistedCount} cards are still unlisted` : "No stale capital flagged today",
+            detail:
+              unlistedCount > 0
+                ? `${fmt(dashboardData.idleCapitalCents)} is still waiting on a listing decision`
+                : "Your active inventory does not show stale listed inventory right now.",
+            meta:
+              unlistedCount > 0
+                ? `${sellThroughRate}% 30d sell-through on currently listed cards`
+                : "Continue monitoring pricing and list velocity from the ledger",
+            ctaLabel: unlistedCount > 0 ? "Review Inventory" : "Open Ledger",
+            ctaHref: "/business/ledger",
+            tone: "red",
+          }
+    );
+
+    return cards;
+  }, [
+    activeCount,
+    dashboardData.bestOpportunity,
+    dashboardData.idleCapitalCents,
+    dashboardData.staleCapitalCents,
+    dashboardData.staleListedItems,
+    listedCount,
+    listRate,
+    recentSales.length,
+    recentSalesList,
+    sellThroughRate,
+    topSalesChannel,
+    unlistedCount,
+  ]);
+
+  const funnelTotal = Math.max(unlistedCount + listedCount + soldLast30Count, 1);
+
+  const ebayKpis = useMemo(() => {
+    const ebaySales = recentSales.filter((sale) => sale.channel === "ebay");
+    return {
+      revenueCents: ebaySales.reduce(
+        (sum, sale) => sum + (sale.sold_price_cents ?? 0) + (sale.shipping_charged_cents ?? 0),
+        0
+      ),
+      profitCents: ebaySales.reduce((sum, sale) => sum + (sale.profit_cents ?? 0), 0),
+      salesCount: ebaySales.length,
+      activeEbayListings: items.filter(
+        (item) => item.channel === "ebay" && item.status === "listed"
+      ).length,
+    };
+  }, [items, recentSales]);
+
+  async function handleSyncEbayOrders() {
+    if (syncingEbayOrders) return;
+    setSyncError(null);
+    setSyncingEbayOrders(true);
+    try {
+      const res = await fetch("/api/business/ebay/orders/sync", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.success) {
+        throw new Error(data.error ?? "Failed to sync eBay orders");
+      }
+    } catch (err) {
+      setSyncError(err instanceof Error ? err.message : "Failed to sync eBay orders");
+    } finally {
+      setSyncingEbayOrders(false);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -143,21 +402,31 @@ export default function BusinessDashboardView({
           <p className="mt-0.5 text-sm text-[var(--muted)]">
             Business overview &amp; insights
           </p>
+          {syncError && <p className="mt-1 text-xs font-medium text-red-700">{syncError}</p>}
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex flex-wrap items-center gap-1.5">
           {hasStorefronts ? (
             <div className="relative">
               <button
                 onClick={() => setShowStorefrontDropdown(!showStorefrontDropdown)}
                 className="cc-btn-secondary whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium flex items-center gap-1.5"
               >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                {primaryStorefront.display_name}
+                <svg className="h-3.5 w-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5h5m0 0v5m0-5L10 14" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 9v10h10" />
                 </svg>
-                {storefronts.length === 1 ? primaryStorefront!.display_name : "Storefronts"}
-                {storefronts.length > 1 && (
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              </a>
+            ) : (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowStorefrontDropdown((current) => !current)}
+                  className={secondaryActionClass}
+                >
+                  Storefronts
+                  <svg className="h-3.5 w-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
                 )}
@@ -186,30 +455,17 @@ export default function BusinessDashboardView({
                     ))}
                     <div className="border-t border-gray-100 dark:border-gray-700 mt-1 pt-1">
                       <Link
-                        href="/business/settings"
-                        className="flex items-center gap-2 px-3 py-2 text-xs text-blue-600 dark:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                        href="/business/settings?section=storefronts"
                         onClick={() => setShowStorefrontDropdown(false)}
+                        className="block border-t border-[var(--biz-border)] px-3 py-2 text-sm font-medium text-[var(--biz-primary)] transition-colors hover:bg-[var(--biz-surface-soft)]"
                       >
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                        Manage Storefronts
+                        Manage storefronts
                       </Link>
                     </div>
-                  </div>
-                </>
-              )}
-              {storefronts.length === 1 && primaryStorefront && (
-                <a
-                  href={primaryStorefront.store_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="absolute inset-0"
-                  aria-label={`Open ${primaryStorefront.display_name}`}
-                />
-              )}
-            </div>
+                  </>
+                )}
+              </div>
+            )
           ) : ebayStoreHref ? (
             <a
               href={ebayStoreHref}
@@ -251,7 +507,6 @@ export default function BusinessDashboardView({
         loading={metricsLoading}
         inventorySummary={inventorySummary}
         totalItemCount={items.length}
-        compact
       />
 
       {needsMigration && (
@@ -365,7 +620,7 @@ export default function BusinessDashboardView({
                         className="truncate text-xs text-[var(--biz-text)] hover:underline transition-colors"
                         title={item.title}
                       >
-                        {item.title}
+                        {dashboardData.bestGradingCandidate ? "Open card →" : "Grade Hub →"}
                       </Link>
                       <span className="shrink-0 text-xs font-semibold tabular-nums text-[var(--biz-primary)]">
                         {fmt(item.current_market_value_cents!)}

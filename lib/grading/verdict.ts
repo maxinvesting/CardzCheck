@@ -76,17 +76,30 @@ function hasPhotoQualityFlags(estimate: GradeEstimate): boolean {
     .join(" ")
     .toLowerCase();
 
-  // Unambiguously negative — safe to check anywhere
+  // Unambiguously negative phrases — safe to check anywhere
   const universalTokens = [
     "out of focus",
     "limited visibility",
-    "obscured",
     "not fully assess",
-    "blurry",
+    "cannot be assessed",
+    "too blurry",
   ];
 
-  // Ambiguous — only flag when appearing in explicitly-negative fields
-  const negativeFieldOnlyTokens = ["lighting", "glare", "resolution", "blur", "unclear"];
+  // Phrase-level tokens — only flag in explicitly-negative fields to avoid
+  // false positives from "no glare observed" or "good resolution" language.
+  const negativeFieldOnlyTokens = [
+    "poor lighting",
+    "bad lighting",
+    "glare blocking",
+    "glare obscur",
+    "blocked by glare",
+    "low resolution",
+    "insufficient resolution",
+    "image blur",
+    "photo blur",
+    "unclear detail",
+    "details unclear",
+  ];
 
   return (
     universalTokens.some((token) => allText.includes(token)) ||
@@ -113,10 +126,10 @@ function getPsaOutcomes(estimate: GradeEstimate): GradeOutcome[] {
   const rangeLabel = buildRangeLabel(estimate);
   if (!rangeLabel) {
     return normalizePsaDistribution([
-      { label: "PSA 10", probability: 0.08 },
-      { label: "PSA 9", probability: 0.32 },
-      { label: "PSA 8", probability: 0.34 },
-      { label: "PSA 7 or lower", probability: 0.26 },
+      { label: "PSA 10", probability: 0.10 },
+      { label: "PSA 9", probability: 0.38 },
+      { label: "PSA 8", probability: 0.28 },
+      { label: "PSA 7 or lower", probability: 0.24 },
     ]);
   }
   return normalizePsaDistribution(

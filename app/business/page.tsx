@@ -10,6 +10,7 @@ import type {
   BusinessInventoryItem,
   BusinessMetrics as MetricsType,
   BusinessSale,
+  EbayAccountStatus,
   UserStorefront,
 } from "@/types";
 import {
@@ -52,6 +53,7 @@ function BusinessDashboardContent() {
   const [recentSalesLoading, setRecentSalesLoading] = useState(false);
   const [needsMigration, setNeedsMigration] = useState(false);
   const [storefronts, setStorefronts] = useState<UserStorefront[]>([]);
+  const [ebayAccount, setEbayAccount] = useState<EbayAccountStatus | null>(null);
 
   const ebayStoreHref = useMemo(
     () => buildEbayStoreHref(ebayStoreUrl),
@@ -59,7 +61,10 @@ function BusinessDashboardContent() {
   );
 
   const inventorySummary = useMemo((): InventoryValueSummary | null => {
-    return computeInventoryValueSummary(items);
+    const activeItems = items.filter(
+      (it) => it.status !== "sold" && it.status !== "returned"
+    );
+    return computeInventoryValueSummary(activeItems);
   }, [items]);
 
   const loadInventory = useCallback(async () => {
@@ -122,6 +127,17 @@ function BusinessDashboardContent() {
     }
   }, []);
 
+  const loadEbayAccount = useCallback(async () => {
+    try {
+      const res = await fetch("/api/business/ebay/account", { cache: "no-store" });
+      if (!res.ok) return;
+      const data: EbayAccountStatus = await res.json();
+      setEbayAccount(data);
+    } catch {
+      // account status is best-effort only
+    }
+  }, []);
+
   const loadRecentSales = useCallback(async () => {
     setRecentSalesLoading(true);
     try {
@@ -149,7 +165,6 @@ function BusinessDashboardContent() {
 
   const loadUserProfile = useCallback(async () => {
     const supabase = createClient();
-    await supabase.auth.refreshSession();
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -216,10 +231,16 @@ function BusinessDashboardContent() {
         router.push("/login?redirect=/business");
         return;
       }
-      await Promise.all([loadInventory(), loadMetrics(), loadRecentSales(), loadStorefronts()]);
+      await Promise.all([
+        loadInventory(),
+        loadMetrics(),
+        loadRecentSales(),
+        loadStorefronts(),
+        loadEbayAccount(),
+      ]);
     }
     init();
-  }, [router, loadUserProfile, loadInventory, loadMetrics, loadRecentSales, loadStorefronts]);
+  }, [router, loadUserProfile, loadInventory, loadMetrics, loadRecentSales, loadStorefronts, loadEbayAccount]);
 
   // Refresh profile when returning to tab (e.g. after settings update)
   useEffect(() => {
@@ -252,7 +273,7 @@ function BusinessDashboardContent() {
   if (loading) {
     return (
       <AuthenticatedLayout>
-        <main className="max-w-7xl mx-auto px-4 py-4">
+        <main className="mx-auto max-w-7xl px-4 py-2">
           <div className="animate-pulse space-y-4">
             <div className="h-8 w-48 rounded bg-[#E5E7EB]" />
             <div className="grid grid-cols-4 gap-4">
@@ -273,7 +294,7 @@ function BusinessDashboardContent() {
   if (hasAccess === false) {
     return (
       <AuthenticatedLayout>
-        <main className="max-w-7xl mx-auto px-4 py-4">
+        <main className="mx-auto max-w-7xl px-4 py-2">
           <BusinessPaywall />
         </main>
       </AuthenticatedLayout>
@@ -282,7 +303,7 @@ function BusinessDashboardContent() {
 
   return (
     <AuthenticatedLayout>
-      <main className="mx-auto max-w-7xl px-4 py-4">
+      <main className="mx-auto max-w-7xl px-4 py-2">
         <BusinessDashboardView
           businessName={businessName}
           metrics={metrics}
@@ -293,6 +314,7 @@ function BusinessDashboardContent() {
           recentSalesLoading={recentSalesLoading}
           ebayStoreHref={ebayStoreHref}
           needsMigration={needsMigration}
+          ebayAccount={ebayAccount}
           storefronts={storefronts}
         />
       </main>
@@ -305,7 +327,7 @@ export default function BusinessDashboardPage() {
     <Suspense
       fallback={
         <AuthenticatedLayout>
-          <main className="max-w-7xl mx-auto px-4 py-4">
+          <main className="mx-auto max-w-7xl px-4 py-2">
             <div className="animate-pulse space-y-4">
               <div className="h-8 w-48 rounded bg-[#E5E7EB]" />
               <div className="grid grid-cols-4 gap-4">

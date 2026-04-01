@@ -31,10 +31,14 @@ export async function POST(request: Request) {
 
     let billing: "monthly" | "annual" = "monthly";
     let tier: "pro" | "business" = "pro";
+    let seatQuantity = 1;
     try {
       const body = await request.json();
       if (body?.billing === "annual") billing = "annual";
       if (body?.tier === "business") tier = "business";
+      if (Number.isFinite(Number(body?.seat_quantity))) {
+        seatQuantity = Math.max(1, Math.trunc(Number(body.seat_quantity)));
+      }
     } catch {
       // Body may be empty for legacy callers — default to monthly pro
     }
@@ -42,9 +46,7 @@ export async function POST(request: Request) {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
     if (tier === "business") {
-      const businessPriceConfigured =
-        process.env.STRIPE_BUSINESS_MONTHLY_PRICE_ID?.trim() ||
-        process.env.STRIPE_BUSINESS_ANNUAL_PRICE_ID?.trim();
+      const businessPriceConfigured = process.env.STRIPE_BUSINESS_MONTHLY_PRICE_ID?.trim();
       if (!businessPriceConfigured) {
         console.error("Checkout: No Business Stripe price IDs configured");
         return NextResponse.json(
@@ -58,7 +60,8 @@ export async function POST(request: Request) {
         user.email,
         `${appUrl}/business?success=true`,
         `${appUrl}/business?canceled=true`,
-        billing
+        "monthly",
+        seatQuantity
       );
       return NextResponse.json({ url: session.url });
     }

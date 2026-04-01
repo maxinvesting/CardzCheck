@@ -91,6 +91,36 @@ export function getCmvDeltaPresentation(
   };
 }
 
+export interface EbayStorefrontPresentation {
+  ebayPrice: string | null;
+  savingsAmount: string | null;
+  savingsPct: number | null;
+  hasEbaySavings: boolean;
+}
+
+/**
+ * Calculates subscriber savings vs. our eBay storefront price.
+ * Returns null values when ebay_storefront_price is not set — callers should fall back to CMV display.
+ */
+export function getEbayStorefrontPresentation(
+  price: number,
+  ebayStorefrontPrice: number | null | undefined
+): EbayStorefrontPresentation {
+  if (!ebayStorefrontPrice || ebayStorefrontPrice <= 0) {
+    return { ebayPrice: null, savingsAmount: null, savingsPct: null, hasEbaySavings: false };
+  }
+
+  const savings = ebayStorefrontPrice - price;
+  const savingsPct = Math.round((savings / ebayStorefrontPrice) * 100);
+
+  return {
+    ebayPrice: formatUsd(ebayStorefrontPrice, 2),
+    savingsAmount: formatUsd(Math.max(0, savings), 2),
+    savingsPct: Math.max(0, savingsPct),
+    hasEbaySavings: savings > 0,
+  };
+}
+
 export function getShippingLabel(shippingCost: number): string {
   if (!Number.isFinite(shippingCost) || shippingCost <= 0) {
     return "Free shipping";

@@ -26,7 +26,7 @@ export default function CompactQuickActions({ onAddCard }: CompactQuickActionsPr
           <span>Add card</span>
         </button>
 
-        {/* Run Comps */}
+        {/* Run Search */}
         <Link
           href="/comps"
           className="inline-flex items-center justify-center gap-2 rounded-lg border border-[color:var(--biz-border,#e5e7eb)] bg-[color:var(--biz-surface-soft,#f9fafb)] px-3 py-2 text-xs font-medium text-[color:var(--biz-text,#111827)] transition-colors hover:bg-[color:var(--biz-hover,#f3f4f6)]"
@@ -34,7 +34,7 @@ export default function CompactQuickActions({ onAddCard }: CompactQuickActionsPr
           <svg className="h-4 w-4 text-[color:var(--biz-muted,#6b7280)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
           </svg>
-          <span>Run comps</span>
+          <span>Run search</span>
         </Link>
 
         {/* View Collection */}

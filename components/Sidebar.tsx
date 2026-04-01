@@ -3,9 +3,9 @@
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import type { User } from "@/types";
 import PricingModal from "@/components/PricingModal";
+import { getCurrentUserCached } from "@/lib/current-user-client";
 
 type NavItem = {
   name: string;
@@ -179,15 +179,24 @@ function NewsIcon() {
   );
 }
 
+function AdminIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+  );
+}
+
 function PERSONAL_NAV_ITEMS(): NavItem[] {
   return [
     { name: "Dashboard", href: "/dashboard", icon: <HomeIcon />, exact: true },
     { name: "Collection", href: "/collection", icon: <CollectionIcon /> },
-    { name: "Grade Probability Engine", href: "/grade-hub", icon: <BadgeIcon />, badge: "Featured" },
+    { name: "Grade Probability Engine", href: "/grade-hub", icon: <BadgeIcon />, badge: "dot" },
     { name: "News & Updates", href: "/news", icon: <NewsIcon />, badge: "New" },
     { name: "Bulk Mode", href: "/bulk", icon: <BulkIcon /> },
     { name: "Watchlist", href: "/watchlist", icon: <EyeIcon />, isPro: true, badge: "Pro" },
-    { name: "Comps", href: "/comps", icon: <ChartIcon />, badge: "Beta" },
+    { name: "Compare Listings", href: "/comps", icon: <ChartIcon />, badge: "Beta" },
     { name: "CardzCheck Analyst", href: "/analyst", icon: <AnalystIcon />, isPro: true, badge: "Pro" },
     { name: "Marketplace", href: "/shop", icon: <ShopIcon /> },
     { name: "Help & FAQ", href: "/help", icon: <HelpIcon /> },
@@ -195,13 +204,27 @@ function PERSONAL_NAV_ITEMS(): NavItem[] {
   ];
 }
 
+function MessagesIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
+      />
+    </svg>
+  );
+}
+
 function BUSINESS_NAV_ITEMS(): NavItem[] {
   return [
     { name: "Dashboard", href: "/business", icon: <HomeIcon />, exact: true },
     { name: "Ledger", href: "/business/ledger", icon: <LedgerIcon /> },
-    { name: "Grade Probability Engine", href: "/grade-hub", icon: <BadgeIcon />, badge: "Featured" },
+    { name: "Customer Service", href: "/business/messages", icon: <MessagesIcon />, badge: "New" },
+    { name: "Grade Probability Engine", href: "/grade-hub", icon: <BadgeIcon />, badge: "dot" },
     { name: "News & Updates", href: "/business/news", icon: <NewsIcon />, badge: "New" },
-    { name: "Comps", href: "/business/comps", icon: <ChartIcon />, badge: "Beta" },
+    { name: "Compare Listings", href: "/business/comps", icon: <ChartIcon />, badge: "Beta" },
     { name: "Business Consultant", href: "/business/consultant", icon: <AnalystIcon /> },
     { name: "Marketplace", href: "/shop", icon: <ShopIcon /> },
     { name: "Help & FAQ", href: "/help", icon: <HelpIcon /> },
@@ -216,34 +239,30 @@ export default function Sidebar() {
   const [remainingSearches, setRemainingSearches] = useState<number | null>(null);
   const [pricingOpen, setPricingOpen] = useState(false);
 
-  const isBusinessWorkspace = pathname.startsWith("/business");
-  const navItems = isBusinessWorkspace ? BUSINESS_NAV_ITEMS() : PERSONAL_NAV_ITEMS();
+  const isBusinessWorkspace = pathname.startsWith("/business") || pathname.startsWith("/admin");
+  const isAdminUser = user?.app_role === "admin" || user?.app_role === "owner";
+  const hasPaidWorkspace = Boolean(user?.is_paid) || isBusinessWorkspace;
+  const baseNavItems = isBusinessWorkspace ? BUSINESS_NAV_ITEMS() : PERSONAL_NAV_ITEMS();
+  const navItems: NavItem[] = isAdminUser
+    ? [
+        ...baseNavItems,
+        { name: "Admin", href: "/admin", icon: <AdminIcon />, badge: "Admin" },
+      ]
+    : baseNavItems;
   const businessSurfaceClass = "bg-[var(--biz-surface)] border-[color:var(--biz-border)]";
 
   useEffect(() => {
     async function loadUser() {
-      const supabase = createClient();
-      const {
-        data: { user: authUser },
-      } = await supabase.auth.getUser();
-
-      if (!authUser) {
+      const currentUser = await getCurrentUserCached();
+      if (!currentUser) {
         setUser(null);
         setRemainingSearches(null);
         return;
       }
 
-      const { data } = await supabase
-        .from("users")
-        .select("*")
-        .eq("id", authUser.id)
-        .single();
-
-      if (!data) return;
-
-      setUser(data);
-      if (!data.is_paid) {
-        setRemainingSearches(3 - (data.free_searches_used || 0));
+      setUser(currentUser);
+      if (!currentUser.is_paid) {
+        setRemainingSearches(3 - (currentUser.free_searches_used || 0));
       } else {
         setRemainingSearches(null);
       }
@@ -305,13 +324,20 @@ export default function Sidebar() {
             CardzCheck
           </span>
           {isBusinessWorkspace && (
-            <span className="mt-1 rounded border border-[color:var(--biz-border)] bg-[#F3F4F6] px-2 py-0.5 text-[10px] font-semibold text-[var(--biz-primary)]">
+            <span
+              className="mt-1 rounded px-2 py-0.5 text-[10px] font-bold tracking-wide"
+              style={{
+                background: "rgba(240,180,41,0.1)",
+                border: "1px solid rgba(240,180,41,0.2)",
+                color: "#f0b429",
+              }}
+            >
               Business
             </span>
           )}
         </Link>
 
-        <nav className="flex-1 p-4 space-y-2">
+        <nav className="flex-1 overflow-y-auto p-4 space-y-2">
           {navItems.map((item) => {
             const isProFeature = Boolean(item.isPro && user && !user.is_paid);
             return (
@@ -319,32 +345,68 @@ export default function Sidebar() {
                 key={item.href}
                 href={item.href}
                 onClick={() => setIsOpen(false)}
-                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
                   isActive(item)
                     ? item.href.includes("/shop")
                       ? "bg-cyan-600 text-white"
                       : isBusinessWorkspace
-                      ? "border border-[color:var(--biz-border)] border-l-2 border-l-[var(--biz-primary)] bg-[#F3F4F6] text-[var(--biz-text)]"
+                      ? "text-[var(--biz-text)]"
                       : "bg-blue-600 text-white"
                     : isBusinessWorkspace
-                      ? "text-[var(--biz-muted)] hover:bg-[#F9FAFB] hover:text-[var(--biz-text)]"
+                      ? "text-[var(--biz-muted)] hover:bg-white/[0.04] hover:text-[var(--biz-text)]"
                       : "text-gray-400 hover:text-white hover:bg-gray-800"
                 }`}
+                style={
+                  isActive(item) && isBusinessWorkspace
+                    ? {
+                        background: "rgba(255,255,255,0.06)",
+                        borderLeft: "2px solid var(--biz-primary)",
+                        paddingLeft: "14px",
+                      }
+                    : {}
+                }
               >
                 {item.icon}
                 <span className="font-medium">{item.name}</span>
+                {/* AI sparkle for Business Consultant */}
+                {item.name === "Business Consultant" && isBusinessWorkspace && (
+                  <svg
+                    className="w-3.5 h-3.5 ml-1 shrink-0 opacity-60"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="#a78bfa"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M12 2l2 7h7l-6 4.5 2.3 7L12 17l-5.3 3.5L9 13 3 8.5h7z" />
+                  </svg>
+                )}
                 {item.badge && !isProFeature && (
-                  <span className={`ml-auto px-1.5 py-0.5 text-xs font-medium rounded ${
-                    item.badge === "Featured"
-                      ? isBusinessWorkspace
-                        ? "border border-amber-200 bg-amber-50 text-[var(--biz-warning)]"
-                        : "bg-blue-500/20 text-blue-400"
-                      : isBusinessWorkspace
-                        ? "border border-[color:var(--biz-border)] text-[var(--biz-muted)]"
-                        : "bg-blue-500/20 text-blue-400"
-                  }`}>
-                    {item.badge}
-                  </span>
+                  item.badge === "dot" ? (
+                    <span
+                      className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full opacity-70"
+                      style={{ backgroundColor: "#1D9E75" }}
+                    />
+                  ) : (
+                    <span
+                      className="ml-auto rounded px-1.5 py-0.5 text-[10px] font-bold"
+                      style={
+                        isBusinessWorkspace
+                          ? {
+                              background: "rgba(255,255,255,0.06)",
+                              border: "1px solid rgba(255,255,255,0.1)",
+                              color: "#64748b",
+                            }
+                          : {
+                              background: "rgba(59,130,246,0.2)",
+                              color: "#60a5fa",
+                            }
+                      }
+                    >
+                      {item.badge}
+                    </span>
+                  )
                 )}
                 {isProFeature && (
                   <svg className="w-4 h-4 ml-auto" fill="currentColor" viewBox="0 0 20 20">
@@ -358,6 +420,45 @@ export default function Sidebar() {
               </Link>
             );
           })}
+
+          {user && (user.app_role === "admin" || user.app_role === "owner") && (
+            <>
+              <div className={`pt-3 pb-1 px-4 text-[10px] font-semibold uppercase tracking-widest ${
+                isBusinessWorkspace ? "text-[var(--biz-muted)]" : "text-gray-600"
+              }`}>
+                Admin
+              </div>
+              {[
+                { name: "Marketplace", href: "/admin/shop", icon: <ShopIcon /> },
+                { name: "News", href: "/admin/news", icon: <NewsIcon /> },
+              ].map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setIsOpen(false)}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                    pathname === item.href || pathname.startsWith(`${item.href}/`)
+                      ? isBusinessWorkspace
+                        ? "border border-orange-200 border-l-2 border-l-orange-500 bg-orange-50 text-orange-700"
+                        : "bg-orange-600 text-white"
+                      : isBusinessWorkspace
+                        ? "text-[var(--biz-muted)] hover:bg-[#F9FAFB] hover:text-[var(--biz-text)]"
+                        : "text-gray-400 hover:text-white hover:bg-gray-800"
+                  }`}
+                >
+                  {item.icon}
+                  <span className="font-medium">{item.name}</span>
+                  <span className={`ml-auto px-1.5 py-0.5 text-[10px] font-semibold rounded ${
+                    isBusinessWorkspace
+                      ? "bg-orange-50 border border-orange-200 text-orange-600"
+                      : "bg-orange-500/20 text-orange-400"
+                  }`}>
+                    Admin
+                  </span>
+                </Link>
+              ))}
+            </>
+          )}
         </nav>
 
         <div
@@ -365,7 +466,7 @@ export default function Sidebar() {
             isBusinessWorkspace ? "border-[color:var(--biz-border)]" : "border-gray-800"
           }`}
         >
-          {user && !user.is_paid && remainingSearches !== null && (
+          {user && !hasPaidWorkspace && remainingSearches !== null && (
             <div className={`rounded-lg px-4 py-3 ${isBusinessWorkspace ? "cc-surface" : "bg-gray-800"}`}>
               <div className="mb-1 text-xs text-[var(--biz-muted)]">Free Plan</div>
               <div className={`text-sm font-medium ${isBusinessWorkspace ? "text-[var(--biz-text)]" : "text-white"}`}>
@@ -380,7 +481,7 @@ export default function Sidebar() {
               <div className={`truncate text-sm font-medium ${isBusinessWorkspace ? "text-[var(--biz-text)]" : "text-white"}`}>
                 {user.email}
               </div>
-              {user.is_paid && (
+              {hasPaidWorkspace && (
                 <div
                   className={`mt-2 inline-flex items-center rounded px-2 py-1 text-xs font-medium ${
                     isBusinessWorkspace
@@ -388,13 +489,13 @@ export default function Sidebar() {
                       : "bg-blue-600 text-white"
                   }`}
                 >
-                  {isBusinessWorkspace ? "Business Member" : "Pro Member"}
+                  {isBusinessWorkspace ? "Business Workspace" : "Pro Member"}
                 </div>
               )}
             </div>
           )}
 
-          {user && !user.is_paid && (
+          {user && !hasPaidWorkspace && (
             <button
               onClick={() => {
                 setIsOpen(false);

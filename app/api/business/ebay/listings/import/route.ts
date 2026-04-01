@@ -7,7 +7,7 @@
 
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { requireBusinessAccess } from "@/lib/business/actions";
+import { requireBusinessOwnerContext } from "@/lib/business/context";
 import { importListings } from "@/lib/ebay/selling/import";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +20,7 @@ export async function POST(): Promise<NextResponse> {
     } = await supabase.auth.getUser();
 
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    await requireBusinessAccess(user.id);
+    await requireBusinessOwnerContext(user.id);
 
     // Verify eBay account is connected
     const { data: account } = await supabase

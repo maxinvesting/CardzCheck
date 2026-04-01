@@ -24,17 +24,17 @@ const FAQ_SECTIONS = [
       },
       {
         q: "What's the difference between the Free and Pro plans?",
-        a: "Free accounts get 3 card searches to explore the platform. Pro Members get unlimited searches, unlimited collection tracking, collection value tracking, and access to Pro-exclusive features like the Watchlist and CardzCheck Analyst. Pro is a one-time payment with lifetime access.",
+        a: "Free accounts get 3 card searches to explore the platform. Pro members get unlimited searches, unlimited collection tracking, collection value tracking, and access to Pro-exclusive features like the Watchlist and CardzCheck Analyst.",
       },
       {
         q: "Can I use CardzCheck on mobile?",
-        a: "Yes. CardzCheck has a mobile-optimized interface. On phones you'll see a bottom tab bar for quick navigation. The full feature set — including collection management, Bulk Mode, and Comps — works on any screen size.",
+        a: "Yes. CardzCheck has a mobile-optimized interface. On phones you'll see a bottom tab bar for quick navigation. The full feature set — including collection management, Bulk Mode, and Sales Search — works on any screen size.",
       },
     ],
   },
   {
-    id: "pricing-comps",
-    title: "Pricing & Comps",
+    id: "pricing-estimates",
+    title: "Pricing & Estimates",
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -43,19 +43,19 @@ const FAQ_SECTIONS = [
     items: [
       {
         q: "Where does CardzCheck get its pricing data?",
-        a: "CardzCheck pulls recent sold listing data from public marketplaces (primarily eBay) to surface real-world transaction prices. Data is refreshed regularly to reflect current market conditions.",
+        a: "CardzCheck uses public marketplace listing data (primarily eBay) to generate directional pricing estimates. Data freshness and coverage vary by card and source.",
       },
       {
-        q: "How accurate are the price estimates?",
-        a: "Price estimates are based on recent comparable sales (\"comps\") and are meant as a guide, not a guarantee. Actual card values can vary based on condition, surface variations, seller reputation, time of year, and buyer demand. Always review the underlying comps before making buying or selling decisions.",
+        q: "How should I interpret the price estimates?",
+        a: "Price estimates are directional guides, not guarantees. Actual card values vary based on condition, surface details, seller reputation, timing, and buyer demand. Always verify results against current listings and sold history before making decisions.",
       },
       {
-        q: "What is the Comps feature?",
-        a: "Comps (short for \"comparables\") lets you search any card and view a filtered feed of recent sold listings. You can filter by grade, date range, and platform to find the most relevant sales for the specific card you're researching.",
+        q: "What is the Sales Search feature?",
+        a: "Sales Search lets you search any card and review filtered listing and sold-history results. You can filter by grade, date range, and platform to narrow to the most relevant matches.",
       },
       {
-        q: "What is \"Current Market Value\" (CMV)?",
-        a: "CMV is CardzCheck's calculated estimate of what a card is worth right now, derived from averaging or weighting recent comparable sales. It's displayed on card detail pages and used to calculate your collection's total value.",
+        q: "What is \"Estimated Market Value\" (Est. MV)?",
+        a: "Est. MV is CardzCheck's modeled pricing estimate from available listing and sold-history signals. It's shown on card details and used in collection value summaries when estimate data is available.",
       },
     ],
   },
@@ -70,7 +70,7 @@ const FAQ_SECTIONS = [
     items: [
       {
         q: "How is my collection value calculated?",
-        a: "Each card in your collection is matched against current market data. CardzCheck multiplies the current market value of each card by the quantity you've added, then sums the totals across your entire collection. Values update when you visit the Collection page.",
+        a: "Each card in your collection is matched against available estimate data. CardzCheck multiplies each card's estimated value by quantity, then sums totals across your collection. Values update when estimate data is available.",
       },
       {
         q: "Can I track multiple copies of the same card?",
@@ -78,7 +78,7 @@ const FAQ_SECTIONS = [
       },
       {
         q: "Can I export my collection?",
-        a: "Yes. From the Collection page, use the Export button to download a CSV of your collection including card names, grades, purchase prices, current market values, and quantities.",
+        a: "Yes. From the Collection page, use the Export button to download a CSV of your collection including card names, grades, purchase prices, estimated market values, and quantities.",
       },
       {
         q: "What is Bulk Mode?",
@@ -125,7 +125,7 @@ const FAQ_SECTIONS = [
     items: [
       {
         q: "What is the Watchlist?",
-        a: "The Watchlist is a Pro feature that lets you track cards you're interested in buying — without adding them to your collection. You'll see their current market value and can monitor price trends over time to spot the right moment to buy.",
+        a: "The Watchlist is a Pro feature that lets you track cards you're interested in buying without adding them to your collection. You'll see estimated market value and can monitor pricing trends over time.",
       },
       {
         q: "How do I add a card to my Watchlist?",
@@ -171,7 +171,11 @@ const FAQ_SECTIONS = [
     items: [
       {
         q: "What is the Business workspace?",
-        a: "The Business workspace is designed for card dealers, resellers, and shop owners. It adds a dedicated Ledger (inventory tracking), Sales analytics, Revenue & profit dashboards, eBay integration, and a Business Consultant AI — all separate from your personal collection.",
+        a: "The Business workspace is designed for card dealers, resellers, and shop owners. It adds a dedicated Ledger (inventory tracking), Sales analytics, Revenue & profit dashboards, eBay integration, and a Business Consultant AI in a shared team workspace.",
+      },
+      {
+        q: "How many users are included with Business?",
+        a: "Business is $29/month and includes 1 owner seat. You can add additional team members for $12/month per seat.",
       },
       {
         q: "How do I switch between the personal and business workspaces?",
@@ -202,11 +206,11 @@ const FAQ_SECTIONS = [
     items: [
       {
         q: "How do I upgrade to Pro?",
-        a: "Click \"Upgrade\" in the sidebar or go to Settings → Current Plan → Upgrade. You'll be taken to a secure checkout. Pro is a one-time payment with lifetime access — no recurring subscription.",
+        a: "Click \"Upgrade\" in the sidebar or go to Settings → Current Plan → Upgrade. You'll be taken to secure Stripe checkout where you can select the plan that fits your workflow.",
       },
       {
-        q: "Is Pro a one-time payment or a subscription?",
-        a: "Pro is a one-time payment that grants lifetime access to all Pro features. You will never be billed again after your initial purchase.",
+        q: "How does Business billing work for teams?",
+        a: "Business billing is monthly. The base plan is $29/month (1 included seat), and each additional team seat is $12/month.",
       },
       {
         q: "How do I change my email address?",
@@ -227,8 +231,8 @@ const FAQ_SECTIONS = [
 const QUICK_LINKS = [
   { label: "Search Cards", href: "/dashboard", desc: "Look up any card and see recent sales", color: "blue" },
   { label: "My Collection", href: "/collection", desc: "Track and value your card collection", color: "purple" },
-  { label: "Comps", href: "/comps", desc: "Browse recent sold listings", color: "emerald" },
-  { label: "Grade Engine", href: "/grade-probability", desc: "Predict grading outcomes with AI", color: "amber" },
+  { label: "Sales Search", href: "/comps", desc: "Review listing and sold-history data", color: "emerald" },
+  { label: "Grade Probability Engine", href: "/grade-probability", desc: "Estimate grading probabilities with AI", color: "amber" },
   { label: "Bulk Mode", href: "/bulk", desc: "Add or evaluate cards in bulk", color: "rose" },
   { label: "Marketplace", href: "/shop", desc: "Browse cards for sale", color: "cyan" },
 ];
