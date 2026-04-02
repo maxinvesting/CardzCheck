@@ -304,7 +304,7 @@ export default function BusinessMessagesView({
           </svg>
           <p className="text-xs text-emerald-800">
             <span className="font-semibold">Suggested replies stay private.</span>
-            {" "}Pick a move, review the draft, edit anything you want, and send it as yourself.
+            {" "}Generate a draft when you need it, edit it, then send it yourself.
           </p>
         </div>
       </div>
@@ -361,10 +361,7 @@ export default function BusinessMessagesView({
       </div>
 
       {/* Main inbox layout */}
-      <div
-        className="overflow-hidden rounded-2xl border border-[var(--biz-border)] bg-white shadow-[0_18px_50px_rgba(0,0,0,0.08)]"
-        style={{ height: "calc(100vh - 280px)", minHeight: "500px" }}
-      >
+      <div className="overflow-hidden rounded-2xl border border-[var(--biz-border)] bg-white shadow-[0_18px_50px_rgba(0,0,0,0.08)] min-h-[560px] h-[calc(100dvh-22rem)]">
         <div className="flex h-full">
           {/* Thread list (left panel) */}
           <div
