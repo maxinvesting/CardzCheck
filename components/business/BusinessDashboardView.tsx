@@ -429,8 +429,7 @@ export default function BusinessDashboardView({
                   <svg className="h-3.5 w-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
-                )}
-              </button>
+                </button>
               {showStorefrontDropdown && storefronts.length > 1 && (
                 <>
                   <div className="fixed inset-0 z-30" onClick={() => setShowStorefrontDropdown(false)} />
@@ -462,6 +461,7 @@ export default function BusinessDashboardView({
                         Manage storefronts
                       </Link>
                     </div>
+                  </div>
                   </>
                 )}
               </div>

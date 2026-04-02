@@ -859,50 +859,42 @@ export default function GradeProbabilityPanel({
       </div>
 
       {/* ── VERIFY COMPS ─────────────────────────────────────────────────── */}
-      {cardIdentity && (cardIdentity.player_name || cardIdentity.set_name) && (() => {
-        const { psa10Url, psa9Url, rawUrl } = buildCompsLinks({
-          player: cardIdentity.player_name,
-          year: cardIdentity.year,
-          setName: cardIdentity.set_name,
-          parallel: cardIdentity.parallel_type,
-        });
-        return (
-          <div className="mt-3 rounded-lg border border-white/[0.07] bg-[#0d1b2a] px-4 py-3">
-            <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.18em] text-blue-400/70">
-              Verify Comps on eBay
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <a
-                href={psa10Url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 rounded border border-blue-900/40 bg-blue-950/40 px-2.5 py-1 text-[11px] font-medium text-blue-300 hover:bg-blue-900/50 transition-colors"
-              >
-                PSA 10 sold →
-              </a>
-              <a
-                href={psa9Url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 rounded border border-blue-900/40 bg-blue-950/40 px-2.5 py-1 text-[11px] font-medium text-blue-300 hover:bg-blue-900/50 transition-colors"
-              >
-                PSA 9 sold →
-              </a>
-              <a
-                href={rawUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 rounded border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-white/50 hover:text-white/70 hover:bg-white/[0.07] transition-colors"
-              >
-                Raw sold →
-              </a>
-            </div>
-            <p className="mt-2 text-[9px] text-white/25">
-              Click to verify current eBay sold prices
-            </p>
+      {cardIdentity && (cardIdentity.player_name || cardIdentity.set_name) && (
+        <div className="mt-3 rounded-lg border border-white/[0.07] bg-[#0d1b2a] px-4 py-3">
+          <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.18em] text-blue-400/70">
+            Verify Comps on eBay
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <a
+              href={buildCompsLinks({ player: cardIdentity.player_name, year: cardIdentity.year, setName: cardIdentity.set_name, parallel: cardIdentity.parallel_type }).psa10Url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 rounded border border-blue-900/40 bg-blue-950/40 px-2.5 py-1 text-[11px] font-medium text-blue-300 hover:bg-blue-900/50 transition-colors"
+            >
+              PSA 10 sold →
+            </a>
+            <a
+              href={buildCompsLinks({ player: cardIdentity.player_name, year: cardIdentity.year, setName: cardIdentity.set_name, parallel: cardIdentity.parallel_type }).psa9Url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 rounded border border-blue-900/40 bg-blue-950/40 px-2.5 py-1 text-[11px] font-medium text-blue-300 hover:bg-blue-900/50 transition-colors"
+            >
+              PSA 9 sold →
+            </a>
+            <a
+              href={buildCompsLinks({ player: cardIdentity.player_name, year: cardIdentity.year, setName: cardIdentity.set_name, parallel: cardIdentity.parallel_type }).rawUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 rounded border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-white/50 hover:text-white/70 hover:bg-white/[0.07] transition-colors"
+            >
+              Raw sold →
+            </a>
           </div>
-        );
-      })()}
+          <p className="mt-2 text-[9px] text-white/25">
+            Click to verify current eBay sold prices
+          </p>
+        </div>
+      )}
       </div>
 
       {/* ── Footer ─────────────────────────────────────────────────── */}
