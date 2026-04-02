@@ -13,6 +13,8 @@ import type { EbayFeeRateKey } from "@/lib/ebay/parity-price";
 import EbayListingModal from "@/components/business/EbayListingModal";
 import GetCompsButton from "@/components/ui/GetCompsButton";
 import { compsParamsFromTitle } from "@/lib/ebay/comps-url";
+import CMVDisplay from "@/components/comps/CMVDisplay";
+import type { CardCmv } from "@/types/comps";
 
 function fmtCents(cents: number | null): string {
   if (cents === null) return "";
@@ -105,11 +107,9 @@ export default function ItemDetailDrawer({
         const imageUrls = images
           .map((img: { url?: string }) => img?.url)
           .filter((u: unknown): u is string => typeof u === "string" && u.length > 0);
-        if (imageUrls.length === 0 && (card.image_url || card.user_image_url || card.stock_image_url || card.ebay_image_url)) {
+        if (imageUrls.length === 0 && (card.image_url || card.user_image_url)) {
           if (card.image_url) imageUrls.push(card.image_url);
           if (card.user_image_url) imageUrls.push(card.user_image_url);
-          if (card.stock_image_url) imageUrls.push(card.stock_image_url);
-          if (card.ebay_image_url) imageUrls.push(card.ebay_image_url);
         }
         const cardIdentity: GradeEstimatorCardInput = {
           player_name: card.player_name ?? "",
@@ -460,6 +460,28 @@ export default function ItemDetailDrawer({
                 <label className="block text-xs text-gray-400 mb-1">
                   Est. Market Value ($)
                 </label>
+                {(() => {
+                  const cmvCents = item.current_market_value_cents;
+                  if (cmvCents && cmvCents > 0) {
+                    const syntheticCmv: CardCmv = {
+                      id: "",
+                      card_id: item.id,
+                      cmv_value: cmvCents / 100,
+                      cmv_low: null,
+                      cmv_high: null,
+                      confidence: "low",
+                      comps_count: 0,
+                      excluded_count: 0,
+                      last_updated: item.updated_at,
+                    };
+                    return (
+                      <div className="mb-2">
+                        <CMVDisplay cmv={syntheticCmv} compact />
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
                 <div className="flex gap-2">
                   <input
                     type="number"
@@ -482,7 +504,7 @@ export default function ItemDetailDrawer({
                   )}
                 </div>
                 <p className="text-[10px] text-gray-500 mt-1">
-                  Override with your own value if needed.
+                  Override with your own value or open card profile to set comps.
                 </p>
               </div>
             </div>

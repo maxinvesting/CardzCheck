@@ -69,13 +69,7 @@ type TabId = "details" | "shop";
 // ── Helpers ──────────────────────────────────────────────────────────
 
 function pickImageUrl(item: ProfileItem): string | null {
-  return (
-    item.user_image_url ||
-    item.stock_image_url ||
-    item.ebay_image_url ||
-    item.image_url ||
-    null
-  );
+  return item.user_image_url || item.image_url || null;
 }
 
 function displayTitle(item: ProfileItem): string {

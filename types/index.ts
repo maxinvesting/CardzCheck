@@ -5,6 +5,12 @@ export interface User {
   business_name?: string | null; // Optional business display name for business workspace
   ebay_store_url?: string | null; // Optional eBay store URL for Sales Channels shortcut
   app_role?: "member" | "admin" | "owner" | null; // App-level role for owner/admin access
+  // eBay OAuth connection (connected_username only — tokens never exposed client-side)
+  ebay_oauth_connected_username?: string | null;
+  ebay_fee_rate?: "standard" | "top_rated_plus" | null;
+  website_url?: string | null;
+  ebay_last_inventory_sync?: string | null;
+  ebay_last_sales_sync?: string | null;
   is_paid: boolean;
   stripe_customer_id: string | null;
   free_searches_used: number;
@@ -138,6 +144,9 @@ export interface BusinessInventoryItem {
   stock_image_url: string | null;
   ebay_image_url: string | null;
   notes: string | null;
+  ebay_item_id?: string | null; // eBay listing item ID for synced items
+  ebay_listing_url?: string | null; // Direct eBay listing URL
+  item_kind?: "owned" | "inventory" | null; // Ownership type
   created_at: string;
   updated_at: string;
 }
