@@ -1,3 +1,5 @@
+import type { TrustedCardImage } from "@/types";
+
 export interface ShopListing {
   id: string;
   created_at: string;
@@ -28,6 +30,7 @@ export interface ShopListing {
   quantity_sold: number;
   image_urls: string[];
   thumbnail_url: string | null;
+  trusted_image?: TrustedCardImage | null;
   status: "active" | "sold" | "reserved" | "delisted" | "archived";
   publish_state: "draft" | "published";
   featured: boolean;

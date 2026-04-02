@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import type { BusinessInventoryItem } from "@/types";
+import { CardImage } from "@/components/CardImage";
 
 interface Props {
   items: BusinessInventoryItem[];
@@ -121,8 +122,6 @@ function CardTile({
   onConsultant: (prompt: string) => void;
 }) {
   const router = useRouter();
-
-  const imageUrl = item.user_image_url ?? item.stock_image_url ?? item.ebay_image_url ?? null;
   const badge = getGradeBadge(item);
   const mv = item.current_market_value_cents;
   const cost = item.cost_basis_total_cents;
@@ -156,20 +155,15 @@ function CardTile({
         className="w-full p-0 border-0 bg-transparent cursor-pointer"
       >
         {/* TOP IMAGE SECTION */}
-        <div className="relative h-22 bg-[#F2EFE9] shrink-0 overflow-hidden" style={{ height: 88 }}>
-          {imageUrl ? (
-            <img
-              src={imageUrl}
-              alt={item.title ?? "Card"}
-              className="w-full h-full object-cover block"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <div className="w-13 h-[72px] bg-[#E5E2DC] rounded flex items-center justify-center" style={{ width: 52 }}>
-                <span className="text-[9px] text-[#AAA]">No photo</span>
-              </div>
-            </div>
-          )}
+        <div className="relative h-22 shrink-0 overflow-hidden" style={{ height: 88 }}>
+          <CardImage
+            image={item.trusted_image}
+            alt={item.title ?? "Card"}
+            aspectClassName="h-full w-full"
+            className="h-full rounded-none border-0 bg-[#F2EFE9]"
+            imageClassName="object-contain"
+            fallbackClassName="bg-[#F2EFE9]"
+          />
           {badge && (
             <span
               className="absolute top-1.5 right-1.5 text-[9px] font-medium px-[5px] py-0.5 rounded whitespace-nowrap leading-[1.4]"

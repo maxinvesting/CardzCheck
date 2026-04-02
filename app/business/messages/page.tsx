@@ -178,7 +178,7 @@ function BusinessMessagesContent() {
               <>
                 <h2 className="mb-2 text-lg font-semibold text-[var(--biz-text)]">Connect your eBay account</h2>
                 <p className="mb-6 max-w-sm text-sm text-[var(--biz-muted)]">
-                  Link your eBay account to sync buyer messages, inquiries, and offer negotiations.
+                  Link your eBay account to sync buyer messages, offers, and follow-ups.
                 </p>
                 <a
                   href="/api/auth/ebay"

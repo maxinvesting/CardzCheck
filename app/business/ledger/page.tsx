@@ -141,9 +141,9 @@ function buildPerfMockInventory(count = PERF_MOCK_ITEM_COUNT): BusinessInventory
       status: statuses[index % statuses.length]!,
       list_price_cents: listPrice,
       current_market_value_cents: cmv,
+      image_url: null,
+      image_source: "none",
       user_image_url: null,
-      stock_image_url: null,
-      ebay_image_url: null,
       notes: index % 10 === 0 ? "[WAX] Sealed product" : null,
       created_at: createdAt,
       updated_at: createdAt,
@@ -906,9 +906,9 @@ function LedgerPageContent() {
         status: (item.status as BusinessInventoryItem["status"]) || "unlisted",
         list_price_cents: (item.list_price_cents as number) ?? null,
         current_market_value_cents: (item.current_market_value_cents as number) ?? null,
+        image_url: null,
+        image_source: "none",
         user_image_url: null,
-        stock_image_url: null,
-        ebay_image_url: null,
         notes: (item.notes as string) || null,
         created_at: now,
         updated_at: now,
@@ -1132,12 +1132,8 @@ function LedgerPageContent() {
       grade: card.grade,
       imageUrl:
         card.user_image_url ||
-        card.stock_image_url ||
-        card.ebay_image_url ||
         card.image_url,
       user_image_url: card.user_image_url,
-      stock_image_url: card.stock_image_url,
-      ebay_image_url: card.ebay_image_url,
       quantity: card.quantity,
     });
     setShowAddCardToInventory(true);
@@ -1153,8 +1149,6 @@ function LedgerPageContent() {
     grade?: string;
     imageUrl?: string;
     user_image_url?: string;
-    stock_image_url?: string;
-    ebay_image_url?: string;
     quantity?: number;
   }) => {
     setShowAddCardModal(false);

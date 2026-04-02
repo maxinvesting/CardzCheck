@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getInventoryItem, updateInventoryItem } from "@/lib/business/actions";
 import { hasBusinessAccess } from "@/lib/access";
-import { normalizeHttpUrl } from "@/lib/collection-images";
 import { parseSmartSearch } from "@/lib/smart-search-parser";
 
 const GRADE_WITH_COMPANY_PATTERN = /^(PSA|BGS|SGC|CGC)\s*(\d+(?:\.\d+)?)$/i;
@@ -127,37 +126,11 @@ export async function GET(request: NextRequest) {
         : null;
     const cmv = modeledCmv;
 
-    const forSaleItems = Array.isArray(data?.forSale?.items)
-      ? data.forSale.items
-      : Array.isArray(data?._forSale?.items)
-      ? data._forSale.items
-      : [];
-    const compItems = Array.isArray(data?.comps) ? data.comps : [];
-
-    const firstForSaleImage = normalizeHttpUrl(
-      forSaleItems.find((entry: { image?: string }) =>
-        normalizeHttpUrl(entry.image ?? null)
-      )?.image ?? null
-    );
-    const firstCompImage = normalizeHttpUrl(
-      compItems.find((entry: { image?: string }) =>
-        normalizeHttpUrl(entry.image ?? null)
-      )?.image ?? null
-    );
-    const stockImageUrl = firstCompImage || firstForSaleImage;
-    const ebayImageUrl = firstForSaleImage || firstCompImage;
-
     let updatedItem = inventoryItem;
     if (itemId && inventoryItem) {
       const updates: Record<string, unknown> = {};
       if (cmv != null) {
         updates.current_market_value_cents = Math.round(cmv * 100);
-      }
-      if (!inventoryItem.stock_image_url && stockImageUrl) {
-        updates.stock_image_url = stockImageUrl;
-      }
-      if (!inventoryItem.ebay_image_url && ebayImageUrl) {
-        updates.ebay_image_url = ebayImageUrl;
       }
 
       if (Object.keys(updates).length > 0) {
@@ -171,8 +144,6 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       cmv,
-      stock_image_url: stockImageUrl ?? null,
-      ebay_image_url: ebayImageUrl ?? null,
       item: updatedItem ?? null,
     });
   } catch (err: unknown) {

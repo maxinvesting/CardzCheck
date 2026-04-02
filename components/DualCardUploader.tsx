@@ -205,12 +205,8 @@ export default function DualCardUploader({
         .filter((url) => typeof url === "string" && url.trim().length > 0);
       const sanitizedImageUrls = uniqueHttpUrls(allImageUrls);
       const userImageUrl = normalizeHttpUrl(frontUrl) || normalizeHttpUrl(sanitizedImageUrls[0] || null);
-      const stockImageUrl = normalizeHttpUrl(result.stock_image_url || null);
-      const ebayImageUrl = normalizeHttpUrl(result.ebay_image_url || null);
       const displayImageUrl =
         userImageUrl ||
-        stockImageUrl ||
-        ebayImageUrl ||
         allImageUrls.find((url) => typeof url === "string" && url.trim().length > 0) ||
         "";
 
@@ -235,8 +231,6 @@ export default function DualCardUploader({
           imageUrls: allImageUrls,
           scanPhotos,
           userImageUrl: userImageUrl || undefined,
-          stockImageUrl: stockImageUrl || undefined,
-          ebayImageUrl: ebayImageUrl || undefined,
           confidence: result.confidence,
           cardIdentity: result.card_identity,
         })
