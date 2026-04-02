@@ -16,6 +16,8 @@ const SubmissionsTabContent = dynamic(
 
 const playfair = Playfair_Display({ subsets: ["latin"], weight: ["400", "600"] });
 
+// CardzCheck blue = blue-600 (#2563eb)
+const CC_BLUE = "#2563eb";
 const NAVY = "#0B1829";
 const GOLD = "#B9A96A";
 
@@ -172,71 +174,79 @@ export default function GradeHubPage() {
           {/* ── Tab: Scan a card / Batch scan ────────────────────────── */}
           {(activeTab === "scan" || activeTab === "batch") && (
             <>
-              {/* Upload zone — navy card with two explicit drop slots */}
-              <div style={{ background: NAVY, borderRadius: 2, overflow: "hidden" }}>
+              {/* Upload zone */}
+              <div>
+                {/* Navy dual-slot card */}
+                <div style={{ background: NAVY, borderRadius: 2, padding: "24px" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1px 1fr" }}>
+                    {/* Front slot */}
+                    <div style={{ padding: "0 16px 0 0", display: "flex", flexDirection: "column" }}>
+                      <div
+                        style={{
+                          border: "1px dashed rgba(255,255,255,0.12)",
+                          borderRadius: 2,
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: 10,
+                          padding: "36px 16px",
+                          flex: 1,
+                        }}
+                      >
+                        <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: "rgba(255,255,255,0.28)" }}>
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6}
+                            d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                        </svg>
+                        <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px", color: "rgba(255,255,255,0.75)", margin: 0 }}>
+                          Front of card
+                        </p>
+                        <p style={{ fontSize: 11, color: "rgba(255,255,255,0.32)", textAlign: "center", margin: 0, lineHeight: 1.4 }}>
+                          Drop image or click to browse
+                        </p>
+                      </div>
+                    </div>
 
-                {/* Two-slot row */}
-                <div style={{ display: "flex", alignItems: "stretch" }}>
-                  {/* Front slot */}
-                  <div
-                    style={{
-                      flex: 1,
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: 10,
-                      padding: "36px 24px",
-                      margin: 16,
-                      marginRight: 8,
-                      border: "1px dashed rgba(255,255,255,0.12)",
-                      borderRadius: 2,
-                    }}
-                  >
-                    <svg
-                      style={{ width: 22, height: 22, color: "rgba(255,255,255,0.28)" }}
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                        d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M4.5 19.5h15a.75.75 0 00.75-.75V6.75a.75.75 0 00-.75-.75H4.5a.75.75 0 00-.75.75v12a.75.75 0 00.75.75z" />
-                    </svg>
-                    <div style={{ textAlign: "center" }}>
-                      <p style={{
-                        fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.8)",
-                        letterSpacing: "0.3px", marginBottom: 4,
-                      }}>
-                        Front of card
-                      </p>
-                      <p style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", lineHeight: 1.4 }}>
-                        Drop image or click to upload
-                      </p>
+                    {/* Vertical divider */}
+                    <div style={{ background: "rgba(255,255,255,0.08)", margin: "8px 0" }} />
+
+                    {/* Back slot */}
+                    <div style={{ padding: "0 0 0 16px", display: "flex", flexDirection: "column" }}>
+                      <div
+                        style={{
+                          border: "1px dashed rgba(255,255,255,0.12)",
+                          borderRadius: 2,
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: 10,
+                          padding: "36px 16px",
+                          flex: 1,
+                        }}
+                      >
+                        <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: "rgba(255,255,255,0.28)" }}>
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6}
+                            d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                        </svg>
+                        <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px", color: "rgba(255,255,255,0.75)", margin: 0 }}>
+                          Back of card
+                        </p>
+                        <p style={{ fontSize: 11, color: "rgba(255,255,255,0.32)", textAlign: "center", margin: 0, lineHeight: 1.4 }}>
+                          Drop image or click to browse
+                        </p>
+                      </div>
                     </div>
                   </div>
+                </div>
 
-                  {/* Vertical divider */}
-                  <div style={{
-                    width: 1,
-                    background: "rgba(255,255,255,0.07)",
-                    alignSelf: "stretch",
-                    margin: "16px 0",
-                  }} />
-
-                  {/* Back slot */}
+                {/* Grade category pills — kept AS-IS */}
+                <div style={{ marginTop: 16 }}>
                   <div
                     style={{
                       flex: 1,
                       display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: 10,
-                      padding: "36px 24px",
-                      margin: 16,
-                      marginLeft: 8,
-                      border: "1px dashed rgba(255,255,255,0.12)",
-                      borderRadius: 2,
+                      overflow: "hidden",
                     }}
                   >
                     <svg
@@ -262,33 +272,61 @@ export default function GradeHubPage() {
                   </div>
                 </div>
 
-                {/* Grade category pills — keep exact structure */}
-                <div
-                  style={{
-                    borderTop: "1px solid rgba(255,255,255,0.07)",
-                    display: "flex",
-                    overflow: "hidden",
-                  }}
-                >
-                  {["Centering", "Corners", "Edges", "Surface"].map((f, i) => (
-                    <div
-                      key={f}
+                {/* CTA buttons */}
+                <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+                  <button
+                    onClick={() => canScan
+                      ? router.push(activeTab === "batch" ? "/grade-hub/scan?slots=3" : "/grade-hub/scan?slots=1")
+                      : router.push("/settings")
+                    }
+                    style={{
+                      width: "100%",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.6px",
+                      borderRadius: 2,
+                      border: "none",
+                      color: "#fff",
+                      background: canScan ? NAVY : "#9ca3af",
+                      padding: "11px 20px",
+                      cursor: canScan ? "pointer" : "not-allowed",
+                    }}
+                  >
+                    {canScan ? "Analyze Card" : "No scans left"}
+                  </button>
+                  {isBusiness && activeTab === "scan" && (
+                    <button
+                      onClick={() => canScan ? router.push("/grade-hub/scan?slots=3") : undefined}
                       style={{
-                        flex: 1,
-                        textAlign: "center",
-                        padding: "9px 4px",
-                        fontSize: 10,
+                        width: "100%",
+                        fontSize: 12,
                         fontWeight: 700,
                         textTransform: "uppercase",
-                        letterSpacing: "0.8px",
-                        color: "rgba(255,255,255,0.28)",
-                        borderRight: i < 3 ? "1px solid rgba(255,255,255,0.07)" : "none",
+                        letterSpacing: "0.6px",
+                        borderRadius: 2,
+                        border: `1px solid ${NAVY}`,
+                        color: NAVY,
+                        background: "transparent",
+                        padding: "11px 20px",
+                        cursor: canScan ? "pointer" : "not-allowed",
+                        opacity: canScan ? 1 : 0.5,
                       }}
                     >
-                      {f}
-                    </div>
-                  ))}
+                      Batch Scan
+                    </button>
+                  )}
                 </div>
+
+                {/* Fine print */}
+                <p style={{ fontSize: 10, color: "#9ca3af", marginTop: 10, textAlign: "center" }}>
+                  {isBusiness
+                    ? "Business plan · Up to 3 cards per batch · Unlimited scans"
+                    : isUnlimited
+                    ? "Unlimited scans"
+                    : `${remaining} scan${remaining !== 1 ? "s" : ""} remaining${credits?.nextGrantAt ? ` · +1 in ${formatTimeUntil(credits.nextGrantAt)}` : ""}`
+                  }
+                </p>
               </div>
 
               {/* CTA buttons */}
@@ -436,8 +474,14 @@ export default function GradeHubPage() {
               </div>
 
               {/* History panel wrapped in table-styled container */}
-              <div style={{ border: "1px solid #e5e7eb", borderRadius: 2, overflow: "hidden" }}>
-                {/* Table header row — navy bg, white labels */}
+              <div
+                style={{
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 2,
+                  overflow: "hidden",
+                }}
+              >
+                {/* Table header row */}
                 <div
                   style={{
                     display: "grid",
@@ -498,8 +542,13 @@ export default function GradeHubPage() {
                   View all →
                 </button>
               </div>
-              <div style={{ border: "1px solid #e5e7eb", borderRadius: 2, overflow: "hidden" }}>
-                {/* Table header row — navy bg, white labels */}
+              <div
+                style={{
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 2,
+                  overflow: "hidden",
+                }}
+              >
                 <div
                   style={{
                     display: "grid",
