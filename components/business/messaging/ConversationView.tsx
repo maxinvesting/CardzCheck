@@ -1,9 +1,58 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import type { MessageThread, Message, NegotiationAnalysis } from "@/lib/messaging/types";
 import NegotiationPanel from "./NegotiationPanel";
 import AIActionsPanel from "./AIActionsPanel";
+
+const IMAGE_URL_RE = /https?:\/\/\S+\.(?:jpg|jpeg|png|gif|webp|bmp|tiff?)(?:\?\S*)?/gi;
+
+function MessageBody({ body, isOutbound }: { body: string; isOutbound: boolean }) {
+  const parts: React.ReactNode[] = [];
+  let last = 0;
+  let match: RegExpExecArray | null;
+  IMAGE_URL_RE.lastIndex = 0;
+  while ((match = IMAGE_URL_RE.exec(body)) !== null) {
+    if (match.index > last) {
+      parts.push(
+        <span key={last} className="whitespace-pre-wrap">
+          {body.slice(last, match.index)}
+        </span>
+      );
+    }
+    const url = match[0];
+    parts.push(
+      <a key={match.index} href={url} target="_blank" rel="noopener noreferrer">
+        <img
+          src={url}
+          alt="Attached image"
+          className="mt-2 max-w-full rounded-lg border border-black/10"
+          style={{ maxHeight: 300 }}
+          onError={(e) => {
+            // If image fails to load, show as a plain link instead
+            const el = e.currentTarget;
+            const link = document.createElement("a");
+            link.href = url;
+            link.target = "_blank";
+            link.rel = "noopener noreferrer";
+            link.textContent = url;
+            link.className = isOutbound ? "underline text-white/80" : "underline text-emerald-700";
+            el.parentElement?.replaceChild(link, el);
+          }}
+        />
+      </a>
+    );
+    last = match.index + url.length;
+  }
+  if (last < body.length) {
+    parts.push(
+      <span key={last} className="whitespace-pre-wrap">
+        {body.slice(last)}
+      </span>
+    );
+  }
+  return <div className="text-sm leading-relaxed">{parts.length ? parts : body}</div>;
+}
 
 function formatTime(iso: string): string {
   const d = new Date(iso);
@@ -144,7 +193,7 @@ export default function ConversationView({
                       {formatTime(msg.created_at)}
                     </span>
                   </div>
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.body}</p>
+                  <MessageBody body={msg.body} isOutbound={isOutbound} />
                 </div>
               </div>
             );
