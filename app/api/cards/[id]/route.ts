@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { CardImage } from "@/types";
+import type { CardImage } from "@/types";
 import { getBusinessContextForUser } from "@/lib/business/context";
+import { resolveTrustedCardImageForItem } from "@/lib/images/resolver";
+import { syncTrustedImageFieldsForItem } from "@/lib/images/trusted-sync";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -17,12 +19,13 @@ type BusinessInventoryLinkRow = {
   grade: string | null;
   grading_company: string | null;
   cert_number: string | null;
+  psa_cert_number?: string | null;
   acquisition_type: string | null;
   acquisition_date: string | null;
   cost_basis_total_cents: number | null;
+  image_url?: string | null;
+  image_source?: "psa" | "user" | "none" | null;
   user_image_url: string | null;
-  stock_image_url: string | null;
-  ebay_image_url: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string | null;
@@ -66,7 +69,7 @@ export async function GET(
 
     if (!card) {
       const businessSelect =
-        "id,card_id,title,grade,grading_company,cert_number,acquisition_type,acquisition_date,cost_basis_total_cents,user_image_url,stock_image_url,ebay_image_url,notes,created_at,updated_at";
+        "id,card_id,title,grade,grading_company,cert_number,psa_cert_number,acquisition_type,acquisition_date,cost_basis_total_cents,image_url,image_source,user_image_url,notes,created_at,updated_at";
 
       let businessByIdQuery = supabase
         .from("business_inventory_items")
@@ -162,13 +165,13 @@ export async function GET(
           grade: businessLink.grade,
           grading_company: businessLink.grading_company,
           cert_number: businessLink.cert_number,
+          psa_cert_number: businessLink.psa_cert_number ?? businessLink.cert_number,
           acquisition_type: businessLink.acquisition_type,
           purchase_price: purchasePrice,
           purchase_date: businessLink.acquisition_date,
-          image_url: null,
+          image_url: businessLink.image_url ?? null,
+          image_source: businessLink.image_source ?? "none",
           user_image_url: businessLink.user_image_url,
-          stock_image_url: businessLink.stock_image_url,
-          ebay_image_url: businessLink.ebay_image_url,
           notes: businessLink.notes,
           created_at: businessLink.created_at,
           updated_at: businessLink.updated_at ?? businessLink.created_at,
@@ -180,66 +183,24 @@ export async function GET(
       return NextResponse.json({ error: "Card not found" }, { status: 404 });
     }
 
-    // Fetch all images for this card
-    const { data: images } = isUuid(resolvedCardId)
-      ? await supabase
-          .from("card_images")
-          .select("*")
-          .eq("card_id", resolvedCardId)
-          .order("position", { ascending: true })
-      : { data: [] as CardImage[] };
+    const resolvedImage = await resolveTrustedCardImageForItem({
+      supabase,
+      item: card as any,
+      itemId: resolvedCardId,
+      userId: user.id,
+    });
 
-    const resolveImageUrl = (path: string | null | undefined): string | null => {
-      if (!path) return null;
-      if (path.startsWith("http")) return path;
-      return supabase.storage.from("card-images").getPublicUrl(path).data.publicUrl;
-    };
-
-    // Generate public URLs
-    let imagesWithUrls = (images || []).map((img: CardImage) => ({
-      ...img,
-      url: resolveImageUrl(img.storage_path) ?? undefined,
-    }));
-
-    if (imagesWithUrls.length === 0) {
-      const legacyUrls = new Set<string>();
-      if (typeof (card as { image_url?: string }).image_url === "string") {
-        legacyUrls.add((card as { image_url?: string }).image_url as string);
-      }
-      if (typeof (card as { user_image_url?: string }).user_image_url === "string") {
-        legacyUrls.add((card as { user_image_url?: string }).user_image_url as string);
-      }
-      if (typeof (card as { stock_image_url?: string }).stock_image_url === "string") {
-        legacyUrls.add((card as { stock_image_url?: string }).stock_image_url as string);
-      }
-      if (typeof (card as { ebay_image_url?: string }).ebay_image_url === "string") {
-        legacyUrls.add((card as { ebay_image_url?: string }).ebay_image_url as string);
-      }
-      const extraUrls = (card as { image_urls?: string[] }).image_urls;
-      if (Array.isArray(extraUrls)) {
-        extraUrls.forEach((url) => {
-          if (typeof url === "string" && url.length > 0) {
-            legacyUrls.add(url);
-          }
-        });
-      }
-
-      imagesWithUrls = Array.from(legacyUrls).map((url, index) => ({
-        id: `legacy-${index}`,
-        card_id: resolvedCardId,
-        user_id: user.id,
-        storage_path: url,
-        position: index,
-        created_at: card.created_at ?? new Date().toISOString(),
-        url,
-      }));
-    }
+    const imagesWithUrls = resolvedImage.cardImages as CardImage[];
 
     return NextResponse.json({
       card: {
         ...card,
+        trusted_image: resolvedImage.trustedImage,
+        image_source: resolvedImage.imageSource,
+        image_url: resolvedImage.imageUrl,
+        psa_cert_number: resolvedImage.psaCertNumber,
         card_images: imagesWithUrls,
-        primary_image: imagesWithUrls.find((img: CardImage) => img.position === 0) || imagesWithUrls[0],
+        primary_image: resolvedImage.primaryImage,
       },
     });
   } catch (error) {
@@ -282,13 +243,10 @@ export async function PATCH(
       "grade",
       "grading_company",
       "cert_number",
+      "psa_cert_number",
       "acquisition_type",
       "purchase_price",
       "purchase_date",
-      "image_url",
-      "user_image_url",
-      "stock_image_url",
-      "ebay_image_url",
       "notes",
     ];
 
@@ -323,7 +281,26 @@ export async function PATCH(
       );
     }
 
-    return NextResponse.json({ card: updatedCard });
+    await syncTrustedImageFieldsForItem(cardId);
+
+    const resolvedImage = await resolveTrustedCardImageForItem({
+      supabase,
+      item: updatedCard,
+      itemId: cardId,
+      userId: user.id,
+    });
+
+    return NextResponse.json({
+      card: {
+        ...updatedCard,
+        trusted_image: resolvedImage.trustedImage,
+        image_source: resolvedImage.imageSource,
+        image_url: resolvedImage.imageUrl,
+        psa_cert_number: resolvedImage.psaCertNumber,
+        card_images: resolvedImage.cardImages,
+        primary_image: resolvedImage.primaryImage,
+      },
+    });
   } catch (error) {
     console.error("Error in PATCH /api/cards/[id]:", error);
     return NextResponse.json(

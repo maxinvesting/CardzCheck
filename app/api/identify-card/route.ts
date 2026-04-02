@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { extractCardIdentityDetailed, type ImageInput } from "@/lib/card-identity";
-import { searchEbayDualSignal } from "@/lib/ebay";
-import { smartSearch } from "@/lib/smartSearch";
 import {
   ALLOWED_MIME_TYPES,
   ALLOWED_URL_HOSTS,
@@ -10,7 +8,6 @@ import {
   MAX_IMAGE_SIZE_BYTES,
   normalizeMimeType,
 } from "@/lib/identify-card-validation";
-import { normalizeHttpUrl } from "@/lib/collection-images";
 
 const INSERT_KEYWORDS = ["downtown", "kaboom", "color blast", "stained glass"];
 
@@ -32,7 +29,6 @@ const MAX_IMAGES_PER_REQUEST = 2;
 type ParsedIdentifyRequest = {
   images: ImageInput[];
   requestedUrls: string[];
-  includeStockImage: boolean;
 };
 
 class HttpError extends Error {
@@ -58,11 +54,6 @@ function isInsertName(value?: string): boolean {
   if (!value) return false;
   const normalized = value.toLowerCase();
   return INSERT_KEYWORDS.some((keyword) => normalized.includes(keyword));
-}
-
-function parseIncludeStockImage(value: unknown): boolean {
-  if (typeof value !== "string") return Boolean(value);
-  return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
 }
 
 function formatSizeLimitError(actualBytes: number): string {
@@ -132,7 +123,6 @@ function validateFetchedImage(
 
 async function parseMultipartRequest(request: NextRequest): Promise<ParsedIdentifyRequest> {
   const formData = await request.formData();
-  const includeStockImage = parseIncludeStockImage(formData.get("includeStockImage"));
 
   const files = formData
     .getAll("images")
@@ -182,7 +172,7 @@ async function parseMultipartRequest(request: NextRequest): Promise<ParsedIdenti
     });
   }
 
-  return { images, requestedUrls: [], includeStockImage };
+  return { images, requestedUrls: [] };
 }
 
 async function parseJsonRequest(request: NextRequest): Promise<ParsedIdentifyRequest> {
@@ -199,7 +189,6 @@ async function parseJsonRequest(request: NextRequest): Promise<ParsedIdentifyReq
     ? body.imageUrls.filter((url): url is string => typeof url === "string")
     : [];
 
-  const includeStockImage = parseIncludeStockImage(body.includeStockImage);
   const requestedUrls = imageUrls.length > 0 ? imageUrls : imageUrl ? [imageUrl] : [];
 
   if (requestedUrls.length === 0) {
@@ -216,7 +205,7 @@ async function parseJsonRequest(request: NextRequest): Promise<ParsedIdentifyReq
     images.push(await resolveImageInput(url));
   }
 
-  return { images, requestedUrls, includeStockImage };
+  return { images, requestedUrls };
 }
 
 async function parseIdentifyRequest(request: NextRequest): Promise<ParsedIdentifyRequest> {
@@ -342,100 +331,6 @@ async function resolveImageInput(imageUrl: string): Promise<ImageInput> {
   };
 }
 
-async function resolveStockImageUrls(
-  cardIdentity: {
-    player: string | null;
-    year: number | null;
-    setName: string | null;
-    subset: string | null;
-    parallel: string | null;
-  },
-  requestedUrls: string[],
-  includeStockImage: boolean
-): Promise<{ stockImageUrl: string | null; ebayImageUrl: string | null }> {
-  const fallbackUrl = requestedUrls.find((url) => normalizeHttpUrl(url)) || null;
-
-  if (!includeStockImage) {
-    return {
-      stockImageUrl: fallbackUrl,
-      ebayImageUrl: null,
-    };
-  }
-
-  const player = (cardIdentity.player ?? "").trim();
-  if (!player) {
-    return {
-      stockImageUrl: fallbackUrl,
-      ebayImageUrl: null,
-    };
-  }
-
-  // Prefer eBay Browse API (best-match sorted) for stock image
-  try {
-    const params = {
-      player,
-      year: cardIdentity.year != null ? String(cardIdentity.year) : undefined,
-      set: [cardIdentity.setName, cardIdentity.subset].filter(Boolean).join(" ").trim() || undefined,
-      parallelType: (cardIdentity.parallel ?? "").trim() || undefined,
-      limit: 15,
-    };
-
-    const response = await searchEbayDualSignal(params);
-    const bestMatch = response.forSale?.items?.find(
-      (item) => item.image && normalizeHttpUrl(item.image)
-    );
-    const ebayImageUrl = bestMatch?.image ? normalizeHttpUrl(bestMatch.image) : null;
-
-    if (ebayImageUrl) {
-      return {
-        stockImageUrl: ebayImageUrl,
-        ebayImageUrl,
-      };
-    }
-  } catch (error) {
-    console.warn("[identify-card] eBay Browse API stock image lookup failed", error);
-  }
-
-  // Fallback: sold comps from smartSearch (may still have images)
-  try {
-    const queryParts = [
-      player,
-      cardIdentity.year ? String(cardIdentity.year) : null,
-      cardIdentity.setName,
-      cardIdentity.subset,
-      cardIdentity.parallel,
-    ].filter((part): part is string => Boolean(part && part.trim()));
-
-    if (queryParts.length > 0) {
-      const smart = await smartSearch(queryParts.join(" "), "collection", {
-        limit: 8,
-        candidateLimit: 50,
-        source: "ebayCollection",
-      });
-
-      const compImage =
-        smart.rawComps?.find(
-          (comp) => typeof comp.image === "string" && normalizeHttpUrl(comp.image)
-        )?.image || null;
-      const ebayImageUrl = compImage ? normalizeHttpUrl(compImage) : null;
-
-      if (ebayImageUrl) {
-        return {
-          stockImageUrl: ebayImageUrl,
-          ebayImageUrl,
-        };
-      }
-    }
-  } catch (error) {
-    console.warn("[identify-card] smartSearch stock image fallback failed", error);
-  }
-
-  return {
-    stockImageUrl: fallbackUrl,
-    ebayImageUrl: null,
-  };
-}
-
 export async function POST(request: NextRequest) {
   try {
     const parsed = await parseIdentifyRequest(request);
@@ -463,18 +358,6 @@ export async function POST(request: NextRequest) {
       : undefined;
     const variantCandidate = cardIdentity.parallel ?? undefined;
 
-    const { stockImageUrl, ebayImageUrl } = await resolveStockImageUrls(
-      {
-        player: cardIdentity.player,
-        year: cardIdentity.year,
-        setName: cardIdentity.setName,
-        subset: cardIdentity.subset,
-        parallel: cardIdentity.parallel,
-      },
-      parsed.requestedUrls,
-      parsed.includeStockImage
-    );
-
     return NextResponse.json({
       player_name: playerName,
       players,
@@ -484,8 +367,6 @@ export async function POST(request: NextRequest) {
       variant: variantCandidate ?? "",
       grade: vision.grade ?? "",
       confidence: cardIdentity.confidence,
-      stock_image_url: stockImageUrl,
-      ebay_image_url: ebayImageUrl,
       card_identity: cardIdentity,
     });
   } catch (error) {

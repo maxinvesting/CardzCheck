@@ -4,52 +4,10 @@ import { LIMITS, type AcquisitionType, type CollectionItem } from "@/types";
 import { isTestMode } from "@/lib/test-mode";
 import { calculateCardCmv } from "@/lib/cmv";
 import { logDebug, redactId } from "@/lib/logging";
-import { normalizeHttpUrl, resolveStoredImagePath, uniqueHttpUrls } from "@/lib/collection-images";
+import { normalizeHttpUrl, uniqueHttpUrls } from "@/lib/collection-images";
 import { hasBusinessAccess } from "@/lib/access";
-
-// ---------------------------------------------------------------------------
-// Simple async concurrency limiter — avoids hammering external APIs (eBay,
-// Anthropic) when many collection items are CMV-stale at the same time.
-// ---------------------------------------------------------------------------
-function withConcurrency<T>(
-  tasks: (() => Promise<T>)[],
-  maxConcurrent: number
-): Promise<T[]> {
-  return new Promise((resolve, reject) => {
-    const results: T[] = new Array(tasks.length);
-    let started = 0;
-    let completed = 0;
-    let failed = false;
-
-    function runNext() {
-      if (failed) return;
-      if (started >= tasks.length) return;
-
-      const index = started++;
-      tasks[index]()
-        .then((result) => {
-          results[index] = result;
-          completed++;
-          if (completed === tasks.length) {
-            resolve(results);
-          } else {
-            runNext();
-          }
-        })
-        .catch((err) => {
-          failed = true;
-          reject(err);
-        });
-    }
-
-    const initialBatch = Math.min(maxConcurrent, tasks.length);
-    for (let i = 0; i < initialBatch; i++) {
-      runNext();
-    }
-  });
-}
-
-const CMV_MAX_CONCURRENT = 3;
+import { hydrateTrustedImagesForItems } from "@/lib/images/resolver";
+import { syncTrustedImageFieldsForItem } from "@/lib/images/trusted-sync";
 
 const ACQUISITION_TYPES: readonly AcquisitionType[] = [
   "pulled",
@@ -143,12 +101,10 @@ function deriveBusinessTitle(input: {
   return display || input.player_name || "Untitled card";
 }
 
-type InsertedRow = Record<string, unknown>;
-
 async function insertCollectionItemWithFallback(
   supabase: Awaited<ReturnType<typeof createClient>>,
   insertPayload: Record<string, unknown>
-): Promise<{ item: InsertedRow | null; error: unknown | null; removedColumns: string[] }> {
+): Promise<{ item: any | null; error: unknown | null; removedColumns: string[] }> {
   const payload = { ...insertPayload };
   const removedColumns: string[] = [];
 
@@ -206,33 +162,11 @@ export async function GET() {
       throw error;
     }
 
-    // Fetch primary images for all cards in a single query
-    const cardIds = (items || []).map((item: CollectionItem) => item.id);
-    const { data: primaryImages } = await supabase
-      .from("card_images")
-      .select("*")
-      .in("card_id", cardIds)
-      .eq("position", 0);
-
-    type CardImage = { card_id: string; storage_path: string; [key: string]: unknown };
-
-    // Create a map of card_id -> primary_image
-    const primaryImageMap = new Map<string, CardImage & { url: string | null }>();
-    (primaryImages || []).forEach((img: CardImage) => {
-      const resolvedUrl = resolveStoredImagePath(
-        img.storage_path,
-        (path) => supabase.storage.from("card-images").getPublicUrl(path).data.publicUrl
-      );
-      primaryImageMap.set(img.card_id, {
-        ...img,
-        url: resolvedUrl,
-      });
+    const hydratedItems = await hydrateTrustedImagesForItems({
+      supabase,
+      items: (items || []) as CollectionItem[],
+      userId: user.id,
     });
-
-    const hydratedItems = (items || []).map((item: CollectionItem) => ({
-      ...item,
-      primary_image: primaryImageMap.get(item.id) || null,
-    }));
 
     if (hydratedItems.length > 0) {
       const first = hydratedItems[0] as any;
@@ -317,17 +251,15 @@ export async function POST(request: NextRequest) {
       parallel_type,
       card_number,
       grade,
-      cert_number,
-      grading_company,
       est_cmv,
       estimated_cmv,
       acquisition_type,
       purchase_price,
       purchase_date,
+      cert_number,
+      psa_cert_number,
       image_url,
       user_image_url,
-      stock_image_url,
-      ebay_image_url,
       image_urls,
       notes,
       quantity,
@@ -373,16 +305,12 @@ export async function POST(request: NextRequest) {
     }
 
     const normalizedUserImageUrl = normalizeHttpUrl(user_image_url) || null;
-    const normalizedStockImageUrl = normalizeHttpUrl(stock_image_url) || null;
-    const normalizedEbayImageUrl = normalizeHttpUrl(ebay_image_url) || null;
     const normalizedImageUrl = normalizeHttpUrl(image_url) || null;
     const normalizedImageUrls = Array.isArray(image_urls)
       ? uniqueHttpUrls(image_urls)
       : [];
     const canonicalImageUrl =
       normalizedUserImageUrl ||
-      normalizedStockImageUrl ||
-      normalizedEbayImageUrl ||
       normalizedImageUrl ||
       normalizedImageUrls[0] ||
       null;
@@ -443,8 +371,6 @@ export async function POST(request: NextRequest) {
       user_id: user.id,
       item_kind: isBusinessUser ? "inventory" : "owned",
       player_name,
-      players: Array.isArray(players) && players.length > 1 ? players : null,
-      insert_type: typeof insert === "string" && insert.trim() ? insert.trim() : null,
       title: isBusinessUser
         ? deriveBusinessTitle({ player_name, year: year || null, set_name: set_name || null, grade: grade || null })
         : null,
@@ -454,14 +380,16 @@ export async function POST(request: NextRequest) {
       card_number: card_number || null,
       grade: grade || null,
       cert_number: cert_number || null,
-      grading_company: grading_company || null,
+      psa_cert_number: psa_cert_number || cert_number || null,
       acquisition_type: acquisitionType,
       purchase_price: acquisitionType === "pulled" ? null : normalizedPurchasePrice,
       purchase_date: normalizedPurchaseDate,
       image_url: canonicalImageUrl,
+      image_source:
+        normalizedUserImageUrl || normalizedImageUrls.length > 0
+          ? "user"
+          : "none",
       user_image_url: normalizedUserImageUrl,
-      stock_image_url: normalizedStockImageUrl,
-      ebay_image_url: normalizedEbayImageUrl,
       notes: combinedNotes,
       quantity: normalizedQuantity,
       acquisition_date: isBusinessUser ? normalizedPurchaseDate : undefined,
@@ -484,9 +412,7 @@ export async function POST(request: NextRequest) {
 
     // Insert with schema fallback so older DBs without new columns still work.
     const insertResult = await insertCollectionItemWithFallback(supabase, insertPayload);
-    // Cast to CollectionItem: the schema-fallback function returns the raw Supabase row
-    // which matches the CollectionItem shape once inserted successfully.
-    const item = insertResult.item as CollectionItem | null;
+    const item = insertResult.item;
     const error = insertResult.error;
 
     if (error || !item) {
@@ -510,18 +436,16 @@ export async function POST(request: NextRequest) {
     // Verify the row has CMV after insert
     logDebug("✅ Inserted row CMV check", {
       id: redactId(item.id),
-      estimated_cmv: item.estimated_cmv ?? "MISSING",
-      est_cmv: item.est_cmv ?? "MISSING",
-      cmv_confidence: item.cmv_confidence ?? "MISSING",
-      cmv_last_updated: item.cmv_last_updated ?? "MISSING",
+      estimated_cmv: (item as any).estimated_cmv ?? "MISSING",
+      est_cmv: (item as any).est_cmv ?? "MISSING",
+      cmv_confidence: (item as any).cmv_confidence ?? "MISSING",
+      cmv_last_updated: (item as any).cmv_last_updated ?? "MISSING",
     });
 
     // Persist user + fallback image URLs for stable rendering across refreshes.
     const persistedImageUrls = uniqueHttpUrls([
       normalizedUserImageUrl,
       ...normalizedImageUrls,
-      normalizedStockImageUrl,
-      normalizedEbayImageUrl,
       canonicalImageUrl,
     ]);
 
@@ -532,6 +456,7 @@ export async function POST(request: NextRequest) {
         // Accept both Supabase storage paths and full legacy URLs.
         storage_path: url,
         position: index,
+        label: index === 0 ? "front" : index === 1 ? "back" : null,
       }));
 
       const { error: imagesError } = await supabase
@@ -549,12 +474,27 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    await syncTrustedImageFieldsForItem(item.id);
+
+    const { data: syncedItem } = await supabase
+      .from("collection_items")
+      .select("*")
+      .eq("id", item.id)
+      .eq("user_id", user.id)
+      .single();
+
+    const [hydratedItem] = await hydrateTrustedImagesForItems({
+      supabase,
+      items: [((syncedItem ?? item) as CollectionItem)],
+      userId: user.id,
+    });
+
     logDebug("✅ Successfully added to collection", {
       userId: redactId(user.id),
       itemId: redactId(item.id),
     });
     return NextResponse.json({
-      item,
+      item: hydratedItem ?? syncedItem ?? item,
       destination: isBusinessUser ? "inventory" : "collection",
     });
   } catch (error) {
@@ -663,7 +603,31 @@ export async function PATCH(request: NextRequest) {
     const shouldRecalculate = cmvRelevantFields.some((field) => field in updates);
 
     if (!shouldRecalculate) {
-      return NextResponse.json({ item });
+      const imageRelevantFields = [
+        "cert_number",
+        "psa_cert_number",
+        "user_image_url",
+        "image_url",
+        "image_source",
+      ];
+      if (imageRelevantFields.some((field) => field in updates)) {
+        await syncTrustedImageFieldsForItem(item.id);
+      }
+
+      const { data: freshItem } = await supabase
+        .from("collection_items")
+        .select("*")
+        .eq("id", item.id)
+        .eq("user_id", user.id)
+        .single();
+
+      const [hydratedItem] = await hydrateTrustedImagesForItems({
+        supabase,
+        items: [((freshItem ?? item) as CollectionItem)],
+        userId: user.id,
+      });
+
+      return NextResponse.json({ item: hydratedItem ?? freshItem ?? item });
     }
 
     const cmvResult = await calculateCardCmv(item);
@@ -679,7 +643,13 @@ export async function PATCH(request: NextRequest) {
       throw updateError;
     }
 
-    return NextResponse.json({ item: updatedItem });
+    const [hydratedItem] = await hydrateTrustedImagesForItems({
+      supabase,
+      items: [updatedItem as CollectionItem],
+      userId: user.id,
+    });
+
+    return NextResponse.json({ item: hydratedItem ?? updatedItem });
   } catch (error) {
     console.error("Collection update error:", error);
     return NextResponse.json(

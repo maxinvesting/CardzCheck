@@ -7,6 +7,7 @@ import {
 } from "@/lib/business/context";
 import type { BusinessInventoryItem, BusinessSale, BusinessMetrics } from "@/types";
 import { computeNetPayout, computeProfit } from "@/lib/business/sales-utils";
+import { hydrateTrustedImagesForItems } from "@/lib/images/resolver";
 
 // Uses unified collection_items table with item_kind = 'inventory'
 const BUSINESS_TABLE = "collection_items" as const;
@@ -37,14 +38,15 @@ type BusinessInventoryRow = {
   grading_company: string | null;
   grade: string | null;
   cert_number: string | null;
+  psa_cert_number: string | null;
   location: string | null;
   channel: string | null;
   status: string | null;
   list_price_cents: number | null;
   current_market_value_cents: number | null;
+  image_url: string | null;
+  image_source: "psa" | "user" | "none" | null;
   user_image_url: string | null;
-  stock_image_url: string | null;
-  ebay_image_url: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string | null;
@@ -200,14 +202,15 @@ function toBusinessInventoryItem(row: BusinessInventoryRow): BusinessInventoryIt
     grading_company: row.grading_company,
     grade: row.grade,
     cert_number: row.cert_number,
+    psa_cert_number: row.psa_cert_number,
     location: row.location,
     channel: normalizeChannel(row.channel),
     status: normalizeStatus(row.status),
     list_price_cents: row.list_price_cents ?? null,
     current_market_value_cents: row.current_market_value_cents ?? null,
+    image_url: row.image_url ?? null,
+    image_source: row.image_source ?? "none",
     user_image_url: row.user_image_url ?? null,
-    stock_image_url: row.stock_image_url ?? null,
-    ebay_image_url: row.ebay_image_url ?? null,
     notes: row.notes,
     ebay_item_id: (row as any).ebay_item_id ?? null,
     ebay_listing_url: (row as any).ebay_listing_url ?? null,
@@ -242,14 +245,16 @@ function buildInventoryInsertPayload(
     grading_company: item.grading_company || null,
     grade: item.grade || null,
     cert_number: item.cert_number || null,
+    psa_cert_number: (item as any).psa_cert_number || item.cert_number || null,
     location: item.location || null,
     channel: item.channel ?? "other",
     status: item.status ?? "unlisted",
     list_price_cents: item.list_price_cents ?? null,
     current_market_value_cents: item.current_market_value_cents ?? null,
+    image_url: (item as any).image_url || (item as any).user_image_url || null,
+    image_source:
+      (item as any).image_source || ((item as any).user_image_url ? "user" : "none"),
     user_image_url: (item as any).user_image_url || null,
-    stock_image_url: (item as any).stock_image_url || null,
-    ebay_image_url: (item as any).ebay_image_url || null,
     notes: item.notes || null,
   };
 }
@@ -283,6 +288,8 @@ function buildInventoryUpdatePayload(
     payload.grading_company = updates.grading_company;
   if (updates.grade !== undefined) payload.grade = updates.grade;
   if (updates.cert_number !== undefined) payload.cert_number = updates.cert_number;
+  if ((updates as any).psa_cert_number !== undefined)
+    payload.psa_cert_number = (updates as any).psa_cert_number;
   if (updates.location !== undefined) payload.location = updates.location;
   if (updates.channel !== undefined) payload.channel = updates.channel;
   if (updates.status !== undefined) payload.status = updates.status;
@@ -290,13 +297,12 @@ function buildInventoryUpdatePayload(
     payload.list_price_cents = updates.list_price_cents;
   if (updates.current_market_value_cents !== undefined)
     payload.current_market_value_cents = updates.current_market_value_cents;
+  if ((updates as any).image_url !== undefined) payload.image_url = (updates as any).image_url;
+  if ((updates as any).image_source !== undefined)
+    payload.image_source = (updates as any).image_source;
   if (updates.notes !== undefined) payload.notes = updates.notes;
   if (updates.user_image_url !== undefined)
     payload.user_image_url = updates.user_image_url;
-  if (updates.stock_image_url !== undefined)
-    payload.stock_image_url = updates.stock_image_url;
-  if (updates.ebay_image_url !== undefined)
-    payload.ebay_image_url = updates.ebay_image_url;
   return payload;
 }
 
@@ -339,7 +345,12 @@ export async function listInventory(
   const { data, error } = await query;
   if (error) throw error;
 
-  return ((data ?? []) as BusinessInventoryRow[]).map(toBusinessInventoryItem);
+  const items = ((data ?? []) as BusinessInventoryRow[]).map(toBusinessInventoryItem);
+  return hydrateTrustedImagesForItems({
+    supabase,
+    items,
+    userId,
+  });
 }
 
 export async function getInventoryItem(
@@ -359,7 +370,13 @@ export async function getInventoryItem(
 
   if (error && error.code !== "PGRST116") throw error;
   if (!data) return null;
-  return toBusinessInventoryItem(data as BusinessInventoryRow);
+  const item = toBusinessInventoryItem(data as BusinessInventoryRow);
+  const [hydrated] = await hydrateTrustedImagesForItems({
+    supabase,
+    items: [item],
+    userId,
+  });
+  return hydrated ?? item;
 }
 
 export async function createInventoryItem(
@@ -379,7 +396,13 @@ export async function createInventoryItem(
     .single();
 
   if (error) throw error;
-  return toBusinessInventoryItem(data as BusinessInventoryRow);
+  const itemRecord = toBusinessInventoryItem(data as BusinessInventoryRow);
+  const [hydrated] = await hydrateTrustedImagesForItems({
+    supabase,
+    items: [itemRecord],
+    userId,
+  });
+  return hydrated ?? itemRecord;
 }
 
 export async function updateInventoryItem(
@@ -405,7 +428,13 @@ export async function updateInventoryItem(
     .single();
 
   if (error) throw error;
-  return toBusinessInventoryItem(data as BusinessInventoryRow);
+  const itemRecord = toBusinessInventoryItem(data as BusinessInventoryRow);
+  const [hydrated] = await hydrateTrustedImagesForItems({
+    supabase,
+    items: [itemRecord],
+    userId,
+  });
+  return hydrated ?? itemRecord;
 }
 
 export async function deleteInventoryItems(

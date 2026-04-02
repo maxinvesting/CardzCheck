@@ -232,11 +232,17 @@ export default function MarketplacePage() {
           return (
             <article key={sku.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="flex gap-4">
-                <img
-                  src={sku.image_url ?? "https://placehold.co/160x220?text=Card"}
-                  alt={sku.name}
-                  className="h-36 w-24 rounded-md object-cover"
-                />
+                {sku.image_url ? (
+                  <img
+                    src={sku.image_url}
+                    alt={sku.name}
+                    className="h-36 w-24 rounded-md object-contain"
+                  />
+                ) : (
+                  <div className="flex h-36 w-24 items-center justify-center rounded-md border border-dashed border-slate-300 bg-slate-50 px-2 text-center text-xs text-slate-500">
+                    No image available
+                  </div>
+                )}
                 <div className="min-w-0 flex-1">
                   <h2 className="truncate text-lg font-medium">{sku.name}</h2>
                   <p className="text-xs text-slate-500">{sku.sku_id}</p>

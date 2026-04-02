@@ -251,8 +251,6 @@ export default function ConfirmAddCardModal({
       ]);
       const canonicalImageUrl =
         normalizeHttpUrl(cardData.userImageUrl || null) ||
-        normalizeHttpUrl(cardData.stockImageUrl || null) ||
-        normalizeHttpUrl(cardData.ebayImageUrl || null) ||
         normalizeHttpUrl(cardData.imageUrl || null);
 
       const body = {
@@ -270,8 +268,6 @@ export default function ConfirmAddCardModal({
         purchase_price: acquisitionType === "pulled" ? null : normalizedPurchasePrice,
         purchase_date: purchaseDate || null,
         user_image_url: normalizeHttpUrl(cardData.userImageUrl || null),
-        stock_image_url: normalizeHttpUrl(cardData.stockImageUrl || null),
-        ebay_image_url: normalizeHttpUrl(cardData.ebayImageUrl || null),
         image_url: canonicalImageUrl,
         image_urls: persistedImageUrls,
         notes: notesParts.length > 0 ? notesParts.join(" | ") : null,

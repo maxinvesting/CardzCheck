@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { CollectionItem } from "@/types";
 import { formatCardSubtitle } from "@/lib/card-identity/display";
 import { formatCurrency, formatPct, computeGainLoss } from "@/lib/formatters";
 import { getEstCmv, getQuantity } from "@/lib/values";
-import { normalizeHttpUrl, uniqueHttpUrls } from "@/lib/collection-images";
 import { buildEbaySoldUrl } from "@/lib/ebay/comps-url";
+import { CardImage } from "@/components/CardImage";
 
 interface CollectionGridProps {
   items: CollectionItem[];
@@ -32,20 +32,6 @@ interface CardItemProps {
 function CardItem({ item, onDelete }: CardItemProps) {
   const router = useRouter();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const imageCandidates = useMemo(
-    () =>
-      uniqueHttpUrls([
-        item.primary_image?.url,
-        item.user_image_url,
-        item.image_url,
-      ]),
-    [item.primary_image?.url, item.user_image_url, item.image_url]
-  );
-  const [imageIndex, setImageIndex] = useState(0);
-
-  useEffect(() => {
-    setImageIndex(0);
-  }, [item.id, imageCandidates.length]);
 
   const quantity = getQuantity(item);
   const cmvPerCard = getEstCmv(item);
@@ -66,9 +52,6 @@ function CardItem({ item, onDelete }: CardItemProps) {
       cmv_last_updated: a.cmv_last_updated ?? "MISSING",
     });
   }
-
-  const imageUrl = imageCandidates[imageIndex] || null;
-
   const handleCardClick = () => {
     router.push(`/card/${item.id}?from=collection`);
   };
@@ -77,40 +60,16 @@ function CardItem({ item, onDelete }: CardItemProps) {
     <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden hover:border-blue-500 dark:hover:border-blue-500 transition-colors cursor-pointer">
       {/* Image - clickable */}
       <div
-        className="aspect-[3/4] bg-gray-100 dark:bg-gray-800 relative"
+        className="relative"
         onClick={handleCardClick}
       >
-        {imageUrl ? (
-          <>
-            <img
-              src={imageUrl}
-              alt={item.player_name}
-              className="w-full h-full object-cover"
-              onError={() => {
-                setImageIndex((prev) => {
-                  const next = prev + 1;
-                  return next < imageCandidates.length ? next : imageCandidates.length;
-                });
-              }}
-            />
-          </>
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <svg
-              className="w-16 h-16 text-gray-300 dark:text-gray-600"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1}
-                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-              />
-            </svg>
-          </div>
-        )}
+        <CardImage
+          image={item.trusted_image}
+          alt={item.player_name}
+          className="rounded-none border-0 bg-gray-100 dark:bg-gray-800"
+          imageClassName="object-contain"
+          fallbackClassName="bg-gray-100 dark:bg-gray-800"
+        />
 
         {/* Delete button */}
         <button
@@ -175,14 +134,14 @@ function CardItem({ item, onDelete }: CardItemProps) {
                 ? formatCurrency(cmv)
                 : isRecentlyAdded && item.cmv_confidence !== "unavailable"
                 ? "Calculating..."
-                : "No CMV yet"}
+                : "Est. Market Value unavailable"}
             </span>
           </div>
           {cmv === null && (
             <p className="text-xs text-gray-400 dark:text-gray-500">
               {isRecentlyAdded && item.cmv_confidence !== "unavailable"
                 ? "Market value is being calculated"
-                : "Add comps on the card page to set market value"}
+                : "Run a search (Beta) to calculate value"}
             </p>
           )}
           {gainLoss && (

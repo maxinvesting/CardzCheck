@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useShopCart } from "@/contexts/ShopCartContext";
 import type { ShopListing } from "@/types/shop";
 import { buildListingTitle } from "./shop-formatters";
+import { CardImage } from "@/components/CardImage";
 
 interface ShopQuickViewModalProps {
   listing: ShopListing | null;
@@ -34,7 +35,6 @@ export default function ShopQuickViewModal({
     onClose();
   };
 
-  const imgUrl = listing.thumbnail_url || listing.image_urls?.[0];
   const title = buildListingTitle(listing);
 
   return (
@@ -63,17 +63,13 @@ export default function ShopQuickViewModal({
 
         <div className="space-y-4 p-4">
           <div className="aspect-[3/4] overflow-hidden rounded-lg bg-slate-100">
-            {imgUrl ? (
-              <img
-                src={imgUrl}
-                alt={`${listing.player_name} ${listing.year}`}
-                className="h-full w-full object-contain"
-              />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center text-slate-500">
-                No image
-              </div>
-            )}
+            <CardImage
+              image={listing.trusted_image}
+              alt={`${listing.player_name} ${listing.year}`}
+              className="border-0 bg-slate-100"
+              imageClassName="object-contain"
+              fallbackClassName="bg-slate-100"
+            />
           </div>
 
           <div>

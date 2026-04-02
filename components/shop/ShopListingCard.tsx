@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useShopCart } from "@/contexts/ShopCartContext";
 import type { ShopListing } from "@/types/shop";
 import type { SubscriptionTier } from "@/lib/subscription-tier";
+import { CardImage } from "@/components/CardImage";
 import {
   buildListingTitle,
   formatUsd,
@@ -57,7 +58,6 @@ export default function ShopListingCard({
   const isBusiness = userTier === "business";
 
   const title = buildListingTitle(listing);
-  const imgUrl = listing.thumbnail_url || listing.image_urls?.[0];
   const detailHref = isLocked ? "/upgrade" : `/shop/${listing.id}`;
 
   const cmv = getCmvDeltaPresentation(listing.price, listing.cmv);
@@ -90,18 +90,13 @@ export default function ShopListingCard({
               Offers OK
             </span>
           )}
-          {imgUrl ? (
-            <img
-              src={imgUrl}
-              alt={title}
-              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
-              loading="lazy"
-            />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center text-sm text-slate-500">
-              No image available
-            </div>
-          )}
+          <CardImage
+            image={listing.trusted_image}
+            alt={title}
+            className="rounded-none border-0 bg-slate-100"
+            imageClassName="object-contain transition-transform duration-300 group-hover:scale-[1.02]"
+            fallbackClassName="bg-slate-100"
+          />
         </div>
       </Link>
 
