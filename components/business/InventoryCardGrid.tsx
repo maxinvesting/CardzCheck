@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { BusinessInventoryItem } from "@/types";
 
@@ -54,7 +53,6 @@ function getGradeBadge(item: BusinessInventoryItem): { label: string; style: Bad
       style: { background: "#6B1B1B", color: "#FFD0D0" },
     };
   }
-  // Any other grading company
   return {
     label: [company, grade].filter(Boolean).join(" ") || "Graded",
     style: { background: "#2A2A2A", color: "#AAAAAA" },
@@ -123,22 +121,14 @@ function CardTile({
   onConsultant: (prompt: string) => void;
 }) {
   const router = useRouter();
-  const [hovered, setHovered] = useState(false);
 
-  const imageUrl =
-    item.user_image_url ?? item.stock_image_url ?? item.ebay_image_url ?? null;
+  const imageUrl = item.user_image_url ?? item.stock_image_url ?? item.ebay_image_url ?? null;
   const badge = getGradeBadge(item);
   const mv = item.current_market_value_cents;
   const cost = item.cost_basis_total_cents;
   const profileHref = `/card/${item.id}?from=business`;
   const mvColor =
-    mv == null
-      ? "#1A1A1A"
-      : mv > cost
-      ? "#2D7A4F"
-      : mv < cost
-      ? "#CC4444"
-      : "#1A1A1A";
+    mv == null ? "#1A1A1A" : mv > cost ? "#2D7A4F" : mv < cost ? "#CC4444" : "#1A1A1A";
   const days = getDaysHeld(item.acquisition_date);
   const action = getAction(item);
   const openProfile = () => router.push(profileHref);
@@ -154,22 +144,7 @@ function CardTile({
           openProfile();
         }
       }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        background: "#FFFFFF",
-        border: "1px solid #E8E5E0",
-        borderRadius: 10,
-        overflow: "hidden",
-        transform: hovered ? "translateY(-1px)" : "translateY(0)",
-        boxShadow: hovered
-          ? "0 4px 16px rgba(0,0,0,0.08)"
-          : "0 1px 3px rgba(0,0,0,0.04)",
-        transition: "transform 0.15s, box-shadow 0.15s",
-        display: "flex",
-        flexDirection: "column",
-        cursor: "pointer",
-      }}
+      className="group bg-white border border-[#E8E5E0] rounded-xl overflow-hidden flex flex-col cursor-pointer transition-all duration-150 hover:-translate-y-px hover:shadow-md shadow-sm"
     >
       <button
         type="button"
@@ -178,73 +153,27 @@ function CardTile({
           openProfile();
         }}
         aria-label={`Open card profile for ${item.title || "Untitled"}`}
-        style={{
-          color: "inherit",
-          textDecoration: "none",
-          cursor: "pointer",
-          border: "none",
-          background: "transparent",
-          padding: 0,
-          width: "100%",
-        }}
+        className="w-full p-0 border-0 bg-transparent cursor-pointer"
       >
         {/* TOP IMAGE SECTION */}
-        <div
-          style={{
-            height: 88,
-            position: "relative",
-            background: "#F2EFE9",
-            flexShrink: 0,
-            overflow: "hidden",
-          }}
-        >
+        <div className="relative h-22 bg-[#F2EFE9] shrink-0 overflow-hidden" style={{ height: 88 }}>
           {imageUrl ? (
             <img
               src={imageUrl}
-              alt={item.title}
-              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+              alt={item.title ?? "Card"}
+              className="w-full h-full object-cover block"
             />
           ) : (
-            <div
-              style={{
-                width: "100%",
-                height: "100%",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <div
-                style={{
-                  width: 52,
-                  height: 72,
-                  background: "#E5E2DC",
-                  borderRadius: 4,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <span style={{ fontSize: 9, color: "#AAA" }}>No photo</span>
+            <div className="w-full h-full flex items-center justify-center">
+              <div className="w-13 h-[72px] bg-[#E5E2DC] rounded flex items-center justify-center" style={{ width: 52 }}>
+                <span className="text-[9px] text-[#AAA]">No photo</span>
               </div>
             </div>
           )}
-          {/* Grade badge */}
           {badge && (
             <span
-              style={{
-                position: "absolute",
-                top: 6,
-                right: 6,
-                fontSize: 9,
-                fontWeight: 500,
-                padding: "2px 5px",
-                borderRadius: 4,
-                background: badge.style.background,
-                color: badge.style.color,
-                whiteSpace: "nowrap",
-                lineHeight: 1.4,
-              }}
+              className="absolute top-1.5 right-1.5 text-[9px] font-medium px-[5px] py-0.5 rounded whitespace-nowrap leading-[1.4]"
+              style={{ background: badge.style.background, color: badge.style.color }}
             >
               {badge.label}
             </span>
@@ -253,7 +182,7 @@ function CardTile({
       </button>
 
       {/* BOTTOM INFO SECTION */}
-      <div style={{ padding: "9px 10px 10px", display: "flex", flexDirection: "column", gap: 5, flex: 1 }}>
+      <div className="px-2.5 pt-2 pb-2.5 flex flex-col gap-1.5 flex-1">
         {/* Card name */}
         <button
           type="button"
@@ -261,94 +190,48 @@ function CardTile({
             event.stopPropagation();
             openProfile();
           }}
-          style={{
-            textDecoration: "none",
-            cursor: "pointer",
-            textAlign: "left",
-            border: "none",
-            background: "transparent",
-            padding: 0,
-          }}
+          className="text-left border-0 bg-transparent p-0 cursor-pointer"
         >
-          <p
-            style={{
-              fontSize: 11,
-              fontWeight: 600,
-              color: "#0B7A4B",
-              lineHeight: 1.4,
-              margin: 0,
-              display: "-webkit-box",
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: "vertical" as const,
-              overflow: "hidden",
-              textDecoration: hovered ? "underline" : "none",
-              textUnderlineOffset: 2,
-            }}
-          >
+          <p className="text-[11px] font-semibold text-[#0B7A4B] leading-[1.4] m-0 line-clamp-2 group-hover:underline underline-offset-[2px]">
             {item.title || "Untitled"}
           </p>
         </button>
 
         {/* Price row */}
-        <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
-          <span
-            style={{
-              fontSize: 13,
-              fontWeight: 500,
-              color: mvColor,
-              fontVariantNumeric: "tabular-nums",
-              lineHeight: 1,
-            }}
-          >
+        <div className="flex items-baseline gap-1">
+          <span className="text-[13px] font-medium tabular-nums leading-none" style={{ color: mvColor }}>
             {mv != null ? fmtCents(mv) : "—"}
           </span>
-          <span style={{ fontSize: 10, color: "#AAA" }}>
+          <span className="text-[10px] text-[#AAA]">
             cost {fmtCents(cost) || "—"}
           </span>
         </div>
 
         {/* Status row */}
-        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+        <div className="flex items-center gap-1">
           <span
-            style={{
-              display: "inline-block",
-              width: 5,
-              height: 5,
-              borderRadius: "50%",
-              background: statusDotColor(item.status),
-              flexShrink: 0,
-            }}
+            className="inline-block w-[5px] h-[5px] rounded-full shrink-0"
+            style={{ background: statusDotColor(item.status) }}
           />
-          <span style={{ fontSize: 10, color: "#888", flex: 1 }}>
+          <span className="text-[10px] text-[#888] flex-1">
             {item.status}
           </span>
           {days != null && (
-            <span style={{ fontSize: 10, color: "#BBB", fontVariantNumeric: "tabular-nums" }}>
+            <span className="text-[10px] text-[#BBB] tabular-nums">
               {days}d
             </span>
           )}
         </div>
 
         {/* Action buttons */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginTop: 2 }}>
+        <div className="grid grid-cols-2 gap-1.5 mt-0.5">
           <button
             type="button"
             onClick={(event) => {
               event.stopPropagation();
               openProfile();
             }}
-            style={{
-              fontSize: 10,
-              fontWeight: 600,
-              padding: "5px 0",
-              borderRadius: 5,
-              background: "#F0F8F4",
-              color: "#0B7A4B",
-              border: "1px solid #C8E6D6",
-              textAlign: "center",
-              textDecoration: "none",
-              cursor: "pointer",
-            }}
+            className="text-[10px] font-semibold py-1 rounded bg-[#F0F8F4] text-[#0B7A4B] border border-[#C8E6D6] text-center cursor-pointer hover:bg-[#E0F2EA] transition-colors"
           >
             View card
           </button>
@@ -358,17 +241,11 @@ function CardTile({
               e.stopPropagation();
               onConsultant(action.prompt);
             }}
+            className="w-full text-[10px] font-medium py-1 rounded text-center cursor-pointer transition-colors"
             style={{
-              width: "100%",
-              fontSize: 10,
-              fontWeight: 500,
-              padding: "5px 0",
-              borderRadius: 5,
-              cursor: "pointer",
               background: action.style.background,
               color: action.style.color,
               border: action.style.border,
-              textAlign: "center",
             }}
           >
             {action.label}
@@ -380,42 +257,21 @@ function CardTile({
 }
 
 function AddTile({ onClick }: { onClick: () => void }) {
-  const [hovered, setHovered] = useState(false);
   return (
-    <div
+    <button
+      type="button"
       onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        border: "1.5px dashed #DDDDDD",
-        borderRadius: 10,
-        minHeight: 152,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        cursor: "pointer",
-        background: hovered ? "#F5F3F0" : "#FAFAF8",
-        transition: "background 0.15s",
-        gap: 4,
-      }}
+      className="border-[1.5px] border-dashed border-[#DDDDDD] rounded-xl min-h-[152px] flex flex-col items-center justify-center cursor-pointer bg-[#FAFAF8] hover:bg-[#F5F3F0] transition-colors gap-1"
     >
-      <span style={{ fontSize: 24, color: "#CCCCCC", lineHeight: 1 }}>+</span>
-      <span style={{ fontSize: 11, color: "#BBBBBB" }}>Add card</span>
-    </div>
+      <span className="text-2xl text-[#CCCCCC] leading-none">+</span>
+      <span className="text-[11px] text-[#BBBBBB]">Add card</span>
+    </button>
   );
 }
 
 export default function InventoryCardGrid({ items, onAddCard, onConsultant }: Props) {
   return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fill, minmax(168px, 1fr))",
-        gap: 10,
-        padding: "0 24px 24px",
-      }}
-    >
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5 px-4 sm:px-6 pb-6 pt-1">
       {items.map((item) => (
         <CardTile key={item.id} item={item} onConsultant={onConsultant} />
       ))}

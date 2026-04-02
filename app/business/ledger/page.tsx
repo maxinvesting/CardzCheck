@@ -9,7 +9,6 @@ import {
   useRef,
   Profiler,
   type ProfilerOnRenderCallback,
-  type CSSProperties,
   startTransition,
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -168,41 +167,21 @@ function RailActionCard({
   badgeColor: string;
   onClick: () => void;
 }) {
-  const [hovered, setHovered] = useState(false);
   const displayCount = countLabel ?? (count != null ? String(count) : "—");
   return (
-    <div
+    <button
+      type="button"
       onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        border: "1px solid #E8E5E0",
-        borderRadius: 7,
-        padding: 10,
-        cursor: "pointer",
-        background: hovered ? "#FAFAF8" : "#FFF",
-        marginBottom: 8,
-        transition: "background 0.1s",
-      }}
+      className="flex w-full items-center justify-between rounded-lg border border-[#E8E5E0] px-2.5 py-2 mb-2 text-left transition-colors hover:bg-[#FAFAF8] bg-white cursor-pointer"
     >
-      <span style={{ fontSize: 11, color: "#444" }}>{label}</span>
+      <span className="text-[11px] text-[#444]">{label}</span>
       <span
-        style={{
-          fontSize: 11,
-          fontWeight: 600,
-          padding: "2px 7px",
-          borderRadius: 10,
-          background: badgeBg,
-          color: badgeColor,
-          fontVariantNumeric: "tabular-nums",
-        }}
+        className="text-[11px] font-semibold px-[7px] py-0.5 rounded-full tabular-nums"
+        style={{ background: badgeBg, color: badgeColor }}
       >
         {displayCount}
       </span>
-    </div>
+    </button>
   );
 }
 
@@ -1221,15 +1200,15 @@ function LedgerPageContent() {
   if (loading) {
     return (
       <AuthenticatedLayout>
-        <main style={{ background: "#F7F5F2", minHeight: "100vh" }}>
+        <main className="bg-[#F7F5F2] min-h-screen">
           <div className="animate-pulse p-6 space-y-4">
-            <div className="h-8 w-48 rounded" style={{ background: "#E5E2DD" }} />
+            <div className="h-8 w-48 rounded bg-[#E5E2DD]" />
             <div className="flex gap-4">
               {[...Array(4)].map((_, i) => (
-                <div key={i} className="h-16 flex-1 rounded" style={{ background: "#E5E2DD" }} />
+                <div key={i} className="h-16 flex-1 rounded bg-[#E5E2DD]" />
               ))}
             </div>
-            <div className="h-64 rounded" style={{ background: "#E5E2DD" }} />
+            <div className="h-64 rounded bg-[#E5E2DD]" />
           </div>
         </main>
       </AuthenticatedLayout>
@@ -1239,7 +1218,7 @@ function LedgerPageContent() {
   if (hasAccess === false) {
     return (
       <AuthenticatedLayout>
-        <main style={{ background: "#F7F5F2", minHeight: "100vh" }} className="px-4 py-4">
+        <main className="bg-[#F7F5F2] min-h-screen px-4 py-4">
           <BusinessPaywall />
         </main>
       </AuthenticatedLayout>
@@ -1288,103 +1267,33 @@ function LedgerPageContent() {
     { key: "Graded", label: "Graded" },
   ];
 
-  const activeTabBtnStyle = {
-    color: "#1A1A1A",
-    paddingBottom: 8,
-    paddingTop: 8,
-    paddingLeft: 4,
-    paddingRight: 4,
-    fontSize: 13,
-    fontWeight: 500,
-    background: "transparent",
-    border: "none",
-    borderBottom: "2px solid #1A1A1A",
-    cursor: "pointer",
-  } as CSSProperties;
-
-  const inactiveTabBtnStyle = {
-    paddingBottom: 8,
-    paddingTop: 8,
-    paddingLeft: 4,
-    paddingRight: 4,
-    fontSize: 13,
-    fontWeight: 400,
-    color: "#888",
-    background: "transparent",
-    border: "none",
-    borderBottom: "2px solid transparent",
-    cursor: "pointer",
-  } as CSSProperties;
-
   return (
     <AuthenticatedLayout>
-      <main
-        style={{ background: "#F7F5F2", minHeight: "100vh", display: "flex" }}
-      >
+      <main className="bg-[#F7F5F2] min-h-screen flex">
         {/* ── CENTER COLUMN ─────────────────────────────────────────────── */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+        <div className="flex-1 flex flex-col min-w-0">
 
           {/* TOPBAR */}
-          <div
-            style={{
-              background: "#F7F5F2",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "20px 24px 12px",
-            }}
-          >
+          <div className="flex items-center justify-between px-4 sm:px-6 pt-5 pb-3">
             <div>
-              <p
-                style={{
-                  fontSize: 10,
-                  color: "#AAA",
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                  margin: 0,
-                }}
-              >
+              <p className="text-[10px] text-[#AAA] tracking-[0.08em] uppercase m-0">
                 INVENTORY
               </p>
-              <h1
-                style={{
-                  fontSize: 22,
-                  fontWeight: 500,
-                  letterSpacing: "-0.02em",
-                  color: "#1A1A1A",
-                  margin: "2px 0 0",
-                }}
-              >
+              <h1 className="text-[22px] font-medium tracking-tight text-[#1A1A1A] mt-0.5">
                 Ledger
               </h1>
             </div>
-            <div style={{ display: "flex", gap: 8 }}>
+            <div className="flex items-center gap-2">
               <button
                 type="button"
-                style={{
-                  padding: "6px 12px",
-                  fontSize: 12,
-                  border: "1px solid #E5E2DD",
-                  borderRadius: 7,
-                  background: "transparent",
-                  color: "#1A1A1A",
-                  cursor: "pointer",
-                }}
+                className="px-3 py-1.5 text-xs border border-[#E5E2DD] rounded-lg bg-transparent text-[#1A1A1A] hover:bg-[#F0EDE8] transition-colors cursor-pointer"
               >
                 Export
               </button>
               <button
                 type="button"
                 onClick={openAddInventoryModal}
-                style={{
-                  padding: "6px 12px",
-                  fontSize: 12,
-                  borderRadius: 7,
-                  background: "#1A1A1A",
-                  color: "#F0EDE8",
-                  border: "none",
-                  cursor: "pointer",
-                }}
+                className="px-3 py-1.5 text-xs rounded-lg bg-[#1A1A1A] text-[#F0EDE8] border-0 hover:bg-[#333] transition-colors cursor-pointer"
               >
                 Add card
               </button>
@@ -1392,93 +1301,65 @@ function LedgerPageContent() {
           </div>
 
           {/* STAT STRIP */}
-          <div
-            style={{
-              borderBottom: "1px solid #E5E2DD",
-              display: "flex",
-              padding: "0 0 14px",
-            }}
-          >
+          <div className="grid grid-cols-2 lg:grid-cols-4 divide-x divide-[#E5E2DD] border-b border-[#E5E2DD] pb-4">
             {/* Stat 1: Portfolio value */}
-            <div
-              style={{
-                flex: 1,
-                padding: "14px 20px 0 24px",
-                borderRight: "1px solid #E5E2DD",
-              }}
-            >
-              <div style={{ fontSize: 20, fontWeight: 500, color: "#1A1A1A", fontVariantNumeric: "tabular-nums" }}>
+            <div className="px-4 sm:px-5 pt-3.5 first:pl-4 sm:first:pl-6">
+              <div className="text-xl font-medium text-[#1A1A1A] tabular-nums">
                 {portfolioValue}
               </div>
-              <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>Portfolio value</div>
-              <div style={{ fontSize: 10, color: "#AAA", marginTop: 1 }}>{portfolioSub}</div>
+              <div className="text-[11px] text-[#888] mt-0.5">Portfolio value</div>
+              <div className="text-[10px] text-[#AAA] mt-0.5 truncate">{portfolioSub}</div>
             </div>
 
             {/* Stat 2: Revenue YTD */}
-            <div
-              style={{
-                flex: 1,
-                padding: "14px 20px 0",
-                borderRight: "1px solid #E5E2DD",
-              }}
-            >
-              <div style={{ fontSize: 20, fontWeight: 500, color: "#2D7A4F", fontVariantNumeric: "tabular-nums" }}>
+            <div className="px-4 sm:px-5 pt-3.5">
+              <div className="text-xl font-medium text-[#2D7A4F] tabular-nums">
                 {revenueYtd}
               </div>
-              <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>Revenue YTD</div>
-              <div style={{ fontSize: 10, color: "#AAA", marginTop: 1 }}>{revenueYtdSub}</div>
+              <div className="text-[11px] text-[#888] mt-0.5">Revenue YTD</div>
+              <div className="text-[10px] text-[#AAA] mt-0.5">{revenueYtdSub}</div>
             </div>
 
             {/* Stat 3: Avg margin */}
-            <div
-              style={{
-                flex: 1,
-                padding: "14px 20px 0",
-                borderRight: "1px solid #E5E2DD",
-              }}
-            >
-              <div style={{ fontSize: 20, fontWeight: 500, color: "#2D7A4F", fontVariantNumeric: "tabular-nums" }}>
+            <div className="px-4 sm:px-5 pt-3.5">
+              <div className="text-xl font-medium text-[#2D7A4F] tabular-nums">
                 {avgMargin}
               </div>
-              <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>Avg margin</div>
-              <div style={{ fontSize: 10, color: "#AAA", marginTop: 1 }}>gross, YTD</div>
+              <div className="text-[11px] text-[#888] mt-0.5">Avg margin</div>
+              <div className="text-[10px] text-[#AAA] mt-0.5">gross, YTD</div>
             </div>
 
             {/* Stat 4: Avg hold time */}
-            <div
-              style={{
-                flex: 1,
-                padding: "14px 20px 0",
-              }}
-            >
-              <div style={{ fontSize: 20, fontWeight: 500, color: "#1A1A1A", fontVariantNumeric: "tabular-nums" }}>
+            <div className="px-4 sm:px-5 pt-3.5">
+              <div className="text-xl font-medium text-[#1A1A1A] tabular-nums">
                 {avgHoldStr}
               </div>
-              <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>Avg hold time</div>
-              <div style={{ fontSize: 10, color: "#AAA", marginTop: 1 }}>across active items</div>
+              <div className="text-[11px] text-[#888] mt-0.5">Avg hold time</div>
+              <div className="text-[10px] text-[#AAA] mt-0.5">across active items</div>
             </div>
           </div>
 
           {/* TAB SWITCHER */}
-          <div
-            style={{
-              display: "flex",
-              gap: 16,
-              padding: "0 24px",
-              borderBottom: "1px solid #E5E2DD",
-            }}
-          >
+          <div className="flex gap-4 px-4 sm:px-6 border-b border-[#E5E2DD]">
             <button
               type="button"
               onClick={() => handleTabChange("inventory")}
-              style={activeTab === "inventory" ? activeTabBtnStyle : inactiveTabBtnStyle}
+              className={`py-2 px-1 text-[13px] border-b-2 bg-transparent border-0 cursor-pointer transition-colors ${
+                activeTab === "inventory"
+                  ? "text-[#1A1A1A] font-medium border-b-[#1A1A1A]"
+                  : "text-[#888] font-normal border-b-transparent"
+              }`}
             >
               Inventory
             </button>
             <button
               type="button"
               onClick={() => handleTabChange("sales")}
-              style={activeTab === "sales" ? activeTabBtnStyle : inactiveTabBtnStyle}
+              className={`py-2 px-1 text-[13px] border-b-2 bg-transparent border-0 cursor-pointer transition-colors ${
+                activeTab === "sales"
+                  ? "text-[#1A1A1A] font-medium border-b-[#1A1A1A]"
+                  : "text-[#888] font-normal border-b-transparent"
+              }`}
             >
               Sales
             </button>
@@ -1488,7 +1369,7 @@ function LedgerPageContent() {
           {activeTab === "inventory" && (
             <>
               {needsMigration && (
-                <div style={{ padding: "16px 24px" }}>
+                <div className="px-4 sm:px-6 py-4">
                   <BusinessMigrationBanner
                     onRetry={() => {
                       setLoading(true);
@@ -1501,32 +1382,15 @@ function LedgerPageContent() {
               {!needsMigration && (
                 <>
                   {/* TOOLBAR */}
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: 12,
-                      padding: "14px 24px 10px",
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3 flex-wrap">
+                    <div className="flex items-center gap-2 flex-wrap">
                       {/* Search */}
                       <input
                         type="text"
                         value={gridSearch}
                         onChange={(e) => setGridSearch(e.target.value)}
                         placeholder="Search inventory..."
-                        style={{
-                          maxWidth: 320,
-                          background: "#FFF",
-                          border: "1px solid #E5E2DD",
-                          borderRadius: 7,
-                          padding: "7px 12px",
-                          fontSize: 12,
-                          color: "#1A1A1A",
-                          outline: "none",
-                        }}
+                        className="max-w-xs w-full bg-white border border-[#E5E2DD] rounded-lg px-3 py-1.5 text-xs text-[#1A1A1A] outline-none focus:border-[#AAA] transition-colors"
                       />
                       {/* Filter pills */}
                       {PILLS.map((pill) => {
@@ -1536,17 +1400,11 @@ function LedgerPageContent() {
                             key={pill.key}
                             type="button"
                             onClick={() => handlePillToggle(pill.key)}
-                            style={{
-                              padding: "5px 10px",
-                              fontSize: 12,
-                              borderRadius: 20,
-                              border: "1px solid #E5E2DD",
-                              background: isActive ? "#1A1A1A" : "#FFF",
-                              color: isActive ? "#F0EDE8" : "#777",
-                              cursor: "pointer",
-                              fontWeight: isActive ? 500 : 400,
-                              whiteSpace: "nowrap",
-                            }}
+                            className={`px-2.5 py-1 text-xs rounded-full border border-[#E5E2DD] cursor-pointer whitespace-nowrap transition-colors ${
+                              isActive
+                                ? "bg-[#1A1A1A] text-[#F0EDE8] font-medium"
+                                : "bg-white text-[#777] font-normal hover:bg-[#F5F2EE]"
+                            }`}
                           >
                             {pill.label}
                           </button>
@@ -1555,20 +1413,14 @@ function LedgerPageContent() {
                     </div>
 
                     {/* View toggle */}
-                    <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                    <div className="flex gap-1 shrink-0">
                       <button
                         type="button"
                         onClick={() => handleViewModeChange("grid")}
                         title="Grid view"
-                        style={{
-                          padding: "5px 7px",
-                          border: "1px solid #E5E2DD",
-                          borderRadius: 6,
-                          background: viewMode === "grid" ? "#1A1A1A" : "#FFF",
-                          color: viewMode === "grid" ? "#F0EDE8" : "#AAA",
-                          cursor: "pointer",
-                          lineHeight: 1,
-                        }}
+                        className={`p-1.5 border border-[#E5E2DD] rounded-md cursor-pointer leading-none transition-colors ${
+                          viewMode === "grid" ? "bg-[#1A1A1A] text-[#F0EDE8]" : "bg-white text-[#AAA] hover:bg-[#F5F2EE]"
+                        }`}
                       >
                         <svg width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
                           <rect x="1" y="1" width="6" height="6" rx="1" />
@@ -1581,15 +1433,9 @@ function LedgerPageContent() {
                         type="button"
                         onClick={() => handleViewModeChange("list")}
                         title="List view"
-                        style={{
-                          padding: "5px 7px",
-                          border: "1px solid #E5E2DD",
-                          borderRadius: 6,
-                          background: viewMode === "list" ? "#1A1A1A" : "#FFF",
-                          color: viewMode === "list" ? "#F0EDE8" : "#AAA",
-                          cursor: "pointer",
-                          lineHeight: 1,
-                        }}
+                        className={`p-1.5 border border-[#E5E2DD] rounded-md cursor-pointer leading-none transition-colors ${
+                          viewMode === "list" ? "bg-[#1A1A1A] text-[#F0EDE8]" : "bg-white text-[#AAA] hover:bg-[#F5F2EE]"
+                        }`}
                       >
                         <svg width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
                           <rect x="1" y="2" width="14" height="2" rx="1" />
@@ -1611,7 +1457,7 @@ function LedgerPageContent() {
 
                   {/* LIST VIEW */}
                   {viewMode === "list" && (
-                    <div style={{ padding: "0 24px 24px" }}>
+                    <div className="px-4 sm:px-6 pb-6">
                       <Surface className="p-5">
                         {perfEnabled ? (
                           <Profiler
@@ -1662,7 +1508,7 @@ function LedgerPageContent() {
           {activeTab === "sales" && (
             <>
               <EbayOrderSyncBanner />
-              <div style={{ padding: "16px 24px 24px" }}>
+              <div className="px-4 sm:px-6 py-4 pb-6">
                 <Surface className="p-5">
                   <SalesTable
                     sales={sales}
@@ -1687,29 +1533,13 @@ function LedgerPageContent() {
         </div>
 
         {/* ── RIGHT RAIL ────────────────────────────────────────────────── */}
-        <div
-          className="hidden lg:flex flex-col shrink-0"
-          style={{
-            width: 220,
-            background: "#FFFFFF",
-            borderLeft: "1px solid #E5E2DD",
-          }}
-        >
+        <div className="hidden lg:flex flex-col w-56 shrink-0 bg-white border-l border-[#E5E2DD]">
           {/* SECTION 1: NEEDS ACTION */}
-          <div style={{ borderBottom: "1px solid #F0EDE8", padding: 16 }}>
-            <p
-              style={{
-                fontSize: 10,
-                color: "#AAA",
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-                margin: "0 0 10px",
-              }}
-            >
+          <div className="border-b border-[#F0EDE8] p-4">
+            <p className="text-[10px] text-[#AAA] tracking-[0.08em] uppercase mb-2.5">
               NEEDS ACTION
             </p>
 
-            {/* List or reprice */}
             <RailActionCard
               label="List or reprice"
               count={needsActionCount}
@@ -1722,7 +1552,6 @@ function LedgerPageContent() {
               }
             />
 
-            {/* Unlisted */}
             <RailActionCard
               label="Unlisted"
               count={unlistedCount}
@@ -1734,7 +1563,6 @@ function LedgerPageContent() {
               }}
             />
 
-            {/* MV coverage */}
             <RailActionCard
               label="MV coverage"
               countLabel={mvCoveragePct != null ? `${mvCoveragePct}%` : "—"}
@@ -1749,16 +1577,8 @@ function LedgerPageContent() {
           </div>
 
           {/* SECTION 2: MONTH TO DATE */}
-          <div style={{ borderBottom: "1px solid #F0EDE8", padding: 16 }}>
-            <p
-              style={{
-                fontSize: 10,
-                color: "#AAA",
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-                margin: "0 0 8px",
-              }}
-            >
+          <div className="border-b border-[#F0EDE8] p-4">
+            <p className="text-[10px] text-[#AAA] tracking-[0.08em] uppercase mb-2">
               MONTH TO DATE
             </p>
             {[
@@ -1769,29 +1589,15 @@ function LedgerPageContent() {
               {
                 label: "Avg hold",
                 value: avgHoldDays != null ? `${avgHoldDays}d` : "—",
-                color:
-                  avgHoldDays != null && avgHoldDays > 21 ? "#C08A20" : "#1A1A1A",
+                color: avgHoldDays != null && avgHoldDays > 21 ? "#C08A20" : "#1A1A1A",
               },
             ].map((row, idx, arr) => (
               <div
                 key={row.label}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "6px 0",
-                  borderBottom: idx < arr.length - 1 ? "1px solid #F5F2EE" : "none",
-                }}
+                className={`flex justify-between items-center py-1.5 ${idx < arr.length - 1 ? "border-b border-[#F5F2EE]" : ""}`}
               >
-                <span style={{ fontSize: 11, color: "#888" }}>{row.label}</span>
-                <span
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 500,
-                    color: row.color,
-                    fontVariantNumeric: "tabular-nums",
-                  }}
-                >
+                <span className="text-[11px] text-[#888]">{row.label}</span>
+                <span className="text-xs font-medium tabular-nums" style={{ color: row.color }}>
                   {row.value}
                 </span>
               </div>
@@ -1799,16 +1605,8 @@ function LedgerPageContent() {
           </div>
 
           {/* SECTION 3: QUICK ACTIONS */}
-          <div style={{ padding: 16 }}>
-            <p
-              style={{
-                fontSize: 10,
-                color: "#AAA",
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-                margin: "0 0 10px",
-              }}
-            >
+          <div className="p-4">
+            <p className="text-[10px] text-[#AAA] tracking-[0.08em] uppercase mb-2.5">
               QUICK ACTIONS
             </p>
             <button
@@ -1818,19 +1616,7 @@ function LedgerPageContent() {
                   "Run a full analysis of my inventory. What should I act on this week?"
                 )
               }
-              style={{
-                display: "block",
-                width: "100%",
-                textAlign: "left",
-                marginBottom: 6,
-                padding: "8px 10px",
-                fontSize: 11,
-                border: "1px solid #E5E2DD",
-                borderRadius: 6,
-                background: "#FFF",
-                color: "#1A1A1A",
-                cursor: "pointer",
-              }}
+              className="block w-full text-left mb-1.5 px-2.5 py-2 text-[11px] border border-[#E5E2DD] rounded-md bg-white text-[#1A1A1A] hover:bg-[#FAFAF8] transition-colors cursor-pointer"
             >
               AI inventory review ↗
             </button>
@@ -1841,18 +1627,7 @@ function LedgerPageContent() {
                   "Which cards in my inventory are best candidates for PSA grading right now?"
                 )
               }
-              style={{
-                display: "block",
-                width: "100%",
-                textAlign: "left",
-                padding: "8px 10px",
-                fontSize: 11,
-                border: "1px solid #E5E2DD",
-                borderRadius: 6,
-                background: "#FFF",
-                color: "#1A1A1A",
-                cursor: "pointer",
-              }}
+              className="block w-full text-left px-2.5 py-2 text-[11px] border border-[#E5E2DD] rounded-md bg-white text-[#1A1A1A] hover:bg-[#FAFAF8] transition-colors cursor-pointer"
             >
               Grading candidates ↗
             </button>
@@ -1963,15 +1738,15 @@ export default function LedgerPage() {
     <Suspense
       fallback={
         <AuthenticatedLayout>
-          <main style={{ background: "#F7F5F2", minHeight: "100vh" }}>
+          <main className="bg-[#F7F5F2] min-h-screen">
             <div className="animate-pulse p-6 space-y-4">
-              <div className="h-8 w-48 rounded" style={{ background: "#E5E2DD" }} />
+              <div className="h-8 w-48 rounded bg-[#E5E2DD]" />
               <div className="flex gap-4">
                 {[...Array(4)].map((_, i) => (
-                  <div key={i} className="h-16 flex-1 rounded" style={{ background: "#E5E2DD" }} />
+                  <div key={i} className="h-16 flex-1 rounded bg-[#E5E2DD]" />
                 ))}
               </div>
-              <div className="h-64 rounded" style={{ background: "#E5E2DD" }} />
+              <div className="h-64 rounded bg-[#E5E2DD]" />
             </div>
           </main>
         </AuthenticatedLayout>
