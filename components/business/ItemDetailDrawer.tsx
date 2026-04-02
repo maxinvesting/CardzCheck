@@ -13,6 +13,8 @@ import type { EbayFeeRateKey } from "@/lib/ebay/parity-price";
 import EbayListingModal from "@/components/business/EbayListingModal";
 import GetCompsButton from "@/components/ui/GetCompsButton";
 import { compsParamsFromTitle } from "@/lib/ebay/comps-url";
+import CMVDisplay from "@/components/comps/CMVDisplay";
+import type { CardCmv } from "@/types/comps";
 
 function fmtCents(cents: number | null): string {
   if (cents === null) return "";
@@ -460,6 +462,28 @@ export default function ItemDetailDrawer({
                 <label className="block text-xs text-gray-400 mb-1">
                   Est. Market Value ($)
                 </label>
+                {(() => {
+                  const cmvCents = item.current_market_value_cents;
+                  if (cmvCents && cmvCents > 0) {
+                    const syntheticCmv: CardCmv = {
+                      id: "",
+                      card_id: item.id,
+                      cmv_value: cmvCents / 100,
+                      cmv_low: null,
+                      cmv_high: null,
+                      confidence: "low",
+                      comps_count: 0,
+                      excluded_count: 0,
+                      last_updated: item.updated_at,
+                    };
+                    return (
+                      <div className="mb-2">
+                        <CMVDisplay cmv={syntheticCmv} compact />
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
                 <div className="flex gap-2">
                   <input
                     type="number"
@@ -482,7 +506,7 @@ export default function ItemDetailDrawer({
                   )}
                 </div>
                 <p className="text-[10px] text-gray-500 mt-1">
-                  Override with your own value if needed.
+                  Override with your own value or open card profile to set comps.
                 </p>
               </div>
             </div>
