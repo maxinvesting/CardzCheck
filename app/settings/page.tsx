@@ -637,12 +637,6 @@ function SettingsContent() {
                     Used to calculate eBay Parity Price in your inventory and shop listings
                   </p>
                 </div>
-                <p className="text-xs text-white/60 mt-1">
-                  Used to calculate eBay Parity Price in your inventory and shop listings
-                </p>
-              </div>
-            </div>
-          )}
 
           {/* Website URL */}
           {isBusinessSettings && (

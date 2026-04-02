@@ -901,7 +901,8 @@ export default function GradeProbabilityPanel({
               Click to verify current eBay sold prices
             </p>
           </div>
-        ) : null}
+        );
+      })()}
       </div>
 
       {/* ── Footer ─────────────────────────────────────────────────── */}

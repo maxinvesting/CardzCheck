@@ -64,10 +64,10 @@ function MessageBody({ body, isOutbound }: { body: string; isOutbound: boolean }
   return <div className="text-sm leading-relaxed">{parts.length ? parts : body}</div>;
 }
 
-function formatTime(iso: string): string {
+function formatMessageTime(iso: string): string {
   const d = new Date(iso);
-  const now = new Date();
-  const diffDays = Math.floor((now.getTime() - d.getTime()) / 86_400_000);
+  return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
 
 function formatThreadTime(iso: string): string {
   const date = new Date(iso);

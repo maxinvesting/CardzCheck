@@ -417,7 +417,7 @@ export default function BusinessDashboardView({
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5h5m0 0v5m0-5L10 14" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 9v10h10" />
                 </svg>
-              </a>
+              </button>
             ) : (
               <div className="relative">
                 <button
