@@ -239,7 +239,7 @@ export default function Sidebar() {
   const [remainingSearches, setRemainingSearches] = useState<number | null>(null);
   const [pricingOpen, setPricingOpen] = useState(false);
 
-  const isBusinessWorkspace = pathname.startsWith("/business") || pathname.startsWith("/grade-hub") || pathname.startsWith("/bulk");
+  const isBusinessWorkspace = pathname.startsWith("/business") || pathname.startsWith("/admin");
   const isAdminUser = user?.app_role === "admin" || user?.app_role === "owner";
   const hasPaidWorkspace = Boolean(user?.is_paid) || isBusinessWorkspace;
   const baseNavItems = isBusinessWorkspace ? BUSINESS_NAV_ITEMS() : PERSONAL_NAV_ITEMS();
@@ -436,31 +436,23 @@ export default function Sidebar() {
                   key={item.href}
                   href={item.href}
                   onClick={() => setIsOpen(false)}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                  className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
                     pathname === item.href || pathname.startsWith(`${item.href}/`)
                       ? isBusinessWorkspace
-                        ? "text-orange-400"
+                        ? "border border-orange-200 border-l-2 border-l-orange-500 bg-orange-50 text-orange-700"
                         : "bg-orange-600 text-white"
                       : isBusinessWorkspace
-                        ? "text-[var(--biz-muted)] hover:bg-white/[0.04] hover:text-[var(--biz-text)]"
+                        ? "text-[var(--biz-muted)] hover:bg-[#F9FAFB] hover:text-[var(--biz-text)]"
                         : "text-gray-400 hover:text-white hover:bg-gray-800"
                   }`}
-                  style={
-                    (pathname === item.href || pathname.startsWith(`${item.href}/`)) && isBusinessWorkspace
-                      ? { background: "rgba(251,146,60,0.08)", borderLeft: "2px solid #f97316", paddingLeft: "14px" }
-                      : {}
-                  }
                 >
                   {item.icon}
                   <span className="font-medium">{item.name}</span>
-                  <span
-                    className="ml-auto rounded px-1.5 py-0.5 text-[10px] font-semibold"
-                    style={
-                      isBusinessWorkspace
-                        ? { background: "rgba(251,146,60,0.1)", border: "1px solid rgba(251,146,60,0.2)", color: "#fb923c" }
-                        : { background: "rgba(249,115,22,0.2)", color: "#fb923c" }
-                    }
-                  >
+                  <span className={`ml-auto px-1.5 py-0.5 text-[10px] font-semibold rounded ${
+                    isBusinessWorkspace
+                      ? "bg-orange-50 border border-orange-200 text-orange-600"
+                      : "bg-orange-500/20 text-orange-400"
+                  }`}>
                     Admin
                   </span>
                 </Link>

@@ -52,53 +52,43 @@ function buildRangeLabel(estimate: GradeEstimate): string | null {
   return `PSA ${formatGradeNumber(low)}-${formatGradeNumber(high)}`;
 }
 
+// Detects GENUINE photo quality problems that make the scan unusable or unreliable.
+// This should return true only for real quality failures (blur, glare, darkness, etc.),
+// NOT for missing optional detail photos.
+//
+// Intentionally excludes:
+//   "limited visibility" — injected by our own pipeline when close-ups are absent;
+//                          it does NOT indicate a quality failure.
+//   "lighting"           — too broad; matches legitimate mentions of good lighting.
+//
+// To add or remove quality failure signals, edit the `tokens` array below.
 function hasPhotoQualityFlags(estimate: GradeEstimate): boolean {
-  // Only check explicitly-negative fields for ambiguous tokens like "lighting" and "glare".
-  // Claude freely mentions these words in positive context inside grade_notes / analysis_reason
-  // (e.g. "lighting was excellent", "no glare observed") — checking those fields caused
-  // false-positive "Rescan Needed" verdicts on well-photographed cards.
-  const negativeFieldsText = [
-    ...(estimate.image_quality?.key_issues ?? []),
-    ...(estimate.confidence?.limiting_factors ?? []),
-    ...(estimate.visibility_notes ?? []),
-  ]
-    .filter((text): text is string => typeof text === "string" && text.trim().length > 0)
-    .join(" ")
-    .toLowerCase();
-
-  // All text — only used for unambiguously negative phrases that can't appear positively.
-  const allText = [
+  const noteText = [
     estimate.grade_notes,
     estimate.analysis_reason,
-    negativeFieldsText,
+    ...(estimate.image_quality?.key_issues ?? []),
+    // Note: visibility_notes and confidence.limiting_factors are excluded because our
+    // own pipeline injects advisory text into them for missing close-ups, which would
+    // cause false positives here.
   ]
     .filter((text): text is string => typeof text === "string" && text.trim().length > 0)
     .join(" ")
     .toLowerCase();
 
-  // Unambiguously negative phrases — safe to check anywhere
-  const universalTokens = [
+  const tokens = [
+    "blur",
+    "blurry",
     "out of focus",
-    "limited visibility",
+    "heavy glare",
+    "severe glare",
+    "too dark",
+    "resolution too low",
+    "cannot assess",
+    "unable to assess",
+    "obscured",
     "not fully assess",
-    "cannot be assessed",
-    "too blurry",
-  ];
-
-  // Phrase-level tokens — only flag in explicitly-negative fields to avoid
-  // false positives from "no glare observed" or "good resolution" language.
-  const negativeFieldOnlyTokens = [
-    "poor lighting",
-    "bad lighting",
-    "glare blocking",
-    "glare obscur",
-    "blocked by glare",
-    "low resolution",
-    "insufficient resolution",
-    "image blur",
-    "photo blur",
-    "unclear detail",
-    "details unclear",
+    "card is cropped",
+    "card not visible",
   ];
 
   return (
@@ -185,30 +175,55 @@ function buildReasoning(options: {
   confidenceScore: number;
   likelyLabel: string;
   likelyProb: number;
+  closeupsMissing: boolean;
 }): string {
+  // Advisory suffix appended when close-ups are absent but quality is otherwise fine.
+  const closeupAdvisory = options.closeupsMissing
+    ? " Close-up photos of corners, edges, and surface would improve accuracy."
+    : "";
+
   if (options.recommendation === "Rescan Needed") {
-    return `Confidence is ${options.confidence} (${options.confidenceScore}/100) with photo-quality limits on centering, corners, edges, or surface, so the scan should be retaken first. Current distribution leads with ${options.likelyLabel} at ${formatPercent(options.likelyProb)} and may shift with better close-ups.`;
+    return `Confidence is ${options.confidence} (${options.confidenceScore}/100) — photo quality limits reliable assessment of centering, corners, edges, or surface. Retake photos with better lighting, focus, and framing for a more accurate estimate. Current distribution leads with ${options.likelyLabel} at ${formatPercent(options.likelyProb)}.`;
   }
 
   if (options.recommendation === "Grade") {
-    return `Centering, corners, edges, and surface evidence support grading, with PSA 9/10 probability at ${formatPercent(options.highGradeProb)} and expected grade EV ${options.ev.toFixed(1)}. The strongest projected outcome is ${options.likelyLabel} at ${formatPercent(options.likelyProb)}.`;
+    return `Centering, corners, edges, and surface evidence support grading, with PSA 9/10 probability at ${formatPercent(options.highGradeProb)} and expected grade EV ${options.ev.toFixed(1)}. The strongest projected outcome is ${options.likelyLabel} at ${formatPercent(options.likelyProb)}.${closeupAdvisory}`;
   }
 
   if (options.recommendation === "Sell Raw") {
-    return `Distribution is weighted to lower outcomes (${formatPercent(options.lowGradeProb)} at PSA 7 or lower), limiting grading upside. Evidence on centering/corners/edges/surface suggests raw sale is likely the safer move right now.`;
+    return `Distribution is weighted to lower outcomes (${formatPercent(options.lowGradeProb)} at PSA 7 or lower), limiting grading upside. Evidence on centering/corners/edges/surface suggests raw sale is likely the safer move right now.${closeupAdvisory}`;
   }
 
-  return `The probability mix is balanced (PSA 9/10 at ${formatPercent(options.highGradeProb)} vs PSA 7 or lower at ${formatPercent(options.lowGradeProb)}), making this a borderline submit. Evidence quality supports a cautious strategy rather than an immediate full-commit grade submission.`;
+  return `The probability mix is balanced (PSA 9/10 at ${formatPercent(options.highGradeProb)} vs PSA 7 or lower at ${formatPercent(options.lowGradeProb)}), making this a borderline submit. Evidence quality supports a cautious strategy rather than an immediate full-commit grade submission.${closeupAdvisory}`;
 }
 
 function buildStrategyTip(
   recommendation: VerdictRecommendation,
-  suggestedGrader: VerdictGrader
+  suggestedGrader: VerdictGrader,
+  closeupsMissing: boolean
 ): string {
-  if (recommendation === "Rescan Needed") return "Upload additional close-up photos";
-  if (recommendation === "Sell Raw") return "List raw on marketplace";
-  if (recommendation === "Borderline") return "Wait for market timing";
+  if (recommendation === "Rescan Needed") {
+    // Rescan is only triggered by genuinely bad photo quality (blur, glare, etc.),
+    // not by missing close-ups. The tip should guide the user to retake the core photos.
+    return "Retake photos with better lighting, focus, and framing";
+  }
 
+  if (recommendation === "Sell Raw") {
+    return closeupsMissing
+      ? "List raw · Add close-up photos for a more precise estimate"
+      : "List raw on marketplace";
+  }
+
+  if (recommendation === "Borderline") {
+    return closeupsMissing
+      ? "Add close-up photos for corner/edge detail, then reassess"
+      : "Wait for market timing";
+  }
+
+  // Grade recommendation
+  if (closeupsMissing) {
+    return `Add close-up photos for corner/edge detail before submitting to ${suggestedGrader}`;
+  }
   if (suggestedGrader === "PSA") return "Submit to PSA Value";
   if (suggestedGrader === "BGS") return "Submit to BGS for high-end upside";
   if (suggestedGrader === "SGC") return "Submit to SGC for vintage turnaround";
@@ -240,24 +255,31 @@ export function buildGradeVerdict(
     estimate.confidence?.overall_confidence_score ??
     (confidence === "high" ? 82 : confidence === "low" ? 38 : 60);
   const photoFlags = hasPhotoQualityFlags(estimate);
-  const limitedVisibilityFlag =
-    estimate.analysis_metadata?.limited_visibility_flag === true ||
-    (estimate.visibility_notes ?? []).some((note) =>
-      note.toLowerCase().includes("limited visibility")
-    );
 
+  // closeupsMissing: true when no close-up detail photos were provided.
+  // This is ADVISORY only — it reduces confidence modestly and adds a tip,
+  // but does NOT trigger "Rescan Needed". Close-ups are optional; front/back is sufficient
+  // for a usable estimate.
+  const closeupsMissing =
+    estimate.analysis_metadata?.missing_closeups_flag === true ||
+    estimate.analysis_metadata?.limited_visibility_flag === true;
+
+  // Thresholds that control "Rescan Needed":
+  //   confidence === "low"     → model or pipeline judged the evidence very weak
+  //   confidenceScore < 50    → numerical confidence below usable threshold
+  //   photoFlags               → genuine quality signals (blur, severe glare, etc.)
+  //   analysis_status "unable" → model could not produce an estimate
+  //
+  // Notable EXCLUSION: closeupsMissing is NOT a Rescan trigger. Missing detail photos
+  // reduce confidence and add an advisory tip, but front/back images are sufficient
+  // for an estimate.
   let recommendation: VerdictRecommendation;
-  if (estimate.analysis_status === "unable" || confidence === "low" || confidenceScore < 40) {
-    // Hard gates: unable status, genuinely low confidence, or very low confidence score.
-    // Old threshold was < 50, which punted too many useful medium-confidence reads.
-    recommendation = "Rescan Needed";
-  } else if (photoFlags && confidenceScore < 58) {
-    // Photo quality issues (blur, glare in negative fields) only punt to Rescan when
-    // confidence is also genuinely low. Good front/back shots can still give a useful verdict.
-    recommendation = "Rescan Needed";
-  } else if (limitedVisibilityFlag && confidenceScore < 55) {
-    // No close-ups + medium-low confidence → ask for better photos.
-    // High-quality front/back alone can still support Borderline or Sell Raw verdicts.
+  if (
+    confidence === "low" ||
+    confidenceScore < 50 ||
+    photoFlags ||
+    estimate.analysis_status === "unable"
+  ) {
     recommendation = "Rescan Needed";
   } else if (lowGradeProb >= 0.45 || (lowGradeProb + getOutcomeProbability(outcomes, "PSA 8")) >= 0.75) {
     recommendation = "Sell Raw";
@@ -299,6 +321,7 @@ export function buildGradeVerdict(
     confidenceScore,
     likelyLabel,
     likelyProb,
+    closeupsMissing,
   });
 
   return {
@@ -308,6 +331,6 @@ export function buildGradeVerdict(
     reasoning,
     disclaimer: VERDICT_DISCLAIMER,
     expectedOutcome: `${likelyLabel} (${formatPercent(likelyProb)})`,
-    strategyTip: buildStrategyTip(recommendation, suggestedGrader),
+    strategyTip: buildStrategyTip(recommendation, suggestedGrader, closeupsMissing),
   };
 }

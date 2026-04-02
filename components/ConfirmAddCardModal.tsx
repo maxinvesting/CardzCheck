@@ -10,6 +10,7 @@ import {
   type CardIdentificationResult,
   type CollectionItem,
 } from "@/types";
+import { usePsaLookup } from "@/hooks/usePsaLookup";
 
 interface ConfirmAddCardModalProps {
   isOpen: boolean;
@@ -52,6 +53,13 @@ export default function ConfirmAddCardModal({
   const [condition, setCondition] = useState<string>("Raw");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // PSA cert lookup
+  const [certNumber, setCertNumber] = useState("");
+  const [psaLockedFields, setPsaLockedFields] = useState<Set<string>>(new Set());
+  const [psaBannerDismissed, setPsaBannerDismissed] = useState(false);
+  const [psaDataApplied, setPsaDataApplied] = useState(false);
+  const { lookup, isLoading: psaLoading, result: psaResult, error: psaError, clearResult: clearPsa } = usePsaLookup();
 
   // Editable fields for low confidence or multi-player/insert cards
   const yearFieldConfidence = cardData?.cardIdentity?.fieldConfidence?.year;
@@ -97,11 +105,48 @@ export default function ConfirmAddCardModal({
     }
   }, [cardData, initialQuantity]);
 
+  // Auto-populate fields when PSA lookup succeeds
+  useEffect(() => {
+    if (!psaResult) return;
+
+    const locked = new Set<string>();
+
+    if (psaResult.player_name) {
+      setEditablePlayerName(psaResult.player_name);
+      setEditablePlayers(psaResult.player_name);
+      locked.add("player_name");
+    }
+    if (psaResult.year) {
+      setEditableYear(psaResult.year);
+      locked.add("year");
+    }
+    if (psaResult.set_name) {
+      setEditableSet(psaResult.set_name);
+      locked.add("set_name");
+    }
+    if (psaResult.parallel_type) {
+      setEditableParallel(psaResult.parallel_type);
+      locked.add("parallel_type");
+    }
+    if (psaResult.grade) {
+      const matched = CONDITION_OPTIONS.find((o) => o.value === psaResult.grade);
+      if (matched) {
+        setCondition(matched.value);
+        locked.add("grade");
+      }
+    }
+
+    setPsaLockedFields(locked);
+    setPsaBannerDismissed(false);
+    setPsaDataApplied(true);
+  }, [psaResult]);
+
   const applyYearOverride = (nextYear: string) => {
     const trimmed = nextYear.trim();
     if (trimmed && !/^\d{4}$/.test(trimmed)) {
       setError("Year must be a 4-digit number");
-      return;
+    } else {
+      setError(null);
     }
   };
 
@@ -112,6 +157,11 @@ export default function ConfirmAddCardModal({
     setQuantity(String(Math.max(1, initialQuantity || 1)));
     setCondition("Raw");
     setError(null);
+    setCertNumber("");
+    setPsaLockedFields(new Set());
+    setPsaBannerDismissed(false);
+    setPsaDataApplied(false);
+    clearPsa();
   };
 
   const handleClose = () => {
@@ -153,17 +203,18 @@ export default function ConfirmAddCardModal({
         return;
       }
 
-      // Use editable fields if confirmation needed, otherwise use cardData
-      const finalPlayers = needsConfirmation && editablePlayers.includes(",")
+      // Use editable fields if confirmation needed or PSA data was applied, otherwise use cardData
+      const useEditable = needsConfirmation || psaDataApplied;
+      const finalPlayers = useEditable && editablePlayers.includes(",")
         ? editablePlayers.split(",").map(p => p.trim()).filter(Boolean)
         : (cardData.players && cardData.players.length > 1 ? cardData.players : [cardData.player_name]);
-      const finalPlayerName = needsConfirmation 
+      const finalPlayerName = useEditable
         ? (finalPlayers.length > 0 ? finalPlayers[0] : editablePlayerName)
         : cardData.player_name;
-      const finalYear = needsConfirmation ? editableYear : cardData.year;
-      const finalSet = needsConfirmation ? editableSet : cardData.set_name;
+      const finalYear = useEditable ? editableYear : cardData.year;
+      const finalSet = useEditable ? editableSet : cardData.set_name;
       const finalInsert = needsConfirmation ? editableInsert : cardData.insert;
-      const finalParallel = (needsConfirmation
+      const finalParallel = (useEditable
         ? editableParallel
         : cardData.parallel_type || cardData.cardIdentity?.parallel || ""
       ).trim();
@@ -211,6 +262,8 @@ export default function ConfirmAddCardModal({
         parallel_type: finalParallel || null,
         card_number: cardData.card_number || null,
         grade: condition, // Use the selected condition
+        cert_number: certNumber.trim() || null,
+        grading_company: certNumber.trim() ? (psaResult ? "PSA" : null) : null,
         acquisition_type: acquisitionType,
         purchase_price: acquisitionType === "pulled" ? null : normalizedPurchasePrice,
         purchase_date: purchaseDate || null,
@@ -322,52 +375,73 @@ export default function ConfirmAddCardModal({
                     <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                       Player(s)
                     </label>
-                    <input
-                      type="text"
-                      value={editablePlayers}
-                      onChange={(e) => setEditablePlayers(e.target.value)}
-                      className="w-full px-2 py-1.5 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-gray-900 dark:text-white"
-                      placeholder="e.g., Bo Nix, John Elway"
-                    />
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={editablePlayers}
+                        onChange={(e) => !psaLockedFields.has("player_name") && setEditablePlayers(e.target.value)}
+                        readOnly={psaLockedFields.has("player_name")}
+                        className={`w-full px-2 py-1.5 text-sm rounded ${psaLockedFields.has("player_name") ? "bg-gray-100 dark:bg-gray-700 border-transparent text-gray-500 dark:text-gray-400 cursor-default" : "bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white"}`}
+                        placeholder="e.g., Bo Nix, John Elway"
+                      />
+                      {psaLockedFields.has("player_name") && (
+                        <button type="button" onClick={() => setPsaLockedFields(prev => { const n = new Set(prev); n.delete("player_name"); return n; })} className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-blue-500 hover:text-blue-700">Edit</button>
+                      )}
+                    </div>
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                       Year
                     </label>
-                    <input
-                      type="text"
-                      value={editableYear}
-                      onChange={(e) => {
-                        setEditableYear(e.target.value);
-                        applyYearOverride(e.target.value);
-                      }}
-                      className="w-full px-2 py-1.5 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-gray-900 dark:text-white"
-                      placeholder="e.g., 2025"
-                    />
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={editableYear}
+                        onChange={(e) => { if (!psaLockedFields.has("year")) { setEditableYear(e.target.value); applyYearOverride(e.target.value); } }}
+                        readOnly={psaLockedFields.has("year")}
+                        className={`w-full px-2 py-1.5 text-sm rounded ${psaLockedFields.has("year") ? "bg-gray-100 dark:bg-gray-700 border-transparent text-gray-500 dark:text-gray-400 cursor-default" : "bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white"}`}
+                        placeholder="e.g., 2025"
+                      />
+                      {psaLockedFields.has("year") && (
+                        <button type="button" onClick={() => setPsaLockedFields(prev => { const n = new Set(prev); n.delete("year"); return n; })} className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-blue-500 hover:text-blue-700">Edit</button>
+                      )}
+                    </div>
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                       Set
                     </label>
-                    <input
-                      type="text"
-                      value={editableSet}
-                      onChange={(e) => setEditableSet(e.target.value)}
-                      className="w-full px-2 py-1.5 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-gray-900 dark:text-white"
-                      placeholder="Donruss Optic"
-                    />
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={editableSet}
+                        onChange={(e) => !psaLockedFields.has("set_name") && setEditableSet(e.target.value)}
+                        readOnly={psaLockedFields.has("set_name")}
+                        className={`w-full px-2 py-1.5 text-sm rounded ${psaLockedFields.has("set_name") ? "bg-gray-100 dark:bg-gray-700 border-transparent text-gray-500 dark:text-gray-400 cursor-default" : "bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white"}`}
+                        placeholder="Donruss Optic"
+                      />
+                      {psaLockedFields.has("set_name") && (
+                        <button type="button" onClick={() => setPsaLockedFields(prev => { const n = new Set(prev); n.delete("set_name"); return n; })} className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-blue-500 hover:text-blue-700">Edit</button>
+                      )}
+                    </div>
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                       Parallel
                     </label>
-                    <input
-                      type="text"
-                      value={editableParallel}
-                      onChange={(e) => setEditableParallel(e.target.value)}
-                      className="w-full px-2 py-1.5 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-gray-900 dark:text-white"
-                      placeholder="e.g., Silver Prizm"
-                    />
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={editableParallel}
+                        onChange={(e) => !psaLockedFields.has("parallel_type") && setEditableParallel(e.target.value)}
+                        readOnly={psaLockedFields.has("parallel_type")}
+                        className={`w-full px-2 py-1.5 text-sm rounded ${psaLockedFields.has("parallel_type") ? "bg-gray-100 dark:bg-gray-700 border-transparent text-gray-500 dark:text-gray-400 cursor-default" : "bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white"}`}
+                        placeholder="e.g., Silver Prizm"
+                      />
+                      {psaLockedFields.has("parallel_type") && (
+                        <button type="button" onClick={() => setPsaLockedFields(prev => { const n = new Set(prev); n.delete("parallel_type"); return n; })} className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-blue-500 hover:text-blue-700">Edit</button>
+                      )}
+                    </div>
                   </div>
                   {cardData.insert || editableInsert ? (
                     <div>
@@ -554,6 +628,56 @@ export default function ConfirmAddCardModal({
               />
             </div>
 
+            {/* Cert Number + PSA Lookup */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Cert Number (Optional)
+              </label>
+              <input
+                type="text"
+                value={certNumber}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setCertNumber(val);
+                  if (psaResult || psaError) {
+                    clearPsa();
+                    setPsaLockedFields(new Set());
+                    setPsaDataApplied(false);
+                  }
+                  lookup(val);
+                }}
+                onBlur={(e) => lookup(e.target.value)}
+                placeholder="PSA cert number"
+                className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              {psaLoading && (
+                <p className="mt-1 flex items-center gap-1 text-[11px] text-gray-400 dark:text-gray-500">
+                  <span className="inline-block h-3 w-3 rounded-full border border-gray-400 border-t-transparent animate-spin" />
+                  Looking up cert...
+                </p>
+              )}
+              {psaResult && !psaBannerDismissed && (
+                <div className="mt-2 flex items-start justify-between gap-2 px-3 py-2 rounded-lg border-l-4 border-[#1D9E75] bg-green-50 dark:bg-green-900/20">
+                  <p className="text-xs text-green-700 dark:text-green-400">
+                    PSA cert verified — fields auto-populated
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setPsaBannerDismissed(true)}
+                    className="flex-shrink-0 text-green-500 hover:text-green-700 dark:text-green-400"
+                    aria-label="Dismiss"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+              {psaError && (
+                <p className="mt-1 text-[11px] text-[#E24B4A]">{psaError}</p>
+              )}
+            </div>
+
             {/* Condition */}
             <div>
               <label
@@ -562,18 +686,40 @@ export default function ConfirmAddCardModal({
               >
                 Condition
               </label>
-              <select
-                id="condition"
-                value={condition}
-                onChange={(e) => setCondition(e.target.value)}
-                className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                {CONDITION_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+              {psaLockedFields.has("grade") ? (
+                <div className="relative">
+                  <select
+                    id="condition"
+                    value={condition}
+                    disabled
+                    className="w-full px-4 py-2.5 bg-gray-100 dark:bg-gray-700 border-transparent rounded-lg text-gray-500 dark:text-gray-400 cursor-default"
+                  >
+                    {CONDITION_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => setPsaLockedFields(prev => { const n = new Set(prev); n.delete("grade"); return n; })}
+                    className="absolute right-8 top-1/2 -translate-y-1/2 text-[10px] text-blue-500 hover:text-blue-700"
+                  >
+                    Edit
+                  </button>
+                </div>
+              ) : (
+                <select
+                  id="condition"
+                  value={condition}
+                  onChange={(e) => setCondition(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  {CONDITION_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
           </div>
 

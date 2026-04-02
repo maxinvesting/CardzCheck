@@ -116,6 +116,10 @@ interface Props {
   storefronts?: UserStorefront[];
 }
 
+function SkeletonLine({ w = "w-full" }: { w?: string }) {
+  return <div className={`h-3.5 ${w} rounded-md bg-slate-100 animate-pulse`} />;
+}
+
 export default function BusinessDashboardView({
   businessName,
   metrics,
@@ -387,31 +391,26 @@ export default function BusinessDashboardView({
   }
 
   return (
-    <div className="space-y-2.5">
-      <div className="flex flex-col gap-2 xl:flex-row xl:items-start xl:justify-between">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-[1.7rem] font-semibold tracking-tight text-[var(--biz-text)]">
-              {businessName ?? "CardzCheck Business"}
-            </h1>
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-normal uppercase tracking-[0.08em] text-slate-500">
-              Operator View
-            </span>
-          </div>
-          <p className="mt-0.5 text-sm text-slate-600">
-            At-a-glance view for inventory, pricing decisions, and sell-through.
+    <div className="space-y-6">
+
+      {/* ── Page header ─────────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-xl font-semibold text-[var(--biz-text)] leading-snug">
+            {businessName ?? "CardzCheck Business"}
+          </h1>
+          <p className="mt-0.5 text-sm text-[var(--muted)]">
+            Business overview &amp; insights
           </p>
           {syncError && <p className="mt-1 text-xs font-medium text-red-700">{syncError}</p>}
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5">
           {hasStorefronts ? (
-            storefronts.length === 1 && primaryStorefront ? (
-              <a
-                href={primaryStorefront.store_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={secondaryActionClass}
+            <div className="relative">
+              <button
+                onClick={() => setShowStorefrontDropdown(!showStorefrontDropdown)}
+                className="cc-btn-secondary whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium flex items-center gap-1.5"
               >
                 {primaryStorefront.display_name}
                 <svg className="h-3.5 w-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -430,33 +429,31 @@ export default function BusinessDashboardView({
                   <svg className="h-3.5 w-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
-                </button>
-                {showStorefrontDropdown && (
-                  <>
-                    <button
-                      type="button"
-                      aria-label="Close storefront menu"
-                      className="fixed inset-0 z-10 cursor-default"
-                      onClick={() => setShowStorefrontDropdown(false)}
-                    />
-                    <div className="absolute right-0 z-20 mt-2 w-64 overflow-hidden rounded-lg border border-[var(--biz-border)] bg-white shadow-sm">
-                      {storefronts.map((store) => (
-                        <a
-                          key={store.id}
-                          href={store.store_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={() => setShowStorefrontDropdown(false)}
-                          className="flex items-center gap-2 px-3 py-2 text-sm text-[var(--biz-text)] transition-colors hover:bg-[var(--biz-surface-soft)]"
-                        >
-                          <span className="truncate font-medium">{store.display_name}</span>
-                          {store.is_primary && (
-                            <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-normal uppercase tracking-[0.08em] text-emerald-700">
-                              Primary
-                            </span>
-                          )}
-                        </a>
-                      ))}
+                )}
+              </button>
+              {showStorefrontDropdown && storefronts.length > 1 && (
+                <>
+                  <div className="fixed inset-0 z-30" onClick={() => setShowStorefrontDropdown(false)} />
+                  <div className="absolute right-0 top-full mt-1 z-40 w-56 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-lg py-1">
+                    {storefronts.map((sf) => (
+                      <a
+                        key={sf.id}
+                        href={sf.store_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 px-3 py-2 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                        onClick={() => setShowStorefrontDropdown(false)}
+                      >
+                        <span className="truncate font-medium">{sf.display_name}</span>
+                        {sf.is_primary && (
+                          <span className="shrink-0 text-[9px] text-blue-500 font-semibold">PRIMARY</span>
+                        )}
+                        <svg className="w-3 h-3 shrink-0 ml-auto text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                      </a>
+                    ))}
+                    <div className="border-t border-gray-100 dark:border-gray-700 mt-1 pt-1">
                       <Link
                         href="/business/settings?section=storefronts"
                         onClick={() => setShowStorefrontDropdown(false)}
@@ -470,99 +467,41 @@ export default function BusinessDashboardView({
               </div>
             )
           ) : ebayStoreHref ? (
-            <a href={ebayStoreHref} target="_blank" rel="noopener noreferrer" className={secondaryActionClass}>
-              eBay storefront
+            <a
+              href={ebayStoreHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="cc-btn-secondary whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium"
+            >
+              eBay Storefront
             </a>
           ) : (
-            <Link href="/business/settings?section=storefronts" className={secondaryActionClass}>
-              Add storefront
+            <Link
+              href="/business/settings"
+              className="cc-btn-secondary whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium text-[var(--muted)]"
+            >
+              Add Storefront
             </Link>
           )}
-
-          {ebayAccount?.connected ? (
-            <button
-              type="button"
-              onClick={handleSyncEbayOrders}
-              disabled={syncingEbayOrders}
-              className={`${secondaryActionClass} disabled:cursor-not-allowed disabled:opacity-60`}
-            >
-              {syncingEbayOrders ? "Syncing eBay…" : "Sync eBay"}
-            </button>
-          ) : (
-            <a
-              href="/api/auth/ebay"
-              className="inline-flex items-center gap-1.5 rounded-none border border-[0.5px] border-amber-300 bg-transparent px-2.5 py-1.5 text-xs font-medium text-amber-700 transition-colors hover:bg-amber-50"
-            >
-              Connect eBay
-            </a>
-          )}
-
-          <a href="/api/business/export?type=inventory" className={secondaryActionClass}>
+          <a
+            href="/api/business/export?type=inventory"
+            className="cc-btn-secondary whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium"
+          >
             Export
           </a>
-
-          <Link href="/business/ledger" className={primaryActionClass}>
+          <Link
+            href="/business/ledger"
+            className="cc-btn-primary flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
             Add Inventory
           </Link>
         </div>
       </div>
 
-      {needsMigration && (
-        <Surface className="border-amber-200 bg-amber-50 p-3.5">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm font-semibold text-amber-800">Business setup still needs a database migration.</p>
-              <p className="mt-1 text-sm text-amber-700">
-                Finish setup in the Ledger before relying on dashboard signals.
-              </p>
-            </div>
-            <Link
-              href="/business/ledger"
-              className="inline-flex items-center justify-center rounded-md bg-amber-600 px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-amber-700"
-            >
-              Open Ledger
-            </Link>
-          </div>
-        </Surface>
-      )}
-
-      {/* ── Channel status sub-header ──────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-[var(--biz-border)] pb-2.5 text-[10px]">
-        <span
-          className={`inline-flex items-center border-l-[3px] pl-2 py-0.5 ${
-            ebayAccount?.connected
-              ? "border-[#1D9E75] text-slate-700"
-              : "border-slate-300 text-slate-500"
-          }`}
-        >
-          eBay {ebayAccount?.connected ? "connected" : "not connected"}
-        </span>
-        <span
-          className={`inline-flex items-center border-l-[3px] pl-2 py-0.5 ${
-            hasWhatnotStorefront
-              ? "border-[#1D9E75] text-slate-700"
-              : "border-slate-300 text-slate-500"
-          }`}
-        >
-          Whatnot {hasWhatnotStorefront ? "configured" : "not configured"}
-        </span>
-        <span
-          className={`inline-flex items-center border-l-[3px] pl-2 py-0.5 ${
-            hasWebsiteStorefront
-              ? "border-[#1D9E75] text-slate-700"
-              : "border-slate-300 text-slate-500"
-          }`}
-        >
-          Website {hasWebsiteStorefront ? "configured" : "not configured"}
-        </span>
-        <Link
-          href="/business/settings?section=storefronts"
-          className="text-[#1D9E75] underline-offset-2 hover:underline"
-        >
-          Manage channels
-        </Link>
-      </div>
-
+      {/* ── KPI strip ───────────────────────────────────────────────────── */}
       <BusinessMetrics
         metrics={metrics}
         loading={metricsLoading}
@@ -570,275 +509,422 @@ export default function BusinessDashboardView({
         totalItemCount={items.length}
       />
 
+      {needsMigration && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-[var(--biz-warning)]">
+          Database setup required.{" "}
+          <Link href="/business/ledger" className="underline hover:text-amber-700">
+            Go to Ledger
+          </Link>{" "}
+          to complete setup.
+        </div>
+      )}
+
       {!needsMigration && (
         <>
-          <div
-            className="grid overflow-hidden rounded-lg border xl:grid-cols-3"
-            style={{
-              borderColor: "var(--biz-border)",
-              background: "var(--biz-surface)",
-            }}
-          >
-            {signalCards.map((signal) => {
-              const styles = SIGNAL_STYLES[signal.tone];
-              return (
-                <div
-                  key={signal.label}
-                  className="flex flex-col gap-2 border-b border-r border-[var(--biz-border)] py-3 pl-4 pr-3 last:border-b-0 xl:border-b-0 xl:last:border-r-0"
-                  style={{ borderLeftWidth: "3px", borderLeftStyle: "solid", borderLeftColor: styles.borderAccent }}
-                >
-                  <span
-                    className="inline-flex self-start rounded px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.06em]"
-                    style={{ background: styles.tagBg, color: styles.tagText }}
-                  >
-                    {signal.label}
+          {/* ── eBay Integration ──────────────────────────────────────────── */}
+          <Surface className="p-5">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-extrabold tracking-tighter leading-none">
+                  <span style={{ color: "#e43137" }}>e</span>
+                  <span style={{ color: "#0064d3" }}>B</span>
+                  <span style={{ color: "#f5af02" }}>a</span>
+                  <span style={{ color: "#86b817" }}>y</span>
+                </span>
+                <span className="text-xs text-[var(--biz-muted)]">
+                  {ebayAccount?.connected
+                    ? `Connected · ${ebayAccount.ebay_username ?? ""}`
+                    : "Not connected"}
+                </span>
+                {ebayAccount?.top_rated_seller && (
+                  <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-[var(--biz-warning)]">
+                    Top Rated Plus
                   </span>
-                  <p className="text-[13px] font-medium leading-snug text-[var(--biz-text)]">
-                    {signal.title}
-                  </p>
-                  <p className="text-[12px] leading-5 text-slate-600">{signal.detail}</p>
-                  <p className="text-[11px] text-slate-500">{signal.meta}</p>
-                  <Link
-                    href={signal.ctaHref}
-                    className="mt-auto text-[11px] underline-offset-2 hover:underline"
-                    style={{ color: "#1D9E75" }}
-                  >
-                    {signal.ctaLabel} →
-                  </Link>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="grid gap-1.5 xl:grid-cols-[0.92fr_1fr_1.08fr]">
-            <Surface className="p-3">
-              <div className="flex items-center justify-between gap-2">
-                <SectionLabel>Inventory Funnel</SectionLabel>
-                <Link href="/business/ledger" className="text-[11px] font-normal text-[var(--biz-primary)] hover:underline">
-                  Open ledger
-                </Link>
+                )}
               </div>
 
-              {activeCount === 0 ? (
-                <p className="mt-3 text-sm text-slate-700">
-                  Add inventory to start tracking list rate, sell-through, and stale capital.
+              <div className="flex items-center gap-2 shrink-0">
+                {ebayAccount?.connected ? (
+                  <>
+                    <button
+                      onClick={() => setShowImportWizard(true)}
+                      className="cc-btn-secondary rounded-lg px-3 py-1.5 text-xs font-medium"
+                    >
+                      Import
+                    </button>
+                    <Link
+                      href="/business/ledger"
+                      className="cc-btn-secondary rounded-lg px-3 py-1.5 text-xs font-semibold"
+                    >
+                      View Listings
+                    </Link>
+                  </>
+                ) : (
+                  <a
+                    href="/api/auth/ebay"
+                    className="cc-btn-primary rounded-lg px-3 py-1.5 text-xs font-semibold"
+                  >
+                    Connect eBay
+                  </a>
+                )}
+              </div>
+            </div>
+
+            {ebayAccount?.connected ? (
+              <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  { label: "Active Listings", value: String(ebayKpis.activeEbayListings) },
+                  { label: "Sales (30d)", value: String(ebayKpis.salesCount) },
+                  { label: "Revenue (30d)", value: fmt(ebayKpis.revenueCents) },
+                  { label: "Profit (30d)", value: fmt(ebayKpis.profitCents) },
+                ].map(({ label, value }) => (
+                  <div
+                    key={label}
+                    className="rounded-lg border border-[var(--biz-border)] bg-[var(--biz-bg)] px-4 py-3"
+                  >
+                    <p className="text-[10px] uppercase tracking-wide text-[var(--biz-muted)] mb-1.5">{label}</p>
+                    <p className="text-lg font-semibold tabular-nums text-[var(--biz-text)]">{value}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-3 text-xs text-[var(--biz-muted)] max-w-lg">
+                Connect your eBay account to sync orders automatically, list cards directly from inventory, and track eBay-specific profit metrics.
+              </p>
+            )}
+          </Surface>
+
+          {/* ── Main data grid ────────────────────────────────────────────── */}
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+
+            {/* Top Movers */}
+            <Surface title="Top Movers · Est. Market Value">
+              {itemsEmpty ? (
+                <p className="text-[var(--biz-muted)] text-xs">
+                  No inventory yet.{" "}
+                  <Link href="/business/ledger" className="text-[var(--biz-primary)] hover:underline">
+                    Add items
+                  </Link>{" "}
+                  to see top performers.
+                </p>
+              ) : dashboardData.topMovers.length === 0 ? (
+                <p className="text-[var(--biz-muted)] text-xs">
+                  Add Est. Market Values to your items to see top movers.
                 </p>
               ) : (
-                <div className="mt-2.5 space-y-2.5">
-                  {[
-                    {
-                      label: "Unlisted",
-                      count: unlistedCount,
-                      share: (unlistedCount / funnelTotal) * 100,
-                      color: "#f59e0b",
-                    },
-                    {
-                      label: "Listed",
-                      count: listedCount,
-                      share: (listedCount / funnelTotal) * 100,
-                      color: "#0b7a4b",
-                    },
-                    {
-                      label: "Sold (30d)",
-                      count: soldLast30Count,
-                      share: (soldLast30Count / funnelTotal) * 100,
-                      color: "#2563eb",
-                    },
-                  ].map((row) => (
-                    <div key={row.label} className="space-y-1">
-                      <div className="flex items-center justify-between gap-2 text-[13px]">
-                        <span className="font-medium text-slate-700">{row.label}</span>
-                        <span className="font-medium tabular-nums text-[var(--biz-text)]">
-                          {recentSalesLoading && row.label === "Sold (30d)" ? "—" : row.count}
-                        </span>
-                      </div>
-                      <FunnelBar value={row.share} color={row.color} />
-                    </div>
-                  ))}
-
-                  <div className="grid grid-cols-2 gap-1.5 border-t border-[var(--biz-border)] pt-2.5">
-                    <div className="rounded-lg bg-[var(--biz-surface-soft)] px-2.5 py-2">
-                      <p className="text-[9px] font-normal uppercase tracking-[0.08em] text-slate-500">List Rate</p>
-                      <p className="mt-0.5 text-lg font-medium tabular-nums text-[var(--biz-text)]">{listRate}%</p>
-                    </div>
-                    <div className="rounded-lg bg-[var(--biz-surface-soft)] px-2.5 py-2">
-                      <p className="text-[9px] font-normal uppercase tracking-[0.08em] text-slate-500">Sell-through</p>
-                      <p className="mt-0.5 text-lg font-medium tabular-nums text-[var(--biz-text)]">{sellThroughRate}%</p>
-                    </div>
-                  </div>
-
-                  <div className="border-t border-[var(--biz-border)] pt-2.5">
-                    <div className="border-l-2 border-[#1D9E75] pl-3 py-1">
-                      <SectionLabel>Grading Insight</SectionLabel>
-                      <p className="mt-0.5 truncate text-[13px] font-medium text-[var(--biz-text)]">
-                        {dashboardData.bestGradingCandidate
-                          ? clipTitle(dashboardData.bestGradingCandidate.title, 42)
-                          : "No raw grading candidate flagged"}
-                      </p>
-                      <p className="mt-0.5 text-[11px] text-slate-600">
-                        {dashboardData.bestGradingCandidate
-                          ? `${fmt(dashboardData.bestGradingCandidate.current_market_value_cents ?? 0)} raw value · ${dashboardData.rawItems.length} raw cards live`
-                          : "Add raw inventory with value data to surface the next grading candidate."}
-                      </p>
+                <ul className="space-y-3">
+                  {dashboardData.topMovers.map((item) => (
+                    <li key={item.id} className="flex items-center justify-between gap-3">
                       <Link
-                        href={dashboardData.bestGradingCandidate ? `/card/${dashboardData.bestGradingCandidate.id}?from=business` : "/grade-hub"}
-                        className="mt-1 inline-block text-[11px] text-[#1D9E75] underline-offset-2 hover:underline"
+                        href="/business/ledger"
+                        className="truncate text-xs text-[var(--biz-text)] hover:underline transition-colors"
+                        title={item.title}
                       >
                         {dashboardData.bestGradingCandidate ? "Open card →" : "Grade Hub →"}
                       </Link>
+                      <span className="shrink-0 text-xs font-semibold tabular-nums text-[var(--biz-primary)]">
+                        {fmt(item.current_market_value_cents!)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Surface>
+
+            {/* Inventory Funnel + Risk Signals combined */}
+            <Surface title="Inventory Status">
+              {itemsEmpty ? (
+                <p className="text-[var(--biz-muted)] text-xs">No inventory data yet.</p>
+              ) : (
+                <>
+                  {/* Funnel numbers */}
+                  <div className="grid grid-cols-3 gap-3 mb-5">
+                    <div className="text-center rounded-lg border border-[var(--biz-border)] bg-[var(--biz-bg)] py-3 px-2">
+                      <p className="text-xl font-semibold tabular-nums text-[var(--biz-warning)]">
+                        {dashboardData.unlisted.length}
+                      </p>
+                      <p className="mt-1 text-[10px] text-[var(--biz-muted)]">Unlisted</p>
+                    </div>
+                    <div className="text-center rounded-lg border border-[var(--biz-border)] bg-[var(--biz-bg)] py-3 px-2">
+                      <p className="text-xl font-semibold tabular-nums text-[var(--biz-text)]">
+                        {dashboardData.listedCount}
+                      </p>
+                      <p className="mt-1 text-[10px] text-[var(--biz-muted)]">Listed</p>
+                    </div>
+                    <div className="text-center rounded-lg border border-[var(--biz-border)] bg-[var(--biz-bg)] py-3 px-2">
+                      <p className="text-xl font-semibold tabular-nums text-[var(--biz-primary)]">
+                        {recentSalesLoading ? "—" : soldLast30Count}
+                      </p>
+                      <p className="mt-1 text-[10px] text-[var(--biz-muted)]">Sold (30d)</p>
                     </div>
                   </div>
-                </div>
+
+                  {/* Risk signals */}
+                  <div
+                    style={{ borderTop: "1px solid var(--biz-border)" }}
+                    className="pt-4 space-y-2.5"
+                  >
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--biz-muted)] mb-3">
+                      Risk Signals
+                    </p>
+                    {[
+                      {
+                        label: "Unlisted items",
+                        count: dashboardData.unlisted.length,
+                        color: dashboardData.unlisted.length > 0 ? "text-[var(--biz-warning)]" : "text-[var(--biz-muted)]",
+                      },
+                      {
+                        label: "Items held > 60 days",
+                        count: dashboardData.aged.length,
+                        color: dashboardData.aged.length > 0 ? "text-red-500" : "text-[var(--biz-muted)]",
+                      },
+                      {
+                        label: "Missing Est. Market Value",
+                        count: dashboardData.noCmv.length,
+                        color: dashboardData.noCmv.length > 0 ? "text-[var(--biz-text)]" : "text-[var(--biz-muted)]",
+                      },
+                    ].map(({ label, count, color }) => (
+                      <div key={label} className="flex items-center justify-between">
+                        <span className="text-xs text-[var(--biz-muted)]">{label}</span>
+                        <span className={`text-xs font-semibold tabular-nums ${color}`}>{count}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {(dashboardData.unlisted.length > 0 || dashboardData.aged.length > 0) && (
+                    <Link
+                      href="/business/ledger"
+                      className="mt-4 inline-block text-xs text-[var(--biz-primary)] hover:underline transition-colors"
+                    >
+                      Review in Ledger →
+                    </Link>
+                  )}
+
+                  <p
+                    style={{ borderTop: "1px solid var(--biz-border)" }}
+                    className="mt-4 pt-3 text-[10px] text-[var(--biz-muted)]"
+                  >
+                    {dashboardData.activeCount} active item{dashboardData.activeCount !== 1 ? "s" : ""} in inventory
+                  </p>
+                </>
               )}
             </Surface>
 
-            <Surface className="p-3">
-              <div className="flex items-center justify-between gap-2">
-                <SectionLabel>Recent Sales</SectionLabel>
-                <Link href="/business/ledger?tab=sales" className="text-[11px] font-normal text-[var(--biz-primary)] hover:underline">
-                  Sales tab
-                </Link>
-              </div>
+            {/* Quick Actions */}
+            <div className="flex flex-col gap-5">
+              <Surface title="Quick Actions">
+                <div className="grid grid-cols-2 gap-2">
+                  <Link
+                    href="/business/ledger"
+                    className="cc-btn-primary flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-xs font-medium"
+                  >
+                    <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Add Inventory
+                  </Link>
+                  <a
+                    href="/api/business/export?type=inventory"
+                    className="cc-btn-secondary flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-xs font-medium"
+                  >
+                    <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Export
+                  </a>
+                  {primaryStorefront ? (
+                    <a
+                      href={primaryStorefront.store_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="cc-btn-secondary flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-xs font-medium"
+                    >
+                      <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                      {primaryStorefront.display_name}
+                    </a>
+                  ) : ebayStoreHref ? (
+                    <a
+                      href={ebayStoreHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="cc-btn-secondary flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-xs font-medium"
+                    >
+                      <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                      eBay Store
+                    </a>
+                  ) : (
+                    <Link
+                      href="/business/settings"
+                      className="cc-btn-secondary flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-xs font-medium text-[var(--muted)]"
+                    >
+                      <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                      Add Storefront
+                    </Link>
+                  )}
+                  <Link
+                    href="/business/grade-probability"
+                    className="cc-btn-secondary flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-xs font-medium text-[var(--biz-warning)]"
+                  >
+                    <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                    </svg>
+                    Grade Probability
+                  </Link>
+                </div>
+              </Surface>
 
+              {/* Grade callout */}
+              <div
+                style={{
+                  border: "1px solid var(--biz-border)",
+                  borderLeft: "3px solid var(--biz-accent-amber)",
+                }}
+                className="rounded-xl bg-[var(--biz-surface)] p-4 flex items-start gap-3"
+              >
+                <div className="shrink-0 w-7 h-7 rounded-md bg-amber-500/15 flex items-center justify-center mt-0.5">
+                  <svg className="w-3.5 h-3.5 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-[var(--biz-text)]">
+                    Grade before you sell
+                  </p>
+                  <p className="mt-1 text-[11px] text-[var(--biz-muted)] leading-snug">
+                    Estimate grade probability and assess whether submitting to PSA/BGS is worth it.
+                  </p>
+                  <Link
+                    href="/business/grade-probability"
+                    className="mt-2.5 inline-block text-[11px] font-medium text-[var(--biz-warning)] hover:underline"
+                  >
+                    Try Grade Probability →
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Recent Activity ──────────────────────────────────────────── */}
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+            <Surface title="Recently Added">
+              {itemsEmpty ? (
+                <p className="text-[var(--biz-muted)] text-xs">
+                  No items yet.{" "}
+                  <Link href="/business/ledger" className="text-[var(--biz-primary)] hover:underline">
+                    Add your first item
+                  </Link>
+                  .
+                </p>
+              ) : (
+                <ul className="space-y-2.5">
+                  {dashboardData.recentlyAdded.map((item) => (
+                    <li key={item.id} className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span
+                          className={`shrink-0 w-1.5 h-1.5 rounded-full ${
+                            item.status === "listed" || item.status === "pending_sale"
+                              ? "bg-blue-400"
+                              : item.status === "sold"
+                              ? "bg-emerald-400"
+                              : "bg-slate-300"
+                          }`}
+                        />
+                        <Link
+                          href="/business/ledger"
+                          className="truncate text-xs text-[var(--biz-text)] hover:underline transition-colors"
+                          title={item.title}
+                        >
+                          {item.title}
+                        </Link>
+                      </div>
+                      <span className="shrink-0 text-[10px] text-[var(--biz-muted)] tabular-nums">
+                        {fmtDate(item.created_at)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {items.length > 8 && (
+                <Link
+                  href="/business/ledger"
+                  className="mt-4 inline-block text-xs text-[var(--biz-primary)] hover:underline transition-colors"
+                >
+                  View all {items.length} items →
+                </Link>
+              )}
+            </Surface>
+
+            <Surface title="Recent Sales">
               {recentSalesLoading ? (
-                <div className="mt-2.5 space-y-1.5">
-                  {[0, 1, 2].map((index) => (
-                    <div key={index} className="h-10 animate-pulse rounded-lg bg-[var(--biz-surface-soft)]" />
+                <div className="space-y-2.5">
+                  {[...Array(4)].map((_, i) => (
+                    <SkeletonLine key={i} w={i % 2 === 0 ? "w-full" : "w-3/4"} />
                   ))}
                 </div>
-              ) : recentSalesList.length === 0 ? (
-                <p className="mt-3 text-sm text-slate-700">
-                  No sales recorded in the last 30 days. Record sales from the ledger to track velocity.
-                </p>
-              ) : (
-                <div className="mt-2 space-y-1.5">
-                  {recentSalesList.map((sale) => {
-                    const profit = sale.profit_cents ?? 0;
-                    const profitColor = profit >= 0 ? "text-emerald-700" : "text-red-700";
-                    return (
-                      <div
-                        key={sale.id}
-                        className="rounded-lg border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-3 py-1.5"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="truncate text-[13px] font-medium text-[var(--biz-text)]" title={sale.inventory_item?.title ?? "Sale"}>
-                              {sale.inventory_item?.title ?? "Sale"}
-                            </p>
-                            <p className="mt-0.5 text-[11px] text-slate-700">
-                              {CHANNEL_LABELS[sale.channel] ?? sale.channel} • {timeAgo(sale.sold_at)}
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-[13px] font-medium tabular-nums text-[var(--biz-text)]">
-                              {fmt(sale.gross_revenue_cents)}
-                            </p>
-                            <p className={`text-[11px] font-medium tabular-nums ${profitColor}`}>
-                              {profit >= 0 ? "+" : ""}
-                              {fmt(profit)}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              <div className="mt-2.5 grid grid-cols-2 gap-1.5 border-t border-[var(--biz-border)] pt-2.5">
-                <div className="rounded-lg bg-[var(--biz-surface-soft)] px-2.5 py-2">
-                  <p className="text-[9px] font-normal uppercase tracking-[0.08em] text-slate-500">Gross (30d)</p>
-                  <p className="mt-0.5 text-lg font-medium tabular-nums text-[var(--biz-text)]">
-                    {fmt(recentSalesGrossCents)}
-                  </p>
-                </div>
-                <div className="rounded-lg bg-[var(--biz-surface-soft)] px-2.5 py-2">
-                  <p className="text-[9px] font-normal uppercase tracking-[0.08em] text-slate-500">Net (30d)</p>
-                  <p className="mt-0.5 text-lg font-medium tabular-nums text-[var(--biz-text)]">
-                    {fmt(recentSalesProfitCents)}
-                  </p>
-                </div>
-              </div>
-
-              {/* Channel Pulse — moved from Top Movers */}
-              <div className="mt-2.5 flex items-center justify-between gap-3 border-t border-[var(--biz-border)] pt-2.5">
-                <div className="min-w-0">
-                  <SectionLabel>Channel Pulse</SectionLabel>
-                  <p className="mt-0.5 text-[11px] text-slate-600">
-                    {ebayAccount?.connected
-                      ? `${ebayKpis.activeEbayListings} eBay listings live · ${ebayKpis.salesCount} eBay sales in 30d`
-                      : "Connect eBay to sync listings and recent sales."}
-                  </p>
-                </div>
-                {ebayAccount?.connected ? (
-                  <p className="shrink-0 text-right text-[13px] font-medium tabular-nums text-[var(--biz-text)]">
-                    {fmt(ebayKpis.profitCents)}
-                  </p>
-                ) : (
+              ) : recentSales.length === 0 ? (
+                <p className="text-[var(--biz-muted)] text-xs">
+                  No sales recorded yet.{" "}
                   <Link
-                    href="/business/settings?section=storefronts"
-                    className="shrink-0 text-[11px] text-[var(--biz-primary)] hover:underline"
+                    href="/business/ledger?tab=sales"
+                    className="text-[var(--biz-primary)] hover:underline"
                   >
-                    Manage
-                  </Link>
-                )}
-              </div>
-            </Surface>
-
-            <Surface className="p-3">
-              <div className="flex items-center justify-between gap-2">
-                <SectionLabel>Top Movers</SectionLabel>
-                <Link href="/business/ledger" className="text-[11px] font-normal text-[var(--biz-primary)] hover:underline">
-                  Inventory tab
-                </Link>
-              </div>
-
-              {dashboardData.topInventory.length === 0 ? (
-                <p className="mt-3 text-sm text-slate-700">
-                  Add market values in the ledger to surface your highest-value inventory here.
+                    Go to Sales tab
+                  </Link>{" "}
+                  to record one.
                 </p>
               ) : (
-                <div className="mt-2 space-y-1.5">
-                  {dashboardData.topInventory.map((item) => {
-                    const age = daysSince(item.acquisition_date);
-                    return (
-                      <div
-                        key={item.id}
-                        className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-3 py-1.5"
-                      >
-                        <div className="min-w-0">
-                          <Link
-                            href={`/card/${item.id}?from=business`}
-                            className="truncate text-[13px] font-medium text-[var(--biz-text)] underline-offset-2 hover:text-[#1D9E75] hover:underline"
-                            title={item.title}
-                          >
-                            {clipTitle(item.title, 50)}
-                          </Link>
-                          <p className="mt-0.5 text-[11px] text-slate-700">
-                            {gradeLabel(item)}
-                            {age != null ? ` • ${age}d held` : ""}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-[13px] font-medium tabular-nums text-[var(--biz-text)]">
-                            {fmt(item.current_market_value_cents ?? 0)}
-                          </p>
-                          <Link
-                            href={`/card/${item.id}?from=business`}
-                            className="mt-1 inline-block text-[11px] text-[#1D9E75] underline-offset-2 hover:underline"
-                          >
-                            Open →
-                          </Link>
-                        </div>
+                <ul className="space-y-3">
+                  {recentSales.map((sale) => (
+                    <li key={sale.id} className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p
+                          className="truncate text-xs text-[var(--biz-text)]"
+                          title={sale.inventory_item?.title ?? "Sale"}
+                        >
+                          {sale.inventory_item?.title ?? "Sale"}
+                        </p>
+                        <p className="text-[10px] text-[var(--biz-muted)]">
+                          {CHANNEL_LABELS[sale.channel] ?? sale.channel} · {fmtDate(sale.sold_at)}
+                        </p>
                       </div>
-                    );
-                  })}
-                </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-xs font-semibold tabular-nums text-[var(--biz-primary)]">
+                          {fmt(sale.gross_revenue_cents)}
+                        </p>
+                        <p
+                          className={`text-[10px] tabular-nums ${
+                            sale.profit_cents >= 0 ? "text-[var(--biz-muted)]" : "text-red-500"
+                          }`}
+                        >
+                          {sale.profit_cents >= 0 ? "+" : ""}
+                          {fmt(sale.profit_cents)} profit
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
               )}
-
+              {recentSales.length > 0 && (
+                <Link
+                  href="/business/ledger?tab=sales"
+                  className="mt-4 inline-block text-xs text-[var(--biz-primary)] hover:underline transition-colors"
+                >
+                  View all sales →
+                </Link>
+              )}
             </Surface>
           </div>
         </>
+      )}
+
+      {showImportWizard && (
+        <EbayImportWizard onClose={() => setShowImportWizard(false)} />
       )}
     </div>
   );

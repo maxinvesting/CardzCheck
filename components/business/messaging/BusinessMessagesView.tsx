@@ -279,10 +279,10 @@ export default function BusinessMessagesView({
       <div className="flex items-center justify-between gap-4 rounded-2xl border border-[var(--biz-border)] bg-gradient-to-r from-emerald-50 via-white to-cyan-50 px-5 py-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-[var(--biz-text)]">
-            Customer Service
+            Buyer Inbox
           </h1>
           <p className="mt-0.5 text-sm text-[var(--biz-muted)]">
-            Buyer support, offers, and follow-ups in one place
+            Offers, questions, and follow-ups in one place
           </p>
         </div>
         <div className="flex items-center gap-2 rounded-full border border-emerald-200 bg-white/80 px-3 py-1.5 shadow-sm backdrop-blur">

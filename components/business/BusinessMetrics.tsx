@@ -11,69 +11,15 @@ function fmtCurrency(dollars: number): string {
     currency: "USD",
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
-  });
+  }).format(cents / 100);
 }
 
-function CountUpDollars({
-  valueCents,
-  duration = 1.3,
-}: {
-  valueCents: number;
-  duration?: number;
-}) {
-  const ref = useRef<HTMLSpanElement>(null);
-
-  useEffect(() => {
-    if (!ref.current) return;
-    if (valueCents === 0) {
-      ref.current.textContent = "$0";
-      return;
-    }
-
-    const controls = animate(0, valueCents / 100, {
-      duration,
-      ease: [0.16, 1, 0.3, 1],
-      onUpdate(value) {
-        if (ref.current) {
-          ref.current.textContent = fmtCurrency(value);
-        }
-      },
-    });
-
-    return controls.stop;
-  }, [duration, valueCents]);
-
-  return <span ref={ref}>$0</span>;
-}
-
-function CountUpInt({
-  value,
-  duration = 1.0,
-}: {
-  value: number;
-  duration?: number;
-}) {
-  const ref = useRef<HTMLSpanElement>(null);
-
-  useEffect(() => {
-    if (!ref.current) return;
-    if (value === 0) {
-      ref.current.textContent = "0";
-      return;
-    }
-
-    const controls = animate(0, value, {
-      duration,
-      ease: [0.16, 1, 0.3, 1],
-      onUpdate(next) {
-        if (ref.current) ref.current.textContent = String(Math.round(next));
-      },
-    });
-
-    return controls.stop;
-  }, [duration, value]);
-
-  return <span ref={ref}>0</span>;
+function fmtFull(cents: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+  }).format(cents / 100);
 }
 
 interface Props {
@@ -81,6 +27,22 @@ interface Props {
   loading: boolean;
   inventorySummary?: InventoryValueSummary | null;
   totalItemCount?: number;
+  compact?: boolean;
+}
+
+const STRIP_STYLE: CSSProperties = {
+  background:
+    "linear-gradient(180deg, rgba(255,255,255,0.99) 0%, rgba(249,250,251,0.97) 100%)",
+  border: "1px solid var(--biz-border)",
+  borderRadius: "14px",
+};
+
+interface CellDef {
+  label: string;
+  primary: string;
+  secondary?: string;
+  primaryClass: string;
+  tag?: string;
 }
 
 export default function BusinessMetrics({
@@ -88,91 +50,110 @@ export default function BusinessMetrics({
   loading,
   inventorySummary,
   totalItemCount,
+  compact = false,
 }: Props) {
-  const profitPositive = !metrics || metrics.profitMtd >= 0;
-  const activeCount = metrics?.activeInventoryCount ?? 0;
-  const totalCount = totalItemCount ?? 0;
-
-  const inventoryValueCents =
-    inventorySummary && inventorySummary.itemCount > 0
-      ? inventorySummary.itemsWithCmv > 0
-        ? inventorySummary.totalCmvCents
-        : inventorySummary.totalCostCents
-      : 0;
-
-  const costBasisLine =
-    inventorySummary && inventorySummary.itemCount > 0
-      ? `Cost basis ${fmtCurrency(inventorySummary.totalCostCents / 100)}`
-      : "No cost data";
-
-  const revenueMtd = metrics?.revenueMtd ?? 0;
-  const profitMtd = metrics?.profitMtd ?? 0;
-  const revenueYtd = metrics ? fmtCurrency(metrics.revenueYtd / 100) : "—";
-  const profitYtd = metrics ? fmtCurrency(metrics.profitYtd / 100) : "—";
-
-  const cards = [
+  const cells: CellDef[] = [
     {
-      label: "Sales MTD",
-      renderValue: () => (metrics ? <CountUpDollars valueCents={revenueMtd} /> : <span>—</span>),
-      sub: `YTD ${revenueYtd}`,
-      valueColor: "var(--biz-text)",
+      label: "Revenue",
+      primary: metrics ? fmt(metrics.revenueMtd) : "—",
+      secondary: metrics ? `${fmt(metrics.revenueYtd)} YTD` : undefined,
+      primaryClass: "text-[var(--biz-text)]",
+      tag: "MTD",
     },
     {
-      label: "Net Earnings MTD",
-      renderValue: () => (metrics ? <CountUpDollars valueCents={profitMtd} /> : <span>—</span>),
-      sub: `YTD ${profitYtd}`,
-      valueColor: profitPositive ? "#1D9E75" : "#E24B4A",
+      label: "Profit",
+      primary: metrics ? fmt(metrics.profitMtd) : "—",
+      secondary: metrics ? `${fmt(metrics.profitYtd)} YTD` : undefined,
+      primaryClass:
+        metrics && metrics.profitMtd >= 0 ? "text-emerald-600" : "text-red-500",
+      tag: "MTD",
+    },
+    {
+      label: "Sales",
+      primary: metrics ? String(metrics.salesCountMtd) : "—",
+      secondary: metrics ? `${metrics.salesCountYtd} YTD` : undefined,
+      primaryClass: "text-[var(--biz-text)]",
+      tag: "MTD",
     },
     {
       label: "Active Inventory",
-      renderValue: () => (metrics ? <CountUpInt value={activeCount} /> : <span>—</span>),
-      sub: `${totalCount} total items`,
-      valueColor: "var(--biz-text)",
+      primary: metrics ? String(metrics.activeInventoryCount) : "—",
+      primaryClass: "text-[var(--biz-text)]",
     },
-    {
-      label: "Inventory Value",
-      renderValue: () =>
-        inventorySummary && inventorySummary.itemCount > 0 ? (
-          <CountUpDollars valueCents={inventoryValueCents} />
-        ) : (
-          <span>—</span>
-        ),
-      sub: costBasisLine,
-      valueColor: "var(--biz-text)",
-    },
-  ] as const;
+  ];
+
+  if (inventorySummary) {
+    const isFiltered =
+      totalItemCount != null &&
+      inventorySummary.itemCount !== totalItemCount;
+    const hasCmv = inventorySummary.itemsWithCmv > 0;
+    cells.push({
+      label: isFiltered ? "Inventory Value (Filtered)" : "Inventory Value",
+      primary:
+        inventorySummary.itemCount === 0
+          ? fmt(0)
+          : hasCmv
+          ? fmtFull(inventorySummary.totalCmvCents)
+          : fmtFull(inventorySummary.totalCostCents),
+      secondary: hasCmv
+        ? `Est. Market Value · ${inventorySummary.itemCount} item${inventorySummary.itemCount !== 1 ? "s" : ""}`
+        : `Cost Basis · ${inventorySummary.itemCount} item${inventorySummary.itemCount !== 1 ? "s" : ""}`,
+      primaryClass: "text-[var(--biz-text)]",
+    });
+  }
+
+  const colClass =
+    cells.length >= 5
+      ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-5"
+      : "grid-cols-2 sm:grid-cols-4";
 
   return (
-    <div
-      className="grid grid-cols-2 overflow-hidden rounded-lg border lg:grid-cols-4"
-      style={{ borderColor: "var(--biz-border)" }}
-    >
-      {cards.map(({ label, renderValue, sub, valueColor }) => (
-        <div
-          key={label}
-          className="border-r px-5 py-4 last:border-r-0"
-          style={{ borderColor: "rgba(0,0,0,0.06)" }}
-        >
-          {loading ? (
-            <div className="space-y-2">
-              <div className="h-2 w-16 animate-pulse rounded bg-slate-200" />
-              <div className="h-7 w-24 animate-pulse rounded bg-slate-200" />
-              <div className="h-2 w-20 animate-pulse rounded bg-slate-100" />
+    <div className={compact ? "mb-2" : "mb-5"}>
+      <div style={STRIP_STYLE} className="overflow-hidden">
+        <div className={`grid ${colClass}`}>
+          {cells.map((cell, i) => (
+            <div
+              key={cell.label}
+              className={[
+                "flex flex-col justify-between gap-3",
+                compact ? "px-5 py-4" : "px-6 py-5",
+                "min-h-[92px] border-[color:var(--biz-border)]",
+                i > 0 ? "border-l" : "",
+                i >= 2 ? "border-t sm:border-t-0" : "",
+                cells.length >= 5 && i >= 3 ? "sm:border-t lg:border-t-0" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+            >
+              <div className="flex items-start justify-between gap-1">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--biz-muted)] leading-tight">
+                  {cell.label}
+                </p>
+                {cell.tag && (
+                  <span className="shrink-0 rounded bg-[var(--biz-border)] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[var(--biz-muted)]">
+                    {cell.tag}
+                  </span>
+                )}
+              </div>
+
+              {loading ? (
+                <div className="h-8 w-20 animate-pulse rounded-md bg-[var(--biz-skeleton)]" />
+              ) : (
+                <div>
+                  <p
+                    className={`text-2xl font-semibold tabular-nums leading-none tracking-tight ${cell.primaryClass}`}
+                  >
+                    {cell.primary}
+                  </p>
+                  {cell.secondary && (
+                    <p className="mt-1.5 text-[11px] text-[var(--biz-muted)] tabular-nums leading-tight">
+                      {cell.secondary}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
-          ) : (
-            <>
-              <p className="text-[9px] font-normal uppercase tracking-[0.08em] text-slate-500">
-                {label}
-              </p>
-              <p
-                className="mt-1.5 text-[22px] font-medium tabular-nums"
-                style={{ color: valueColor, lineHeight: 1.1 }}
-              >
-                {renderValue()}
-              </p>
-              <p className="mt-1 text-[11px] font-normal text-slate-500">{sub}</p>
-            </>
-          )}
+          ))}
         </div>
       ))}
     </div>
