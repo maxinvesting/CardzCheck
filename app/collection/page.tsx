@@ -558,14 +558,14 @@ export default function CollectionPage() {
 
   return (
     <AuthenticatedLayout>
-      <main className="max-w-6xl mx-auto px-4 py-8">
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+              <h1 className="text-2xl lg:text-3xl font-semibold text-gray-900 dark:text-white">
                 Your Collection
               </h1>
-              <p className="text-gray-500 dark:text-gray-400 mt-1">
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                 Track performance and manage your investment
               </p>
             </div>
