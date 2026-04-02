@@ -8,6 +8,11 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      maxWidth: {
+        "5xl": "68rem",
+        "6xl": "80rem",
+        "7xl": "92rem",
+      },
       keyframes: {
         "fade-slide-in": {
           "0%": { opacity: "0", transform: "translateY(6px)" },

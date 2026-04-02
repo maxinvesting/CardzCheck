@@ -146,10 +146,10 @@ export default function DashboardPage() {
 
   return (
     <AuthenticatedLayout>
-      <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+      <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
         {/* Greeting */}
-        <header className="mb-4 sm:mb-6">
-          <h1 className="text-xl font-semibold leading-snug text-[var(--biz-text)]">
+        <header className="mb-6">
+          <h1 className="text-2xl lg:text-3xl font-semibold leading-snug text-[var(--biz-text)]">
             Welcome back{userName ? `, ${userName}` : ""}
           </h1>
           <p className="mt-1 text-sm text-[var(--biz-muted)]">
@@ -158,21 +158,21 @@ export default function DashboardPage() {
         </header>
 
         {/* Metrics band */}
-        <section className="mb-4 sm:mb-6">
+        <section className="mb-6">
           <Surface>
             <CompactMetricsRow items={collectionItems} loading={loading} />
           </Surface>
         </section>
 
         {/* Loyalty perks progress */}
-        <section className="mb-4 sm:mb-6">
+        <section className="mb-6">
           <LoyaltyPerksWidget />
         </section>
 
         {/* Secondary layout: performers, activity, quick actions */}
-        <section className="space-y-4">
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(260px,1fr)]">
-            <div className="space-y-4">
+        <section>
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(260px,1fr)]">
+            <div className="space-y-6">
               <CompactTopPerformers items={collectionItems} loading={loading} />
               <ActivityFeed recentCards={collectionItems.slice(0, 5)} />
             </div>

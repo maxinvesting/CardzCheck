@@ -12,6 +12,7 @@ import { createClient } from "@/lib/supabase/client";
 import { hasBusinessWorkspaceAccess } from "@/lib/business/workspace-access";
 import { useGradeEstimateFromImages } from "@/lib/grading/useGradeEstimateFromImages";
 import { gradingCopy } from "@/copy/grading";
+import CompsAndCmvSection from "@/components/comps/CompsAndCmvSection";
 
 export default function CardProfilePage() {
   const params = useParams();
@@ -130,18 +131,15 @@ export default function CardProfilePage() {
           year: card.year,
           set_name: card.set_name,
           insert: card.insert,
-              grade: card.grade,
-              grading_company: card.grading_company,
-              cert_number: card.cert_number,
-              acquisition_type: card.acquisition_type,
-              purchase_price: card.purchase_price,
-              purchase_date: card.purchase_date,
-              image_url: card.image_url,
-              user_image_url: card.user_image_url,
-              stock_image_url: card.stock_image_url,
-              ebay_image_url: card.ebay_image_url,
-              notes: card.notes,
-            }),
+          grade: card.grade,
+          grading_company: card.grading_company,
+          cert_number: card.cert_number,
+          psa_cert_number: card.psa_cert_number ?? card.cert_number,
+          acquisition_type: card.acquisition_type,
+          purchase_price: card.purchase_price,
+          purchase_date: card.purchase_date,
+          notes: card.notes,
+        }),
       });
 
       if (!response.ok) {
@@ -196,12 +194,7 @@ export default function CardProfilePage() {
     const fromImages = (images || []).map((img) => img.url).filter((u): u is string => Boolean(u));
     if (fromImages.length > 0) return fromImages;
     if (!card) return [];
-    const legacy: string[] = [];
-    if (card.image_url) legacy.push(card.image_url);
-    if (card.user_image_url) legacy.push(card.user_image_url);
-    if (card.stock_image_url) legacy.push(card.stock_image_url);
-    if (card.ebay_image_url) legacy.push(card.ebay_image_url);
-    return legacy;
+    return card.trusted_image?.frontCandidates ?? [];
   }, [images, card]);
 
   const cardIdentity = useMemo(() => {
@@ -356,6 +349,9 @@ export default function CardProfilePage() {
             />
           </div>
         </div>
+
+        {/* Comps & CMV section */}
+        <CompsAndCmvSection card={card} />
 
         {/* Grade probability section */}
         <section className="mt-10 pt-8 border-t border-gray-200 dark:border-gray-800">

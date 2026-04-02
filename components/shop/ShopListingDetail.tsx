@@ -8,6 +8,7 @@ import ShopListingAiInsight from "./ShopListingAiInsight";
 import ShopListingGradeAnalysis from "./ShopListingGradeAnalysis";
 import type { ShopListing } from "@/types/shop";
 import type { SubscriptionTier } from "@/lib/subscription-tier";
+import { CardImage } from "@/components/CardImage";
 import {
   buildListingTitle,
   formatUsd,
@@ -137,17 +138,23 @@ export default function ShopListingDetail({
         <section className="space-y-4">
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
             <div className="aspect-[4/5] bg-slate-100">
-              {images[selectedImage] ? (
-                <img
-                  src={images[selectedImage]}
-                  alt={title}
-                  className="h-full w-full object-contain"
-                />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center text-slate-500">
-                  No image available
-                </div>
-              )}
+              <CardImage
+                image={{
+                  source: listing.trusted_image?.source ?? "none",
+                  frontUrl: images[selectedImage] ?? listing.trusted_image?.frontUrl ?? null,
+                  backUrl: listing.trusted_image?.backUrl ?? null,
+                  frontCandidates:
+                    images[selectedImage] && images[selectedImage].length > 0
+                      ? [images[selectedImage]]
+                      : listing.trusted_image?.frontCandidates ?? [],
+                  backCandidates: listing.trusted_image?.backCandidates ?? [],
+                  hasFallbackCta: !images[selectedImage] && (listing.trusted_image?.hasFallbackCta ?? true),
+                }}
+                alt={title}
+                className="border-0 bg-slate-100"
+                imageClassName="object-contain"
+                fallbackClassName="bg-slate-100"
+              />
             </div>
           </div>
 
@@ -163,7 +170,7 @@ export default function ShopListingDetail({
                       : "border-slate-200 hover:border-slate-300"
                   }`}
                 >
-                  <img src={imageUrl} alt="" className="h-full w-full object-cover" />
+                  <img src={imageUrl} alt="" className="h-full w-full object-contain" />
                 </button>
               ))}
             </div>
@@ -302,6 +309,13 @@ export default function ShopListingDetail({
                   {listing.cert_number && <p>Certification #{listing.cert_number}</p>}
                   <p>{isBusiness ? "Free shipping" : shippingLabel} • Ships in 1-2 days</p>
                 </div>
+
+                {listing.accepts_offers && (
+                  <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+                    Offers welcome — contact CardzCheck if you&apos;d like to discuss price on this
+                    card.
+                  </p>
+                )}
 
                 {listing.ebay_comp_url && (
                   <a
