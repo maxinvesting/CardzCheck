@@ -15,7 +15,7 @@ import { LIMITS } from "@/types";
 import { isTestMode, getTestUser } from "@/lib/test-mode";
 import { computeCollectionSummary, getEstCmv, getQuantity } from "@/lib/values";
 import { formatGraderGrade, normalizeCardNumber } from "@/lib/cards/format";
-import { normalizeHttpUrl, pickCollectionImageUrl, uniqueHttpUrls } from "@/lib/collection-images";
+import { pickCollectionImageUrl } from "@/lib/collection-images";
 
 function formatPrice(price: number | null): string {
   if (price === null) return "—";
@@ -200,8 +200,8 @@ export default function CollectionPage() {
       "cmv_last_updated",
       "image_url",
       "user_image_url",
-      "stock_image_url",
-      "ebay_image_url",
+      "psa_cert_number",
+      "image_source",
       "notes",
     ];
 
@@ -219,8 +219,8 @@ export default function CollectionPage() {
       it.cmv_last_updated,
       it.image_url,
       it.user_image_url,
-      it.stock_image_url,
-      it.ebay_image_url,
+      it.psa_cert_number,
+      it.image_source,
       it.notes,
     ]);
 
@@ -301,8 +301,7 @@ export default function CollectionPage() {
     const iDate = idx("purchase_date");
     const iImage = idx("image_url");
     const iUserImage = idx("user_image_url");
-    const iStockImage = idx("stock_image_url");
-    const iEbayImage = idx("ebay_image_url");
+    const iPsaCertNumber = idx("psa_cert_number");
     const iNotes = idx("notes");
 
     const toNull = (v: string | undefined) => (v && v.trim() ? v.trim() : null);
@@ -330,8 +329,7 @@ export default function CollectionPage() {
         purchase_date: iDate === -1 ? null : toNull(cols[iDate]),
         image_url: iImage === -1 ? null : toNull(cols[iImage]),
         user_image_url: iUserImage === -1 ? null : toNull(cols[iUserImage]),
-        stock_image_url: iStockImage === -1 ? null : toNull(cols[iStockImage]),
-        ebay_image_url: iEbayImage === -1 ? null : toNull(cols[iEbayImage]),
+        psa_cert_number: iPsaCertNumber === -1 ? null : toNull(cols[iPsaCertNumber]),
         notes: iNotes === -1 ? null : toNull(cols[iNotes]),
       };
     });
@@ -535,24 +533,6 @@ export default function CollectionPage() {
           ? cmvData.stats.cmv
           : null;
 
-      const searchPayload =
-        cmvData && typeof cmvData === "object"
-          ? (cmvData as {
-              _forSale?: { items?: Array<{ image?: string | null }> };
-              comps?: Array<{ image?: string | null }>;
-            })
-          : null;
-      const forSaleItems = Array.isArray(searchPayload?._forSale?.items)
-        ? searchPayload?._forSale?.items || []
-        : [];
-      const compsItems = Array.isArray(searchPayload?.comps) ? searchPayload.comps || [] : [];
-
-      const listingImageUrls = uniqueHttpUrls([
-        ...forSaleItems.map((item) => normalizeHttpUrl(item?.image || null)),
-        ...compsItems.map((comp) => normalizeHttpUrl(comp?.image || null)),
-      ]);
-      const bestListingImageUrl = listingImageUrls[0] || null;
-
       const cardData: CardIdentificationResult = {
         player_name: card.player_name,
         year: card.year || undefined,
@@ -560,10 +540,7 @@ export default function CollectionPage() {
         parallel_type: card.variant || undefined,
         card_number: numberLabel || undefined,
         grade: gradeLabel || undefined,
-        imageUrl: bestListingImageUrl || "",
-        imageUrls: listingImageUrls.length > 0 ? listingImageUrls : undefined,
-        stockImageUrl: bestListingImageUrl || undefined,
-        ebayImageUrl: bestListingImageUrl || undefined,
+        imageUrl: "",
         confidence: "high",
       };
 

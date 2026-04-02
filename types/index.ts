@@ -135,14 +135,16 @@ export interface BusinessInventoryItem {
   grading_company: string | null;
   grade: string | null;
   cert_number: string | null;
+  psa_cert_number?: string | null;
   location: string | null;
   channel: "ebay" | "whatnot" | "instagram" | "show" | "local" | "other";
   status: "unlisted" | "listed" | "pending_sale" | "sold" | "returned";
   list_price_cents: number | null;
   current_market_value_cents: number | null;
+  image_source?: CardImageSource | null;
+  image_url?: string | null;
+  trusted_image?: TrustedCardImage | null;
   user_image_url: string | null;
-  stock_image_url: string | null;
-  ebay_image_url: string | null;
   notes: string | null;
   ebay_item_id?: string | null; // eBay listing item ID for synced items
   ebay_listing_url?: string | null; // Direct eBay listing URL
@@ -239,13 +241,14 @@ export interface CollectionItem {
   grade: string | null;
   grading_company?: string | null; // PSA, BGS, SGC, CGC, etc.
   cert_number?: string | null; // Certification number from grading company
+  psa_cert_number?: string | null;
   acquisition_type?: AcquisitionType | null;
   purchase_price: number | null;
   purchase_date: string | null;
   image_url: string | null;
+  image_source?: CardImageSource | null;
+  trusted_image?: TrustedCardImage | null;
   user_image_url?: string | null;
-  stock_image_url?: string | null;
-  ebay_image_url?: string | null;
   notes: string | null;
   quantity?: number | null;
   acquisition_date?: string | null;
@@ -283,10 +286,21 @@ export interface CardImage {
   user_id: string;
   storage_path: string;
   position: number;
-  label?: string | null;
+  label?: "front" | "back" | string | null;
   created_at: string;
   // URL computed on client/server
   url?: string;
+}
+
+export type CardImageSource = "psa" | "user" | "none";
+
+export interface TrustedCardImage {
+  source: CardImageSource;
+  frontUrl: string | null;
+  backUrl: string | null;
+  frontCandidates: string[];
+  backCandidates: string[];
+  hasFallbackCta: boolean;
 }
 
 export interface Comp {
@@ -711,8 +725,6 @@ export interface CardIdentification {
   variant: string; // Parallel/variant (not used for inserts)
   grade: string;
   confidence: "high" | "medium" | "low";
-  stock_image_url?: string | null;
-  ebay_image_url?: string | null;
   card_identity?: CardIdentity; // Canonical identity metadata (optional)
 }
 
@@ -747,8 +759,6 @@ export interface CardIdentificationResult extends SearchFormData {
   imageUrls?: string[];
   scanPhotos?: GradeScanPhoto[];
   userImageUrl?: string;
-  stockImageUrl?: string;
-  ebayImageUrl?: string;
   confidence: "high" | "medium" | "low";
   players?: string[]; // All players (for multi-player cards)
   insert?: string; // Insert type (e.g., "Downtown")
@@ -759,9 +769,9 @@ export interface CardIdentificationResult extends SearchFormData {
 
 export type CardImageFields = {
   image_url?: string;
+  image_source?: CardImageSource | null;
+  psa_cert_number?: string | null;
   user_image_url?: string;
-  stock_image_url?: string;
-  ebay_image_url?: string;
 };
 
 export type AcquisitionType =

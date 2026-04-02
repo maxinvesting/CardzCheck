@@ -22,8 +22,6 @@ export interface CardPickerSelection {
   card_number?: string;
   image_url?: string;
   user_image_url?: string;
-  stock_image_url?: string;
-  ebay_image_url?: string;
   quantity?: number;
 }
 
@@ -44,8 +42,6 @@ interface CardSearchResult {
   card_number?: string | null;
   image_url?: string | null;
   user_image_url?: string | null;
-  stock_image_url?: string | null;
-  ebay_image_url?: string | null;
 }
 
 interface CardPickerProps {
@@ -355,8 +351,6 @@ export default function CardPicker({
       card_number: normalizeCardNumber(card.card_number ?? undefined),
       image_url: card.image_url ?? undefined,
       user_image_url: card.user_image_url ?? undefined,
-      stock_image_url: card.stock_image_url ?? undefined,
-      ebay_image_url: card.ebay_image_url ?? undefined,
     });
   };
 
