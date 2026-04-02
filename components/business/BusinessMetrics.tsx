@@ -73,28 +73,24 @@ export default function BusinessMetrics({
       value: revenueMtd,
       valueColor: "var(--biz-text)" as string,
       sub: `YTD ${revenueYtd}`,
-      accentColor: "#3b82f6",
     },
     {
       label: "Net Earnings MTD",
       value: profitMtd,
       valueColor: profitPositive ? "#16a34a" : "#dc2626",
       sub: `YTD ${profitYtd}`,
-      accentColor: profitPositive ? "#16a34a" : "#dc2626",
     },
     {
       label: "Active Inventory",
       value: activeCount,
       valueColor: "var(--biz-text)" as string,
       sub: `${totalCount} total items`,
-      accentColor: "#a855f7",
     },
     {
       label: "Inventory Value",
       value: inventoryValue,
       valueColor: "var(--biz-text)" as string,
       sub: costBasisLine,
-      accentColor: "#f59e0b",
     },
   ];
 
@@ -106,11 +102,10 @@ export default function BusinessMetrics({
         gap: "10px",
       }}
     >
-      {cards.map(({ label, value, valueColor, sub, accentColor }) => (
+      {cards.map(({ label, value, valueColor, sub }) => (
         <div key={label} style={{
-          background: "var(--color-background-secondary, #F9FAFB)",
+          background: "#ffffff",
           border: "1px solid var(--biz-border)",
-          borderLeft: `3px solid ${accentColor}`,
           borderRadius: "8px",
           padding: "14px 16px",
         }}>

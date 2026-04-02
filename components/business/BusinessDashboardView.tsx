@@ -162,7 +162,7 @@ export default function BusinessDashboardView({
             {businessName ?? "CardzCheck Business"}
           </h1>
           <p className="text-xs text-[var(--muted)]">
-            Business overview &amp; insights
+            {new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })} overview
           </p>
         </div>
 
@@ -261,7 +261,7 @@ export default function BusinessDashboardView({
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
-            Add Inventory
+            Add Item
           </Link>
         </div>
       </div>
@@ -288,11 +288,9 @@ export default function BusinessDashboardView({
         </div>
       )}
 
-      {/* ── Workflow band: Sales Channels + Grade & Actions ─────────────── */}
+      {/* ── Sales Channels ──────────────────────────────────────────────── */}
       {!needsMigration && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          {/* Sales Channels panel */}
-          <Surface className="p-6">
+        <Surface className="p-6">
             <div className="flex items-center justify-between gap-2 mb-4">
               <h2 className="text-sm font-semibold text-[var(--biz-text)]">Sales Channels</h2>
               <Link
@@ -307,12 +305,7 @@ export default function BusinessDashboardView({
               {/* eBay row */}
               <div className="flex items-center justify-between gap-3 rounded-lg border border-[var(--biz-border)] bg-[#F9FAFB] px-3 py-2.5">
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <span className="text-sm font-extrabold tracking-tighter leading-none shrink-0">
-                    <span style={{ color: "#e43137" }}>e</span>
-                    <span style={{ color: "#0064d3" }}>B</span>
-                    <span style={{ color: "#f5af02" }}>a</span>
-                    <span style={{ color: "#86b817" }}>y</span>
-                  </span>
+                  <span className="text-[11px] font-semibold text-[var(--biz-text)] shrink-0">eBay</span>
                   {ebayAccount?.connected ? (
                     <div className="flex items-center gap-1.5 min-w-0">
                       <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
@@ -367,10 +360,10 @@ export default function BusinessDashboardView({
                 return (
                   <div className="flex items-center justify-between gap-3 rounded-lg border border-[var(--biz-border)] bg-[#F9FAFB] px-3 py-2.5">
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <span className="text-[11px] font-semibold text-purple-700 shrink-0">Whatnot</span>
+                      <span className="text-[11px] font-semibold text-[var(--biz-text)] shrink-0">Whatnot</span>
                       {wn ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-1.5 py-0.5 text-[10px] font-medium text-purple-700">
-                          <span className="h-1.5 w-1.5 rounded-full bg-purple-500" />
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                           Connected
                         </span>
                       ) : (
@@ -404,10 +397,10 @@ export default function BusinessDashboardView({
                 return (
                   <div className="flex items-center justify-between gap-3 rounded-lg border border-[var(--biz-border)] bg-[#F9FAFB] px-3 py-2.5">
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <span className="text-[11px] font-semibold text-sky-700 shrink-0">Website</span>
+                      <span className="text-[11px] font-semibold text-[var(--biz-text)] shrink-0">Website</span>
                       {web ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium text-sky-700">
-                          <span className="h-1.5 w-1.5 rounded-full bg-sky-500" />
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                           Connected
                         </span>
                       ) : (
@@ -460,86 +453,7 @@ export default function BusinessDashboardView({
             {syncError && (
               <p className="mt-2 text-[10px] text-red-600">{syncError}</p>
             )}
-          </Surface>
-
-          {/* Grade probability + key actions */}
-          <Surface title="Grade & Quick Actions">
-            <div className="flex flex-col gap-4">
-              <div className="flex items-start gap-3">
-                <div className="shrink-0 w-7 h-7 rounded-md bg-amber-500/15 flex items-center justify-center mt-0.5">
-                  <svg
-                    className="w-3.5 h-3.5 text-amber-700"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"
-                    />
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-[var(--biz-text)]">
-                    Use the Grade Probability Engine before you sell
-                  </p>
-                  <p className="mt-1 text-xs text-[var(--biz-muted)]">
-                    Estimate grade probabilities to help you decide whether submitting to PSA/BGS is worth the fees.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <Link
-                  href="/business/grade-probability"
-                  className="cc-btn-primary rounded-md px-3 py-2 text-xs font-semibold"
-                >
-                  Grade Probability
-                </Link>
-                <Link
-                  href="/business/ledger"
-                  className="cc-btn-secondary rounded-md px-3 py-2 text-xs font-medium"
-                >
-                  Add Inventory
-                </Link>
-                <a
-                  href="/api/business/export?type=inventory"
-                  className="cc-btn-secondary rounded-md px-3 py-2 text-xs font-medium"
-                >
-                  Export
-                </a>
-                {primaryStorefront ? (
-                  <a
-                    href={primaryStorefront.store_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="cc-btn-secondary rounded-md px-3 py-2 text-xs font-medium"
-                  >
-                    {primaryStorefront.display_name}
-                  </a>
-                ) : ebayStoreHref ? (
-                  <a
-                    href={ebayStoreHref}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="cc-btn-secondary rounded-md px-3 py-2 text-xs font-medium"
-                  >
-                    eBay Store
-                  </a>
-                ) : (
-                  <Link
-                    href="/business/settings"
-                    className="cc-btn-secondary rounded-md px-3 py-2 text-xs font-medium text-[var(--muted)]"
-                  >
-                    Add Storefront
-                  </Link>
-                )}
-              </div>
-            </div>
-          </Surface>
-        </div>
+        </Surface>
       )}
 
       {showImportWizard && (
