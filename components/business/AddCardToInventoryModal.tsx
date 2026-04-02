@@ -13,8 +13,7 @@ export interface PendingInventoryCard {
   grade?: string;
   imageUrl?: string;
   user_image_url?: string;
-  stock_image_url?: string;
-  ebay_image_url?: string;
+  psa_cert_number?: string;
   quantity?: number;
 }
 
@@ -191,15 +190,16 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
           condition_status: gradeFields.conditionStatus,
           grading_company: gradeFields.gradingCompany,
           grade: gradeFields.gradeValue,
+          psa_cert_number: card.psa_cert_number || null,
           channel: form.channel,
           status: form.status,
           list_price_cents: form.list_price ? toCents(form.list_price) : null,
           current_market_value_cents: form.current_market_value
             ? toCents(form.current_market_value)
             : null,
+          image_url: card.user_image_url || card.imageUrl || null,
+          image_source: card.user_image_url ? "user" : "none",
           user_image_url: card.user_image_url || null,
-          stock_image_url: card.stock_image_url || null,
-          ebay_image_url: card.ebay_image_url || null,
           location: form.location || null,
           notes: form.notes || null,
         }),

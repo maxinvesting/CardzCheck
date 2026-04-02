@@ -6,6 +6,10 @@ import {
   normalizeShopCategoryLabel,
   SHOP_CATEGORY_OPTIONS,
 } from "@/lib/cards/market-category";
+import {
+  hydrateShopListings,
+  syncShopListingImageProjection,
+} from "@/lib/shop/server";
 
 type ListingStatus = "active" | "sold" | "reserved" | "delisted" | "archived";
 type PublishState = "draft" | "published";
@@ -95,14 +99,6 @@ function asTags(value: unknown): string[] {
   return [];
 }
 
-function asImageUrls(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-
-  return value
-    .map((item) => (typeof item === "string" ? item.trim() : ""))
-    .filter((url) => /^https?:\/\//i.test(url));
-}
-
 function hasOwn(value: unknown, key: string): boolean {
   return Boolean(
     value &&
@@ -148,7 +144,9 @@ export async function GET() {
     );
   }
 
-  return NextResponse.json({ listings: data ?? [] });
+  return NextResponse.json({
+    listings: await hydrateShopListings((data ?? []) as any[]),
+  });
 }
 
 export async function PATCH(request: NextRequest) {
@@ -270,6 +268,10 @@ export async function PATCH(request: NextRequest) {
     filtered.is_premium = asBoolean(updates.is_premium);
   }
 
+  if ("accepts_offers" in updates) {
+    filtered.accepts_offers = asBoolean(updates.accepts_offers);
+  }
+
   if ("tags" in updates) {
     filtered.tags = asTags(updates.tags);
   }
@@ -302,15 +304,6 @@ export async function PATCH(request: NextRequest) {
     filtered.shipping_method = asNullableString(updates.shipping_method) ?? "bmwt";
   }
 
-  if ("image_urls" in updates) {
-    filtered.image_urls = asImageUrls(updates.image_urls);
-  }
-
-  if ("thumbnail_url" in updates) {
-    const thumbnail = asNullableString(updates.thumbnail_url);
-    filtered.thumbnail_url = thumbnail;
-  }
-
   if (Object.keys(filtered).length === 0) {
     return NextResponse.json(
       { error: "No valid updates" },
@@ -334,7 +327,8 @@ export async function PATCH(request: NextRequest) {
     );
   }
 
-  return NextResponse.json({ listing: data });
+  const listing = (await syncShopListingImageProjection(data.id)) ?? data;
+  return NextResponse.json({ listing });
 }
 
 export async function POST(request: NextRequest) {
@@ -365,13 +359,11 @@ export async function POST(request: NextRequest) {
   const costBasis = asNumber(body?.cost_basis);
   const ebaySoldComp = asNumber(body?.ebay_sold_comp);
   const shippingCost = asNumber(body?.shipping_cost);
-  const imageUrls = asImageUrls(body?.image_urls);
   const inventoryItemId = asNullableString(body?.inventory_item_id);
   const parallelVariant = asNullableString(body?.parallel_variant);
   const cardNumber = asNullableString(body?.card_number);
   const certNumber = asNullableString(body?.cert_number);
   const description = asNullableString(body?.description);
-  const thumbnailUrl = asNullableString(body?.thumbnail_url) ?? imageUrls[0] ?? null;
   const tags = asTags(body?.tags);
   const notes = asNullableString(body?.notes);
 
@@ -395,10 +387,11 @@ export async function POST(request: NextRequest) {
     status: asStatus(body?.status, "active"),
     shipping_method: asNullableString(body?.shipping_method) ?? "bmwt",
     shipping_cost: shippingCost != null ? Math.max(0, shippingCost) : 4,
-    image_urls: imageUrls,
-    thumbnail_url: thumbnailUrl,
+    image_urls: [],
+    thumbnail_url: null,
     featured: asBoolean(body?.featured),
     is_premium: asBoolean(body?.is_premium),
+    accepts_offers: asBoolean(body?.accepts_offers),
     tags,
   };
 
@@ -439,7 +432,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  return NextResponse.json({ listing: data });
+  const listing = (await syncShopListingImageProjection(data.id)) ?? data;
+  return NextResponse.json({ listing });
 }
 
 export async function DELETE(request: NextRequest) {

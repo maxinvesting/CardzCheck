@@ -3,6 +3,7 @@
 import { useShopCart } from "@/contexts/ShopCartContext";
 import Link from "next/link";
 import { buildListingTitle } from "./shop-formatters";
+import { CardImage } from "@/components/CardImage";
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -55,17 +56,14 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                   key={item.listingId}
                   className="flex gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3"
                 >
-                  {item.listing?.thumbnail_url ? (
-                    <img
-                      src={item.listing.thumbnail_url}
-                      alt=""
-                      className="h-16 w-16 rounded object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-16 w-16 items-center justify-center rounded bg-slate-200">
-                      <span className="text-xs text-slate-500">No img</span>
-                    </div>
-                  )}
+                  <CardImage
+                    image={item.listing?.trusted_image ?? null}
+                    alt={item.listing ? buildListingTitle(item.listing) : "Cart item"}
+                    aspectClassName="h-16 w-16"
+                    className="rounded bg-slate-200"
+                    imageClassName="object-contain"
+                    fallbackClassName="bg-slate-200"
+                  />
 
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium text-slate-900">

@@ -3,9 +3,16 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Playfair_Display } from "next/font/google";
+import dynamic from "next/dynamic";
 import { useAuth } from "@/contexts/AuthContext";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import GradeEstimatorHistoryPanel from "@/components/grading/GradeEstimatorHistoryPanel";
+
+// Lazy-load the heavy submission builder only when the tab is active
+const SubmissionsTabContent = dynamic(
+  () => import("@/components/grading/SubmissionsTabContent"),
+  { ssr: false, loading: () => <div className="py-12 text-center text-sm text-gray-400">Loading submissions…</div> }
+);
 
 const playfair = Playfair_Display({ subsets: ["latin"], weight: ["400", "600"] });
 
@@ -21,7 +28,7 @@ type CreditStatus = {
   nextGrantAt: string | null;
 };
 
-type Tab = "scan" | "batch" | "history";
+type Tab = "scan" | "batch" | "history" | "submissions";
 
 function formatTimeUntil(iso: string | null): string {
   if (!iso) return "";
@@ -60,6 +67,7 @@ export default function GradeHubPage() {
     { key: "scan", label: "Scan a card", show: true },
     { key: "batch", label: "Batch scan", show: isBusiness },
     { key: "history", label: "History", show: true },
+    { key: "submissions", label: "Submissions", show: true },
   ];
 
   return (
@@ -68,7 +76,7 @@ export default function GradeHubPage() {
 
         {/* ── Tab bar ──────────────────────────────────────────────────── */}
         <div
-          style={{ backgroundColor: CC_BLUE, borderBottom: `3px solid ${GOLD}` }}
+          style={{ backgroundColor: NAVY, borderBottom: `3px solid ${GOLD}` }}
           className="flex items-center gap-0 px-6"
         >
           {/* Tabs */}
@@ -86,13 +94,12 @@ export default function GradeHubPage() {
                     textTransform: "uppercase",
                     letterSpacing: "0.6px",
                     color: isActive ? "#fff" : "rgba(255,255,255,0.55)",
-                    borderBottom: isActive ? `3px solid ${GOLD}` : "3px solid transparent",
-                    marginBottom: -3,
                     background: "transparent",
                     border: "none",
                     borderBottomWidth: 3,
                     borderBottomStyle: "solid",
                     borderBottomColor: isActive ? GOLD : "transparent",
+                    marginBottom: -3,
                   }}
                 >
                   {tab.label}
@@ -119,7 +126,7 @@ export default function GradeHubPage() {
               Settings
             </button>
             <button
-              onClick={() => router.push(isBusiness ? "/grade-hub/scan?slots=1" : "/grade-hub/scan?slots=1")}
+              onClick={() => router.push("/grade-hub/scan?slots=1")}
               style={{
                 fontSize: 11,
                 fontWeight: 700,
@@ -127,7 +134,7 @@ export default function GradeHubPage() {
                 letterSpacing: "0.6px",
                 borderRadius: 2,
                 border: "none",
-                color: "#1e3a8a",
+                color: NAVY,
                 background: GOLD,
                 padding: "6px 14px",
               }}
@@ -237,30 +244,31 @@ export default function GradeHubPage() {
                 <div style={{ marginTop: 16 }}>
                   <div
                     style={{
-                      border: "1px solid #d0d5dd",
-                      borderRadius: 2,
+                      flex: 1,
                       display: "flex",
                       overflow: "hidden",
                     }}
                   >
-                    {["Centering", "Corners", "Edges", "Surface"].map((f, i) => (
-                      <div
-                        key={f}
-                        style={{
-                          flex: 1,
-                          textAlign: "center",
-                          padding: "8px 4px",
-                          fontSize: 10,
-                          fontWeight: 700,
-                          textTransform: "uppercase",
-                          letterSpacing: "0.8px",
-                          color: "#9ca3af",
-                          borderRight: i < 3 ? "1px solid #d0d5dd" : "none",
-                        }}
-                      >
-                        {f}
-                      </div>
-                    ))}
+                    <svg
+                      style={{ width: 22, height: 22, color: "rgba(255,255,255,0.28)" }}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                        d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M4.5 19.5h15a.75.75 0 00.75-.75V6.75a.75.75 0 00-.75-.75H4.5a.75.75 0 00-.75.75v12a.75.75 0 00.75.75z" />
+                    </svg>
+                    <div style={{ textAlign: "center" }}>
+                      <p style={{
+                        fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.8)",
+                        letterSpacing: "0.3px", marginBottom: 4,
+                      }}>
+                        Back of card
+                      </p>
+                      <p style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", lineHeight: 1.4 }}>
+                        Drop image or click to upload
+                      </p>
+                    </div>
                   </div>
                 </div>
 
@@ -321,7 +329,67 @@ export default function GradeHubPage() {
                 </p>
               </div>
 
-              {/* Stats strip */}
+              {/* CTA buttons */}
+              <div className="space-y-2.5">
+                <button
+                  onClick={() =>
+                    canScan
+                      ? router.push(activeTab === "batch" ? "/grade-hub/scan?slots=3" : "/grade-hub/scan?slots=1")
+                      : router.push("/settings")
+                  }
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.6px",
+                    borderRadius: 2,
+                    border: "none",
+                    color: "#fff",
+                    background: canScan ? NAVY : "#9ca3af",
+                    padding: "12px 20px",
+                    cursor: canScan ? "pointer" : "not-allowed",
+                    textAlign: "center",
+                  }}
+                >
+                  {canScan ? "Analyze Card" : "No scans left"}
+                </button>
+
+                {isBusiness && activeTab === "scan" && (
+                  <button
+                    onClick={() => (canScan ? router.push("/grade-hub/scan?slots=3") : undefined)}
+                    style={{
+                      display: "block",
+                      width: "100%",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.6px",
+                      borderRadius: 2,
+                      border: `1px solid ${NAVY}`,
+                      color: NAVY,
+                      background: "transparent",
+                      padding: "11px 20px",
+                      cursor: canScan ? "pointer" : "not-allowed",
+                      opacity: canScan ? 1 : 0.5,
+                      textAlign: "center",
+                    }}
+                  >
+                    Batch Scan
+                  </button>
+                )}
+
+                <p style={{ fontSize: 10, color: "#d1d5db", textAlign: "center" }}>
+                  {isBusiness
+                    ? "Business plan · Up to 3 cards per batch · Unlimited scans"
+                    : isUnlimited
+                    ? "Unlimited scans"
+                    : `${remaining} scan${remaining !== 1 ? "s" : ""} remaining${credits?.nextGrantAt ? ` · +1 in ${formatTimeUntil(credits.nextGrantAt)}` : ""}`}
+                </p>
+              </div>
+
+              {/* Stats strip — keep exact structure */}
               <div
                 style={{
                   display: "grid",
@@ -384,7 +452,6 @@ export default function GradeHubPage() {
           {/* ── Tab: History ─────────────────────────────────────────── */}
           {activeTab === "history" && (
             <div>
-              {/* Section header */}
               <div className="flex items-center justify-between mb-4">
                 <h2
                   className={playfair.className}
@@ -439,8 +506,6 @@ export default function GradeHubPage() {
                     </div>
                   ))}
                 </div>
-
-                {/* History panel output */}
                 <div className="divide-y divide-gray-100">
                   <GradeEstimatorHistoryPanel onSelect={() => {}} />
                 </div>
@@ -448,8 +513,13 @@ export default function GradeHubPage() {
             </div>
           )}
 
+          {/* ── Tab: Submissions ──────────────────────────────────────── */}
+          {activeTab === "submissions" && (
+            <SubmissionsTabContent />
+          )}
+
           {/* Recent scans preview on scan/batch tabs */}
-          {activeTab !== "history" && (
+          {activeTab !== "history" && activeTab !== "submissions" && (
             <div>
               <div className="flex items-center justify-between mb-4">
                 <h2

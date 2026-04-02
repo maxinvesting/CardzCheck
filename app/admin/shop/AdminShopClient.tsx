@@ -47,6 +47,7 @@ interface ListingFormState {
   status: ListingStatus;
   featured: boolean;
   is_premium: boolean;
+  accepts_offers: boolean;
   tags: string;
   notes: string;
   ebay_comp_url: string;
@@ -81,6 +82,7 @@ const DEFAULT_FORM: ListingFormState = {
   status: "active",
   featured: false,
   is_premium: false,
+  accepts_offers: false,
   tags: "",
   notes: "",
   ebay_comp_url: "",
@@ -146,6 +148,7 @@ function listingToForm(listing: ShopListing): ListingFormState {
       : "active",
     featured: Boolean(listing.featured),
     is_premium: Boolean(listing.is_premium),
+    accepts_offers: Boolean(listing.accepts_offers),
     tags: Array.isArray(listing.tags) ? listing.tags.join(", ") : "",
     notes: listing.notes || "",
     ebay_comp_url: listing.ebay_comp_url || "",
@@ -209,6 +212,7 @@ function formToPayload(form: ListingFormState) {
     status: form.status,
     featured: form.featured,
     is_premium: form.is_premium,
+    accepts_offers: form.accepts_offers,
     tags: parseTags(form.tags),
     notes: form.notes.trim() || null,
     ebay_comp_url: form.ebay_comp_url.trim() || null,
@@ -239,6 +243,7 @@ function cloneListingForCreate(listing: ShopListing) {
     status: listing.status,
     featured: listing.featured,
     is_premium: listing.is_premium,
+    accepts_offers: listing.accepts_offers,
     tags: listing.tags,
     notes: listing.notes,
     image_urls: listing.image_urls,
@@ -661,6 +666,18 @@ function ListingFields({
         />
         Premium
       </label>
+
+      <label className="flex items-center gap-2 rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-300 md:col-span-2">
+        <input
+          type="checkbox"
+          checked={form.accepts_offers}
+          onChange={(event) =>
+            setForm((previous) => ({ ...previous, accepts_offers: event.target.checked }))
+          }
+          className="rounded border-gray-600"
+        />
+        Accept offers (shows in shop &ldquo;Offers only&rdquo; filter)
+      </label>
     </div>
   );
 }
@@ -690,6 +707,7 @@ export default function AdminShopClient() {
         shipping_cost: string;
         status: ListingStatus;
         featured: boolean;
+        accepts_offers: boolean;
       }
     >
   >({});
@@ -772,6 +790,7 @@ export default function AdminShopClient() {
                 ? (listing.status as ListingStatus)
                 : "active",
               featured: Boolean(listing.featured),
+              accepts_offers: Boolean(listing.accepts_offers),
             },
           ])
         )
@@ -937,6 +956,7 @@ export default function AdminShopClient() {
       shipping_cost: string;
       status: ListingStatus;
       featured: boolean;
+      accepts_offers: boolean;
     }>
   ) => {
     setInlineDrafts((previous) => ({
@@ -1116,6 +1136,7 @@ export default function AdminShopClient() {
                   <th className="px-3 py-2 font-medium">Shipping</th>
                   <th className="px-3 py-2 font-medium">Status</th>
                   <th className="px-3 py-2 font-medium">Featured</th>
+                  <th className="px-3 py-2 font-medium">Offers</th>
                   <th className="px-3 py-2 font-medium">Created</th>
                   <th className="px-3 py-2 font-medium">Actions</th>
                 </tr>
@@ -1194,13 +1215,30 @@ export default function AdminShopClient() {
                         <label className="inline-flex items-center gap-2 text-xs text-gray-300">
                           <input
                             type="checkbox"
-                            checked={draft?.featured ?? false}
+                            checked={draft?.featured ?? Boolean(listing.featured)}
                             onChange={(event) => {
                               updateInlineDraft(listing.id, {
                                 featured: event.target.checked,
                               });
                               void runRowAction(listing.id, {
                                 featured: event.target.checked,
+                              });
+                            }}
+                          />
+                          Yes
+                        </label>
+                      </td>
+                      <td className="px-3 py-2">
+                        <label className="inline-flex items-center gap-2 text-xs text-gray-300">
+                          <input
+                            type="checkbox"
+                            checked={draft?.accepts_offers ?? Boolean(listing.accepts_offers)}
+                            onChange={(event) => {
+                              updateInlineDraft(listing.id, {
+                                accepts_offers: event.target.checked,
+                              });
+                              void runRowAction(listing.id, {
+                                accepts_offers: event.target.checked,
                               });
                             }}
                           />
