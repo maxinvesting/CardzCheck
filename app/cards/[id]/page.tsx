@@ -12,6 +12,7 @@ import { createClient } from "@/lib/supabase/client";
 import { hasBusinessWorkspaceAccess } from "@/lib/business/workspace-access";
 import { useGradeEstimateFromImages } from "@/lib/grading/useGradeEstimateFromImages";
 import { gradingCopy } from "@/copy/grading";
+import CompsAndCmvSection from "@/components/comps/CompsAndCmvSection";
 
 export default function CardProfilePage() {
   const params = useParams();
@@ -356,6 +357,9 @@ export default function CardProfilePage() {
             />
           </div>
         </div>
+
+        {/* Comps & CMV section */}
+        <CompsAndCmvSection card={card} />
 
         {/* Grade probability section */}
         <section className="mt-10 pt-8 border-t border-gray-200 dark:border-gray-800">

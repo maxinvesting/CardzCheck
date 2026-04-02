@@ -175,14 +175,14 @@ function CardItem({ item, onDelete }: CardItemProps) {
                 ? formatCurrency(cmv)
                 : isRecentlyAdded && item.cmv_confidence !== "unavailable"
                 ? "Calculating..."
-                : "Est. Market Value unavailable"}
+                : "No CMV yet"}
             </span>
           </div>
           {cmv === null && (
             <p className="text-xs text-gray-400 dark:text-gray-500">
               {isRecentlyAdded && item.cmv_confidence !== "unavailable"
                 ? "Market value is being calculated"
-                : "Run a search (Beta) to calculate value"}
+                : "Add comps on the card page to set market value"}
             </p>
           )}
           {gainLoss && (
