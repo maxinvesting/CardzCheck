@@ -895,7 +895,6 @@ export default function GradeProbabilityPanel({
           </p>
         </div>
       )}
-      </div>
 
       {/* ── Footer ─────────────────────────────────────────────────── */}
       <div className="border-t border-white/[0.06] px-5 py-4 flex flex-wrap items-center justify-between gap-3">
