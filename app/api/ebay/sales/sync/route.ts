@@ -193,7 +193,7 @@ export async function POST() {
       .eq("user_id", user.id)
       .in("external_order_id", lineItemExternalIds);
 
-    const existingIds = new Set((existingSales ?? []).map((s) => s.external_order_id));
+    const existingIds = new Set((existingSales ?? []).map((s: { external_order_id: string | null }) => s.external_order_id));
 
     let imported = 0;
     let skipped = 0;
