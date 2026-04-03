@@ -155,7 +155,7 @@ export default function BusinessMetrics({
             </div>
           ))}
         </div>
-      ))}
+      </div>
     </div>
   );
 }
