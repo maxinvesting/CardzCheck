@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { Playfair_Display } from "next/font/google";
 import dynamic from "next/dynamic";
 import { useAuth } from "@/contexts/AuthContext";
@@ -30,6 +30,8 @@ type CreditStatus = {
 
 type Tab = "scan" | "batch" | "history" | "submissions";
 
+type CreditsFetchState = "loading" | "ready" | "error";
+
 function formatTimeUntil(iso: string | null): string {
   if (!iso) return "";
   const ms = new Date(iso).getTime() - Date.now();
@@ -43,25 +45,69 @@ function formatTimeUntil(iso: string | null): string {
 
 export default function GradeHubPage() {
   const { authUser, loading: authLoading } = useAuth();
+  const pathname = usePathname();
   const router = useRouter();
   const [credits, setCredits] = useState<CreditStatus | null>(null);
+  const [creditsFetchState, setCreditsFetchState] = useState<CreditsFetchState>("loading");
   const [activeTab, setActiveTab] = useState<Tab>("scan");
+  const gradeHubBasePath = pathname?.startsWith("/business") ? "/business/grade-hub" : "/grade-hub";
+  const gradeHubScanPath = `${gradeHubBasePath}/scan`;
+
+  const loadCredits = useCallback(() => {
+    setCreditsFetchState("loading");
+    fetch("/api/grading/credits")
+      .then(async (r) => {
+        const data = await r.json();
+        if (!r.ok) throw new Error(data?.error ?? "Request failed");
+        if (data?.error) throw new Error(data.error);
+        return data as CreditStatus;
+      })
+      .then((data) => {
+        setCredits(data);
+        setCreditsFetchState("ready");
+      })
+      .catch(() => {
+        setCreditsFetchState("error");
+      });
+  }, []);
 
   useEffect(() => {
     if (!authLoading && !authUser) router.replace("/login");
   }, [authUser, authLoading, router]);
 
   useEffect(() => {
-    fetch("/api/grading/credits")
-      .then((r) => r.json())
-      .then(setCredits)
-      .catch(() => {});
-  }, []);
+    if (authLoading || !authUser) return;
+    loadCredits();
+  }, [authLoading, authUser, loadCredits]);
 
   const isBusiness = credits?.tier === "business";
   const isUnlimited = credits?.unlimited === true;
-  const canScan = isUnlimited || (credits?.remaining ?? 0) > 0;
+  const canScan =
+    creditsFetchState === "ready" &&
+    credits !== null &&
+    (isUnlimited || (credits.remaining ?? 0) > 0);
   const remaining = credits?.remaining ?? 0;
+  const creditsLoading = creditsFetchState === "loading";
+  const creditsError = creditsFetchState === "error";
+
+  const scanSlotsForTab = activeTab === "batch" ? 3 : 1;
+
+  const openScanSession = useCallback(
+    (slots: number) => {
+      router.push(`${gradeHubScanPath}?slots=${slots}`);
+    },
+    [gradeHubScanPath, router]
+  );
+
+  const handlePrimaryAnalyze = useCallback(() => {
+    if (creditsLoading) return;
+    if (creditsError) {
+      openScanSession(scanSlotsForTab);
+      return;
+    }
+    if (canScan) openScanSession(scanSlotsForTab);
+    else router.push("/settings");
+  }, [canScan, creditsError, creditsLoading, openScanSession, router, scanSlotsForTab]);
 
   const tabs: { key: Tab; label: string; show: boolean }[] = [
     { key: "scan", label: "Scan a card", show: true },
@@ -111,6 +157,10 @@ export default function GradeHubPage() {
           {/* Right-side action buttons */}
           <div className="flex items-center gap-2 py-2">
             <button
+              type="button"
+              onClick={() =>
+                router.push(pathname?.startsWith("/business") ? "/business/settings" : "/settings")
+              }
               style={{
                 fontSize: 11,
                 fontWeight: 700,
@@ -121,12 +171,14 @@ export default function GradeHubPage() {
                 color: "#fff",
                 background: "transparent",
                 padding: "6px 14px",
+                cursor: "pointer",
               }}
             >
               Settings
             </button>
             <button
-              onClick={() => router.push("/grade-hub/scan?slots=1")}
+              type="button"
+              onClick={() => openScanSession(1)}
               style={{
                 fontSize: 11,
                 fontWeight: 700,
@@ -276,7 +328,7 @@ export default function GradeHubPage() {
                 <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
                   <button
                     onClick={() => canScan
-                      ? router.push(activeTab === "batch" ? "/grade-hub/scan?slots=3" : "/grade-hub/scan?slots=1")
+                      ? router.push(`${gradeHubScanPath}?slots=${activeTab === "batch" ? 3 : 1}`)
                       : router.push("/settings")
                     }
                     style={{
@@ -295,10 +347,10 @@ export default function GradeHubPage() {
                   >
                     {canScan ? "Analyze Card" : "No scans left"}
                   </button>
-                  {isBusiness && activeTab === "scan" && (
-                    <button
-                      onClick={() => canScan ? router.push("/grade-hub/scan?slots=3") : undefined}
-                      style={{
+                {isBusiness && activeTab === "scan" && (
+                  <button
+                    onClick={() => canScan ? router.push(`${gradeHubScanPath}?slots=3`) : undefined}
+                    style={{
                         width: "100%",
                         fontSize: 12,
                         fontWeight: 700,
@@ -334,7 +386,7 @@ export default function GradeHubPage() {
                 <button
                   onClick={() =>
                     canScan
-                      ? router.push(activeTab === "batch" ? "/grade-hub/scan?slots=3" : "/grade-hub/scan?slots=1")
+                      ? router.push(`${gradeHubScanPath}?slots=${activeTab === "batch" ? 3 : 1}`)
                       : router.push("/settings")
                   }
                   style={{
@@ -358,7 +410,7 @@ export default function GradeHubPage() {
 
                 {isBusiness && activeTab === "scan" && (
                   <button
-                    onClick={() => (canScan ? router.push("/grade-hub/scan?slots=3") : undefined)}
+                    onClick={() => (canScan ? router.push(`${gradeHubScanPath}?slots=3`) : undefined)}
                     style={{
                       display: "block",
                       width: "100%",
