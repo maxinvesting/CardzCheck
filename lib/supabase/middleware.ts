@@ -18,6 +18,7 @@ const PERSONAL_WORKSPACE_PATHS = [
   "/collection",
   "/watchlist",
   "/comps",
+  "/grade-hub",
   "/grade-probability",
   "/grade-estimator",
   "/analyst",
@@ -30,8 +31,9 @@ type RedirectRule = {
 
 const PERSONAL_TO_BUSINESS_REDIRECTS: RedirectRule[] = [
   { from: "/comps", to: "/business/comps" },
-  { from: "/grade-probability", to: "/business/grade-probability" },
-  { from: "/grade-estimator", to: "/business/grade-probability" },
+  { from: "/grade-hub", to: "/business/grade-hub" },
+  { from: "/grade-probability", to: "/business/grade-hub" },
+  { from: "/grade-estimator", to: "/business/grade-hub" },
   { from: "/analyst", to: "/business/consultant" },
   { from: "/dashboard", to: "/business" },
   { from: "/collection", to: "/business" },
@@ -40,8 +42,9 @@ const PERSONAL_TO_BUSINESS_REDIRECTS: RedirectRule[] = [
 
 const BUSINESS_TO_PERSONAL_REDIRECTS: RedirectRule[] = [
   { from: "/business/comps", to: "/comps" },
-  { from: "/business/grade-probability", to: "/grade-probability" },
-  { from: "/business/grade-estimator", to: "/grade-probability" },
+  { from: "/business/grade-hub", to: "/grade-hub" },
+  { from: "/business/grade-probability", to: "/grade-hub" },
+  { from: "/business/grade-estimator", to: "/grade-hub" },
   { from: "/business/consultant", to: "/analyst" },
   { from: "/business/analyst", to: "/analyst" },
   { from: "/business/settings", to: "/settings" },
