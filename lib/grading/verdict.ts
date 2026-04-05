@@ -91,10 +91,7 @@ function hasPhotoQualityFlags(estimate: GradeEstimate): boolean {
     "card not visible",
   ];
 
-  return (
-    universalTokens.some((token) => allText.includes(token)) ||
-    negativeFieldOnlyTokens.some((token) => negativeFieldsText.includes(token))
-  );
+  return tokens.some((token) => noteText.includes(token));
 }
 
 function getPsaOutcomes(estimate: GradeEstimate): GradeOutcome[] {

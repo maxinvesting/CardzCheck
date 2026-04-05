@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import type { MessageThread, Message, NegotiationAnalysis } from "@/lib/messaging/types";
 import type {
   MarketplaceReplyAction,
@@ -229,7 +229,7 @@ export default function ConversationView({
                       {formatThreadTime(message.created_at)}
                     </span>
                   </div>
-                  <MessageBody body={msg.body} isOutbound={isOutbound} />
+                  <MessageBody body={message.body} isOutbound={isOutbound} />
                 </div>
               </div>
             );

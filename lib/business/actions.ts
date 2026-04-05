@@ -25,6 +25,7 @@ function assertUUIDs(ids: string[]): void {
 type BusinessInventoryRow = {
   id: string;
   user_id: string;
+  business_account_id: string | null;
   item_kind: string | null;
   title: string;
   quantity: number | null;
@@ -189,6 +190,7 @@ function toBusinessInventoryItem(row: BusinessInventoryRow): BusinessInventoryIt
   return {
     id: row.id,
     user_id: row.user_id,
+    business_account_id: row.business_account_id ?? row.user_id,
     card_id: row.id,
     title: row.title || "Untitled item",
     quantity: normalizeQuantity(row.quantity),

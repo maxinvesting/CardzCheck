@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import EbayImportWizard from "@/components/business/EbayImportWizard";
 import BusinessMetrics from "@/components/business/BusinessMetrics";
 import { Surface } from "@/components/ui/Surface";
 import type {
@@ -28,6 +29,13 @@ function timeAgo(iso: string): string {
   if (diffDays === 1) return "1d ago";
   if (diffDays < 7) return `${diffDays}d ago`;
   return `${Math.floor(diffDays / 7)}w ago`;
+}
+
+function fmtDate(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const date = new Date(iso);
+  if (!Number.isFinite(date.getTime())) return "—";
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 function daysSince(dateStr: string | null): number | null {
@@ -154,6 +162,13 @@ export default function BusinessDashboardView({
     const rawItems = activeItems.filter(
       (item) => item.condition_status === "raw" || !item.grade?.trim()
     );
+    const agedItems = activeItems.filter((item) => {
+      const days = daysSince(item.acquisition_date);
+      return days != null && days >= 60;
+    });
+    const noCmvItems = activeItems.filter(
+      (item) => (item.current_market_value_cents ?? 0) <= 0
+    );
     const staleListedItems = listedItems
       .map((item) => ({ item, days: daysSince(item.acquisition_date) }))
       .filter((entry): entry is { item: BusinessInventoryItem; days: number } => entry.days != null)
@@ -167,6 +182,9 @@ export default function BusinessDashboardView({
           (b.current_market_value_cents ?? 0) - (a.current_market_value_cents ?? 0)
       )
       .slice(0, 2);
+    const recentlyAdded = [...items]
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, 5);
 
     const bestOpportunity = [...unlistedItems]
       .filter((item) => (item.current_market_value_cents ?? 0) > 0)
@@ -197,11 +215,18 @@ export default function BusinessDashboardView({
 
     return {
       activeItems,
+      activeCount: activeItems.length,
       listedItems,
+      listedCount: listedItems.length,
       unlistedItems,
+      unlisted: unlistedItems,
       rawItems,
+      aged: agedItems,
+      noCmv: noCmvItems,
       staleListedItems,
       topInventory,
+      topMovers: topInventory,
+      recentlyAdded,
       bestOpportunity,
       bestGradingCandidate,
       idleCapitalCents,
@@ -252,6 +277,7 @@ export default function BusinessDashboardView({
   const activeCount = dashboardData.activeItems.length;
   const listedCount = dashboardData.listedItems.length;
   const unlistedCount = dashboardData.unlistedItems.length;
+  const itemsEmpty = items.length === 0;
   const listRate = activeCount > 0 ? Math.round((listedCount / activeCount) * 100) : 0;
   const sellThroughRate = listedCount > 0 ? Math.round((soldLast30Count / listedCount) * 100) : 0;
 
