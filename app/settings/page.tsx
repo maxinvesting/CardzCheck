@@ -76,6 +76,7 @@ function SettingsContent() {
   const [businessName, setBusinessName] = useState("");
   const [businessNameLoading, setBusinessNameLoading] = useState(false);
   const [ebayStoreUrl, setEbayStoreUrl] = useState("");
+  const [ebayStoreUrlLoading, setEbayStoreUrlLoading] = useState(false);
   const [ebayFeeRate, setEbayFeeRate] = useState<EbayFeeRateKey>("standard");
   const [ebayFeeRateSaving, setEbayFeeRateSaving] = useState(false);
   const [websiteUrl, setWebsiteUrl] = useState("");

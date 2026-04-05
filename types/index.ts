@@ -491,6 +491,7 @@ export interface GradeEstimateAnalysisMetadata {
   calibrated_score?: number;
   worst_axis_deviation?: number;
   parse_incomplete_flag?: boolean;
+  missing_closeups_flag?: boolean;
   limited_visibility_flag?: boolean;
 }
 

@@ -21,6 +21,8 @@ import { isTestMode } from "@/lib/test-mode";
 
 export type AppRole = "member" | "admin" | "owner";
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export function isOwnerRole(role: AppRole | null | undefined): boolean {
   return role === "owner";
 }
