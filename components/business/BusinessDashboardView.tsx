@@ -134,6 +134,7 @@ export default function BusinessDashboardView({
   storefronts = [],
 }: Props) {
   const [showStorefrontDropdown, setShowStorefrontDropdown] = useState(false);
+  const [showImportWizard, setShowImportWizard] = useState(false);
   const [syncingEbayOrders, setSyncingEbayOrders] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
 
