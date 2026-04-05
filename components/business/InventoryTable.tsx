@@ -105,6 +105,10 @@ interface Props {
   ebayTopRated?: boolean;
   /** Whether the user has eBay connected (shows Sync button) */
   ebayConnected?: boolean;
+  /** Compact list-view mode — hides some columns */
+  listView?: boolean;
+  /** Whether this table instance is the currently active/visible one */
+  isActive?: boolean;
 }
 
 const STATUS_OPTIONS = ["unlisted", "listed", "pending_sale", "sold", "returned"] as const;
@@ -230,6 +234,8 @@ export default function InventoryTable({
   perfEnabled = false,
   ebayTopRated = false,
   ebayConnected = false,
+  listView = false,
+  isActive: _isActive = false,
 }: Props) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
