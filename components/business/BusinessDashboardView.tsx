@@ -426,8 +426,8 @@ export default function BusinessDashboardView({
           <h1 className="text-xl font-semibold text-[var(--biz-text)] leading-snug">
             {businessName ?? "CardzCheck Business"}
           </h1>
-          <p className="mt-0.5 text-sm text-[var(--muted)]">
-            Business overview &amp; insights
+          <p className="text-xs text-[var(--muted)]">
+            {new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })} overview
           </p>
           {syncError && <p className="mt-1 text-xs font-medium text-red-700">{syncError}</p>}
         </div>
@@ -523,7 +523,7 @@ export default function BusinessDashboardView({
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
-            Add Inventory
+            Add Item
           </Link>
         </div>
       </div>
@@ -546,31 +546,45 @@ export default function BusinessDashboardView({
         </div>
       )}
 
+      {/* ── Sales Channels ──────────────────────────────────────────────── */}
       {!needsMigration && (
-        <>
-          {/* ── eBay Integration ──────────────────────────────────────────── */}
-          <Surface className="p-5">
-            <div className="flex items-center justify-between gap-4 flex-wrap">
-              <div className="flex items-center gap-3">
-                <span className="text-sm font-extrabold tracking-tighter leading-none">
-                  <span style={{ color: "#e43137" }}>e</span>
-                  <span style={{ color: "#0064d3" }}>B</span>
-                  <span style={{ color: "#f5af02" }}>a</span>
-                  <span style={{ color: "#86b817" }}>y</span>
-                </span>
-                <span className="text-xs text-[var(--biz-muted)]">
-                  {ebayAccount?.connected
-                    ? `Connected · ${ebayAccount.ebay_username ?? ""}`
-                    : "Not connected"}
-                </span>
-                {ebayAccount?.top_rated_seller && (
-                  <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-[var(--biz-warning)]">
-                    Top Rated Plus
-                  </span>
-                )}
-              </div>
+        <Surface className="p-6">
+            <div className="flex items-center justify-between gap-2 mb-4">
+              <h2 className="text-sm font-semibold text-[var(--biz-text)]">Sales Channels</h2>
+              <Link
+                href="/business/settings?section=storefronts"
+                className="text-[11px] text-[var(--biz-muted)] hover:text-[var(--biz-text)] transition-colors"
+              >
+                Manage →
+              </Link>
+            </div>
 
-              <div className="flex items-center gap-2 shrink-0">
+            <div className="space-y-3">
+              {/* eBay row */}
+              <div className="flex items-center justify-between gap-3 rounded-lg border border-[var(--biz-border)] bg-[#F9FAFB] px-3 py-2.5">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className="text-[11px] font-semibold text-[var(--biz-text)] shrink-0">eBay</span>
+                  {ebayAccount?.connected ? (
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                        Connected
+                      </span>
+                      {ebayAccount.ebay_username && (
+                        <span className="truncate text-[11px] text-[var(--biz-muted)]">
+                          {ebayAccount.ebay_username}
+                        </span>
+                      )}
+                      {ebayAccount.top_rated_seller && (
+                        <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                          TRS+
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-[11px] text-[var(--biz-muted)]">Not connected</span>
+                  )}
+                </div>
                 {ebayAccount?.connected ? (
                   <>
                     <button
@@ -595,6 +609,80 @@ export default function BusinessDashboardView({
                   </a>
                 )}
               </div>
+
+              {/* Whatnot row */}
+              {(() => {
+                const wn = storefronts.find((s) => s.platform === "whatnot");
+                return (
+                  <div className="flex items-center justify-between gap-3 rounded-lg border border-[var(--biz-border)] bg-[#F9FAFB] px-3 py-2.5">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="text-[11px] font-semibold text-[var(--biz-text)] shrink-0">Whatnot</span>
+                      {wn ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                          Connected
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-[var(--biz-muted)]">Not configured</span>
+                      )}
+                    </div>
+                    {wn ? (
+                      <a
+                        href={wn.store_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="cc-btn-secondary shrink-0 rounded px-2 py-1 text-[11px] font-medium"
+                      >
+                        View Store
+                      </a>
+                    ) : (
+                      <Link
+                        href="/business/settings?section=storefronts"
+                        className="cc-btn-secondary shrink-0 rounded px-2.5 py-1 text-[11px] font-medium"
+                      >
+                        + Add
+                      </Link>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Website row */}
+              {(() => {
+                const web = storefronts.find((s) => s.platform === "website" || s.platform === "shopify");
+                return (
+                  <div className="flex items-center justify-between gap-3 rounded-lg border border-[var(--biz-border)] bg-[#F9FAFB] px-3 py-2.5">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="text-[11px] font-semibold text-[var(--biz-text)] shrink-0">Website</span>
+                      {web ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                          Connected
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-[var(--biz-muted)]">Not configured</span>
+                      )}
+                    </div>
+                    {web ? (
+                      <a
+                        href={web.store_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="cc-btn-secondary shrink-0 rounded px-2 py-1 text-[11px] font-medium"
+                      >
+                        View Store
+                      </a>
+                    ) : (
+                      <Link
+                        href="/business/settings?section=storefronts"
+                        className="cc-btn-secondary shrink-0 rounded px-2.5 py-1 text-[11px] font-medium"
+                      >
+                        + Add
+                      </Link>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             {ebayAccount?.connected ? (
@@ -619,7 +707,12 @@ export default function BusinessDashboardView({
                 Connect your eBay account to sync orders automatically, list cards directly from inventory, and track eBay-specific profit metrics.
               </p>
             )}
-          </Surface>
+
+            {syncError && (
+              <p className="mt-2 text-[10px] text-red-600">{syncError}</p>
+            )}
+        </Surface>
+      )}
 
           {/* ── Main data grid ────────────────────────────────────────────── */}
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
