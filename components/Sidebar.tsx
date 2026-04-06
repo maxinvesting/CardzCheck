@@ -232,14 +232,34 @@ function BUSINESS_NAV_ITEMS(): NavItem[] {
   ];
 }
 
+// Routes that are unambiguously personal-only (not in business nav)
+const PERSONAL_ONLY_PREFIXES = ["/dashboard", "/collection", "/watchlist", "/analyst", "/analytics"];
+
 export default function Sidebar() {
   const pathname = usePathname();
   const [user, setUser] = useState<User | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [remainingSearches, setRemainingSearches] = useState<number | null>(null);
   const [pricingOpen, setPricingOpen] = useState(false);
+  const [businessMode, setBusinessMode] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("sidebar-mode") === "business";
+    }
+    return false;
+  });
 
-  const isBusinessWorkspace = pathname.startsWith("/business") || pathname.startsWith("/grade-hub") || pathname.startsWith("/bulk");
+  useEffect(() => {
+    if (pathname.startsWith("/business")) {
+      setBusinessMode(true);
+      localStorage.setItem("sidebar-mode", "business");
+    } else if (PERSONAL_ONLY_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
+      setBusinessMode(false);
+      localStorage.setItem("sidebar-mode", "personal");
+    }
+    // Shared routes (/shop, /help, /grade-hub, /bulk, /news, /settings) — keep current mode
+  }, [pathname]);
+
+  const isBusinessWorkspace = businessMode;
   const isAdminUser = user?.app_role === "admin" || user?.app_role === "owner";
   const hasPaidWorkspace = Boolean(user?.is_paid) || isBusinessWorkspace;
   const baseNavItems = isBusinessWorkspace ? BUSINESS_NAV_ITEMS() : PERSONAL_NAV_ITEMS();
