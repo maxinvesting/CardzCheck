@@ -1,3 +1,22 @@
+/**
+ * Feature access and usage limit helpers — SERVER ONLY.
+ *
+ * Subscription tiers:
+ *  free     — 3 searches/mo, 3 AI messages/mo, 5 collection items, no watchlist
+ *  pro      — Unlimited search/AI/collection, watchlist, grade estimator
+ *  business — All Pro features + inventory, sales, eBay integration, analytics
+ *
+ * Usage pattern:
+ *   1. checkProAccess(userId) — get tier + status
+ *   2. canAccessFeature(userId, feature) — per-feature access gate
+ *   3. getUsage(userId) — read free-tier counters
+ *   4. incrementSearchUsage / incrementAIUsage — call after successful operations
+ *
+ * These checks are always enforced server-side. Client-side gating (PaywallModal)
+ * is UX only — API routes enforce access independently and must not trust client
+ * claims about subscription status.
+ */
+
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { isTestMode } from "@/lib/test-mode";
 import { getScanCreditStatus } from "@/lib/grading/scanCredits";
@@ -132,9 +151,15 @@ export async function checkLegacyProAccess(userId: string): Promise<boolean> {
 }
 
 /**
- * Get usage stats for a user
+ * Get usage stats for a user.
+ *
+ * Pass a pre-fetched `isPro` value when you already have it to avoid a
+ * redundant subscription query (e.g. from inside canAccessFeature).
  */
-export async function getUsage(userId: string): Promise<UsageCheck> {
+export async function getUsage(
+  userId: string,
+  isPro?: boolean
+): Promise<UsageCheck> {
   // In test mode, return unlimited access
   if (isTestMode()) {
     return {
@@ -153,9 +178,9 @@ export async function getUsage(userId: string): Promise<UsageCheck> {
     .eq("user_id", userId)
     .single();
 
-  const isPro = await checkLegacyProAccess(userId);
+  const proAccess = isPro !== undefined ? isPro : await checkLegacyProAccess(userId);
 
-  if (isPro) {
+  if (proAccess) {
     return {
       searchesUsed: usage?.searches_used || 0,
       aiMessagesUsed: usage?.ai_messages_used || 0,
@@ -176,60 +201,40 @@ export async function getUsage(userId: string): Promise<UsageCheck> {
 }
 
 /**
- * Increment search usage count
+ * Increment search usage count.
+ *
+ * Uses a Postgres RPC function (increment_search_usage) that executes an
+ * INSERT … ON CONFLICT DO UPDATE SET searches_used = searches_used + 1
+ * in a single round-trip, eliminating the read-then-write race condition
+ * that the previous read → compute → write pattern had.
+ *
+ * Migration: supabase/migrations/20260314_usage_increment_fns.sql
  */
 export async function incrementSearchUsage(userId: string): Promise<void> {
   if (isTestMode()) return;
 
   const supabase = await createServiceClient();
+  const { error } = await supabase.rpc("increment_search_usage", { p_user_id: userId });
 
-  // Upsert usage record with incremented search count
-  const { data: existing } = await supabase
-    .from("usage")
-    .select("searches_used")
-    .eq("user_id", userId)
-    .single();
-
-  if (existing) {
-    await supabase
-      .from("usage")
-      .update({ searches_used: (existing.searches_used || 0) + 1 })
-      .eq("user_id", userId);
-  } else {
-    await supabase.from("usage").insert({
-      user_id: userId,
-      searches_used: 1,
-      ai_messages_used: 0,
-    });
+  if (error) {
+    console.error("[access] incrementSearchUsage RPC failed:", error);
   }
 }
 
 /**
- * Increment AI message usage count
+ * Increment AI message usage count.
+ *
+ * Uses the same atomic RPC pattern as incrementSearchUsage.
+ * Migration: supabase/migrations/20260314_usage_increment_fns.sql
  */
 export async function incrementAIUsage(userId: string): Promise<void> {
   if (isTestMode()) return;
 
   const supabase = await createServiceClient();
+  const { error } = await supabase.rpc("increment_ai_usage", { p_user_id: userId });
 
-  // Upsert usage record with incremented AI message count
-  const { data: existing } = await supabase
-    .from("usage")
-    .select("ai_messages_used")
-    .eq("user_id", userId)
-    .single();
-
-  if (existing) {
-    await supabase
-      .from("usage")
-      .update({ ai_messages_used: (existing.ai_messages_used || 0) + 1 })
-      .eq("user_id", userId);
-  } else {
-    await supabase.from("usage").insert({
-      user_id: userId,
-      searches_used: 0,
-      ai_messages_used: 1,
-    });
+  if (error) {
+    console.error("[access] incrementAIUsage RPC failed:", error);
   }
 }
 
@@ -261,7 +266,8 @@ export async function canAccessFeature(
     return { allowed: true };
   }
 
-  const usage = await getUsage(userId);
+  // Pass isPro=false so getUsage skips its own subscription query.
+  const usage = await getUsage(userId, false);
 
   switch (feature) {
     case "search":

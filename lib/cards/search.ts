@@ -22,8 +22,6 @@ export interface CardCatalogRow {
   card_number?: string | null;
   image_url?: string | null;
   user_image_url?: string | null;
-  stock_image_url?: string | null;
-  ebay_image_url?: string | null;
 }
 
 export interface ScoredCard extends CardCatalogRow {

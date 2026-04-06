@@ -1,8 +1,27 @@
+/**
+ * Admin and owner authorization helpers.
+ *
+ * Access model:
+ *  - "owner"  — full admin panel access, including role management
+ *  - "admin"  — admin panel access, cannot promote/demote owners
+ *  - "member" — normal user (default)
+ *
+ * Bootstrap access:
+ *   When no DB roles exist yet (new deployment), OWNER_EMAIL and ADMIN_EMAILS
+ *   env vars grant temporary elevated access so the first admin can set up roles.
+ *   These should be removed or left empty once proper DB roles are assigned.
+ *
+ * SECURITY: Never hardcode email addresses here. Use env vars exclusively.
+ *   Set OWNER_EMAIL and ADMIN_EMAILS in your deployment environment.
+ */
+
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isTestMode } from "@/lib/test-mode";
 
 export type AppRole = "member" | "admin" | "owner";
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function isOwnerRole(role: AppRole | null | undefined): boolean {
   return role === "owner";
@@ -20,21 +39,16 @@ export function isAdmin(user: { appRole?: AppRole | null } | null | undefined): 
   return isAdminRole(user?.appRole ?? null);
 }
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
+/**
+ * Parses bootstrap admin emails from environment variables only.
+ * OWNER_EMAIL and ADMIN_EMAILS are for initial setup when no DB roles exist.
+ * Once roles are assigned in the DB, these env vars should be cleared.
+ */
 function parseBootstrapAdminEmails(): Set<string> {
-  const ownerEmail = process.env.OWNER_EMAIL ?? "";
-  const adminEmails = process.env.ADMIN_EMAILS ?? "";
-
-  if (!ownerEmail && !adminEmails) {
-    // Warn once — bootstrap access is disabled if neither var is set
-    console.warn(
-      "[admin] Neither OWNER_EMAIL nor ADMIN_EMAILS env vars are set. " +
-      "Bootstrap admin access is disabled. Set OWNER_EMAIL in your environment."
-    );
-  }
-
-  const raw = [adminEmails, ownerEmail].join(",");
+  const raw = [
+    process.env.ADMIN_EMAILS ?? "",
+    process.env.OWNER_EMAIL ?? "",
+  ].join(",");
 
   return new Set(
     raw
@@ -151,6 +165,15 @@ export async function getAdminAuth(): Promise<{
         { status: 403 }
       ),
     };
+  }
+
+  // Warn when bootstrap email fallback is used — this means the user has not been
+  // assigned a proper DB role yet. Assign roles in the DB and clear bootstrap env vars.
+  if (bootstrapAdmin && !isElevatedRole(role)) {
+    console.warn(
+      "[admin] Access granted via bootstrap email fallback — assign a DB role to this user and clear OWNER_EMAIL/ADMIN_EMAILS env vars.",
+      { userId: user.id?.slice(-6) }
+    );
   }
 
   return {

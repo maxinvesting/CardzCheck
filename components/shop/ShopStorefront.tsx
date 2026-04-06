@@ -66,6 +66,7 @@ export default function ShopStorefront({
   const [gradeFilter, setGradeFilter] = useState<string | null>(null);
   const [priceRange, setPriceRange] = useState<PriceRangeValue>("");
   const [sort, setSort] = useState<SortValue>("newest");
+  const [offersOnly, setOffersOnly] = useState(false);
   const [catalogPage, setCatalogPage] = useState(1);
 
   const categories = useMemo(() => {
@@ -107,10 +108,22 @@ export default function ShopStorefront({
       list = list.filter((listing) => listing.grade === gradeFilter);
     }
 
+    if (offersOnly) {
+      list = list.filter((listing) => listing.accepts_offers === true);
+    }
+
     list = applyPriceRange(list, priceRange);
     sortListings(list, sort);
     return list;
-  }, [initialListings, searchLower, categoryFilter, gradeFilter, priceRange, sort]);
+  }, [
+    initialListings,
+    searchLower,
+    categoryFilter,
+    gradeFilter,
+    offersOnly,
+    priceRange,
+    sort,
+  ]);
 
   const catalogPageCount = Math.max(
     1,
@@ -126,6 +139,7 @@ export default function ShopStorefront({
     Boolean(categoryFilter) ||
     Boolean(gradeFilter) ||
     Boolean(priceRange) ||
+    offersOnly ||
     sort !== "newest";
 
   const clearFilters = useCallback(() => {
@@ -133,6 +147,7 @@ export default function ShopStorefront({
     setCategoryFilter(null);
     setGradeFilter(null);
     setPriceRange("");
+    setOffersOnly(false);
     setSort("newest");
     setCatalogPage(1);
   }, []);
@@ -342,6 +357,7 @@ export default function ShopStorefront({
                 gradeFilter={gradeFilter}
                 priceRange={priceRange}
                 sort={sort}
+                offersOnly={offersOnly}
                 onSearchChange={(value) => {
                   setSearch(value);
                   setCatalogPage(1);
@@ -360,6 +376,10 @@ export default function ShopStorefront({
                 }}
                 onSortChange={(value) => {
                   setSort(value);
+                  setCatalogPage(1);
+                }}
+                onOffersOnlyChange={(value) => {
+                  setOffersOnly(value);
                   setCatalogPage(1);
                 }}
                 resultCount={catalogFiltered.length}

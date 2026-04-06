@@ -28,11 +28,13 @@ export interface ShopFilterBarProps {
   gradeFilter: string | null;
   priceRange: PriceRangeValue;
   sort: SortValue;
+  offersOnly: boolean;
   onSearchChange: (value: string) => void;
   onCategoryChange: (value: string | null) => void;
   onGradeChange: (value: string | null) => void;
   onPriceRangeChange: (value: PriceRangeValue) => void;
   onSortChange: (value: SortValue) => void;
+  onOffersOnlyChange: (value: boolean) => void;
   resultCount: number;
 }
 
@@ -44,17 +46,19 @@ function FilterControls({
   gradeFilter,
   priceRange,
   sort,
+  offersOnly,
   onSearchChange,
   onCategoryChange,
   onGradeChange,
   onPriceRangeChange,
   onSortChange,
+  onOffersOnlyChange,
 }: Omit<ShopFilterBarProps, "resultCount">) {
   const baseSelect =
     "h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:border-cyan-500 focus:outline-none";
 
   return (
-    <div className="grid gap-2 md:grid-cols-[minmax(220px,1.3fr)_repeat(4,minmax(0,1fr))]">
+    <div className="grid gap-2 md:grid-cols-[minmax(220px,1.3fr)_repeat(4,minmax(0,1fr))_auto]">
       <input
         type="search"
         value={search}
@@ -112,6 +116,16 @@ function FilterControls({
           </option>
         ))}
       </select>
+
+      <label className="flex h-10 cursor-pointer items-center gap-2 whitespace-nowrap rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800">
+        <input
+          type="checkbox"
+          checked={offersOnly}
+          onChange={(event) => onOffersOnlyChange(event.target.checked)}
+          className="h-4 w-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
+        />
+        Offers only
+      </label>
     </div>
   );
 }
@@ -124,11 +138,13 @@ export default function ShopFilterBar({
   gradeFilter,
   priceRange,
   sort,
+  offersOnly,
   onSearchChange,
   onCategoryChange,
   onGradeChange,
   onPriceRangeChange,
   onSortChange,
+  onOffersOnlyChange,
   resultCount,
 }: ShopFilterBarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -145,11 +161,13 @@ export default function ShopFilterBar({
             gradeFilter={gradeFilter}
             priceRange={priceRange}
             sort={sort}
+            offersOnly={offersOnly}
             onSearchChange={onSearchChange}
             onCategoryChange={onCategoryChange}
             onGradeChange={onGradeChange}
             onPriceRangeChange={onPriceRangeChange}
             onSortChange={onSortChange}
+            onOffersOnlyChange={onOffersOnlyChange}
           />
         </div>
         <span className="shrink-0 text-sm tabular-nums text-slate-500">
@@ -275,6 +293,16 @@ export default function ShopFilterBar({
                   </option>
                 ))}
               </select>
+
+              <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800">
+                <input
+                  type="checkbox"
+                  checked={offersOnly}
+                  onChange={(event) => onOffersOnlyChange(event.target.checked)}
+                  className="h-4 w-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
+                />
+                Offers only
+              </label>
             </div>
 
             <button
