@@ -371,6 +371,12 @@ export default function CardProfilePage() {
     return null;
   }, [item]);
 
+  const marketValue = useMemo(() => {
+    if (!item || item.current_market_value_cents == null) return null;
+    const qty = item.quantity ?? 1;
+    return item.current_market_value_cents * qty;
+  }, [item]);
+
   const gradeEstimate = useGradeEstimateFromImages({
     imageUrls: cardForGrade?.imageUrls ?? [],
     card: cardForGrade?.cardIdentity ?? null,
@@ -890,7 +896,10 @@ export default function CardProfilePage() {
                     >
                       {isBusinessMode ? (
                         <button
-                          onClick={() => { setShowOverflow(false); setImageUrlInput(imageUrl ?? ""); setShowImageModal(true); }}
+                          onClick={() => {
+                            setShowOverflow(false);
+                            openImageModal();
+                          }}
                           className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors"
                           style={{ color: "#3D3A37" }}
                         >
