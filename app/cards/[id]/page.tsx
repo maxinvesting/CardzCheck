@@ -67,7 +67,7 @@ export default function CardProfilePage() {
               businessProfile.item.id.length > 0
                 ? businessProfile.item.id
                 : cardId;
-            router.replace(`/card/${businessItemId}?from=business`);
+            router.replace(`/business/card/${businessItemId}`);
             return;
           }
 
@@ -90,7 +90,7 @@ export default function CardProfilePage() {
 
           // Final fallback: hand off to unified profile route so it can run
           // cross-mode resolution logic.
-          router.replace(`/card/${cardId}?from=business`);
+          router.replace(`/business/card/${cardId}`);
           return;
         } else if (response.status === 401) {
           router.push("/signin");

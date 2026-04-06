@@ -226,7 +226,7 @@ function BUSINESS_NAV_ITEMS(): NavItem[] {
     { name: "News & Updates", href: "/business/news", icon: <NewsIcon />, badge: "New" },
     { name: "Compare Listings", href: "/business/comps", icon: <ChartIcon />, badge: "Beta" },
     { name: "Business Consultant", href: "/business/consultant", icon: <AnalystIcon /> },
-    { name: "Marketplace", href: "/shop", icon: <ShopIcon /> },
+    { name: "Marketplace", href: "/business/shop", icon: <ShopIcon /> },
     { name: "Help & FAQ", href: "/business/help", icon: <HelpIcon /> },
     { name: "Settings", href: "/business/settings", icon: <SettingsIcon /> },
   ];

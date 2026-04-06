@@ -21,6 +21,9 @@ const PERSONAL_WORKSPACE_PATHS = [
   "/grade-hub",
   "/grade-probability",
   "/grade-estimator",
+  "/help",
+  "/shop",
+  "/card",
   "/analyst",
 ];
 
@@ -34,6 +37,9 @@ const PERSONAL_TO_BUSINESS_REDIRECTS: RedirectRule[] = [
   { from: "/grade-hub", to: "/business/grade-hub" },
   { from: "/grade-probability", to: "/business/grade-hub" },
   { from: "/grade-estimator", to: "/business/grade-hub" },
+  { from: "/help", to: "/business/help" },
+  { from: "/shop", to: "/business/shop" },
+  { from: "/card", to: "/business/card" },
   { from: "/analyst", to: "/business/consultant" },
   { from: "/dashboard", to: "/business" },
   { from: "/collection", to: "/business" },
@@ -45,10 +51,12 @@ const BUSINESS_TO_PERSONAL_REDIRECTS: RedirectRule[] = [
   { from: "/business/grade-hub", to: "/grade-hub" },
   { from: "/business/grade-probability", to: "/grade-hub" },
   { from: "/business/grade-estimator", to: "/grade-hub" },
+  { from: "/business/help", to: "/help" },
+  { from: "/business/shop", to: "/shop" },
+  { from: "/business/card", to: "/card" },
   { from: "/business/consultant", to: "/analyst" },
   { from: "/business/analyst", to: "/analyst" },
   { from: "/business/settings", to: "/settings" },
-  { from: "/business/shop", to: "/shop" },
   { from: "/business", to: "/dashboard" },
 ];
 
@@ -58,8 +66,11 @@ function matchesPrefix(pathname: string, prefix: string): boolean {
 
 function findRedirect(pathname: string, rules: RedirectRule[]): string | null {
   for (const rule of rules) {
-    if (matchesPrefix(pathname, rule.from)) {
+    if (pathname === rule.from) {
       return rule.to;
+    }
+    if (pathname.startsWith(`${rule.from}/`)) {
+      return `${rule.to}${pathname.slice(rule.from.length)}`;
     }
   }
   return null;

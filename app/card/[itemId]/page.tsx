@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { useParams, useSearchParams, useRouter } from "next/navigation";
+import { useParams, usePathname, useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { CardImage as TrustedCardImageFrame } from "@/components/CardImage";
 import {
@@ -138,11 +138,13 @@ function severityBadge(severity: string) {
 
 export default function CardProfilePage() {
   const params = useParams();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
   const itemId = params.itemId as string;
-  const from = (searchParams.get("from") as Mode) || "collection";
-  const isBusinessMode = from === "business";
+  const routeIsBusiness = pathname?.startsWith("/business") ?? false;
+  const from = ((searchParams.get("from") as Mode) || (routeIsBusiness ? "business" : "collection"));
+  const isBusinessMode = routeIsBusiness || from === "business";
 
   // Data state
   const [item, setItem] = useState<ProfileItem | null>(null);
@@ -193,6 +195,13 @@ export default function CardProfilePage() {
   const [valueResult, setValueResult] = useState<WorthGradingResult | null>(null);
   const [valueLoading, setValueLoading] = useState(false);
   const [valueError, setValueError] = useState<string | null>(null);
+
+  const buildProfilePath = useCallback((resolvedId: string, mode: Mode) => {
+    if (mode === "business") {
+      return `/business/card/${resolvedId}`;
+    }
+    return `/card/${resolvedId}?from=collection`;
+  }, []);
 
   useEffect(() => {
     if (toast) {
@@ -287,7 +296,7 @@ export default function CardProfilePage() {
             ? data.item.id
             : itemId;
         if (resolvedId !== itemId) {
-          router.replace(`/card/${resolvedId}?from=${primaryMode}`);
+          router.replace(buildProfilePath(resolvedId, primaryMode));
         }
         return;
       }
@@ -308,7 +317,7 @@ export default function CardProfilePage() {
             typeof data?.item?.id === "string" && data.item.id.length > 0
               ? data.item.id
               : itemId;
-          router.replace(`/card/${resolvedId}?from=${fallbackMode}`);
+          router.replace(buildProfilePath(resolvedId, fallbackMode));
           return;
         }
 
@@ -327,7 +336,7 @@ export default function CardProfilePage() {
     } finally {
       setLoading(false);
     }
-  }, [itemId, from, router]);
+  }, [itemId, from, router, buildProfilePath]);
 
   useEffect(() => {
     loadProfile();
