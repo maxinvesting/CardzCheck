@@ -53,28 +53,31 @@ export default function BusinessMetrics({
 }: Props) {
   const cells: CellDef[] = [
     {
-      label: "Sales MTD",
-      value: revenueMtd,
-      valueColor: "var(--biz-text)" as string,
-      sub: `YTD ${revenueYtd}`,
+      label: "Revenue",
+      primary: metrics ? fmt(metrics.revenueMtd) : "—",
+      secondary: metrics ? `${fmt(metrics.revenueYtd)} YTD` : undefined,
+      primaryClass: "text-[var(--biz-text)]",
+      tag: "MTD",
     },
     {
-      label: "Net Earnings MTD",
-      value: profitMtd,
-      valueColor: profitPositive ? "#16a34a" : "#dc2626",
-      sub: `YTD ${profitYtd}`,
+      label: "Profit",
+      primary: metrics ? fmt(metrics.profitMtd) : "—",
+      secondary: metrics ? `${fmt(metrics.profitYtd)} YTD` : undefined,
+      primaryClass:
+        metrics && metrics.profitMtd >= 0 ? "text-emerald-600" : "text-red-500",
+      tag: "MTD",
+    },
+    {
+      label: "Sales",
+      primary: metrics ? String(metrics.salesCountMtd) : "—",
+      secondary: metrics ? `${metrics.salesCountYtd} YTD` : undefined,
+      primaryClass: "text-[var(--biz-text)]",
+      tag: "MTD",
     },
     {
       label: "Active Inventory",
-      value: activeCount,
-      valueColor: "var(--biz-text)" as string,
-      sub: `${totalCount} total items`,
-    },
-    {
-      label: "Inventory Value",
-      value: inventoryValue,
-      valueColor: "var(--biz-text)" as string,
-      sub: costBasisLine,
+      primary: metrics ? String(metrics.activeInventoryCount) : "—",
+      primaryClass: "text-[var(--biz-text)]",
     },
   ];
 
@@ -89,8 +92,8 @@ export default function BusinessMetrics({
         inventorySummary.itemCount === 0
           ? fmt(0)
           : hasCmv
-          ? fmtFull(inventorySummary.totalCmvCents)
-          : fmtFull(inventorySummary.totalCostCents),
+            ? fmtFull(inventorySummary.totalCmvCents)
+            : fmtFull(inventorySummary.totalCostCents),
       secondary: hasCmv
         ? `Est. Market Value · ${inventorySummary.itemCount} item${inventorySummary.itemCount !== 1 ? "s" : ""}`
         : `Cost Basis · ${inventorySummary.itemCount} item${inventorySummary.itemCount !== 1 ? "s" : ""}`,
@@ -104,21 +107,10 @@ export default function BusinessMetrics({
       : "grid-cols-2 sm:grid-cols-4";
 
   return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-        gap: "10px",
-      }}
-    >
-      {cards.map(({ label, value, valueColor, sub }) => (
-        <div key={label} style={{
-          background: "#ffffff",
-          border: "1px solid var(--biz-border)",
-          borderRadius: "8px",
-          padding: "14px 16px",
-        }}>
-          {loading ? (
+    <div className={compact ? "mb-2" : "mb-5"}>
+      <div style={STRIP_STYLE} className="overflow-hidden">
+        <div className={`grid ${colClass}`}>
+          {cells.map((cell, i) => (
             <div
               key={cell.label}
               className={[

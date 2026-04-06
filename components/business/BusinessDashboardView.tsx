@@ -548,7 +548,8 @@ export default function BusinessDashboardView({
 
       {/* ── Sales Channels ──────────────────────────────────────────────── */}
       {!needsMigration && (
-        <Surface className="p-6">
+        <>
+          <Surface className="p-6">
             <div className="flex items-center justify-between gap-2 mb-4">
               <h2 className="text-sm font-semibold text-[var(--biz-text)]">Sales Channels</h2>
               <Link
@@ -711,8 +712,7 @@ export default function BusinessDashboardView({
             {syncError && (
               <p className="mt-2 text-[10px] text-red-600">{syncError}</p>
             )}
-        </Surface>
-      )}
+          </Surface>
 
           {/* ── Main data grid ────────────────────────────────────────────── */}
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
