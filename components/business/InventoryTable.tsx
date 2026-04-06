@@ -8,7 +8,7 @@ import {
   forwardRef,
   type ComponentPropsWithoutRef,
 } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { TableVirtuoso } from "react-virtuoso";
 import type { BusinessInventoryItem } from "@/types";
 import {
@@ -95,14 +95,20 @@ interface Props {
   onMarkSold?: (item: BusinessInventoryItem) => void;
   /** Called when filtered items change so parent can display filter-aware inventory value */
   onFilteredChange?: (filtered: BusinessInventoryItem[]) => void;
+  /** Called when user wants to move item from inventory to personal collection */
+  onToggleItemKind?: (item: BusinessInventoryItem, targetKind: "owned" | "inventory") => void;
   /** Tighter row padding (Business mode) */
   dense?: boolean;
   /** Enables dev-only perf instrumentation output */
   perfEnabled?: boolean;
   /** Whether the connected eBay account is Top Rated Plus (affects fee preview) */
   ebayTopRated?: boolean;
-  /** Whether an active eBay account is connected — gates the List eBay button */
+  /** Whether the user has eBay connected (shows Sync button) */
   ebayConnected?: boolean;
+  /** Compact list-view mode — hides some columns */
+  listView?: boolean;
+  /** Whether this table instance is the currently active/visible one */
+  isActive?: boolean;
 }
 
 const STATUS_OPTIONS = ["unlisted", "listed", "pending_sale", "sold", "returned"] as const;
@@ -189,7 +195,7 @@ const COLUMNS: ColumnDef[] = [
     editable: true,
     width: "w-24 shrink-0",
   },
-  { key: "_view", label: "Profile", editable: false, width: "w-20 shrink-0" },
+  { key: "_view", label: "Open", editable: false, width: "w-24 shrink-0" },
   { key: "_grade", label: "", editable: false, width: "w-16 shrink-0" },
   { key: "_actions", label: "", editable: false, width: "w-20 shrink-0" },
 ];
@@ -223,11 +229,15 @@ export default function InventoryTable({
   onDelete,
   onMarkSold,
   onFilteredChange,
+  onToggleItemKind,
   dense = false,
   perfEnabled = false,
   ebayTopRated = false,
   ebayConnected = false,
+  listView = false,
+  isActive: _isActive = false,
 }: Props) {
+  const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   // Default to "active" so marking an item sold moves it out of the inventory view
@@ -248,6 +258,14 @@ export default function InventoryTable({
   const [sortKey, setSortKey] = useState<SortableColumnKey | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
+
+  const displayColumns = useMemo(
+    () =>
+      listView
+        ? COLUMNS.filter((c) => !["channel", "location", "acquisition_date"].includes(c.key))
+        : COLUMNS,
+    [listView]
+  );
 
   const handleFetchCmv = async (item: BusinessInventoryItem) => {
     if (item.current_market_value_cents != null && item.current_market_value_cents > 0) return;
@@ -369,6 +387,10 @@ export default function InventoryTable({
     setEditValue(currentValue?.toString() ?? "");
   };
 
+  const openProfile = (itemId: string) => {
+    router.push(`/card/${itemId}?from=business`);
+  };
+
   const commitEdit = (overrideValue?: string) => {
     if (!editingCell) return;
     const { id, field } = editingCell;
@@ -463,24 +485,30 @@ export default function InventoryTable({
     if (field === "title") {
       const isWax = item.notes?.includes("[WAX]");
       const titleStr = buildDisplayTitle(item);
-      const titleContent = (
-        <>
+      return (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            openProfile(item.id);
+          }}
+          className="group/title flex min-w-0 cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent p-0 py-0.5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+        >
           {isWax && (
             <span className="inline-flex shrink-0 items-center rounded border border-amber-200 bg-amber-50 px-1 py-0.5 text-[10px] font-semibold whitespace-nowrap text-amber-700">
               WAX
             </span>
           )}
-          <span className="truncate" title={titleStr}>{titleStr}</span>
-        </>
-      );
-      return (
-        <Link
-          href={`/card/${item.id}?from=business`}
-          onClick={(e) => e.stopPropagation()}
-          className="flex min-w-0 items-center gap-1.5 text-[var(--biz-text)] hover:underline"
-        >
-          {titleContent}
-        </Link>
+          <span
+            className="min-w-0 truncate text-sm font-semibold text-[var(--biz-primary)] underline-offset-2 group-hover/row:underline"
+            title={titleStr}
+          >
+            {titleStr}
+          </span>
+          <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 transition-colors group-hover/title:bg-emerald-100">
+            View card
+          </span>
+        </button>
       );
     }
     if (field === "list_price_cents") {
@@ -489,6 +517,16 @@ export default function InventoryTable({
         return <span className="italic text-[var(--biz-muted)] text-xs">{emptyPlaceholder(field)}</span>;
       }
       return <span className="tabular-nums">{formatted}</span>;
+    }
+    if (field === "current_market_value_cents" && listView) {
+      const mv = item.current_market_value_cents;
+      const cost = item.cost_basis_total_cents;
+      const color = mv == null || mv <= 0 ? "#AAA" : mv > cost ? "#2D7A4F" : "#CC4444";
+      return (
+        <span style={{ color }} className="tabular-nums font-medium">
+          {fmtCents(mv) || "—"}
+        </span>
+      );
     }
     if (field === "current_market_value_cents") {
       const formatted = fmtCents(val);
@@ -530,13 +568,19 @@ export default function InventoryTable({
     }
     if (field === "_view") {
       return (
-        <Link
-          href={`/card/${item.id}?from=business`}
-          onClick={(e) => e.stopPropagation()}
-          className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-[var(--biz-primary)] hover:underline"
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            openProfile(item.id);
+          }}
+          className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700 transition-colors hover:bg-emerald-100"
         >
-          Profile
-        </Link>
+          View card
+          <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
       );
     }
     if (field === "_grade") {
@@ -631,31 +675,24 @@ export default function InventoryTable({
   };
 
   const channelBadge = (channel: string, item?: BusinessInventoryItem) => {
-    const ebayItemId = item ? (item as any).ebay_item_id as string | null : null;
+    const listingUrl = item?.ebay_listing_url || (item?.ebay_item_id ? `https://www.ebay.com/itm/${item.ebay_item_id}` : null);
     if (channel === "ebay") {
-      return (
-        <div className="flex flex-col gap-0.5">
-          <span className="inline-flex items-center gap-1 rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
-            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-              <path d="M6.26 8.68c-1.04 0-2.08.37-2.08 1.63 0 .74.48 1.27 1.2 1.27.99 0 1.68-.87 1.74-1.93l.03-.97h-.89zm2.79 3.3h-1.8l.03-.72h-.03c-.56.6-1.32.88-2.12.88C3.63 12.14 2.7 11.19 2.7 9.97c0-1.92 1.64-2.49 3.2-2.49h1.2V7.2c0-.7-.54-1.08-1.39-1.08-.65 0-1.35.24-1.87.6l-.05-1.45c.65-.32 1.56-.51 2.28-.51 1.74 0 2.78.71 2.78 2.48v4.74zM13.3 5.6h1.82l-.6 1.47h-.04c.67-.98 1.44-1.63 2.62-1.63.12 0 .24.01.34.04l-.32 1.82a1.97 1.97 0 0 0-.41-.04c-1.48 0-2.25 1.45-2.51 2.77l-.73 3.95h-1.92L13.3 5.6zm-3.33 0l-1.75 8.38H6.3l1.75-8.38h1.92zm8.1 0l-1.11 5.37c-.17.85.13 1.16.69 1.16.2 0 .38-.02.57-.08l-.17 1.39c-.33.1-.71.16-1.1.16-1.28 0-2.1-.63-1.8-2.14L16.26 5.6h1.82z"/>
-            </svg>
-            eBay
-          </span>
-          {ebayItemId && (
-            <EbayListingBadge
-              ebayItemId={ebayItemId}
-              status={item?.status === "sold" ? "sold" : "active"}
-            />
-          )}
-        </div>
-      );
-    }
-    if (channel === "whatnot") {
-      return (
-        <span className="inline-flex items-center gap-1 rounded border border-purple-200 bg-purple-50 px-1.5 py-0.5 text-[10px] font-medium text-purple-700">
-          Whatnot
+      const badge = (
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-[#86b817]/15 text-[#86b817] border border-[#86b817]/20">
+          <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M6.26 8.68c-1.04 0-2.08.37-2.08 1.63 0 .74.48 1.27 1.2 1.27.99 0 1.68-.87 1.74-1.93l.03-.97h-.89zm2.79 3.3h-1.8l.03-.72h-.03c-.56.6-1.32.88-2.12.88C3.63 12.14 2.7 11.19 2.7 9.97c0-1.92 1.64-2.49 3.2-2.49h1.2V7.2c0-.7-.54-1.08-1.39-1.08-.65 0-1.35.24-1.87.6l-.05-1.45c.65-.32 1.56-.51 2.28-.51 1.74 0 2.78.71 2.78 2.48v4.74zM13.3 5.6h1.82l-.6 1.47h-.04c.67-.98 1.44-1.63 2.62-1.63.12 0 .24.01.34.04l-.32 1.82a1.97 1.97 0 0 0-.41-.04c-1.48 0-2.25 1.45-2.51 2.77l-.73 3.95h-1.92L13.3 5.6zm-3.33 0l-1.75 8.38H6.3l1.75-8.38h1.92zm8.1 0l-1.11 5.37c-.17.85.13 1.16.69 1.16.2 0 .38-.02.57-.08l-.17 1.39c-.33.1-.71.16-1.1.16-1.28 0-2.1-.63-1.8-2.14L16.26 5.6h1.82z"/>
+          </svg>
+          eBay
         </span>
       );
+      if (listingUrl) {
+        return (
+          <a href={listingUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title="View eBay listing">
+            {badge}
+          </a>
+        );
+      }
+      return badge;
     }
     if (channel === "show") {
       return (
@@ -689,7 +726,7 @@ export default function InventoryTable({
   };
 
   // ── Mobile card component (< 640px) ──────────────────────────────────────
-  const MobileInventoryCard = ({ item, idx }: { item: BusinessInventoryItem; idx: number }) => {
+  const MobileInventoryCard = ({ item }: { item: BusinessInventoryItem }) => {
     const days = getDaysHeld(item.acquisition_date);
     const daysColor = getDaysHeldColor(days);
     const titleStr = buildDisplayTitle(item);
@@ -720,19 +757,34 @@ export default function InventoryTable({
             className="mt-0.5 min-h-[18px] min-w-[18px] rounded border-[var(--biz-border)] text-emerald-600 focus:ring-emerald-500"
           />
           <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 mb-0.5">
-              {isWaxItem && (
-                <span className="inline-flex shrink-0 items-center rounded border border-amber-200 bg-amber-50 px-1 py-0.5 text-[10px] font-semibold whitespace-nowrap text-amber-700">
-                  WAX
-                </span>
-              )}
-              <Link
-                href={`/card/${item.id}?from=business`}
-                onClick={(e) => e.stopPropagation()}
-                className="block min-h-[44px] truncate text-sm font-medium text-[var(--biz-text)] hover:underline"
+            <div className="mb-0.5 flex items-start justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-1.5">
+                {isWaxItem && (
+                  <span className="inline-flex shrink-0 items-center rounded border border-amber-200 bg-amber-50 px-1 py-0.5 text-[10px] font-semibold whitespace-nowrap text-amber-700">
+                    WAX
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openProfile(item.id);
+                  }}
+                  className="block min-h-[44px] min-w-0 cursor-pointer border-0 bg-transparent p-0 truncate text-left text-sm font-semibold text-[var(--biz-primary)] underline-offset-2 hover:underline"
+                >
+                  {titleStr || "Untitled"}
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openProfile(item.id);
+                }}
+                className="inline-flex shrink-0 items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700 transition-colors hover:bg-emerald-100"
               >
-                {titleStr || "Untitled"}
-              </Link>
+                View
+              </button>
             </div>
           </div>
         </div>
@@ -784,6 +836,19 @@ export default function InventoryTable({
           </span>
           {item.channel && channelBadge(item.channel, item)}
           <div className="ml-auto flex items-center gap-1.5">
+            {onToggleItemKind && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleItemKind(item, "owned");
+                }}
+                title="Move to Personal Collection"
+                className="px-2 py-1 text-[10px] font-medium bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-gray-200 rounded min-h-[32px]"
+              >
+                → PC
+              </button>
+            )}
             {item.card_id && (
               <button
                 type="button"
@@ -832,7 +897,7 @@ export default function InventoryTable({
   };
 
   const rowClass = (item: BusinessInventoryItem, idx: number): string =>
-    `transition-colors cursor-pointer ${
+    `group/row transition-colors ${
       selectedItemId === item.id
         ? "bg-emerald-50 ring-inset"
         : idx % 2 === 1
@@ -850,7 +915,7 @@ export default function InventoryTable({
           className="rounded border-[var(--biz-border)] text-emerald-600 focus:ring-emerald-500"
         />
       </th>
-      {COLUMNS.map((col) => {
+      {displayColumns.map((col) => {
         const isSortable = Boolean(col.sortable);
         const isActiveSort = isSortable && sortKey === col.key;
         const ariaSort = isSortable
@@ -902,12 +967,12 @@ export default function InventoryTable({
           className="rounded border-[var(--biz-border)] text-emerald-600 focus:ring-emerald-500"
         />
       </td>
-      {COLUMNS.map((col) => (
+      {displayColumns.map((col) => (
         <td
           key={`${item.id}-${col.key}`}
           className={`border-l border-[var(--biz-border)] px-3 py-2 text-[var(--biz-text)] ${col.width} ${col.alignRight ? "text-right tabular-nums" : ""}`}
           onClick={() => {
-            if (col.key === "_actions" || col.key === "_grade" || col.key === "_view") {
+            if (col.key === "title" || col.key === "_actions" || col.key === "_grade" || col.key === "_view") {
               return;
             }
             if (editingCell?.id === item.id && editingCell?.field === col.key) {
@@ -1131,8 +1196,8 @@ export default function InventoryTable({
           </div>
         ) : (
           <div className="space-y-2">
-            {filtered.map((item, idx) => (
-              <MobileInventoryCard key={item.id} item={item} idx={idx} />
+            {filtered.map((item) => (
+              <MobileInventoryCard key={item.id} item={item} />
             ))}
           </div>
         )}
@@ -1199,10 +1264,10 @@ export default function InventoryTable({
         {filtered.length} item{filtered.length !== 1 ? "s" : ""}
         {filtered.length !== items.length && ` (of ${items.length} total)`}
         <span className="hidden sm:inline">
-          {" \u00B7 Click cell to edit \u00B7 Double-click row to open detail"}
+          {" \u00B7 Click title or Open to view profile \u00B7 Click cell to edit"}
         </span>
         <span className="sm:hidden">
-          {" \u00B7 Tap card to open detail"}
+          {" \u00B7 Tap View or title to open profile"}
         </span>
       </div>
 

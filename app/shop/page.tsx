@@ -6,6 +6,8 @@ import { hasActiveProTier, type SubscriptionTier } from "@/lib/subscription-tier
 import { hasBusinessWorkspaceAccess } from "@/lib/business/workspace-access";
 import ShopStorefront from "@/components/shop/ShopStorefront";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "CardzCheck Deals",
 };

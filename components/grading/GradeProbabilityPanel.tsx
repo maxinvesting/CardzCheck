@@ -236,6 +236,36 @@ function hasPhotoQualityFlag(notes?: string | null): boolean {
   );
 }
 
+function buildPsaPopUrl(cardIdentity: {
+  player_name?: string;
+  year?: string;
+  set_name?: string;
+  parallel_type?: string;
+}): string {
+  const parts = [
+    cardIdentity.player_name,
+    cardIdentity.year,
+    cardIdentity.set_name,
+    cardIdentity.parallel_type,
+  ].filter(Boolean) as string[];
+  const q = parts.join(" ");
+  return `https://www.psacard.com/pop/search?q=${encodeURIComponent(q)}`;
+}
+
+function buildBgsPopUrl(cardIdentity: {
+  player_name?: string;
+  year?: string;
+  set_name?: string;
+}): string {
+  const parts = [
+    cardIdentity.player_name,
+    cardIdentity.year,
+    cardIdentity.set_name,
+  ].filter(Boolean) as string[];
+  const q = parts.join(" ");
+  return `https://www.beckett.com/search/#q=${encodeURIComponent(q)}&tab=population`;
+}
+
 function buildCardIdentityLabel(cardIdentity?: {
   player_name?: string;
   year?: string;
@@ -829,50 +859,92 @@ export default function GradeProbabilityPanel({
       </div>
 
       {/* ── VERIFY COMPS ─────────────────────────────────────────────────── */}
-      {cardIdentity && (cardIdentity.player_name || cardIdentity.set_name) && (() => {
-        const { psa10Url, psa9Url, rawUrl } = buildCompsLinks({
-          player: cardIdentity.player_name,
-          year: cardIdentity.year,
-          setName: cardIdentity.set_name,
-          parallel: cardIdentity.parallel_type,
-        });
-        return (
-          <div className="mt-3 rounded-lg border border-white/[0.07] bg-[#0d1b2a] px-4 py-3">
-            <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.18em] text-blue-400/70">
-              Verify Comps on eBay
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <a
-                href={psa10Url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 rounded border border-blue-900/40 bg-blue-950/40 px-2.5 py-1 text-[11px] font-medium text-blue-300 hover:bg-blue-900/50 transition-colors"
-              >
-                PSA 10 sold →
-              </a>
-              <a
-                href={psa9Url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 rounded border border-blue-900/40 bg-blue-950/40 px-2.5 py-1 text-[11px] font-medium text-blue-300 hover:bg-blue-900/50 transition-colors"
-              >
-                PSA 9 sold →
-              </a>
-              <a
-                href={rawUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 rounded border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-white/50 hover:text-white/70 hover:bg-white/[0.07] transition-colors"
-              >
-                Raw sold →
-              </a>
-            </div>
-            <p className="mt-2 text-[9px] text-white/25">
-              Click to verify current eBay sold prices
-            </p>
+      {cardIdentity && (cardIdentity.player_name || cardIdentity.set_name) && (
+        <div className="mt-3 rounded-lg border border-white/[0.07] bg-[#0d1b2a] px-4 py-3">
+          <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.18em] text-blue-400/70">
+            Verify Comps on eBay
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <a
+              href={buildCompsLinks({ player: cardIdentity.player_name, year: cardIdentity.year, setName: cardIdentity.set_name, parallel: cardIdentity.parallel_type }).psa10Url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 rounded border border-blue-900/40 bg-blue-950/40 px-2.5 py-1 text-[11px] font-medium text-blue-300 hover:bg-blue-900/50 transition-colors"
+            >
+              PSA 10 sold →
+            </a>
+            <a
+              href={buildCompsLinks({ player: cardIdentity.player_name, year: cardIdentity.year, setName: cardIdentity.set_name, parallel: cardIdentity.parallel_type }).psa9Url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 rounded border border-blue-900/40 bg-blue-950/40 px-2.5 py-1 text-[11px] font-medium text-blue-300 hover:bg-blue-900/50 transition-colors"
+            >
+              PSA 9 sold →
+            </a>
+            <a
+              href={buildCompsLinks({ player: cardIdentity.player_name, year: cardIdentity.year, setName: cardIdentity.set_name, parallel: cardIdentity.parallel_type }).rawUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 rounded border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-white/50 hover:text-white/70 hover:bg-white/[0.07] transition-colors"
+            >
+              Raw sold →
+            </a>
           </div>
-        );
-      })()}
+          <p className="mt-2 text-[9px] text-white/25">
+            Click to verify current eBay sold prices
+          </p>
+        </div>
+      )}
+
+      {/* ── Footer ─────────────────────────────────────────────────── */}
+      <div className="border-t border-white/[0.06] px-5 py-4 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-[10px] text-[#3a5068] leading-relaxed max-w-prose" data-export-disclaimer="true">
+          {gradingCopy.panel.disclaimer}
+        </p>
+
+        <div className="flex flex-wrap items-center gap-3" data-export-ignore="true">
+          {/* PSA Pop Report link */}
+          {cardIdentity?.player_name ? (
+            <a
+              href={buildPsaPopUrl(cardIdentity)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs text-[#3a5068] hover:text-blue-400 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              PSA Pop
+            </a>
+          ) : null}
+
+          {/* BGS Pop Report link */}
+          {cardIdentity?.player_name ? (
+            <a
+              href={buildBgsPopUrl(cardIdentity)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs text-[#3a5068] hover:text-emerald-400 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              BGS Pop
+            </a>
+          ) : null}
+
+          <button
+            type="button"
+            onClick={handleExportPdf}
+            className="inline-flex items-center gap-1.5 text-xs text-[#3a5068] hover:text-[#7a91a8] transition-colors"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            Export report
+          </button>
+        </div>
+      </div>
 
       {cardIdentity && cardIdentity.player_name ? (
         <PreSubmissionAnalysisSection estimate={estimate} cardIdentity={cardIdentity} />
