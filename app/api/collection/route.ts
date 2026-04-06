@@ -315,12 +315,10 @@ export async function POST(request: NextRequest) {
       normalizedImageUrls[0] ||
       null;
 
-    // Store players array and insert in notes if DB columns don't exist yet
-    // TODO: Add migration for players (JSONB) and insert (text) columns
+    // Store players array in notes (JSONB column not yet added)
     const sanitizedNotes = stripHtml(notes);
     const notesParts: string[] = [];
     if (sanitizedNotes) notesParts.push(sanitizedNotes);
-    if (insert) notesParts.push(`[INSERT:${insert}]`);
     if (players && players.length > 1) {
       notesParts.push(`[PLAYERS:${JSON.stringify(players)}]`);
     }
@@ -377,6 +375,7 @@ export async function POST(request: NextRequest) {
       year: year || null,
       set_name: set_name || null,
       parallel_type: parallel_type || null,
+      insert: insert || null,
       card_number: card_number || null,
       grade: grade || null,
       cert_number: cert_number || null,
