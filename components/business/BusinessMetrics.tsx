@@ -92,8 +92,8 @@ export default function BusinessMetrics({
         inventorySummary.itemCount === 0
           ? fmt(0)
           : hasCmv
-          ? fmtFull(inventorySummary.totalCmvCents)
-          : fmtFull(inventorySummary.totalCostCents),
+            ? fmtFull(inventorySummary.totalCmvCents)
+            : fmtFull(inventorySummary.totalCostCents),
       secondary: hasCmv
         ? `Est. Market Value · ${inventorySummary.itemCount} item${inventorySummary.itemCount !== 1 ? "s" : ""}`
         : `Cost Basis · ${inventorySummary.itemCount} item${inventorySummary.itemCount !== 1 ? "s" : ""}`,

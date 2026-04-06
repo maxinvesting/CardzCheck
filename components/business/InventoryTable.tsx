@@ -101,6 +101,8 @@ interface Props {
   dense?: boolean;
   /** Enables dev-only perf instrumentation output */
   perfEnabled?: boolean;
+  /** Whether the connected eBay account is Top Rated Plus (affects fee preview) */
+  ebayTopRated?: boolean;
   /** Whether the user has eBay connected (shows Sync button) */
   ebayConnected?: boolean;
   /** Compact list layout used in the business ledger list tab */
@@ -230,6 +232,7 @@ export default function InventoryTable({
   onToggleItemKind,
   dense = false,
   perfEnabled = false,
+  ebayTopRated = false,
   ebayConnected = false,
   listView = false,
   ebayTopRated = false,

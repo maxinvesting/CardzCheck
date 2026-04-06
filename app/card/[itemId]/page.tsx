@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { useParams, useSearchParams, useRouter } from "next/navigation";
+import { useParams, usePathname, useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { CardImage as TrustedCardImageFrame } from "@/components/CardImage";
 import {
@@ -26,6 +26,7 @@ interface ProfileItem {
   cert_number?: string | null;
   parallel_type?: string | null;
   insert?: string | null;
+  card_number?: string | null;
   quantity?: number | null;
   status?: string | null;
   channel?: string | null;
@@ -138,11 +139,13 @@ function severityBadge(severity: string) {
 
 export default function CardProfilePage() {
   const params = useParams();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
   const itemId = params.itemId as string;
-  const from = (searchParams.get("from") as Mode) || "collection";
-  const isBusinessMode = from === "business";
+  const routeIsBusiness = pathname?.startsWith("/business") ?? false;
+  const from = ((searchParams.get("from") as Mode) || (routeIsBusiness ? "business" : "collection"));
+  const isBusinessMode = routeIsBusiness || from === "business";
 
   // Data state
   const [item, setItem] = useState<ProfileItem | null>(null);
@@ -193,6 +196,13 @@ export default function CardProfilePage() {
   const [valueResult, setValueResult] = useState<WorthGradingResult | null>(null);
   const [valueLoading, setValueLoading] = useState(false);
   const [valueError, setValueError] = useState<string | null>(null);
+
+  const buildProfilePath = useCallback((resolvedId: string, mode: Mode) => {
+    if (mode === "business") {
+      return `/business/card/${resolvedId}`;
+    }
+    return `/card/${resolvedId}?from=collection`;
+  }, []);
 
   useEffect(() => {
     if (toast) {
@@ -287,7 +297,7 @@ export default function CardProfilePage() {
             ? data.item.id
             : itemId;
         if (resolvedId !== itemId) {
-          router.replace(`/card/${resolvedId}?from=${primaryMode}`);
+          router.replace(buildProfilePath(resolvedId, primaryMode));
         }
         return;
       }
@@ -308,7 +318,7 @@ export default function CardProfilePage() {
             typeof data?.item?.id === "string" && data.item.id.length > 0
               ? data.item.id
               : itemId;
-          router.replace(`/card/${resolvedId}?from=${fallbackMode}`);
+          router.replace(buildProfilePath(resolvedId, fallbackMode));
           return;
         }
 
@@ -327,7 +337,7 @@ export default function CardProfilePage() {
     } finally {
       setLoading(false);
     }
-  }, [itemId, from, router]);
+  }, [itemId, from, router, buildProfilePath]);
 
   useEffect(() => {
     loadProfile();
@@ -359,6 +369,12 @@ export default function CardProfilePage() {
     if (typeof item.cost_basis_total_cents === "number") return item.cost_basis_total_cents;
     if (typeof item.purchase_price === "number") return Math.round(item.purchase_price * 100);
     return null;
+  }, [item]);
+
+  const marketValue = useMemo(() => {
+    if (!item || item.current_market_value_cents == null) return null;
+    const qty = item.quantity ?? 1;
+    return item.current_market_value_cents * qty;
   }, [item]);
 
   const gradeEstimate = useGradeEstimateFromImages({
@@ -601,8 +617,12 @@ export default function CardProfilePage() {
   const gradeNum = item.grade ?? "—";
   const certNum = item.psa_cert_number ?? item.cert_number;
   const playerName = item.player_name ?? item.title ?? "Unknown Player";
-  const setLabel = [item.year, item.set_name].filter(Boolean).join(" · ");
-  const hasParallel = !!(item.parallel_type || item.insert);
+  const baseSetLabel = [item.year, item.set_name].filter(Boolean).join(" ");
+  const parallelLabel = item.parallel_type || item.insert || null;
+  const setLabel = [baseSetLabel, parallelLabel].filter(Boolean).join(" | ") || "Sports Card";
+  const displayPlayerName = item.card_number
+    ? `#${item.card_number} ${playerName}`
+    : playerName;
 
   const tabs: { id: TabId; label: string }[] = [
     { id: "details", label: "Details" },
@@ -615,16 +635,18 @@ export default function CardProfilePage() {
       style={{ background: "#EEECE8", fontFamily: "'Sora', sans-serif" }}
     >
       <div className="max-w-[1100px] mx-auto px-4 py-8">
-        {/* Back link */}
-        <button
-          onClick={() => router.push(isBusinessMode ? "/business" : "/collection")}
-          className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors mb-5"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-          {isBusinessMode ? "Back to Inventory" : "Back to Collection"}
-        </button>
+        {/* Top nav */}
+        <div className="flex items-center justify-between mb-5">
+          <button
+            onClick={() => router.push(isBusinessMode ? "/business" : "/collection")}
+            className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            {isBusinessMode ? "Back to Inventory" : "Back to Collection"}
+          </button>
+        </div>
 
         {/* Main card */}
         <div
@@ -781,12 +803,12 @@ export default function CardProfilePage() {
                 className="uppercase tracking-widest mb-2"
                 style={{ fontSize: 10, color: "#B0ADA8", fontWeight: 500 }}
               >
-                {setLabel || "Sports Card"}
+                {setLabel}
               </p>
 
               {/* 2. Player name */}
               <h1
-                className="leading-tight mb-3"
+                className="leading-tight mb-5"
                 style={{
                   fontSize: 34,
                   fontWeight: 800,
@@ -795,85 +817,72 @@ export default function CardProfilePage() {
                   lineHeight: 1.1,
                 }}
               >
-                {playerName}
+                {displayPlayerName}
               </h1>
 
-              {/* 3. Parallel pill */}
-              {hasParallel && (
-                <div className="flex items-center gap-2 mb-4">
-                  <span
-                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold"
-                    style={{
-                      background: "#F0FAF4",
-                      border: "1px solid #B8E6CC",
-                      color: "#167A40",
-                    }}
-                  >
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
-                    {[item.parallel_type, item.insert].filter(Boolean).join(" · ")}
-                    {item.cert_number && ` · #${item.cert_number}`}
-                  </span>
+              {/* 3. Price section */}
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div style={{ border: "1px solid #E8E6E1", borderRadius: 12, padding: "14px 16px" }}>
+                  <p className="uppercase tracking-widest mb-2" style={{ fontSize: 9, color: "#B0ADA8", fontWeight: 500 }}>
+                    Market Estimate
+                  </p>
+                  {marketValue ? (
+                    <p style={{ fontSize: 26, fontWeight: 700, color: "#0F0E0D", lineHeight: 1 }}>
+                      {fmtCents(marketValue)}
+                    </p>
+                  ) : (
+                    <p style={{ fontSize: 26, fontWeight: 700, color: "#C0BDBA", lineHeight: 1 }}>—</p>
+                  )}
                 </div>
-              )}
+                <div style={{ border: "1px solid #E8E6E1", borderRadius: 12, padding: "14px 16px" }}>
+                  <p className="uppercase tracking-widest mb-2" style={{ fontSize: 9, color: "#B0ADA8", fontWeight: 500 }}>
+                    eBay Comps
+                  </p>
+                  <a
+                    href={ebayCompsUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 font-bold hover:underline"
+                    style={{ fontSize: 16, color: "#2563EB" }}
+                  >
+                    View Sold
+                    <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                  </a>
+                </div>
+              </div>
 
-              {/* 5. CTA row */}
+              {/* 4. Primary CTA + Item Actions */}
               <div className="flex items-center gap-2 mb-6">
-                {/* Primary: List on eBay / Set Price */}
-                <button
-                  onClick={openImageModal}
-                  className="flex-1 px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-100 rounded-lg text-sm font-medium transition-colors"
+                <a
+                  href={ebayCompsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 flex items-center justify-center py-3 text-white font-semibold text-sm transition-colors hover:bg-gray-800"
+                  style={{ background: "#111", borderRadius: 12 }}
                 >
-                  Upload Image
-                </button>
-
-                {/* Edit */}
-                {isBusinessMode ? (
-                  <button
-                    onClick={openImageModal}
-                    className="flex items-center justify-center gap-1.5 px-5 text-sm font-semibold transition-colors hover:bg-gray-50"
-                    style={{
-                      height: 44,
-                      borderRadius: 11,
-                      border: "1.5px solid #E4E2DE",
-                      color: "#3D3A37",
-                      background: "#fff",
-                    }}
-                  >
-                    Edit
-                  </button>
-                ) : (
-                  <Link
-                    href={`/cards/${item.id}`}
-                    className="flex items-center justify-center gap-1.5 px-5 text-sm font-semibold transition-colors hover:bg-gray-50"
-                    style={{
-                      height: 44,
-                      borderRadius: 11,
-                      border: "1.5px solid #E4E2DE",
-                      color: "#3D3A37",
-                      background: "#fff",
-                    }}
-                  >
-                    Edit
-                  </Link>
-                )}
-
-                {/* Overflow ··· */}
+                  Find Comps on eBay
+                </a>
                 <div className="relative" ref={overflowRef}>
                   <button
                     onClick={() => setShowOverflow((v) => !v)}
-                    className="flex items-center justify-center font-bold transition-colors hover:bg-gray-50"
+                    className="flex items-center gap-1.5 text-sm font-semibold transition-colors hover:bg-gray-50"
                     style={{
-                      width: 44,
-                      height: 44,
-                      borderRadius: 11,
+                      height: 46,
+                      paddingLeft: 14,
+                      paddingRight: 14,
+                      borderRadius: 12,
                       border: "1.5px solid #E4E2DE",
                       color: "#3D3A37",
                       background: "#fff",
-                      fontSize: 18,
-                      letterSpacing: 2,
+                      whiteSpace: "nowrap",
                     }}
                   >
-                    ···
+                    Item Actions
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
                   </button>
                   {showOverflow && (
                     <div
@@ -885,6 +894,27 @@ export default function CardProfilePage() {
                         boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
                       }}
                     >
+                      {isBusinessMode ? (
+                        <button
+                          onClick={() => {
+                            setShowOverflow(false);
+                            openImageModal();
+                          }}
+                          className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors"
+                          style={{ color: "#3D3A37" }}
+                        >
+                          Edit
+                        </button>
+                      ) : (
+                        <Link
+                          href={`/cards/${item.id}`}
+                          onClick={() => setShowOverflow(false)}
+                          className="block w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors"
+                          style={{ color: "#3D3A37" }}
+                        >
+                          Edit
+                        </Link>
+                      )}
                       {isBusinessMode && item.status !== "sold" && (
                         <button
                           onClick={() => { setShowOverflow(false); setShowSoldModal(true); }}
@@ -894,16 +924,6 @@ export default function CardProfilePage() {
                           Mark Sold
                         </button>
                       )}
-                      <a
-                        href={ebayCompsUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={() => setShowOverflow(false)}
-                        className="block w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors"
-                        style={{ color: "#3D3A37" }}
-                      >
-                        Find Comps on eBay
-                      </a>
                       <button
                         onClick={() => {
                           setShowOverflow(false);
@@ -912,7 +932,7 @@ export default function CardProfilePage() {
                         className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors"
                         style={{ color: "#3D3A37" }}
                       >
-                        Upload Image
+                        {imageUrl ? "Change Image" : "Set Image"}
                       </button>
                     </div>
                   )}
@@ -954,30 +974,11 @@ export default function CardProfilePage() {
                   )}
                 </DataCell>
 
-                {/* Cost Basis */}
-                <DataCell label="Cost Basis">
+                {/* My Cost */}
+                <DataCell label="My Cost">
                   {costCents != null ? (
                     <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, color: "#0F0E0D", fontSize: 13 }}>
                       {fmtCents(costCents)}
-                    </span>
-                  ) : (
-                    <EmptyCell />
-                  )}
-                </DataCell>
-
-                {/* Unrealized P/L */}
-                <DataCell label="Unrealized P/L">
-                  {plData ? (
-                    <span
-                      style={{
-                        fontFamily: "'JetBrains Mono', monospace",
-                        fontWeight: 600,
-                        fontSize: 13,
-                        color: plData.diff >= 0 ? "#16A34A" : "#DC2626",
-                      }}
-                    >
-                      {plData.diff >= 0 ? "+" : ""}
-                      {fmtCents(plData.diff)}
                     </span>
                   ) : (
                     <EmptyCell />
@@ -989,6 +990,17 @@ export default function CardProfilePage() {
                   {item.acquisition_date || item.purchase_date ? (
                     <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, color: "#0F0E0D", fontSize: 13 }}>
                       {fmtDate(item.acquisition_date ?? item.purchase_date)}
+                    </span>
+                  ) : (
+                    <EmptyCell />
+                  )}
+                </DataCell>
+
+                {/* My Value */}
+                <DataCell label="My Value">
+                  {item.list_price_cents != null ? (
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, color: "#0F0E0D", fontSize: 13 }}>
+                      {fmtCents(item.list_price_cents)}
                     </span>
                   ) : (
                     <EmptyCell />

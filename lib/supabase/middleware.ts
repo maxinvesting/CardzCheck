@@ -21,6 +21,9 @@ const PERSONAL_WORKSPACE_PATHS = [
   "/grade-hub",
   "/grade-probability",
   "/grade-estimator",
+  "/help",
+  "/shop",
+  "/card",
   "/analyst",
 ];
 
@@ -48,7 +51,6 @@ const BUSINESS_TO_PERSONAL_REDIRECTS: RedirectRule[] = [
   { from: "/business/consultant", to: "/analyst" },
   { from: "/business/analyst", to: "/analyst" },
   { from: "/business/settings", to: "/settings" },
-  { from: "/business/shop", to: "/shop" },
   { from: "/business", to: "/dashboard" },
 ];
 
@@ -58,8 +60,11 @@ function matchesPrefix(pathname: string, prefix: string): boolean {
 
 function findRedirect(pathname: string, rules: RedirectRule[]): string | null {
   for (const rule of rules) {
-    if (matchesPrefix(pathname, rule.from)) {
+    if (pathname === rule.from) {
       return rule.to;
+    }
+    if (pathname.startsWith(`${rule.from}/`)) {
+      return `${rule.to}${pathname.slice(rule.from.length)}`;
     }
   }
   return null;
