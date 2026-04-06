@@ -107,8 +107,6 @@ interface Props {
   ebayConnected?: boolean;
   /** Compact list layout used in the business ledger list tab */
   listView?: boolean;
-  /** Whether the connected eBay account is Top Rated */
-  ebayTopRated?: boolean;
 }
 
 const STATUS_OPTIONS = ["unlisted", "listed", "pending_sale", "sold", "returned"] as const;
@@ -235,7 +233,6 @@ export default function InventoryTable({
   ebayTopRated = false,
   ebayConnected = false,
   listView = false,
-  ebayTopRated = false,
 }: Props) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
