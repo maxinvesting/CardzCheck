@@ -126,11 +126,17 @@ export function SkuDetailClient({ skuId }: { skuId: string }) {
 
       <section className="rounded-xl border border-slate-200 bg-white p-4">
         <div className="flex gap-4">
-          <img
-            src={sku?.image_url ?? "https://placehold.co/160x220?text=Card"}
-            alt={sku?.name ?? skuId}
-            className="h-40 w-28 rounded-md object-cover"
-          />
+          {sku?.image_url ? (
+            <img
+              src={sku.image_url}
+              alt={sku?.name ?? skuId}
+              className="h-40 w-28 rounded-md object-contain"
+            />
+          ) : (
+            <div className="flex h-40 w-28 items-center justify-center rounded-md border border-dashed border-slate-300 bg-slate-50 px-2 text-center text-xs text-slate-500">
+              No image available
+            </div>
+          )}
           <div>
             <h1 className="text-2xl font-semibold">{sku?.name ?? "Unknown SKU"}</h1>
             <p className="text-xs text-slate-500">{skuId}</p>

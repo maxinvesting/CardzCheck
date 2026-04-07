@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useShopCart } from "@/contexts/ShopCartContext";
 import type { ShopListing } from "@/types/shop";
 import type { SubscriptionTier } from "@/lib/subscription-tier";
+import { CardImage } from "@/components/CardImage";
 import {
   buildListingTitle,
   formatUsd,
@@ -57,7 +58,6 @@ export default function ShopListingCard({
   const isBusiness = userTier === "business";
 
   const title = buildListingTitle(listing);
-  const imgUrl = listing.thumbnail_url || listing.image_urls?.[0];
   const detailHref = isLocked ? "/upgrade" : `/shop/${listing.id}`;
 
   const cmv = getCmvDeltaPresentation(listing.price, listing.cmv);
@@ -84,19 +84,19 @@ export default function ShopListingCard({
   return (
     <article className="group flex h-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white transition-shadow duration-200 hover:shadow-[0_16px_38px_rgba(15,23,42,0.08)]">
       <Link href={detailHref} className="block">
-        <div className="aspect-[4/5] overflow-hidden bg-slate-100">
-          {imgUrl ? (
-            <img
-              src={imgUrl}
-              alt={title}
-              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
-              loading="lazy"
-            />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center text-sm text-slate-500">
-              No image available
-            </div>
+        <div className="relative aspect-[4/5] overflow-hidden bg-slate-100">
+          {listing.accepts_offers && (
+            <span className="absolute left-2 top-2 z-10 rounded-full bg-amber-500/95 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white shadow-sm">
+              Offers OK
+            </span>
           )}
+          <CardImage
+            image={listing.trusted_image}
+            alt={title}
+            className="rounded-none border-0 bg-slate-100"
+            imageClassName="object-contain transition-transform duration-300 group-hover:scale-[1.02]"
+            fallbackClassName="bg-slate-100"
+          />
         </div>
       </Link>
 

@@ -48,8 +48,6 @@ export function normalizeIdentificationResult(
     imageUrls: input.imageUrls ?? undefined,
     scanPhotos: input.scanPhotos ?? undefined,
     userImageUrl: input.userImageUrl ?? undefined,
-    stockImageUrl: input.stockImageUrl ?? undefined,
-    ebayImageUrl: input.ebayImageUrl ?? undefined,
     confidence: input.confidence ?? "low",
     cardIdentity,
     confirmedYear: input.confirmedYear ?? undefined,

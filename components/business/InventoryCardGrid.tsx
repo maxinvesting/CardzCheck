@@ -31,8 +31,8 @@ export interface InventoryCardGridProps {
 
 function CardImageArea({ item }: { item: BusinessInventoryItem }) {
   const imageCandidates = useMemo(
-    () => uniqueHttpUrls([item.user_image_url, item.stock_image_url, item.ebay_image_url]),
-    [item.user_image_url, item.stock_image_url, item.ebay_image_url]
+    () => uniqueHttpUrls([item.user_image_url]),
+    [item.user_image_url]
   );
   const [imageIndex, setImageIndex] = useState(0);
   const imageUrl = imageCandidates[imageIndex] || null;

@@ -94,7 +94,7 @@ export default function CertLookupModal({ isOpen, onClose, onCardFound }: Props)
       grader: result.card.grader,
       grade: result.card.grade,
       imageUrl: result.card.imageUrl,
-      stock_image_url: result.card.stock_image_url,
+      user_image_url: result.card.imageUrl,
     });
     onClose();
   };

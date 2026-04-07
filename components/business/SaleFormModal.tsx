@@ -309,6 +309,36 @@ export default function SaleFormModal({
             </label>
           )}
 
+          {channel === "whatnot" && (
+            <div className="rounded border border-purple-900/50 bg-purple-950/20 px-3 py-2.5 text-xs">
+              <p className="font-semibold text-purple-300">Recording a Whatnot sale</p>
+              <ol className="mt-1.5 list-decimal list-inside space-y-1 text-gray-400">
+                <li>
+                  Find the order in your{" "}
+                  <span className="font-medium text-gray-300">Whatnot Seller Dashboard → Orders</span>
+                </li>
+                <li>
+                  <span className="font-medium text-gray-300">Sold Price</span> — the hammer price the buyer paid
+                </li>
+                <li>
+                  <span className="font-medium text-gray-300">Shipping Charged</span> — what you collected for shipping (often $0 if flat-rate included)
+                </li>
+                <li>
+                  <span className="font-medium text-gray-300">Platform Fees</span> — Whatnot seller fee (typically 9.5%) + 2.9% payment processing; find the exact amount under "Fee Breakdown"
+                </li>
+                <li>
+                  <span className="font-medium text-gray-300">Shipping Cost</span> — what Whatnot charged you to ship the card
+                </li>
+                <li>
+                  <span className="font-medium text-gray-300">External Order ID</span> — paste the Whatnot order number to prevent duplicates
+                </li>
+              </ol>
+              <p className="mt-2 text-[11px] text-gray-500">
+                Tip: Whatnot orders sync automatically once you export a CSV from your seller dashboard and upload it via the Bulk Import tool.
+              </p>
+            </div>
+          )}
+
           {channel === "ebay" && (
             <div className="space-y-2 rounded border border-gray-700 bg-gray-900/60 px-3 py-2">
               <div className="flex items-center justify-between gap-2">

@@ -14,9 +14,9 @@ import {
 import { useRouter, useSearchParams } from "next/navigation";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import BusinessPaywall from "@/components/business/BusinessPaywall";
-import BusinessLedgerView from "@/components/business/BusinessLedgerView";
 import BusinessMigrationBanner from "@/components/business/BusinessMigrationBanner";
 import InventoryTable from "@/components/business/InventoryTable";
+import InventoryCardGrid from "@/components/business/InventoryCardGrid";
 import ItemDetailDrawer from "@/components/business/ItemDetailDrawer";
 import SalesTable, { type SalesFilters } from "@/components/business/SalesTable";
 import SaleFormModal from "@/components/business/SaleFormModal";
@@ -142,14 +142,48 @@ function buildPerfMockInventory(count = PERF_MOCK_ITEM_COUNT): BusinessInventory
       status: statuses[index % statuses.length]!,
       list_price_cents: listPrice,
       current_market_value_cents: cmv,
+      image_url: null,
+      image_source: "none",
       user_image_url: null,
-      stock_image_url: null,
-      ebay_image_url: null,
       notes: index % 10 === 0 ? "[WAX] Sealed product" : null,
       created_at: createdAt,
       updated_at: createdAt,
     };
   });
+}
+
+// ── Rail action card ─────────────────────────────────────────────────────────
+function RailActionCard({
+  label,
+  count,
+  countLabel,
+  badgeBg,
+  badgeColor,
+  onClick,
+}: {
+  label: string;
+  count?: number;
+  countLabel?: string;
+  badgeBg: string;
+  badgeColor: string;
+  onClick: () => void;
+}) {
+  const displayCount = countLabel ?? (count != null ? String(count) : "—");
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center justify-between rounded-lg border border-[#E8E5E0] px-2.5 py-2 mb-2 text-left transition-colors hover:bg-[#FAFAF8] bg-white cursor-pointer"
+    >
+      <span className="text-[11px] text-[#444]">{label}</span>
+      <span
+        className="text-[11px] font-semibold px-[7px] py-0.5 rounded-full tabular-nums"
+        style={{ background: badgeBg, color: badgeColor }}
+      >
+        {displayCount}
+      </span>
+    </button>
+  );
 }
 
 function LedgerPageContent() {
@@ -201,6 +235,13 @@ function LedgerPageContent() {
   const [ebayTopRated, setEbayTopRated] = useState(false);
   const [whatnotStorefront, setWhatnotStorefront] = useState<UserStorefront | null>(null);
   const [websiteStorefront, setWebsiteStorefront] = useState<UserStorefront | null>(null);
+  const [viewMode, setViewMode] = useState<"grid" | "list">(() =>
+    typeof window !== "undefined"
+      ? ((localStorage.getItem("ledger_view") as "grid" | "list") ?? "grid")
+      : "grid"
+  );
+  const [gridSearch, setGridSearch] = useState("");
+  const [activePills, setActivePills] = useState<Set<string>>(new Set(["all"]));
   const perfEnabled = useMemo(() => isPerfEnabled(), []);
   const perfMockMode = useMemo(
     () => perfEnabled && searchParams.get("perfMock") === "1",
@@ -237,6 +278,91 @@ function LedgerPageContent() {
   const ebayStoreHref = useMemo(
     () => buildEbayStoreHref(ebayStoreUrl),
     [ebayStoreUrl]
+  );
+
+  const avgHoldDays = useMemo(() => {
+    const active = items.filter(
+      (it) => it.status !== "sold" && it.status !== "returned" && it.acquisition_date
+    );
+    if (!active.length) return null;
+    const now = Date.now();
+    const sum = active.reduce((acc, it) => {
+      return acc + Math.floor((now - new Date(it.acquisition_date!).getTime()) / 86_400_000);
+    }, 0);
+    return Math.round(sum / active.length);
+  }, [items]);
+
+  const gridFilteredItems = useMemo(() => {
+    let result = items.filter((it) => it.status !== "sold" && it.status !== "returned");
+    if (!activePills.has("all")) {
+      if (activePills.has("Listed")) result = result.filter((it) => it.status === "listed");
+      if (activePills.has("Unlisted")) result = result.filter((it) => it.status === "unlisted");
+      if (activePills.has("Raw")) result = result.filter((it) => it.condition_status === "raw");
+      if (activePills.has("Graded")) result = result.filter((it) => it.condition_status === "graded");
+    }
+    if (gridSearch.trim()) {
+      const q = gridSearch.toLowerCase();
+      result = result.filter((it) => it.title?.toLowerCase().includes(q));
+    }
+    return result;
+  }, [items, activePills, gridSearch]);
+
+  const activeItemCount = useMemo(
+    () => items.filter((it) => it.status !== "sold" && it.status !== "returned").length,
+    [items]
+  );
+
+  const needsActionCount = useMemo(() => {
+    const now = Date.now();
+    return items.filter((it) => {
+      if (it.status === "sold" || it.status === "returned") return false;
+      if (it.status === "unlisted") return true;
+      if (it.status === "listed" && it.acquisition_date) {
+        const days = Math.floor((now - new Date(it.acquisition_date).getTime()) / 86_400_000);
+        return days > 21;
+      }
+      return false;
+    }).length;
+  }, [items]);
+
+  const unlistedCount = useMemo(
+    () => items.filter((it) => it.status === "unlisted").length,
+    [items]
+  );
+
+  const mvCoveragePct = useMemo(() => {
+    const active = items.filter((it) => it.status !== "sold" && it.status !== "returned");
+    if (!active.length) return null;
+    const withMv = active.filter(
+      (it) => it.current_market_value_cents != null && it.current_market_value_cents > 0
+    );
+    return Math.round((withMv.length / active.length) * 100);
+  }, [items]);
+
+  const handleViewModeChange = useCallback((next: "grid" | "list") => {
+    setViewMode(next);
+    if (typeof window !== "undefined") localStorage.setItem("ledger_view", next);
+  }, []);
+
+  const handlePillToggle = useCallback((pill: string) => {
+    if (pill === "all") {
+      setActivePills(new Set(["all"]));
+      return;
+    }
+    setActivePills((prev) => {
+      const next = new Set(prev);
+      next.delete("all");
+      if (next.has(pill)) next.delete(pill);
+      else next.add(pill);
+      return next.size === 0 ? new Set(["all"]) : next;
+    });
+  }, []);
+
+  const openConsultant = useCallback(
+    (prompt: string) => {
+      router.push(`/business/consultant?prompt=${encodeURIComponent(prompt)}`);
+    },
+    [router]
   );
 
   const handleFilteredChange = useCallback((filtered: BusinessInventoryItem[]) => {
@@ -782,9 +908,9 @@ function LedgerPageContent() {
         status: (item.status as BusinessInventoryItem["status"]) || "unlisted",
         list_price_cents: (item.list_price_cents as number) ?? null,
         current_market_value_cents: (item.current_market_value_cents as number) ?? null,
+        image_url: null,
+        image_source: "none",
         user_image_url: null,
-        stock_image_url: null,
-        ebay_image_url: null,
         notes: (item.notes as string) || null,
         created_at: now,
         updated_at: now,
@@ -854,6 +980,40 @@ function LedgerPageContent() {
       markClickStart("open-mark-sold-modal", { itemId: item.id });
     }
     setMarkSoldItem(item);
+  };
+
+  const handleToggleItemKind = async (
+    item: BusinessInventoryItem,
+    targetKind: "owned" | "inventory"
+  ) => {
+    const confirmed = window.confirm(
+      targetKind === "owned"
+        ? "Move this card to your Personal Collection? P&L data will be hidden but not deleted."
+        : "Move this card to Business Inventory? Full P&L tracking will be enabled."
+    );
+    if (!confirmed) return;
+
+    try {
+      const res = await fetch("/api/business/inventory/toggle-kind", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: item.id, target_kind: targetKind }),
+      });
+      if (!res.ok) throw new Error("Failed to toggle item kind");
+      // Remove from inventory list if moved to PC
+      if (targetKind === "owned") {
+        setItems((prev) => prev.filter((it) => it.id !== item.id));
+        if (selectedItem?.id === item.id) setSelectedItem(null);
+        setToast({ type: "success", message: "Card moved to Personal Collection." });
+      } else {
+        setItems((prev) =>
+          prev.map((it) => (it.id === item.id ? { ...it, item_kind: "inventory" } : it))
+        );
+        setToast({ type: "success", message: "Card moved to Business Inventory." });
+      }
+    } catch {
+      setToast({ type: "error", message: "Failed to move card. Please try again." });
+    }
   };
 
   const handleCreateSale = async (sale: Record<string, unknown>) => {
@@ -998,7 +1158,7 @@ function LedgerPageContent() {
   const handleCardPickerSelect = (card: CardPickerSelection) => {
     setShowCardPicker(false);
     setPendingInventoryCard({
-      card_id: card.id,
+      card_id: card.id || undefined,
       player_name: card.player_name,
       year: card.year,
       set_name: card.set_name,
@@ -1008,12 +1168,8 @@ function LedgerPageContent() {
       grade: card.grade,
       imageUrl:
         card.user_image_url ||
-        card.stock_image_url ||
-        card.ebay_image_url ||
         card.image_url,
       user_image_url: card.user_image_url,
-      stock_image_url: card.stock_image_url,
-      ebay_image_url: card.ebay_image_url,
       quantity: card.quantity,
     });
     setShowAddCardToInventory(true);
@@ -1029,8 +1185,6 @@ function LedgerPageContent() {
     grade?: string;
     imageUrl?: string;
     user_image_url?: string;
-    stock_image_url?: string;
-    ebay_image_url?: string;
     quantity?: number;
   }) => {
     setShowAddCardModal(false);
@@ -1076,15 +1230,15 @@ function LedgerPageContent() {
   if (loading) {
     return (
       <AuthenticatedLayout>
-        <main className="max-w-7xl mx-auto px-4 py-4">
-          <div className="animate-pulse space-y-4">
-            <div className="h-8 w-48 rounded bg-[#E5E7EB]" />
-            <div className="grid grid-cols-5 gap-4">
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="h-20 rounded-xl bg-[#E5E7EB]" />
+        <main className="bg-[#F7F5F2] min-h-screen">
+          <div className="animate-pulse p-6 space-y-4">
+            <div className="h-8 w-48 rounded bg-[#E5E2DD]" />
+            <div className="flex gap-4">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="h-16 flex-1 rounded bg-[#E5E2DD]" />
               ))}
             </div>
-            <div className="h-64 rounded-xl bg-[#E5E7EB]" />
+            <div className="h-64 rounded bg-[#E5E2DD]" />
           </div>
         </main>
       </AuthenticatedLayout>
@@ -1094,224 +1248,537 @@ function LedgerPageContent() {
   if (hasAccess === false) {
     return (
       <AuthenticatedLayout>
-        <main className="max-w-7xl mx-auto px-4 py-4">
+        <main className="bg-[#F7F5F2] min-h-screen px-4 py-4">
           <BusinessPaywall />
         </main>
       </AuthenticatedLayout>
     );
   }
 
+  // ── Stat strip formatted values ───────────────────────────────────────────
+  const portfolioValue = inventorySummary?.totalCmvCents
+    ? `$${Math.round(inventorySummary.totalCmvCents / 100).toLocaleString("en-US")}`
+    : "—";
+  const portfolioSub = inventorySummary
+    ? `${inventorySummary.itemCount} items · $${Math.round(inventorySummary.totalCostCents / 100).toLocaleString("en-US")} basis`
+    : "—";
+  const revenueYtd =
+    metrics && metrics.revenueYtd > 0
+      ? `$${Math.round(metrics.revenueYtd / 100).toLocaleString("en-US")}`
+      : "—";
+  const revenueYtdSub =
+    metrics && metrics.salesCountYtd > 0 ? `${metrics.salesCountYtd} sales closed` : "—";
+  const avgMargin =
+    metrics && metrics.revenueYtd > 0
+      ? `${((metrics.profitYtd / metrics.revenueYtd) * 100).toFixed(1)}%`
+      : "—";
+  const avgHoldStr = avgHoldDays != null ? `${avgHoldDays}d` : "—";
+
+  // ── Right-rail MTD values ─────────────────────────────────────────────────
+  const mtdRevenue =
+    metrics && metrics.revenueMtd > 0
+      ? `$${Math.round(metrics.revenueMtd / 100).toLocaleString("en-US")}`
+      : "—";
+  const mtdMargin =
+    metrics && metrics.revenueMtd > 0
+      ? `${((metrics.profitMtd / metrics.revenueMtd) * 100).toFixed(1)}%`
+      : "—";
+  const mtdAvgSale =
+    metrics && metrics.salesCountMtd > 0
+      ? `$${Math.round(metrics.revenueMtd / metrics.salesCountMtd / 100).toLocaleString("en-US")}`
+      : "—";
+
+  // ── Filter pills config ───────────────────────────────────────────────────
+  const PILLS = [
+    { key: "all", label: `All ${activeItemCount}` },
+    { key: "Listed", label: "Listed" },
+    { key: "Unlisted", label: "Unlisted" },
+    { key: "Raw", label: "Raw" },
+    { key: "Graded", label: "Graded" },
+  ];
+
   return (
     <AuthenticatedLayout>
-      <main className="mx-auto max-w-7xl px-4 py-4">
-        <BusinessLedgerView
-          businessName={businessName}
-          ebayStoreHref={ebayStoreHref}
-          ebayConnected={ebayConnected}
-          whatnotConnected={Boolean(whatnotStorefront)}
-          whatnotUrl={whatnotStorefront?.store_url ?? null}
-          websiteConnected={Boolean(websiteStorefront)}
-          websiteUrl={websiteStorefront?.store_url ?? null}
-          metrics={metrics}
-          metricsLoading={metricsLoading}
-          inventorySummary={inventorySummary}
-          totalItemCount={items.length}
-          activeTab={activeTab}
-          onTabChange={handleTabChange}
-          needsMigration={needsMigration}
-          items={items}
-          showAddDropdown={showAddDropdown}
-          onToggleAddDropdown={() => setShowAddDropdown((prev) => !prev)}
-          onAddInventory={openAddInventoryModal}
-          onAddWax={() => setShowAddWaxModal(true)}
-          onManualAdd={() => setShowAddModal(true)}
-          onAddByCert={() => setShowCertLookup(true)}
-        >
-          {/* Migration banner */}
-          {needsMigration && (
-            <div className="mt-3">
-              <BusinessMigrationBanner
-                onRetry={() => {
-                  setLoading(true);
-                  loadInventory();
-                }}
-              />
+      <main className="bg-[#F7F5F2] min-h-screen flex">
+        {/* ── CENTER COLUMN ─────────────────────────────────────────────── */}
+        <div className="flex-1 flex flex-col min-w-0">
+
+          {/* TOPBAR */}
+          <div className="flex items-center justify-between px-4 sm:px-6 pt-5 pb-3">
+            <div>
+              <p className="text-[10px] text-[#AAA] tracking-[0.08em] uppercase m-0">
+                INVENTORY
+              </p>
+              <h1 className="text-[22px] font-medium tracking-tight text-[#1A1A1A] mt-0.5">
+                Ledger
+              </h1>
             </div>
-          )}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="px-3 py-1.5 text-xs border border-[#E5E2DD] rounded-lg bg-transparent text-[#1A1A1A] hover:bg-[#F0EDE8] transition-colors cursor-pointer"
+              >
+                Export
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowCertLookup(true)}
+                className="px-3 py-1.5 text-xs rounded-lg bg-blue-600 text-white border-0 hover:bg-blue-700 transition-colors cursor-pointer font-medium"
+                title="Add a graded card by PSA cert number"
+              >
+                PSA Cert #
+              </button>
+              <button
+                type="button"
+                onClick={openAddInventoryModal}
+                className="px-3 py-1.5 text-xs rounded-lg bg-[#1A1A1A] text-[#F0EDE8] border-0 hover:bg-[#333] transition-colors cursor-pointer"
+              >
+                Add card
+              </button>
+            </div>
+          </div>
 
-          {/* Inventory tab */}
-          {!needsMigration && activeTab === "inventory" && (
-            <Surface className="p-5">
-              {perfEnabled ? (
-                <Profiler
-                  id="BusinessInventoryTable"
-                  onRender={handleInventoryProfilerRender}
-                >
-                  <InventoryTable
-                    items={items}
-                    selectedItemId={selectedItem?.id ?? null}
-                    onItemClick={setSelectedItem}
-                    onInlineUpdate={handleInlineUpdate}
-                    onBulkAction={handleBulkAction}
-                    onDelete={handleDelete}
-                    onMarkSold={handleMarkSold}
-                    onFilteredChange={handleFilteredChange}
-                    ebayConnected={ebayConnected}
-                    ebayTopRated={ebayTopRated}
-                    dense
-                    perfEnabled={perfEnabled}
-                  />
-                </Profiler>
-              ) : (
-                <InventoryTable
-                  items={items}
-                  selectedItemId={selectedItem?.id ?? null}
-                  onItemClick={setSelectedItem}
-                  onInlineUpdate={handleInlineUpdate}
-                  onBulkAction={handleBulkAction}
-                  onDelete={handleDelete}
-                  onMarkSold={handleMarkSold}
-                  onFilteredChange={handleFilteredChange}
-                  ebayConnected={ebayConnected}
-                  ebayTopRated={ebayTopRated}
-                  dense
-                />
-              )}
-            </Surface>
-          )}
+          {/* STAT STRIP */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 divide-x divide-[#E5E2DD] border-b border-[#E5E2DD] pb-4">
+            {/* Stat 1: Portfolio value */}
+            <div className="px-4 sm:px-5 pt-3.5 first:pl-4 sm:first:pl-6">
+              <div className="text-xl font-medium text-[#1A1A1A] tabular-nums">
+                {portfolioValue}
+              </div>
+              <div className="text-[11px] text-[#888] mt-0.5">Portfolio value</div>
+              <div className="text-[10px] text-[#AAA] mt-0.5 truncate">{portfolioSub}</div>
+            </div>
 
-          {/* Sales tab */}
-          {!needsMigration && activeTab === "sales" && (
-            <EbayOrderSyncBanner />
-          )}
-          {!needsMigration && activeTab === "sales" && (
-            <Surface className="p-5">
-              <SalesTable
-                sales={sales}
-                loading={salesLoading}
-                filters={salesFilters}
-                onFiltersChange={(next) => {
-                  setSalesFilters(next);
-                  setSalesPage(1);
-                }}
-                onEditSale={handleUpdateSale}
-                onDeleteSale={handleDeleteSale}
-                page={salesPage}
-                pageSize={salesPageSize}
-                total={salesTotal}
-                onPageChange={(next) => setSalesPage(next)}
-                storeTier={storeTier}
-              />
-            </Surface>
-          )}
-        </BusinessLedgerView>
+            {/* Stat 2: Revenue YTD */}
+            <div className="px-4 sm:px-5 pt-3.5">
+              <div className="text-xl font-medium text-[#2D7A4F] tabular-nums">
+                {revenueYtd}
+              </div>
+              <div className="text-[11px] text-[#888] mt-0.5">Revenue YTD</div>
+              <div className="text-[10px] text-[#AAA] mt-0.5">{revenueYtdSub}</div>
+            </div>
 
-        {/* Item detail drawer */}
-        {selectedItem && (
-          <ItemDetailDrawer
-            item={selectedItem}
-            onClose={() => setSelectedItem(null)}
-            onSave={handleSaveItem}
-          />
-        )}
+            {/* Stat 3: Avg margin */}
+            <div className="px-4 sm:px-5 pt-3.5">
+              <div className="text-xl font-medium text-[#2D7A4F] tabular-nums">
+                {avgMargin}
+              </div>
+              <div className="text-[11px] text-[#888] mt-0.5">Avg margin</div>
+              <div className="text-[10px] text-[#AAA] mt-0.5">gross, YTD</div>
+            </div>
 
-        {/* Add modals */}
-        <AddInventoryModal
-          isOpen={showAddModal}
-          onClose={() => setShowAddModal(false)}
-          onAdd={handleAddItem}
-        />
+            {/* Stat 4: Avg hold time */}
+            <div className="px-4 sm:px-5 pt-3.5">
+              <div className="text-xl font-medium text-[#1A1A1A] tabular-nums">
+                {avgHoldStr}
+              </div>
+              <div className="text-[11px] text-[#888] mt-0.5">Avg hold time</div>
+              <div className="text-[10px] text-[#AAA] mt-0.5">across active items</div>
+            </div>
+          </div>
 
-        <AddCardModalNew
-          isOpen={showAddCardModal}
-          onClose={() => setShowAddCardModal(false)}
-          onSuccess={() => {}}
-          onLimitReached={() => {}}
-          addMode="business"
-          modalTitle="Add Card to Inventory"
-          onOpenSmartSearch={() => {
-            setShowAddCardModal(false);
-            setShowCardPicker(true);
-          }}
-          onCardSelected={handleCardIdentified}
-        />
-
-        <CardPickerModal
-          isOpen={showCardPicker}
-          title="Add Card to Inventory"
-          mode="collection"
-          onClose={() => setShowCardPicker(false)}
-          onSelect={handleCardPickerSelect}
-          quantityEnabled
-        />
-
-        <AddCardToInventoryModal
-          isOpen={showAddCardToInventory}
-          card={pendingInventoryCard}
-          onClose={() => {
-            setShowAddCardToInventory(false);
-            setPendingInventoryCard(null);
-          }}
-          onSuccess={handleCardAdded}
-        />
-
-        <AddWaxModal
-          isOpen={showAddWaxModal}
-          onClose={() => setShowAddWaxModal(false)}
-          onAdd={handleAddWax}
-        />
-
-        <CertLookupModal
-          isOpen={showCertLookup}
-          onClose={() => setShowCertLookup(false)}
-          onCardFound={(card) => {
-            setShowCertLookup(false);
-            setPendingInventoryCard(card);
-            setShowAddCardToInventory(true);
-          }}
-        />
-
-        <SaleFormModal
-          isOpen={Boolean(markSoldItem)}
-          title={markSoldItem ? `Mark as sold: ${markSoldItem.title}` : "Mark as sold"}
-          submitLabel="Record sale"
-          defaults={
-            markSoldItem
-              ? {
-                  inventory_item_id: markSoldItem.id,
-                  channel: markSoldItem.channel,
-                  sold_at: new Date().toISOString(),
-                  cogs_cents: markSoldItem.cost_basis_total_cents,
-                }
-              : undefined
-          }
-          onClose={() => setMarkSoldItem(null)}
-          onSubmit={async (payload) => {
-            await handleCreateSale(payload as unknown as Record<string, unknown>);
-            setMarkSoldItem(null);
-          }}
-          showCogsField={false}
-          storeTier={storeTier}
-        />
-
-        {/* Toast notification */}
-        {toast && (
-          <div
-            className={`fixed bottom-4 right-4 z-50 flex items-center gap-3 rounded-lg border p-4 ${
-              toast.type === "success"
-                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                : "border-red-200 bg-red-50 text-red-700"
-            }`}
-          >
-            <span>{toast.message}</span>
-            <button type="button" onClick={() => setToast(null)} className="hover:opacity-75">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+          {/* TAB SWITCHER */}
+          <div className="flex gap-4 px-4 sm:px-6 border-b border-[#E5E2DD]">
+            <button
+              type="button"
+              onClick={() => handleTabChange("inventory")}
+              className={`py-2 px-1 text-[13px] border-b-2 bg-transparent border-0 cursor-pointer transition-colors ${
+                activeTab === "inventory"
+                  ? "text-[#1A1A1A] font-medium border-b-[#1A1A1A]"
+                  : "text-[#888] font-normal border-b-transparent"
+              }`}
+            >
+              Inventory
+            </button>
+            <button
+              type="button"
+              onClick={() => handleTabChange("sales")}
+              className={`py-2 px-1 text-[13px] border-b-2 bg-transparent border-0 cursor-pointer transition-colors ${
+                activeTab === "sales"
+                  ? "text-[#1A1A1A] font-medium border-b-[#1A1A1A]"
+                  : "text-[#888] font-normal border-b-transparent"
+              }`}
+            >
+              Sales
             </button>
           </div>
-        )}
+
+          {/* ── INVENTORY TAB ──────────────────────────────────────────── */}
+          {activeTab === "inventory" && (
+            <>
+              {needsMigration && (
+                <div className="px-4 sm:px-6 py-4">
+                  <BusinessMigrationBanner
+                    onRetry={() => {
+                      setLoading(true);
+                      loadInventory();
+                    }}
+                  />
+                </div>
+              )}
+
+              {!needsMigration && (
+                <>
+                  {/* TOOLBAR */}
+                  <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3 flex-wrap">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {/* Search */}
+                      <input
+                        type="text"
+                        value={gridSearch}
+                        onChange={(e) => setGridSearch(e.target.value)}
+                        placeholder="Search inventory..."
+                        className="max-w-xs w-full bg-white border border-[#E5E2DD] rounded-lg px-3 py-1.5 text-xs text-[#1A1A1A] outline-none focus:border-[#AAA] transition-colors"
+                      />
+                      {/* Filter pills */}
+                      {PILLS.map((pill) => {
+                        const isActive = activePills.has(pill.key);
+                        return (
+                          <button
+                            key={pill.key}
+                            type="button"
+                            onClick={() => handlePillToggle(pill.key)}
+                            className={`px-2.5 py-1 text-xs rounded-full border border-[#E5E2DD] cursor-pointer whitespace-nowrap transition-colors ${
+                              isActive
+                                ? "bg-[#1A1A1A] text-[#F0EDE8] font-medium"
+                                : "bg-white text-[#777] font-normal hover:bg-[#F5F2EE]"
+                            }`}
+                          >
+                            {pill.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* View toggle */}
+                    <div className="flex gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleViewModeChange("grid")}
+                        title="Grid view"
+                        className={`p-1.5 border border-[#E5E2DD] rounded-md cursor-pointer leading-none transition-colors ${
+                          viewMode === "grid" ? "bg-[#1A1A1A] text-[#F0EDE8]" : "bg-white text-[#AAA] hover:bg-[#F5F2EE]"
+                        }`}
+                      >
+                        <svg width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+                          <rect x="1" y="1" width="6" height="6" rx="1" />
+                          <rect x="9" y="1" width="6" height="6" rx="1" />
+                          <rect x="1" y="9" width="6" height="6" rx="1" />
+                          <rect x="9" y="9" width="6" height="6" rx="1" />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleViewModeChange("list")}
+                        title="List view"
+                        className={`p-1.5 border border-[#E5E2DD] rounded-md cursor-pointer leading-none transition-colors ${
+                          viewMode === "list" ? "bg-[#1A1A1A] text-[#F0EDE8]" : "bg-white text-[#AAA] hover:bg-[#F5F2EE]"
+                        }`}
+                      >
+                        <svg width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+                          <rect x="1" y="2" width="14" height="2" rx="1" />
+                          <rect x="1" y="7" width="14" height="2" rx="1" />
+                          <rect x="1" y="12" width="14" height="2" rx="1" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* GRID VIEW */}
+                  {viewMode === "grid" && (
+                    <InventoryCardGrid
+                      items={gridFilteredItems}
+                      selectedItemId={selectedItem?.id ?? null}
+                      onItemClick={setSelectedItem}
+                      onMarkSold={handleMarkSold}
+                      ebayConnected={ebayConnected}
+                    />
+                  )}
+
+                  {/* LIST VIEW */}
+                  {viewMode === "list" && (
+                    <div className="px-4 sm:px-6 pb-6">
+                      <Surface className="p-5">
+                        {perfEnabled ? (
+                          <Profiler
+                            id="BusinessInventoryTable"
+                            onRender={handleInventoryProfilerRender}
+                          >
+                            <InventoryTable
+                              items={items}
+                              selectedItemId={selectedItem?.id ?? null}
+                              onItemClick={setSelectedItem}
+                              onInlineUpdate={handleInlineUpdate}
+                              onBulkAction={handleBulkAction}
+                              onDelete={handleDelete}
+                              onMarkSold={handleMarkSold}
+                              onFilteredChange={handleFilteredChange}
+                              ebayConnected={ebayConnected}
+                              ebayTopRated={ebayTopRated}
+                              dense
+                              perfEnabled={perfEnabled}
+                              listView
+                            />
+                          </Profiler>
+                        ) : (
+                          <InventoryTable
+                            items={items}
+                            selectedItemId={selectedItem?.id ?? null}
+                            onItemClick={setSelectedItem}
+                            onInlineUpdate={handleInlineUpdate}
+                            onBulkAction={handleBulkAction}
+                            onDelete={handleDelete}
+                            onMarkSold={handleMarkSold}
+                            onFilteredChange={handleFilteredChange}
+                            ebayConnected={ebayConnected}
+                            ebayTopRated={ebayTopRated}
+                            dense
+                            listView
+                          />
+                        )}
+                      </Surface>
+                    </div>
+                  )}
+                </>
+              )}
+            </>
+          )}
+
+          {/* ── SALES TAB ─────────────────────────────────────────────── */}
+          {activeTab === "sales" && (
+            <>
+              <EbayOrderSyncBanner />
+              <div className="px-4 sm:px-6 py-4 pb-6">
+                <Surface className="p-5">
+                  <SalesTable
+                    sales={sales}
+                    loading={salesLoading}
+                    filters={salesFilters}
+                    onFiltersChange={(next) => {
+                      setSalesFilters(next);
+                      setSalesPage(1);
+                    }}
+                    onEditSale={handleUpdateSale}
+                    onDeleteSale={handleDeleteSale}
+                    page={salesPage}
+                    pageSize={salesPageSize}
+                    total={salesTotal}
+                    onPageChange={(next) => setSalesPage(next)}
+                    storeTier={storeTier}
+                  />
+                </Surface>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* ── RIGHT RAIL ────────────────────────────────────────────────── */}
+        <div className="hidden lg:flex flex-col w-56 shrink-0 bg-white border-l border-[#E5E2DD]">
+          {/* SECTION 1: NEEDS ACTION */}
+          <div className="border-b border-[#F0EDE8] p-4">
+            <p className="text-[10px] text-[#AAA] tracking-[0.08em] uppercase mb-2.5">
+              NEEDS ACTION
+            </p>
+
+            <RailActionCard
+              label="List or reprice"
+              count={needsActionCount}
+              badgeBg="#FBF5E8"
+              badgeColor="#8A5C0A"
+              onClick={() =>
+                openConsultant(
+                  "Show me all cards I should list or reprice right now, sorted by margin potential."
+                )
+              }
+            />
+
+            <RailActionCard
+              label="Unlisted"
+              count={unlistedCount}
+              badgeBg="#F2EFE9"
+              badgeColor="#777"
+              onClick={() => {
+                handleTabChange("inventory");
+                handlePillToggle("Unlisted");
+              }}
+            />
+
+            <RailActionCard
+              label="MV coverage"
+              countLabel={mvCoveragePct != null ? `${mvCoveragePct}%` : "—"}
+              badgeBg="#F0F8F4"
+              badgeColor="#2D7A4F"
+              onClick={() =>
+                openConsultant(
+                  `My market value coverage is ${mvCoveragePct ?? "—"}%. What should I focus on next?`
+                )
+              }
+            />
+          </div>
+
+          {/* SECTION 2: MONTH TO DATE */}
+          <div className="border-b border-[#F0EDE8] p-4">
+            <p className="text-[10px] text-[#AAA] tracking-[0.08em] uppercase mb-2">
+              MONTH TO DATE
+            </p>
+            {[
+              { label: "Sales", value: metrics?.salesCountMtd ?? "—", color: "#1A1A1A" },
+              { label: "Revenue", value: mtdRevenue, color: "#2D7A4F" },
+              { label: "Margin", value: mtdMargin, color: "#2D7A4F" },
+              { label: "Avg sale", value: mtdAvgSale, color: "#1A1A1A" },
+              {
+                label: "Avg hold",
+                value: avgHoldDays != null ? `${avgHoldDays}d` : "—",
+                color: avgHoldDays != null && avgHoldDays > 21 ? "#C08A20" : "#1A1A1A",
+              },
+            ].map((row, idx, arr) => (
+              <div
+                key={row.label}
+                className={`flex justify-between items-center py-1.5 ${idx < arr.length - 1 ? "border-b border-[#F5F2EE]" : ""}`}
+              >
+                <span className="text-[11px] text-[#888]">{row.label}</span>
+                <span className="text-xs font-medium tabular-nums" style={{ color: row.color }}>
+                  {row.value}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* SECTION 3: QUICK ACTIONS */}
+          <div className="p-4">
+            <p className="text-[10px] text-[#AAA] tracking-[0.08em] uppercase mb-2.5">
+              QUICK ACTIONS
+            </p>
+            <button
+              type="button"
+              onClick={() =>
+                openConsultant(
+                  "Run a full analysis of my inventory. What should I act on this week?"
+                )
+              }
+              className="block w-full text-left mb-1.5 px-2.5 py-2 text-[11px] border border-[#E5E2DD] rounded-md bg-white text-[#1A1A1A] hover:bg-[#FAFAF8] transition-colors cursor-pointer"
+            >
+              AI inventory review ↗
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                openConsultant(
+                  "Which cards in my inventory are best candidates for PSA grading right now?"
+                )
+              }
+              className="block w-full text-left px-2.5 py-2 text-[11px] border border-[#E5E2DD] rounded-md bg-white text-[#1A1A1A] hover:bg-[#FAFAF8] transition-colors cursor-pointer"
+            >
+              Grading candidates ↗
+            </button>
+          </div>
+        </div>
       </main>
+
+      {/* ── MODALS ────────────────────────────────────────────────────────── */}
+
+      {selectedItem && (
+        <ItemDetailDrawer
+          item={selectedItem}
+          onClose={() => setSelectedItem(null)}
+          onSave={handleSaveItem}
+        />
+      )}
+
+      <AddInventoryModal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onAdd={handleAddItem}
+      />
+
+      <AddCardModalNew
+        isOpen={showAddCardModal}
+        onClose={() => setShowAddCardModal(false)}
+        onSuccess={() => {}}
+        onLimitReached={() => {}}
+        addMode="business"
+        modalTitle="Add Card to Inventory"
+        onOpenSmartSearch={() => {
+          setShowAddCardModal(false);
+          setShowCardPicker(true);
+        }}
+        onCardSelected={handleCardIdentified}
+      />
+
+      <CardPickerModal
+        isOpen={showCardPicker}
+        title="Add Card to Inventory"
+        mode="collection"
+        onClose={() => setShowCardPicker(false)}
+        onSelect={handleCardPickerSelect}
+        quantityEnabled
+      />
+
+      <AddCardToInventoryModal
+        isOpen={showAddCardToInventory}
+        card={pendingInventoryCard}
+        onClose={() => {
+          setShowAddCardToInventory(false);
+          setPendingInventoryCard(null);
+        }}
+        onSuccess={handleCardAdded}
+      />
+
+      <AddWaxModal
+        isOpen={showAddWaxModal}
+        onClose={() => setShowAddWaxModal(false)}
+        onAdd={handleAddWax}
+      />
+
+      <CertLookupModal
+        isOpen={showCertLookup}
+        onClose={() => setShowCertLookup(false)}
+        onCardFound={(card) => {
+          setShowCertLookup(false);
+          setPendingInventoryCard(card);
+          setShowAddCardToInventory(true);
+        }}
+      />
+
+      <SaleFormModal
+        isOpen={Boolean(markSoldItem)}
+        title={markSoldItem ? `Mark as sold: ${markSoldItem.title}` : "Mark as sold"}
+        submitLabel="Record sale"
+        defaults={
+          markSoldItem
+            ? {
+                inventory_item_id: markSoldItem.id,
+                channel: markSoldItem.channel,
+                sold_at: new Date().toISOString(),
+                cogs_cents: markSoldItem.cost_basis_total_cents,
+              }
+            : undefined
+        }
+        onClose={() => setMarkSoldItem(null)}
+        onSubmit={async (payload) => {
+          await handleCreateSale(payload as unknown as Record<string, unknown>);
+          setMarkSoldItem(null);
+        }}
+        showCogsField={false}
+        storeTier={storeTier}
+      />
+
+      {toast && (
+        <div
+          className={`fixed bottom-4 right-4 z-50 flex items-center gap-3 rounded-lg border p-4 ${
+            toast.type === "success"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+              : "border-red-200 bg-red-50 text-red-700"
+          }`}
+        >
+          <span>{toast.message}</span>
+          <button type="button" onClick={() => setToast(null)} className="hover:opacity-75">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
     </AuthenticatedLayout>
   );
 }
@@ -1321,15 +1788,15 @@ export default function LedgerPage() {
     <Suspense
       fallback={
         <AuthenticatedLayout>
-          <main className="max-w-7xl mx-auto px-4 py-4">
-            <div className="animate-pulse space-y-4">
-              <div className="h-8 w-48 rounded bg-[#E5E7EB]" />
-              <div className="grid grid-cols-5 gap-4">
-                {[...Array(5)].map((_, i) => (
-                  <div key={i} className="h-20 rounded-xl bg-[#E5E7EB]" />
+          <main className="bg-[#F7F5F2] min-h-screen">
+            <div className="animate-pulse p-6 space-y-4">
+              <div className="h-8 w-48 rounded bg-[#E5E2DD]" />
+              <div className="flex gap-4">
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="h-16 flex-1 rounded bg-[#E5E2DD]" />
                 ))}
               </div>
-              <div className="h-64 rounded-xl bg-[#E5E7EB]" />
+              <div className="h-64 rounded bg-[#E5E2DD]" />
             </div>
           </main>
         </AuthenticatedLayout>

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAdminAuth } from "@/lib/admin";
 import { createServiceClient } from "@/lib/supabase/server";
 import { inferShopCategoryLabel } from "@/lib/cards/market-category";
+import { syncShopListingImageProjection } from "@/lib/shop/server";
 
 /**
  * Sync shop_listings from business_inventory_items.
@@ -81,7 +82,10 @@ export async function POST() {
         .from("shop_listings")
         .update({ quantity: qty, cmv })
         .eq("id", existing.id);
-      if (!updErr) results.updated++;
+      if (!updErr) {
+        await syncShopListingImageProjection(existing.id);
+        results.updated++;
+      }
       else results.flagged.push(`update failed: ${inv.id}`);
     } else if (price > 0 && qty > 0) {
       const insert = {
@@ -108,10 +112,15 @@ export async function POST() {
         ),
         tags: inv.channel ? [inv.channel] : [],
       };
-      const { error: insErr } = await supabase
+      const { data: inserted, error: insErr } = await supabase
         .from("shop_listings")
-        .insert(insert);
-      if (!insErr) results.created++;
+        .insert(insert)
+        .select("id")
+        .single();
+      if (!insErr && inserted?.id) {
+        await syncShopListingImageProjection(inserted.id);
+        results.created++;
+      }
       else results.flagged.push(`insert failed: ${inv.id}`);
     } else {
       results.skipped++;

@@ -283,7 +283,6 @@ export default function BusinessLedgerView({
             loading={metricsLoading}
             inventorySummary={inventorySummary}
             totalItemCount={totalItemCount}
-            compact
           />
         </div>
       </Surface>
