@@ -16,6 +16,8 @@ export interface PendingInventoryCard {
   stock_image_url?: string;
   ebay_image_url?: string;
   quantity?: number;
+  /** PSA cert number — populated when card added via cert lookup */
+  cert_number?: string;
 }
 
 interface Props {
@@ -200,6 +202,7 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
           user_image_url: card.user_image_url || null,
           stock_image_url: card.stock_image_url || null,
           ebay_image_url: card.ebay_image_url || null,
+          cert_number: card.cert_number || null,
           location: form.location || null,
           notes: form.notes || null,
         }),
@@ -315,6 +318,9 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
               )}
               {gradeFields.gradeLabel && (
                 <p className="text-xs text-blue-400 font-medium">{gradeFields.gradeLabel}</p>
+              )}
+              {card.cert_number && (
+                <p className="text-xs text-gray-500 font-mono mt-0.5">Cert #{card.cert_number}</p>
               )}
             </div>
           </div>

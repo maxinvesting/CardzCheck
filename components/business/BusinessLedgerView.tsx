@@ -32,6 +32,7 @@ interface Props {
   onAddInventory: () => void;
   onAddWax: () => void;
   onManualAdd: () => void;
+  onAddByCert?: () => void;
   children: ReactNode;
 }
 
@@ -56,6 +57,7 @@ export default function BusinessLedgerView({
   onAddInventory,
   onAddWax,
   onManualAdd,
+  onAddByCert,
   children,
 }: Props) {
   return (
@@ -253,6 +255,21 @@ export default function BusinessLedgerView({
                     </svg>
                     Manual Entry
                   </button>
+                  {onAddByCert && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onToggleAddDropdown();
+                        onAddByCert();
+                      }}
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-[var(--biz-text)] transition-colors hover:bg-[color:var(--biz-hover,#f3f4f6)] border-t border-[var(--biz-border)]"
+                    >
+                      <span className="inline-flex items-center justify-center h-4 w-4 rounded text-[9px] font-bold bg-blue-600 text-white flex-shrink-0">
+                        PSA
+                      </span>
+                      By PSA Cert #
+                    </button>
+                  )}
                 </div>
               )}
             </div>

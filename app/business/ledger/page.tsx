@@ -25,6 +25,7 @@ import AddInventoryModal from "@/components/business/AddInventoryModal";
 import AddWaxModal from "@/components/business/AddWaxModal";
 import AddCardToInventoryModal from "@/components/business/AddCardToInventoryModal";
 import type { PendingInventoryCard } from "@/components/business/AddCardToInventoryModal";
+import CertLookupModal from "@/components/business/CertLookupModal";
 import AddCardModalNew from "@/components/AddCardModalNew";
 import CardPickerModal from "@/components/CardPickerModal";
 import type { CardPickerSelection } from "@/components/CardPicker";
@@ -178,6 +179,7 @@ function LedgerPageContent() {
   const [showAddCardToInventory, setShowAddCardToInventory] = useState(false);
   const [pendingInventoryCard, setPendingInventoryCard] = useState<PendingInventoryCard | null>(null);
   const [showAddWaxModal, setShowAddWaxModal] = useState(false);
+  const [showCertLookup, setShowCertLookup] = useState(false);
   const [showAddDropdown, setShowAddDropdown] = useState(false);
   const [needsMigration, setNeedsMigration] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
@@ -1123,6 +1125,7 @@ function LedgerPageContent() {
           onAddInventory={openAddInventoryModal}
           onAddWax={() => setShowAddWaxModal(true)}
           onManualAdd={() => setShowAddModal(true)}
+          onAddByCert={() => setShowCertLookup(true)}
         >
           {/* Migration banner */}
           {needsMigration && (
@@ -1256,6 +1259,16 @@ function LedgerPageContent() {
           isOpen={showAddWaxModal}
           onClose={() => setShowAddWaxModal(false)}
           onAdd={handleAddWax}
+        />
+
+        <CertLookupModal
+          isOpen={showCertLookup}
+          onClose={() => setShowCertLookup(false)}
+          onCardFound={(card) => {
+            setShowCertLookup(false);
+            setPendingInventoryCard(card);
+            setShowAddCardToInventory(true);
+          }}
         />
 
         <SaleFormModal
