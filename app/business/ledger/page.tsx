@@ -1478,6 +1478,10 @@ function LedgerPageContent() {
                   {viewMode === "grid" && (
                     <InventoryCardGrid
                       items={gridFilteredItems}
+                      selectedItemId={selectedItem?.id ?? null}
+                      onItemClick={setSelectedItem}
+                      onMarkSold={handleMarkSold}
+                      ebayConnected={ebayConnected}
                       onAddCard={openAddInventoryModal}
                       onConsultant={openConsultant}
                     />
