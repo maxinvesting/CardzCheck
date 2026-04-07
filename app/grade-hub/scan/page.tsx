@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useState } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { usePathname, useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { Playfair_Display } from "next/font/google";
@@ -28,6 +28,7 @@ function StatusDot({ state }: { state: SlotState }) {
 }
 
 function ScanPageInner() {
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
   const { authUser, loading: authLoading } = useAuth();
@@ -55,6 +56,7 @@ function ScanPageInner() {
   const [slotStates, setSlotStates] = useState<SlotState[]>(
     Array.from({ length: TIER_MAX_SLOTS.business }, () => "idle" as SlotState)
   );
+  const gradeHubBasePath = pathname?.startsWith("/business") ? "/business/grade-hub" : "/grade-hub";
 
   useEffect(() => {
     setActiveSlots((p) => Math.min(p, maxSlots));
@@ -87,7 +89,7 @@ function ScanPageInner() {
         >
           <div className="flex items-stretch flex-1">
             <Link
-              href="/grade-hub"
+              href={gradeHubBasePath}
               style={{
                 fontSize: 12,
                 fontWeight: 700,
@@ -164,7 +166,7 @@ function ScanPageInner() {
               </div>
             )}
             <button
-              onClick={() => router.push("/grade-hub")}
+              onClick={() => router.push(gradeHubBasePath)}
               style={{
                 fontSize: 11,
                 fontWeight: 700,
@@ -236,7 +238,7 @@ function ScanPageInner() {
                   className="flex justify-center gap-3"
                 >
                   <Link
-                    href="/grade-hub"
+                    href={gradeHubBasePath}
                     style={{
                       fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.6px",
                       borderRadius: 2, border: "1px solid rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.7)",
@@ -246,7 +248,7 @@ function ScanPageInner() {
                     Back to Hub
                   </Link>
                   <button
-                    onClick={() => router.push("/grade-hub")}
+                    onClick={() => router.push(gradeHubBasePath)}
                     style={{
                       fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.6px",
                       borderRadius: 2, border: "none", color: "#fff",

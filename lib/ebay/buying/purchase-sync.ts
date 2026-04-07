@@ -202,7 +202,6 @@ async function importLineItem(
     tax_cents: taxCents,
     fees_paid_cents: 0,
     quantity: li.quantity,
-    ebay_image_url: li.imageUrl,
     ebay_purchase_order_id: order.purchaseOrderId,
     ebay_purchase_line_item_id: li.lineItemId,
   };

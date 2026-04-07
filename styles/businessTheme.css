@@ -4,11 +4,19 @@
   --biz-border: #e5e7eb;
   --biz-text: #111827;
   --biz-muted: #6b7280;
-  --biz-primary: #0b7a4b;
+  --biz-primary: #1D9E75;
   --biz-warning: #b45309;
   --biz-surface-soft: #f9fafb;
   --biz-hover: #f3f4f6;
   --biz-skeleton: #e5e7eb;
+
+  /* Signal tag colors */
+  --tag-opportunity-bg: #1D9E75;
+  --tag-opportunity-text: #ffffff;
+  --tag-trend-bg: #FAEEDA;
+  --tag-trend-text: #854F0B;
+  --tag-alert-bg: #FCEBEB;
+  --tag-alert-text: #A32D2D;
 
   /* Compatibility aliases for existing components */
   --app-bg: var(--biz-bg);
@@ -22,12 +30,13 @@
 
   background: var(--biz-bg);
   color: var(--biz-text);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
 .business-theme .cc-surface {
   background: var(--biz-surface);
   border: 1px solid var(--biz-border);
-  border-radius: 12px;
+  border-radius: 8px;
   box-shadow: none;
 }
 
@@ -35,19 +44,30 @@
   border: 1px solid transparent;
   background: var(--biz-primary);
   color: #ffffff;
+  border-radius: 0;
 }
 
 .business-theme .cc-btn-primary:hover {
-  background: #09643e;
+  background: #17896A;
 }
 
 .business-theme .cc-btn-secondary {
-  border: 1px solid var(--biz-border);
-  background: #ffffff;
+  border: 0.5px solid var(--biz-border);
+  background: transparent;
   color: var(--biz-text);
 }
 
 .business-theme .cc-btn-secondary:hover {
-  background: #f9fafb;
+  background: var(--biz-hover);
   border-color: #d1d5db;
+}
+
+.business-theme .biz-btn-ghost {
+  background: transparent;
+  border: 0.5px solid var(--biz-border);
+  color: var(--biz-text);
+}
+
+.business-theme .biz-btn-ghost:hover {
+  background: var(--biz-hover);
 }

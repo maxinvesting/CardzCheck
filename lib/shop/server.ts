@@ -1,8 +1,10 @@
-import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/server";
 import type { ShopListing } from "@/types/shop";
+import { resolveTrustedCardImageForItem } from "@/lib/images/resolver";
+import { uniqueTrustedImageUrls } from "@/lib/images/shared";
 
 const PUBLIC_COLUMNS =
-  "id,created_at,updated_at,title,slug,description,inventory_item_id,player_name,year,set_brand,parallel_variant,card_number,grade,condition,cert_number,sport,price,cmv,ebay_storefront_price,quantity,quantity_sold,image_urls,thumbnail_url,status,publish_state,featured,is_premium,shipping_method,shipping_cost,tags,ebay_comp_url,ai_insight,ai_insight_at,grade_analysis,grade_analysis_at";
+  "id,created_at,updated_at,title,slug,description,inventory_item_id,player_name,year,set_brand,parallel_variant,card_number,grade,condition,cert_number,sport,price,cmv,ebay_storefront_price,quantity,quantity_sold,image_urls,thumbnail_url,status,publish_state,featured,is_premium,accepts_offers,shipping_method,shipping_cost,tags,ebay_comp_url,ai_insight,ai_insight_at,grade_analysis,grade_analysis_at";
 
 export interface ShopStats {
   activeCount: number;
@@ -37,7 +39,7 @@ export async function getShopListingsWithStats(): Promise<{
   listings: ShopListing[];
   stats: ShopStats;
 }> {
-  const supabase = await createClient();
+  const supabase = await createServiceClient();
   const { data, error } = await supabase
     .from("shop_listings")
     .select(PUBLIC_COLUMNS)
@@ -50,7 +52,7 @@ export async function getShopListingsWithStats(): Promise<{
     return { listings: [], stats: defaultStats() };
   }
 
-  const listings = (data ?? []) as ShopListing[];
+  const listings = await hydrateShopListings((data ?? []) as ShopListing[]);
   const stats = computeStats(listings);
   return { listings, stats };
 }
@@ -102,7 +104,7 @@ export async function getRelatedListings(
   listingId: string,
   listing: ShopListing
 ): Promise<ShopListing[]> {
-  const supabase = await createClient();
+  const supabase = await createServiceClient();
   const { data, error } = await supabase
     .from("shop_listings")
     .select(PUBLIC_COLUMNS)
@@ -114,7 +116,7 @@ export async function getRelatedListings(
 
   if (error || !data) return [];
 
-  const candidates = data as ShopListing[];
+  const candidates = await hydrateShopListings(data as ShopListing[]);
   const priceMin = listing.price - 50;
   const priceMax = listing.price + 50;
 
@@ -142,4 +144,60 @@ export async function getRelatedListings(
   }
 
   return related;
+}
+
+export async function hydrateShopListing(listing: ShopListing): Promise<ShopListing> {
+  const supabase = await createServiceClient();
+  const resolved = await resolveTrustedCardImageForItem({
+    supabase,
+    item: {
+      id: listing.inventory_item_id,
+      cert_number: listing.cert_number,
+      psa_cert_number: listing.cert_number,
+      image_url: null,
+      image_source: null,
+      user_image_url: null,
+    },
+    itemId: listing.inventory_item_id,
+  });
+
+  const imageUrls = uniqueTrustedImageUrls([
+    resolved.trustedImage.frontUrl,
+    resolved.trustedImage.backUrl,
+  ]);
+
+  return {
+    ...listing,
+    trusted_image: resolved.trustedImage,
+    thumbnail_url: resolved.trustedImage.frontUrl,
+    image_urls: imageUrls,
+  };
+}
+
+export async function hydrateShopListings(listings: ShopListing[]): Promise<ShopListing[]> {
+  return Promise.all(listings.map((listing) => hydrateShopListing(listing)));
+}
+
+export async function syncShopListingImageProjection(
+  listingId: string
+): Promise<ShopListing | null> {
+  const supabase = await createServiceClient();
+  const { data, error } = await supabase
+    .from("shop_listings")
+    .select(PUBLIC_COLUMNS)
+    .eq("id", listingId)
+    .maybeSingle();
+
+  if (error || !data) return null;
+
+  const hydrated = await hydrateShopListing(data as ShopListing);
+  await supabase
+    .from("shop_listings")
+    .update({
+      thumbnail_url: hydrated.thumbnail_url,
+      image_urls: hydrated.image_urls,
+    })
+    .eq("id", listingId);
+
+  return hydrated;
 }
