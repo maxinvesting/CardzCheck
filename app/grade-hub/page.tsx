@@ -217,7 +217,7 @@ export default function GradeHubPage() {
               Estimate your grade odds.
             </h1>
             <p style={{ fontSize: 13, color: "#6b7280", lineHeight: 1.5, maxWidth: 560 }}>
-              Upload card images — the engine scores centering, corners, edges &amp; surface and returns calibrated PSA &amp; BGS distributions.
+              Upload card images — the engine scores centering, corners, edges &amp; surface and returns calibrated probability bands for PSA, BGS, CGC, SGC, and Tag Rater.
             </p>
           </div>
 

@@ -6,6 +6,11 @@ import { inferShopCategoryLabel } from "@/lib/cards/market-category";
 import type { GradeCmv, GradeProbabilities, WorthGradingResult } from "@/types";
 import { cacheGradeCmv, getCachedGradeCmv } from "./cache";
 import { DEFAULT_COMPS_WINDOW_DAYS, DEFAULT_GRADE_FEES } from "./constants";
+import {
+  deriveHalfPointGradersFromPsa,
+  mapPsaToBgs,
+  normalizeHalfPointGradeDistribution,
+} from "@/lib/grading/halfPointGraderMaps";
 
 type GradeKey = "raw" | "psa10" | "psa9" | "psa8" | "bgs95" | "bgs9" | "bgs85";
 
@@ -335,27 +340,24 @@ export function normalizeProbabilities(
     probabilities.psa["9"] +
     probabilities.psa["8"] +
     probabilities.psa["7_or_lower"];
-  const sumBgs =
-    probabilities.bgs["9.5"] +
-    probabilities.bgs["9"] +
-    probabilities.bgs["8.5"] +
-    probabilities.bgs["8_or_lower"];
   const psaTotal = sumPsa || 1;
-  const bgsTotal = sumBgs || 1;
+  const psaNorm = {
+    "10": probabilities.psa["10"] / psaTotal,
+    "9": probabilities.psa["9"] / psaTotal,
+    "8": probabilities.psa["8"] / psaTotal,
+    "7_or_lower": probabilities.psa["7_or_lower"] / psaTotal,
+  };
+  const bgsNorm = normalizeHalfPointGradeDistribution(
+    probabilities.bgs ?? mapPsaToBgs(psaNorm)
+  );
+  const derived = deriveHalfPointGradersFromPsa(psaNorm, bgsNorm);
 
   return {
-    psa: {
-      "10": probabilities.psa["10"] / psaTotal,
-      "9": probabilities.psa["9"] / psaTotal,
-      "8": probabilities.psa["8"] / psaTotal,
-      "7_or_lower": probabilities.psa["7_or_lower"] / psaTotal,
-    },
-    bgs: {
-      "9.5": probabilities.bgs["9.5"] / bgsTotal,
-      "9": probabilities.bgs["9"] / bgsTotal,
-      "8.5": probabilities.bgs["8.5"] / bgsTotal,
-      "8_or_lower": probabilities.bgs["8_or_lower"] / bgsTotal,
-    },
+    psa: psaNorm,
+    bgs: bgsNorm,
+    cgc: normalizeHalfPointGradeDistribution(probabilities.cgc ?? derived.cgc),
+    sgc: normalizeHalfPointGradeDistribution(probabilities.sgc ?? derived.sgc),
+    tag: normalizeHalfPointGradeDistribution(probabilities.tag ?? derived.tag),
     confidence: probabilities.confidence,
   };
 }
