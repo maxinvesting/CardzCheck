@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { certNumber: string } }
+  { params }: { params: Promise<{ certNumber: string }> }
 ) {
   // Auth check — must be signed in
   const supabase = await createClient();
@@ -13,7 +13,7 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { certNumber } = params;
+  const { certNumber } = await params;
   if (!certNumber?.trim()) {
     return NextResponse.json({ error: "cert number is required" }, { status: 400 });
   }
