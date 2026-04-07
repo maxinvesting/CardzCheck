@@ -20,6 +20,8 @@ import {
 import EbayListingBadge from "./EbayListingBadge";
 import EbayListingModal from "./EbayListingModal";
 import { buildEbaySoldUrl } from "@/lib/ebay/comps-url";
+import InventoryCardGrid from "./InventoryCardGrid";
+import InventoryScrollView from "./InventoryScrollView";
 
 function fmtCents(cents: number | null): string {
   if (cents === null) return "";
@@ -255,6 +257,15 @@ export default function InventoryTable({
   const [sortKey, setSortKey] = useState<SortableColumnKey | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
+  const [viewMode, setViewMode] = useState<"grid" | "scroll" | "table">(() => {
+    if (typeof window === "undefined") return "grid";
+    const stored = window.localStorage.getItem("biz_inventory_view");
+    return (stored === "grid" || stored === "scroll" || stored === "table") ? stored : "grid";
+  });
+
+  useEffect(() => {
+    window.localStorage.setItem("biz_inventory_view", viewMode);
+  }, [viewMode]);
 
   const displayColumns = useMemo(
     () =>
@@ -1125,6 +1136,57 @@ export default function InventoryTable({
               <option key={c} value={c}>{c}</option>
             ))}
           </select>
+
+          {/* View mode toggle — desktop only */}
+          <div className="hidden sm:flex items-center rounded-md border border-[var(--biz-border)] overflow-hidden shrink-0">
+            <button
+              type="button"
+              title="Card grid view"
+              onClick={() => setViewMode("grid")}
+              className={`flex items-center justify-center w-8 h-8 transition-colors ${
+                viewMode === "grid"
+                  ? "bg-emerald-600 text-white"
+                  : "bg-white text-[var(--biz-muted)] hover:text-[var(--biz-text)] hover:bg-[#F3F4F6]"
+              }`}
+            >
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <rect x="3" y="3" width="7" height="7" rx="1"/>
+                <rect x="14" y="3" width="7" height="7" rx="1"/>
+                <rect x="3" y="14" width="7" height="7" rx="1"/>
+                <rect x="14" y="14" width="7" height="7" rx="1"/>
+              </svg>
+            </button>
+            <button
+              type="button"
+              title="One at a time view"
+              onClick={() => setViewMode("scroll")}
+              className={`flex items-center justify-center w-8 h-8 border-x border-[var(--biz-border)] transition-colors ${
+                viewMode === "scroll"
+                  ? "bg-emerald-600 text-white"
+                  : "bg-white text-[var(--biz-muted)] hover:text-[var(--biz-text)] hover:bg-[#F3F4F6]"
+              }`}
+            >
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <rect x="5" y="3" width="14" height="18" rx="2"/>
+                <path d="M9 8h6M9 12h6M9 16h4"/>
+              </svg>
+            </button>
+            <button
+              type="button"
+              title="Table view"
+              onClick={() => setViewMode("table")}
+              className={`flex items-center justify-center w-8 h-8 transition-colors ${
+                viewMode === "table"
+                  ? "bg-emerald-600 text-white"
+                  : "bg-white text-[var(--biz-muted)] hover:text-[var(--biz-text)] hover:bg-[#F3F4F6]"
+              }`}
+            >
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <rect x="3" y="3" width="18" height="18" rx="2"/>
+                <path d="M3 9h18M3 15h18M9 3v18"/>
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1200,8 +1262,35 @@ export default function InventoryTable({
         )}
       </div>
 
+      {/* Desktop grid view (>= 640px) */}
+      {viewMode === "grid" && (
+        <div className="hidden sm:block">
+          <InventoryCardGrid
+            items={sortedItems}
+            selectedItemId={selectedItemId}
+            onItemClick={onItemClick}
+            onMarkSold={onMarkSold}
+            ebayConnected={ebayConnected}
+            onEbayList={(item) => setEbayListingItem(item)}
+          />
+        </div>
+      )}
+
+      {/* Desktop scroll/focus view (>= 640px) */}
+      {viewMode === "scroll" && (
+        <div className="hidden sm:block">
+          <InventoryScrollView
+            items={sortedItems}
+            onItemClick={onItemClick}
+            onMarkSold={onMarkSold}
+            ebayConnected={ebayConnected}
+            onEbayList={(item) => setEbayListingItem(item)}
+          />
+        </div>
+      )}
+
       {/* Desktop table (>= 640px) — ledger style: tight rows, right-align money */}
-      <div
+      {viewMode === "table" && <div
         ref={tableContainerRef}
         className="hidden sm:block border border-[var(--biz-border)] rounded-lg overflow-hidden"
         onScrollCapture={() => {
@@ -1255,13 +1344,13 @@ export default function InventoryTable({
             </table>
           </div>
         )}
-      </div>
+      </div>}
 
       <div className="mt-1.5 text-[10px] text-[var(--biz-muted)]">
         {filtered.length} item{filtered.length !== 1 ? "s" : ""}
         {filtered.length !== items.length && ` (of ${items.length} total)`}
         <span className="hidden sm:inline">
-          {" \u00B7 Click title or Open to view profile \u00B7 Click cell to edit"}
+          {viewMode === "table" && " \u00B7 Click cell to edit \u00B7 Double-click row to open detail"}
         </span>
         <span className="sm:hidden">
           {" \u00B7 Tap View or title to open profile"}
