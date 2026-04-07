@@ -1,17 +1,16 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { useParams, useSearchParams, useRouter } from "next/navigation";
+import { useParams, usePathname, useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import Image from "next/image";
-import { createClient as createSupabaseClient } from "@/lib/supabase/client";
+import { CardImage as TrustedCardImageFrame } from "@/components/CardImage";
 import {
   estimateTakeHome,
   fmtCents,
 } from "@/lib/business/pricing";
 import { useGradeEstimateFromImages } from "@/lib/grading/useGradeEstimateFromImages";
 import type { GradeEstimatorCardInput } from "@/lib/grade-estimator/value";
-import type { WorthGradingResult } from "@/types";
+import type { CardImage, TrustedCardImage, WorthGradingResult } from "@/types";
 import { buildEbaySoldUrl } from "@/lib/ebay/comps-url";
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -27,6 +26,7 @@ interface ProfileItem {
   cert_number?: string | null;
   parallel_type?: string | null;
   insert?: string | null;
+  card_number?: string | null;
   quantity?: number | null;
   status?: string | null;
   channel?: string | null;
@@ -39,9 +39,12 @@ interface ProfileItem {
   purchase_date?: string | null;
   notes?: string | null;
   image_url?: string | null;
+  image_source?: "psa" | "user" | "none" | null;
   user_image_url?: string | null;
-  stock_image_url?: string | null;
-  ebay_image_url?: string | null;
+  psa_cert_number?: string | null;
+  trusted_image?: TrustedCardImage | null;
+  card_images?: CardImage[] | null;
+  primary_image?: CardImage | null;
   created_at?: string | null;
   updated_at?: string | null;
 }
@@ -70,10 +73,10 @@ type TabId = "details" | "shop";
 
 function pickImageUrl(item: ProfileItem): string | null {
   return (
-    item.user_image_url ||
-    item.stock_image_url ||
-    item.ebay_image_url ||
+    item.trusted_image?.frontUrl ||
     item.image_url ||
+    item.user_image_url ||
+    item.card_images?.find((image) => typeof image.url === "string" && image.url.length > 0)?.url ||
     null
   );
 }
@@ -82,44 +85,6 @@ function displayTitle(item: ProfileItem): string {
   if (item.title) return item.title;
   const parts = [item.year, item.player_name, item.set_name, item.grade];
   return parts.filter(Boolean).join(" ") || "Untitled";
-}
-
-function buildGradeSearchTerm(
-  grade?: string | null,
-  gradingCompany?: string | null
-): string | null {
-  const normalizedGrade = grade?.trim();
-  if (!normalizedGrade) return null;
-  if (/^(PSA|BGS|SGC|CGC)\s/i.test(normalizedGrade)) {
-    return normalizedGrade;
-  }
-  return `${(gradingCompany || "PSA").toUpperCase()} ${normalizedGrade}`;
-}
-
-function buildEbayActiveSearchQuery(item: ProfileItem, fallbackTitle: string): string {
-  const rawTitle = item.title?.trim();
-  if (rawTitle && !/^(PSA|BGS|SGC|CGC)?\s*\d+(\.\d+)?$/i.test(rawTitle)) {
-    return rawTitle;
-  }
-
-  const identityParts = [
-    item.year,
-    item.player_name,
-    item.set_name,
-    item.parallel_type,
-    item.insert,
-  ]
-    .map((part) => part?.trim())
-    .filter((part): part is string => Boolean(part));
-
-  const gradePart = buildGradeSearchTerm(item.grade, item.grading_company);
-  const parts = identityParts.length > 0 && gradePart
-    ? [...identityParts, gradePart]
-    : identityParts;
-  if (parts.length > 0) return parts.join(" ");
-  if (gradePart) return gradePart;
-  if (fallbackTitle.trim()) return fallbackTitle.trim();
-  return "sports trading card";
 }
 
 function fmtDate(d: string | null | undefined): string {
@@ -139,10 +104,6 @@ function toTimestamp(value: string | null | undefined): number | null {
   if (!value) return null;
   const parsed = new Date(value).getTime();
   return Number.isFinite(parsed) ? parsed : null;
-}
-
-function isValidHttpUrl(value: string): boolean {
-  return /^https?:\/\//i.test(value);
 }
 
 const MAX_IMAGE_UPLOAD_BYTES = 10 * 1024 * 1024;
@@ -178,11 +139,13 @@ function severityBadge(severity: string) {
 
 export default function CardProfilePage() {
   const params = useParams();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
   const itemId = params.itemId as string;
-  const from = (searchParams.get("from") as Mode) || "collection";
-  const isBusinessMode = from === "business";
+  const routeIsBusiness = pathname?.startsWith("/business") ?? false;
+  const from = ((searchParams.get("from") as Mode) || (routeIsBusiness ? "business" : "collection"));
+  const isBusinessMode = routeIsBusiness || from === "business";
 
   // Data state
   const [item, setItem] = useState<ProfileItem | null>(null);
@@ -193,12 +156,10 @@ export default function CardProfilePage() {
   // Image zoom
   const [imageZoom, setImageZoom] = useState(false);
   const [showImageModal, setShowImageModal] = useState(false);
-  const [imageUrlInput, setImageUrlInput] = useState("");
   const [imageFileInput, setImageFileInput] = useState<File | null>(null);
   const [imageFilePreviewUrl, setImageFilePreviewUrl] = useState<string | null>(null);
   const [savingImage, setSavingImage] = useState(false);
   const imageFilePickerRef = useRef<HTMLInputElement | null>(null);
-  const attemptedImageHydrationRef = useRef(false);
 
   // Update Price modal
   const [showPriceModal, setShowPriceModal] = useState(false);
@@ -236,6 +197,13 @@ export default function CardProfilePage() {
   const [valueLoading, setValueLoading] = useState(false);
   const [valueError, setValueError] = useState<string | null>(null);
 
+  const buildProfilePath = useCallback((resolvedId: string, mode: Mode) => {
+    if (mode === "business") {
+      return `/business/card/${resolvedId}`;
+    }
+    return `/card/${resolvedId}?from=collection`;
+  }, []);
+
   useEffect(() => {
     if (toast) {
       const t = setTimeout(() => setToast(null), 3000);
@@ -263,11 +231,11 @@ export default function CardProfilePage() {
       if (mode === "business" && data.item) {
         const businessItem = data.item as ProfileItem;
         const imageCandidates = [
-          businessItem.user_image_url,
-          businessItem.stock_image_url,
-          businessItem.ebay_image_url,
-          businessItem.image_url,
-        ].filter((u): u is string => typeof u === "string" && u.length > 0);
+          ...(businessItem.trusted_image?.frontCandidates ?? []),
+          ...((businessItem.card_images ?? [])
+            .map((image) => image.url)
+            .filter((url): url is string => typeof url === "string" && url.length > 0)),
+        ].filter((url, index, array) => array.indexOf(url) === index);
         if (imageCandidates.length > 0) {
           const cardIdentity: GradeEstimatorCardInput = {
             player_name: businessItem.player_name ?? businessItem.title ?? "",
@@ -329,7 +297,7 @@ export default function CardProfilePage() {
             ? data.item.id
             : itemId;
         if (resolvedId !== itemId) {
-          router.replace(`/card/${resolvedId}?from=${primaryMode}`);
+          router.replace(buildProfilePath(resolvedId, primaryMode));
         }
         return;
       }
@@ -350,7 +318,7 @@ export default function CardProfilePage() {
             typeof data?.item?.id === "string" && data.item.id.length > 0
               ? data.item.id
               : itemId;
-          router.replace(`/card/${resolvedId}?from=${fallbackMode}`);
+          router.replace(buildProfilePath(resolvedId, fallbackMode));
           return;
         }
 
@@ -369,26 +337,16 @@ export default function CardProfilePage() {
     } finally {
       setLoading(false);
     }
-  }, [itemId, from, router]);
+  }, [itemId, from, router, buildProfilePath]);
 
   useEffect(() => {
     loadProfile();
   }, [loadProfile]);
 
-  useEffect(() => {
-    attemptedImageHydrationRef.current = false;
-  }, [itemId, from]);
-
   // ── Derived State ────────────────────────────────────────────────
 
   const imageUrl = item ? pickImageUrl(item) : null;
   const title = item ? displayTitle(item) : "";
-  const ebayActiveSearchQuery = item
-    ? buildEbayActiveSearchQuery(item, title)
-    : "sports trading card";
-  const ebayActiveSearchUrl = `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(
-    ebayActiveSearchQuery
-  )}&_sacat=212`;
   const ebayCompsUrl = item
     ? buildEbaySoldUrl({
         player: item.player_name,
@@ -401,48 +359,6 @@ export default function CardProfilePage() {
       })
     : buildEbaySoldUrl({ title: "sports trading card" });
 
-  useEffect(() => {
-    if (!isBusinessMode || !item || imageUrl || attemptedImageHydrationRef.current) {
-      return;
-    }
-    attemptedImageHydrationRef.current = true;
-
-    let cancelled = false;
-    fetch(`/api/business/inventory/fetch-cmv?item_id=${encodeURIComponent(item.id)}`)
-      .then(async (res) => {
-        if (!res.ok) return null;
-        return res.json().catch(() => null);
-      })
-      .then((data) => {
-        if (cancelled || !data) return;
-        const updatedItem = data.item as Partial<ProfileItem> | undefined;
-        if (updatedItem) {
-          setItem((prev) => (prev ? { ...prev, ...updatedItem } : prev));
-          return;
-        }
-        const stockImage = typeof data.stock_image_url === "string" ? data.stock_image_url : null;
-        const ebayImage = typeof data.ebay_image_url === "string" ? data.ebay_image_url : null;
-        if (stockImage || ebayImage) {
-          setItem((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  stock_image_url: prev.stock_image_url || stockImage,
-                  ebay_image_url: prev.ebay_image_url || ebayImage,
-                }
-              : prev
-          );
-        }
-      })
-      .catch(() => {
-        // Best-effort background hydration for missing image data.
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isBusinessMode, item, imageUrl]);
-
   const takeHome = useMemo(() => {
     if (!item) return [];
     return estimateTakeHome(item.list_price_cents);
@@ -453,6 +369,12 @@ export default function CardProfilePage() {
     if (typeof item.cost_basis_total_cents === "number") return item.cost_basis_total_cents;
     if (typeof item.purchase_price === "number") return Math.round(item.purchase_price * 100);
     return null;
+  }, [item]);
+
+  const marketValue = useMemo(() => {
+    if (!item || item.current_market_value_cents == null) return null;
+    const qty = item.quantity ?? 1;
+    return item.current_market_value_cents * qty;
   }, [item]);
 
   const gradeEstimate = useGradeEstimateFromImages({
@@ -577,132 +499,52 @@ export default function CardProfilePage() {
     }
   };
 
-  const handleSaveImageUrl = async () => {
+  const handleUploadImage = async () => {
     if (!item || savingImage) return;
-    const trimmed = imageUrlInput.trim();
-    if (!imageFileInput && trimmed && !isValidHttpUrl(trimmed)) {
-      setToast({
-        type: "error",
-        message: "Please enter a full image URL that starts with http:// or https://",
-      });
+    if (!imageFileInput) {
+      setToast({ type: "error", message: "Choose an image file to upload" });
       return;
     }
 
     setSavingImage(true);
     try {
-      let payloadUrl: string | null = trimmed || null;
-      if (imageFileInput) {
-        if (!imageFileInput.type.startsWith("image/")) {
-          setToast({ type: "error", message: "Please choose an image file" });
-          return;
-        }
-        if (imageFileInput.size > MAX_IMAGE_UPLOAD_BYTES) {
-          setToast({ type: "error", message: "Image must be under 10MB" });
-          return;
-        }
-
-        const supabase = createSupabaseClient();
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) {
-          setToast({ type: "error", message: "Please log in to upload images" });
-          return;
-        }
-
-        const sanitizedName = imageFileInput.name.replace(/[^\w.-]+/g, "_");
-        const extension = sanitizedName.includes(".")
-          ? sanitizedName.split(".").pop()
-          : imageFileInput.type.split("/")[1] || "jpg";
-        const randomPart = Math.random().toString(36).slice(2, 10);
-        const storagePath = `${user.id}/profile/${Date.now()}-${randomPart}.${extension}`;
-
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from("card-images")
-          .upload(storagePath, imageFileInput, {
-            cacheControl: "3600",
-            contentType: imageFileInput.type || undefined,
-            upsert: false,
-          });
-
-        if (uploadError) {
-          setToast({ type: "error", message: "Failed to upload image" });
-          return;
-        }
-
-        payloadUrl = supabase.storage
-          .from("card-images")
-          .getPublicUrl(uploadData.path).data.publicUrl;
+      if (!imageFileInput.type.startsWith("image/")) {
+        setToast({ type: "error", message: "Please choose an image file" });
+        return;
       }
-      const endpoint = isBusinessMode
-        ? "/api/business/inventory"
-        : `/api/cards/${item.id}`;
-      const body = isBusinessMode
-        ? { id: item.id, user_image_url: payloadUrl }
-        : { user_image_url: payloadUrl };
-
-      const res = await fetch(endpoint, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-
-      if (!res.ok) {
-        setToast({ type: "error", message: "Failed to save image" });
+      if (imageFileInput.size > MAX_IMAGE_UPLOAD_BYTES) {
+        setToast({ type: "error", message: "Image must be under 10MB" });
         return;
       }
 
-      if (isBusinessMode) {
-        const updated = await res.json().catch(() => null);
-        setItem((prev) =>
-          prev
-            ? {
-                ...prev,
-                user_image_url:
-                  typeof updated?.user_image_url === "string"
-                    ? updated.user_image_url
-                    : payloadUrl,
-              }
-            : prev
-        );
-      } else {
-        const response = await res.json().catch(() => null);
-        const updatedCard = response?.card as Partial<ProfileItem> | undefined;
-        setItem((prev) =>
-          prev
-            ? {
-                ...prev,
-                user_image_url:
-                  typeof updatedCard?.user_image_url === "string"
-                    ? updatedCard.user_image_url
-                    : payloadUrl,
-                image_url:
-                  typeof updatedCard?.image_url === "string"
-                    ? updatedCard.image_url
-                    : prev.image_url,
-              }
-            : prev
-        );
+      const formData = new FormData();
+      formData.append("front", imageFileInput);
+
+      const res = await fetch(`/api/cards/${item.id}/images`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        setToast({ type: "error", message: "Failed to upload image" });
+        return;
       }
 
+      await loadProfile();
       setImageFileInput(null);
       if (imageFilePickerRef.current) {
         imageFilePickerRef.current.value = "";
       }
       setShowImageModal(false);
-      setToast({
-        type: "success",
-        message: payloadUrl ? "Image saved" : "Image removed",
-      });
+      setToast({ type: "success", message: "Image uploaded" });
     } catch {
-      setToast({ type: "error", message: "Failed to save image" });
+      setToast({ type: "error", message: "Failed to upload image" });
     } finally {
       setSavingImage(false);
     }
   };
 
-  const openImageModal = (currentUrl: string | null) => {
-    setImageUrlInput(currentUrl ?? "");
+  const openImageModal = () => {
     setImageFileInput(null);
     if (imageFilePickerRef.current) {
       imageFilePickerRef.current.value = "";
@@ -731,7 +573,6 @@ export default function CardProfilePage() {
       return;
     }
     setImageFileInput(file);
-    setImageUrlInput("");
   };
 
   // ── Render: Loading / Error ──────────────────────────────────────
@@ -772,13 +613,16 @@ export default function CardProfilePage() {
 
   // ── Render: Profile ──────────────────────────────────────────────
 
-  const marketValue = item.current_market_value_cents;
   const gradeCompany = (item.grading_company ?? "PSA").toUpperCase();
   const gradeNum = item.grade ?? "—";
-  const certNum = item.cert_number;
+  const certNum = item.psa_cert_number ?? item.cert_number;
   const playerName = item.player_name ?? item.title ?? "Unknown Player";
-  const setLabel = [item.year, item.set_name].filter(Boolean).join(" · ");
-  const hasParallel = !!(item.parallel_type || item.insert);
+  const baseSetLabel = [item.year, item.set_name].filter(Boolean).join(" ");
+  const parallelLabel = item.parallel_type || item.insert || null;
+  const setLabel = [baseSetLabel, parallelLabel].filter(Boolean).join(" | ") || "Sports Card";
+  const displayPlayerName = item.card_number
+    ? `#${item.card_number} ${playerName}`
+    : playerName;
 
   const tabs: { id: TabId; label: string }[] = [
     { id: "details", label: "Details" },
@@ -791,16 +635,18 @@ export default function CardProfilePage() {
       style={{ background: "#EEECE8", fontFamily: "'Sora', sans-serif" }}
     >
       <div className="max-w-[1100px] mx-auto px-4 py-8">
-        {/* Back link */}
-        <button
-          onClick={() => router.push(isBusinessMode ? "/business" : "/collection")}
-          className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors mb-5"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-          {isBusinessMode ? "Back to Inventory" : "Back to Collection"}
-        </button>
+        {/* Top nav */}
+        <div className="flex items-center justify-between mb-5">
+          <button
+            onClick={() => router.push(isBusinessMode ? "/business" : "/collection")}
+            className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            {isBusinessMode ? "Back to Inventory" : "Back to Collection"}
+          </button>
+        </div>
 
         {/* Main card */}
         <div
@@ -847,36 +693,34 @@ export default function CardProfilePage() {
 
               {/* Card image */}
               <div className="relative w-full flex items-center justify-center py-6 px-8">
-                {imageUrl ? (
-                  <div
-                    className="relative cursor-pointer"
-                    style={{ width: 260, height: 360 }}
-                    onClick={() => setImageZoom(true)}
-                  >
-                    <Image
-                      src={imageUrl}
-                      alt={title}
-                      fill
-                      unoptimized
-                      className="object-contain hover:scale-[1.02] transition-transform duration-200"
-                    />
-                  </div>
-                ) : (
-                  <div
-                    className="flex flex-col items-center justify-center"
-                    style={{
-                      width: 260,
-                      height: 360,
-                      borderRadius: 8,
-                      background: "linear-gradient(160deg, #0b1f3a 0%, #1f4d78 100%)",
-                    }}
-                  >
-                    <svg className="w-16 h-16 mb-2 opacity-30" fill="none" stroke="white" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    <p className="text-white/40 text-xs font-medium tracking-wide">No Image</p>
-                  </div>
-                )}
+                <div
+                  className={`block ${imageUrl ? "cursor-zoom-in" : "cursor-default"}`}
+                  style={{ width: 260 }}
+                  onClick={() => {
+                    if (imageUrl) {
+                      setImageZoom(true);
+                    }
+                  }}
+                  role={imageUrl ? "button" : undefined}
+                  tabIndex={imageUrl ? 0 : undefined}
+                  onKeyDown={(event) => {
+                    if (imageUrl && (event.key === "Enter" || event.key === " ")) {
+                      event.preventDefault();
+                      setImageZoom(true);
+                    }
+                  }}
+                >
+                  <TrustedCardImageFrame
+                    image={item.trusted_image}
+                    alt={title}
+                    className="w-full rounded-[8px] bg-white"
+                    imageClassName="transition-transform duration-200 hover:scale-[1.02]"
+                    fallbackClassName="bg-[#F4F1EC]"
+                    allowUploadCta={!imageUrl}
+                    ctaLabel="Add image"
+                    onCtaClick={openImageModal}
+                  />
+                </div>
               </div>
 
               {/* Player name bar */}
@@ -914,21 +758,20 @@ export default function CardProfilePage() {
                 </a>
               ) : (
                 <div
-                  className="w-full aspect-[3/4] flex flex-col items-center justify-center text-gray-500 cursor-pointer hover:bg-gray-800/50 transition-colors"
-                  onClick={() => openImageModal(null)}
+                  title="No PSA cert number"
+                  className="flex items-center justify-center w-10 h-10 rounded-xl text-gray-300"
+                  style={{ border: "1.5px solid #E9E7E2", background: "transparent" }}
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
                   </svg>
-                  <p className="text-sm font-medium text-gray-400">Add your photo</p>
-                  <p className="text-xs text-gray-600 mt-1">Upload from your files</p>
                 </div>
               )}
 
               {/* Change image */}
               <button
-                onClick={() => { setImageUrlInput(imageUrl ?? ""); setShowImageModal(true); }}
-                title="Change image"
+                onClick={openImageModal}
+                title="Upload image"
                 className="flex items-center justify-center w-10 h-10 rounded-xl text-gray-500 hover:text-gray-800 hover:border-gray-400 transition-colors"
                 style={{ border: "1.5px solid #DDDBD6", background: "transparent" }}
               >
@@ -960,12 +803,12 @@ export default function CardProfilePage() {
                 className="uppercase tracking-widest mb-2"
                 style={{ fontSize: 10, color: "#B0ADA8", fontWeight: 500 }}
               >
-                {setLabel || "Sports Card"}
+                {setLabel}
               </p>
 
               {/* 2. Player name */}
               <h1
-                className="leading-tight mb-3"
+                className="leading-tight mb-5"
                 style={{
                   fontSize: 34,
                   fontWeight: 800,
@@ -974,85 +817,72 @@ export default function CardProfilePage() {
                   lineHeight: 1.1,
                 }}
               >
-                {playerName}
+                {displayPlayerName}
               </h1>
 
-              {/* 3. Parallel pill */}
-              {hasParallel && (
-                <div className="flex items-center gap-2 mb-4">
-                  <span
-                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold"
-                    style={{
-                      background: "#F0FAF4",
-                      border: "1px solid #B8E6CC",
-                      color: "#167A40",
-                    }}
-                  >
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
-                    {[item.parallel_type, item.insert].filter(Boolean).join(" · ")}
-                    {item.cert_number && ` · #${item.cert_number}`}
-                  </span>
+              {/* 3. Price section */}
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div style={{ border: "1px solid #E8E6E1", borderRadius: 12, padding: "14px 16px" }}>
+                  <p className="uppercase tracking-widest mb-2" style={{ fontSize: 9, color: "#B0ADA8", fontWeight: 500 }}>
+                    Market Estimate
+                  </p>
+                  {marketValue ? (
+                    <p style={{ fontSize: 26, fontWeight: 700, color: "#0F0E0D", lineHeight: 1 }}>
+                      {fmtCents(marketValue)}
+                    </p>
+                  ) : (
+                    <p style={{ fontSize: 26, fontWeight: 700, color: "#C0BDBA", lineHeight: 1 }}>—</p>
+                  )}
                 </div>
-              )}
+                <div style={{ border: "1px solid #E8E6E1", borderRadius: 12, padding: "14px 16px" }}>
+                  <p className="uppercase tracking-widest mb-2" style={{ fontSize: 9, color: "#B0ADA8", fontWeight: 500 }}>
+                    eBay Comps
+                  </p>
+                  <a
+                    href={ebayCompsUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 font-bold hover:underline"
+                    style={{ fontSize: 16, color: "#2563EB" }}
+                  >
+                    View Sold
+                    <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                  </a>
+                </div>
+              </div>
 
-              {/* 5. CTA row */}
+              {/* 4. Primary CTA + Item Actions */}
               <div className="flex items-center gap-2 mb-6">
-                {/* Primary: List on eBay / Set Price */}
-                <button
-                  onClick={() => openImageModal(imageUrl)}
-                  className="flex-1 px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-100 rounded-lg text-sm font-medium transition-colors"
+                <a
+                  href={ebayCompsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 flex items-center justify-center py-3 text-white font-semibold text-sm transition-colors hover:bg-gray-800"
+                  style={{ background: "#111", borderRadius: 12 }}
                 >
-                  {imageUrl ? "Change Image" : "Set Image"}
-                </button>
-
-                {/* Edit */}
-                {isBusinessMode ? (
-                  <button
-                    onClick={() => { setImageUrlInput(imageUrl ?? ""); setShowImageModal(true); }}
-                    className="flex items-center justify-center gap-1.5 px-5 text-sm font-semibold transition-colors hover:bg-gray-50"
-                    style={{
-                      height: 44,
-                      borderRadius: 11,
-                      border: "1.5px solid #E4E2DE",
-                      color: "#3D3A37",
-                      background: "#fff",
-                    }}
-                  >
-                    Edit
-                  </button>
-                ) : (
-                  <Link
-                    href={`/cards/${item.id}`}
-                    className="flex items-center justify-center gap-1.5 px-5 text-sm font-semibold transition-colors hover:bg-gray-50"
-                    style={{
-                      height: 44,
-                      borderRadius: 11,
-                      border: "1.5px solid #E4E2DE",
-                      color: "#3D3A37",
-                      background: "#fff",
-                    }}
-                  >
-                    Edit
-                  </Link>
-                )}
-
-                {/* Overflow ··· */}
+                  Find Comps on eBay
+                </a>
                 <div className="relative" ref={overflowRef}>
                   <button
                     onClick={() => setShowOverflow((v) => !v)}
-                    className="flex items-center justify-center font-bold transition-colors hover:bg-gray-50"
+                    className="flex items-center gap-1.5 text-sm font-semibold transition-colors hover:bg-gray-50"
                     style={{
-                      width: 44,
-                      height: 44,
-                      borderRadius: 11,
+                      height: 46,
+                      paddingLeft: 14,
+                      paddingRight: 14,
+                      borderRadius: 12,
                       border: "1.5px solid #E4E2DE",
                       color: "#3D3A37",
                       background: "#fff",
-                      fontSize: 18,
-                      letterSpacing: 2,
+                      whiteSpace: "nowrap",
                     }}
                   >
-                    ···
+                    Item Actions
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
                   </button>
                   {showOverflow && (
                     <div
@@ -1064,6 +894,27 @@ export default function CardProfilePage() {
                         boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
                       }}
                     >
+                      {isBusinessMode ? (
+                        <button
+                          onClick={() => {
+                            setShowOverflow(false);
+                            openImageModal();
+                          }}
+                          className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors"
+                          style={{ color: "#3D3A37" }}
+                        >
+                          Edit
+                        </button>
+                      ) : (
+                        <Link
+                          href={`/cards/${item.id}`}
+                          onClick={() => setShowOverflow(false)}
+                          className="block w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors"
+                          style={{ color: "#3D3A37" }}
+                        >
+                          Edit
+                        </Link>
+                      )}
                       {isBusinessMode && item.status !== "sold" && (
                         <button
                           onClick={() => { setShowOverflow(false); setShowSoldModal(true); }}
@@ -1073,22 +924,15 @@ export default function CardProfilePage() {
                           Mark Sold
                         </button>
                       )}
-                      <a
-                        href={ebayCompsUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={() => setShowOverflow(false)}
-                        className="block w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors"
-                        style={{ color: "#3D3A37" }}
-                      >
-                        Find Comps on eBay
-                      </a>
                       <button
-                        onClick={() => { setShowOverflow(false); setImageUrlInput(imageUrl ?? ""); setShowImageModal(true); }}
+                        onClick={() => {
+                          setShowOverflow(false);
+                          openImageModal();
+                        }}
                         className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors"
                         style={{ color: "#3D3A37" }}
                       >
-                        {imageUrl ? "Change Image URL" : "Set Image URL"}
+                        {imageUrl ? "Change Image" : "Set Image"}
                       </button>
                     </div>
                   )}
@@ -1130,30 +974,11 @@ export default function CardProfilePage() {
                   )}
                 </DataCell>
 
-                {/* Cost Basis */}
-                <DataCell label="Cost Basis">
+                {/* My Cost */}
+                <DataCell label="My Cost">
                   {costCents != null ? (
                     <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, color: "#0F0E0D", fontSize: 13 }}>
                       {fmtCents(costCents)}
-                    </span>
-                  ) : (
-                    <EmptyCell />
-                  )}
-                </DataCell>
-
-                {/* Unrealized P/L */}
-                <DataCell label="Unrealized P/L">
-                  {plData ? (
-                    <span
-                      style={{
-                        fontFamily: "'JetBrains Mono', monospace",
-                        fontWeight: 600,
-                        fontSize: 13,
-                        color: plData.diff >= 0 ? "#16A34A" : "#DC2626",
-                      }}
-                    >
-                      {plData.diff >= 0 ? "+" : ""}
-                      {fmtCents(plData.diff)}
                     </span>
                   ) : (
                     <EmptyCell />
@@ -1165,6 +990,17 @@ export default function CardProfilePage() {
                   {item.acquisition_date || item.purchase_date ? (
                     <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, color: "#0F0E0D", fontSize: 13 }}>
                       {fmtDate(item.acquisition_date ?? item.purchase_date)}
+                    </span>
+                  ) : (
+                    <EmptyCell />
+                  )}
+                </DataCell>
+
+                {/* My Value */}
+                <DataCell label="My Value">
+                  {item.list_price_cents != null ? (
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, color: "#0F0E0D", fontSize: 13 }}>
+                      {fmtCents(item.list_price_cents)}
                     </span>
                   ) : (
                     <EmptyCell />
@@ -1472,11 +1308,11 @@ export default function CardProfilePage() {
       {showImageModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
           <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-lg">
-            <h3 className="text-lg font-semibold mb-4">Set Image</h3>
+            <h3 className="text-lg font-semibold mb-4">Upload Image</h3>
             <div className="space-y-4">
               <div className="space-y-2">
                 <label className="block text-sm text-gray-400">
-                  Upload from your files
+                  Upload a real card photo
                 </label>
                 <input
                   ref={imageFilePickerRef}
@@ -1513,29 +1349,8 @@ export default function CardProfilePage() {
                     Clear selected file
                   </button>
                 )}
-              </div>
-              <div className="space-y-2">
-                <label className="block text-sm text-gray-400">
-                  Or paste an image URL (optional)
-                </label>
-                <input
-                  type="url"
-                  value={imageUrlInput}
-                  onChange={(e) => {
-                    setImageUrlInput(e.target.value);
-                    if (imageFileInput) {
-                      setImageFileInput(null);
-                      if (imageFilePickerRef.current) {
-                        imageFilePickerRef.current.value = "";
-                      }
-                    }
-                  }}
-                  placeholder="https://..."
-                  autoFocus
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                />
                 <p className="text-xs text-gray-500">
-                  Leave both file and URL blank to remove your custom image.
+                  PSA images are used automatically when a valid cert image exists. Uploaded images are used when no PSA image is available.
                 </p>
               </div>
             </div>
@@ -1553,12 +1368,12 @@ export default function CardProfilePage() {
                 Cancel
               </button>
               <button
-                onClick={handleSaveImageUrl}
-                disabled={savingImage}
+                onClick={handleUploadImage}
+                disabled={savingImage || !imageFileInput}
                 className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:bg-gray-800 transition-colors"
                 style={{ background: "#111", borderRadius: 11 }}
               >
-                {savingImage ? "Saving…" : "Save"}
+                {savingImage ? "Uploading…" : "Upload"}
               </button>
             </div>
           </div>

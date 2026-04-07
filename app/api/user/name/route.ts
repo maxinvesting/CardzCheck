@@ -130,8 +130,16 @@ export async function PATCH(request: NextRequest) {
       body,
       "ebay_store_url"
     );
+    const hasEbayFeeRate = Object.prototype.hasOwnProperty.call(
+      body,
+      "ebay_fee_rate"
+    );
+    const hasWebsiteUrl = Object.prototype.hasOwnProperty.call(
+      body,
+      "website_url"
+    );
 
-    if (!hasName && !hasBusinessName && !hasEbayStoreUrl) {
+    if (!hasName && !hasBusinessName && !hasEbayStoreUrl && !hasEbayFeeRate && !hasWebsiteUrl) {
       return NextResponse.json(
         { error: "No profile fields provided" },
         { status: 400 }
@@ -142,6 +150,8 @@ export async function PATCH(request: NextRequest) {
       name?: string | null;
       business_name?: string | null;
       ebay_store_url?: string | null;
+      ebay_fee_rate?: string | null;
+      website_url?: string | null;
     } = {};
 
     if (hasName) {
@@ -230,11 +240,52 @@ export async function PATCH(request: NextRequest) {
       updates.ebay_store_url = trimmedUrl || null;
     }
 
+    if (hasEbayFeeRate) {
+      const feeRate = body.ebay_fee_rate;
+      if (feeRate !== "standard" && feeRate !== "top_rated_plus") {
+        return NextResponse.json(
+          { error: "ebay_fee_rate must be 'standard' or 'top_rated_plus'" },
+          { status: 400 }
+        );
+      }
+      updates.ebay_fee_rate = feeRate;
+    }
+
+    if (hasWebsiteUrl) {
+      const websiteUrl = body.website_url;
+      if (websiteUrl !== null && websiteUrl !== undefined && typeof websiteUrl !== "string") {
+        return NextResponse.json(
+          { error: "website_url must be a string" },
+          { status: 400 }
+        );
+      }
+      const trimmedWebsiteUrl = typeof websiteUrl === "string" ? websiteUrl.trim() : "";
+      if (trimmedWebsiteUrl) {
+        try {
+          const parsed = new URL(trimmedWebsiteUrl);
+          if (!["http:", "https:"].includes(parsed.protocol)) {
+            return NextResponse.json(
+              { error: "website_url must use http or https" },
+              { status: 400 }
+            );
+          }
+        } catch {
+          return NextResponse.json(
+            { error: "website_url must be a valid URL" },
+            { status: 400 }
+          );
+        }
+      }
+      updates.website_url = trimmedWebsiteUrl || null;
+    }
+
     const upsertPayload: {
       id: string;
       name?: string | null;
       business_name?: string | null;
       ebay_store_url?: string | null;
+      ebay_fee_rate?: string | null;
+      website_url?: string | null;
     } = {
       id: user.id,
       ...updates,
@@ -303,6 +354,8 @@ export async function PATCH(request: NextRequest) {
         ...(hasName ? { name: updates.name ?? null } : {}),
         ...(hasBusinessName ? { business_name: updates.business_name ?? null } : {}),
         ...(hasEbayStoreUrl ? { ebay_store_url: updates.ebay_store_url ?? null } : {}),
+        ...(hasEbayFeeRate ? { ebay_fee_rate: updates.ebay_fee_rate ?? null } : {}),
+        ...(hasWebsiteUrl ? { website_url: updates.website_url ?? null } : {}),
       },
     });
   } catch (error) {
