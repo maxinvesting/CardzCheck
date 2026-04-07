@@ -145,6 +145,8 @@ export interface BusinessInventoryItem {
   image_url?: string | null;
   trusted_image?: TrustedCardImage | null;
   user_image_url: string | null;
+  stock_image_url?: string | null;
+  ebay_image_url?: string | null;
   notes: string | null;
   ebay_item_id?: string | null; // eBay listing item ID for synced items
   ebay_listing_url?: string | null; // Direct eBay listing URL
