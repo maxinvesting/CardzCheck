@@ -16,10 +16,10 @@ export default function AuthenticatedLayout({
 
   return (
     <div
-      className={`relative flex min-h-screen overflow-hidden ${
+      className={`relative flex min-h-screen ${
         isBusinessShell
           ? "business-theme bg-[var(--biz-bg)] text-[var(--biz-text)]"
-          : "bg-[#0f1419]"
+          : "overflow-hidden bg-[#0f1419]"
       }`}
     >
       {!isBusinessShell && (

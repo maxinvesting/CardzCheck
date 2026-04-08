@@ -342,7 +342,7 @@ export default function BusinessMessagesView({
       {/* Main inbox layout */}
       <div
         className="overflow-hidden rounded-2xl border border-[var(--biz-border)] bg-white shadow-[0_18px_50px_rgba(0,0,0,0.08)]"
-        style={{ height: "calc(100vh - 280px)", minHeight: "500px" }}
+        style={{ height: "calc(100vh - 400px)", minHeight: "480px" }}
       >
         <div className="flex h-full">
           {/* Thread list (left panel) */}
