@@ -12,7 +12,10 @@
       "runtimeExecutable": "/Users/maxwellhilliard/.nvm/versions/node/v24.12.0/bin/node",
       "runtimeArgs": ["/Users/maxwellhilliard/.nvm/versions/node/v24.12.0/bin/pnpm", "dev:turbo"],
       "port": 3000,
-      "autoPort": true
+      "autoPort": true,
+      "env": {
+        "PATH": "/Users/maxwellhilliard/.nvm/versions/node/v24.12.0/bin:/usr/local/bin:/usr/bin:/bin"
+      }
     },
     {
       "name": "CardzCheck Main",

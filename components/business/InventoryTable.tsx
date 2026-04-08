@@ -207,7 +207,7 @@ const VirtuosoScroller = forwardRef<
   <div
     {...props}
     ref={ref}
-    className={`overflow-auto ${className ?? ""}`.trim()}
+    className={`overflow-y-auto overflow-x-hidden ${className ?? ""}`.trim()}
   />
 ));
 VirtuosoScroller.displayName = "VirtuosoScroller";
@@ -1298,9 +1298,9 @@ export default function InventoryTable({
       )}
 
       {/* Desktop table (>= 640px) — ledger style: tight rows, right-align money */}
-      {viewMode === "table" && <div
-        ref={tableContainerRef}
-        className="hidden sm:block border border-[var(--biz-border)] rounded-lg overflow-hidden"
+      {/* Outer wrapper handles horizontal scroll; inner keeps overflow-hidden for rounded corners */}
+      <div
+        className="hidden sm:block overflow-x-auto"
         onScrollCapture={() => {
           if (perfEnabled) setPerfInteraction("scroll");
         }}
@@ -1308,36 +1308,39 @@ export default function InventoryTable({
           if (perfEnabled) setPerfInteraction("click");
         }}
       >
-        {filtered.length === 0 ? (
-          <div className="px-4 py-8 text-center text-xs text-[var(--biz-muted)]">
-            {activeTab === "wax"
-              ? "No wax / sealed products found. Use Add Wax to track boxes and cases."
-              : activeTab === "cards"
-              ? "No cards found. Use Add Inventory to add cards to your inventory."
-              : "No inventory items found."}
-          </div>
-        ) : shouldVirtualize ? (
-          <TableVirtuoso
-            data={sortedItems}
-            style={{ height: virtualTableHeight }}
-            components={{
-              Scroller: VirtuosoScroller,
-              Table: (props) => <table {...props} className="w-full text-xs text-left" />,
-              TableHead: (props) => (
-                <thead {...props} className="bg-[var(--biz-surface-soft)] border-b border-[var(--biz-border)]" />
-              ),
-              TableBody: (props) => <tbody {...props} className="divide-y divide-[var(--biz-border)]" />,
-              TableRow: ({ item, context: _context, ...props }) => (
-                <tr {...props} className={rowClass(item, props["data-index"])} />
-              ),
-            }}
-            computeItemKey={(_index, item) => item.id}
-            fixedHeaderContent={renderHeader}
-            itemContent={(_index, item) => renderRowCells(item)}
-            increaseViewportBy={240}
-          />
-        ) : (
-          <div className="overflow-x-auto">
+        <div
+          ref={tableContainerRef}
+          className="border border-[var(--biz-border)] rounded-lg overflow-hidden min-w-max"
+        >
+          {filtered.length === 0 ? (
+            <div className="px-4 py-8 text-center text-xs text-[var(--biz-muted)]">
+              {activeTab === "wax"
+                ? "No wax / sealed products found. Use Add Wax to track boxes and cases."
+                : activeTab === "cards"
+                ? "No cards found. Use Add Inventory to add cards to your inventory."
+                : "No inventory items found."}
+            </div>
+          ) : shouldVirtualize ? (
+            <TableVirtuoso
+              data={sortedItems}
+              style={{ height: virtualTableHeight }}
+              components={{
+                Scroller: VirtuosoScroller,
+                Table: (props) => <table {...props} className="w-full text-xs text-left" />,
+                TableHead: (props) => (
+                  <thead {...props} className="bg-[#F9FAFB] border-b border-[var(--biz-border)]" />
+                ),
+                TableBody: (props) => <tbody {...props} className="divide-y divide-[var(--biz-border)]" />,
+                TableRow: ({ item, context: _context, ...props }) => (
+                  <tr {...props} className={rowClass(item, props["data-index"])} />
+                ),
+              }}
+              computeItemKey={(_index, item) => item.id}
+              fixedHeaderContent={renderHeader}
+              itemContent={(_index, item) => renderRowCells(item)}
+              increaseViewportBy={240}
+            />
+          ) : (
             <table className="w-full text-xs text-left">
               <thead className="sticky top-0 z-10 bg-[var(--biz-surface-soft)] border-b border-[var(--biz-border)]">
                 {renderHeader()}
@@ -1350,9 +1353,9 @@ export default function InventoryTable({
                 ))}
               </tbody>
             </table>
-          </div>
-        )}
-      </div>}
+          )}
+        </div>
+      </div>
 
       <div className="mt-1.5 text-[10px] text-[var(--biz-muted)]">
         {filtered.length} item{filtered.length !== 1 ? "s" : ""}
