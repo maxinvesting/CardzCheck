@@ -298,14 +298,17 @@ export default function GradeHubPage() {
                           : `${remaining} scan${remaining !== 1 ? "s" : ""} remaining${credits?.nextGrantAt ? ` · +1 in ${formatTimeUntil(credits.nextGrantAt)}` : ""}`}
                 </p>
                 <p style={{ fontSize: 10, color: "#9ca3af", marginTop: 6, textAlign: "center" }}>
+                  <span className="text-[#9ca3af]">
+                    Scanning above stays on this page.{" "}
+                  </span>
                   <button
                     type="button"
                     onClick={() => openScanSession(scanSlotsForTab)}
                     className="text-[#6b7280] underline underline-offset-2 hover:text-[#374151]"
                   >
-                    Open full-screen scan workspace
+                    Open separate scan session page
                   </button>{" "}
-                  if you prefer the dedicated session view.
+                  only if you want the fullscreen workspace.
                 </p>
               </div>
 

@@ -179,9 +179,11 @@ export default function AddCardModalNew({
   onCardSelected,
 }: AddCardModalNewProps) {
   const hasCardPicker = Boolean(onOpenSmartSearch);
-  /** Raw vs graded first step when adding from upload/DB (business inventory or personal collection). */
-  const showKindStep =
-    hasCardPicker && (addMode === "business" || addMode === "collection");
+  /**
+   * Raw vs graded first step for business inventory and personal collection.
+   * Intentionally does NOT require `onOpenSmartSearch` (dashboard quick-add had no picker and skipped this entirely).
+   */
+  const showKindStep = addMode === "business" || addMode === "collection";
 
   const [mode, setMode] = useState<ModalMode>(() => (showKindStep ? "kind" : "select"));
   const [loading, setLoading] = useState(false);
