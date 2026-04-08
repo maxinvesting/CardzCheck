@@ -90,7 +90,7 @@ type SignalCard = {
 };
 
 const SIGNAL_STYLES: Record<SignalTone, { tagBg: string; tagText: string; borderAccent: string }> = {
-  emerald: { tagBg: "#1D9E75", tagText: "#ffffff", borderAccent: "#1D9E75" },
+  emerald: { tagBg: "var(--biz-primary)", tagText: "var(--biz-primary-foreground)", borderAccent: "var(--biz-primary)" },
   amber:   { tagBg: "#FAEEDA", tagText: "#854F0B", borderAccent: "#854F0B" },
   red:     { tagBg: "#FCEBEB", tagText: "#A32D2D", borderAccent: "#A32D2D" },
 };
@@ -108,7 +108,7 @@ const secondaryActionClass =
   "inline-flex items-center gap-1.5 rounded-none border border-[0.5px] border-[var(--biz-border)] bg-transparent px-2.5 py-1.5 text-xs font-medium text-[var(--biz-text)] transition-colors hover:bg-[var(--biz-hover)]";
 
 const primaryActionClass =
-  "inline-flex items-center gap-1.5 rounded-none bg-[#1D9E75] px-2.5 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[#17896A]";
+  "inline-flex items-center gap-1.5 rounded-none bg-[var(--biz-primary)] px-2.5 py-1.5 text-xs font-medium text-[var(--biz-primary-foreground)] transition-colors hover:bg-[var(--biz-primary-hover)]";
 
 interface Props {
   businessName: string | null;
@@ -461,7 +461,7 @@ export default function BusinessDashboardView({
                         >
                           <span className="truncate font-medium">{sf.display_name}</span>
                           {sf.is_primary && (
-                            <span className="shrink-0 text-[9px] text-blue-500 font-semibold">PRIMARY</span>
+                            <span className="shrink-0 text-[9px] font-semibold text-[var(--biz-secondary)]">PRIMARY</span>
                           )}
                           <svg className="w-3 h-3 shrink-0 ml-auto text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
@@ -562,13 +562,13 @@ export default function BusinessDashboardView({
 
             <div className="space-y-3">
               {/* eBay row */}
-              <div className="flex items-center justify-between gap-3 rounded-lg border border-[var(--biz-border)] bg-[#F9FAFB] px-3 py-2.5">
+	              <div className="flex items-center justify-between gap-3 rounded-lg border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-3 py-2.5">
                 <div className="flex items-center gap-2.5 min-w-0">
                   <span className="text-[11px] font-semibold text-[var(--biz-text)] shrink-0">eBay</span>
                   {ebayAccount?.connected ? (
                     <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+	                      <span className="inline-flex items-center gap-1 rounded-full border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--biz-primary)]">
+	                        <span className="h-1.5 w-1.5 rounded-full bg-[var(--biz-primary)]" />
                         Connected
                       </span>
                       {ebayAccount.ebay_username && (
@@ -615,12 +615,12 @@ export default function BusinessDashboardView({
               {(() => {
                 const wn = storefronts.find((s) => s.platform === "whatnot");
                 return (
-                  <div className="flex items-center justify-between gap-3 rounded-lg border border-[var(--biz-border)] bg-[#F9FAFB] px-3 py-2.5">
+	                  <div className="flex items-center justify-between gap-3 rounded-lg border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-3 py-2.5">
                     <div className="flex items-center gap-2.5 min-w-0">
                       <span className="text-[11px] font-semibold text-[var(--biz-text)] shrink-0">Whatnot</span>
                       {wn ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+	                        <span className="inline-flex items-center gap-1 rounded-full border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--biz-primary)]">
+	                          <span className="h-1.5 w-1.5 rounded-full bg-[var(--biz-primary)]" />
                           Connected
                         </span>
                       ) : (
@@ -652,12 +652,12 @@ export default function BusinessDashboardView({
               {(() => {
                 const web = storefronts.find((s) => s.platform === "website" || s.platform === "shopify");
                 return (
-                  <div className="flex items-center justify-between gap-3 rounded-lg border border-[var(--biz-border)] bg-[#F9FAFB] px-3 py-2.5">
+	                  <div className="flex items-center justify-between gap-3 rounded-lg border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-3 py-2.5">
                     <div className="flex items-center gap-2.5 min-w-0">
                       <span className="text-[11px] font-semibold text-[var(--biz-text)] shrink-0">Website</span>
                       {web ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+	                        <span className="inline-flex items-center gap-1 rounded-full border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--biz-primary)]">
+	                          <span className="h-1.5 w-1.5 rounded-full bg-[var(--biz-primary)]" />
                           Connected
                         </span>
                       ) : (
@@ -948,10 +948,10 @@ export default function BusinessDashboardView({
                       <div className="flex items-center gap-2 min-w-0">
                         <span
                           className={`shrink-0 w-1.5 h-1.5 rounded-full ${
-                            item.status === "listed" || item.status === "pending_sale"
-                              ? "bg-blue-400"
-                              : item.status === "sold"
-                              ? "bg-emerald-400"
+	                            item.status === "listed" || item.status === "pending_sale"
+	                              ? "bg-[var(--biz-secondary)]"
+	                              : item.status === "sold"
+	                              ? "bg-[var(--biz-primary)]"
                               : "bg-slate-300"
                           }`}
                         />

@@ -276,7 +276,7 @@ export default function BusinessMessagesView({
   return (
     <div className="space-y-4">
       {/* Page header */}
-      <div className="flex items-center justify-between gap-4 rounded-2xl border border-[var(--biz-border)] bg-gradient-to-r from-emerald-50 via-white to-cyan-50 px-5 py-4">
+      <div className="flex items-center justify-between gap-4 rounded-2xl border border-[var(--biz-border)] bg-[linear-gradient(135deg,var(--biz-primary-soft)_0%,#ffffff_56%,var(--biz-secondary-soft)_100%)] px-5 py-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-[var(--biz-text)]">
             Buyer Inbox
@@ -285,9 +285,9 @@ export default function BusinessMessagesView({
             Offers, questions, and follow-ups in one place
           </p>
         </div>
-        <div className="flex items-center gap-2 rounded-full border border-emerald-200 bg-white/80 px-3 py-1.5 shadow-sm backdrop-blur">
-          <span className="h-2 w-2 rounded-full bg-emerald-500" />
-          <span className="text-xs font-semibold text-emerald-700">
+        <div className="flex items-center gap-2 rounded-full border border-[var(--biz-primary-border)] bg-white/80 px-3 py-1.5 shadow-sm backdrop-blur">
+          <span className="h-2 w-2 rounded-full bg-[var(--biz-primary)]" />
+          <span className="text-xs font-semibold text-[var(--biz-primary)]">
             Live Inbox
           </span>
         </div>
@@ -297,12 +297,12 @@ export default function BusinessMessagesView({
       <MessagingStatsBar stats={stats} loading={false} />
 
       {/* Assistant disclosure */}
-      <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 px-4 py-2.5">
+      <div className="rounded-xl border border-[var(--biz-secondary-border)] bg-[var(--biz-secondary-soft)] px-4 py-2.5">
         <div className="flex items-center gap-2">
-          <svg className="h-3.5 w-3.5 shrink-0 text-emerald-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="h-3.5 w-3.5 shrink-0 text-[var(--biz-secondary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
           </svg>
-          <p className="text-xs text-emerald-800">
+          <p className="text-xs text-[var(--biz-secondary)]">
             <span className="font-semibold">Suggested replies stay private.</span>
             {" "}Generate a draft when you need it, edit it, then send it yourself.
           </p>
@@ -344,8 +344,8 @@ export default function BusinessMessagesView({
             onClick={() => setUnreadOnly((prev) => !prev)}
             className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
               unreadOnly
-                ? "bg-emerald-600 text-white"
-                : "border border-[var(--biz-border)] text-[var(--biz-text)] hover:bg-[#F9FAFB]"
+                ? "bg-[var(--biz-primary)] text-[var(--biz-primary-foreground)]"
+                : "border border-[var(--biz-border)] text-[var(--biz-text)] hover:bg-[var(--biz-hover)]"
             }`}
           >
             Unread Only
@@ -353,7 +353,7 @@ export default function BusinessMessagesView({
           <button
             type="button"
             onClick={refreshThreadList}
-            className="rounded-lg border border-[var(--biz-border)] px-3 py-2 text-sm font-medium text-[var(--biz-text)] hover:bg-[#F9FAFB]"
+            className="rounded-lg border border-[var(--biz-border)] px-3 py-2 text-sm font-medium text-[var(--biz-text)] hover:bg-[var(--biz-hover)]"
           >
             {listRefreshing ? "Refreshing..." : "Refresh"}
           </button>

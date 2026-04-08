@@ -64,7 +64,7 @@ export default function BusinessMetrics({
       primary: metrics ? fmt(metrics.profitMtd) : "—",
       secondary: metrics ? `${fmt(metrics.profitYtd)} YTD` : undefined,
       primaryClass:
-        metrics && metrics.profitMtd >= 0 ? "text-emerald-600" : "text-red-500",
+        metrics && metrics.profitMtd >= 0 ? "text-[var(--biz-profit)]" : "text-red-500",
       tag: "MTD",
     },
     {

@@ -41,6 +41,9 @@ export interface BusinessAccount {
   id: string;
   owner_user_id: string;
   name: string | null;
+  appearance_primary_color?: string | null;
+  appearance_secondary_color?: string | null;
+  appearance_tertiary_color?: string | null;
   billing_interval: "monthly";
   subscription_status: string;
   current_period_end: string | null;
@@ -52,6 +55,12 @@ export interface BusinessAccount {
   purchased_seats: number;
   created_at: string;
   updated_at: string;
+}
+
+export interface BusinessAppearance {
+  primaryColor: string;
+  secondaryColor: string;
+  tertiaryColor: string;
 }
 
 export interface BusinessMembership {

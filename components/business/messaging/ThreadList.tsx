@@ -14,9 +14,9 @@ const FILTER_TABS: { key: ThreadFilter; label: string }[] = [
 
 const STATUS_STYLES: Record<MessageThread["status"], string> = {
   needs_response: "border-amber-200 bg-amber-50 text-amber-700",
-  open: "border-blue-200 bg-blue-50 text-blue-700",
+  open: "border-[var(--biz-secondary-border)] bg-[var(--biz-secondary-soft)] text-[var(--biz-secondary)]",
   awaiting_buyer: "border-violet-200 bg-violet-50 text-violet-700",
-  resolved: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  resolved: "border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] text-[var(--biz-primary)]",
   archived: "border-slate-200 bg-slate-100 text-slate-500",
 };
 
@@ -75,8 +75,8 @@ export default function ThreadList({
               onClick={() => onFilterChange(tab.key)}
               className={`whitespace-nowrap rounded-full px-3 py-1.5 text-[11px] font-semibold transition-all ${
                 filter === tab.key
-                  ? "bg-[linear-gradient(135deg,#18a06f_0%,#117d58_100%)] text-white shadow-[0_8px_18px_rgba(17,125,88,0.18)]"
-                  : "text-[var(--biz-muted)] hover:bg-[#F4F7F9] hover:text-[var(--biz-text)]"
+                  ? "bg-[var(--biz-primary)] text-[var(--biz-primary-foreground)] shadow-[0_8px_18px_var(--biz-primary-border)]"
+                  : "text-[var(--biz-muted)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]"
               }`}
             >
               {tab.label}
@@ -166,7 +166,7 @@ export default function ThreadList({
                         {STATUS_LABELS[thread.status]}
                       </span>
                       {offerText ? (
-                        <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                        <span className="rounded-full border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] px-2 py-0.5 text-[10px] font-semibold text-[var(--biz-primary)]">
                           Offer {offerText}
                         </span>
                       ) : (
@@ -181,7 +181,7 @@ export default function ThreadList({
                             event.stopPropagation();
                             onTogglePin(thread.id);
                           }}
-                          className="rounded-full border border-[var(--biz-border)] bg-white px-2 py-0.5 text-[10px] font-semibold text-[var(--biz-muted)] transition-colors hover:bg-[#F8FAFC]"
+                          className="rounded-full border border-[var(--biz-border)] bg-white px-2 py-0.5 text-[10px] font-semibold text-[var(--biz-muted)] transition-colors hover:bg-[var(--biz-hover)]"
                         >
                           {isPinned ? "Unpin" : "Pin"}
                         </button>
