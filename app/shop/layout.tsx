@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import { ShopCartProvider, useShopCart } from "@/contexts/ShopCartContext";
 import CartDrawer from "@/components/shop/CartDrawer";
 import ShopFooter from "@/components/shop/ShopFooter";
@@ -28,15 +29,18 @@ const SHOP_THEME_CSS = `
 `;
 
 function ShopNav() {
+  const pathname = usePathname();
   const [cartOpen, setCartOpen] = useState(false);
   const { totalItems } = useShopCart();
+  const basePath = pathname?.startsWith("/business") ? "/business/shop" : "/shop";
+  const appHomePath = pathname?.startsWith("/business") ? "/business" : "/";
 
   return (
     <>
       <header className="sticky top-0 z-30 border-b border-[var(--shop-border)] bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
           <Link
-            href="/shop"
+            href={basePath}
             className="flex items-center gap-3 transition-opacity hover:opacity-90"
           >
             <span className="text-xl font-semibold tracking-tight text-[var(--shop-text)]">
@@ -49,7 +53,7 @@ function ShopNav() {
 
           <div className="flex items-center gap-3">
             <Link
-              href="/"
+              href={appHomePath}
               className="text-sm text-[var(--shop-muted)] transition-colors hover:text-[var(--shop-text)]"
             >
               Main App

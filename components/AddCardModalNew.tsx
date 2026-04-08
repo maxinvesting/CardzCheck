@@ -34,8 +34,6 @@ interface AddCardModalNewProps {
     grade?: string;
     imageUrl?: string;
     user_image_url?: string;
-    stock_image_url?: string;
-    ebay_image_url?: string;
     quantity?: number;
   }) => void;
 }
@@ -252,8 +250,8 @@ export default function AddCardModalNew({
       const hasFallbackDataUrls = imageInputs.some(isDataUrl);
       const identifyInput =
         imageInputs.length > 1 && !hasFallbackDataUrls
-          ? { imageUrls: imageInputs, includeStockImage: false }
-          : { imageUrl: primaryIdentifyImage, includeStockImage: false };
+          ? { imageUrls: imageInputs }
+          : { imageUrl: primaryIdentifyImage };
 
       const identify = await identifyCardFromImages(identifyInput);
 
@@ -285,8 +283,6 @@ export default function AddCardModalNew({
         imageUrl: displayImageUrl,
         imageUrls: selectedImageUrls.length > 0 ? selectedImageUrls : undefined,
         userImageUrl: primaryUserImage || undefined,
-        stockImageUrl: undefined,
-        ebayImageUrl: undefined,
         confidence: result.confidence,
         cardIdentity: result.card_identity,
       }));
@@ -441,8 +437,6 @@ export default function AddCardModalNew({
         grade: effectiveGrade,
         imageUrl: identifiedCard.imageUrl || undefined,
         user_image_url: identifiedCard.userImageUrl || undefined,
-        stock_image_url: identifiedCard.stockImageUrl || undefined,
-        ebay_image_url: identifiedCard.ebayImageUrl || undefined,
         quantity: parsedQuantity,
       };
       onCardSelected(cardData);
@@ -495,8 +489,6 @@ export default function AddCardModalNew({
       ]);
       const canonicalImageUrl =
         normalizeHttpUrl(identifiedCard.userImageUrl || null) ||
-        normalizeHttpUrl(identifiedCard.stockImageUrl || null) ||
-        normalizeHttpUrl(identifiedCard.ebayImageUrl || null) ||
         normalizeHttpUrl(identifiedCard.imageUrl || null);
 
       const body = {
@@ -511,8 +503,6 @@ export default function AddCardModalNew({
         purchase_price: acquisitionType === "pulled" ? null : normalizedPurchasePrice,
         purchase_date: purchaseDate || null,
         user_image_url: normalizeHttpUrl(identifiedCard.userImageUrl || null),
-        stock_image_url: normalizeHttpUrl(identifiedCard.stockImageUrl || null),
-        ebay_image_url: normalizeHttpUrl(identifiedCard.ebayImageUrl || null),
         image_url: canonicalImageUrl,
         image_urls: persistedImageUrls,
         notes: notesParts.length > 0 ? notesParts.join(" | ") : null,
@@ -556,9 +546,7 @@ export default function AddCardModalNew({
   const showingBestMatchInDatabase = identifiedCard
     ? !identifiedCard.userImageUrl &&
       Boolean(identifiedCard.imageUrl) &&
-      !isDataUrl(identifiedCard.imageUrl || "") &&
-      (identifiedCard.imageUrl === identifiedCard.stockImageUrl ||
-        identifiedCard.imageUrl === identifiedCard.ebayImageUrl)
+      !isDataUrl(identifiedCard.imageUrl || "")
     : false;
 
   if (!isOpen) return null;

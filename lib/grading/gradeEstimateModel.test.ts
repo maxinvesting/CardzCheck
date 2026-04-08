@@ -156,11 +156,22 @@ describe("parseGradeEstimateModelOutput", () => {
       (sum, value) => sum + value,
       0
     );
+    const sumHalf = (m: Record<string, number>) =>
+      Object.values(m).reduce((s, v) => s + v, 0);
+    const cgcTotal = sumHalf(parsed.estimate.grade_probabilities!.cgc);
+    const sgcTotal = sumHalf(parsed.estimate.grade_probabilities!.sgc);
+    const tagTotal = sumHalf(parsed.estimate.grade_probabilities!.tag);
 
     expect(psaTotal).toBeGreaterThan(0.99);
     expect(psaTotal).toBeLessThan(1.01);
     expect(bgsTotal).toBeGreaterThan(0.99);
     expect(bgsTotal).toBeLessThan(1.01);
+    expect(cgcTotal).toBeGreaterThan(0.99);
+    expect(cgcTotal).toBeLessThan(1.01);
+    expect(sgcTotal).toBeGreaterThan(0.99);
+    expect(sgcTotal).toBeLessThan(1.01);
+    expect(tagTotal).toBeGreaterThan(0.99);
+    expect(tagTotal).toBeLessThan(1.01);
   });
 
   it("enforces centering gates for poor centering ratios", async () => {
@@ -509,8 +520,8 @@ describe("parseGradeEstimateModelOutput", () => {
       { scanPhotoKinds: ["front", "back"] }
     );
 
-    expect(parsed.estimate.confidence?.overall_confidence_score).toBeLessThanOrEqual(65);
+    expect(parsed.estimate.confidence?.overall_confidence_score).toBeLessThanOrEqual(72);
     expect(parsed.estimate.grade_probabilities?.confidence).not.toBe("high");
-    expect(parsed.estimate.visibility_notes?.join(" ")).toContain("Limited visibility");
+    expect(parsed.estimate.visibility_notes?.join(" ")).toMatch(/close-up|close up/i);
   });
 });

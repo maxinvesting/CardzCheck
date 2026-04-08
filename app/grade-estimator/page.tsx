@@ -295,6 +295,7 @@ export default function GradeEstimatorPage() {
   const [historyRefreshToken, setHistoryRefreshToken] = useState(0);
   const [lastSavedJobId, setLastSavedJobId] = useState<string | null>(null);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const [gradingGoal, setGradingGoal] = useState<"liquidity" | "speed_cost">("liquidity");
   const [labelsEnabledByRole, setLabelsEnabledByRole] = useState(false);
   const labelsEnabledByEnv =
     process.env.NEXT_PUBLIC_ENABLE_GRADING_LABELS === "true";
@@ -1127,24 +1128,59 @@ export default function GradeEstimatorPage() {
                         ) : null}
 
                         {gradeEstimate ? (
-                          <GradeProbabilityPanel
-                            estimate={gradeEstimate}
-                            cardIdentity={identifiedCard ? {
-                              player_name: identifiedCard.player_name,
-                              year: identifiedCard.year,
-                              set_name: identifiedCard.set_name,
-                              parallel_type: identifiedCard.parallel_type,
-                              card_number: identifiedCard.card_number,
-                              variation: identifiedCard.variation,
-                              insert: identifiedCard.insert,
-                            } : null}
-                            primaryImageUrl={
-                              identifiedCard?.imageUrl || identifiedCard?.imageUrls?.[0] || null
-                            }
-                            imageUrls={identifiedCard?.imageUrls ?? null}
-                            scanPhotos={identifiedCard?.scanPhotos ?? null}
-                            showPreliminaryBadge={showPreliminaryBadge}
-                          />
+                          <>
+                            <div className="flex flex-col gap-2 rounded-lg border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-3 py-2.5 sm:flex-row sm:items-center sm:gap-6">
+                              <span className="text-[10px] font-semibold uppercase tracking-widest text-[var(--biz-muted)] shrink-0">
+                                {gradingCopy.panel.gradingGoalTitle}
+                              </span>
+                              <div className="flex flex-wrap gap-x-4 gap-y-2">
+                                <label className="flex cursor-pointer items-center gap-2 text-xs text-[var(--biz-text)]">
+                                  <input
+                                    type="radio"
+                                    name="grading-goal"
+                                    checked={gradingGoal === "liquidity"}
+                                    onChange={() => setGradingGoal("liquidity")}
+                                    className="accent-blue-600"
+                                  />
+                                  {gradingCopy.panel.gradingGoalLiquidity}
+                                </label>
+                                <label className="flex cursor-pointer items-center gap-2 text-xs text-[var(--biz-text)]">
+                                  <input
+                                    type="radio"
+                                    name="grading-goal"
+                                    checked={gradingGoal === "speed_cost"}
+                                    onChange={() => setGradingGoal("speed_cost")}
+                                    className="accent-blue-600"
+                                  />
+                                  {gradingCopy.panel.gradingGoalSpeedCost}
+                                </label>
+                              </div>
+                            </div>
+                            <GradeProbabilityPanel
+                              estimate={gradeEstimate}
+                              cardIdentity={
+                                identifiedCard
+                                  ? {
+                                      player_name: identifiedCard.player_name,
+                                      year: identifiedCard.year,
+                                      set_name: identifiedCard.set_name,
+                                      parallel_type: identifiedCard.parallel_type,
+                                      card_number: identifiedCard.card_number,
+                                      variation: identifiedCard.variation,
+                                      insert: identifiedCard.insert,
+                                      card_stock: identifiedCard.cardIdentity?.cardStock,
+                                    }
+                                  : null
+                              }
+                              primaryImageUrl={
+                                identifiedCard?.imageUrl || identifiedCard?.imageUrls?.[0] || null
+                              }
+                              imageUrls={identifiedCard?.imageUrls ?? null}
+                              scanPhotos={identifiedCard?.scanPhotos ?? null}
+                              showPreliminaryBadge={showPreliminaryBadge}
+                              gradingPriority={gradingGoal}
+                            />
+                          </>
                         ) : null}
 
                         <GradeScanLabelPanel

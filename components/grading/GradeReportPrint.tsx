@@ -9,26 +9,31 @@
  * in a browser print dialog window where CSS modules / Tailwind may differ.
  */
 
-import type { GradeEstimate } from "@/types";
+import type { GradeEstimate, GradeProbabilities } from "@/types";
+import { gradingCopy } from "@/copy/grading";
+import { normalizeProbabilities } from "@/lib/grade-estimator/value";
+import {
+  HALF_POINT_GRADER_ROWS,
+  getHalfPointOutcomes,
+} from "@/lib/grading/graderDistributionUi";
 import { DigitalSlab } from "./DigitalSlab";
 import {
   distributionFromRange,
-  normalizeDistribution,
   normalizePsaDistribution,
   type GradeOutcome,
 } from "@/lib/grading/gradeProbability";
-import { buildGradeVerdict, VERDICT_DISCLAIMER } from "@/lib/grading/verdict";
+import {
+  buildGradeVerdict,
+  VERDICT_DISCLAIMER,
+  type VerdictCardIdentity,
+} from "@/lib/grading/verdict";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
 export interface GradeReportPrintProps {
   estimate: GradeEstimate;
-  cardIdentity?: {
-    player_name?: string;
-    year?: string;
-    set_name?: string;
-    parallel_type?: string;
-  } | null;
+  cardIdentity?: VerdictCardIdentity;
+  gradingPriority?: "liquidity" | "speed_cost";
   primaryImageUrl?: string | null;
   imageUrls?: string[] | null;
   generatedAt?: string;
@@ -93,18 +98,25 @@ function getPsaOutcomes(estimate: GradeEstimate): GradeOutcome[] {
   return normalizePsaDistribution(mapToPsaBuckets(derived), { allowPsa10Override });
 }
 
-function getBgsOutcomes(estimate: GradeEstimate): GradeOutcome[] | null {
-  if (!estimate.grade_probabilities?.bgs) return null;
-  return normalizeDistribution([
-    { label: "BGS 9.5", probability: estimate.grade_probabilities.bgs["9.5"] },
-    { label: "BGS 9", probability: estimate.grade_probabilities.bgs["9"] },
-    { label: "BGS 8.5", probability: estimate.grade_probabilities.bgs["8.5"] },
-    {
-      label: "BGS 8 or lower",
-      probability: estimate.grade_probabilities.bgs["8_or_lower"],
-    },
-  ]);
+function resolvePrintGradeProbabilities(
+  estimate: GradeEstimate
+): GradeProbabilities | null {
+  const g = estimate.grade_probabilities;
+  if (!g?.psa) return null;
+  return normalizeProbabilities(g as GradeProbabilities);
 }
+
+type ProbTone = "blue" | "emerald" | "violet" | "amber" | "rose";
+
+const PROB_TONE: Record<ProbTone, { hi: string; lo: string }> = {
+  blue: { hi: "#2563EB", lo: "#BFDBFE" },
+  emerald: { hi: "#059669", lo: "#A7F3D0" },
+  violet: { hi: "#7C3AED", lo: "#DDD6FE" },
+  amber: { hi: "#D97706", lo: "#FDE68A" },
+  rose: { hi: "#E11D48", lo: "#FECDD3" },
+};
+
+const PRINT_HALF_TONES: ProbTone[] = ["emerald", "violet", "amber", "rose"];
 
 function expectedValue(outcomes: GradeOutcome[]): number {
   const gradeMap: Record<string, number> = {
@@ -173,12 +185,16 @@ function ProbBar({
   label,
   probability,
   highlighted,
+  tone = "blue",
 }: {
   label: string;
   probability: number;
   highlighted: boolean;
+  tone?: ProbTone;
 }) {
   const pct = Math.round(probability * 100);
+  const colors = PROB_TONE[tone];
+  const fill = highlighted ? colors.hi : colors.lo;
   return (
     <div style={{ marginBottom: 10, opacity: pct === 0 ? 0.4 : 1 }}>
       <div
@@ -222,7 +238,7 @@ function ProbBar({
             height: "100%",
             borderRadius: 4,
             width: `${pct}%`,
-            backgroundColor: highlighted ? "#2563EB" : "#BFDBFE",
+            backgroundColor: fill,
           }}
         />
       </div>
@@ -304,16 +320,17 @@ export function GradeReportPrint({
   imageUrls,
   generatedAt,
   slabId,
+  gradingPriority = "liquidity",
 }: GradeReportPrintProps) {
   const psaOutcomes = getPsaOutcomes(estimate);
-  const bgsOutcomes = getBgsOutcomes(estimate);
+  const resolvedGradeProbabilities = resolvePrintGradeProbabilities(estimate);
   const psaTotal = psaOutcomes.reduce((sum, o) => sum + o.probability, 0);
   const likely = mostLikely(psaOutcomes);
   const ev = expectedValue(psaOutcomes);
   const evLabel = psaTotal > 0 ? ev.toFixed(1) : "—";
   const confidence = estimate.grade_probabilities?.confidence ?? null;
   const cardLabel = buildCardLabel(cardIdentity);
-  const verdict = buildGradeVerdict(estimate, cardIdentity);
+  const verdict = buildGradeVerdict(estimate, cardIdentity, { gradingPriority });
 
   const imageUrl =
     (imageUrls?.filter(Boolean) ?? []).length > 0
@@ -679,7 +696,7 @@ export function GradeReportPrint({
         </p>
       </div>
 
-      {/* ── PSA distribution ────────────────────────────────────────── */}
+      {/* ── Five-service probability ─────────────────────────────────── */}
       <div
         style={{
           marginBottom: 24,
@@ -687,45 +704,130 @@ export function GradeReportPrint({
           borderBottom: `1px solid ${COLOR.border}`,
         }}
       >
-        <SectionLabel>PSA Probability Distribution</SectionLabel>
-        {psaOutcomes.map((outcome) => (
-          <ProbBar
-            key={outcome.label}
-            label={outcome.label}
-            probability={outcome.probability}
-            highlighted={outcome.label === likely?.label}
-          />
-        ))}
-      </div>
-
-      {/* ── BGS distribution (if available) ─────────────────────────── */}
-      {bgsOutcomes ? (
+        <SectionLabel>Five-service probability</SectionLabel>
         <div
           style={{
-            marginBottom: 24,
-            paddingBottom: 24,
-            borderBottom: `1px solid ${COLOR.border}`,
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 18,
+            alignItems: "flex-start",
           }}
         >
-          <SectionLabel>BGS Probability Distribution</SectionLabel>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "4px 24px",
-            }}
-          >
-            {bgsOutcomes.map((outcome) => (
+          <div style={{ flex: "1 1 132px", minWidth: 132 }}>
+            <div
+              style={{
+                fontSize: 9,
+                fontWeight: 700,
+                letterSpacing: "0.12em",
+                textTransform: "uppercase",
+                color: COLOR.muted,
+                marginBottom: 8,
+                fontFamily: FONT,
+              }}
+            >
+              PSA
+            </div>
+            {estimate.grader_perspectives?.psa ? (
+              <p
+                style={{
+                  margin: "0 0 8px",
+                  fontSize: 9,
+                  lineHeight: 1.45,
+                  color: COLOR.secondary,
+                  fontFamily: FONT,
+                }}
+              >
+                {estimate.grader_perspectives.psa}
+              </p>
+            ) : null}
+            {psaOutcomes.map((outcome) => (
               <ProbBar
                 key={outcome.label}
                 label={outcome.label}
                 probability={outcome.probability}
-                highlighted={false}
+                highlighted={outcome.label === likely?.label}
+                tone="blue"
               />
             ))}
           </div>
+          {resolvedGradeProbabilities
+            ? HALF_POINT_GRADER_ROWS.map((row, idx) => {
+                const outs = getHalfPointOutcomes(
+                  resolvedGradeProbabilities,
+                  row.labels,
+                  row.key
+                );
+                const top = mostLikely(outs);
+                const persp = estimate.grader_perspectives?.[row.perspectiveField];
+                return (
+                  <div key={row.key} style={{ flex: "1 1 132px", minWidth: 132 }}>
+                    <div
+                      style={{
+                        fontSize: 9,
+                        fontWeight: 700,
+                        letterSpacing: "0.12em",
+                        textTransform: "uppercase",
+                        color: COLOR.muted,
+                        marginBottom: 8,
+                        fontFamily: FONT,
+                      }}
+                    >
+                      {row.title}
+                    </div>
+                    {persp ? (
+                      <p
+                        style={{
+                          margin: "0 0 8px",
+                          fontSize: 9,
+                          lineHeight: 1.45,
+                          color: COLOR.secondary,
+                          fontFamily: FONT,
+                        }}
+                      >
+                        {persp}
+                      </p>
+                    ) : null}
+                    {top ? (
+                      <div
+                        style={{
+                          fontSize: 10,
+                          color: COLOR.secondary,
+                          marginBottom: 6,
+                          fontFamily: FONT,
+                        }}
+                      >
+                        Top: {top.label} {formatPercent(top.probability)}
+                      </div>
+                    ) : null}
+                    {outs.map((outcome) => (
+                      <ProbBar
+                        key={outcome.label}
+                        label={outcome.label}
+                        probability={outcome.probability}
+                        highlighted={outcome.label === top?.label}
+                        tone={PRINT_HALF_TONES[idx] ?? "emerald"}
+                      />
+                    ))}
+                  </div>
+                );
+              })
+            : null}
         </div>
-      ) : null}
+        {resolvedGradeProbabilities ? (
+          <p
+            style={{
+              marginTop: 12,
+              marginBottom: 0,
+              fontSize: 8,
+              lineHeight: 1.45,
+              color: COLOR.muted,
+              fontFamily: FONT,
+            }}
+          >
+            {gradingCopy.panel.multiGraderBandsNote}
+          </p>
+        ) : null}
+      </div>
 
       {/* ── Evidence blocks ──────────────────────────────────────────── */}
       <div
@@ -795,8 +897,8 @@ export function GradeReportPrint({
           }}
         >
           AI estimate only. Not a professional grade. CardzCheck is not affiliated with PSA,
-          BGS, or SGC. Results may vary and should not be used as the sole basis for financial
-          decisions.
+          BGS, CGC, SGC, or TAG. Results may vary and should not be used as the sole basis for
+          financial decisions.
         </p>
         <span
           style={{

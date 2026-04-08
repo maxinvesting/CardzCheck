@@ -1,23 +1,7 @@
 "use client";
 
+import { formatPrice } from "@/lib/pricing";
 import type { MessageThread, ThreadFilter } from "@/lib/messaging/types";
-
-const CATEGORY_LABELS: Record<string, { label: string; color: string }> = {
-  question: { label: "Question", color: "bg-blue-50 text-blue-700 border-blue-200" },
-  offer: { label: "Offer", color: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-  shipping: { label: "Shipping", color: "bg-purple-50 text-purple-700 border-purple-200" },
-  complaint: { label: "Complaint", color: "bg-red-50 text-red-700 border-red-200" },
-  return_refund: { label: "Return", color: "bg-amber-50 text-amber-700 border-amber-200" },
-  other: { label: "Other", color: "bg-gray-50 text-gray-600 border-gray-200" },
-};
-
-const STATUS_DOTS: Record<string, string> = {
-  needs_response: "bg-red-500",
-  open: "bg-blue-400",
-  awaiting_buyer: "bg-amber-400",
-  resolved: "bg-emerald-400",
-  archived: "bg-gray-300",
-};
 
 const FILTER_TABS: { key: ThreadFilter; label: string }[] = [
   { key: "all", label: "All" },
@@ -27,6 +11,22 @@ const FILTER_TABS: { key: ThreadFilter; label: string }[] = [
   { key: "resolved", label: "Resolved" },
   { key: "archived", label: "Archived" },
 ];
+
+const STATUS_STYLES: Record<MessageThread["status"], string> = {
+  needs_response: "border-amber-200 bg-amber-50 text-amber-700",
+  open: "border-[var(--biz-secondary-border)] bg-[var(--biz-secondary-soft)] text-[var(--biz-secondary)]",
+  awaiting_buyer: "border-violet-200 bg-violet-50 text-violet-700",
+  resolved: "border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] text-[var(--biz-primary)]",
+  archived: "border-slate-200 bg-slate-100 text-slate-500",
+};
+
+const STATUS_LABELS: Record<MessageThread["status"], string> = {
+  needs_response: "Needs reply",
+  open: "Open",
+  awaiting_buyer: "Awaiting buyer",
+  resolved: "Resolved",
+  archived: "Archived",
+};
 
 function relativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -38,6 +38,11 @@ function relativeTime(iso: string): string {
   const days = Math.floor(hours / 24);
   if (days < 7) return `${days}d`;
   return `${Math.floor(days / 7)}w`;
+}
+
+function formatMoney(cents: number | null | undefined): string | null {
+  if (typeof cents !== "number" || !Number.isFinite(cents)) return null;
+  return formatPrice(cents / 100);
 }
 
 interface Props {
@@ -60,118 +65,128 @@ export default function ThreadList({
   onTogglePin,
 }: Props) {
   return (
-    <div className="flex h-full flex-col">
-      {/* Filter tabs */}
-      <div className="flex gap-1 overflow-x-auto border-b border-[var(--biz-border)] bg-[#FAFAFA] px-3 py-2">
-        {FILTER_TABS.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => onFilterChange(tab.key)}
-            className={`whitespace-nowrap rounded-md px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
-              filter === tab.key
-                ? "bg-gradient-to-r from-emerald-500 to-emerald-700 text-white shadow-sm"
-                : "text-[var(--biz-muted)] hover:bg-white hover:text-[var(--biz-text)]"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+    <div className="flex h-full flex-col bg-[#FBFCFD]">
+      <div className="border-b border-[var(--biz-border)] bg-white px-3 py-3">
+        <div className="flex gap-1 overflow-x-auto">
+          {FILTER_TABS.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => onFilterChange(tab.key)}
+              className={`whitespace-nowrap rounded-full px-3 py-1.5 text-[11px] font-semibold transition-all ${
+                filter === tab.key
+                  ? "bg-[var(--biz-primary)] text-[var(--biz-primary-foreground)] shadow-[0_8px_18px_var(--biz-primary-border)]"
+                  : "text-[var(--biz-muted)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Thread list */}
       <div className="flex-1 overflow-y-auto">
         {threads.length === 0 ? (
-          <div className="p-6 text-center text-xs text-[var(--biz-muted)]">
-            No messages match this filter.
+          <div className="px-5 py-10 text-center text-sm text-[var(--biz-muted)]">
+            No conversations match this view.
           </div>
         ) : (
           threads.map((thread) => {
-            const cat = CATEGORY_LABELS[thread.category] ?? CATEGORY_LABELS.other;
             const isSelected = thread.id === selectedId;
             const hasUnread = thread.unread_count > 0;
             const isPinned = pinnedThreadIds.includes(thread.id);
+            const offerText = formatMoney(thread.offer_amount_cents);
 
             return (
               <button
                 key={thread.id}
+                type="button"
                 onClick={() => onSelectThread(thread.id)}
-                className={`w-full border-b border-[var(--biz-border)] px-4 py-3.5 text-left transition-colors ${
+                className={`w-full border-b border-[var(--biz-border)] px-4 py-3 text-left transition-all ${
                   isSelected
-                    ? "border-l-2 border-l-[var(--biz-primary)] bg-gradient-to-r from-emerald-50 to-white"
-                    : "hover:bg-[#F9FAFB]"
+                    ? "bg-[linear-gradient(135deg,#eefaf4_0%,#ffffff_72%)] shadow-[inset_3px_0_0_0_var(--biz-primary)]"
+                    : "bg-transparent hover:bg-white"
                 }`}
               >
-                <div className="flex items-start justify-between gap-2">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-xs font-semibold text-slate-600">
+                    {(thread.buyer_display_name ?? thread.buyer_username).slice(0, 1).toUpperCase()}
+                  </div>
+
                   <div className="min-w-0 flex-1">
-                    {/* Buyer + status */}
-                    <div className="flex items-center gap-2">
-                      {isPinned && (
-                        <span className="rounded bg-amber-100 px-1 py-0.5 text-[9px] font-semibold text-amber-700">
-                          PIN
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span
+                            className={`truncate text-sm ${
+                              hasUnread
+                                ? "font-semibold text-[var(--biz-text)]"
+                                : "font-medium text-[var(--biz-text)]"
+                            }`}
+                          >
+                            {thread.buyer_display_name ?? thread.buyer_username}
+                          </span>
+                          {hasUnread ? (
+                            <span className="rounded-full bg-[#DC2626] px-1.5 py-0.5 text-[9px] font-bold text-white">
+                              {thread.unread_count}
+                            </span>
+                          ) : null}
+                          {isPinned ? (
+                            <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-amber-700">
+                              Pinned
+                            </span>
+                          ) : null}
+                        </div>
+                        {thread.item_title ? (
+                          <p className="mt-0.5 truncate text-[12px] text-[var(--biz-muted)]">
+                            {thread.item_title}
+                          </p>
+                        ) : null}
+                      </div>
+
+                      <div className="flex shrink-0 flex-col items-end gap-1">
+                        <span className="text-[10px] font-medium tabular-nums text-[var(--biz-muted)]">
+                          {relativeTime(thread.last_message_at)}
                         </span>
-                      )}
-                      <span
-                        className={`h-2 w-2 shrink-0 rounded-full ${
-                          STATUS_DOTS[thread.status] ?? "bg-gray-300"
-                        }`}
-                      />
-                      <span
-                        className={`truncate text-sm ${
-                          hasUnread
-                            ? "font-semibold text-[var(--biz-text)]"
-                            : "font-medium text-[var(--biz-text)]"
-                        }`}
-                      >
-                        {thread.buyer_display_name ?? thread.buyer_username}
-                      </span>
-                      {hasUnread && (
-                        <span className="shrink-0 rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold text-white">
-                          {thread.unread_count}
-                        </span>
-                      )}
+                      </div>
                     </div>
 
-                    {/* Item title */}
-                    {thread.item_title && (
-                      <p className="mt-0.5 truncate text-[11px] text-[var(--biz-muted)]">
-                        {thread.item_title}
-                      </p>
-                    )}
-
-                    {/* Preview */}
                     <p
-                      className={`mt-1 line-clamp-2 text-xs ${
+                      className={`mt-1.5 line-clamp-1 text-[13px] leading-relaxed ${
                         hasUnread ? "text-[var(--biz-text)]" : "text-[var(--biz-muted)]"
                       }`}
                     >
                       {thread.last_message_preview}
                     </p>
-                  </div>
 
-                  {/* Right side: time + category */}
-                  <div className="flex shrink-0 flex-col items-end gap-1.5">
-                    <span className="text-[10px] tabular-nums text-[var(--biz-muted)]">
-                      {relativeTime(thread.last_message_at)}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onTogglePin(thread.id);
-                      }}
-                      className={`rounded border px-1.5 py-0.5 text-[9px] font-semibold ${
-                        isPinned
-                          ? "border-amber-200 bg-amber-50 text-amber-700"
-                          : "border-[var(--biz-border)] bg-white text-[var(--biz-muted)]"
-                      }`}
-                    >
-                      {isPinned ? "Unpin" : "Pin"}
-                    </button>
-                    <span
-                      className={`rounded-full border px-1.5 py-0.5 text-[9px] font-medium ${cat.color}`}
-                    >
-                      {cat.label}
-                    </span>
+                    <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                      <span
+                        className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${STATUS_STYLES[thread.status]}`}
+                      >
+                        {STATUS_LABELS[thread.status]}
+                      </span>
+                      {offerText ? (
+                        <span className="rounded-full border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] px-2 py-0.5 text-[10px] font-semibold text-[var(--biz-primary)]">
+                          Offer {offerText}
+                        </span>
+                      ) : (
+                        <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-500">
+                          {thread.platform === "ebay" ? "eBay" : thread.platform}
+                        </span>
+                      )}
+                      {isSelected ? (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onTogglePin(thread.id);
+                          }}
+                          className="rounded-full border border-[var(--biz-border)] bg-white px-2 py-0.5 text-[10px] font-semibold text-[var(--biz-muted)] transition-colors hover:bg-[var(--biz-hover)]"
+                        >
+                          {isPinned ? "Unpin" : "Pin"}
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
               </button>
