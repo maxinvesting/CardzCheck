@@ -77,12 +77,10 @@ export default function AuthenticatedLayout({
 
   return (
     <div
-      className={`relative flex min-h-screen overflow-hidden ${
+      className={`relative flex min-h-screen ${
         isBusinessShell
-          ? isBusinessRoute
-            ? "business-theme business-workspace-theme bg-[var(--biz-bg)] text-[var(--biz-text)]"
-            : "business-theme bg-[var(--biz-bg)] text-[var(--biz-text)]"
-          : "bg-[#0f1419]"
+          ? "business-theme bg-[var(--biz-bg)] text-[var(--biz-text)]"
+          : "overflow-hidden bg-[#0f1419]"
       }`}
       style={businessAppearanceStyle}
     >
