@@ -13,6 +13,8 @@ interface DualCardUploaderProps {
   disabled?: boolean;
   onStart?: () => void;
   onReset?: () => void;
+  /** When set, photos are ready but analysis stays blocked (e.g. missing card name) */
+  analyzeGateHint?: string | null;
 }
 
 type PhotoTag = "auto" | "front" | "back" | "corner" | "edges" | "surface" | "other";
@@ -104,6 +106,7 @@ export default function DualCardUploader({
   disabled,
   onStart,
   onReset,
+  analyzeGateHint,
 }: DualCardUploaderProps) {
   const [photos, setPhotos] = useState<PhotoDraft[]>([]);
   const [dragging, setDragging] = useState(false);
@@ -365,16 +368,18 @@ export default function DualCardUploader({
       <button
         type="button"
         onClick={() => { void handleAnalyze(); }}
-        disabled={!canAnalyze || Boolean(disabled)}
+        disabled={!canAnalyze || Boolean(disabled) || Boolean(analyzeGateHint)}
         className={`w-full rounded-xl border py-3 text-sm font-semibold transition-colors ${
-          canAnalyze && !disabled
+          canAnalyze && !disabled && !analyzeGateHint
             ? "border-slate-900 bg-slate-900 text-white hover:bg-slate-800"
             : "cursor-not-allowed border-slate-700 bg-slate-800/50 text-slate-500"
         }`}
       >
-        {canAnalyze
-          ? `Analyze ${photos.length} photo${photos.length === 1 ? "" : "s"} →`
-          : "Add front + back photos to continue"}
+        {!canAnalyze
+          ? "Add front + back photos to continue"
+          : analyzeGateHint
+            ? analyzeGateHint
+            : `Analyze ${photos.length} photo${photos.length === 1 ? "" : "s"} →`}
       </button>
 
       {error ? (

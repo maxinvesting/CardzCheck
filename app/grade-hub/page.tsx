@@ -6,6 +6,7 @@ import { Playfair_Display } from "next/font/google";
 import dynamic from "next/dynamic";
 import { useAuth } from "@/contexts/AuthContext";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
+import CardScanSlot from "@/components/grading/CardScanSlot";
 import GradeEstimatorHistoryPanel from "@/components/grading/GradeEstimatorHistoryPanel";
 
 // Lazy-load the heavy submission builder only when the tab is active
@@ -48,6 +49,8 @@ export default function GradeHubPage() {
   const [credits, setCredits] = useState<CreditStatus | null>(null);
   const [creditsFetchState, setCreditsFetchState] = useState<CreditsFetchState>("loading");
   const [activeTab, setActiveTab] = useState<Tab>("scan");
+  /** Remount scan slots for a fresh session without navigating away */
+  const [hubScanKey, setHubScanKey] = useState(0);
   const gradeHubBasePath = pathname?.startsWith("/business") ? "/business/grade-hub" : "/grade-hub";
   const gradeHubScanPath = `${gradeHubBasePath}/scan`;
 
@@ -97,15 +100,12 @@ export default function GradeHubPage() {
     [gradeHubScanPath, router]
   );
 
-  const handlePrimaryAnalyze = useCallback(() => {
-    if (creditsLoading) return;
-    if (creditsError) {
-      openScanSession(scanSlotsForTab);
-      return;
-    }
-    if (canScan) openScanSession(scanSlotsForTab);
-    else router.push("/settings");
-  }, [canScan, creditsError, creditsLoading, openScanSession, router, scanSlotsForTab]);
+  const scanDisabled = creditsLoading || (!creditsError && !canScan);
+
+  const hubScanGridClass =
+    scanSlotsForTab === 1
+      ? "max-w-2xl mx-auto"
+      : "grid grid-cols-1 lg:grid-cols-3 gap-5";
 
   const tabs: { key: Tab; label: string; show: boolean }[] = [
     { key: "scan", label: "Scan a card", show: true },
@@ -176,7 +176,7 @@ export default function GradeHubPage() {
             </button>
             <button
               type="button"
-              onClick={() => openScanSession(1)}
+              onClick={() => setHubScanKey((k) => k + 1)}
               style={{
                 fontSize: 11,
                 fontWeight: 700,
@@ -224,92 +224,27 @@ export default function GradeHubPage() {
           {/* ── Tab: Scan a card / Batch scan ────────────────────────── */}
           {(activeTab === "scan" || activeTab === "batch") && (
             <>
-              {/* Scan entry — opens real upload flow on /scan */}
-              <div>
+              {/* Inline scan — same upload + analysis as /grade-hub/scan, without leaving the hub */}
+              <div id="grade-hub-scan-workspace">
                 <div
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => openScanSession(scanSlotsForTab)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      openScanSession(scanSlotsForTab);
-                    }
-                  }}
-                  style={{ background: NAVY, borderRadius: 2, padding: "24px", cursor: "pointer" }}
+                  className="rounded-sm border border-[#e5e7eb] overflow-hidden shadow-sm [&_.cc-surface]:!bg-[#101f36] [&_.cc-surface]:!border-[rgba(255,255,255,0.08)]"
                 >
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1px 1fr" }}>
-                    <div style={{ padding: "0 16px 0 0", display: "flex", flexDirection: "column" }}>
-                      <div
-                        style={{
-                          border: "1px dashed rgba(255,255,255,0.2)",
-                          borderRadius: 2,
-                          display: "flex",
-                          flexDirection: "column",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: 10,
-                          padding: "36px 16px",
-                          flex: 1,
-                        }}
-                      >
-                        <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: "rgba(255,255,255,0.35)" }}>
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6}
-                            d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-                        </svg>
-                        <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px", color: "rgba(255,255,255,0.85)", margin: 0 }}>
-                          Front of card
-                        </p>
-                        <p style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", textAlign: "center", margin: 0, lineHeight: 1.4 }}>
-                          Added on the scan page
-                        </p>
-                      </div>
-                    </div>
-                    <div style={{ background: "rgba(255,255,255,0.08)", margin: "8px 0" }} />
-                    <div style={{ padding: "0 0 0 16px", display: "flex", flexDirection: "column" }}>
-                      <div
-                        style={{
-                          border: "1px dashed rgba(255,255,255,0.2)",
-                          borderRadius: 2,
-                          display: "flex",
-                          flexDirection: "column",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: 10,
-                          padding: "36px 16px",
-                          flex: 1,
-                        }}
-                      >
-                        <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: "rgba(255,255,255,0.35)" }}>
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6}
-                            d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-                        </svg>
-                        <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px", color: "rgba(255,255,255,0.85)", margin: 0 }}>
-                          Back of card
-                        </p>
-                        <p style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", textAlign: "center", margin: 0, lineHeight: 1.4 }}>
-                          Added on the scan page
-                        </p>
-                      </div>
-                    </div>
+                  <div key={hubScanKey} className={hubScanGridClass}>
+                    {Array.from({ length: scanSlotsForTab }).map((_, i) => (
+                      <CardScanSlot
+                        key={i}
+                        slotIndex={i}
+                        totalSlots={scanSlotsForTab}
+                        disabled={scanDisabled}
+                      />
+                    ))}
                   </div>
-                  <p
-                    style={{
-                      fontSize: 11,
-                      color: "rgba(255,255,255,0.5)",
-                      textAlign: "center",
-                      margin: "16px 0 0",
-                      lineHeight: 1.45,
-                    }}
-                  >
-                    Click here to open your scan session — upload front, back, and optional close-ups on the next screen.
-                  </p>
                 </div>
 
                 {creditsError && (
                   <div className="mt-3 flex flex-col gap-2 rounded border border-amber-200 bg-amber-50 px-3 py-2.5">
                     <p className="text-xs text-amber-900">
-                      Couldn&apos;t load scan credits. You can still open a scan session; limits are enforced when you run an analysis.
+                      Couldn&apos;t load scan credits. You can still run an analysis; limits are enforced on the server.
                     </p>
                     <button
                       type="button"
@@ -321,43 +256,13 @@ export default function GradeHubPage() {
                   </div>
                 )}
 
-                <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
-                  <button
-                    type="button"
-                    onClick={handlePrimaryAnalyze}
-                    disabled={creditsLoading}
-                    style={{
-                      width: "100%",
-                      fontSize: 12,
-                      fontWeight: 700,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.6px",
-                      borderRadius: 2,
-                      border: "none",
-                      color: "#fff",
-                      background: creditsLoading
-                        ? "#9ca3af"
-                        : creditsError || canScan
-                          ? NAVY
-                          : "#9ca3af",
-                      padding: "11px 20px",
-                      cursor: creditsLoading ? "not-allowed" : "pointer",
-                    }}
-                  >
-                    {creditsLoading
-                      ? "Checking scan access…"
-                      : creditsError
-                        ? "Open scan session"
-                        : canScan
-                          ? "Analyze Card"
-                          : "No scans left"}
-                  </button>
-                  {isBusiness && activeTab === "scan" && (
+                {isBusiness && activeTab === "scan" && (
+                  <div style={{ marginTop: 12 }}>
                     <button
                       type="button"
                       onClick={() => {
-                        if (creditsLoading) return;
-                        if (creditsError || canScan) openScanSession(3);
+                        if (creditsLoading || (!creditsError && !canScan)) return;
+                        setActiveTab("batch");
                       }}
                       disabled={creditsLoading || (!creditsError && !canScan)}
                       style={{
@@ -376,21 +281,31 @@ export default function GradeHubPage() {
                         opacity: creditsLoading || (!creditsError && !canScan) ? 0.5 : 1,
                       }}
                     >
-                      Batch Scan
+                      Batch scan (up to 3 cards)
                     </button>
-                  )}
-                </div>
+                  </div>
+                )}
 
                 <p style={{ fontSize: 10, color: "#9ca3af", marginTop: 10, textAlign: "center" }}>
                   {creditsLoading
                     ? "Loading scan balance…"
                     : creditsError
-                      ? "Credit balance unavailable — open a session to continue."
+                      ? "Credit balance unavailable — try uploading when you’re ready."
                       : isBusiness
                         ? "Business plan · Up to 3 cards per batch · Unlimited scans"
                         : isUnlimited
                           ? "Unlimited scans"
                           : `${remaining} scan${remaining !== 1 ? "s" : ""} remaining${credits?.nextGrantAt ? ` · +1 in ${formatTimeUntil(credits.nextGrantAt)}` : ""}`}
+                </p>
+                <p style={{ fontSize: 10, color: "#9ca3af", marginTop: 6, textAlign: "center" }}>
+                  <button
+                    type="button"
+                    onClick={() => openScanSession(scanSlotsForTab)}
+                    className="text-[#6b7280] underline underline-offset-2 hover:text-[#374151]"
+                  >
+                    Open full-screen scan workspace
+                  </button>{" "}
+                  if you prefer the dedicated session view.
                 </p>
               </div>
 

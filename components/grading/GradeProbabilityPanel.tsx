@@ -31,7 +31,7 @@ import {
 } from "@/lib/grading/graderDistributionUi";
 import type { GradeProbabilities } from "@/types";
 import { SpeakButton } from "@/components/ui/SpeakButton";
-import { buildCompsLinks } from "@/lib/ebay/comps-url";
+import { buildCompsLinks, type CompsParams } from "@/lib/ebay/comps-url";
 import PreSubmissionAnalysisSection from "@/components/grading/PreSubmissionAnalysisSection";
 
 interface GradeProbabilityPanelProps {
@@ -278,13 +278,30 @@ function buildBgsPopUrl(cardIdentity: {
   return `https://www.beckett.com/search/#q=${encodeURIComponent(q)}&tab=population`;
 }
 
+function compsParamsForPanel(cardIdentity: VerdictCardIdentity): CompsParams {
+  const owner = cardIdentity?.owner_declared_title?.trim();
+  if (owner) {
+    return { title: owner };
+  }
+  return {
+    player: cardIdentity?.player_name,
+    year: cardIdentity?.year,
+    setName: cardIdentity?.set_name,
+    parallel: cardIdentity?.parallel_type,
+  };
+}
+
 function buildCardIdentityLabel(cardIdentity?: {
   player_name?: string;
   year?: string;
   set_name?: string;
   parallel_type?: string;
+  owner_declared_title?: string;
 } | null): string | null {
   if (!cardIdentity) return null;
+  if (cardIdentity.owner_declared_title?.trim()) {
+    return cardIdentity.owner_declared_title.trim();
+  }
   const parts: string[] = [];
   if (cardIdentity.player_name) parts.push(cardIdentity.player_name);
   if (cardIdentity.year) parts.push(cardIdentity.year);
@@ -941,14 +958,15 @@ export default function GradeProbabilityPanel({
       </div>
 
       {/* ── VERIFY COMPS ─────────────────────────────────────────────────── */}
-      {cardIdentity && (cardIdentity.player_name || cardIdentity.set_name) && (
+      {cardIdentity &&
+        (cardIdentity.owner_declared_title || cardIdentity.player_name || cardIdentity.set_name) && (
         <div className="mt-3 rounded-lg border border-white/[0.07] bg-[#0d1b2a] px-4 py-3">
           <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.18em] text-blue-400/70">
             Verify Comps on eBay
           </p>
           <div className="flex flex-wrap gap-2">
             <a
-              href={buildCompsLinks({ player: cardIdentity.player_name, year: cardIdentity.year, setName: cardIdentity.set_name, parallel: cardIdentity.parallel_type }).psa10Url}
+              href={buildCompsLinks(compsParamsForPanel(cardIdentity)).psa10Url}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 rounded border border-blue-900/40 bg-blue-950/40 px-2.5 py-1 text-[11px] font-medium text-blue-300 hover:bg-blue-900/50 transition-colors"
@@ -956,7 +974,7 @@ export default function GradeProbabilityPanel({
               PSA 10 sold →
             </a>
             <a
-              href={buildCompsLinks({ player: cardIdentity.player_name, year: cardIdentity.year, setName: cardIdentity.set_name, parallel: cardIdentity.parallel_type }).psa9Url}
+              href={buildCompsLinks(compsParamsForPanel(cardIdentity)).psa9Url}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 rounded border border-blue-900/40 bg-blue-950/40 px-2.5 py-1 text-[11px] font-medium text-blue-300 hover:bg-blue-900/50 transition-colors"
@@ -964,7 +982,7 @@ export default function GradeProbabilityPanel({
               PSA 9 sold →
             </a>
             <a
-              href={buildCompsLinks({ player: cardIdentity.player_name, year: cardIdentity.year, setName: cardIdentity.set_name, parallel: cardIdentity.parallel_type }).rawUrl}
+              href={buildCompsLinks(compsParamsForPanel(cardIdentity)).rawUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 rounded border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-white/50 hover:text-white/70 hover:bg-white/[0.07] transition-colors"

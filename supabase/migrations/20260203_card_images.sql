@@ -10,21 +10,17 @@ CREATE TABLE IF NOT EXISTS card_images (
   label text NULL,
   created_at timestamptz DEFAULT now()
 );
-
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_card_images_card_id_position ON card_images(card_id, position);
 CREATE INDEX IF NOT EXISTS idx_card_images_user_id ON card_images(user_id);
-
 -- RLS Policies
 ALTER TABLE card_images ENABLE ROW LEVEL SECURITY;
-
 -- Users can view their own card images
 CREATE POLICY "Users can view own card images"
   ON card_images
   FOR SELECT
   TO authenticated
   USING (auth.uid() = user_id);
-
 -- Users can insert card images for their own cards
 CREATE POLICY "Users can insert own card images"
   ON card_images
@@ -38,7 +34,6 @@ CREATE POLICY "Users can insert own card images"
       AND cards.user_id = auth.uid()
     )
   );
-
 -- Users can update their own card images
 CREATE POLICY "Users can update own card images"
   ON card_images
@@ -46,13 +41,11 @@ CREATE POLICY "Users can update own card images"
   TO authenticated
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
-
 -- Users can delete their own card images
 CREATE POLICY "Users can delete own card images"
   ON card_images
   FOR DELETE
   TO authenticated
   USING (auth.uid() = user_id);
-
 -- Comment for documentation
 COMMENT ON TABLE card_images IS 'Stores multiple images per card with position ordering. Position 0 is the primary image shown in grids.';

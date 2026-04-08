@@ -88,7 +88,7 @@ export default function AIActionsPanel({
           type="button"
           onClick={() => onGenerateReply(selectedAction, sellerNote)}
           disabled={replyLoading}
-          className="rounded-xl bg-[linear-gradient(135deg,#18a06f_0%,#117d58_100%)] px-3.5 py-2 text-[12px] font-semibold text-white shadow-[0_10px_24px_rgba(17,125,88,0.22)] transition-all hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-xl bg-[var(--biz-primary)] px-3.5 py-2 text-[12px] font-semibold text-[var(--biz-primary-foreground)] shadow-[0_10px_24px_var(--biz-primary-border)] transition-colors hover:bg-[var(--biz-primary-hover)] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {replyLoading ? "Drafting..." : activeDraft ? "Regenerate" : "Generate draft"}
         </button>
@@ -108,8 +108,8 @@ export default function AIActionsPanel({
               onClick={() => setSelectedAction(action.id)}
               className={`whitespace-nowrap rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
                 isActive
-                  ? "border-emerald-300 bg-emerald-50 text-emerald-800"
-                  : "border-[var(--biz-border)] bg-white text-[var(--biz-muted)] hover:bg-[#F8FAFC] hover:text-[var(--biz-text)]"
+                  ? "border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] text-[var(--biz-primary)]"
+                  : "border-[var(--biz-border)] bg-white text-[var(--biz-muted)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]"
               }`}
             >
               {action.label}
@@ -122,7 +122,7 @@ export default function AIActionsPanel({
         <button
           type="button"
           onClick={() => setShowSellerNote((current) => !current)}
-          className="rounded-full border border-[var(--biz-border)] bg-white px-3 py-1.5 text-[11px] font-semibold text-[var(--biz-muted)] transition-colors hover:bg-[#F8FAFC]"
+          className="rounded-full border border-[var(--biz-border)] bg-white px-3 py-1.5 text-[11px] font-semibold text-[var(--biz-muted)] transition-colors hover:bg-[var(--biz-hover)]"
         >
           {showSellerNote ? "Hide note" : "Add note"}
         </button>
@@ -149,12 +149,12 @@ export default function AIActionsPanel({
       ) : null}
 
       {replyLoading ? (
-        <div className="mt-3 rounded-[18px] border border-emerald-100 bg-white px-3.5 py-3">
+        <div className="mt-3 rounded-[18px] border border-[var(--biz-primary-border)] bg-white px-3.5 py-3">
           <div className="flex items-center gap-2">
-            <div className="h-7 w-7 animate-pulse rounded-full bg-emerald-100" />
+            <div className="h-7 w-7 animate-pulse rounded-full bg-[var(--biz-primary-soft)]" />
             <div>
-              <p className="text-sm font-semibold text-emerald-900">Building draft</p>
-              <p className="text-[11px] text-emerald-700">
+              <p className="text-sm font-semibold text-[var(--biz-text)]">Building draft</p>
+              <p className="text-[11px] text-[var(--biz-primary)]">
                 Pulling in the thread and your selected move.
               </p>
             </div>
@@ -173,14 +173,14 @@ export default function AIActionsPanel({
               type="button"
               onClick={() => onInsertReply(draftEditorText.trim())}
               disabled={!draftEditorText.trim()}
-              className="rounded-xl bg-[linear-gradient(135deg,#18a06f_0%,#117d58_100%)] px-3 py-2 text-[12px] font-semibold text-white transition-all hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-45"
+              className="rounded-xl bg-[var(--biz-primary)] px-3 py-2 text-[12px] font-semibold text-[var(--biz-primary-foreground)] transition-colors hover:bg-[var(--biz-primary-hover)] disabled:cursor-not-allowed disabled:opacity-45"
             >
               Use draft
             </button>
             <button
               type="button"
               onClick={handleCopyDraft}
-              className="rounded-xl border border-[var(--biz-border)] bg-white px-3 py-2 text-[12px] font-semibold text-[var(--biz-text)] transition-colors hover:bg-[#F8FAFC]"
+              className="rounded-xl border border-[var(--biz-border)] bg-white px-3 py-2 text-[12px] font-semibold text-[var(--biz-text)] transition-colors hover:bg-[var(--biz-hover)]"
             >
               {copied ? "Copied" : "Copy"}
             </button>

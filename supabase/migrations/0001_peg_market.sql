@@ -2,7 +2,6 @@
 -- Core SKU, sold comp, and peg update audit tables.
 
 create extension if not exists pgcrypto;
-
 create table if not exists public.skus (
   id uuid primary key default gen_random_uuid(),
   sku_id text not null unique,
@@ -11,7 +10,6 @@ create table if not exists public.skus (
   image_url text,
   created_at timestamptz not null default now()
 );
-
 create table if not exists public.sold_comps (
   id uuid primary key default gen_random_uuid(),
   sku_id text not null,
@@ -23,7 +21,6 @@ create table if not exists public.sold_comps (
   created_at timestamptz not null default now(),
   constraint sold_comps_sku_fk foreign key (sku_id) references public.skus (sku_id) on delete cascade
 );
-
 create table if not exists public.peg_updates (
   id uuid primary key default gen_random_uuid(),
   sku_id text not null,
@@ -39,7 +36,6 @@ create table if not exists public.peg_updates (
   constraint peg_updates_sku_fk foreign key (sku_id) references public.skus (sku_id) on delete cascade,
   constraint peg_updates_sku_nonce_unique unique (sku_id, nonce)
 );
-
 create index if not exists idx_skus_created_at on public.skus (created_at desc);
 create index if not exists idx_sold_comps_sku_sold_at on public.sold_comps (sku_id, sold_at desc);
 create index if not exists idx_sold_comps_source_external on public.sold_comps (source, external_id);

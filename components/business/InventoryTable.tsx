@@ -140,7 +140,7 @@ function getDaysHeld(acquisitionDate: string | null | undefined): number | null 
 
 function getDaysHeldColor(days: number | null): string {
   if (days === null) return "text-[var(--biz-muted)]";
-  if (days < 30) return "text-emerald-700";
+  if (days < 30) return "text-[var(--biz-primary)]";
   if (days <= 60) return "text-amber-700";
   return "text-red-600";
 }
@@ -489,7 +489,7 @@ export default function InventoryTable({
             e.stopPropagation();
             openProfile(item.id);
           }}
-          className="group/title flex min-w-0 cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent p-0 py-0.5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+          className="group/title flex min-w-0 cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent p-0 py-0.5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--biz-focus)]"
         >
           {isWax && (
             <span className="inline-flex shrink-0 items-center rounded border border-amber-200 bg-amber-50 px-1 py-0.5 text-[10px] font-semibold whitespace-nowrap text-amber-700">
@@ -502,7 +502,7 @@ export default function InventoryTable({
           >
             {titleStr}
           </span>
-          <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 transition-colors group-hover/title:bg-emerald-100">
+          <span className="shrink-0 rounded-full border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--biz-primary)] transition-colors group-hover/title:bg-[var(--biz-primary-soft-strong)]">
             View card
           </span>
         </button>
@@ -518,7 +518,12 @@ export default function InventoryTable({
     if (field === "current_market_value_cents" && listView) {
       const mv = item.current_market_value_cents;
       const cost = item.cost_basis_total_cents;
-      const color = mv == null || mv <= 0 ? "#AAA" : mv > cost ? "#2D7A4F" : "#CC4444";
+      const color =
+        mv == null || mv <= 0
+          ? "var(--biz-muted)"
+          : mv > cost
+          ? "var(--biz-profit)"
+          : "#CC4444";
       return (
         <span style={{ color }} className="tabular-nums font-medium">
           {fmtCents(mv) || "—"}
@@ -545,7 +550,7 @@ export default function InventoryTable({
                 handleFetchCmv(item);
               }}
               disabled={isFetching || !item.title?.trim()}
-              className="shrink-0 rounded border border-[var(--biz-border)] bg-[#F9FAFB] px-1.5 py-0.5 text-[10px] font-medium text-[var(--biz-text)] hover:bg-[#F3F4F6] disabled:opacity-50"
+              className="shrink-0 rounded border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--biz-text)] hover:bg-[var(--biz-hover)] disabled:opacity-50"
             >
               {isFetching ? "…" : "Get"}
             </button>
@@ -571,7 +576,7 @@ export default function InventoryTable({
             e.stopPropagation();
             openProfile(item.id);
           }}
-          className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700 transition-colors hover:bg-emerald-100"
+          className="inline-flex items-center gap-1 rounded-md border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] px-2 py-1 text-[11px] font-semibold text-[var(--biz-primary)] transition-colors hover:bg-[var(--biz-primary-soft-strong)]"
         >
           View card
           <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -589,7 +594,7 @@ export default function InventoryTable({
             e.stopPropagation();
             onItemClick(item);
           }}
-          className="rounded border border-[var(--biz-border)] bg-[#F9FAFB] px-1.5 py-0.5 text-[10px] font-medium text-[var(--biz-primary)] hover:bg-[#F3F4F6]"
+          className="rounded border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--biz-primary)] hover:bg-[var(--biz-hover)]"
         >
           Grade
         </button>
@@ -619,7 +624,7 @@ export default function InventoryTable({
               e.stopPropagation();
               onMarkSold?.(item);
             }}
-            className="rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 hover:bg-emerald-100"
+            className="rounded border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] px-2 py-0.5 text-[10px] font-medium text-[var(--biz-primary)] hover:bg-[var(--biz-primary-soft-strong)]"
           >
             Mark Sold
           </button>
@@ -630,7 +635,7 @@ export default function InventoryTable({
                 e.stopPropagation();
                 setEbayListingItem(item);
               }}
-              className="rounded border border-[var(--biz-border)] bg-[#F9FAFB] px-2 py-0.5 text-[10px] font-medium text-[var(--biz-primary)] hover:bg-[#F3F4F6]"
+              className="rounded border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-2 py-0.5 text-[10px] font-medium text-[var(--biz-primary)] hover:bg-[var(--biz-hover)]"
             >
               List eBay
             </button>
@@ -640,7 +645,7 @@ export default function InventoryTable({
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="rounded border border-[var(--biz-border)] bg-[#F9FAFB] px-2 py-0.5 text-[10px] font-medium text-[var(--biz-primary)] hover:bg-[#F3F4F6] transition-colors"
+            className="rounded border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-2 py-0.5 text-[10px] font-medium text-[var(--biz-primary)] hover:bg-[var(--biz-hover)] transition-colors"
           >
             Get Comps
           </a>
@@ -663,11 +668,14 @@ export default function InventoryTable({
 
   const statusColor = (status: string) => {
     switch (status) {
-      case "sold": return "border border-emerald-200 bg-emerald-50 text-emerald-700";
-      case "listed": return "border border-blue-200 bg-blue-50 text-blue-700";
+      case "sold":
+        return "border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] text-[var(--biz-primary)]";
+      case "listed":
+        return "border border-[var(--biz-secondary-border)] bg-[var(--biz-secondary-soft)] text-[var(--biz-secondary)]";
       case "pending_sale": return "border border-amber-200 bg-amber-50 text-amber-700";
       case "returned": return "border border-red-200 bg-red-50 text-red-700";
-      default: return "border border-[var(--biz-border)] bg-[#F9FAFB] text-[var(--biz-muted)]";
+      default:
+        return "border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] text-[var(--biz-muted)]";
     }
   };
 
@@ -716,7 +724,7 @@ export default function InventoryTable({
       ? channel.charAt(0).toUpperCase() + channel.slice(1)
       : "—";
     return (
-      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-[#F9FAFB] text-[var(--biz-muted)] border border-[var(--biz-border)]">
+      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-[var(--biz-surface-soft)] text-[var(--biz-muted)] border border-[var(--biz-border)]">
         {label}
       </span>
     );
@@ -737,8 +745,8 @@ export default function InventoryTable({
         onClick={() => onItemClick(item)}
         className={`rounded-lg border p-3 transition-colors cursor-pointer ${
           selectedItemId === item.id
-            ? "border-emerald-700/60 bg-emerald-50"
-            : "border-[var(--biz-border)] bg-white hover:bg-[#F3F4F6]"
+            ? "border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)]"
+            : "border-[var(--biz-border)] bg-white hover:bg-[var(--biz-hover)]"
         }`}
       >
         {/* Top row: checkbox + title */}
@@ -751,7 +759,7 @@ export default function InventoryTable({
               toggleOne(item.id);
             }}
             onClick={(e) => e.stopPropagation()}
-            className="mt-0.5 min-h-[18px] min-w-[18px] rounded border-[var(--biz-border)] text-emerald-600 focus:ring-emerald-500"
+            className="mt-0.5 min-h-[18px] min-w-[18px] rounded border-[var(--biz-border)] text-[var(--biz-primary)] focus:ring-[var(--biz-focus)]"
           />
           <div className="flex-1 min-w-0">
             <div className="mb-0.5 flex items-start justify-between gap-2">
@@ -778,7 +786,7 @@ export default function InventoryTable({
                   e.stopPropagation();
                   openProfile(item.id);
                 }}
-                className="inline-flex shrink-0 items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700 transition-colors hover:bg-emerald-100"
+                className="inline-flex shrink-0 items-center rounded-full border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] px-2 py-1 text-[10px] font-semibold text-[var(--biz-primary)] transition-colors hover:bg-[var(--biz-primary-soft-strong)]"
               >
                 View
               </button>
@@ -804,7 +812,7 @@ export default function InventoryTable({
                   handleFetchCmv(item);
                 }}
                 disabled={isFetching || !item.title?.trim()}
-                className="min-h-[28px] rounded border border-[var(--biz-border)] bg-[#F9FAFB] px-1.5 py-0.5 text-[10px] font-medium text-[var(--biz-text)] hover:bg-[#F3F4F6] disabled:opacity-50"
+                className="min-h-[28px] rounded border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--biz-text)] hover:bg-[var(--biz-hover)] disabled:opacity-50"
               >
                 {isFetching ? "\u2026" : "Get MV"}
               </button>
@@ -853,7 +861,7 @@ export default function InventoryTable({
                   e.stopPropagation();
                   onItemClick(item);
                 }}
-                className="min-h-[32px] min-w-[44px] rounded border border-[var(--biz-border)] bg-[#F9FAFB] px-2 py-1 text-[11px] font-medium text-[var(--biz-primary)] hover:bg-[#F3F4F6]"
+                className="min-h-[32px] min-w-[44px] rounded border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-2 py-1 text-[11px] font-medium text-[var(--biz-primary)] hover:bg-[var(--biz-hover)]"
               >
                 Grade
               </button>
@@ -865,7 +873,7 @@ export default function InventoryTable({
                   e.stopPropagation();
                   onMarkSold?.(item);
                 }}
-                className="min-h-[32px] min-w-[44px] rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100"
+                className="min-h-[32px] min-w-[44px] rounded border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] px-2 py-1 text-[11px] font-medium text-[var(--biz-primary)] hover:bg-[var(--biz-primary-soft-strong)]"
               >
                 Sold
               </button>
@@ -896,10 +904,10 @@ export default function InventoryTable({
   const rowClass = (item: BusinessInventoryItem, idx: number): string =>
     `group/row transition-colors ${
       selectedItemId === item.id
-        ? "bg-emerald-50 ring-inset"
+        ? "bg-[var(--biz-primary-soft)] ring-inset"
         : idx % 2 === 1
-        ? "bg-white hover:bg-[#F3F4F6]"
-        : "hover:bg-[#F3F4F6]"
+        ? "bg-white hover:bg-[var(--biz-hover)]"
+        : "hover:bg-[var(--biz-hover)]"
     }`;
 
   const renderHeader = () => (
@@ -909,7 +917,7 @@ export default function InventoryTable({
           type="checkbox"
           checked={sortedItems.length > 0 && selected.size === sortedItems.length}
           onChange={toggleAll}
-          className="rounded border-[var(--biz-border)] text-emerald-600 focus:ring-emerald-500"
+          className="rounded border-[var(--biz-border)] text-[var(--biz-primary)] focus:ring-[var(--biz-focus)]"
         />
       </th>
       {displayColumns.map((col) => {
@@ -961,7 +969,7 @@ export default function InventoryTable({
           type="checkbox"
           checked={selected.has(item.id)}
           onChange={() => toggleOne(item.id)}
-          className="rounded border-[var(--biz-border)] text-emerald-600 focus:ring-emerald-500"
+          className="rounded border-[var(--biz-border)] text-[var(--biz-primary)] focus:ring-[var(--biz-focus)]"
         />
       </td>
       {displayColumns.map((col) => (
@@ -1030,7 +1038,7 @@ export default function InventoryTable({
               activeTab === tab.id
                 ? tab.id === "wax"
                   ? "border-amber-600 text-amber-700"
-                  : "border-emerald-600 text-emerald-700"
+                  : "border-[var(--biz-primary)] text-[var(--biz-primary)]"
                 : "border-transparent text-[var(--biz-muted)] hover:text-[var(--biz-text)]"
             }`}
           >
@@ -1050,8 +1058,8 @@ export default function InventoryTable({
                 activeTab === tab.id
                   ? tab.id === "wax"
                     ? "bg-amber-100 text-amber-700"
-                    : "bg-emerald-100 text-emerald-700"
-                  : "bg-[#F9FAFB] text-[var(--biz-muted)]"
+                    : "bg-[var(--biz-primary-soft)] text-[var(--biz-primary)]"
+                  : "bg-[var(--biz-surface-soft)] text-[var(--biz-muted)]"
               }`}
             >
               {tab.count}
@@ -1077,7 +1085,7 @@ export default function InventoryTable({
               setSearch(e.target.value);
             }}
             placeholder="Search inventory..."
-            className="min-h-[44px] w-full rounded-md border border-[var(--biz-border)] bg-white py-2.5 pl-8 pr-2.5 text-sm text-[var(--biz-text)] placeholder:text-[var(--biz-muted)] focus:border-transparent focus:ring-2 focus:ring-emerald-500 sm:min-h-0 sm:py-1.5 sm:text-xs"
+            className="min-h-[44px] w-full rounded-md border border-[var(--biz-border)] bg-white py-2.5 pl-8 pr-2.5 text-sm text-[var(--biz-text)] placeholder:text-[var(--biz-muted)] focus:border-transparent focus:ring-2 focus:ring-[var(--biz-focus)] sm:min-h-0 sm:py-1.5 sm:text-xs"
           />
         </div>
 
@@ -1130,8 +1138,8 @@ export default function InventoryTable({
 
       {/* Bulk actions bar */}
       {selected.size > 0 && (
-        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 p-2">
-          <span className="text-sm font-medium text-emerald-700">
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-md border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] p-2">
+          <span className="text-sm font-medium text-[var(--biz-primary)]">
             {selected.size} selected
           </span>
           <select
@@ -1227,7 +1235,7 @@ export default function InventoryTable({
               Scroller: VirtuosoScroller,
               Table: (props) => <table {...props} className="w-full text-xs text-left" />,
               TableHead: (props) => (
-                <thead {...props} className="bg-[#F9FAFB] border-b border-[var(--biz-border)]" />
+                <thead {...props} className="bg-[var(--biz-surface-soft)] border-b border-[var(--biz-border)]" />
               ),
               TableBody: (props) => <tbody {...props} className="divide-y divide-[var(--biz-border)]" />,
               TableRow: ({ item, context: _context, ...props }) => (
@@ -1242,7 +1250,7 @@ export default function InventoryTable({
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs text-left">
-              <thead className="sticky top-0 z-10 bg-[#F9FAFB] border-b border-[var(--biz-border)]">
+              <thead className="sticky top-0 z-10 bg-[var(--biz-surface-soft)] border-b border-[var(--biz-border)]">
                 {renderHeader()}
               </thead>
               <tbody className="divide-y divide-[var(--biz-border)]">

@@ -17,7 +17,6 @@ BEGIN
       USING (auth.uid() = user_id);
   END IF;
 END $$;
-
 -- ============================================
 -- USAGE (server-managed counters)
 -- ============================================
@@ -34,7 +33,6 @@ BEGIN
       USING (auth.uid() = user_id);
   END IF;
 END $$;
-
 -- ============================================
 -- USERS PROFILE TABLE (owner read/update only)
 -- ============================================
@@ -59,54 +57,76 @@ BEGIN
     -- No DELETE policy: deletion remains blocked by default.
   END IF;
 END $$;
-
 -- ============================================
 -- STORAGE POLICIES FOR CARD IMAGES
 -- ============================================
 -- Scope to the card-images bucket and user-owned prefixes.
+-- Note: storage.objects is owned by supabase_storage_admin; ALTER TABLE requires
+-- superuser. On Supabase Cloud, set storage RLS via the dashboard. This block
+-- handles the permission error gracefully so the migration can still complete.
 DO $$
 BEGIN
   IF to_regclass('storage.objects') IS NOT NULL THEN
-    ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+    BEGIN
+      ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+    EXCEPTION WHEN insufficient_privilege THEN
+      RAISE NOTICE 'Skipping storage.objects RLS enable — requires superuser. Set via Supabase dashboard.';
+    END;
 
-    DROP POLICY IF EXISTS "Card images read own" ON storage.objects;
-    CREATE POLICY "Card images read own"
-      ON storage.objects FOR SELECT
-      TO authenticated
-      USING (
-        bucket_id = 'card-images'
-        AND name LIKE (auth.uid()::text || '/%')
-      );
+    BEGIN
+      DROP POLICY IF EXISTS "Card images read own" ON storage.objects;
+      CREATE POLICY "Card images read own"
+        ON storage.objects FOR SELECT
+        TO authenticated
+        USING (
+          bucket_id = 'card-images'
+          AND name LIKE (auth.uid()::text || '/%')
+        );
+    EXCEPTION WHEN insufficient_privilege THEN
+      RAISE NOTICE 'Skipping storage.objects policy "Card images read own" — requires superuser.';
+    END;
 
-    DROP POLICY IF EXISTS "Card images insert own" ON storage.objects;
-    CREATE POLICY "Card images insert own"
-      ON storage.objects FOR INSERT
-      TO authenticated
-      WITH CHECK (
-        bucket_id = 'card-images'
-        AND name LIKE (auth.uid()::text || '/%')
-      );
+    BEGIN
+      DROP POLICY IF EXISTS "Card images insert own" ON storage.objects;
+      CREATE POLICY "Card images insert own"
+        ON storage.objects FOR INSERT
+        TO authenticated
+        WITH CHECK (
+          bucket_id = 'card-images'
+          AND name LIKE (auth.uid()::text || '/%')
+        );
+    EXCEPTION WHEN insufficient_privilege THEN
+      RAISE NOTICE 'Skipping storage.objects policy "Card images insert own" — requires superuser.';
+    END;
 
-    DROP POLICY IF EXISTS "Card images update own" ON storage.objects;
-    CREATE POLICY "Card images update own"
-      ON storage.objects FOR UPDATE
-      TO authenticated
-      USING (
-        bucket_id = 'card-images'
-        AND name LIKE (auth.uid()::text || '/%')
-      )
-      WITH CHECK (
-        bucket_id = 'card-images'
-        AND name LIKE (auth.uid()::text || '/%')
-      );
+    BEGIN
+      DROP POLICY IF EXISTS "Card images update own" ON storage.objects;
+      CREATE POLICY "Card images update own"
+        ON storage.objects FOR UPDATE
+        TO authenticated
+        USING (
+          bucket_id = 'card-images'
+          AND name LIKE (auth.uid()::text || '/%')
+        )
+        WITH CHECK (
+          bucket_id = 'card-images'
+          AND name LIKE (auth.uid()::text || '/%')
+        );
+    EXCEPTION WHEN insufficient_privilege THEN
+      RAISE NOTICE 'Skipping storage.objects policy "Card images update own" — requires superuser.';
+    END;
 
-    DROP POLICY IF EXISTS "Card images delete own" ON storage.objects;
-    CREATE POLICY "Card images delete own"
-      ON storage.objects FOR DELETE
-      TO authenticated
-      USING (
-        bucket_id = 'card-images'
-        AND name LIKE (auth.uid()::text || '/%')
-      );
+    BEGIN
+      DROP POLICY IF EXISTS "Card images delete own" ON storage.objects;
+      CREATE POLICY "Card images delete own"
+        ON storage.objects FOR DELETE
+        TO authenticated
+        USING (
+          bucket_id = 'card-images'
+          AND name LIKE (auth.uid()::text || '/%')
+        );
+    EXCEPTION WHEN insufficient_privilege THEN
+      RAISE NOTICE 'Skipping storage.objects policy "Card images delete own" — requires superuser.';
+    END;
   END IF;
 END $$;

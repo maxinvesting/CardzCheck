@@ -240,6 +240,7 @@ export default function Sidebar() {
   const [pricingOpen, setPricingOpen] = useState(false);
 
   const isBusinessWorkspace = pathname.startsWith("/business") || pathname.startsWith("/admin");
+  const isBusinessRoute = pathname.startsWith("/business");
   const isAdminUser = user?.app_role === "admin" || user?.app_role === "owner";
   const hasPaidWorkspace = Boolean(user?.is_paid) || isBusinessWorkspace;
   const baseNavItems = isBusinessWorkspace ? BUSINESS_NAV_ITEMS() : PERSONAL_NAV_ITEMS();
@@ -353,14 +354,16 @@ export default function Sidebar() {
                       ? "text-[var(--biz-text)]"
                       : "bg-blue-600 text-white"
                     : isBusinessWorkspace
-                      ? "text-[var(--biz-muted)] hover:bg-white/[0.04] hover:text-[var(--biz-text)]"
+                      ? "text-[var(--biz-muted)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]"
                       : "text-gray-400 hover:text-white hover:bg-gray-800"
                 }`}
                 style={
                   isActive(item) && isBusinessWorkspace
                     ? {
-                        background: "rgba(255,255,255,0.06)",
-                        borderLeft: "2px solid var(--biz-primary)",
+                        background: isBusinessRoute
+                          ? "var(--biz-nav-active-bg)"
+                          : "rgba(255,255,255,0.06)",
+                        borderLeft: "2px solid var(--biz-nav-active-border)",
                         paddingLeft: "14px",
                       }
                     : {}
@@ -394,9 +397,15 @@ export default function Sidebar() {
                       style={
                         isBusinessWorkspace
                           ? {
-                              background: "rgba(255,255,255,0.06)",
-                              border: "1px solid rgba(255,255,255,0.1)",
-                              color: "#64748b",
+                              background: isBusinessRoute
+                                ? "var(--biz-secondary-soft)"
+                                : "rgba(255,255,255,0.06)",
+                              border: isBusinessRoute
+                                ? "1px solid var(--biz-secondary-border)"
+                                : "1px solid rgba(255,255,255,0.1)",
+                              color: isBusinessRoute
+                                ? "var(--biz-secondary)"
+                                : "#64748b",
                             }
                           : {
                               background: "rgba(59,130,246,0.2)",
@@ -442,7 +451,7 @@ export default function Sidebar() {
                         ? "border border-orange-200 border-l-2 border-l-orange-500 bg-orange-50 text-orange-700"
                         : "bg-orange-600 text-white"
                       : isBusinessWorkspace
-                        ? "text-[var(--biz-muted)] hover:bg-[#F9FAFB] hover:text-[var(--biz-text)]"
+                        ? "text-[var(--biz-muted)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]"
                         : "text-gray-400 hover:text-white hover:bg-gray-800"
                   }`}
                 >
@@ -485,7 +494,7 @@ export default function Sidebar() {
                 <div
                   className={`mt-2 inline-flex items-center rounded px-2 py-1 text-xs font-medium ${
                     isBusinessWorkspace
-                      ? "border border-[color:var(--biz-border)] bg-[#F0FDF4] text-[var(--biz-primary)]"
+                      ? "border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] text-[var(--biz-primary)]"
                       : "bg-blue-600 text-white"
                   }`}
                 >

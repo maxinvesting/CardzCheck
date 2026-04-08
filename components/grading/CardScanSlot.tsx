@@ -41,6 +41,8 @@ const SLOT_COLORS = ["border-l-blue-500", "border-l-emerald-500", "border-l-ambe
 const SLOT_LABEL_COLORS = ["text-blue-400", "text-emerald-400", "text-amber-400"];
 const SLOT_NAMES = ["Card A", "Card B", "Card C"];
 
+const MIN_OWNER_CARD_NAME_LEN = 3;
+
 export default function CardScanSlot({
   slotIndex,
   totalSlots,
@@ -60,6 +62,8 @@ export default function CardScanSlot({
   const [error, setError] = useState<string | null>(null);
   const [slotState, setSlotState] = useState<SlotState>("idle");
 
+  /** Required before analysis — drives comps + API card context (overrides bad auto-ID) */
+  const [ownerCardName, setOwnerCardName] = useState("");
   // Pre-scan notes (typed before upload — fed to AI as initial context)
   const [preScanNotes, setPreScanNotes] = useState("");
 
@@ -83,6 +87,7 @@ export default function CardScanSlot({
     setAnalyzing(false);
     setShowAnimation(false);
     setError(null);
+    setOwnerCardName("");
     setPreScanNotes("");
     setRefinePanelOpen(false);
     setRefinementText("");
@@ -97,6 +102,7 @@ export default function CardScanSlot({
    * called immediately after identification (before React state has flushed).
    */
   const runGradeAnalysis = useCallback(async (card: CardIdentificationResult) => {
+    const statedLabel = (card.owner_declared_title ?? card.player_name ?? "").trim();
     const rawUrls = card.imageUrls ??
       (card.imageUrl ? [card.imageUrl] : []);
     const fallbackPhotos: GradeScanPhoto[] = rawUrls.map((url, i) => ({
@@ -134,17 +140,22 @@ export default function CardScanSlot({
           back_url: back.url,
           closeups: closeups.map((p, i) => ({ url: p.url, kind: p.kind, sort_order: i })),
           scanPhotos: scanPhotos.map((p, i) => ({ ...p, sort_order: i })),
-          card: {
-            player_name: card.player_name,
-            game: card.cardIdentity?.sport ?? undefined,
-            sport: card.cardIdentity?.sport ?? undefined,
-            year: card.year,
-            set_name: card.set_name,
-            card_number: card.card_number,
-            parallel_type: card.parallel_type,
-            variation: card.variation,
-            insert: card.insert,
-          },
+          // Owner-stated label only — avoids wrong year/set/player from auto-ID leaking into market/comps
+          card: statedLabel
+            ? {
+                player_name: statedLabel,
+              }
+            : {
+                player_name: card.player_name,
+                game: card.cardIdentity?.sport ?? undefined,
+                sport: card.cardIdentity?.sport ?? undefined,
+                year: card.year,
+                set_name: card.set_name,
+                card_number: card.card_number,
+                parallel_type: card.parallel_type,
+                variation: card.variation,
+                insert: card.insert,
+              },
           preScanNotes: preScanNotes.trim() || undefined,
         }),
       });
@@ -185,15 +196,27 @@ export default function CardScanSlot({
    * Immediately triggers grade analysis — no extra button click needed.
    */
   const handleIdentified = useCallback((data: CardIdentificationResult) => {
-    setIdentifiedCard(data);
+    const declared = ownerCardName.trim();
+    const merged: CardIdentificationResult = {
+      ...data,
+      player_name: declared,
+      owner_declared_title: declared,
+      year: undefined,
+      set_name: undefined,
+      parallel_type: undefined,
+      variation: undefined,
+      insert: undefined,
+      card_number: undefined,
+      players: declared ? [declared] : data.players,
+    };
+    setIdentifiedCard(merged);
     setGradeEstimate(null);
     setGradeJob(null);
     setGradeJobId(null);
     setError(null);
     setShowAnimation(false);
-    // Auto-trigger grade analysis with fresh data (skip the "ready" intermediate state)
-    void runGradeAnalysis(data);
-  }, [runGradeAnalysis]);
+    void runGradeAnalysis(merged);
+  }, [ownerCardName, runGradeAnalysis]);
 
   /** Retry — re-runs analysis using stored card data. */
   const handleAnalyze = useCallback(async () => {
@@ -452,6 +475,23 @@ export default function CardScanSlot({
 
           {slotState === "idle" && (
             <motion.div key="upload" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
+              <div className="rounded-xl border border-amber-500/25 bg-white/[0.03] px-4 py-3 space-y-2">
+                <label className="flex items-center gap-1.5 text-[11px] font-semibold text-white/75 tracking-wide">
+                  Card name <span className="text-rose-400/90">*</span>
+                </label>
+                <p className="text-[10px] text-white/40 leading-snug">
+                  Type the correct set, player, and parallel before you run the scan. This drives eBay comps and market context when auto-ID is wrong.
+                </p>
+                <input
+                  type="text"
+                  value={ownerCardName}
+                  onChange={(e) => setOwnerCardName(e.target.value)}
+                  maxLength={220}
+                  autoComplete="off"
+                  placeholder="e.g. 2023 Prizm Victor Wembanyama Silver Prizm #136"
+                  className="w-full rounded-md border border-white/12 bg-white/5 px-3 py-2 text-sm text-white/90 placeholder:text-white/22 focus:outline-none focus:ring-1 focus:ring-amber-500/35"
+                />
+              </div>
               {/* Pre-scan notes — optional context the user types before uploading */}
               <div className="rounded-xl border border-white/8 bg-white/[0.03] px-4 py-3 space-y-2">
                 <label className="flex items-center gap-1.5 text-[11px] font-semibold text-white/50 tracking-wide">
@@ -478,6 +518,11 @@ export default function CardScanSlot({
                 onIdentified={handleIdentified}
                 disabled={disabled || isAnalyzing}
                 onReset={handleReset}
+                analyzeGateHint={
+                  ownerCardName.trim().length < MIN_OWNER_CARD_NAME_LEN
+                    ? `Name this card first (at least ${MIN_OWNER_CARD_NAME_LEN} characters).`
+                    : null
+                }
               />
             </motion.div>
           )}

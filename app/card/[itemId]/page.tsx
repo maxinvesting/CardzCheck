@@ -473,13 +473,13 @@ export default function CardProfilePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           inventory_item_id: item.id,
-          sale_price_cents: priceCents,
+          sold_price_cents: priceCents,
           channel: soldForm.channel,
-          sale_date: soldForm.sale_date,
+          sold_at: soldForm.sale_date,
           platform_fees_cents: 0,
           shipping_charged_cents: 0,
-          shipping_paid_cents: 0,
-          other_costs_cents: 0,
+          shipping_cost_cents: 0,
+          tax_cents: 0,
         }),
       });
       if (res.ok) {
@@ -490,7 +490,8 @@ export default function CardProfilePage() {
         setSoldForm({ sale_price: "", channel: "ebay", sale_date: new Date().toISOString().slice(0, 10) });
         setToast({ type: "success", message: "Sale recorded" });
       } else {
-        setToast({ type: "error", message: "Failed to record sale" });
+        const data = await res.json().catch(() => ({}));
+        setToast({ type: "error", message: data.error || "Failed to record sale" });
       }
     } catch {
       setToast({ type: "error", message: "Failed to record sale" });
