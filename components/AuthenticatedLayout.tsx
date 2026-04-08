@@ -28,8 +28,8 @@ export default function AuthenticatedLayout({
 
       <Sidebar />
       {/* Main content area with padding for sidebar and bottom tab */}
-      <div className="flex-1 lg:ml-64 relative z-10 pb-20 lg:pb-0">
-        <div className="min-h-screen">{children}</div>
+      <div className="flex-1 min-w-0 lg:ml-64 relative z-10 pb-20 lg:pb-0 overflow-x-auto">
+        <div className="min-h-screen min-w-0">{children}</div>
       </div>
       <BottomTabBar />
     </div>
