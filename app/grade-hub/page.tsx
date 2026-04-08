@@ -52,7 +52,6 @@ export default function GradeHubPage() {
   /** Remount scan slots for a fresh session without navigating away */
   const [hubScanKey, setHubScanKey] = useState(0);
   const gradeHubBasePath = pathname?.startsWith("/business") ? "/business/grade-hub" : "/grade-hub";
-  const gradeHubScanPath = `${gradeHubBasePath}/scan`;
 
   const loadCredits = useCallback(() => {
     setCreditsFetchState("loading");
@@ -92,13 +91,6 @@ export default function GradeHubPage() {
   const creditsError = creditsFetchState === "error";
 
   const scanSlotsForTab = activeTab === "batch" ? 3 : 1;
-
-  const openScanSession = useCallback(
-    (slots: number) => {
-      router.push(`${gradeHubScanPath}?slots=${slots}`);
-    },
-    [gradeHubScanPath, router]
-  );
 
   const scanDisabled = creditsLoading || (!creditsError && !canScan);
 
@@ -224,7 +216,7 @@ export default function GradeHubPage() {
           {/* ── Tab: Scan a card / Batch scan ────────────────────────── */}
           {(activeTab === "scan" || activeTab === "batch") && (
             <>
-              {/* Inline scan — same upload + analysis as /grade-hub/scan, without leaving the hub */}
+              {/* Inline scan + analysis stays in this page */}
               <div id="grade-hub-scan-workspace">
                 <div
                   className="rounded-sm border border-[#e5e7eb] overflow-hidden shadow-sm [&_.cc-surface]:!bg-[#101f36] [&_.cc-surface]:!border-[rgba(255,255,255,0.08)]"
@@ -298,17 +290,7 @@ export default function GradeHubPage() {
                           : `${remaining} scan${remaining !== 1 ? "s" : ""} remaining${credits?.nextGrantAt ? ` · +1 in ${formatTimeUntil(credits.nextGrantAt)}` : ""}`}
                 </p>
                 <p style={{ fontSize: 10, color: "#9ca3af", marginTop: 6, textAlign: "center" }}>
-                  <span className="text-[#9ca3af]">
-                    Scanning above stays on this page.{" "}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => openScanSession(scanSlotsForTab)}
-                    className="text-[#6b7280] underline underline-offset-2 hover:text-[#374151]"
-                  >
-                    Open separate scan session page
-                  </button>{" "}
-                  only if you want the fullscreen workspace.
+                  Scanning and results stay on this page.
                 </p>
               </div>
 
