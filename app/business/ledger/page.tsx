@@ -1181,6 +1181,8 @@ function LedgerPageContent() {
     card_number?: string;
     parallel_type?: string;
     grade?: string;
+    grader?: string;
+    psa_cert_number?: string;
     imageUrl?: string;
     user_image_url?: string;
     quantity?: number;

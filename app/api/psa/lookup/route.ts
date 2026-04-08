@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
 interface PsaCertObject {
+  CertNumber?: string;
   Subject?: string;
   Year?: string;
   Brand?: string;
@@ -9,6 +10,8 @@ interface PsaCertObject {
   GradeName?: string;
   CardGrade?: string;
   SpecLevel?: string;
+  /** PSA often uses Variety for parallels / variations */
+  Variety?: string;
   [key: string]: unknown;
 }
 
@@ -27,18 +30,21 @@ interface PsaMappedResult {
   parallel_type: string | null;
 }
 
-function mapPsaResponse(data: PsaApiResponse): PsaMappedResult {
-  const cert = data?.PSACert ?? {};
-
-  let grade: string | null = null;
-  if (cert.GradeName && cert.GradeName.trim()) {
-    grade = cert.GradeName.trim();
-    if (!/^PSA\s/i.test(grade)) {
-      grade = `PSA ${grade}`;
-    }
-  } else if (cert.CardGrade && cert.CardGrade.trim()) {
-    grade = `PSA ${cert.CardGrade.trim()}`;
+function normalizePsaGradeLabel(cert: PsaCertObject): string | null {
+  const cardGrade = cert.CardGrade?.trim();
+  if (cardGrade) {
+    return /^PSA\s/i.test(cardGrade) ? cardGrade : `PSA ${cardGrade}`;
   }
+  const gradeName = cert.GradeName?.trim();
+  if (!gradeName) return null;
+  if (/^PSA\s/i.test(gradeName)) return gradeName;
+  const numeric = gradeName.match(/(\d+(?:\.\d+)?)/);
+  if (numeric) return `PSA ${numeric[1]}`;
+  return `PSA ${gradeName}`;
+}
+
+function mapPsaCert(cert: PsaCertObject): PsaMappedResult {
+  const grade = normalizePsaGradeLabel(cert);
 
   return {
     player_name: cert.Subject?.trim() || null,
@@ -47,7 +53,7 @@ function mapPsaResponse(data: PsaApiResponse): PsaMappedResult {
     card_number: cert.CardNumber?.trim() || null,
     grade,
     grading_company: "PSA",
-    parallel_type: cert.SpecLevel?.trim() || null,
+    parallel_type: cert.SpecLevel?.trim() || cert.Variety?.trim() || null,
   };
 }
 
@@ -74,23 +80,27 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "certNumber is required" }, { status: 400 });
   }
 
-  const certNumber = rawCert.trim().replace(/\s+/g, "");
-  if (certNumber.length < 5) {
+  const certDigits = rawCert.trim().replace(/\D/g, "");
+  if (certDigits.length < 5) {
     return NextResponse.json({ error: "certNumber is too short" }, { status: 400 });
   }
 
-  const token = process.env.PSA_ACCESS_TOKEN;
+  const token = (process.env.PSA_ACCESS_TOKEN ?? process.env.PSA_API_TOKEN)?.trim();
   if (!token) {
-    console.error("[psa/lookup] PSA_ACCESS_TOKEN not configured");
+    console.error("[psa/lookup] PSA_ACCESS_TOKEN (or PSA_API_TOKEN) not configured");
     return NextResponse.json({ error: "PSA lookup failed", found: false }, { status: 503 });
   }
 
   let psaData: PsaApiResponse;
   try {
     const res = await fetch(
-      `https://api.psacard.com/publicapi/cert/GetByCertNumber/${certNumber}`,
+      `https://api.psacard.com/publicapi/cert/GetByCertNumber/${encodeURIComponent(certDigits)}`,
       {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+          "X-Api-Key": token,
+        },
         cache: "no-store",
       }
     );
@@ -110,9 +120,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "PSA lookup failed", found: false });
   }
 
-  if (!psaData?.PSACert) {
+  const certPayload = psaData?.PSACert ?? (psaData as unknown as PsaCertObject | undefined);
+  const cert =
+    certPayload && typeof certPayload === "object" && !Array.isArray(certPayload)
+      ? (certPayload as PsaCertObject)
+      : null;
+  const certNo = cert?.CertNumber?.trim();
+  if (!cert || (!certNo && !cert.Subject?.trim())) {
     return NextResponse.json({ error: "Cert not found", found: false });
   }
 
-  return NextResponse.json({ found: true, ...mapPsaResponse(psaData) });
+  return NextResponse.json({ found: true, ...mapPsaCert(cert) });
 }

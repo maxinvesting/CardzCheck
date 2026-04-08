@@ -369,7 +369,7 @@ export default function ConfirmAddCardModal({
 
             {/* Card Details */}
             <div className="flex-1 min-w-0">
-              {needsConfirmation ? (
+              {needsConfirmation || psaDataApplied ? (
                 <div className="space-y-2">
                   <div>
                     <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">

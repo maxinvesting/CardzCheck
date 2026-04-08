@@ -172,7 +172,7 @@ export async function fetchPsaCertLookup(
   const cached = await readCachedLookup(certNumber);
   if (cached) return cached;
 
-  const token = process.env.PSA_API_TOKEN?.trim();
+  const token = (process.env.PSA_ACCESS_TOKEN ?? process.env.PSA_API_TOKEN)?.trim();
   if (!token) {
     return {
       certNumber,
@@ -180,7 +180,7 @@ export async function fetchPsaCertLookup(
       frontImageUrl: null,
       backImageUrl: null,
       payload: null,
-      lastError: "PSA_API_TOKEN is missing",
+      lastError: "PSA_ACCESS_TOKEN or PSA_API_TOKEN is missing",
     };
   }
 
