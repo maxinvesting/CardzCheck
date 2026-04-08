@@ -41,6 +41,9 @@ export interface BusinessAccount {
   id: string;
   owner_user_id: string;
   name: string | null;
+  appearance_primary_color?: string | null;
+  appearance_secondary_color?: string | null;
+  appearance_tertiary_color?: string | null;
   billing_interval: "monthly";
   subscription_status: string;
   current_period_end: string | null;
@@ -52,6 +55,12 @@ export interface BusinessAccount {
   purchased_seats: number;
   created_at: string;
   updated_at: string;
+}
+
+export interface BusinessAppearance {
+  primaryColor: string;
+  secondaryColor: string;
+  tertiaryColor: string;
 }
 
 export interface BusinessMembership {
@@ -145,6 +154,8 @@ export interface BusinessInventoryItem {
   image_url?: string | null;
   trusted_image?: TrustedCardImage | null;
   user_image_url: string | null;
+  stock_image_url?: string | null;
+  ebay_image_url?: string | null;
   notes: string | null;
   ebay_item_id?: string | null; // eBay listing item ID for synced items
   ebay_listing_url?: string | null; // Direct eBay listing URL
@@ -533,6 +544,8 @@ export interface GradeEstimate {
   corners_findings?: GradeFinding[];
   edges_findings?: GradeFinding[];
   grade_probabilities?: GradeProbabilities;
+  /** Short model-written notes on how each major grader would view this card (optional). */
+  grader_perspectives?: GradeGraderPerspectives;
   analysis_status?: "ok" | "low_confidence" | "unable";
   analysis_reason?: string;
   analysis_warning_code?: "parse_error" | "low_confidence" | "unable";
@@ -543,6 +556,22 @@ export interface GradeEstimate {
   analysis_metadata?: GradeEstimateAnalysisMetadata;
 }
 
+/** Four outcome bands aligned to half-point scales (BGS-style buckets; UI maps labels per company). */
+export type HalfPointGradeDistribution = {
+  "9.5": number;
+  "9": number;
+  "8.5": number;
+  "8_or_lower": number;
+};
+
+export interface GradeGraderPerspectives {
+  psa?: string;
+  bgs?: string;
+  cgc?: string;
+  sgc?: string;
+  tag?: string;
+}
+
 export interface GradeProbabilities {
   psa: {
     "10": number;
@@ -550,12 +579,10 @@ export interface GradeProbabilities {
     "8": number;
     "7_or_lower": number;
   };
-  bgs: {
-    "9.5": number;
-    "9": number;
-    "8.5": number;
-    "8_or_lower": number;
-  };
+  bgs: HalfPointGradeDistribution;
+  cgc: HalfPointGradeDistribution;
+  sgc: HalfPointGradeDistribution;
+  tag: HalfPointGradeDistribution;
   confidence?: "high" | "medium" | "low";
 }
 

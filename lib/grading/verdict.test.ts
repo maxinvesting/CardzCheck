@@ -43,6 +43,24 @@ function makeEstimate(
         "8.5": 0.2,
         "8_or_lower": 0.12,
       },
+      cgc: {
+        "9.5": 0.18,
+        "9": 0.48,
+        "8.5": 0.22,
+        "8_or_lower": 0.12,
+      },
+      sgc: {
+        "9.5": 0.24,
+        "9": 0.46,
+        "8.5": 0.18,
+        "8_or_lower": 0.12,
+      },
+      tag: {
+        "9.5": 0.2,
+        "9": 0.47,
+        "8.5": 0.21,
+        "8_or_lower": 0.12,
+      },
       confidence: "high",
     },
     analysis_status: "ok",
@@ -150,9 +168,10 @@ describe("buildGradeVerdict", () => {
     const modern = buildGradeVerdict(
       makeEstimate({
         grade_probabilities: {
+          ...makeEstimate().grade_probabilities!,
           confidence: "medium",
           psa: { "10": 0.18, "9": 0.45, "8": 0.27, "7_or_lower": 0.1 },
-          bgs: { "9.5": 0.05, "9": 0.50, "8.5": 0.30, "8_or_lower": 0.15 },
+          bgs: { "9.5": 0.05, "9": 0.5, "8.5": 0.3, "8_or_lower": 0.15 },
         },
       }),
       { year: "2023" },
@@ -167,9 +186,35 @@ describe("buildGradeVerdict", () => {
       }),
       { year: "2010" }
     );
+    const highCeilingChromium = buildGradeVerdict(
+      makeEstimate({
+        grade_probabilities: {
+          ...makeEstimate().grade_probabilities!,
+          psa: { "10": 0.8, "9": 0.1, "8": 0.06, "7_or_lower": 0.04 },
+        },
+      }),
+      { year: "2010", card_stock: "chromium" }
+    );
+    const highCeilingUltra = buildGradeVerdict(
+      makeEstimate({
+        grade_probabilities: {
+          ...makeEstimate().grade_probabilities!,
+          psa: { "10": 0.8, "9": 0.1, "8": 0.06, "7_or_lower": 0.04 },
+        },
+      }),
+      { year: "2020", parallel_type: "Gold /10" }
+    );
+    const speedCostModern = buildGradeVerdict(
+      makeEstimate(),
+      { year: "2020" },
+      { gradingPriority: "speed_cost" }
+    );
 
     expect(vintage.suggestedGrader).toBe("SGC");
     expect(modern.suggestedGrader).toBe("TAG");
-    expect(highCeiling.suggestedGrader).toBe("BGS");
+    expect(highCeiling.suggestedGrader).toBe("PSA");
+    expect(highCeilingChromium.suggestedGrader).toBe("BGS");
+    expect(highCeilingUltra.suggestedGrader).toBe("BGS");
+    expect(speedCostModern.suggestedGrader).toBe("SGC");
   });
 });

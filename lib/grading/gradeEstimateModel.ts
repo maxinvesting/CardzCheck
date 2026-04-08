@@ -1,6 +1,7 @@
 import type {
   GradeEstimate,
   GradeProbabilities,
+  GradeGraderPerspectives,
   GradeFinding,
   GradeEstimateConfidence,
   GradeEstimateCenteringDetail,
@@ -37,6 +38,10 @@ import {
   resolveGradingProfile,
   type GradingCardCategory,
 } from "@/lib/grading/grading-profile";
+import {
+  deriveHalfPointGradersFromPsa,
+  mapPsaToBgs,
+} from "@/lib/grading/halfPointGraderMaps";
 
 type GradeEstimateEvidence = {
   centering: string;
@@ -137,6 +142,24 @@ function toStringArray(value: unknown, fallback: string[] = []): string[] {
     .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
     .filter((entry) => entry.length > 0);
   return items.length > 0 ? items : fallback;
+}
+
+function parseGraderPerspectives(value: unknown): GradeGraderPerspectives | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const row = value as Record<string, unknown>;
+  const pick = (key: string): string | undefined => {
+    const t = toText(row[key], "");
+    return t.length > 0 ? t : undefined;
+  };
+  const out: GradeGraderPerspectives = {
+    psa: pick("psa"),
+    bgs: pick("bgs"),
+    cgc: pick("cgc"),
+    sgc: pick("sgc"),
+    tag: pick("tag"),
+  };
+  const hasAny = Object.values(out).some((v) => v !== undefined);
+  return hasAny ? out : undefined;
 }
 
 function normalizeStatus(value: unknown): GradeEstimateStatus {
@@ -362,15 +385,15 @@ function applyLimitedVisibilityAdjustments(
     psa["9"] += from10 * 0.85;
     psa["8"] += from10 * 0.15;
     const normalizedPsa = normalizeProbabilityMap(psa);
+    const bgsBase = mapPsaToBgs(normalizedPsa);
+    const half = deriveHalfPointGradersFromPsa(normalizedPsa, bgsBase);
     adjusted.grade_probabilities = {
       ...adjusted.grade_probabilities,
       psa: normalizedPsa,
-      bgs: normalizeProbabilityMap({
-        "9.5": normalizedPsa["10"],
-        "9": normalizedPsa["9"],
-        "8.5": normalizedPsa["8"],
-        "8_or_lower": normalizedPsa["7_or_lower"],
-      }),
+      bgs: half.bgs,
+      cgc: half.cgc,
+      sgc: half.sgc,
+      tag: half.tag,
       confidence: confidenceLabel,
     };
   }
@@ -400,28 +423,6 @@ function mapOutcomesToBgs(outcomes: GradeOutcome[]): GradeProbabilities["bgs"] {
     else map["8_or_lower"] += outcome.probability;
   });
   return normalizeProbabilityMap(map);
-}
-
-function mapPsaToBgs(psa: GradeProbabilities["psa"]): GradeProbabilities["bgs"] {
-  // BGS 9.5 "Pristine" requires a perfect subgrade on all four categories and is
-  // roughly 3-4x harder than PSA 10. Real-world hit rates: PSA 10 ~5-8% of submissions,
-  // BGS 9.5 ~1-2%. A 1:1 remap would show wildly inflated BGS 9.5 numbers.
-  //
-  // Conversion model (coefficients sum to 1.0 per PSA input bucket):
-  //   PSA 10  → 30% BGS 9.5 | 65% BGS 9  | 5%  BGS 8.5 | 0%  BGS 8-
-  //   PSA 9   → 0%  BGS 9.5 | 78% BGS 9  | 17% BGS 8.5 | 5%  BGS 8-
-  //   PSA 8   → 0%  BGS 9.5 | 0%  BGS 9  | 72% BGS 8.5 | 28% BGS 8-
-  //   PSA 7-  → 0%  BGS 9.5 | 0%  BGS 9  | 0%  BGS 8.5 | 100% BGS 8-
-  const bgs95 = psa["10"] * 0.30;
-  const bgs9  = psa["10"] * 0.65 + psa["9"] * 0.78;
-  const bgs85 = psa["10"] * 0.05 + psa["9"] * 0.17 + psa["8"] * 0.72;
-  const bgs8orLower = psa["9"] * 0.05 + psa["8"] * 0.28 + psa["7_or_lower"];
-  return normalizeProbabilityMap({
-    "9.5": bgs95,
-    "9": bgs9,
-    "8.5": bgs85,
-    "8_or_lower": bgs8orLower,
-  });
 }
 
 function mapPsaToOutcomes(psa: GradeProbabilities["psa"]): GradeOutcome[] {
@@ -1077,9 +1078,18 @@ async function buildEstimateFromParsed(
   );
   bgs = normalizeProbabilityMap(bgs);
 
+  const halfPoint = deriveHalfPointGradersFromPsa(psa, bgs);
+  const perspectives = parseGraderPerspectives(result.grader_perspectives);
+  if (perspectives) {
+    estimate.grader_perspectives = perspectives;
+  }
+
   estimate.grade_probabilities = {
     psa,
-    bgs,
+    bgs: halfPoint.bgs,
+    cgc: halfPoint.cgc,
+    sgc: halfPoint.sgc,
+    tag: halfPoint.tag,
     confidence: confidence.confidence_label,
   };
   if (calibratorPsa && activeCalibrator) {

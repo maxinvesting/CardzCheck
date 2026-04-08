@@ -42,6 +42,9 @@ const baseEstimate: GradeEstimate = {
   grade_probabilities: {
     psa: { "10": 0.2, "9": 0.5, "8": 0.2, "7_or_lower": 0.1 },
     bgs: { "9.5": 0.2, "9": 0.5, "8.5": 0.2, "8_or_lower": 0.1 },
+    cgc: { "9.5": 0.18, "9": 0.52, "8.5": 0.2, "8_or_lower": 0.1 },
+    sgc: { "9.5": 0.22, "9": 0.48, "8.5": 0.2, "8_or_lower": 0.1 },
+    tag: { "9.5": 0.2, "9": 0.5, "8.5": 0.2, "8_or_lower": 0.1 },
     confidence: "high",
   },
   analysis_status: "ok",

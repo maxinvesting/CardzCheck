@@ -27,7 +27,7 @@ export function getDaysHeld(acquisitionDate: string | null | undefined): number 
 
 export function getDaysHeldColor(days: number | null): string {
   if (days === null) return "text-[var(--biz-muted)]";
-  if (days < 30) return "text-emerald-700";
+  if (days < 30) return "text-[var(--biz-primary)]";
   if (days <= 60) return "text-amber-700";
   return "text-red-600";
 }
@@ -77,11 +77,14 @@ export function buildDisplayTitle(item: BusinessInventoryItem): string {
 
 export function statusColor(status: string): string {
   switch (status) {
-    case "sold": return "border border-emerald-200 bg-emerald-50 text-emerald-700";
-    case "listed": return "border border-blue-200 bg-blue-50 text-blue-700";
+    case "sold":
+      return "border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] text-[var(--biz-primary)]";
+    case "listed":
+      return "border border-[var(--biz-secondary-border)] bg-[var(--biz-secondary-soft)] text-[var(--biz-secondary)]";
     case "pending_sale": return "border border-amber-200 bg-amber-50 text-amber-700";
     case "returned": return "border border-red-200 bg-red-50 text-red-700";
-    default: return "border border-[var(--biz-border)] bg-[#F9FAFB] text-[var(--biz-muted)]";
+    default:
+      return "border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] text-[var(--biz-muted)]";
   }
 }
 
@@ -106,14 +109,20 @@ export function gradeBadgeLabel(item: BusinessInventoryItem): string | null {
 
 export function gradeBadgeColor(item: BusinessInventoryItem): string {
   if (item.condition_status !== "graded") {
-    return "bg-[#F3F4F6] text-[var(--biz-muted)]";
+    return "bg-[var(--biz-surface-soft)] text-[var(--biz-muted)]";
   }
   const grade = parseFloat(item.grade || "0");
-  if (grade >= 10) return "bg-blue-600 text-white";
-  if (grade >= 9) return "bg-emerald-600 text-white";
-  if (grade >= 8) return "bg-emerald-100 text-emerald-800";
+  if (grade >= 10) {
+    return "border border-[var(--biz-tertiary-border)] bg-[var(--biz-tertiary)] text-[var(--biz-tertiary-foreground)]";
+  }
+  if (grade >= 9) {
+    return "border border-[var(--biz-primary-border)] bg-[var(--biz-primary)] text-[var(--biz-primary-foreground)]";
+  }
+  if (grade >= 8) {
+    return "border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] text-[var(--biz-primary)]";
+  }
   if (grade >= 7) return "bg-amber-100 text-amber-800";
-  return "bg-[#F3F4F6] text-[var(--biz-muted)]";
+  return "bg-[var(--biz-surface-soft)] text-[var(--biz-muted)]";
 }
 
 export function getCompsUrl(item: BusinessInventoryItem): string {

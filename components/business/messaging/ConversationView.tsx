@@ -144,7 +144,7 @@ export default function ConversationView({
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
             <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-emerald-100 bg-emerald-50 text-sm font-semibold text-emerald-700">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] text-sm font-semibold text-[var(--biz-primary)]">
                 {getAvatarLabel(thread)}
               </div>
               <div className="min-w-0">
@@ -180,7 +180,7 @@ export default function ConversationView({
             <button
               type="button"
               onClick={() => onUpdateThreadStatus(thread.id, "resolved")}
-              className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[12px] font-semibold text-emerald-700 transition-colors hover:bg-emerald-100"
+              className="rounded-xl border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] px-3 py-1.5 text-[12px] font-semibold text-[var(--biz-primary)] transition-colors hover:bg-[var(--biz-primary-soft-strong)]"
             >
               Mark resolved
             </button>
@@ -213,14 +213,14 @@ export default function ConversationView({
                 <div
                   className={`max-w-[82%] rounded-[22px] px-4 py-3 shadow-[0_12px_30px_rgba(15,23,42,0.06)] ${
                     isOutbound
-                      ? "border border-emerald-200 bg-[#EAF8F1] text-[var(--biz-text)]"
+                      ? "border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] text-[var(--biz-text)]"
                       : "border border-[var(--biz-border)] bg-white text-[var(--biz-text)]"
                   }`}
                 >
                   <div className="mb-1.5 flex flex-wrap items-center gap-2 text-[10px]">
                     <span
                       className={`font-semibold ${
-                        isOutbound ? "text-emerald-700" : "text-[var(--biz-muted)]"
+                        isOutbound ? "text-[var(--biz-primary)]" : "text-[var(--biz-muted)]"
                       }`}
                     >
                       {isOutbound ? "You" : message.sender_username}
@@ -263,7 +263,7 @@ export default function ConversationView({
                 <button
                   type="button"
                   onClick={() => setReplyText(draftResult.reply)}
-                  className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[11px] font-semibold text-emerald-700 transition-colors hover:bg-emerald-100"
+                  className="rounded-full border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] px-3 py-1.5 text-[11px] font-semibold text-[var(--biz-primary)] transition-colors hover:bg-[var(--biz-primary-soft-strong)]"
                 >
                   Load latest draft
                 </button>
@@ -286,7 +286,7 @@ export default function ConversationView({
                 type="button"
                 onClick={handleSend}
                 disabled={!replyText.trim() || sendLoading}
-                className="rounded-xl bg-[linear-gradient(135deg,#18a06f_0%,#117d58_100%)] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(17,125,88,0.22)] transition-all hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-45"
+	                className="rounded-xl bg-[var(--biz-primary)] px-4 py-2.5 text-sm font-semibold text-[var(--biz-primary-foreground)] shadow-[0_10px_24px_var(--biz-primary-border)] transition-all hover:bg-[var(--biz-primary-hover)] disabled:cursor-not-allowed disabled:opacity-45"
               >
                 {sendLoading ? "Sending..." : "Send reply"}
               </button>
@@ -313,9 +313,9 @@ function PlatformChip({ platform }: { platform: MessageThread["platform"] }) {
 function StatusChip({ status }: { status: MessageThread["status"] }) {
   const styles: Record<MessageThread["status"], string> = {
     needs_response: "border-amber-200 bg-amber-50 text-amber-700",
-    open: "border-blue-200 bg-blue-50 text-blue-700",
+    open: "border-[var(--biz-secondary-border)] bg-[var(--biz-secondary-soft)] text-[var(--biz-secondary)]",
     awaiting_buyer: "border-violet-200 bg-violet-50 text-violet-700",
-    resolved: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    resolved: "border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] text-[var(--biz-primary)]",
     archived: "border-slate-200 bg-slate-100 text-slate-500",
   };
   const labels: Record<MessageThread["status"], string> = {

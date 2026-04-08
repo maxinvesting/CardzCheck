@@ -14,6 +14,9 @@ describe("buildFallbackGradeEstimate", () => {
     expect(estimate.analysis_status).toBe("unable");
     expect(estimate.grade_probabilities?.psa).toBeTruthy();
     expect(estimate.grade_probabilities?.bgs).toBeTruthy();
+    expect(estimate.grade_probabilities?.cgc).toBeTruthy();
+    expect(estimate.grade_probabilities?.sgc).toBeTruthy();
+    expect(estimate.grade_probabilities?.tag).toBeTruthy();
     const psaTotal = Object.values(estimate.grade_probabilities?.psa ?? {}).reduce(
       (sum, value) => sum + value,
       0

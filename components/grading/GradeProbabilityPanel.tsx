@@ -19,22 +19,24 @@ import {
   GRADE_SCAN_KIND_LABELS,
   normalizeGradeScanPhotos,
 } from "@/lib/grading/scanPhotos";
-import { buildGradeVerdict, type GradeVerdict } from "@/lib/grading/verdict";
+import {
+  buildGradeVerdict,
+  type GradeVerdict,
+  type VerdictCardIdentity,
+} from "@/lib/grading/verdict";
+import { normalizeProbabilities } from "@/lib/grade-estimator/value";
+import {
+  HALF_POINT_GRADER_ROWS,
+  getHalfPointOutcomes,
+} from "@/lib/grading/graderDistributionUi";
+import type { GradeProbabilities } from "@/types";
 import { SpeakButton } from "@/components/ui/SpeakButton";
 import { buildCompsLinks } from "@/lib/ebay/comps-url";
 import PreSubmissionAnalysisSection from "@/components/grading/PreSubmissionAnalysisSection";
 
 interface GradeProbabilityPanelProps {
   estimate: GradeEstimate;
-  cardIdentity?: {
-    player_name?: string;
-    year?: string;
-    set_name?: string;
-    parallel_type?: string;
-    card_number?: string;
-    variation?: string;
-    insert?: string;
-  } | null;
+  cardIdentity?: VerdictCardIdentity;
   primaryImageUrl?: string | null;
   imageUrls?: string[] | null;
   scanPhotos?: GradeScanPhoto[] | null;
@@ -42,10 +44,25 @@ interface GradeProbabilityPanelProps {
   compact?: boolean;
   /** Correction text applied during a refinement re-run — shows a "Refined" badge */
   appliedRefinement?: string | null;
+  /**
+   * "liquidity" (default): PSA unless chromium stock or ultra high-end signals → BGS.
+   * "speed_cost": prefer SGC for modern Grade/Borderline when turnaround and fees matter.
+   */
+  gradingPriority?: "liquidity" | "speed_cost";
 }
 
 const PSA_ORDER = ["PSA 10", "PSA 9", "PSA 8", "PSA 7 or lower"];
-const BGS_ORDER = ["BGS 9.5", "BGS 9", "BGS 8.5", "BGS 8 or lower"];
+type BarAccent = "blue" | "emerald" | "violet" | "amber" | "rose";
+
+const BAR_ACCENTS: Record<BarAccent, { bar: string; barDim: string }> = {
+  blue: { bar: "bg-blue-500", barDim: "bg-blue-500/30" },
+  emerald: { bar: "bg-emerald-500", barDim: "bg-emerald-500/30" },
+  violet: { bar: "bg-violet-500", barDim: "bg-violet-500/30" },
+  amber: { bar: "bg-amber-500", barDim: "bg-amber-500/30" },
+  rose: { bar: "bg-rose-500", barDim: "bg-rose-500/30" },
+};
+
+const HALF_POINT_ACCENTS: BarAccent[] = ["emerald", "violet", "amber", "rose"];
 
 const RECOMMENDATION_CLASSES: Record<GradeVerdict["recommendation"], string> = {
   Grade: "border-emerald-200 bg-emerald-50 text-emerald-700",
@@ -115,17 +132,12 @@ function getPsaOutcomes(
   });
 }
 
-function getBgsOutcomes(estimate: GradeEstimate): GradeOutcome[] | null {
-  if (!estimate.grade_probabilities?.bgs) return null;
-  return normalizeDistribution([
-    { label: "BGS 9.5", probability: estimate.grade_probabilities.bgs["9.5"] },
-    { label: "BGS 9", probability: estimate.grade_probabilities.bgs["9"] },
-    { label: "BGS 8.5", probability: estimate.grade_probabilities.bgs["8.5"] },
-    {
-      label: "BGS 8 or lower",
-      probability: estimate.grade_probabilities.bgs["8_or_lower"],
-    },
-  ]);
+function resolveFullGradeProbabilities(
+  estimate: GradeEstimate
+): GradeProbabilities | null {
+  const g = estimate.grade_probabilities;
+  if (!g?.psa) return null;
+  return normalizeProbabilities(g as GradeProbabilities);
 }
 
 function expectedValue(outcomes: GradeOutcome[]): number {
@@ -334,11 +346,10 @@ function ProbabilityBar({
   label: string;
   probability: number;
   isHighlighted: boolean;
-  accentColor: "blue" | "emerald";
+  accentColor: BarAccent;
 }) {
   const percent = Math.round(probability * 100);
-  const barColor = accentColor === "blue" ? "bg-blue-500" : "bg-emerald-500";
-  const barColorDim = accentColor === "blue" ? "bg-blue-500/30" : "bg-emerald-500/30";
+  const { bar: barColor, barDim: barColorDim } = BAR_ACCENTS[accentColor];
 
   return (
     <div className={`transition-opacity ${percent === 0 ? "opacity-40" : ""}`}>
@@ -409,6 +420,75 @@ function EvidenceBlock({
   );
 }
 
+function GraderPerspectiveNote({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mb-2">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="text-left text-[9px] text-white/30 hover:text-white/55 transition-colors underline-offset-2 hover:underline"
+      >
+        {open ? "Hide note" : "How they’d look at this"}
+      </button>
+      {open ? (
+        <p className="mt-1 text-[9px] leading-snug text-white/40">{text}</p>
+      ) : null}
+    </div>
+  );
+}
+
+function HalfPointGraderColumn({
+  title,
+  outcomes,
+  accent,
+  perspective,
+}: {
+  title: string;
+  outcomes: GradeOutcome[];
+  accent: BarAccent;
+  perspective?: string;
+}) {
+  const [perspectiveOpen, setPerspectiveOpen] = useState(false);
+  const top = mostLikely(outcomes);
+  return (
+    <div className="min-w-[128px] shrink-0 px-1">
+      <p className="text-[9px] font-bold uppercase tracking-widest text-white/35 mb-1">{title}</p>
+      {top ? (
+        <p className="text-[10px] text-white/45 mb-1.5 leading-snug">
+          Top: <span className="text-white/70 font-medium">{top.label}</span>{" "}
+          <span className="font-mono">{formatPercent(top.probability)}</span>
+        </p>
+      ) : null}
+      {perspective ? (
+        <>
+          <button
+            type="button"
+            onClick={() => setPerspectiveOpen((o) => !o)}
+            className="mb-1.5 text-left text-[9px] text-white/30 hover:text-white/55 transition-colors underline-offset-2 hover:underline"
+          >
+            {perspectiveOpen ? "Hide note" : "How they’d look at this"}
+          </button>
+          {perspectiveOpen ? (
+            <p className="text-[9px] leading-snug text-white/40 mb-2">{perspective}</p>
+          ) : null}
+        </>
+      ) : null}
+      <div className="space-y-2">
+        {outcomes.map((outcome) => (
+          <ProbabilityBar
+            key={outcome.label}
+            label={outcome.label}
+            probability={outcome.probability}
+            isHighlighted={outcome.label === top?.label}
+            accentColor={accent}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─────────────────────────────────────────────────────────
 // Main component
 // ─────────────────────────────────────────────────────────
@@ -422,11 +502,11 @@ export default function GradeProbabilityPanel({
   showPreliminaryBadge,
   compact = false,
   appliedRefinement,
+  gradingPriority = "liquidity",
 }: GradeProbabilityPanelProps) {
   const confidence = estimate.grade_probabilities?.confidence;
 
   const [selectedPhotoIdx, setSelectedPhotoIdx] = useState(0);
-  const [showBgsDistribution, setShowBgsDistribution] = useState(false);
   const [evidenceOpen, setEvidenceOpen] = useState(false);
   const [verdictOpen, setVerdictOpen] = useState(false);
   const [exportingPng, setExportingPng] = useState(false);
@@ -436,7 +516,10 @@ export default function GradeProbabilityPanel({
     estimate.grade_probabilities?.confidence === "high" &&
     meetsTopTierEvidence(estimate);
   const psaOutcomes = getPsaOutcomes(estimate, { allowPsa10Override });
-  const bgsOutcomes = getBgsOutcomes(estimate);
+  const resolvedGradeProbabilities = useMemo(
+    () => resolveFullGradeProbabilities(estimate),
+    [estimate]
+  );
   const psaTotal = psaOutcomes.reduce((sum, outcome) => sum + outcome.probability, 0);
   const likely = mostLikely(psaOutcomes);
   const ev = expectedValue(psaOutcomes);
@@ -451,8 +534,8 @@ export default function GradeProbabilityPanel({
     : undefined;
   const cardLabel = buildCardIdentityLabel(cardIdentity);
   const verdict = useMemo(
-    () => buildGradeVerdict(estimate, cardIdentity),
-    [estimate, cardIdentity]
+    () => buildGradeVerdict(estimate, cardIdentity, { gradingPriority }),
+    [estimate, cardIdentity, gradingPriority]
   );
 
   const confidencePillClass = confidence
@@ -533,6 +616,7 @@ export default function GradeProbabilityPanel({
         imageUrls,
         generatedAt: new Date().toISOString(),
         slabId,
+        gradingPriority,
       });
     } catch (err) {
       console.error("Failed to open PDF print page:", err);
@@ -627,49 +711,47 @@ export default function GradeProbabilityPanel({
           {/* Grade Probability Distribution */}
           <div className="px-5 pt-4 pb-5 border-t border-white/8">
             <p className="text-[9px] font-semibold uppercase tracking-widest text-white/30 mb-3">
-              Grade Probability · PSA
+              Grade probability · five services
             </p>
-            <div className="space-y-2.5">
-              {psaOutcomes.map((outcome) => (
-                <ProbabilityBar
-                  key={outcome.label}
-                  label={outcome.label}
-                  probability={outcome.probability}
-                  isHighlighted={outcome.label === likely?.label}
-                  accentColor="blue"
-                />
-              ))}
-            </div>
-            {bgsOutcomes && (
-              <div className="mt-3">
-                <button
-                  type="button"
-                  onClick={() => setShowBgsDistribution((prev) => !prev)}
-                  className="flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-widest text-white/25 transition-colors hover:text-white/60"
-                >
-                  <svg className={`h-3 w-3 transition-transform duration-200 ${showBgsDistribution ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                  BGS Distribution
-                </button>
-                {showBgsDistribution && (
-                  <div className="mt-2.5 space-y-2.5">
-                    {BGS_ORDER.map((label) => {
-                      const outcome = bgsOutcomes.find((item) => item.label === label);
-                      return (
-                        <ProbabilityBar
-                          key={label}
-                          label={label}
-                          probability={outcome?.probability ?? 0}
-                          isHighlighted={false}
-                          accentColor="emerald"
-                        />
-                      );
-                    })}
-                  </div>
-                )}
+            <div className="-mx-1 flex gap-2 overflow-x-auto pb-1 snap-x snap-mandatory">
+              <div className="min-w-[128px] shrink-0 snap-start px-1">
+                <p className="text-[9px] font-bold uppercase tracking-widest text-white/35 mb-2">PSA</p>
+                {estimate.grader_perspectives?.psa ? (
+                  <GraderPerspectiveNote text={estimate.grader_perspectives.psa} />
+                ) : null}
+                <div className="space-y-2.5">
+                  {psaOutcomes.map((outcome) => (
+                    <ProbabilityBar
+                      key={outcome.label}
+                      label={outcome.label}
+                      probability={outcome.probability}
+                      isHighlighted={outcome.label === likely?.label}
+                      accentColor="blue"
+                    />
+                  ))}
+                </div>
               </div>
-            )}
+              {resolvedGradeProbabilities
+                ? HALF_POINT_GRADER_ROWS.map((row, idx) => (
+                    <HalfPointGraderColumn
+                      key={row.key}
+                      title={row.title}
+                      outcomes={getHalfPointOutcomes(
+                        resolvedGradeProbabilities,
+                        row.labels,
+                        row.key
+                      )}
+                      accent={HALF_POINT_ACCENTS[idx] ?? "emerald"}
+                      perspective={estimate.grader_perspectives?.[row.perspectiveField]}
+                    />
+                  ))
+                : null}
+            </div>
+            {resolvedGradeProbabilities ? (
+              <p className="mt-2 text-[8px] leading-snug text-white/22">
+                {gradingCopy.panel.multiGraderBandsNote}
+              </p>
+            ) : null}
           </div>
 
           {/* Evidence (collapsible) */}
@@ -970,6 +1052,7 @@ export default function GradeProbabilityPanel({
           imageUrls={normalizedScanPhotos.map((photo) => photo.url)}
           generatedAt={new Date().toISOString()}
           slabId={slabId}
+          gradingPriority={gradingPriority}
         />
       </div>
     </>

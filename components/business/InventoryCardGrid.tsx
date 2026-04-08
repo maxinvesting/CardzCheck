@@ -20,6 +20,54 @@ import {
 
 const VIRTUALIZE_THRESHOLD = 200;
 
+type ConsultantAction = {
+  label: string;
+  style: { background: string; color: string; border: string };
+  prompt: string;
+};
+
+function getConsultantAction(item: BusinessInventoryItem): ConsultantAction {
+  const mv = item.current_market_value_cents;
+  const cost = item.cost_basis_total_cents;
+  const days = getDaysHeld(item.acquisition_date);
+  const listPrice = item.list_price_cents;
+  const underwater = mv != null && mv < cost;
+  const isUnlisted = item.status === "unlisted";
+  const isListed = item.status === "listed";
+  const listedTooLong = isListed && days != null && days > 21;
+  const hasGoodMargin = mv != null && cost > 0 && mv > cost * 1.1;
+  const title = buildDisplayTitle(item) || item.title || "this card";
+
+  if (underwater) {
+    return {
+      label: "Underwater ↗",
+      style: { background: "#FEF0F0", color: "#CC4444", border: "1px solid #F0C0C0" },
+      prompt: `${title} is underwater — cost ${fmtCents(cost)}, MV ${fmtCents(mv)}. Cut losses or hold?`,
+    };
+  }
+  if (isUnlisted && hasGoodMargin) {
+    return {
+      label: "List now ↗",
+      style: { background: "#F0F8F4", color: "#2D7A4F", border: "1px solid #C8E6D6" },
+      prompt: `Should I list ${title} now? Cost ${fmtCents(cost)}, est MV ${fmtCents(mv!)}.`,
+    };
+  }
+  if (listedTooLong) {
+    return {
+      label: "Reprice ↗",
+      style: { background: "#FBF5E8", color: "#8A5C0A", border: "1px solid #E8D5A0" },
+      prompt: `${title} has been listed ${days}d at ${listPrice != null ? fmtCents(listPrice) : "unknown price"}. Should I reprice?`,
+    };
+  }
+  return {
+    label: "Analyze ↗",
+    style: { background: "#F2EFE9", color: "#777777", border: "1px solid #E5E2DD" },
+    prompt: `Analyze ${title} — cost ${fmtCents(cost)}, MV ${mv != null ? fmtCents(mv) : "unknown"}.`,
+  };
+}
+
+type GridRow = { kind: "item"; item: BusinessInventoryItem } | { kind: "add" };
+
 export interface InventoryCardGridProps {
   items: BusinessInventoryItem[];
   selectedItemId?: string | null;
@@ -27,6 +75,8 @@ export interface InventoryCardGridProps {
   onMarkSold?: (item: BusinessInventoryItem) => void;
   ebayConnected?: boolean;
   onEbayList?: (item: BusinessInventoryItem) => void;
+  onAddCard?: () => void;
+  onConsultant?: (prompt: string) => void;
 }
 
 function CardImageArea({ item }: { item: BusinessInventoryItem }) {
@@ -93,6 +143,7 @@ function InventoryCardCell({
   onMarkSold,
   ebayConnected,
   onEbayList,
+  onConsultant,
 }: {
   item: BusinessInventoryItem;
   selected: boolean;
@@ -100,6 +151,7 @@ function InventoryCardCell({
   onMarkSold?: (item: BusinessInventoryItem) => void;
   ebayConnected?: boolean;
   onEbayList?: (item: BusinessInventoryItem) => void;
+  onConsultant?: (prompt: string) => void;
 }) {
   const titleStr = buildDisplayTitle(item);
   const days = getDaysHeld(item.acquisition_date);
@@ -115,13 +167,15 @@ function InventoryCardCell({
     item.status !== "returned" &&
     item.status !== "pending_sale";
 
+  const consultantAction = onConsultant ? getConsultantAction(item) : null;
+
   return (
     <div
       onClick={() => onItemClick(item)}
       className={`flex flex-col rounded-xl border bg-white overflow-hidden cursor-pointer transition-all hover:shadow-md ${
         selected
-          ? "border-emerald-600 ring-1 ring-emerald-600"
-          : "border-[var(--biz-border)] hover:border-emerald-400"
+          ? "border-[var(--biz-primary)] ring-1 ring-[var(--biz-primary)]"
+          : "border-[var(--biz-border)] hover:border-[var(--biz-primary-border)]"
       }`}
     >
       {/* Image */}
@@ -171,7 +225,7 @@ function InventoryCardCell({
         >
           <Link
             href={`/card/${item.id}?from=business`}
-            className="rounded border border-[var(--biz-border)] bg-[#F9FAFB] px-1.5 py-0.5 text-[9px] font-medium text-[var(--biz-primary)] hover:bg-[#F3F4F6] whitespace-nowrap"
+            className="rounded border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-1.5 py-0.5 text-[9px] font-medium text-[var(--biz-primary)] hover:bg-[var(--biz-hover)] whitespace-nowrap"
           >
             View
           </Link>
@@ -179,7 +233,7 @@ function InventoryCardCell({
             <button
               type="button"
               onClick={() => onMarkSold?.(item)}
-              className="rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[9px] font-medium text-emerald-700 hover:bg-emerald-100 whitespace-nowrap"
+              className="rounded border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] px-1.5 py-0.5 text-[9px] font-medium text-[var(--biz-primary)] hover:bg-[var(--biz-primary-soft-strong)] whitespace-nowrap"
             >
               Sold
             </button>
@@ -188,7 +242,7 @@ function InventoryCardCell({
             <button
               type="button"
               onClick={() => onEbayList?.(item)}
-              className="rounded border border-[var(--biz-border)] bg-[#F9FAFB] px-1.5 py-0.5 text-[9px] font-medium text-[var(--biz-primary)] hover:bg-[#F3F4F6] whitespace-nowrap"
+              className="rounded border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-1.5 py-0.5 text-[9px] font-medium text-[var(--biz-primary)] hover:bg-[var(--biz-hover)] whitespace-nowrap"
             >
               List
             </button>
@@ -197,13 +251,40 @@ function InventoryCardCell({
             href={getCompsUrl(item)}
             target="_blank"
             rel="noopener noreferrer"
-            className="rounded border border-[var(--biz-border)] bg-[#F9FAFB] px-1.5 py-0.5 text-[9px] font-medium text-[var(--biz-primary)] hover:bg-[#F3F4F6] whitespace-nowrap"
+            className="rounded border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-1.5 py-0.5 text-[9px] font-medium text-[var(--biz-primary)] hover:bg-[var(--biz-hover)] whitespace-nowrap"
           >
             Comps
           </a>
+          {consultantAction && (
+            <button
+              type="button"
+              onClick={() => onConsultant?.(consultantAction.prompt)}
+              className="rounded px-1.5 py-0.5 text-[9px] font-medium whitespace-nowrap"
+              style={{
+                background: consultantAction.style.background,
+                color: consultantAction.style.color,
+                border: consultantAction.style.border,
+              }}
+            >
+              {consultantAction.label}
+            </button>
+          )}
         </div>
       </div>
     </div>
+  );
+}
+
+function AddTile({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="border-[1.5px] border-dashed border-[var(--biz-border)] rounded-xl min-h-[152px] flex flex-col items-center justify-center cursor-pointer bg-[#FAFAF8] hover:bg-[#F5F3F0] transition-colors gap-1"
+    >
+      <span className="text-2xl text-[#CCCCCC] leading-none">+</span>
+      <span className="text-[11px] text-[#BBBBBB]">Add card</span>
+    </button>
   );
 }
 
@@ -216,8 +297,16 @@ export default function InventoryCardGrid({
   onMarkSold,
   ebayConnected,
   onEbayList,
+  onAddCard,
+  onConsultant,
 }: InventoryCardGridProps) {
-  if (items.length === 0) {
+  const rows: GridRow[] = useMemo(() => {
+    const itemRows = items.map((item) => ({ kind: "item" as const, item }));
+    if (onAddCard) return [...itemRows, { kind: "add" as const }];
+    return itemRows;
+  }, [items, onAddCard]);
+
+  if (rows.length === 0) {
     return (
       <div className="py-12 text-center text-sm text-[var(--biz-muted)]">
         No inventory items found.
@@ -232,27 +321,35 @@ export default function InventoryCardGrid({
     onMarkSold,
     ebayConnected,
     onEbayList,
+    onConsultant,
   });
 
-  if (items.length > VIRTUALIZE_THRESHOLD) {
-    return (
+  const gridBody =
+    rows.length > VIRTUALIZE_THRESHOLD ? (
       <VirtuosoGrid
-        data={items}
+        data={rows}
         listClassName={GRID_CLASS}
         style={{ height: "calc(100vh - 340px)", minHeight: 400 }}
-        itemContent={(_index, item) => (
-          <InventoryCardCell key={item.id} {...cellProps(item)} />
-        )}
-        computeItemKey={(_index, item) => item.id}
+        itemContent={(_index, row) =>
+          row.kind === "add" ? (
+            <AddTile key="__add__" onClick={onAddCard!} />
+          ) : (
+            <InventoryCardCell key={row.item.id} {...cellProps(row.item)} />
+          )
+        }
+        computeItemKey={(_index, row) => (row.kind === "add" ? "__add__" : row.item.id)}
       />
+    ) : (
+      <div className={GRID_CLASS}>
+        {rows.map((row) =>
+          row.kind === "add" ? (
+            <AddTile key="__add__" onClick={onAddCard!} />
+          ) : (
+            <InventoryCardCell key={row.item.id} {...cellProps(row.item)} />
+          )
+        )}
+      </div>
     );
-  }
 
-  return (
-    <div className={GRID_CLASS}>
-      {items.map((item) => (
-        <InventoryCardCell key={item.id} {...cellProps(item)} />
-      ))}
-    </div>
-  );
+  return <div className="px-4 sm:px-6 pb-6 pt-1">{gridBody}</div>;
 }

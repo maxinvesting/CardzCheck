@@ -24,16 +24,79 @@ export interface GradeVerdict {
 }
 
 export const VERDICT_DISCLAIMER =
-  "AI estimate only. Not a professional grade. Final grades are determined by official grading companies such as PSA, BGS, SGC, or TAG.";
+  "AI estimate only. Not a professional grade. Final grades are determined by official grading companies such as PSA, BGS, CGC, SGC, or TAG (Tag Rater).";
 
-type VerdictCardIdentity = {
+/** Identity fields used for grader routing (subset of UI card identity). */
+export type VerdictCardIdentity = {
   year?: string;
+  player_name?: string;
+  set_name?: string;
+  parallel_type?: string;
+  variation?: string;
+  insert?: string;
+  card_number?: string;
+  /** From card ID pipeline: chromium ≈ thicker stock (e.g. Prizm/Chrome). */
+  card_stock?: "paper" | "chromium" | "unknown";
 } | null | undefined;
 
 function parseYear(cardIdentity?: VerdictCardIdentity): number | null {
   if (!cardIdentity?.year) return null;
   const numeric = Number(cardIdentity.year);
   return Number.isFinite(numeric) ? Math.round(numeric) : null;
+}
+
+function isThickStockChromium(cardIdentity?: VerdictCardIdentity): boolean {
+  return cardIdentity?.card_stock === "chromium";
+}
+
+/** Heuristic: premium products / low-serial parallels where BGS subgrades often matter. */
+function isUltraHighEndTier(cardIdentity?: VerdictCardIdentity): boolean {
+  if (!cardIdentity) return false;
+  const blob = [
+    cardIdentity.parallel_type,
+    cardIdentity.set_name,
+    cardIdentity.variation,
+    cardIdentity.insert,
+  ]
+    .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
+    .join(" ")
+    .toLowerCase();
+  if (!blob.trim()) return false;
+
+  const premiumProducts = [
+    "national treasure",
+    "flawless",
+    "immaculate",
+    "exquisite",
+    "opulence",
+    "the cup",
+    "metal universe",
+  ];
+  if (premiumProducts.some((p) => blob.includes(p))) return true;
+
+  const premiumParallels = [
+    "1/1",
+    "one of one",
+    "one-of-one",
+    "superfractor",
+    "kaboom",
+    "downtown",
+    "black finite",
+    "white sparkle",
+    "mystery",
+    "fotl",
+    "first off",
+    "logoman",
+    "triple logoman",
+    "shield",
+  ];
+  if (premiumParallels.some((p) => blob.includes(p))) return true;
+
+  // Serial /10 or rarer in parallel or variation text
+  if (/\/\s*(1|2|3|5|10)\b/i.test(blob)) return true;
+  if (/\b\d+\s*\/\s*(1|2|3|5|10)\b/i.test(blob)) return true;
+
+  return false;
 }
 
 function formatPercent(probability: number): string {
@@ -140,20 +203,38 @@ function getSuggestedGrader(options: {
   year: number | null;
   vintageOverride?: boolean | null;
   preferTag?: boolean;
+  /** Default "liquidity" → PSA unless thick stock / ultra high end → BGS. */
+  gradingPriority?: "liquidity" | "speed_cost";
   p10: number;
   bgs95: number;
   confidence: "high" | "medium" | "low";
   recommendation: VerdictRecommendation;
+  thickStock: boolean;
+  ultraHighEnd: boolean;
 }): VerdictGrader {
   const isVintage =
     options.vintageOverride === true ||
     (options.vintageOverride !== false && options.year !== null && options.year <= 1989);
   if (isVintage) return "SGC";
 
-  // Suggest BGS when PSA 10 probability is meaningful OR BGS 9.5 probability is non-trivial.
-  // Old threshold (p10 >= 0.30) never triggered because PSA 10 was hard-capped at 18%.
-  // Now that the cap is evidence-based, we lower the trigger and also key off BGS 9.5 directly.
-  if ((options.p10 >= 0.20 || options.bgs95 >= 0.08) && options.confidence !== "low") return "BGS";
+  const gradingPriority = options.gradingPriority ?? "liquidity";
+  const gemPath =
+    options.confidence !== "low" &&
+    (options.p10 >= 0.12 || options.bgs95 >= 0.05);
+
+  // Faster / economical path (non-vintage): user or product explicitly chose speed+cost.
+  if (
+    gradingPriority === "speed_cost" &&
+    !isVintage &&
+    (options.recommendation === "Grade" || options.recommendation === "Borderline")
+  ) {
+    return "SGC";
+  }
+
+  // Liquidity-first: PSA unless chromium/thick stock or ultra high-end tier warrants BGS.
+  if (gradingPriority === "liquidity" && gemPath && (options.thickStock || options.ultraHighEnd)) {
+    return "BGS";
+  }
 
   const isModern = options.year !== null && options.year >= 2018;
   if (options.preferTag && isModern && options.recommendation !== "Rescan Needed") {
@@ -197,7 +278,8 @@ function buildReasoning(options: {
 function buildStrategyTip(
   recommendation: VerdictRecommendation,
   suggestedGrader: VerdictGrader,
-  closeupsMissing: boolean
+  closeupsMissing: boolean,
+  meta?: { sgcForSpeedCost?: boolean }
 ): string {
   if (recommendation === "Rescan Needed") {
     // Rescan is only triggered by genuinely bad photo quality (blur, glare, etc.),
@@ -221,9 +303,16 @@ function buildStrategyTip(
   if (closeupsMissing) {
     return `Add close-up photos for corner/edge detail before submitting to ${suggestedGrader}`;
   }
-  if (suggestedGrader === "PSA") return "Submit to PSA Value";
-  if (suggestedGrader === "BGS") return "Submit to BGS for high-end upside";
-  if (suggestedGrader === "SGC") return "Submit to SGC for vintage turnaround";
+  if (suggestedGrader === "PSA") return "Submit to PSA for maximum liquidity";
+  if (suggestedGrader === "BGS") {
+    return "Submit to BGS — strong fit for chromium/thick stock or ultra high-end pieces";
+  }
+  if (suggestedGrader === "SGC") {
+    if (meta?.sgcForSpeedCost) {
+      return "Submit to SGC when you want quicker turnaround and typically lower fees";
+    }
+    return "Submit to SGC for vintage-friendly slabs and solid turnaround";
+  }
   return "Submit to TAG for modern AI-focused grading";
 }
 
@@ -233,6 +322,8 @@ export function buildGradeVerdict(
   options?: {
     preferTag?: boolean;
     vintageOverride?: boolean | null;
+    /** "liquidity" (default): PSA unless chromium / ultra high end → BGS. "speed_cost": SGC for modern Grade/Borderline. */
+    gradingPriority?: "liquidity" | "speed_cost";
   }
 ): GradeVerdict {
   const outcomes = getPsaOutcomes(estimate);
@@ -288,15 +379,30 @@ export function buildGradeVerdict(
 
   const year = parseYear(cardIdentity);
   const bgs95 = estimate.grade_probabilities?.bgs?.["9.5"] ?? 0;
+  const gradingPriority = options?.gradingPriority ?? "liquidity";
+  const thickStock = isThickStockChromium(cardIdentity ?? undefined);
+  const ultraHighEnd = isUltraHighEndTier(cardIdentity ?? undefined);
+  const isVintage =
+    options?.vintageOverride === true ||
+    (options?.vintageOverride !== false && year !== null && year <= 1989);
+
   const suggestedGrader = getSuggestedGrader({
     year,
     vintageOverride: options?.vintageOverride ?? null,
     preferTag: options?.preferTag ?? false,
+    gradingPriority,
     p10,
     bgs95,
     confidence,
     recommendation,
+    thickStock,
+    ultraHighEnd,
   });
+
+  const sgcForSpeedCost =
+    suggestedGrader === "SGC" &&
+    !isVintage &&
+    gradingPriority === "speed_cost";
 
   const ev =
     outcomes.reduce((sum, outcome) => {
@@ -328,6 +434,8 @@ export function buildGradeVerdict(
     reasoning,
     disclaimer: VERDICT_DISCLAIMER,
     expectedOutcome: `${likelyLabel} (${formatPercent(likelyProb)})`,
-    strategyTip: buildStrategyTip(recommendation, suggestedGrader, closeupsMissing),
+    strategyTip: buildStrategyTip(recommendation, suggestedGrader, closeupsMissing, {
+      sgcForSpeedCost,
+    }),
   };
 }

@@ -5,6 +5,9 @@ import type { GradeCmv, GradeProbabilities } from "../../types";
 const baseProbabilities: GradeProbabilities = {
   psa: { "10": 0.12, "9": 0.65, "8": 0.2, "7_or_lower": 0.03 },
   bgs: { "9.5": 0.12, "9": 0.65, "8.5": 0.2, "8_or_lower": 0.03 },
+  cgc: { "9.5": 0.1, "9": 0.65, "8.5": 0.22, "8_or_lower": 0.03 },
+  sgc: { "9.5": 0.14, "9": 0.63, "8.5": 0.2, "8_or_lower": 0.03 },
+  tag: { "9.5": 0.12, "9": 0.64, "8.5": 0.21, "8_or_lower": 0.03 },
   confidence: "high",
 };
 
