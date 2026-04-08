@@ -9,7 +9,11 @@ import {
 import { runGradeEstimateJob } from "@/lib/grading/gradeEstimateJob";
 import type { GradeEstimateJobStatusResponse } from "@/lib/grading/gradeEstimateJob";
 import { createGradeEstimateJobDependencies } from "@/lib/grading/gradeEstimateServer";
-import { checkGradeTokenBudget } from "@/lib/grading/tokenBudget";
+import {
+  releaseGradeTokenBudgetReservation,
+  reserveGradeTokenBudget,
+  settleGradeTokenBudgetReservation,
+} from "@/lib/grading/tokenBudget";
 import { isTestMode } from "@/lib/test-mode";
 import type { GradeEstimatorCardInput } from "@/lib/grade-estimator/value";
 import type { GradeScanPhoto } from "@/types";
@@ -33,6 +37,10 @@ type GradeEstimateStartPayload = {
 };
 
 export async function POST(request: NextRequest) {
+  let budgetReservationId: string | null = null;
+  let reservationFinalized = false;
+  let job = createGradeEstimateJob();
+
   try {
     const supabase = await createClient();
     const {
@@ -74,19 +82,21 @@ export async function POST(request: NextRequest) {
           );
         }
       } else {
-        // Paid tiers: enforce monthly token budget
-        const budget = await checkGradeTokenBudget(user.id, proAccess.tier);
-        if (!budget.allowed) {
+        const budgetReservation = await reserveGradeTokenBudget(user.id, proAccess.tier);
+        if (!budgetReservation.allowed || !budgetReservation.reservationId) {
           return NextResponse.json(
             {
-              error: budget.reason ?? "Monthly scanning budget reached.",
+              error: budgetReservation.reason ?? "Monthly scanning budget reached.",
               code: "BUDGET_EXCEEDED",
-              budgetCents: budget.budgetCents,
-              spentCents: budget.spentCents,
+              budgetCents: budgetReservation.budgetCents,
+              spentCents: budgetReservation.spentCents,
+              reservedCents: budgetReservation.reservedCents,
             },
             { status: 429 }
           );
         }
+
+        budgetReservationId = budgetReservation.reservationId;
       }
     }
 
@@ -131,8 +141,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const job = createGradeEstimateJob();
-    const deps = createGradeEstimateJobDependencies(user.id);
+    const deps = createGradeEstimateJobDependencies(user.id, {
+      recordUsage: !budgetReservationId,
+    });
 
     // Run the full pipeline synchronously so the result is available in this
     // response. The old fire-and-forget approach broke in serverless environments
@@ -147,6 +158,24 @@ export async function POST(request: NextRequest) {
       },
       deps
     );
+
+    if (budgetReservationId) {
+      const modelUsage = job.internal.modelUsage;
+      if (modelUsage) {
+        const settled = await settleGradeTokenBudgetReservation(
+          budgetReservationId,
+          modelUsage.inputTokens,
+          modelUsage.outputTokens
+        );
+
+        if (!settled) {
+          throw new Error("Failed to settle monthly scanning budget.");
+        }
+      } else {
+        await releaseGradeTokenBudgetReservation(budgetReservationId);
+      }
+      reservationFinalized = true;
+    }
 
     const response: GradeEstimateJobStatusResponse = {
       jobId: job.jobId,
@@ -166,5 +195,9 @@ export async function POST(request: NextRequest) {
       { error: "Failed to start grade estimate" },
       { status: 500 }
     );
+  } finally {
+    if (budgetReservationId && !reservationFinalized && !job.internal.modelUsage) {
+      await releaseGradeTokenBudgetReservation(budgetReservationId);
+    }
   }
 }
