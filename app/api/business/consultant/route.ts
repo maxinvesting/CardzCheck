@@ -10,7 +10,10 @@ import {
 import { buildBusinessConsultantContext } from "@/lib/business/consultant-context";
 import { BUSINESS_CONSULTANT_MASTER_PROMPT } from "@/lib/ai/business-consultant-prompt";
 import type { BusinessConsultation } from "@/types";
-import { parseBusinessConsultantReport } from "@/lib/business/consultant-report";
+import {
+  parseBusinessConsultantReport,
+  type BusinessConsultantReport,
+} from "@/lib/business/consultant-report";
 
 interface ConsultantRequest {
   prompt: string;
@@ -20,6 +23,66 @@ interface ConsultantRequest {
 }
 
 const CONSULTATION_HISTORY_LIMIT = 25;
+const QUICK_CAPABILITY_QUESTION_MAX_CHARS = 220;
+
+function isQuickCapabilityQuestion(
+  prompt: string,
+  modeHint: ConsultantRequest["mode_hint"]
+): boolean {
+  if (modeHint === "report") return false;
+  const normalized = prompt.trim().toLowerCase();
+  if (!normalized || normalized.length > QUICK_CAPABILITY_QUESTION_MAX_CHARS) return false;
+
+  const startsLikeQuestion = /^(can|could|do|does|is|are|will|would|what|how)\b/.test(normalized);
+  const hasQuestionSignal = normalized.includes("?") || startsLikeQuestion;
+  if (!hasQuestionSignal) return false;
+
+  const asksCapability =
+    /\b(capabilit(?:y|ies)|able|support)\b/.test(normalized) ||
+    /^(can|could|do|does|is|are)\b/.test(normalized);
+  const asksSearchOrDeals =
+    /\b(search|scan|find|look up|web|internet|deal|deals|comp|comps|price|pricing)\b/.test(
+      normalized
+    );
+
+  return asksCapability && asksSearchOrDeals;
+}
+
+function shouldEnableWebSearch(prompt: string, isGradingQuestion: boolean): boolean {
+  if (isGradingQuestion) return true;
+  return /\b(ebay|sold|comp|comps|market|price|pricing|deal|deals|buy|acquisition|target|undervalued|search|scan|web|internet|latest|current)\b/i.test(
+    prompt
+  );
+}
+
+function buildQuickCapabilityReport(): BusinessConsultantReport {
+  return {
+    response_mode: "answer",
+    report_title: "Capability Check",
+    timestamp: new Date().toISOString(),
+    data_coverage: {
+      inventory_count: 0,
+      sales_count: 0,
+      missing: [],
+    },
+    answer:
+      "Yes, I can scan the internet for deals. What should I target (card/player or product), budget, and preferred marketplaces so I can run web search?",
+    key_points: [
+      "Fast response mode used for a capability question.",
+      "Web search runs after criteria are provided.",
+    ],
+    kpis: [],
+    high_risk_positions: [],
+    recommended_actions: [
+      {
+        action: "Send target, budget, and location/marketplace constraints.",
+        impact: "Enables immediate, focused deal search.",
+        effort: "low",
+      },
+    ],
+    notes: ["No inventory or sales analysis was required for this question."],
+  };
+}
 
 // GET /api/business/consultant - Load saved consultant history
 export async function GET() {
@@ -108,41 +171,72 @@ export async function POST(request: NextRequest) {
 
     const businessContextScope = await requireBusinessContext(user.id);
 
-    const [inventory, salesResult, metrics] = await Promise.all([
-      listInventory(user.id),
-      listSales(user.id),
-      getBusinessMetrics(user.id),
-    ]);
-
-    const businessContext = buildBusinessConsultantContext({
-      inventory,
-      sales: salesResult.sales,
-      metrics,
-    });
-
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Missing Anthropic API key",
-          code: "MISSING_LLM_KEY",
-        },
-        { status: 500 }
-      );
-    }
-
-    const anthropic = new Anthropic({ apiKey });
-
     // Detect grading questions so we can inject a stronger pre-search instruction.
     const isGradingQuestion = /grad(e|ing)|psa|bgs|sgc|slab|submit|submission|worth grading|grade roi/i.test(prompt);
+    const useQuickCapabilityPath = isQuickCapabilityQuestion(prompt, modeHint);
 
-    const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 8096,
+    let report: BusinessConsultantReport | null = null;
+    let consultantResponse = "Constraint: Response unavailable for this request.";
+    let contextSummary: {
+      inventoryItems: number;
+      activeItems: number;
+      totalSales: number;
+      cmvCoveragePct: number;
+    } = {
+      inventoryItems: 0,
+      activeItems: 0,
+      totalSales: 0,
+      cmvCoveragePct: 0,
+    };
+
+    if (useQuickCapabilityPath) {
+      report = buildQuickCapabilityReport();
+      consultantResponse = JSON.stringify(report);
+    } else {
+      const [inventory, salesResult, metrics] = await Promise.all([
+        listInventory(user.id),
+        listSales(user.id),
+        getBusinessMetrics(user.id),
+      ]);
+
+      const businessContext = buildBusinessConsultantContext({
+        inventory,
+        sales: salesResult.sales,
+        metrics,
+      });
+
+      contextSummary = {
+        inventoryItems: businessContext.inventory_summary.total_items,
+        activeItems: businessContext.inventory_summary.active_items,
+        totalSales: businessContext.sales_summary.total_sales,
+        cmvCoveragePct: businessContext.inventory_summary.cmv_coverage_pct,
+      };
+
+      const apiKey = process.env.ANTHROPIC_API_KEY;
+      if (!apiKey) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "Missing Anthropic API key",
+            code: "MISSING_LLM_KEY",
+          },
+          { status: 500 }
+        );
+      }
+
+      const anthropic = new Anthropic({ apiKey });
+      const shouldUseWebSearch = shouldEnableWebSearch(prompt, isGradingQuestion);
+      const isReportMode = modeHint === "report";
+      const model = !shouldUseWebSearch && !isReportMode
+        ? "claude-haiku-4-5-20251001"
+        : "claude-sonnet-4-20250514";
+      const maxTokens = isReportMode ? 4096 : shouldUseWebSearch ? 1536 : 512;
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      tools: [{ type: "web_search_20250305", name: "web_search" }] as any,
-      system: `${BUSINESS_CONSULTANT_MASTER_PROMPT}
+      const modelRequest: any = {
+        model,
+        max_tokens: maxTokens,
+        system: `${BUSINESS_CONSULTANT_MASTER_PROMPT}
 ${modeHint === "report" ? '\nMODE OVERRIDE: Always set response_mode to "report" for this request, regardless of question type.\n' : ""}
 ${isGradingQuestion ? '\nGRADING ANALYSIS DETECTED: You MUST execute all three mandatory web_search calls (PSA 10, PSA 9, raw sold eBay 2026) BEFORE generating any analysis or JSON output. Do not produce the final JSON until all three searches are complete and you have real sold comp data. Use the exact fee figures from the system prompt — do not estimate fees.\n' : ""}
 ADDITIONAL EXECUTION RULES:
@@ -175,10 +269,10 @@ OUTPUT FORMAT (STRICT):
 - Arrays may be empty, but all keys must be present.
 - All numeric fields must be numbers (not strings).
 - The JSON must be parseable with a standard JSON parser without any preprocessing.`,
-      messages: [
-        {
-          role: "user",
-          content: `BUSINESS QUESTION (PRIMARY DECISION TO ANALYZE):
+        messages: [
+          {
+            role: "user",
+            content: `BUSINESS QUESTION (PRIMARY DECISION TO ANALYZE):
 ${prompt}
 
 TEMPLATE CATEGORY:
@@ -189,33 +283,40 @@ ${additionalContext || "None provided."}
 
 BUSINESS DATA JSON (SOURCE OF TRUTH):
 ${JSON.stringify(businessContext, null, 2)}`,
-        },
-      ],
-    });
+          },
+        ],
+      };
 
-    // Filter to text blocks only — web_search_tool_result and tool_use blocks are
-    // intermediate steps and should not be included in the final response text.
-    const textBlocks = response.content.filter((block) => block.type === "text");
-    const modelText =
-      textBlocks.length > 0
-        ? textBlocks
-            .map((block) => (block.type === "text" ? block.text : ""))
-            .join("\n")
-            .trim()
-        : null;
+      if (shouldUseWebSearch) {
+        modelRequest.tools = [
+          {
+            type: "web_search_20250305",
+            name: "web_search",
+            max_uses: isGradingQuestion ? 24 : 4,
+          },
+        ];
+      }
 
-    const { report, rawText } = parseBusinessConsultantReport(modelText);
-    const consultantResponse =
-      rawText && rawText.length > 0
-        ? rawText
-        : "Constraint: Response unavailable for this request.";
+      const response = await anthropic.messages.create(modelRequest);
 
-    const contextSummary = {
-      inventoryItems: businessContext.inventory_summary.total_items,
-      activeItems: businessContext.inventory_summary.active_items,
-      totalSales: businessContext.sales_summary.total_sales,
-      cmvCoveragePct: businessContext.inventory_summary.cmv_coverage_pct,
-    };
+      // Filter to text blocks only — web_search_tool_result and tool_use blocks are
+      // intermediate steps and should not be included in the final response text.
+      const textBlocks = response.content.filter((block) => block.type === "text");
+      const modelText =
+        textBlocks.length > 0
+          ? textBlocks
+              .map((block) => (block.type === "text" ? block.text : ""))
+              .join("\n")
+              .trim()
+          : null;
+
+      const parsed = parseBusinessConsultantReport(modelText);
+      report = parsed.report;
+      consultantResponse =
+        parsed.rawText && parsed.rawText.length > 0
+          ? parsed.rawText
+          : "Constraint: Response unavailable for this request.";
+    }
 
     const consultationTitle =
       prompt.length > 80 ? `${prompt.slice(0, 80).trim()}...` : prompt;

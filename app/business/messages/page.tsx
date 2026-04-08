@@ -17,6 +17,7 @@ function BusinessMessagesContent() {
   const [ebayConnected, setEbayConnected] = useState<boolean | null>(null);
   const [msgError, setMsgError] = useState<string | null>(null);
   const [businessName, setBusinessName] = useState<string | null>(null);
+  const [syncRetriedAfterEmpty, setSyncRetriedAfterEmpty] = useState(false);
 
   const loadData = useCallback(async () => {
     setMsgError(null);
@@ -68,6 +69,7 @@ function BusinessMessagesContent() {
         setStats(data.stats);
         setThreads(data.threads);
         setEbayConnected(data.ebayConnected ?? false);
+        setSyncRetriedAfterEmpty(Boolean(data?.sync?.retriedAfterEmpty));
       } else {
         setMsgError(`Failed to load messages (${msgRes.status})`);
       }
@@ -114,21 +116,21 @@ function BusinessMessagesContent() {
     return (
       <AuthenticatedLayout>
         <main className="mx-auto max-w-7xl px-4 py-8">
-          <h1 className="text-2xl font-bold text-[var(--biz-text)] mb-8">Customer Service</h1>
+          <h1 className="text-2xl font-bold text-[var(--biz-text)] mb-8">Buyer Inbox</h1>
           <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--biz-border)] bg-white py-20 text-center shadow-sm">
             <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-red-50">
               <svg className="h-8 w-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
               </svg>
             </div>
-            <h2 className="mb-2 text-lg font-semibold text-[var(--biz-text)]">Unable to load customer service inbox</h2>
+            <h2 className="mb-2 text-lg font-semibold text-[var(--biz-text)]">Unable to load buyer inbox</h2>
             <p className="mb-6 max-w-sm text-sm text-[var(--biz-muted)]">
               {msgError ?? "Something went wrong. Try refreshing or reconnecting your eBay account."}
             </p>
             <div className="flex gap-3">
               <button
                 onClick={() => { setLoading(true); loadData(); }}
-                className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-500"
+                className="inline-flex items-center gap-2 rounded-lg bg-[var(--biz-primary)] px-5 py-2.5 text-sm font-semibold text-[var(--biz-primary-foreground)] transition-colors hover:bg-[var(--biz-primary-hover)]"
               >
                 Try Again
               </button>
@@ -151,10 +153,10 @@ function BusinessMessagesContent() {
     return (
       <AuthenticatedLayout>
         <main className="mx-auto max-w-7xl px-4 py-8">
-          <h1 className="text-2xl font-bold text-[var(--biz-text)] mb-8">Customer Service</h1>
+          <h1 className="text-2xl font-bold text-[var(--biz-text)] mb-8">Buyer Inbox</h1>
           <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--biz-border)] bg-white py-20 text-center shadow-sm">
-            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#F0FDF4]">
-              <svg className="h-8 w-8 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--biz-primary-soft)]">
+              <svg className="h-8 w-8 text-[var(--biz-primary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
               </svg>
             </div>
@@ -176,11 +178,11 @@ function BusinessMessagesContent() {
               <>
                 <h2 className="mb-2 text-lg font-semibold text-[var(--biz-text)]">Connect your eBay account</h2>
                 <p className="mb-6 max-w-sm text-sm text-[var(--biz-muted)]">
-                  Link your eBay account to sync buyer messages, inquiries, and offer negotiations.
+                  Link your eBay account to sync buyer messages, offers, and follow-ups.
                 </p>
                 <a
                   href="/api/auth/ebay"
-                  className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-500"
+                  className="inline-flex items-center gap-2 rounded-lg bg-[var(--biz-primary)] px-5 py-2.5 text-sm font-semibold text-[var(--biz-primary-foreground)] transition-colors hover:bg-[var(--biz-primary-hover)]"
                 >
                   Connect eBay Account
                 </a>
@@ -199,6 +201,7 @@ function BusinessMessagesContent() {
           initialStats={stats}
           initialThreads={threads}
           businessName={businessName}
+          initialSyncRetriedAfterEmpty={syncRetriedAfterEmpty}
         />
       </main>
     </AuthenticatedLayout>

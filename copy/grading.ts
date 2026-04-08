@@ -64,6 +64,11 @@ export const gradingCopy = {
     },
     disclaimer:
       "Estimates are based on photos and may miss defects not visible in images. Final grades are determined by grading companies.",
+    multiGraderBandsNote:
+      "BGS, CGC, SGC, and Tag Rater columns use model-relative outcome bands (not official slab labels).",
+    gradingGoalTitle: "Submission priority",
+    gradingGoalLiquidity: "Maximum liquidity (PSA-first)",
+    gradingGoalSpeedCost: "Speed & cost (SGC when it fits)",
     confidenceReduced: "Confidence reduced due to photo quality.",
   },
   valuePanel: {

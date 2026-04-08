@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import PricingModal from "@/components/PricingModal";
+import AppearanceSettingsCard from "@/components/business/settings/AppearanceSettingsCard";
 import EbayConnectSection from "@/components/business/settings/EbayConnectSection";
 import StorefrontsSection from "@/components/business/settings/StorefrontsSection";
 import TeamManagementSection from "@/components/business/settings/TeamManagementSection";
@@ -52,6 +53,14 @@ function persistEbayStoreUrl(value: string) {
   );
 }
 
+type EbayStatus = {
+  connected: boolean;
+  username: string | null;
+  last_inventory_sync: string | null;
+  last_sales_sync: string | null;
+  fee_rate: EbayFeeRateKey;
+};
+
 function SettingsContent() {
   const pathname = usePathname();
   const router = useRouter();
@@ -68,7 +77,16 @@ function SettingsContent() {
   const [businessName, setBusinessName] = useState("");
   const [businessNameLoading, setBusinessNameLoading] = useState(false);
   const [ebayStoreUrl, setEbayStoreUrl] = useState("");
+  const [ebayStoreUrlLoading, setEbayStoreUrlLoading] = useState(false);
   const [ebayFeeRate, setEbayFeeRate] = useState<EbayFeeRateKey>("standard");
+  const [ebayFeeRateSaving, setEbayFeeRateSaving] = useState(false);
+  const [websiteUrl, setWebsiteUrl] = useState("");
+  const [websiteUrlLoading, setWebsiteUrlLoading] = useState(false);
+  const [ebayStatus, setEbayStatus] = useState<EbayStatus | null>(null);
+  const [ebayStatusLoading, setEbayStatusLoading] = useState(false);
+  const [ebayConnectLoading, setEbayConnectLoading] = useState(false);
+  const [ebayDisconnectLoading, setEbayDisconnectLoading] = useState(false);
+  const [ebayBanner, setEbayBanner] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [pricingOpen, setPricingOpen] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -79,8 +97,15 @@ function SettingsContent() {
   useEffect(() => {
     if (searchParams.get("success") === "true") {
       setShowSuccess(true);
-      // Auto-hide after 5 seconds
       setTimeout(() => setShowSuccess(false), 5000);
+    }
+    const ebayConnected = searchParams.get("ebay_connected");
+    const ebayError = searchParams.get("ebay_error");
+    if (ebayConnected === "true") {
+      setEbayBanner({ type: "success", message: "eBay account connected successfully!" });
+      setTimeout(() => setEbayBanner(null), 6000);
+    } else if (ebayError) {
+      setEbayBanner({ type: "error", message: decodeURIComponent(ebayError) });
     }
   }, [searchParams]);
 
@@ -162,11 +187,27 @@ function SettingsContent() {
         setName(userData.name || "");
         setBusinessName(userData.business_name || "");
         setEbayStoreUrl(resolvedEbayStoreUrl);
+        setWebsiteUrl(userData.website_url || "");
+        // Prefer DB fee rate; fall back to localStorage
+        const dbFeeRate = userData.ebay_fee_rate === "top_rated_plus" ? "top_rated_plus" : "standard";
+        setEbayFeeRate(dbFeeRate);
+        persistEbayFeeRate(dbFeeRate);
       } else {
         setEbayStoreUrl(normalizeEbayStoreUrl(metadataEbayStoreUrl));
+        setEbayFeeRate(getStoredEbayFeeRate());
       }
       persistEbayStoreUrl(resolvedEbayStoreUrl);
-      setEbayFeeRate(getStoredEbayFeeRate());
+
+      // Fetch eBay OAuth status (Business only)
+      try {
+        const ebayRes = await fetch("/api/ebay/status");
+        if (ebayRes.ok) {
+          const ebayData = await ebayRes.json();
+          setEbayStatus(ebayData);
+        }
+      } catch {
+        // Non-fatal — just don't show eBay status
+      }
 
       setLoading(false);
     }
@@ -231,6 +272,153 @@ function SettingsContent() {
     }
   };
 
+  const handleEbayStoreUrlUpdate = async () => {
+    setEbayStoreUrlLoading(true);
+    try {
+      const normalizedInput = normalizeEbayStoreUrl(ebayStoreUrl);
+      const response = await fetch("/api/user/name", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ebay_store_url: normalizedInput || null,
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        alert(data.error || "Failed to update eBay Store URL");
+        return;
+      }
+
+      const savedEbayStoreUrl = normalizeEbayStoreUrl(
+        data?.data?.ebay_store_url ?? normalizedInput
+      );
+      setEbayStoreUrl(savedEbayStoreUrl);
+      persistEbayStoreUrl(savedEbayStoreUrl);
+
+      if (user) {
+        setUser({ ...user, ebay_store_url: savedEbayStoreUrl || null });
+      }
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 5000);
+    } catch (error) {
+      console.error("Error updating eBay Store URL:", error);
+      alert("Failed to update eBay Store URL");
+    } finally {
+      setEbayStoreUrlLoading(false);
+    }
+  };
+
+  const handleEbayFeeRateChange = async (value: EbayFeeRateKey) => {
+    setEbayFeeRate(value);
+    persistEbayFeeRate(value);
+    setEbayFeeRateSaving(true);
+    try {
+      await fetch("/api/user/name", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ebay_fee_rate: value }),
+      });
+    } catch {
+      // Non-fatal — localStorage already updated
+    } finally {
+      setEbayFeeRateSaving(false);
+    }
+  };
+
+  const handleWebsiteUrlUpdate = async () => {
+    setWebsiteUrlLoading(true);
+    try {
+      const response = await fetch("/api/user/name", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ website_url: websiteUrl.trim() || null }),
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        alert(data.error || "Failed to update website URL");
+        return;
+      }
+      if (user) setUser({ ...user, website_url: websiteUrl.trim() || null });
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 5000);
+    } catch {
+      alert("Failed to update website URL");
+    } finally {
+      setWebsiteUrlLoading(false);
+    }
+  };
+
+  const handleEbayConnect = () => {
+    setEbayConnectLoading(true);
+    window.location.href = "/api/ebay/connect";
+  };
+
+  const handleEbayDisconnect = async () => {
+    if (!confirm("Disconnect your eBay account? You can reconnect at any time.")) return;
+    setEbayDisconnectLoading(true);
+    try {
+      const res = await fetch("/api/ebay/disconnect", { method: "POST" });
+      if (res.ok) {
+        setEbayStatus((prev) => prev ? { ...prev, connected: false, username: null } : null);
+        setEbayBanner({ type: "success", message: "eBay account disconnected." });
+        setTimeout(() => setEbayBanner(null), 5000);
+      } else {
+        const data = await res.json();
+        alert(data.error || "Failed to disconnect eBay account");
+      }
+    } catch {
+      alert("Failed to disconnect eBay account");
+    } finally {
+      setEbayDisconnectLoading(false);
+    }
+  };
+
+  const handleEbayInventorySync = async () => {
+    setEbayStatusLoading(true);
+    try {
+      const res = await fetch("/api/ebay/inventory/sync", { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        setEbayStatus((prev) => prev ? { ...prev, last_inventory_sync: data.synced_at } : prev);
+        setEbayBanner({
+          type: "success",
+          message: `Inventory synced: ${data.added} added, ${data.updated} updated.`,
+        });
+        setTimeout(() => setEbayBanner(null), 6000);
+      } else {
+        alert(data.error || "Inventory sync failed");
+      }
+    } catch {
+      alert("Inventory sync failed");
+    } finally {
+      setEbayStatusLoading(false);
+    }
+  };
+
+  const handleEbaySalesSync = async () => {
+    setEbayStatusLoading(true);
+    try {
+      const res = await fetch("/api/ebay/sales/sync", { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        setEbayStatus((prev) => prev ? { ...prev, last_sales_sync: data.synced_at } : prev);
+        setEbayBanner({
+          type: "success",
+          message: `Sales synced: ${data.imported} imported, ${data.skipped} skipped.`,
+        });
+        setTimeout(() => setEbayBanner(null), 6000);
+      } else {
+        alert(data.error || "Sales sync failed");
+      }
+    } catch {
+      alert("Sales sync failed");
+    } finally {
+      setEbayStatusLoading(false);
+    }
+  };
+
   const handleLogout = async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
@@ -254,7 +442,14 @@ function SettingsContent() {
     return (
       <AuthenticatedLayout>
         <div className="flex items-center justify-center min-h-screen">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <div
+            className="animate-spin rounded-full h-8 w-8 border-b-2"
+            style={{
+              borderBottomColor: pathname.startsWith("/business")
+                ? "var(--biz-primary)"
+                : "#2563EB",
+            }}
+          />
         </div>
       </AuthenticatedLayout>
     );
@@ -279,20 +474,28 @@ function SettingsContent() {
         "Unlimited collection tracking",
         "Collection value tracking",
       ];
+  const businessSectionClass =
+    "rounded-2xl border border-[var(--biz-border)] bg-[var(--biz-surface)] p-6 shadow-[var(--biz-shadow-sm)]";
+  const businessInputClass =
+    "w-full rounded-lg border border-[var(--biz-border)] bg-white px-4 py-2 text-[var(--biz-text)] placeholder:text-[var(--biz-muted)] focus:border-[var(--biz-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--biz-focus)]";
+  const businessPrimaryButtonClass =
+    "rounded-lg px-4 py-2 font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 bg-[var(--biz-primary)] text-[var(--biz-primary-foreground)] hover:bg-[var(--biz-primary-hover)]";
+  const businessSecondaryButtonClass =
+    "rounded-lg border border-[var(--biz-border)] px-4 py-2 font-medium text-[var(--biz-text)] transition-colors hover:bg-[var(--biz-hover)] disabled:cursor-not-allowed disabled:opacity-50";
 
   return (
     <AuthenticatedLayout>
-      <div className="min-h-screen bg-[#0b2347]">
-        <main className="max-w-4xl mx-auto px-4 py-10 text-white">
-          <h1 className="text-3xl font-bold text-white mb-8">
+      <div className={isBusinessSettings ? "min-h-screen bg-[var(--biz-bg)]" : "min-h-screen bg-[#0b2347]"}>
+        <main className={`max-w-4xl mx-auto px-4 py-10 ${isBusinessSettings ? "text-[var(--biz-text)]" : "text-white"}`}>
+          <h1 className={`mb-8 text-3xl font-bold ${isBusinessSettings ? "text-[var(--biz-text)]" : "text-white"}`}>
             Settings
           </h1>
 
         {showSuccess && (
-          <div className="mb-8 p-4 bg-emerald-500/15 border border-emerald-300/30 rounded-xl">
+          <div className={`mb-8 rounded-xl border p-4 ${isBusinessSettings ? "border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)]" : "border-emerald-300/30 bg-emerald-500/15"}`}>
             <div className="flex items-center gap-3">
               <svg
-                className="w-6 h-6 text-green-500"
+                className={`w-6 h-6 ${isBusinessSettings ? "text-[var(--biz-primary)]" : "text-green-500"}`}
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -305,10 +508,10 @@ function SettingsContent() {
                 />
               </svg>
               <div>
-                <p className="font-medium text-emerald-200">
+                <p className={`font-medium ${isBusinessSettings ? "text-[var(--biz-text)]" : "text-emerald-200"}`}>
                   Payment successful!
                 </p>
-                <p className="text-sm text-emerald-100/90">
+                <p className={`text-sm ${isBusinessSettings ? "text-[var(--biz-muted)]" : "text-emerald-100/90"}`}>
                   You now have unlimited access to CardzCheck.
                 </p>
               </div>
@@ -318,13 +521,13 @@ function SettingsContent() {
 
         <div className="space-y-6">
           {/* Account Information */}
-          <div className="bg-white/5 border border-white/15 rounded-2xl p-6 backdrop-blur-sm">
-            <h2 className="text-lg font-semibold text-white mb-4">
+          <div className={isBusinessSettings ? businessSectionClass : "bg-white/5 border border-white/15 rounded-2xl p-6 backdrop-blur-sm"}>
+            <h2 className={`mb-4 text-lg font-semibold ${isBusinessSettings ? "text-[var(--biz-text)]" : "text-white"}`}>
               Account Information
             </h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-white/85 mb-2">
+                <label className={`mb-2 block text-sm font-medium ${isBusinessSettings ? "text-[var(--biz-text)]" : "text-white/85"}`}>
                   Name
                 </label>
                 <div className="flex gap-2">
@@ -334,23 +537,23 @@ function SettingsContent() {
                     onChange={(e) => setName(e.target.value)}
                     placeholder="Your name"
                     maxLength={100}
-                    className="flex-1 px-4 py-2 bg-[#10294a] border border-white/20 rounded-lg text-white placeholder:text-white/45 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent"
+                    className={isBusinessSettings ? businessInputClass : "flex-1 px-4 py-2 bg-[#10294a] border border-white/20 rounded-lg text-white placeholder:text-white/45 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent"}
                   />
                   <button
                     onClick={handleNameUpdate}
                     disabled={nameLoading || name === (user?.name || "")}
-                    className="px-4 py-2 bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className={isBusinessSettings ? businessPrimaryButtonClass : "px-4 py-2 bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"}
                   >
                     {nameLoading ? "Saving..." : "Save"}
                   </button>
                 </div>
-                <p className="text-xs text-white/60 mt-1">
+                <p className={`mt-1 text-xs ${isBusinessSettings ? "text-[var(--biz-muted)]" : "text-white/60"}`}>
                   This name will be used for personalization throughout the app
                 </p>
               </div>
               {isBusinessSettings && (
                 <div>
-                  <label className="block text-sm font-medium text-white/85 mb-2">
+                  <label className="mb-2 block text-sm font-medium text-[var(--biz-text)]">
                     Business Name
                   </label>
                   <div className="flex gap-2">
@@ -360,7 +563,7 @@ function SettingsContent() {
                       onChange={(e) => setBusinessName(e.target.value)}
                       placeholder="Your business name"
                       maxLength={120}
-                      className="flex-1 px-4 py-2 bg-[#10294a] border border-white/20 rounded-lg text-white placeholder:text-white/45 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent"
+                      className={businessInputClass}
                     />
                     <button
                       onClick={handleBusinessNameUpdate}
@@ -368,35 +571,35 @@ function SettingsContent() {
                         businessNameLoading ||
                         businessName === (user?.business_name || "")
                       }
-                      className="px-4 py-2 bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className={businessPrimaryButtonClass}
                     >
                       {businessNameLoading ? "Saving..." : "Save"}
                     </button>
                   </div>
-                  <p className="text-xs text-white/60 mt-1">
+                  <p className="mt-1 text-xs text-[var(--biz-muted)]">
                     Used as your Business workspace title
                   </p>
                 </div>
               )}
               <div>
-                <label className="block text-sm font-medium text-white/85 mb-2">
+                <label className={`mb-2 block text-sm font-medium ${isBusinessSettings ? "text-[var(--biz-text)]" : "text-white/85"}`}>
                   Email
                 </label>
                 <input
                   type="email"
                   value={email}
                   disabled
-                  className="w-full px-4 py-2 bg-[#10294a]/80 border border-white/20 rounded-lg text-white/80 cursor-not-allowed"
+                  className={isBusinessSettings ? `${businessInputClass} cursor-not-allowed bg-[var(--biz-surface-soft)] text-[var(--biz-muted)]` : "w-full px-4 py-2 bg-[#10294a]/80 border border-white/20 rounded-lg text-white/80 cursor-not-allowed"}
                 />
-                <p className="text-xs text-white/60 mt-1">
+                <p className={`mt-1 text-xs ${isBusinessSettings ? "text-[var(--biz-muted)]" : "text-white/60"}`}>
                   Contact support to change your email address
                 </p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-white/85 mb-2">
+                <label className={`mb-2 block text-sm font-medium ${isBusinessSettings ? "text-[var(--biz-text)]" : "text-white/85"}`}>
                   Member Since
                 </label>
-                <p className="text-white">
+                <p className={isBusinessSettings ? "text-[var(--biz-text)]" : "text-white"}>
                   {user?.created_at
                     ? new Date(user.created_at).toLocaleDateString("en-US", {
                         month: "long",
@@ -409,18 +612,11 @@ function SettingsContent() {
             </div>
           </div>
 
-          {isBusinessSettings && (
-            <div className="bg-white/5 border border-white/15 rounded-2xl p-6 backdrop-blur-sm">
-              <h2 className="text-lg font-semibold text-white mb-4">
-                Team Management
-              </h2>
-              <TeamManagementSection />
-            </div>
-          )}
+          {isBusinessSettings && isBusinessMember && <AppearanceSettingsCard />}
 
-          {isBusinessSettings && (
-            <div className="bg-white/5 border border-white/15 rounded-2xl p-6 backdrop-blur-sm">
-              <h2 className="text-lg font-semibold text-white mb-4">
+          {isBusinessSettings && isBusinessMember && (
+            <div className={businessSectionClass}>
+              <h2 className="mb-4 text-lg font-semibold text-[var(--biz-text)]">
                 Storefronts
               </h2>
               <StorefrontsSection />
@@ -428,46 +624,164 @@ function SettingsContent() {
           )}
 
           {isBusinessSettings && (
-            <div className="bg-white/5 border border-white/15 rounded-2xl p-6 backdrop-blur-sm">
-              <h2 className="text-lg font-semibold text-white mb-4">
-                eBay Integration
+            <div className={businessSectionClass}>
+                {/* eBay Fee Rate Setting */}
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-[var(--biz-text)]">
+                    eBay Fee Rate
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleEbayFeeRateChange("standard")}
+                      disabled={ebayFeeRateSaving}
+                      className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium border transition-colors disabled:opacity-50 ${
+                        ebayFeeRate === "standard"
+                          ? "border-[var(--biz-primary)] bg-[var(--biz-primary)] text-[var(--biz-primary-foreground)]"
+                          : "border-[var(--biz-border)] bg-white text-[var(--biz-text)] hover:bg-[var(--biz-hover)]"
+                      }`}
+                    >
+                      Standard — 13%
+                    </button>
+                    <button
+                      onClick={() => handleEbayFeeRateChange("top_rated_plus")}
+                      disabled={ebayFeeRateSaving}
+                      className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium border transition-colors disabled:opacity-50 ${
+                        ebayFeeRate === "top_rated_plus"
+                          ? "border-[var(--biz-primary)] bg-[var(--biz-primary)] text-[var(--biz-primary-foreground)]"
+                          : "border-[var(--biz-border)] bg-white text-[var(--biz-text)] hover:bg-[var(--biz-hover)]"
+                      }`}
+                    >
+                      Top Rated Plus — 12%
+                    </button>
+                  </div>
+                  <p className="mt-1 text-xs text-[var(--biz-muted)]">
+                    Used to calculate eBay Parity Price in your inventory and shop listings
+                  </p>
+                </div>
+            </div>
+          )}
+
+          {/* Website URL */}
+          {isBusinessSettings && (
+            <div className={businessSectionClass}>
+              <h2 className="mb-4 text-lg font-semibold text-[var(--biz-text)]">
+                Your Website
               </h2>
-              <EbayConnectSection />
-              <div className="mt-4 pt-4 border-t border-white/15">
-                <label className="block text-sm font-medium text-white/85 mb-2">
-                  eBay Fee Rate
+              <div>
+                <label className="mb-2 block text-sm font-medium text-[var(--biz-text)]">
+                  Website URL
                 </label>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap sm:flex-nowrap">
+                  <input
+                    type="url"
+                    value={websiteUrl}
+                    onChange={(e) => setWebsiteUrl(e.target.value)}
+                    placeholder="https://yourstore.com"
+                    maxLength={2048}
+                    className={`${businessInputClass} min-w-0 flex-1`}
+                  />
                   <button
-                    onClick={() => {
-                      setEbayFeeRate("standard");
-                      persistEbayFeeRate("standard");
-                    }}
-                    className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium border transition-colors ${
-                      ebayFeeRate === "standard"
-                        ? "bg-blue-600 text-white border-blue-600"
-                        : "bg-[#10294a] text-white/85 border-white/20 hover:bg-[#14355f]"
-                    }`}
+                    onClick={handleWebsiteUrlUpdate}
+                    disabled={websiteUrlLoading || websiteUrl === (user?.website_url || "")}
+                    className={`${businessPrimaryButtonClass} shrink-0`}
                   >
-                    Standard — 13%
-                  </button>
-                  <button
-                    onClick={() => {
-                      setEbayFeeRate("top_rated_plus");
-                      persistEbayFeeRate("top_rated_plus");
-                    }}
-                    className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium border transition-colors ${
-                      ebayFeeRate === "top_rated_plus"
-                        ? "bg-blue-600 text-white border-blue-600"
-                        : "bg-[#10294a] text-white/85 border-white/20 hover:bg-[#14355f]"
-                    }`}
-                  >
-                    Top Rated Plus — 12%
+                    {websiteUrlLoading ? "Saving..." : "Save"}
                   </button>
                 </div>
-                <p className="text-xs text-white/60 mt-1">
-                  Used to calculate eBay Parity Price in your inventory and shop listings
+                <p className="mt-1 text-xs text-[var(--biz-muted)]">
+                  Your personal or business website
                 </p>
+              </div>
+            </div>
+          )}
+
+          {/* eBay Integrations */}
+          {isBusinessSettings && (
+            <div className={businessSectionClass}>
+              <h2 className="mb-1 text-lg font-semibold text-[var(--biz-text)]">
+                Integrations
+              </h2>
+              <p className="mb-5 text-sm text-[var(--biz-muted)]">
+                Connect your eBay seller account to sync inventory and sales automatically.
+              </p>
+
+              {/* eBay OAuth banner */}
+              {ebayBanner && (
+                <div className={`mb-4 p-3 rounded-lg text-sm border ${
+                  ebayBanner.type === "success"
+                    ? "border-[var(--biz-secondary-border)] bg-[var(--biz-secondary-soft)] text-[var(--biz-secondary)]"
+                    : "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200"
+                }`}>
+                  {ebayBanner.message}
+                </div>
+              )}
+
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-sm font-medium text-[var(--biz-text)]">eBay Seller Account</span>
+                    {ebayStatus?.connected ? (
+                      <span className="inline-flex items-center rounded-full border border-[var(--biz-secondary-border)] bg-[var(--biz-secondary-soft)] px-2 py-0.5 text-[10px] font-semibold text-[var(--biz-secondary)]">
+                        Connected
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center rounded-full border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-2 py-0.5 text-[10px] font-semibold text-[var(--biz-muted)]">
+                        Not connected
+                      </span>
+                    )}
+                  </div>
+                  {ebayStatus?.connected && ebayStatus.username && (
+                    <p className="text-xs text-[var(--biz-muted)]">
+                      Connected as <span className="font-medium text-[var(--biz-text)]">{ebayStatus.username}</span>
+                    </p>
+                  )}
+                  {ebayStatus?.connected && (
+                    <div className="mt-1.5 space-y-0.5 text-xs text-[var(--biz-muted)]">
+                      {ebayStatus.last_inventory_sync && (
+                        <p>Inventory synced: {new Date(ebayStatus.last_inventory_sync).toLocaleDateString()}</p>
+                      )}
+                      {ebayStatus.last_sales_sync && (
+                        <p>Sales synced: {new Date(ebayStatus.last_sales_sync).toLocaleDateString()}</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  {ebayStatus?.connected ? (
+                    <>
+                      <button
+                        onClick={handleEbayInventorySync}
+                        disabled={ebayStatusLoading}
+                        className={`${businessSecondaryButtonClass} px-3 py-1.5 text-xs`}
+                      >
+                        {ebayStatusLoading ? "Syncing..." : "Sync Inventory"}
+                      </button>
+                      <button
+                        onClick={handleEbaySalesSync}
+                        disabled={ebayStatusLoading}
+                        className={`${businessSecondaryButtonClass} px-3 py-1.5 text-xs`}
+                      >
+                        {ebayStatusLoading ? "Syncing..." : "Sync Sales"}
+                      </button>
+                      <button
+                        onClick={handleEbayDisconnect}
+                        disabled={ebayDisconnectLoading}
+                        className="px-3 py-1.5 text-xs font-medium border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50"
+                      >
+                        {ebayDisconnectLoading ? "Disconnecting..." : "Disconnect"}
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={handleEbayConnect}
+                      disabled={ebayConnectLoading}
+                      className={`${businessPrimaryButtonClass} text-sm`}
+                    >
+                      {ebayConnectLoading ? "Connecting..." : "Connect eBay"}
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -579,35 +893,35 @@ function SettingsContent() {
           )}
 
           {/* Password */}
-          <div className="bg-white/5 border border-white/15 rounded-2xl p-6 backdrop-blur-sm">
-            <h2 className="text-lg font-semibold text-white mb-4">
+          <div className={isBusinessSettings ? businessSectionClass : "bg-white/5 border border-white/15 rounded-2xl p-6 backdrop-blur-sm"}>
+            <h2 className={`mb-4 text-lg font-semibold ${isBusinessSettings ? "text-[var(--biz-text)]" : "text-white"}`}>
               Password
             </h2>
-            <p className="text-sm text-white/70 mb-4">
+            <p className={`mb-4 text-sm ${isBusinessSettings ? "text-[var(--biz-muted)]" : "text-white/70"}`}>
               Password changes are not currently supported. Contact support if
               you need to reset your password.
             </p>
           </div>
 
           {/* Session */}
-          <div className="bg-white/5 border border-white/15 rounded-2xl p-6 backdrop-blur-sm">
-            <h2 className="text-lg font-semibold text-white mb-4">
+          <div className={isBusinessSettings ? businessSectionClass : "bg-white/5 border border-white/15 rounded-2xl p-6 backdrop-blur-sm"}>
+            <h2 className={`mb-4 text-lg font-semibold ${isBusinessSettings ? "text-[var(--biz-text)]" : "text-white"}`}>
               Session
             </h2>
             <button
               onClick={handleLogout}
-              className="px-4 py-2 border border-white/30 text-white rounded-lg hover:bg-white/10 transition-colors"
+              className={isBusinessSettings ? businessSecondaryButtonClass : "px-4 py-2 border border-white/30 text-white rounded-lg hover:bg-white/10 transition-colors"}
             >
               Log out
             </button>
           </div>
 
           {/* Danger Zone */}
-          <div className="bg-red-500/10 border border-red-300/40 rounded-2xl p-6 backdrop-blur-sm">
-            <h2 className="text-lg font-semibold text-red-200 mb-4">
+          <div className={`rounded-2xl p-6 ${isBusinessSettings ? "border border-red-200 bg-red-50" : "border border-red-300/40 bg-red-500/10 backdrop-blur-sm"}`}>
+            <h2 className={`mb-4 text-lg font-semibold ${isBusinessSettings ? "text-red-700" : "text-red-200"}`}>
               Danger Zone
             </h2>
-            <p className="text-sm text-white/75 mb-4">
+            <p className={`mb-4 text-sm ${isBusinessSettings ? "text-red-700/80" : "text-white/75"}`}>
               Once you delete your account, there is no going back. This action
               will permanently delete your account and all associated data.
             </p>
@@ -661,7 +975,10 @@ export default function SettingsPage() {
       fallback={
         <AuthenticatedLayout>
           <div className="flex items-center justify-center min-h-screen">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <div
+              className="animate-spin rounded-full h-8 w-8 border-b-2"
+              style={{ borderBottomColor: "var(--biz-primary, #2563EB)" }}
+            />
           </div>
         </AuthenticatedLayout>
       }

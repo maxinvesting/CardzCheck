@@ -29,7 +29,6 @@ export interface IdentifyCardFromImagesArgs {
   files?: File[];
   imageUrl?: string;
   imageUrls?: string[];
-  includeStockImage?: boolean;
   signal?: AbortSignal;
 }
 
@@ -99,17 +98,14 @@ export async function identifyCardFromImages(
     for (const file of files) {
       formData.append("images", file);
     }
-    if (args.includeStockImage) {
-      formData.append("includeStockImage", "1");
-    }
     requestInit.body = formData;
   } else {
     const imageUrls = Array.isArray(args.imageUrls)
       ? args.imageUrls.filter((url): url is string => typeof url === "string" && url.trim().length > 0)
       : [];
     const payload = imageUrls.length > 0
-      ? { imageUrls, includeStockImage: Boolean(args.includeStockImage) }
-      : { imageUrl: args.imageUrl, includeStockImage: Boolean(args.includeStockImage) };
+      ? { imageUrls }
+      : { imageUrl: args.imageUrl };
 
     requestInit.headers = { "Content-Type": "application/json" };
     requestInit.body = JSON.stringify(payload);

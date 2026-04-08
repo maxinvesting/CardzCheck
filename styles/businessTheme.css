@@ -2,13 +2,48 @@
   --biz-bg: #f7f8fa;
   --biz-surface: #ffffff;
   --biz-border: #e5e7eb;
+  --biz-border-subtle: #eef2f1;
   --biz-text: #111827;
   --biz-muted: #6b7280;
-  --biz-primary: #0b7a4b;
+  --biz-primary: #1D9E75;
+  --biz-primary-hover: #17896A;
+  --biz-primary-soft: rgba(29, 158, 117, 0.1);
+  --biz-primary-soft-strong: rgba(29, 158, 117, 0.16);
+  --biz-primary-border: rgba(29, 158, 117, 0.28);
+  --biz-primary-foreground: #ffffff;
+  --biz-secondary: #15803D;
+  --biz-secondary-hover: #116730;
+  --biz-secondary-soft: rgba(21, 128, 61, 0.09);
+  --biz-secondary-soft-strong: rgba(21, 128, 61, 0.15);
+  --biz-secondary-border: rgba(21, 128, 61, 0.25);
+  --biz-secondary-foreground: #ffffff;
+  --biz-tertiary: #0F766E;
+  --biz-tertiary-hover: #0C5E58;
+  --biz-tertiary-soft: rgba(15, 118, 110, 0.09);
+  --biz-tertiary-soft-strong: rgba(15, 118, 110, 0.15);
+  --biz-tertiary-border: rgba(15, 118, 110, 0.25);
+  --biz-tertiary-foreground: #ffffff;
+  --biz-link: var(--biz-primary);
+  --biz-focus: rgba(29, 158, 117, 0.22);
+  --biz-nav-active-bg: rgba(29, 158, 117, 0.1);
+  --biz-nav-active-border: var(--biz-primary);
+  --biz-profit: var(--biz-primary);
+  --biz-profit-soft: rgba(29, 158, 117, 0.1);
+  --biz-success-soft: rgba(21, 128, 61, 0.1);
   --biz-warning: #b45309;
   --biz-surface-soft: #f9fafb;
   --biz-hover: #f3f4f6;
   --biz-skeleton: #e5e7eb;
+  --biz-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --biz-shadow-md: 0 10px 24px rgba(15, 23, 42, 0.06);
+
+  /* Signal tag colors */
+  --tag-opportunity-bg: var(--biz-primary);
+  --tag-opportunity-text: var(--biz-primary-foreground);
+  --tag-trend-bg: var(--biz-secondary-soft-strong);
+  --tag-trend-text: var(--biz-secondary);
+  --tag-alert-bg: #FCEBEB;
+  --tag-alert-text: #A32D2D;
 
   /* Compatibility aliases for existing components */
   --app-bg: var(--biz-bg);
@@ -22,32 +57,119 @@
 
   background: var(--biz-bg);
   color: var(--biz-text);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+.business-workspace-theme {
+  --biz-bg: #f5f8f5;
+  --biz-surface: #ffffff;
+  --biz-surface-soft: #f3f8f4;
+  --biz-border: #dbe7de;
+  --biz-border-subtle: #e8efea;
+  --biz-text: #0f172a;
+  --biz-muted: #5f6f65;
+  --biz-hover: #eef6f0;
+  --biz-skeleton: #e3ebe5;
 }
 
 .business-theme .cc-surface {
   background: var(--biz-surface);
   border: 1px solid var(--biz-border);
   border-radius: 12px;
-  box-shadow: none;
+  box-shadow: var(--biz-shadow-sm);
 }
 
 .business-theme .cc-btn-primary {
   border: 1px solid transparent;
   background: var(--biz-primary);
-  color: #ffffff;
+  color: var(--biz-primary-foreground);
+  border-radius: 0;
 }
 
 .business-theme .cc-btn-primary:hover {
-  background: #09643e;
+  background: var(--biz-primary-hover);
 }
 
 .business-theme .cc-btn-secondary {
-  border: 1px solid var(--biz-border);
-  background: #ffffff;
+  border: 0.5px solid var(--biz-border);
+  background: transparent;
   color: var(--biz-text);
 }
 
 .business-theme .cc-btn-secondary:hover {
-  background: #f9fafb;
+  background: var(--biz-hover);
   border-color: #d1d5db;
+}
+
+.business-theme .biz-btn-ghost {
+  background: transparent;
+  border: 0.5px solid var(--biz-border);
+  color: var(--biz-text);
+}
+
+.business-theme .biz-btn-ghost:hover {
+  background: var(--biz-hover);
+}
+
+.business-workspace-theme a {
+  color: var(--biz-link);
+}
+
+.business-workspace-theme a:hover {
+  color: var(--biz-primary-hover);
+}
+
+.business-workspace-theme .text-blue-700,
+.business-workspace-theme .text-blue-600,
+.business-workspace-theme .text-blue-500,
+.business-workspace-theme .text-blue-400,
+.business-workspace-theme .text-emerald-700,
+.business-workspace-theme .text-emerald-600,
+.business-workspace-theme .text-emerald-500,
+.business-workspace-theme .text-emerald-400,
+.business-workspace-theme .text-green-500,
+.business-workspace-theme .text-green-600,
+.business-workspace-theme .text-green-700 {
+  color: var(--biz-primary) !important;
+}
+
+.business-workspace-theme .bg-blue-600,
+.business-workspace-theme .bg-emerald-600,
+.business-workspace-theme .bg-green-600 {
+  background-color: var(--biz-primary) !important;
+  color: var(--biz-primary-foreground) !important;
+}
+
+.business-workspace-theme .hover\:bg-blue-700:hover,
+.business-workspace-theme .hover\:bg-blue-500:hover,
+.business-workspace-theme .hover\:bg-blue-400:hover,
+.business-workspace-theme .hover\:bg-emerald-700:hover,
+.business-workspace-theme .hover\:bg-emerald-500:hover,
+.business-workspace-theme .hover\:bg-green-700:hover,
+.business-workspace-theme .hover\:bg-green-500:hover {
+  background-color: var(--biz-primary-hover) !important;
+}
+
+.business-workspace-theme .bg-blue-100,
+.business-workspace-theme .bg-blue-50,
+.business-workspace-theme .bg-emerald-100,
+.business-workspace-theme .bg-emerald-50,
+.business-workspace-theme .bg-green-100,
+.business-workspace-theme .bg-green-50 {
+  background-color: var(--biz-primary-soft) !important;
+}
+
+.business-workspace-theme .border-blue-500,
+.business-workspace-theme .border-blue-200,
+.business-workspace-theme .border-emerald-500,
+.business-workspace-theme .border-emerald-200,
+.business-workspace-theme .border-green-500,
+.business-workspace-theme .border-green-200 {
+  border-color: var(--biz-primary-border) !important;
+}
+
+.business-workspace-theme .focus\:ring-blue-500:focus,
+.business-workspace-theme .focus\:ring-emerald-500:focus,
+.business-workspace-theme .focus\:ring-green-500:focus {
+  --tw-ring-color: var(--biz-focus) !important;
 }

@@ -1,4 +1,8 @@
 import type { GradeEstimate, GradeProbabilities } from "@/types";
+import {
+  deriveHalfPointGradersFromPsa,
+  mapPsaToBgs,
+} from "@/lib/grading/halfPointGraderMaps";
 
 type Distribution = Record<string, number>;
 
@@ -7,13 +11,6 @@ const PSA_DEFAULTS: Record<string, Distribution> = {
   "9": { "10": 0.12, "9": 0.65, "8": 0.2, "7_or_lower": 0.03 },
   "8": { "10": 0.03, "9": 0.22, "8": 0.6, "7_or_lower": 0.15 },
   "7_or_lower": { "10": 0.01, "9": 0.09, "8": 0.3, "7_or_lower": 0.6 },
-};
-
-const BGS_DEFAULTS: Record<string, Distribution> = {
-  "9.5": { "9.5": 0.55, "9": 0.4, "8.5": 0.05, "8_or_lower": 0 },
-  "9": { "9.5": 0.12, "9": 0.65, "8.5": 0.2, "8_or_lower": 0.03 },
-  "8.5": { "9.5": 0.03, "9": 0.22, "8.5": 0.6, "8_or_lower": 0.15 },
-  "8_or_lower": { "9.5": 0.01, "9": 0.09, "8.5": 0.3, "8_or_lower": 0.6 },
 };
 
 function normalizeDistribution<T extends Distribution>(dist: T): T {
@@ -50,9 +47,14 @@ function getConfidence(estimate: GradeEstimate): "high" | "medium" | "low" {
 
 export function buildGradeProbabilities(estimate: GradeEstimate): GradeProbabilities {
   const bucket = getPredictedBucket(estimate);
+  const psa = normalizeDistribution(PSA_DEFAULTS[bucket]) as GradeProbabilities["psa"];
+  const half = deriveHalfPointGradersFromPsa(psa, mapPsaToBgs(psa));
   return {
-    psa: normalizeDistribution(PSA_DEFAULTS[bucket]) as GradeProbabilities["psa"],
-    bgs: normalizeDistribution(BGS_DEFAULTS[bucket]) as GradeProbabilities["bgs"],
+    psa,
+    bgs: half.bgs,
+    cgc: half.cgc,
+    sgc: half.sgc,
+    tag: half.tag,
     confidence: getConfidence(estimate),
   };
 }
@@ -63,6 +65,9 @@ export function normalizeGradeProbabilities(
   return {
     psa: normalizeDistribution(probabilities.psa),
     bgs: normalizeDistribution(probabilities.bgs),
+    cgc: normalizeDistribution(probabilities.cgc),
+    sgc: normalizeDistribution(probabilities.sgc),
+    tag: normalizeDistribution(probabilities.tag),
     confidence: probabilities.confidence,
   };
 }

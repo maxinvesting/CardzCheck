@@ -19,7 +19,7 @@ export const GRADE_REPORT_SESSION_KEY = "cc_grade_report_data";
 const PRINT_PAGE_PATH = "/grade-report/print";
 
 const ATTRIBUTION_TEXT =
-  "AI condition estimate by CardzCheck · Not affiliated with PSA or BGS";
+  "AI condition estimate by CardzCheck · Not affiliated with PSA, BGS, CGC, SGC, or TAG";
 
 const ATTRIBUTION_OPACITY = 0.55;
 
