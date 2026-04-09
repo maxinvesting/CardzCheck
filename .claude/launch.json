@@ -9,15 +9,15 @@
     },
     {
       "name": "Next.js Dev (turbo)",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["dev:turbo"],
+      "runtimeExecutable": "/Users/maxwellhilliard/.nvm/versions/node/v24.12.0/bin/node",
+      "runtimeArgs": ["/Users/maxwellhilliard/.nvm/versions/node/v24.12.0/bin/pnpm", "dev:turbo"],
       "port": 3000,
       "autoPort": true
     },
     {
       "name": "CardzCheck Main",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["dev:turbo"],
+      "runtimeExecutable": "/Users/maxwellhilliard/.nvm/versions/node/v24.12.0/bin/node",
+      "runtimeArgs": ["/Users/maxwellhilliard/cardzcheck/node_modules/.bin/next", "dev", "--port", "3001"],
       "port": 3001,
       "autoPort": true
     }

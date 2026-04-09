@@ -260,7 +260,7 @@ export default function BusinessMessagesView({
   }, [initialThreads, loadThread]);
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-4">
       {/* Page header */}
       <div className="flex items-center justify-between gap-4 rounded-2xl border border-[var(--biz-border)] bg-gradient-to-r from-emerald-50 via-white to-cyan-50 px-5 py-4">
         <div>
@@ -341,8 +341,8 @@ export default function BusinessMessagesView({
 
       {/* Main inbox layout */}
       <div
-        className="overflow-hidden rounded-2xl border border-[var(--biz-border)] bg-white shadow-[0_18px_50px_rgba(0,0,0,0.08)]"
-        style={{ height: "calc(100vh - 280px)", minHeight: "500px" }}
+        className="min-h-0 flex-1 overflow-hidden rounded-2xl border border-[var(--biz-border)] bg-white shadow-[0_18px_50px_rgba(0,0,0,0.08)]"
+        style={{ minHeight: "500px" }}
       >
         <div className="flex h-full">
           {/* Thread list (left panel) */}

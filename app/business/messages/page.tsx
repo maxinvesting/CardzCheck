@@ -194,7 +194,7 @@ function BusinessMessagesContent() {
 
   return (
     <AuthenticatedLayout>
-      <main className="mx-auto max-w-7xl px-4 py-4">
+      <main className="mx-auto flex h-full max-w-7xl flex-col px-4 py-4">
         <BusinessMessagesView
           initialStats={stats}
           initialThreads={threads}
