@@ -53,9 +53,6 @@ export interface BusinessAccount {
   seats_included: number;
   seat_quantity: number;
   purchased_seats: number;
-  appearance_primary_color?: string | null;
-  appearance_secondary_color?: string | null;
-  appearance_tertiary_color?: string | null;
   created_at: string;
   updated_at: string;
 }
