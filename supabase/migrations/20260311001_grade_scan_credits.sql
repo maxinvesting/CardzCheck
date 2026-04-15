@@ -12,13 +12,11 @@ CREATE TABLE IF NOT EXISTS grade_scan_credits (
 ALTER TABLE grade_scan_credits ENABLE ROW LEVEL SECURITY;
 
 -- Users can read their own credits row
-DROP POLICY IF EXISTS "grade_scan_credits_select_own" ON public.grade_scan_credits;
 CREATE POLICY "grade_scan_credits_select_own"
   ON grade_scan_credits FOR SELECT
   USING (auth.uid() = user_id);
 
 -- Service role manages all rows (no user-facing write policy)
-DROP POLICY IF EXISTS "grade_scan_credits_service_all" ON public.grade_scan_credits;
 CREATE POLICY "grade_scan_credits_service_all"
   ON grade_scan_credits FOR ALL
   USING (true)

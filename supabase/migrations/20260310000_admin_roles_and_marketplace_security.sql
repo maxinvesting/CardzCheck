@@ -108,19 +108,16 @@ EXECUTE FUNCTION public.guard_user_role_and_wallet_updates();
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Users can read own profile" ON public.users;
-DROP POLICY IF EXISTS "Users can read own profile" ON public.users;
 CREATE POLICY "Users can read own profile"
   ON public.users FOR SELECT
   USING (auth.uid() = id);
 
-DROP POLICY IF EXISTS "Users can update own profile" ON public.users;
 DROP POLICY IF EXISTS "Users can update own profile" ON public.users;
 CREATE POLICY "Users can update own profile"
   ON public.users FOR UPDATE
   USING (auth.uid() = id)
   WITH CHECK (auth.uid() = id);
 
-DROP POLICY IF EXISTS "Users can insert own profile" ON public.users;
 DROP POLICY IF EXISTS "Users can insert own profile" ON public.users;
 CREATE POLICY "Users can insert own profile"
   ON public.users FOR INSERT
@@ -168,7 +165,6 @@ END;
 $$;
 
 DROP TRIGGER IF EXISTS skus_touch_updated_at ON public.skus;
-DROP TRIGGER IF EXISTS skus_touch_updated_at ON public.skus;
 CREATE TRIGGER skus_touch_updated_at
 BEFORE UPDATE ON public.skus
 FOR EACH ROW
@@ -200,7 +196,6 @@ ALTER TABLE public.sold_comps ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.peg_updates ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Public can read active marketplace skus" ON public.skus;
-DROP POLICY IF EXISTS "Public can read active marketplace skus" ON public.skus;
 CREATE POLICY "Public can read active marketplace skus"
   ON public.skus FOR SELECT
   USING (
@@ -209,7 +204,6 @@ CREATE POLICY "Public can read active marketplace skus"
     OR public.current_user_is_admin()
   );
 
-DROP POLICY IF EXISTS "Public can read active sold comps" ON public.sold_comps;
 DROP POLICY IF EXISTS "Public can read active sold comps" ON public.sold_comps;
 CREATE POLICY "Public can read active sold comps"
   ON public.sold_comps FOR SELECT
@@ -224,7 +218,6 @@ CREATE POLICY "Public can read active sold comps"
     )
   );
 
-DROP POLICY IF EXISTS "Public can read active peg updates" ON public.peg_updates;
 DROP POLICY IF EXISTS "Public can read active peg updates" ON public.peg_updates;
 CREATE POLICY "Public can read active peg updates"
   ON public.peg_updates FOR SELECT

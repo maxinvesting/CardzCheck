@@ -174,7 +174,7 @@ SET
   acquisition_date = COALESCE(
     ci.acquisition_date,
     CASE
-      WHEN ci.purchase_date IS NOT NULL THEN ci.purchase_date::DATE
+      WHEN ci.purchase_date ~ '^\d{4}-\d{2}-\d{2}$' THEN ci.purchase_date::DATE
       ELSE NULL
     END
   ),
@@ -246,7 +246,7 @@ SELECT
     WHEN bi.cost_basis_total_cents IS NULL THEN NULL
     ELSE bi.cost_basis_total_cents::NUMERIC / 100.0
   END,
-  bi.acquisition_date,
+  bi.acquisition_date::TEXT,
   COALESCE(bi.quantity, 1),
   bi.acquisition_date,
   COALESCE(bi.cost_basis_total_cents, 0),
@@ -305,7 +305,7 @@ SELECT
   w.player_name,
   w.year,
   w.set_brand,
-  CASE WHEN w.card_number ~ '^\d+$' THEN w.card_number::INTEGER ELSE NULL END,
+  w.card_number,
   w.parallel_variant,
   w.condition,
   'other',
@@ -344,7 +344,7 @@ WHERE NOT EXISTS (
     AND LOWER(COALESCE(ci.player_name, '')) = LOWER(COALESCE(w.player_name, ''))
     AND COALESCE(ci.year, '') = COALESCE(w.year, '')
     AND COALESCE(ci.set_name, '') = COALESCE(w.set_brand, '')
-    AND COALESCE(ci.card_number::TEXT, '') = COALESCE(w.card_number, '')
+    AND COALESCE(ci.card_number, '') = COALESCE(w.card_number, '')
     AND COALESCE(ci.parallel_type, '') = COALESCE(w.parallel_variant, '')
 );
 

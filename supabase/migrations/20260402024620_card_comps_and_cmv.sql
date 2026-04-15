@@ -55,4 +55,4 @@ create policy "owner_all_card_cmv" on public.card_cmv
 -- Performance indexes
 create index card_comps_card_id_idx on public.card_comps(card_id);
 create index card_comps_card_id_selected_idx on public.card_comps(card_id, is_selected);
-create index card_cmv_card_id_idx on public.card_cmv(card_id);;
+create index card_cmv_card_id_idx on public.card_cmv(card_id);

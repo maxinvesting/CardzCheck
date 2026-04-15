@@ -38,26 +38,22 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_grade_scan_photos_scan_sort
 ALTER TABLE grade_scan_photos ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Users can view own grade scan photos" ON grade_scan_photos;
-DROP POLICY IF EXISTS "Users can view own grade scan photos" ON public.grade_scan_photos;
 CREATE POLICY "Users can view own grade scan photos"
   ON grade_scan_photos FOR SELECT
   USING (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Users can create own grade scan photos" ON grade_scan_photos;
-DROP POLICY IF EXISTS "Users can create own grade scan photos" ON public.grade_scan_photos;
 CREATE POLICY "Users can create own grade scan photos"
   ON grade_scan_photos FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Users can update own grade scan photos" ON grade_scan_photos;
-DROP POLICY IF EXISTS "Users can update own grade scan photos" ON public.grade_scan_photos;
 CREATE POLICY "Users can update own grade scan photos"
   ON grade_scan_photos FOR UPDATE
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Users can delete own grade scan photos" ON grade_scan_photos;
-DROP POLICY IF EXISTS "Users can delete own grade scan photos" ON public.grade_scan_photos;
 CREATE POLICY "Users can delete own grade scan photos"
   ON grade_scan_photos FOR DELETE
   USING (auth.uid() = user_id);

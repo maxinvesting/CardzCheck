@@ -21,22 +21,18 @@ create index if not exists idx_user_storefronts_user_id on public.user_storefron
 -- RLS: business users can only manage their own storefronts.
 alter table public.user_storefronts enable row level security;
 
-DROP POLICY IF EXISTS "Users can view own storefronts" ON user_storefronts;
 create policy "Users can view own storefronts"
   on public.user_storefronts for select
   using (auth.uid() = user_id);
 
-DROP POLICY IF EXISTS "Users can insert own storefronts" ON user_storefronts;
 create policy "Users can insert own storefronts"
   on public.user_storefronts for insert
   with check (auth.uid() = user_id);
 
-DROP POLICY IF EXISTS "Users can update own storefronts" ON user_storefronts;
 create policy "Users can update own storefronts"
   on public.user_storefronts for update
   using (auth.uid() = user_id);
 
-DROP POLICY IF EXISTS "Users can delete own storefronts" ON user_storefronts;
 create policy "Users can delete own storefronts"
   on public.user_storefronts for delete
   using (auth.uid() = user_id);
@@ -51,7 +47,6 @@ end;
 $$ language plpgsql;
 
 drop trigger if exists trg_user_storefronts_updated_at on public.user_storefronts;
-DROP TRIGGER IF EXISTS trg_user_storefronts_updated_at ON public.user_storefronts;
 create trigger trg_user_storefronts_updated_at
   before update on public.user_storefronts
   for each row execute function public.set_updated_at();

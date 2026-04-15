@@ -218,4 +218,4 @@ WHERE TRUE;
 COMMENT ON TABLE public.psa_cert_cache IS 'Cached PSA cert lookups used to resolve trustworthy front/back slab images.';
 COMMENT ON COLUMN public.collection_items.image_source IS 'Trusted image source. PSA is preferred over user uploads when a valid PSA cert image exists.';
 COMMENT ON COLUMN public.business_inventory_items.image_source IS 'Trusted image source. PSA is preferred over user uploads when a valid PSA cert image exists.';
-COMMENT ON COLUMN public.cards.image_source IS 'Trusted image source for legacy card rows.';;
+COMMENT ON COLUMN public.cards.image_source IS 'Trusted image source for legacy card rows.';

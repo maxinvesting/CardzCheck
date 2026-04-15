@@ -16,13 +16,11 @@ CREATE TABLE IF NOT EXISTS announcements (
 ALTER TABLE announcements ENABLE ROW LEVEL SECURITY;
 
 -- Everyone can read public announcements
-DROP POLICY IF EXISTS "announcements_read_public" ON public.announcements;
 CREATE POLICY "announcements_read_public"
   ON announcements FOR SELECT
   USING (is_public = true AND published_at <= NOW());
 
 -- Service role reads all (including business-only)
-DROP POLICY IF EXISTS "announcements_service_all" ON public.announcements;
 CREATE POLICY "announcements_service_all"
   ON announcements FOR ALL
   USING (true)

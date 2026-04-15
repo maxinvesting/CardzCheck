@@ -94,36 +94,30 @@ ALTER TABLE public.grade_scan_labels ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.grade_model_versions ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Users can view own grade scan features" ON public.grade_scan_features;
-DROP POLICY IF EXISTS "Users can view own grade scan features" ON public.grade_scan_features;
 CREATE POLICY "Users can view own grade scan features"
   ON public.grade_scan_features FOR SELECT
   USING (auth.uid() = user_id);
 
-DROP POLICY IF EXISTS "Users can create own grade scan features" ON public.grade_scan_features;
 DROP POLICY IF EXISTS "Users can create own grade scan features" ON public.grade_scan_features;
 CREATE POLICY "Users can create own grade scan features"
   ON public.grade_scan_features FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Users can delete own grade scan features" ON public.grade_scan_features;
-DROP POLICY IF EXISTS "Users can delete own grade scan features" ON public.grade_scan_features;
 CREATE POLICY "Users can delete own grade scan features"
   ON public.grade_scan_features FOR DELETE
   USING (auth.uid() = user_id);
 
-DROP POLICY IF EXISTS "Users can view own grade scan labels" ON public.grade_scan_labels;
 DROP POLICY IF EXISTS "Users can view own grade scan labels" ON public.grade_scan_labels;
 CREATE POLICY "Users can view own grade scan labels"
   ON public.grade_scan_labels FOR SELECT
   USING (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Users can create own grade scan labels" ON public.grade_scan_labels;
-DROP POLICY IF EXISTS "Users can create own grade scan labels" ON public.grade_scan_labels;
 CREATE POLICY "Users can create own grade scan labels"
   ON public.grade_scan_labels FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
-DROP POLICY IF EXISTS "Users can update own grade scan labels" ON public.grade_scan_labels;
 DROP POLICY IF EXISTS "Users can update own grade scan labels" ON public.grade_scan_labels;
 CREATE POLICY "Users can update own grade scan labels"
   ON public.grade_scan_labels FOR UPDATE
@@ -131,31 +125,26 @@ CREATE POLICY "Users can update own grade scan labels"
   WITH CHECK (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Users can delete own grade scan labels" ON public.grade_scan_labels;
-DROP POLICY IF EXISTS "Users can delete own grade scan labels" ON public.grade_scan_labels;
 CREATE POLICY "Users can delete own grade scan labels"
   ON public.grade_scan_labels FOR DELETE
   USING (auth.uid() = user_id);
 
-DROP POLICY IF EXISTS "Users can view active grade model versions" ON public.grade_model_versions;
 DROP POLICY IF EXISTS "Users can view active grade model versions" ON public.grade_model_versions;
 CREATE POLICY "Users can view active grade model versions"
   ON public.grade_model_versions FOR SELECT
   USING (is_active = TRUE OR auth.role() = 'service_role' OR public.current_user_is_admin());
 
 DROP POLICY IF EXISTS "Only admin or service can insert grade model versions" ON public.grade_model_versions;
-DROP POLICY IF EXISTS "Only admin or service can insert grade model versions" ON public.grade_model_versions;
 CREATE POLICY "Only admin or service can insert grade model versions"
   ON public.grade_model_versions FOR INSERT
   WITH CHECK (auth.role() = 'service_role' OR public.current_user_is_admin());
 
-DROP POLICY IF EXISTS "Only admin or service can update grade model versions" ON public.grade_model_versions;
 DROP POLICY IF EXISTS "Only admin or service can update grade model versions" ON public.grade_model_versions;
 CREATE POLICY "Only admin or service can update grade model versions"
   ON public.grade_model_versions FOR UPDATE
   USING (auth.role() = 'service_role' OR public.current_user_is_admin())
   WITH CHECK (auth.role() = 'service_role' OR public.current_user_is_admin());
 
-DROP POLICY IF EXISTS "Only admin or service can delete grade model versions" ON public.grade_model_versions;
 DROP POLICY IF EXISTS "Only admin or service can delete grade model versions" ON public.grade_model_versions;
 CREATE POLICY "Only admin or service can delete grade model versions"
   ON public.grade_model_versions FOR DELETE
