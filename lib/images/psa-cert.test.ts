@@ -1,11 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { extractPsaImageUrls, normalizePsaCertNumber } from "@/lib/images/psa-cert";
+import {
+  buildPsaCertCdnImageUrls,
+  extractPsaImageUrls,
+  normalizePsaCertNumber,
+} from "@/lib/images/psa-cert";
 
 describe("PSA cert helpers", () => {
-  it("normalizes cert numbers", () => {
+  it("normalizes cert numbers to digits only", () => {
     expect(normalizePsaCertNumber(" 1234 567 ")).toBe("1234567");
+    expect(normalizePsaCertNumber("Cert #120344868")).toBe("120344868");
     expect(normalizePsaCertNumber("")).toBeNull();
     expect(normalizePsaCertNumber(null)).toBeNull();
+    expect(normalizePsaCertNumber("12")).toBeNull();
+  });
+
+  it("builds canonical PSA CDN image URLs", () => {
+    expect(buildPsaCertCdnImageUrls("120344868")).toEqual({
+      frontImageUrl: "https://cert-images.psa.com/120344868/large/120344868_f.jpg",
+      backImageUrl: "https://cert-images.psa.com/120344868/large/120344868_b.jpg",
+    });
   });
 
   it("extracts front and back images from nested PSA payloads", () => {

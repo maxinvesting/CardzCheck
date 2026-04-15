@@ -696,7 +696,7 @@ export default function CollectionPage() {
             </div>
             {isNearLimit && (
               <p className="text-sm text-yellow-800 dark:text-yellow-200 mt-2">
-                You're near your collection limit. Upgrade for unlimited cards.
+                You&apos;re near your collection limit. Upgrade for unlimited cards.
               </p>
             )}
           </div>

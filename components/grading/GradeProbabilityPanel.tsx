@@ -42,6 +42,8 @@ interface GradeProbabilityPanelProps {
   scanPhotos?: GradeScanPhoto[] | null;
   showPreliminaryBadge?: boolean;
   compact?: boolean;
+  flat?: boolean;
+  headerLabel?: string;
   /** Correction text applied during a refinement re-run — shows a "Refined" badge */
   appliedRefinement?: string | null;
   /**
@@ -518,6 +520,8 @@ export default function GradeProbabilityPanel({
   scanPhotos,
   showPreliminaryBadge,
   compact = false,
+  flat = false,
+  headerLabel = "CardzCheck · AI Estimate",
   appliedRefinement,
   gradingPriority = "liquidity",
 }: GradeProbabilityPanelProps) {
@@ -554,6 +558,19 @@ export default function GradeProbabilityPanel({
     () => buildGradeVerdict(estimate, cardIdentity, { gradingPriority }),
     [estimate, cardIdentity, gradingPriority]
   );
+  const analysisSpeechText = [
+    cardLabel ? `Card: ${cardLabel}.` : "",
+    likely ? `Most likely grade: ${likely.label} with ${Math.round(likely.probability * 100)} percent probability.` : "",
+    `Recommendation: ${verdict.recommendation}.`,
+    `Suggested grader: ${verdict.suggestedGrader}.`,
+    verdict.reasoning ? `Reasoning: ${verdict.reasoning}.` : "",
+    estimate.centering ? `Centering: ${estimate.centering}.` : "",
+    estimate.corners ? `Corners: ${estimate.corners}.` : "",
+    estimate.surface ? `Surface: ${estimate.surface}.` : "",
+    estimate.edges ? `Edges: ${estimate.edges}.` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   const confidencePillClass = confidence
     ? (confidencePillClasses[confidence] ?? confidencePillClasses.medium)
@@ -655,7 +672,7 @@ export default function GradeProbabilityPanel({
       {/* ── DARK GALLERY VIEWER ─────────────────────────────────────────── */}
       <div
         ref={panelRef}
-        className="flex flex-col lg:flex-row overflow-hidden rounded-xl border border-white/8 bg-[#111]"
+        className={`flex flex-col overflow-hidden lg:flex-row ${flat ? "border-y border-white/8 bg-[#111]" : "rounded-xl border border-white/8 bg-[#111]"}`}
         style={{ minHeight: 560 }}
       >
 
@@ -665,7 +682,7 @@ export default function GradeProbabilityPanel({
           {/* Brand label */}
           <div className="px-5 pt-5 pb-3">
             <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-[#c8a951]">
-              CardzCheck · AI Estimate
+              {headerLabel}
             </p>
             {showPreliminaryBadge && (
               <span className="mt-1 inline-flex items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-400">
@@ -720,7 +737,7 @@ export default function GradeProbabilityPanel({
 
           {/* Warning banner */}
           {inlineBanner && (
-            <div className="mx-5 mb-4 rounded-lg border border-amber-500/20 bg-amber-500/8 px-3 py-2">
+            <div className={flat ? "mx-5 mb-4 border-l border-amber-500/30 pl-3" : "mx-5 mb-4 rounded-lg border border-amber-500/20 bg-amber-500/8 px-3 py-2"}>
               <p className="text-[10px] leading-snug text-amber-400">{inlineBanner}</p>
             </div>
           )}
@@ -891,16 +908,9 @@ export default function GradeProbabilityPanel({
                 {exportingPng ? "…" : "PNG"}
               </button>
               <SpeakButton
-                text={[
-                  likely ? `Most likely grade: ${likely.label} with ${Math.round(likely.probability * 100)} percent probability.` : "",
-                  `Recommendation: ${verdict.recommendation}.`,
-                  `Suggested grader: ${verdict.suggestedGrader}.`,
-                  estimate.centering ? `Centering: ${estimate.centering}.` : "",
-                  estimate.corners ? `Corners: ${estimate.corners}.` : "",
-                  estimate.surface ? `Surface: ${estimate.surface}.` : "",
-                  estimate.edges ? `Edges: ${estimate.edges}.` : "",
-                ].filter(Boolean).join(" ")}
+                text={analysisSpeechText}
                 size="sm"
+                label={compact ? undefined : "Read analysis"}
               />
             </div>
             {exportError && (
@@ -960,7 +970,7 @@ export default function GradeProbabilityPanel({
       {/* ── VERIFY COMPS ─────────────────────────────────────────────────── */}
       {cardIdentity &&
         (cardIdentity.owner_declared_title || cardIdentity.player_name || cardIdentity.set_name) && (
-        <div className="mt-3 rounded-lg border border-white/[0.07] bg-[#0d1b2a] px-4 py-3">
+        <div className={flat ? "mt-6 border-t border-white/[0.07] px-0 py-4" : "mt-3 rounded-lg border border-white/[0.07] bg-[#0d1b2a] px-4 py-3"}>
           <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.18em] text-blue-400/70">
             Verify Comps on eBay
           </p>
@@ -997,7 +1007,7 @@ export default function GradeProbabilityPanel({
       )}
 
       {/* ── Footer ─────────────────────────────────────────────────── */}
-      <div className="border-t border-white/[0.06] px-5 py-4 flex flex-wrap items-center justify-between gap-3">
+      <div className={`flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.06] py-4 ${flat ? "px-0" : "px-5"}`}>
         <p className="text-[10px] text-[#3a5068] leading-relaxed max-w-prose" data-export-disclaimer="true">
           {gradingCopy.panel.disclaimer}
         </p>

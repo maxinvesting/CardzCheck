@@ -16,9 +16,9 @@
     },
     {
       "name": "CardzCheck Main",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["dev:turbo"],
-      "port": 3001,
+      "runtimeExecutable": "/Users/maxwellhilliard/cardzcheck/node_modules/.bin/next",
+      "runtimeArgs": ["dev"],
+      "port": 3000,
       "autoPort": true
     }
   ]

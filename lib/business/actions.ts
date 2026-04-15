@@ -233,6 +233,7 @@ function buildInventoryInsertPayload(
   const title = item.title || "Untitled item";
   return {
     user_id: userId,
+    business_account_id: businessAccountId,
     item_kind: BUSINESS_ITEM_KIND,
     title,
     player_name: (item as any).player_name || title,
@@ -331,7 +332,12 @@ export async function listInventory(
     .eq("item_kind", BUSINESS_ITEM_KIND)
     .order("created_at", { ascending: false });
 
-  if (filters?.status) query = query.eq("status", filters.status);
+  if (filters?.status) {
+    query = query.eq("status", filters.status);
+  } else {
+    // By default, exclude sold and returned items from inventory listings
+    query = query.neq("status", "sold").neq("status", "returned");
+  }
   if (filters?.channel) query = query.eq("channel", filters.channel);
   if (filters?.condition_status)
     query = query.eq("condition_status", filters.condition_status);
@@ -472,10 +478,14 @@ export async function updateItemKind(
   targetKind: "owned" | "inventory",
   options?: { cost_basis_total_cents?: number }
 ): Promise<void> {
-  await requireBusinessAccess(userId);
+  const context = await requireBusinessAccess(userId);
   const supabase = await createClient();
 
-  const payload: Record<string, unknown> = { item_kind: targetKind };
+  const payload: Record<string, unknown> = {
+    item_kind: targetKind,
+    business_account_id:
+      targetKind === "inventory" ? context.businessAccountId : null,
+  };
   if (targetKind === "inventory" && options?.cost_basis_total_cents !== undefined) {
     payload.cost_basis_total_cents = options.cost_basis_total_cents;
   }
@@ -755,7 +765,7 @@ function toBusinessSale(row: BusinessSaleRow): BusinessSale {
 }
 
 async function attachInventoryTitles(
-  businessAccountId: string,
+  _businessAccountId: string,
   sales: BusinessSale[]
 ): Promise<BusinessSale[]> {
   const inventoryIds = Array.from(
@@ -771,11 +781,13 @@ async function attachInventoryTitles(
   if (validInventoryIds.length === 0) return sales;
 
   const supabase = await createClient();
+  // Do not filter by business_account_id here: legacy collection_items rows may have
+  // a null or stale business_account_id while still belonging to this user. RLS on
+  // collection_items scopes rows to the authenticated user.
   const { data, error } = await supabase
     .from(BUSINESS_TABLE)
     .select("id, title")
-    .in("id", validInventoryIds)
-    .eq("business_account_id", businessAccountId);
+    .in("id", validInventoryIds);
   if (error) return sales;
 
   const titleById = new Map<string, string>();
@@ -797,19 +809,59 @@ async function attachInventoryTitles(
 }
 
 async function getInventoryContextForSale(
-  businessAccountId: string,
-  inventoryItemId?: string | null
+  args: {
+    businessAccountId: string;
+    userId: string;
+    ownerUserId: string;
+    inventoryItemId?: string | null;
+  }
 ): Promise<{ id: string; title: string | null; channel: string | null; cost_basis_total_cents: number | null } | null> {
+  const { businessAccountId, userId, ownerUserId, inventoryItemId } = args;
   if (!inventoryItemId) return null;
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const scopedLookup = await supabase
     .from(BUSINESS_TABLE)
     .select("id, title, channel, cost_basis_total_cents")
     .eq("id", inventoryItemId)
     .eq("business_account_id", businessAccountId)
     .maybeSingle();
 
-  if (error) throw error;
+  if (
+    scopedLookup.error &&
+    !isBusinessSalesSchemaMismatch(scopedLookup.error)
+  ) {
+    throw scopedLookup.error;
+  }
+
+  let data = scopedLookup.data;
+
+  // Older inventory rows may not have business_account_id populated yet.
+  if (!data) {
+    const fallbackUserIds = Array.from(
+      new Set(
+        [userId, ownerUserId].filter(
+          (value): value is string => typeof value === "string" && value.length > 0
+        )
+      )
+    );
+
+    let fallbackQuery = supabase
+      .from(BUSINESS_TABLE)
+      .select("id, title, channel, cost_basis_total_cents")
+      .eq("id", inventoryItemId)
+      .eq("item_kind", BUSINESS_ITEM_KIND);
+
+    if (fallbackUserIds.length === 1) {
+      fallbackQuery = fallbackQuery.eq("user_id", fallbackUserIds[0]);
+    } else if (fallbackUserIds.length > 1) {
+      fallbackQuery = fallbackQuery.in("user_id", fallbackUserIds);
+    }
+
+    const fallbackLookup = await fallbackQuery.maybeSingle();
+    if (fallbackLookup.error) throw fallbackLookup.error;
+    data = fallbackLookup.data;
+  }
+
   if (!data) return null;
 
   return {
@@ -831,6 +883,59 @@ async function ensureCollectionItemMirrorForSale(
   _inventoryContext: { id: string; title: string | null } | null
 ): Promise<void> {
   // Nothing to do — business inventory lives in collection_items directly.
+}
+
+async function markInventoryItemSold(args: {
+  supabase: Awaited<ReturnType<typeof createClient>>;
+  inventoryItemId: string;
+  businessAccountId: string;
+  userId: string;
+  ownerUserId: string;
+}): Promise<void> {
+  const { supabase, inventoryItemId, businessAccountId, userId, ownerUserId } = args;
+
+  const scopedUpdate = await supabase
+    .from(BUSINESS_TABLE)
+    .update({ status: "sold" })
+    .eq("id", inventoryItemId)
+    .eq("item_kind", BUSINESS_ITEM_KIND)
+    .eq("business_account_id", businessAccountId)
+    .select("id")
+    .maybeSingle();
+
+  if (
+    scopedUpdate.error &&
+    !isBusinessSalesSchemaMismatch(scopedUpdate.error)
+  ) {
+    normalizeBusinessSaleError(scopedUpdate.error);
+  }
+
+  if (scopedUpdate.data) return;
+
+  const fallbackUserIds = Array.from(
+    new Set(
+      [userId, ownerUserId].filter(
+        (value): value is string => typeof value === "string" && value.length > 0
+      )
+    )
+  );
+
+  let fallbackUpdate = supabase
+    .from(BUSINESS_TABLE)
+    .update({ status: "sold" })
+    .eq("id", inventoryItemId)
+    .eq("item_kind", BUSINESS_ITEM_KIND);
+
+  if (fallbackUserIds.length === 1) {
+    fallbackUpdate = fallbackUpdate.eq("user_id", fallbackUserIds[0]);
+  } else if (fallbackUserIds.length > 1) {
+    fallbackUpdate = fallbackUpdate.in("user_id", fallbackUserIds);
+  }
+
+  const fallbackResult = await fallbackUpdate.select("id").maybeSingle();
+  if (fallbackResult.error) {
+    normalizeBusinessSaleError(fallbackResult.error);
+  }
 }
 
 function buildComputedSalePayload(args: {
@@ -1107,10 +1212,12 @@ export async function createSale(
   const context = await requireBusinessAccess(userId);
   const supabase = await createClient();
 
-  const inventoryContext = await getInventoryContextForSale(
-    context.businessAccountId,
-    sale.inventory_item_id
-  );
+  const inventoryContext = await getInventoryContextForSale({
+    businessAccountId: context.businessAccountId,
+    userId,
+    ownerUserId: context.ownerUserId,
+    inventoryItemId: sale.inventory_item_id,
+  });
 
   if (sale.inventory_item_id && !inventoryContext) {
     const err = new Error("Inventory item not found for this business");
@@ -1155,12 +1262,13 @@ export async function createSale(
 
     // Mark the linked inventory row as sold if present.
     if (insertPayload.inventory_item_id) {
-      const { error: updateError } = await supabase
-        .from(BUSINESS_TABLE)
-        .update({ status: "sold" })
-        .eq("id", insertPayload.inventory_item_id)
-        .eq("business_account_id", context.businessAccountId);
-      if (updateError) normalizeBusinessSaleError(updateError);
+      await markInventoryItemSold({
+        supabase,
+        inventoryItemId: insertPayload.inventory_item_id,
+        businessAccountId: context.businessAccountId,
+        userId,
+        ownerUserId: context.ownerUserId,
+      });
     }
 
     if (!created) {
@@ -1235,10 +1343,12 @@ export async function updateSale(
     external_order_id: updates.external_order_id ?? existing.external_order_id ?? existing.order_id,
   };
 
-  const inventoryContext = await getInventoryContextForSale(
-    context.businessAccountId,
-    mergedBase.inventory_item_id
-  );
+  const inventoryContext = await getInventoryContextForSale({
+    businessAccountId: context.businessAccountId,
+    userId,
+    ownerUserId: context.ownerUserId,
+    inventoryItemId: mergedBase.inventory_item_id,
+  });
 
   await ensureCollectionItemMirrorForSale(supabase, userId, inventoryContext);
 

@@ -8,6 +8,7 @@ import {
   type GradingService,
   type GradingTierKey,
 } from "@/lib/grading/preSubmissionRules";
+import { SpeakButton } from "@/components/ui/SpeakButton";
 
 type RiskRating = "LOW" | "MEDIUM" | "HIGH" | "DO_NOT_GRADE";
 type Verdict = "SUBMIT" | "BORDERLINE" | "HOLD_RAW";
@@ -190,6 +191,27 @@ export default function PreSubmissionAnalysisSection({ estimate, cardIdentity }:
       : analysis?.verdict === "BORDERLINE"
       ? "border-amber-400/40 bg-amber-500/20 text-amber-200"
       : "border-rose-400/40 bg-rose-500/20 text-rose-200";
+  const analysisSpeechText = analysis
+    ? [
+        analysis.recommendation.service
+          ? `Recommended service: ${analysis.recommendation.service.toUpperCase()}.`
+          : "",
+        analysis.recommendation.reason ? analysis.recommendation.reason : "",
+        analysis.verdict ? `Verdict: ${analysis.verdict.replace("_", " ")}.` : "",
+        analysis.verdictReasoning ? analysis.verdictReasoning : "",
+        analysis.breakEven ? `Break-even grade: ${analysis.breakEven}.` : "",
+        analysis.riskRating ? `Risk rating: ${analysis.riskRating}.` : "",
+        analysis.profits.psa[0]
+          ? `Estimated PSA 10 net: ${formatSignedMoney(analysis.profits.psa[0].net)}.`
+          : "",
+        analysis.profits.psa[1]
+          ? `Estimated PSA 9 net: ${formatSignedMoney(analysis.profits.psa[1].net)}.`
+          : "",
+        analysis.fallbackNotice ?? "",
+      ]
+        .filter(Boolean)
+        .join(" ")
+    : "";
 
   return (
     <div className="mt-4 rounded-xl border border-white/[0.08] bg-[#0d1b2a]">
@@ -207,9 +229,19 @@ export default function PreSubmissionAnalysisSection({ estimate, cardIdentity }:
       {isOpen && (
         <div className="space-y-4 border-t border-white/[0.08] px-4 pb-4 pt-3">
           <div className="rounded-lg border border-white/[0.08] bg-white/[0.03] p-3">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/50">
-              Grading Service Recommendation
-            </p>
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/50">
+                Grading Service Recommendation
+              </p>
+              {analysis ? (
+                <SpeakButton
+                  text={analysisSpeechText}
+                  size="sm"
+                  label="Read analysis"
+                  className="border border-white/15 bg-black/20 text-white/70 hover:bg-white/10"
+                />
+              ) : null}
+            </div>
             <p className="mt-2 text-sm font-semibold text-white/90">
               Recommended: {analysis?.recommendation.service.toUpperCase() ?? "PSA"}
             </p>

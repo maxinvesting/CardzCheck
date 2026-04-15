@@ -8,7 +8,10 @@ import {
   type ResolvedGradeEstimateImage,
 } from "@/lib/grading/gradeEstimateImages";
 import { parseGradeEstimateModelOutput } from "@/lib/grading/gradeEstimateModel";
-import type { GradeEstimateJobDependencies } from "@/lib/grading/gradeEstimateJob";
+import type {
+  GradeEstimateJobDependencies,
+  GradeEstimateModelUsage,
+} from "@/lib/grading/gradeEstimateJob";
 import type { GradeEstimate } from "@/types";
 import { isCloseupKind } from "@/lib/grading/scanPhotos";
 import {
@@ -215,7 +218,7 @@ async function runGradeModel(
   userId?: string | null,
   correctionText?: string | null,
   preScanNotes?: string | null
-): Promise<string | null> {
+): Promise<{ text: string | null; usage: GradeEstimateModelUsage | null }> {
   const closeupCount = images.filter((image) => isCloseupKind(image.kind)).length;
   const photoRoles = images
     .map(
@@ -275,15 +278,24 @@ async function runGradeModel(
     system: SYSTEM_PROMPT,
   });
 
-  // Fire-and-forget usage recording — never blocks the response.
+  const usage: GradeEstimateModelUsage | null = message.usage
+    ? {
+        inputTokens: message.usage.input_tokens,
+        outputTokens: message.usage.output_tokens,
+      }
+    : null;
+
   if (userId) {
-    recordGradeTokenUsage(userId, message.usage.input_tokens, message.usage.output_tokens).catch(
-      (err) => console.error("[token-budget] recordGradeTokenUsage failed:", err)
-    );
+    if (usage) {
+      await recordGradeTokenUsage(userId, usage.inputTokens, usage.outputTokens);
+    }
   }
 
   const textContent = message.content.find((c) => c.type === "text");
-  return textContent && textContent.type === "text" ? textContent.text : null;
+  return {
+    text: textContent && textContent.type === "text" ? textContent.text : null,
+    usage,
+  };
 }
 
 async function runOcrIdentity(images: ResolvedGradeEstimateImage[]) {
@@ -352,13 +364,27 @@ async function runPostGradingValue(options: {
   );
 }
 
-export function createGradeEstimateJobDependencies(userId?: string | null): GradeEstimateJobDependencies {
+export function createGradeEstimateJobDependencies(
+  userId?: string | null,
+  options?: { recordUsage?: boolean }
+): GradeEstimateJobDependencies {
+  const shouldRecordUsage = options?.recordUsage ?? true;
+
   return {
     resolveImages: resolveGradeEstimateImages,
     runOcrIdentity,
     // Bind userId via closure so token usage is recorded against the requesting user.
     // correctionText and preScanNotes are passed through at call time from the job input.
-    runGradeModel: (images, identity, correctionText, preScanNotes) => runGradeModel(images, identity, userId, correctionText, preScanNotes),
+    runGradeModel: async (images, identity, correctionText, preScanNotes) => {
+      const result = await runGradeModel(
+        images,
+        identity,
+        shouldRecordUsage ? userId : null,
+        correctionText,
+        preScanNotes
+      );
+      return result;
+    },
     parseModelOutput: async (options) => parseGradeEstimateModelOutput(options),
     runPostGradingValue,
   };

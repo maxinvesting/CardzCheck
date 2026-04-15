@@ -102,7 +102,7 @@ export default function HeroStats({ items, loading, onSearch }: HeroStatsProps) 
         <div className="max-w-xl mx-auto">
           {/* Title */}
           <h2 className="text-2xl font-bold text-white mb-2">
-            Track a card's value
+            Track a card&apos;s value
           </h2>
           <p className="text-sm text-gray-400 mb-5">
             Run a card search, then add it to your collection to track value over time.

@@ -50,8 +50,17 @@ export interface BusinessAccount {
   seats_included: number;
   seat_quantity: number;
   purchased_seats: number;
+  appearance_primary_color?: string | null;
+  appearance_secondary_color?: string | null;
+  appearance_tertiary_color?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface BusinessAppearance {
+  primaryColor: string;
+  secondaryColor: string;
+  tertiaryColor: string;
 }
 
 export interface BusinessMembership {
@@ -778,6 +787,7 @@ export interface CardIdentificationResult extends SearchFormData {
   imageUrls?: string[];
   scanPhotos?: GradeScanPhoto[];
   userImageUrl?: string;
+  owner_declared_title?: string;
   confidence: "high" | "medium" | "low";
   players?: string[]; // All players (for multi-player cards)
   insert?: string; // Insert type (e.g., "Downtown")

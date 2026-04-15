@@ -957,7 +957,7 @@ function CompsPageContent() {
               Search for any trading card to get estimated values from active listings
             </p>
             <p className="text-sm text-gray-500">
-              Try searching "Michael Jordan Fleer 1986 PSA 10" or upload a card photo
+              Try searching {'"'}Michael Jordan Fleer 1986 PSA 10{'"'} or upload a card photo
             </p>
           </div>
         )}
@@ -980,7 +980,7 @@ function CompsPageContent() {
                 />
               </svg>
               <h3 className="text-lg font-semibold text-white mb-2">
-                You've used all your free searches
+                You&apos;ve used all your free searches
               </h3>
               <p className="text-gray-400 mb-4">
                 Upgrade for unlimited searches and collection tracking.

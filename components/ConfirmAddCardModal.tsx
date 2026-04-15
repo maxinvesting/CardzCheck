@@ -545,7 +545,7 @@ export default function ConfirmAddCardModal({
 
           {cardData.cardIdentity?.warnings?.includes("parse_error") ? (
             <InlineNotice type="warning">
-              We couldn't read all card details. Please confirm the year and set.
+              We couldn&apos;t read all card details. Please confirm the year and set.
             </InlineNotice>
           ) : null}
 

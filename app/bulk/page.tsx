@@ -87,7 +87,8 @@ function CreateBatchModal({
       >
         <h2 className="text-lg font-semibold text-white mb-1">New Batch</h2>
         <p className="text-sm text-gray-400 mb-5">
-          Give this batch a name so you can identify it later (e.g. "Prizm Commons Box 1").
+          Give this batch a name so you can identify it later (e.g.{' '}
+          {'"'}Prizm Commons Box 1{'"'}).
         </p>
 
         <form onSubmit={handleSubmit}>

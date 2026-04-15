@@ -116,6 +116,7 @@ interface SubmissionBuilderPanelProps {
   gradeEstimate: GradeEstimate | null;
   uploadPanel?: ReactNode;
   recentRunsPanel?: ReactNode;
+  blackLabel?: boolean;
   /** Render additional content below each item row (e.g. AI walkthrough) */
   renderItemExtra?: (item: SubmissionDetailItem) => ReactNode;
   /** Called whenever a submission's items are loaded or refreshed */
@@ -202,6 +203,7 @@ export default function SubmissionBuilderPanel({
   gradeEstimate,
   uploadPanel,
   recentRunsPanel,
+  blackLabel = false,
   renderItemExtra,
   onItemsLoaded,
 }: SubmissionBuilderPanelProps) {
@@ -567,6 +569,31 @@ export default function SubmissionBuilderPanel({
   const showSubmissionInlineError = Boolean(submissionsError) && submissions.length > 0;
   const isAuthOrPermissionError =
     submissionsError?.code === "unauthorized" || submissionsError?.code === "auth_or_permission_denied";
+  const builderTitle = blackLabel ? "Submission Center" : "Build Submission";
+  const builderDescription = blackLabel
+    ? "Create and manage mock or actual submissions in one service-style workspace."
+    : "Create mock submissions for planning or actual submissions for PSA tracking.";
+  const rootClass = blackLabel
+    ? "rounded-[28px] border border-[#3a2f19] bg-[radial-gradient(circle_at_top,rgba(184,154,85,0.12),transparent_38%),linear-gradient(180deg,#11100d_0%,#0a0a0a_100%)] p-5 lg:h-full"
+    : "rounded-xl border border-gray-700 bg-gray-800/50 p-4 lg:h-full";
+  const cardClass = blackLabel
+    ? "rounded-[24px] border border-[#3a2f19] bg-black/30 p-5"
+    : "rounded-lg border border-gray-700 bg-gray-900/40 p-4";
+  const sideClass = blackLabel
+    ? "flex min-h-0 flex-col rounded-[24px] border border-[#3a2f19] bg-black/25"
+    : "flex min-h-0 flex-col rounded-lg border border-gray-700 bg-gray-900/35";
+  const inputClass = blackLabel
+    ? "rounded-2xl border border-[#3a2f19] bg-black/40 px-3 py-2 text-sm text-[#f8f2e7]"
+    : "rounded border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white";
+  const actionPrimaryClass = blackLabel
+    ? "rounded-full border border-[#8e7740]/45 bg-[#b89a55] px-4 py-2 text-sm font-medium text-black disabled:opacity-50"
+    : "rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50";
+  const actionSecondaryClass = blackLabel
+    ? "rounded-full border border-[#8e7740]/35 px-3 py-2 text-xs font-medium text-[#f2dfad] disabled:opacity-50"
+    : "rounded bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50";
+  const actionNeutralClass = blackLabel
+    ? "rounded-full border border-white/10 px-3 py-2 text-xs font-medium text-white/70 disabled:opacity-50"
+    : "rounded bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50";
 
   const createSubmission = useCallback(async () => {
     if (!createName.trim()) return;
@@ -930,8 +957,8 @@ export default function SubmissionBuilderPanel({
 
   if (!authUserId) {
     return (
-      <div className="rounded-xl border border-gray-700 bg-gray-800/50 p-5">
-        <h3 className="text-lg font-semibold text-white">Build Submission</h3>
+      <div className={blackLabel ? "rounded-[24px] border border-[#3a2f19] bg-black/30 p-5" : "rounded-xl border border-gray-700 bg-gray-800/50 p-5"}>
+        <h3 className={`text-lg font-semibold ${blackLabel ? "text-[#f8f2e7]" : "text-white"}`}>{builderTitle}</h3>
         <p className="mt-2 text-sm text-gray-300">Please sign in to view or manage grading submissions.</p>
         <a
           href="/login?redirect=/grade-estimator"
@@ -945,8 +972,8 @@ export default function SubmissionBuilderPanel({
 
   if (!isPaidUser) {
     return (
-      <div className="rounded-xl border border-amber-700/40 bg-amber-900/20 p-5">
-        <h3 className="text-lg font-semibold text-amber-200">Build Submission</h3>
+      <div className={blackLabel ? "rounded-[24px] border border-[#8e7740]/35 bg-[#8e7740]/10 p-5" : "rounded-xl border border-amber-700/40 bg-amber-900/20 p-5"}>
+        <h3 className={`text-lg font-semibold ${blackLabel ? "text-[#f2dfad]" : "text-amber-200"}`}>{builderTitle}</h3>
         <p className="mt-2 text-sm text-amber-100/90">
           Submission Builder and actual submission tracking are available on paid plans.
         </p>
@@ -962,13 +989,13 @@ export default function SubmissionBuilderPanel({
   }
 
   return (
-    <div className="rounded-xl border border-gray-700 bg-gray-800/50 p-4 lg:h-full">
+    <div className={rootClass}>
       <div className="grid gap-4 lg:h-full lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
         <div className="flex min-h-0 flex-col gap-4">
-          <div className="rounded-lg border border-gray-700 bg-gray-900/40 p-4">
-            <h3 className="text-lg font-semibold text-white">Build Submission</h3>
-            <p className="mt-1 text-sm text-gray-400">
-              Create mock submissions for planning or actual submissions for PSA tracking.
+          <div className={cardClass}>
+            <h3 className={`text-lg font-semibold ${blackLabel ? "text-[#f8f2e7]" : "text-white"}`}>{builderTitle}</h3>
+            <p className={`mt-1 text-sm ${blackLabel ? "text-white/56" : "text-gray-400"}`}>
+              {builderDescription}
             </p>
 
             {actionError ? (
@@ -982,20 +1009,20 @@ export default function SubmissionBuilderPanel({
                 value={createName}
                 onChange={(event) => setCreateName(event.target.value)}
                 placeholder="Submission name (e.g. March PSA 20-card)"
-                className="rounded border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white"
+                className={inputClass}
               />
               <select
                 value={createMode}
                 onChange={(event) => setCreateMode(event.target.value as SubmissionMode)}
-                className="rounded border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white"
+                className={inputClass}
               >
-                <option value="mock">Mock</option>
-                <option value="actual">Actual</option>
+                <option value="mock">Mock Submission</option>
+                <option value="actual">Actual Submission</option>
               </select>
               <button
                 disabled={creating || !createName.trim()}
                 onClick={() => void createSubmission()}
-                className="rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                className={actionPrimaryClass}
               >
                 {creating ? "Creating..." : "Create Submission"}
               </button>
@@ -1003,21 +1030,21 @@ export default function SubmissionBuilderPanel({
           </div>
 
           {uploadPanel ? (
-            <div className="rounded-lg border border-gray-700 bg-gray-900/30 p-3">
+            <div className={blackLabel ? "rounded-[24px] border border-[#3a2f19] bg-black/25 p-4" : "rounded-lg border border-gray-700 bg-gray-900/30 p-3"}>
               {uploadPanel}
             </div>
           ) : null}
         </div>
 
-        <div className="flex min-h-0 flex-col rounded-lg border border-gray-700 bg-gray-900/35">
-          <div className="border-b border-gray-700 px-3 py-2">
+        <div className={sideClass}>
+          <div className={`px-4 py-3 ${blackLabel ? "border-b border-[#3a2f19]" : "border-b border-gray-700"}`}>
             <div className="flex items-center justify-between gap-2">
-              <h4 className="text-sm font-semibold text-white">Submissions / Recent Runs</h4>
+              <h4 className={`text-sm font-semibold ${blackLabel ? "text-[#f8f2e7]" : "text-white"}`}>Submissions / Recent Runs</h4>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => void loadSubmissions({ reason: "refresh" })}
                   disabled={isSubmissionBusy}
-                  className="rounded border border-gray-600 px-2.5 py-1 text-xs text-gray-300 hover:bg-gray-700 disabled:opacity-60"
+                  className={blackLabel ? "rounded-full border border-white/10 px-3 py-1.5 text-xs text-white/60 hover:border-white/20 hover:text-white/80 disabled:opacity-60" : "rounded border border-gray-600 px-2.5 py-1 text-xs text-gray-300 hover:bg-gray-700 disabled:opacity-60"}
                 >
                   {isRefreshing ? "Refreshing..." : "Refresh"}
                 </button>
@@ -1033,7 +1060,7 @@ export default function SubmissionBuilderPanel({
               </div>
             </div>
             {showSubmissionInlineError ? (
-              <div className="mt-2 rounded border border-red-700/50 bg-red-900/30 px-2.5 py-1.5 text-xs text-red-200">
+              <div className={`mt-2 rounded px-2.5 py-1.5 text-xs text-red-200 ${blackLabel ? "border border-red-700/40 bg-red-900/20" : "border border-red-700/50 bg-red-900/30"}`}>
                 {submissionsError?.message}
               </div>
             ) : null}
@@ -1084,12 +1111,16 @@ export default function SubmissionBuilderPanel({
                       onClick={() => setSelectedSubmissionId(submission.id)}
                       className={`rounded-lg border px-3 py-3 text-left ${
                         selectedSubmissionId === submission.id
-                          ? "border-blue-500 bg-blue-900/30"
-                          : "border-gray-700 bg-gray-900/40 hover:bg-gray-900/70"
+                          ? blackLabel
+                            ? "border-[#8e7740]/45 bg-[#8e7740]/10"
+                            : "border-blue-500 bg-blue-900/30"
+                          : blackLabel
+                            ? "border-[#3a2f19] bg-black/30 hover:bg-black/45"
+                            : "border-gray-700 bg-gray-900/40 hover:bg-gray-900/70"
                       }`}
                     >
-                      <p className="text-sm font-semibold text-white">{submission.name}</p>
-                      <p className="text-xs text-gray-400 mt-1">
+                      <p className={`text-sm font-semibold ${blackLabel ? "text-[#f8f2e7]" : "text-white"}`}>{submission.name}</p>
+                      <p className={`mt-1 text-xs ${blackLabel ? "text-white/48" : "text-gray-400"}`}>
                         {submission.mode.toUpperCase()} · {submission.status} · {submission.card_count} cards
                       </p>
                     </button>
@@ -1100,7 +1131,7 @@ export default function SubmissionBuilderPanel({
             <div className="text-sm text-gray-400">Loading submission details...</div>
           ) : (
             <div className="space-y-5">
-              <div className="rounded-lg border border-gray-700 p-4">
+              <div className={blackLabel ? "rounded-[24px] border border-[#3a2f19] bg-black/25 p-5" : "rounded-lg border border-gray-700 p-4"}>
                 <div className="grid gap-3 md:grid-cols-3">
                   <label className="space-y-1 text-xs text-gray-400">
                     <span>Declared value (USD)</span>
@@ -1180,33 +1211,33 @@ export default function SubmissionBuilderPanel({
                 <button
                   onClick={() => void saveSubmissionFields()}
                   disabled={savingSubmission}
-                  className="mt-3 rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                  className={`mt-3 ${actionPrimaryClass}`}
                 >
                   {savingSubmission ? "Saving..." : "Save Submission Settings"}
                 </button>
               </div>
 
-              <div className="rounded-lg border border-gray-700 p-4 space-y-3">
-                <h4 className="text-sm font-semibold text-white">Add Cards</h4>
+              <div className={blackLabel ? "rounded-[24px] border border-[#3a2f19] bg-black/25 p-5 space-y-3" : "rounded-lg border border-gray-700 p-4 space-y-3"}>
+                <h4 className={`text-sm font-semibold ${blackLabel ? "text-[#f8f2e7]" : "text-white"}`}>Add Cards</h4>
                 <div className="flex flex-wrap gap-2">
                   <button
                     disabled={addingItems || !identifiedCard}
                     onClick={() => void addCurrentCard()}
-                    className="rounded bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+                    className={actionSecondaryClass}
                   >
                     Add Current Analyzed Card
                   </button>
                   <button
                     disabled={addingItems || collectionSelection.length === 0}
                     onClick={() => void addSelectedCollection()}
-                    className="rounded bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+                    className={actionNeutralClass}
                   >
                     Add Selected Collection Cards
                   </button>
                   <button
                     disabled={addingItems || watchlistSelection.length === 0}
                     onClick={() => void addSelectedWatchlist()}
-                    className="rounded bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+                    className={actionNeutralClass}
                   >
                     Add Selected Watchlist Cards
                   </button>
@@ -1355,7 +1386,7 @@ export default function SubmissionBuilderPanel({
                   <button
                     disabled={addingItems}
                     onClick={() => void addManualEntry()}
-                    className="rounded bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+                    className={actionSecondaryClass}
                   >
                     Add Manual Card
                   </button>
@@ -1530,7 +1561,7 @@ export default function SubmissionBuilderPanel({
                   <button
                     disabled={savingActuals}
                     onClick={() => void saveReturnedGrades()}
-                    className="rounded bg-blue-600 px-3 py-2 text-xs font-medium text-white disabled:opacity-50"
+                    className={actionPrimaryClass}
                   >
                     {savingActuals ? "Saving..." : "Save Returned Grades"}
                   </button>

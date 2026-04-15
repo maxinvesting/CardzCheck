@@ -48,10 +48,10 @@ export default function TestAuthPage() {
 
       <div className="space-y-2">
         <p className="text-sm text-gray-400">
-          If you're logged in, you should see hasSession: true and hasUser: true
+          If you&apos;re logged in, you should see hasSession: true and hasUser: true
         </p>
         <p className="text-sm text-gray-400">
-          If you see false for both, your session isn't being saved
+          If you see false for both, your session isn&apos;t being saved
         </p>
       </div>
 

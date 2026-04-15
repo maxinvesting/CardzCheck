@@ -482,6 +482,9 @@ function SettingsContent() {
     "rounded-lg px-4 py-2 font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 bg-[var(--biz-primary)] text-[var(--biz-primary-foreground)] hover:bg-[var(--biz-primary-hover)]";
   const businessSecondaryButtonClass =
     "rounded-lg border border-[var(--biz-border)] px-4 py-2 font-medium text-[var(--biz-text)] transition-colors hover:bg-[var(--biz-hover)] disabled:cursor-not-allowed disabled:opacity-50";
+  const showBusinessAppearanceCard = isBusinessSettings;
+  const showBusinessAppearanceShortcut =
+    !isBusinessSettings && hasBusinessWorkspace;
 
   return (
     <AuthenticatedLayout>
@@ -520,6 +523,28 @@ function SettingsContent() {
         )}
 
         <div className="space-y-6">
+          {showBusinessAppearanceShortcut && (
+            <div className="rounded-2xl border border-emerald-300/30 bg-emerald-500/15 p-6 backdrop-blur-sm">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-emerald-100">
+                    Business Workspace Appearance
+                  </h2>
+                  <p className="mt-1 text-sm text-emerald-50/90">
+                    Your business colors now live in business-mode settings.
+                    Use that page to set the shared 3-color workspace palette.
+                  </p>
+                </div>
+                <button
+                  onClick={() => router.push("/business/settings")}
+                  className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-400"
+                >
+                  Open Business Settings
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Account Information */}
           <div className={isBusinessSettings ? businessSectionClass : "bg-white/5 border border-white/15 rounded-2xl p-6 backdrop-blur-sm"}>
             <h2 className={`mb-4 text-lg font-semibold ${isBusinessSettings ? "text-[var(--biz-text)]" : "text-white"}`}>
@@ -612,7 +637,7 @@ function SettingsContent() {
             </div>
           </div>
 
-          {isBusinessSettings && isBusinessMember && <AppearanceSettingsCard />}
+          {showBusinessAppearanceCard && <AppearanceSettingsCard />}
 
           {isBusinessSettings && isBusinessMember && (
             <div className={businessSectionClass}>

@@ -20,20 +20,36 @@ function buildSupabaseMock() {
   const nextInsertError = { current: null as { code: string; message: string; details?: string } | null };
   /** When true, inventory lookup returns null (inventory item not found). */
   let inventoryNotFound = false;
+  /** When true, the scoped inventory lookup by business_account_id misses and fallback must succeed. */
+  let scopedInventoryLookupMiss = false;
 
   const from = vi.fn((table: string) => {
     const state: {
       insertedPayload?: Record<string, unknown>;
       updatePayload?: Record<string, unknown>;
+      filters?: Record<string, unknown>;
     } = {};
 
     const builder: any = {
       select: vi.fn(() => builder),
-      eq: vi.fn(() => builder),
-      in: vi.fn(() => builder),
+      eq: vi.fn((column: string, value: unknown) => {
+        state.filters = { ...(state.filters ?? {}), [column]: value };
+        return builder;
+      }),
+      in: vi.fn((column: string, value: unknown) => {
+        state.filters = { ...(state.filters ?? {}), [column]: value };
+        return builder;
+      }),
       maybeSingle: vi.fn(async () => {
         if (table === "collection_items") {
           if (inventoryNotFound) return { data: null, error: null };
+          if (
+            scopedInventoryLookupMiss &&
+            state.filters &&
+            Object.prototype.hasOwnProperty.call(state.filters, "business_account_id")
+          ) {
+            return { data: null, error: null };
+          }
           return {
             data: {
               id: "inv-1",
@@ -93,6 +109,9 @@ function buildSupabaseMock() {
     nextInsertError,
     setInventoryNotFound: (v: boolean) => {
       inventoryNotFound = v;
+    },
+    setScopedInventoryLookupMiss: (v: boolean) => {
+      scopedInventoryLookupMiss = v;
     },
   };
 
@@ -319,6 +338,30 @@ describe("POST /api/business/sales", () => {
     expect(response.status).toBe(400);
     const body = await response.json();
     expect(body.error).toBe("Inventory item not found for this business");
+  });
+
+  it("falls back to legacy inventory rows when business_account_id is missing", async () => {
+    const { client, insertedPayloads } = buildSupabaseMock();
+    createClientMock.mockResolvedValue(client);
+    client.setScopedInventoryLookupMiss(true);
+
+    const response = await callPost(
+      new Request("http://localhost/api/business/sales", {
+        method: "POST",
+        body: JSON.stringify({
+          inventory_item_id: "11111111-1111-1111-1111-111111111111",
+          sold_price_cents: 15000,
+          channel: "ebay",
+        }),
+        headers: { "Content-Type": "application/json" },
+      }) as any
+    );
+
+    expect(response.status).toBe(201);
+    expect(insertedPayloads[0]).toMatchObject({
+      inventory_item_id: "inv-1",
+      business_account_id: "acct-1",
+    });
   });
 
   it("returns 400 with clear message when external order ID is duplicate (23505)", async () => {

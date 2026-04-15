@@ -11,7 +11,11 @@ import type { SubmissionAIWalkthroughState } from "@/lib/grading/submissions/typ
 const BATCH_CONCURRENCY = 3;
 const BATCH_STAGGER_MS = 400;
 
-export default function SubmissionsTabContent() {
+export default function SubmissionsTabContent({
+  blackLabel = false,
+}: {
+  blackLabel?: boolean;
+}) {
   // Map of item.id → walkthrough state
   const [aiStates, setAiStates] = useState<
     Map<string, SubmissionAIWalkthroughState>
@@ -88,6 +92,7 @@ export default function SubmissionsTabContent() {
     <SubmissionBuilderPanel
       identifiedCard={null}
       gradeEstimate={null}
+      blackLabel={blackLabel}
       renderItemExtra={renderItemExtra}
       onItemsLoaded={handleItemsLoaded}
     />

@@ -13,6 +13,8 @@ interface CardDetailsFormProps {
   onUpdate: (updates: Partial<CollectionItem>) => void;
   onSave: () => void;
   saving?: boolean;
+  defaultEditing?: boolean;
+  onExitEdit?: () => void;
 }
 
 export default function CardDetailsForm({
@@ -20,8 +22,10 @@ export default function CardDetailsForm({
   onUpdate,
   onSave,
   saving = false,
+  defaultEditing = false,
+  onExitEdit,
 }: CardDetailsFormProps) {
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditing, setIsEditing] = useState(defaultEditing);
   const [pendingPsaResult, setPendingPsaResult] = useState<PsaLookupResult | null>(null);
   const { lookup, lookupImmediate, isLoading: psaLoading, result: psaResult, error: psaError, clearResult: clearPsa } = usePsaLookup();
   const router = useRouter();
@@ -37,6 +41,7 @@ export default function CardDetailsForm({
   const handleSave = async () => {
     await onSave();
     setIsEditing(false);
+    onExitEdit?.();
   };
 
   if (!isEditing) {
@@ -329,7 +334,7 @@ export default function CardDetailsForm({
           {saving ? "Saving..." : "Save Changes"}
         </button>
         <button
-          onClick={() => setIsEditing(false)}
+          onClick={() => { setIsEditing(false); onExitEdit?.(); }}
           disabled={saving}
           className="px-4 py-2.5 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-white rounded-lg font-medium transition-colors"
         >

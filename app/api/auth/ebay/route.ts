@@ -44,9 +44,9 @@ export async function GET(): Promise<NextResponse> {
       );
     }
 
-    // Fail fast with a user-friendly message if eBay env vars are missing,
-    // instead of throwing an unhandled error that results in a 500 page.
-    if (!process.env.EBAY_CLIENT_ID || !process.env.EBAY_CLIENT_SECRET || !process.env.EBAY_REDIRECT_URI) {
+    // App credentials are required; redirect URI can come from EBAY_REDIRECT_URI or
+    // NEXT_PUBLIC_APP_URL / NEXT_PUBLIC_SITE_URL / VERCEL_URL (see resolveEbayRedirectUri).
+    if (!process.env.EBAY_CLIENT_ID?.trim() || !process.env.EBAY_CLIENT_SECRET?.trim()) {
       const message = "eBay credentials not configured";
       return NextResponse.redirect(
         `${SITE_URL}/business/settings?ebay=error&code=${toErrorCode(message)}`
@@ -74,8 +74,10 @@ export async function GET(): Promise<NextResponse> {
     const rawMessage =
       err instanceof Error ? err.message : "Failed to initiate eBay connection";
     const message =
-      rawMessage.includes("must be set") || rawMessage.includes("EBAY_CLIENT_ID")
-        ? "eBay integration is not configured. Set EBAY_CLIENT_ID, EBAY_CLIENT_SECRET, and EBAY_REDIRECT_URI in the server environment (see .env.example)."
+      rawMessage.includes("must be set") ||
+      rawMessage.includes("EBAY_CLIENT_ID") ||
+      rawMessage.includes("OAuth callback")
+        ? "eBay integration is not configured. Set EBAY_CLIENT_ID and EBAY_CLIENT_SECRET from the eBay Developer Program, and either EBAY_REDIRECT_URI or NEXT_PUBLIC_APP_URL (see .env.example)."
         : rawMessage;
     return NextResponse.json({ error: message }, { status: 500 });
   }

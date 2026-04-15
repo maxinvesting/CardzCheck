@@ -20,6 +20,11 @@ export default function AuthenticatedLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const isGradeWorkspace =
+    pathname === "/grade-hub" ||
+    pathname === "/business/grade-hub" ||
+    pathname?.startsWith("/grade-hub/") ||
+    pathname?.startsWith("/business/grade-hub/");
   const isBusinessRoute = pathname?.startsWith("/business") ?? false;
   const isAdminRoute = pathname?.startsWith("/admin");
   const isBusinessShell = isBusinessRoute || isAdminRoute || pathname === "/dashboard";
@@ -28,7 +33,7 @@ export default function AuthenticatedLayout({
   );
 
   useEffect(() => {
-    if (!isBusinessRoute || typeof window === "undefined") return;
+    if (!isBusinessRoute || isGradeWorkspace || typeof window === "undefined") return;
 
     let isMounted = true;
 
@@ -67,18 +72,22 @@ export default function AuthenticatedLayout({
         handleAppearanceUpdate as EventListener
       );
     };
-  }, [isBusinessRoute]);
+  }, [isBusinessRoute, isGradeWorkspace]);
 
   const businessAppearanceStyle = useMemo(
     () =>
-      isBusinessRoute ? getBusinessAppearanceCssVariables(appearance) : undefined,
-    [appearance, isBusinessRoute]
+      isBusinessRoute && !isGradeWorkspace
+        ? getBusinessAppearanceCssVariables(appearance)
+        : undefined,
+    [appearance, isBusinessRoute, isGradeWorkspace]
   );
 
   return (
     <div
       className={`relative flex min-h-screen overflow-hidden ${
-        isBusinessShell
+        isGradeWorkspace
+          ? "bg-[#060606] text-[var(--biz-text)]"
+          : isBusinessShell
           ? isBusinessRoute
             ? "business-theme business-workspace-theme bg-[var(--biz-bg)] text-[var(--biz-text)]"
             : "business-theme bg-[var(--biz-bg)] text-[var(--biz-text)]"
@@ -86,16 +95,20 @@ export default function AuthenticatedLayout({
       }`}
       style={businessAppearanceStyle}
     >
-      {!isBusinessShell && (
+      {!isBusinessShell && !isGradeWorkspace && (
         <SportsCardBackground variant="default" />
       )}
 
-      <Sidebar />
+      {!isGradeWorkspace ? <Sidebar /> : null}
       {/* Main content area with padding for sidebar and bottom tab */}
-      <div className="flex-1 lg:ml-64 relative z-10 pb-20 lg:pb-0">
+      <div
+        className={`relative z-10 flex-1 pb-20 lg:pb-0 ${
+          isGradeWorkspace ? "" : "lg:ml-64"
+        }`}
+      >
         <div className="min-h-screen">{children}</div>
       </div>
-      <BottomTabBar />
+      {!isGradeWorkspace ? <BottomTabBar /> : null}
     </div>
   );
 }

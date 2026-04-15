@@ -14,7 +14,7 @@
     "grading:upload-model": "node scripts/upload_model_version.mjs",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "test": "vitest",
     "test:smart-search": "SMART_SEARCH_HARNESS=1 vitest run lib/smartSearch/__tests__/smart-search-harness.test.ts"
   },

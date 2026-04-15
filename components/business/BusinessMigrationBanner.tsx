@@ -140,7 +140,7 @@ export default function BusinessMigrationBanner({ onRetry }: Props) {
         <div>
           <h3 className="text-base font-bold text-amber-300">Database setup required</h3>
           <p className="text-sm text-amber-200/70 mt-1">
-            The business inventory tables haven't been created in your database yet. Run a one-time SQL migration to get started.
+            The business inventory tables haven&apos;t been created in your database yet. Run a one-time SQL migration to get started.
           </p>
         </div>
       </div>

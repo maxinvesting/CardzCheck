@@ -39,22 +39,27 @@ export async function getShopListingsWithStats(): Promise<{
   listings: ShopListing[];
   stats: ShopStats;
 }> {
-  const supabase = await createServiceClient();
-  const { data, error } = await supabase
-    .from("shop_listings")
-    .select(PUBLIC_COLUMNS)
-    .eq("status", "active")
-    .eq("publish_state", "published")
-    .order("created_at", { ascending: false });
+  try {
+    const supabase = await createServiceClient();
+    const { data, error } = await supabase
+      .from("shop_listings")
+      .select(PUBLIC_COLUMNS)
+      .eq("status", "active")
+      .eq("publish_state", "published")
+      .order("created_at", { ascending: false });
 
-  if (error) {
-    console.error("Error fetching shop listings:", error);
+    if (error) {
+      console.error("Error fetching shop listings:", error);
+      return { listings: [], stats: defaultStats() };
+    }
+
+    const listings = await hydrateShopListings((data ?? []) as ShopListing[]);
+    const stats = computeStats(listings);
+    return { listings, stats };
+  } catch (error) {
+    console.error("Error initializing shop listings:", error);
     return { listings: [], stats: defaultStats() };
   }
-
-  const listings = await hydrateShopListings((data ?? []) as ShopListing[]);
-  const stats = computeStats(listings);
-  return { listings, stats };
 }
 
 function defaultStats(): ShopStats {

@@ -193,10 +193,10 @@ function PERSONAL_NAV_ITEMS(): NavItem[] {
     { name: "Dashboard", href: "/dashboard", icon: <HomeIcon />, exact: true },
     { name: "Collection", href: "/collection", icon: <CollectionIcon /> },
     { name: "Grade Probability Engine", href: "/grade-hub", icon: <BadgeIcon />, badge: "dot" },
-    { name: "News & Updates", href: "/news", icon: <NewsIcon />, badge: "New" },
+    { name: "News & Updates", href: "/news", icon: <NewsIcon /> },
     { name: "Bulk Mode", href: "/bulk", icon: <BulkIcon /> },
     { name: "Watchlist", href: "/watchlist", icon: <EyeIcon />, isPro: true, badge: "Pro" },
-    { name: "Compare Listings", href: "/comps", icon: <ChartIcon />, badge: "Beta" },
+    { name: "Compare Listings", href: "/comps", icon: <ChartIcon /> },
     { name: "CardzCheck Analyst", href: "/analyst", icon: <AnalystIcon />, isPro: true, badge: "Pro" },
     { name: "Marketplace", href: "/shop", icon: <ShopIcon /> },
     { name: "Help & FAQ", href: "/help", icon: <HelpIcon /> },
@@ -221,10 +221,10 @@ function BUSINESS_NAV_ITEMS(): NavItem[] {
   return [
     { name: "Dashboard", href: "/business", icon: <HomeIcon />, exact: true },
     { name: "Ledger", href: "/business/ledger", icon: <LedgerIcon /> },
-    { name: "Customer Service", href: "/business/messages", icon: <MessagesIcon />, badge: "New" },
+    { name: "Customer Service", href: "/business/messages", icon: <MessagesIcon /> },
     { name: "Grade Probability Engine", href: "/business/grade-hub", icon: <BadgeIcon />, badge: "dot" },
-    { name: "News & Updates", href: "/business/news", icon: <NewsIcon />, badge: "New" },
-    { name: "Compare Listings", href: "/business/comps", icon: <ChartIcon />, badge: "Beta" },
+    { name: "News & Updates", href: "/business/news", icon: <NewsIcon /> },
+    { name: "Compare Listings", href: "/business/comps", icon: <ChartIcon /> },
     { name: "Business Consultant", href: "/business/consultant", icon: <AnalystIcon /> },
     { name: "Marketplace", href: "/shop", icon: <ShopIcon /> },
     { name: "Help & FAQ", href: "/business/help", icon: <HelpIcon /> },
@@ -328,9 +328,9 @@ export default function Sidebar() {
             <span
               className="mt-1 rounded px-2 py-0.5 text-[10px] font-bold tracking-wide"
               style={{
-                background: "rgba(240,180,41,0.1)",
-                border: "1px solid rgba(240,180,41,0.2)",
-                color: "#f0b429",
+                background: "var(--biz-primary-soft)",
+                border: "1px solid var(--biz-primary-border)",
+                color: "var(--biz-primary)",
               }}
             >
               Business
@@ -365,6 +365,9 @@ export default function Sidebar() {
                           : "rgba(255,255,255,0.06)",
                         borderLeft: "2px solid var(--biz-nav-active-border)",
                         paddingLeft: "14px",
+                        boxShadow: isBusinessRoute
+                          ? "inset 0 0 0 1px var(--biz-primary-border)"
+                          : undefined,
                       }
                     : {}
                 }
