@@ -4,19 +4,29 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useParams, usePathname, useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { CardImage as TrustedCardImageFrame } from "@/components/CardImage";
+import BusinessInventoryItemEditor from "@/components/business/BusinessInventoryItemEditor";
 import {
   estimateTakeHome,
   fmtCents,
 } from "@/lib/business/pricing";
-import { useGradeEstimateFromImages } from "@/lib/grading/useGradeEstimateFromImages";
-import type { GradeEstimatorCardInput } from "@/lib/grade-estimator/value";
-import type { CardImage, TrustedCardImage, WorthGradingResult } from "@/types";
+import type { BusinessInventoryItem, CardImage, TrustedCardImage } from "@/types";
 import { buildEbaySoldUrl } from "@/lib/ebay/comps-url";
+import {
+  buildBeckettMarketplaceSearchUrl,
+  buildComcSearchUrl,
+  buildEbaySearchUrl,
+  buildFanaticsCollectSearchUrl,
+  buildFacebookMarketplaceSearchUrl,
+  buildMySlabsSearchUrl,
+} from "@/lib/marketplace-search";
 
 // ── Types ────────────────────────────────────────────────────────────
 
 interface ProfileItem {
   id: string;
+  card_id?: string | null;
+  user_id?: string;
+  business_account_id?: string;
   title?: string | null;
   player_name?: string | null;
   year?: string | null;
@@ -30,14 +40,20 @@ interface ProfileItem {
   quantity?: number | null;
   status?: string | null;
   channel?: string | null;
+  acquisition_type?: "buy" | "trade" | "rip" | "consignment" | "other" | null;
   condition_status?: string | null;
   list_price_cents?: number | null;
   cost_basis_total_cents?: number | null;
+  tax_cents?: number | null;
+  shipping_cents?: number | null;
+  fees_paid_cents?: number | null;
   current_market_value_cents?: number | null;
   acquisition_date?: string | null;
   purchase_price?: number | null;
   purchase_date?: string | null;
   notes?: string | null;
+  location?: string | null;
+  ebay_item_id?: string | null;
   image_url?: string | null;
   image_source?: "psa" | "user" | "none" | null;
   user_image_url?: string | null;
@@ -72,8 +88,14 @@ type TabId = "details" | "shop";
 // ── Helpers ──────────────────────────────────────────────────────────
 
 function pickImageUrl(item: ProfileItem): string | null {
+  const certDigits = (item.psa_cert_number ?? item.cert_number ?? "").replace(/\D/g, "");
+  const certFallback =
+    certDigits.length >= 5
+      ? `https://cert-images.psa.com/${certDigits}/large/${certDigits}_f.jpg`
+      : null;
   return (
     item.trusted_image?.frontUrl ||
+    certFallback ||
     item.image_url ||
     item.user_image_url ||
     item.card_images?.find((image) => typeof image.url === "string" && image.url.length > 0)?.url ||
@@ -181,21 +203,13 @@ export default function CardProfilePage() {
 
   // Active tab
   const [activeTab, setActiveTab] = useState<TabId>("details");
+  const [activePanel, setActivePanel] = useState<"none" | "inventory">("none");
 
   // Toast
   const [toast, setToast] = useState<{
     type: "success" | "error";
     message: string;
   } | null>(null);
-
-  // Business grade estimate + worth-grading summary
-  const [cardForGrade, setCardForGrade] = useState<{
-    imageUrls: string[];
-    cardIdentity: GradeEstimatorCardInput;
-  } | null>(null);
-  const [valueResult, setValueResult] = useState<WorthGradingResult | null>(null);
-  const [valueLoading, setValueLoading] = useState(false);
-  const [valueError, setValueError] = useState<string | null>(null);
 
   const buildProfilePath = useCallback((resolvedId: string, mode: Mode) => {
     if (mode === "business") {
@@ -210,6 +224,16 @@ export default function CardProfilePage() {
       return () => clearTimeout(t);
     }
   }, [toast]);
+
+  useEffect(() => {
+    if (!isBusinessMode) return;
+    const panel = searchParams.get("panel");
+    if (panel === "inventory") {
+      setActivePanel("inventory");
+    } else {
+      setActivePanel("none");
+    }
+  }, [isBusinessMode, searchParams]);
 
   useEffect(() => {
     if (!imageFileInput) {
@@ -227,35 +251,6 @@ export default function CardProfilePage() {
     const applyProfile = (data: any, mode: Mode) => {
       setItem(data.item);
       setSales(data.sales ?? []);
-
-      if (mode === "business" && data.item) {
-        const businessItem = data.item as ProfileItem;
-        const imageCandidates = [
-          ...(businessItem.trusted_image?.frontCandidates ?? []),
-          ...((businessItem.card_images ?? [])
-            .map((image) => image.url)
-            .filter((url): url is string => typeof url === "string" && url.length > 0)),
-        ].filter((url, index, array) => array.indexOf(url) === index);
-        if (imageCandidates.length > 0) {
-          const cardIdentity: GradeEstimatorCardInput = {
-            player_name: businessItem.player_name ?? businessItem.title ?? "",
-            year: businessItem.year ?? undefined,
-            set_name: businessItem.set_name ?? undefined,
-            card_number: undefined,
-            parallel_type: businessItem.parallel_type ?? undefined,
-            variation: businessItem.insert ?? undefined,
-            insert: undefined,
-          };
-          setCardForGrade({
-            imageUrls: imageCandidates,
-            cardIdentity,
-          });
-        } else {
-          setCardForGrade(null);
-        }
-      } else {
-        setCardForGrade(null);
-      }
     };
 
     const fetchProfile = async (mode: Mode) => {
@@ -346,6 +341,37 @@ export default function CardProfilePage() {
   // ── Derived State ────────────────────────────────────────────────
 
   const imageUrl = item ? pickImageUrl(item) : null;
+  const trustedImageForFrame = useMemo<TrustedCardImage | null>(() => {
+    if (!item) return null;
+    if (item.trusted_image?.frontCandidates?.length) return item.trusted_image;
+
+    const certDigits = (item.psa_cert_number ?? item.cert_number ?? "").replace(/\D/g, "");
+    if (certDigits.length < 5) return item.trusted_image ?? null;
+
+    const frontCandidates = [
+      `https://cert-images.psa.com/${certDigits}/large/${certDigits}_f.jpg`,
+      `https://cert-images.psa.com/${certDigits}/large/${certDigits}_front.jpg`,
+      `https://cert-images.psa.com/${certDigits}/small/${certDigits}_f.jpg`,
+      `https://cert-images.psa.com/${certDigits}/small/${certDigits}_front.jpg`,
+    ];
+    const backCandidates = [
+      `https://cert-images.psa.com/${certDigits}/large/${certDigits}_b.jpg`,
+      `https://cert-images.psa.com/${certDigits}/large/${certDigits}_back.jpg`,
+      `https://cert-images.psa.com/${certDigits}/small/${certDigits}_b.jpg`,
+      `https://cert-images.psa.com/${certDigits}/small/${certDigits}_back.jpg`,
+    ];
+    const front = frontCandidates[0];
+    const back = backCandidates[0];
+
+    return {
+      source: "psa",
+      frontUrl: front,
+      backUrl: back,
+      frontCandidates,
+      backCandidates,
+      hasFallbackCta: false,
+    };
+  }, [item]);
   const title = item ? displayTitle(item) : "";
   const ebayCompsUrl = item
     ? buildEbaySoldUrl({
@@ -358,6 +384,87 @@ export default function CardProfilePage() {
         title: item.title ?? title,
       })
     : buildEbaySoldUrl({ title: "sports trading card" });
+  const marketplaceLinks = useMemo(() => {
+    const params = item
+      ? {
+          player: item.player_name,
+          year: item.year,
+          setName: item.set_name,
+          parallel: item.parallel_type,
+          cardNumber: item.card_number,
+          gradingCompany: item.grading_company,
+          grade: item.grade,
+          title: item.title ?? title,
+        }
+      : { title: "sports trading card" };
+
+    const q = encodeURIComponent(
+      [
+        (params as { player?: string }).player,
+        (params as { year?: string }).year,
+        (params as { setName?: string }).setName,
+        (params as { parallel?: string }).parallel,
+        (params as { gradingCompany?: string }).gradingCompany,
+        (params as { grade?: string }).grade,
+      ]
+        .filter(Boolean)
+        .join(" ")
+    );
+    const playerQ = encodeURIComponent((params as { player?: string }).player ?? "");
+
+    return [
+      {
+        label: "eBay Sold",
+        description: "Completed & sold listings",
+        href: buildEbaySoldUrl(params as Parameters<typeof buildEbaySoldUrl>[0]),
+      },
+      {
+        label: "eBay Active",
+        description: "Current buy it now & auctions",
+        href: buildEbaySearchUrl(params),
+      },
+      {
+        label: "130point",
+        description: "eBay sold comps aggregator",
+        href: `https://www.130point.com/sales?q=${q}`,
+      },
+      {
+        label: "PWCC",
+        description: "Premium auctions & weekly",
+        href: `https://www.pwccmarketplace.com/marketplace?query=${q}`,
+      },
+      {
+        label: "Goldin",
+        description: "High-end card auctions",
+        href: `https://goldin.co/search?q=${playerQ}`,
+      },
+      {
+        label: "MySlabs",
+        description: "Graded slab marketplace",
+        href: buildMySlabsSearchUrl(params),
+      },
+      {
+        label: "COMC",
+        description: "Raw & graded marketplace",
+        href: buildComcSearchUrl(params),
+      },
+      {
+        label: "Fanatics Collect",
+        description: "Buy now marketplace",
+        href: buildFanaticsCollectSearchUrl(params),
+      },
+      {
+        label: "Beckett",
+        description: "Price guide & market data",
+        href: buildBeckettMarketplaceSearchUrl(params),
+      },
+      {
+        label: "Alt",
+        description: "Fractional & direct sales",
+        href: `https://app.alt.xyz/search?q=${playerQ}`,
+      },
+    ];
+  }, [item, title]);
 
   const takeHome = useMemo(() => {
     if (!item) return [];
@@ -376,46 +483,6 @@ export default function CardProfilePage() {
     const qty = item.quantity ?? 1;
     return item.current_market_value_cents * qty;
   }, [item]);
-
-  const gradeEstimate = useGradeEstimateFromImages({
-    imageUrls: cardForGrade?.imageUrls ?? [],
-    card: cardForGrade?.cardIdentity ?? null,
-  });
-
-  const fetchWorthGrading = useCallback(async () => {
-    if (!cardForGrade?.cardIdentity || !gradeEstimate.estimate?.grade_probabilities) return;
-    setValueLoading(true);
-    setValueError(null);
-    try {
-      const response = await fetch("/api/grade-estimator/value", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          card: cardForGrade.cardIdentity,
-          gradeProbabilities: gradeEstimate.estimate.grade_probabilities,
-          estimatorConfidence: gradeEstimate.estimate.grade_probabilities.confidence,
-        }),
-      });
-      if (!response.ok) throw new Error("POST_GRADING_VALUE_UNAVAILABLE");
-      const result: WorthGradingResult = await response.json();
-      setValueResult(result);
-    } catch {
-      setValueResult(null);
-      setValueError("Unable to estimate post-grading value right now.");
-    } finally {
-      setValueLoading(false);
-    }
-  }, [cardForGrade, gradeEstimate.estimate]);
-
-  useEffect(() => {
-    if (!cardForGrade?.cardIdentity || !gradeEstimate.estimate?.grade_probabilities) {
-      setValueResult(null);
-      setValueError(null);
-      setValueLoading(false);
-      return;
-    }
-    void fetchWorthGrading();
-  }, [cardForGrade, gradeEstimate.estimate, fetchWorthGrading]);
 
   // Unrealized P/L
   const plData = useMemo(() => {
@@ -473,13 +540,13 @@ export default function CardProfilePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           inventory_item_id: item.id,
-          sale_price_cents: priceCents,
+          sold_price_cents: priceCents,
           channel: soldForm.channel,
-          sale_date: soldForm.sale_date,
+          sold_at: soldForm.sale_date,
           platform_fees_cents: 0,
           shipping_charged_cents: 0,
-          shipping_paid_cents: 0,
-          other_costs_cents: 0,
+          shipping_cost_cents: 0,
+          tax_cents: 0,
         }),
       });
       if (res.ok) {
@@ -490,7 +557,8 @@ export default function CardProfilePage() {
         setSoldForm({ sale_price: "", channel: "ebay", sale_date: new Date().toISOString().slice(0, 10) });
         setToast({ type: "success", message: "Sale recorded" });
       } else {
-        setToast({ type: "error", message: "Failed to record sale" });
+        const data = await res.json().catch(() => ({}));
+        setToast({ type: "error", message: data.error || "Failed to record sale" });
       }
     } catch {
       setToast({ type: "error", message: "Failed to record sale" });
@@ -544,6 +612,27 @@ export default function CardProfilePage() {
     }
   };
 
+  const handleSaveBusinessInventoryItem = async (
+    id: string,
+    updates: Partial<BusinessInventoryItem>
+  ) => {
+    try {
+      const res = await fetch("/api/business/inventory", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, ...updates }),
+      });
+      if (!res.ok) {
+        setToast({ type: "error", message: "Failed to save item" });
+        return;
+      }
+      await loadProfile();
+      setToast({ type: "success", message: "Item saved" });
+    } catch {
+      setToast({ type: "error", message: "Failed to save item" });
+    }
+  };
+
   const openImageModal = () => {
     setImageFileInput(null);
     if (imageFilePickerRef.current) {
@@ -581,7 +670,7 @@ export default function CardProfilePage() {
     return (
       <div
         className="min-h-screen flex items-center justify-center"
-        style={{ background: "#EEECE8", fontFamily: "'Sora', sans-serif" }}
+        style={{ background: "#F6FAF7", fontFamily: "'Sora', sans-serif" }}
       >
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-2 border-gray-300 border-t-gray-700 rounded-full animate-spin" />
@@ -595,14 +684,14 @@ export default function CardProfilePage() {
     return (
       <div
         className="min-h-screen flex items-center justify-center px-4"
-        style={{ background: "#EEECE8", fontFamily: "'Sora', sans-serif" }}
+        style={{ background: "#F6FAF7", fontFamily: "'Sora', sans-serif" }}
       >
         <div className="bg-white rounded-2xl p-10 text-center shadow-sm max-w-sm w-full">
           <p className="text-lg font-semibold text-gray-800 mb-2">{error || "Item not found"}</p>
           <button
             onClick={() => router.push(isBusinessMode ? "/business" : "/collection")}
             className="mt-4 px-6 py-2.5 text-white rounded-xl text-sm font-medium hover:bg-gray-800 transition-colors"
-            style={{ background: "#111" }}
+            style={{ background: "#146B42" }}
           >
             {isBusinessMode ? "Back to Inventory" : "Back to Collection"}
           </button>
@@ -614,7 +703,6 @@ export default function CardProfilePage() {
   // ── Render: Profile ──────────────────────────────────────────────
 
   const gradeCompany = (item.grading_company ?? "PSA").toUpperCase();
-  const gradeNum = item.grade ?? "—";
   const certNum = item.psa_cert_number ?? item.cert_number;
   const playerName = item.player_name ?? item.title ?? "Unknown Player";
   const baseSetLabel = [item.year, item.set_name].filter(Boolean).join(" ");
@@ -626,20 +714,37 @@ export default function CardProfilePage() {
 
   const tabs: { id: TabId; label: string }[] = [
     { id: "details", label: "Details" },
-    { id: "shop", label: "Shop" },
+    { id: "shop", label: "Comps" },
   ];
+  const businessItemForEditor =
+    isBusinessMode && item ? (item as unknown as BusinessInventoryItem) : null;
+
+  const palette = {
+    appBg: "#F6FAF7",
+    panelBg: "#FFFFFF",
+    subtleGreen: "#EAF6EE",
+    border: "#DCE9E1",
+    text: "#101A14",
+    muted: "#6F7D74",
+    accent: "#1C8C58",
+    accentDark: "#146B42",
+  };
 
   return (
     <div
       className="min-h-screen"
-      style={{ background: "#EEECE8", fontFamily: "'Sora', sans-serif" }}
+      style={{
+        background: `radial-gradient(circle at 10% 0%, ${palette.subtleGreen} 0%, ${palette.appBg} 45%, #FFFFFF 100%)`,
+        fontFamily: "'Sora', sans-serif",
+      }}
     >
       <div className="max-w-[1100px] mx-auto px-4 py-8">
         {/* Top nav */}
-        <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center justify-between mb-6">
           <button
             onClick={() => router.push(isBusinessMode ? "/business" : "/collection")}
-            className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors"
+            className="flex items-center gap-1.5 text-sm transition-colors px-3 py-1.5 rounded-full border"
+            style={{ color: palette.muted, borderColor: palette.border, background: "#FFFFFFCC" }}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -652,45 +757,23 @@ export default function CardProfilePage() {
         <div
           className="flex overflow-hidden"
           style={{
-            background: "#fff",
-            borderRadius: 20,
-            boxShadow: "0 4px 40px rgba(0,0,0,0.08)",
+            background: palette.panelBg,
+            borderRadius: 24,
+            border: `1px solid ${palette.border}`,
+            boxShadow: "0 14px 40px rgba(16, 40, 26, 0.08)",
           }}
         >
           {/* ── LEFT PANEL ───────────────────────────────────────── */}
           <div
             className="shrink-0 flex flex-col"
-            style={{ width: 380, background: "#F7F6F2", borderRadius: "20px 0 0 20px" }}
+            style={{
+              width: 380,
+              background: "linear-gradient(180deg, #F7FCF9 0%, #F1F8F4 100%)",
+              borderRight: `1px solid ${palette.border}`,
+            }}
           >
             {/* Image area */}
             <div className="relative flex flex-col items-center" style={{ flex: 1 }}>
-              {/* PSA-style slab label */}
-              <div
-                className="w-full flex items-center justify-between px-3 py-2"
-                style={{ background: "#fff", borderBottom: "1px solid #E8E6E1" }}
-              >
-                <div
-                  className="flex flex-col gap-0.5 leading-none"
-                  style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 7, color: "#555" }}
-                >
-                  {item.set_name && (
-                    <span className="uppercase tracking-widest">{item.set_name}</span>
-                  )}
-                  <span className="uppercase tracking-widest font-semibold" style={{ color: "#1a1a1a" }}>
-                    {playerName}
-                  </span>
-                  {item.insert && (
-                    <span className="uppercase tracking-widest">{item.insert}</span>
-                  )}
-                </div>
-                <div
-                  className="font-bold leading-none"
-                  style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 24, color: "#C8102E" }}
-                >
-                  {gradeNum}
-                </div>
-              </div>
-
               {/* Card image */}
               <div className="relative w-full flex items-center justify-center py-6 px-8">
                 <div
@@ -711,7 +794,7 @@ export default function CardProfilePage() {
                   }}
                 >
                   <TrustedCardImageFrame
-                    image={item.trusted_image}
+                    image={trustedImageForFrame}
                     alt={title}
                     className="w-full rounded-[8px] bg-white"
                     imageClassName="transition-transform duration-200 hover:scale-[1.02]"
@@ -723,24 +806,12 @@ export default function CardProfilePage() {
                 </div>
               </div>
 
-              {/* Player name bar */}
-              <div
-                className="w-full px-4 py-2.5"
-                style={{ background: "rgba(10,15,28,0.72)" }}
-              >
-                <p className="text-white font-semibold text-sm truncate" style={{ fontFamily: "'Sora', sans-serif" }}>
-                  {playerName}
-                </p>
-                {item.year && (
-                  <p className="text-white/50 text-xs mt-0.5">{item.year}</p>
-                )}
-              </div>
             </div>
 
             {/* 3 ghost icon buttons */}
             <div
               className="flex items-center justify-center gap-3 px-6 py-4"
-              style={{ borderTop: "1px solid #E8E6E1" }}
+              style={{ borderTop: `1px solid ${palette.border}` }}
             >
               {/* Cert / PSA lookup */}
               {certNum ? (
@@ -801,7 +872,7 @@ export default function CardProfilePage() {
               {/* 1. Set tag */}
               <p
                 className="uppercase tracking-widest mb-2"
-                style={{ fontSize: 10, color: "#B0ADA8", fontWeight: 500 }}
+                style={{ fontSize: 10, color: palette.muted, fontWeight: 600 }}
               >
                 {setLabel}
               </p>
@@ -813,7 +884,7 @@ export default function CardProfilePage() {
                   fontSize: 34,
                   fontWeight: 800,
                   letterSpacing: "-0.02em",
-                  color: "#0F0E0D",
+                  color: palette.text,
                   lineHeight: 1.1,
                 }}
               >
@@ -822,20 +893,20 @@ export default function CardProfilePage() {
 
               {/* 3. Price section */}
               <div className="grid grid-cols-2 gap-3 mb-4">
-                <div style={{ border: "1px solid #E8E6E1", borderRadius: 12, padding: "14px 16px" }}>
-                  <p className="uppercase tracking-widest mb-2" style={{ fontSize: 9, color: "#B0ADA8", fontWeight: 500 }}>
+                <div style={{ border: `1px solid ${palette.border}`, borderRadius: 14, padding: "14px 16px", background: "#FBFEFC" }}>
+                  <p className="uppercase tracking-widest mb-2" style={{ fontSize: 9, color: palette.muted, fontWeight: 600 }}>
                     Market Estimate
                   </p>
                   {marketValue ? (
-                    <p style={{ fontSize: 26, fontWeight: 700, color: "#0F0E0D", lineHeight: 1 }}>
+                    <p style={{ fontSize: 26, fontWeight: 700, color: palette.text, lineHeight: 1 }}>
                       {fmtCents(marketValue)}
                     </p>
                   ) : (
                     <p style={{ fontSize: 26, fontWeight: 700, color: "#C0BDBA", lineHeight: 1 }}>—</p>
                   )}
                 </div>
-                <div style={{ border: "1px solid #E8E6E1", borderRadius: 12, padding: "14px 16px" }}>
-                  <p className="uppercase tracking-widest mb-2" style={{ fontSize: 9, color: "#B0ADA8", fontWeight: 500 }}>
+                <div style={{ border: `1px solid ${palette.border}`, borderRadius: 14, padding: "14px 16px", background: "#FBFEFC" }}>
+                  <p className="uppercase tracking-widest mb-2" style={{ fontSize: 9, color: palette.muted, fontWeight: 600 }}>
                     eBay Comps
                   </p>
                   <a
@@ -843,7 +914,7 @@ export default function CardProfilePage() {
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1 font-bold hover:underline"
-                    style={{ fontSize: 16, color: "#2563EB" }}
+                    style={{ fontSize: 16, color: palette.accentDark }}
                   >
                     View Sold
                     <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -855,15 +926,22 @@ export default function CardProfilePage() {
 
               {/* 4. Primary CTA + Item Actions */}
               <div className="flex items-center gap-2 mb-6">
-                <a
-                  href={ebayCompsUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-1 flex items-center justify-center py-3 text-white font-semibold text-sm transition-colors hover:bg-gray-800"
-                  style={{ background: "#111", borderRadius: 12 }}
+                <button
+                  onClick={() => setActiveTab("shop")}
+                  className="flex-1 flex items-center justify-center py-3 text-white font-semibold text-sm transition-colors"
+                  style={{ background: palette.accentDark, borderRadius: 12, border: "none", cursor: "pointer" }}
                 >
-                  Find Comps on eBay
-                </a>
+                  View Comps
+                </button>
+                {isBusinessMode && (
+                  <button
+                    onClick={() => setActivePanel("inventory")}
+                    className="inline-flex items-center justify-center h-[46px] px-4 text-sm font-semibold text-white transition-colors"
+                    style={{ background: "#1C8C58", borderRadius: 12 }}
+                  >
+                    Edit Inventory
+                  </button>
+                )}
                 <div className="relative" ref={overflowRef}>
                   <button
                     onClick={() => setShowOverflow((v) => !v)}
@@ -873,9 +951,9 @@ export default function CardProfilePage() {
                       paddingLeft: 14,
                       paddingRight: 14,
                       borderRadius: 12,
-                      border: "1.5px solid #E4E2DE",
-                      color: "#3D3A37",
-                      background: "#fff",
+                      border: `1.5px solid ${palette.border}`,
+                      color: palette.text,
+                      background: "#FFFFFF",
                       whiteSpace: "nowrap",
                     }}
                   >
@@ -890,7 +968,7 @@ export default function CardProfilePage() {
                       style={{
                         background: "#fff",
                         borderRadius: 12,
-                        border: "1px solid #E4E2DE",
+                        border: `1px solid ${palette.border}`,
                         boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
                       }}
                     >
@@ -898,19 +976,19 @@ export default function CardProfilePage() {
                         <button
                           onClick={() => {
                             setShowOverflow(false);
-                            openImageModal();
+                            setActivePanel("inventory");
                           }}
                           className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors"
-                          style={{ color: "#3D3A37" }}
+                          style={{ color: palette.text }}
                         >
-                          Edit
+                          Edit Inventory
                         </button>
                       ) : (
                         <Link
                           href={`/cards/${item.id}`}
                           onClick={() => setShowOverflow(false)}
                           className="block w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors"
-                          style={{ color: "#3D3A37" }}
+                          style={{ color: palette.text }}
                         >
                           Edit
                         </Link>
@@ -919,7 +997,7 @@ export default function CardProfilePage() {
                         <button
                           onClick={() => { setShowOverflow(false); setShowSoldModal(true); }}
                           className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors"
-                          style={{ color: "#3D3A37" }}
+                          style={{ color: palette.text }}
                         >
                           Mark Sold
                         </button>
@@ -930,7 +1008,7 @@ export default function CardProfilePage() {
                           openImageModal();
                         }}
                         className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors"
-                        style={{ color: "#3D3A37" }}
+                        style={{ color: palette.text }}
                       >
                         {imageUrl ? "Change Image" : "Set Image"}
                       </button>
@@ -1025,7 +1103,7 @@ export default function CardProfilePage() {
               {/* 7. Tab bar */}
               <div
                 className="flex items-center gap-6 -mx-8 px-8"
-                style={{ borderTop: "1.5px solid #EBEBEA" }}
+                style={{ borderTop: `1.5px solid ${palette.border}` }}
               >
                 {tabs.map((tab) => (
                   <button
@@ -1033,7 +1111,7 @@ export default function CardProfilePage() {
                     onClick={() => setActiveTab(tab.id)}
                     className="relative text-sm font-medium transition-colors py-3"
                     style={{
-                      color: activeTab === tab.id ? "#0F0E0D" : "#A09D9A",
+                      color: activeTab === tab.id ? palette.text : palette.muted,
                       background: "none",
                       border: "none",
                       cursor: "pointer",
@@ -1043,7 +1121,7 @@ export default function CardProfilePage() {
                     {activeTab === tab.id && (
                       <span
                         className="absolute top-0 left-0 right-0"
-                        style={{ height: 2, background: "#0F0E0D", borderRadius: "0 0 2px 2px" }}
+                        style={{ height: 2, background: palette.accentDark, borderRadius: "0 0 2px 2px" }}
                       />
                     )}
                   </button>
@@ -1068,51 +1146,14 @@ export default function CardProfilePage() {
                   </div>
 
                   {item.notes && (
-                    <div className="mt-4 p-3 rounded-xl" style={{ background: "#F7F6F2", border: "1px solid #EBEBEA" }}>
+                    <div className="mt-4 p-3 rounded-xl" style={{ background: "#F8FCFA", border: "1px solid #DCE9E1" }}>
                       <p className="text-xs uppercase tracking-widest text-gray-400 mb-1">Notes</p>
                       <p className="text-sm text-gray-700">{item.notes}</p>
                     </div>
                   )}
 
-                  {isBusinessMode && cardForGrade && gradeEstimate.estimate && (
-                    <div className="mt-4 p-3 rounded-xl" style={{ background: "#F7F6F2", border: "1px solid #EBEBEA" }}>
-                      <p className="text-xs uppercase tracking-widest text-gray-400 mb-2">Grade Estimate</p>
-                      <p className="text-sm text-gray-700">
-                        Most likely: PSA {gradeEstimate.estimate.estimated_grade_low}–{gradeEstimate.estimate.estimated_grade_high}
-                        {gradeEstimate.estimate.grade_probabilities?.confidence && (
-                          <span className="text-gray-400 ml-2">· {gradeEstimate.estimate.grade_probabilities.confidence} confidence</span>
-                        )}
-                      </p>
-                      {valueResult && (
-                        <p className="text-sm text-gray-700 mt-1">
-                          Should grade?{" "}
-                          <span className="font-semibold text-emerald-600">
-                            {valueResult.rating === "strong_yes"
-                              ? "Strong Yes"
-                              : valueResult.rating === "yes"
-                              ? "Yes"
-                              : valueResult.rating === "maybe"
-                              ? "Maybe"
-                              : "No"}
-                          </span>
-                          {valueResult.bestOption !== "none" && (
-                            <span className="text-gray-400 ml-2">· Best: {valueResult.bestOption.toUpperCase()}</span>
-                          )}
-                        </p>
-                      )}
-                      {!valueResult && valueLoading && (
-                        <p className="text-xs text-gray-400 mt-1">Analyzing grading value…</p>
-                      )}
-                      {valueError && (
-                        <button onClick={() => void fetchWorthGrading()} className="mt-1 text-xs text-blue-500 hover:text-blue-400">
-                          Retry analysis
-                        </button>
-                      )}
-                    </div>
-                  )}
-
                   {isBusinessMode && takeHome.length > 0 && (
-                    <div className="mt-4 p-3 rounded-xl" style={{ background: "#F7F6F2", border: "1px solid #EBEBEA" }}>
+                    <div className="mt-4 p-3 rounded-xl" style={{ background: "#F8FCFA", border: "1px solid #DCE9E1" }}>
                       <p className="text-xs uppercase tracking-widest text-gray-400 mb-2">Est. Take-Home at List Price</p>
                       <div className="space-y-1">
                         {takeHome.map((th) => (
@@ -1134,28 +1175,85 @@ export default function CardProfilePage() {
 
               {/* Shop tab */}
               {activeTab === "shop" && (
-                <div className="flex flex-col items-center justify-center py-10 gap-4">
-                  <p className="text-sm text-center max-w-xs" style={{ color: "#9D9A97" }}>
-                    Search for comparable listings on eBay to track live market prices.
-                  </p>
-                  <a
-                    href={ebayCompsUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-gray-800"
-                    style={{ background: "#111", borderRadius: 11 }}
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                    </svg>
-                    Find Comps on eBay
-                  </a>
+                <div className="py-8">
+                  <div className="mb-4">
+                    <p
+                      className="uppercase tracking-widest mb-2"
+                      style={{ fontSize: 9, color: palette.muted, fontWeight: 600 }}
+                    >
+                      Marketplace Comps
+                    </p>
+                    <p className="text-sm max-w-md" style={{ color: "#9D9A97" }}>
+                      Search this card across every major platform — sold comps, active listings, and price guides.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {marketplaceLinks.map((marketplace) => (
+                      <a
+                        key={marketplace.label}
+                        href={marketplace.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group flex items-center justify-between gap-3 p-4 transition-colors hover:bg-[#F8FCFA]"
+                        style={{
+                          border: `1px solid ${palette.border}`,
+                          borderRadius: 16,
+                          background: "#FFFFFF",
+                        }}
+                      >
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold" style={{ color: palette.text }}>
+                            {marketplace.label}
+                          </p>
+                          <p className="text-xs mt-1" style={{ color: palette.muted }}>
+                            {marketplace.description}
+                          </p>
+                        </div>
+                        <svg
+                          className="w-4 h-4 shrink-0 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
+                          fill="none"
+                          stroke={palette.accentDark}
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                          />
+                        </svg>
+                      </a>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
           </div>
         </div>
       </div>
+
+      {isBusinessMode && activePanel === "inventory" && businessItemForEditor && (
+        <div className="fixed inset-0 z-50">
+          <div className="absolute inset-0 bg-black/35" onClick={() => setActivePanel("none")} />
+          <div
+            className="absolute right-0 top-0 h-full w-full max-w-2xl overflow-y-auto"
+            style={{
+              background: "#FFFFFF",
+              borderLeft: "1px solid #DCE9E1",
+              boxShadow: "0 12px 40px rgba(16, 40, 26, 0.16)",
+            }}
+          >
+            <BusinessInventoryItemEditor
+              item={businessItemForEditor}
+              onSave={handleSaveBusinessInventoryItem}
+              onClose={() => setActivePanel("none")}
+              tone="light"
+              showOpenProfileLink={false}
+            />
+          </div>
+        </div>
+      )}
 
       {/* ── Image Zoom Modal ─────────────────────────────────────────── */}
       {imageZoom && imageUrl && (
@@ -1408,11 +1506,11 @@ function DataCell({ label, children }: { label: string; children: React.ReactNod
   return (
     <div
       className="flex flex-col gap-1.5 p-3 rounded-[11px]"
-      style={{ background: "#F7F6F2", border: "1px solid #EBEBEA" }}
+      style={{ background: "#FBFEFC", border: "1px solid #DCE9E1" }}
     >
       <span
         className="uppercase tracking-widest"
-        style={{ fontSize: 9, color: "#C0BDBA", fontWeight: 500 }}
+        style={{ fontSize: 9, color: "#6F7D74", fontWeight: 600 }}
       >
         {label}
       </span>
@@ -1432,10 +1530,10 @@ function FactRow({ label, value }: { label: string; value: string | null | undef
   return (
     <div
       className="flex justify-between items-center py-1.5"
-      style={{ borderBottom: "1px solid #F3F2F0" }}
+      style={{ borderBottom: "1px solid #ECF4EF" }}
     >
-      <span className="text-xs font-medium" style={{ color: "#A09D9A" }}>{label}</span>
-      <span className="text-xs font-medium capitalize" style={{ color: "#3D3A37" }}>{value}</span>
+      <span className="text-xs font-medium" style={{ color: "#6F7D74" }}>{label}</span>
+      <span className="text-xs font-medium capitalize" style={{ color: "#101A14" }}>{value}</span>
     </div>
   );
 }

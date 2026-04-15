@@ -12,8 +12,6 @@ import {
   buildDisplayTitle,
   statusColor,
   statusLabel,
-  gradeBadgeLabel,
-  gradeBadgeColor,
   getCompsUrl,
   isUnderwater,
 } from "@/lib/business/inventory-display";
@@ -86,9 +84,6 @@ function CardImageArea({ item }: { item: BusinessInventoryItem }) {
   );
   const [imageIndex, setImageIndex] = useState(0);
   const imageUrl = imageCandidates[imageIndex] || null;
-  const gradeLabel = gradeBadgeLabel(item);
-  const gradeColor = gradeBadgeColor(item);
-
   return (
     <div className="relative aspect-[3/4] bg-[#F3F4F6] overflow-hidden">
       {imageUrl ? (
@@ -120,13 +115,7 @@ function CardImageArea({ item }: { item: BusinessInventoryItem }) {
           </svg>
         </div>
       )}
-      {gradeLabel && (
-        <span
-          className={`absolute bottom-2 left-2 px-1.5 py-0.5 rounded text-[10px] font-bold leading-tight ${gradeColor}`}
-        >
-          {gradeLabel}
-        </span>
-      )}
+
       {item.quantity > 1 && (
         <span className="absolute top-2 right-2 px-1.5 py-0.5 rounded bg-black/60 text-white text-[10px] font-semibold">
           ×{item.quantity}

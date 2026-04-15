@@ -49,6 +49,11 @@ export type GradeEstimateJobFinal = GradeEstimateJobPartial & {
   estimate?: GradeEstimate;
 };
 
+export type GradeEstimateModelUsage = {
+  inputTokens: number;
+  outputTokens: number;
+};
+
 export type GradeEstimateJobStatusResponse = {
   jobId: string;
   status: GradeEstimateJobStatus;
@@ -90,7 +95,12 @@ export type GradeEstimateJobDependencies = {
     imageStats: ImageStats;
   }>;
   runOcrIdentity: (images: ResolvedGradeEstimateImage[]) => Promise<CardIdentity>;
-  runGradeModel: (images: ResolvedGradeEstimateImage[], identity?: CardIdentity | null, correctionText?: string, preScanNotes?: string) => Promise<string | null>;
+  runGradeModel: (
+    images: ResolvedGradeEstimateImage[],
+    identity?: CardIdentity | null,
+    correctionText?: string,
+    preScanNotes?: string
+  ) => Promise<{ text: string | null; usage: GradeEstimateModelUsage | null }>;
   parseModelOutput: (options: {
     modelText: string | null;
     imageStats: ImageStats;
@@ -112,12 +122,13 @@ export type GradeEstimateJobState = GradeEstimateJobStatusResponse & {
   createdAt: number;
   updatedAt: number;
   expiresAt: number;
-  internal: {
-    resolvedImages?: ResolvedGradeEstimateImage[];
-    imageStats?: ImageStats;
-    modelText?: string | null;
+    internal: {
+      resolvedImages?: ResolvedGradeEstimateImage[];
+      imageStats?: ImageStats;
+      modelText?: string | null;
+      modelUsage?: GradeEstimateModelUsage | null;
+    };
   };
-};
 
 export function createGradeEstimateJobState(options?: {
   jobId?: string;
@@ -259,12 +270,19 @@ export async function runGradeEstimateJob(
     const resolvedImages = job.internal.resolvedImages ?? [];
     // Pass identity so the grade model can apply card-type context (chrome, vintage, etc.)
     // Pass correctionText when refining and preScanNotes when the user typed pre-scan context.
-    const modelText = await deps.runGradeModel(resolvedImages, job.partial.identity, input.correctionText, input.preScanNotes);
-    job.internal.modelText = modelText;
+    const modelResult = await deps.runGradeModel(
+      resolvedImages,
+      job.partial.identity,
+      input.correctionText,
+      input.preScanNotes
+    );
+    job.internal.modelText = modelResult.text;
+    job.internal.modelUsage = modelResult.usage;
     finishStep(job, "grade_model", gradeStart, "done");
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to analyze condition";
     job.internal.modelText = null;
+    job.internal.modelUsage = null;
     finishStep(job, "grade_model", gradeStart, "error", message);
   }
 

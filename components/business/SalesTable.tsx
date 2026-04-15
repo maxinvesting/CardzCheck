@@ -57,7 +57,7 @@ export default function SalesTable({
           ...sale,
           gross,
           totalFees,
-          title: sale.inventory_item?.title || "Unlinked sale",
+          title: sale.inventory_item?.title?.trim() || "Unlinked sale",
         };
       }),
     [sales]

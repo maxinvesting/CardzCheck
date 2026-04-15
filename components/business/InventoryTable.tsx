@@ -20,8 +20,6 @@ import {
 import EbayListingBadge from "./EbayListingBadge";
 import EbayListingModal from "./EbayListingModal";
 import { buildEbaySoldUrl } from "@/lib/ebay/comps-url";
-import InventoryCardGrid from "./InventoryCardGrid";
-import InventoryScrollView from "./InventoryScrollView";
 
 function fmtCents(cents: number | null): string {
   if (cents === null) return "";
@@ -207,7 +205,7 @@ const VirtuosoScroller = forwardRef<
   <div
     {...props}
     ref={ref}
-    className={`overflow-y-auto overflow-x-hidden ${className ?? ""}`.trim()}
+    className={`overflow-auto ${className ?? ""}`.trim()}
   />
 ));
 VirtuosoScroller.displayName = "VirtuosoScroller";
@@ -257,15 +255,6 @@ export default function InventoryTable({
   const [sortKey, setSortKey] = useState<SortableColumnKey | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
-  const [viewMode, setViewMode] = useState<"grid" | "scroll" | "table">(() => {
-    if (typeof window === "undefined") return "grid";
-    const stored = window.localStorage.getItem("biz_inventory_view");
-    return (stored === "grid" || stored === "scroll" || stored === "table") ? stored : "grid";
-  });
-
-  useEffect(() => {
-    window.localStorage.setItem("biz_inventory_view", viewMode);
-  }, [viewMode]);
 
   const displayColumns = useMemo(
     () =>
@@ -1144,57 +1133,6 @@ export default function InventoryTable({
               <option key={c} value={c}>{c}</option>
             ))}
           </select>
-
-          {/* View mode toggle — desktop only */}
-          <div className="hidden sm:flex items-center rounded-md border border-[var(--biz-border)] overflow-hidden shrink-0">
-            <button
-              type="button"
-              title="Card grid view"
-              onClick={() => setViewMode("grid")}
-              className={`flex items-center justify-center w-8 h-8 transition-colors ${
-                viewMode === "grid"
-                  ? "bg-emerald-600 text-white"
-                  : "bg-white text-[var(--biz-muted)] hover:text-[var(--biz-text)] hover:bg-[#F3F4F6]"
-              }`}
-            >
-              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                <rect x="3" y="3" width="7" height="7" rx="1"/>
-                <rect x="14" y="3" width="7" height="7" rx="1"/>
-                <rect x="3" y="14" width="7" height="7" rx="1"/>
-                <rect x="14" y="14" width="7" height="7" rx="1"/>
-              </svg>
-            </button>
-            <button
-              type="button"
-              title="One at a time view"
-              onClick={() => setViewMode("scroll")}
-              className={`flex items-center justify-center w-8 h-8 border-x border-[var(--biz-border)] transition-colors ${
-                viewMode === "scroll"
-                  ? "bg-emerald-600 text-white"
-                  : "bg-white text-[var(--biz-muted)] hover:text-[var(--biz-text)] hover:bg-[#F3F4F6]"
-              }`}
-            >
-              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                <rect x="5" y="3" width="14" height="18" rx="2"/>
-                <path d="M9 8h6M9 12h6M9 16h4"/>
-              </svg>
-            </button>
-            <button
-              type="button"
-              title="Table view"
-              onClick={() => setViewMode("table")}
-              className={`flex items-center justify-center w-8 h-8 transition-colors ${
-                viewMode === "table"
-                  ? "bg-emerald-600 text-white"
-                  : "bg-white text-[var(--biz-muted)] hover:text-[var(--biz-text)] hover:bg-[#F3F4F6]"
-              }`}
-            >
-              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                <rect x="3" y="3" width="18" height="18" rx="2"/>
-                <path d="M3 9h18M3 15h18M9 3v18"/>
-              </svg>
-            </button>
-          </div>
         </div>
       </div>
 
@@ -1270,37 +1208,10 @@ export default function InventoryTable({
         )}
       </div>
 
-      {/* Desktop grid view (>= 640px) */}
-      {viewMode === "grid" && (
-        <div className="hidden sm:block">
-          <InventoryCardGrid
-            items={sortedItems}
-            selectedItemId={selectedItemId}
-            onItemClick={onItemClick}
-            onMarkSold={onMarkSold}
-            ebayConnected={ebayConnected}
-            onEbayList={(item) => setEbayListingItem(item)}
-          />
-        </div>
-      )}
-
-      {/* Desktop scroll/focus view (>= 640px) */}
-      {viewMode === "scroll" && (
-        <div className="hidden sm:block">
-          <InventoryScrollView
-            items={sortedItems}
-            onItemClick={onItemClick}
-            onMarkSold={onMarkSold}
-            ebayConnected={ebayConnected}
-            onEbayList={(item) => setEbayListingItem(item)}
-          />
-        </div>
-      )}
-
       {/* Desktop table (>= 640px) — ledger style: tight rows, right-align money */}
-      {/* Outer wrapper handles horizontal scroll; inner keeps overflow-hidden for rounded corners */}
       <div
-        className="hidden sm:block overflow-x-auto"
+        ref={tableContainerRef}
+        className="hidden sm:block border border-[var(--biz-border)] rounded-lg overflow-hidden"
         onScrollCapture={() => {
           if (perfEnabled) setPerfInteraction("scroll");
         }}
@@ -1308,39 +1219,36 @@ export default function InventoryTable({
           if (perfEnabled) setPerfInteraction("click");
         }}
       >
-        <div
-          ref={tableContainerRef}
-          className="border border-[var(--biz-border)] rounded-lg overflow-hidden min-w-max"
-        >
-          {filtered.length === 0 ? (
-            <div className="px-4 py-8 text-center text-xs text-[var(--biz-muted)]">
-              {activeTab === "wax"
-                ? "No wax / sealed products found. Use Add Wax to track boxes and cases."
-                : activeTab === "cards"
-                ? "No cards found. Use Add Inventory to add cards to your inventory."
-                : "No inventory items found."}
-            </div>
-          ) : shouldVirtualize ? (
-            <TableVirtuoso
-              data={sortedItems}
-              style={{ height: virtualTableHeight }}
-              components={{
-                Scroller: VirtuosoScroller,
-                Table: (props) => <table {...props} className="w-full text-xs text-left" />,
-                TableHead: (props) => (
-                  <thead {...props} className="bg-[#F9FAFB] border-b border-[var(--biz-border)]" />
-                ),
-                TableBody: (props) => <tbody {...props} className="divide-y divide-[var(--biz-border)]" />,
-                TableRow: ({ item, context: _context, ...props }) => (
-                  <tr {...props} className={rowClass(item, props["data-index"])} />
-                ),
-              }}
-              computeItemKey={(_index, item) => item.id}
-              fixedHeaderContent={renderHeader}
-              itemContent={(_index, item) => renderRowCells(item)}
-              increaseViewportBy={240}
-            />
-          ) : (
+        {filtered.length === 0 ? (
+          <div className="px-4 py-8 text-center text-xs text-[var(--biz-muted)]">
+            {activeTab === "wax"
+              ? "No wax / sealed products found. Use Add Wax to track boxes and cases."
+              : activeTab === "cards"
+              ? "No cards found. Use Add Inventory to add cards to your inventory."
+              : "No inventory items found."}
+          </div>
+        ) : shouldVirtualize ? (
+          <TableVirtuoso
+            data={sortedItems}
+            style={{ height: virtualTableHeight }}
+            components={{
+              Scroller: VirtuosoScroller,
+              Table: (props) => <table {...props} className="w-full text-xs text-left" />,
+              TableHead: (props) => (
+                <thead {...props} className="bg-[var(--biz-surface-soft)] border-b border-[var(--biz-border)]" />
+              ),
+              TableBody: (props) => <tbody {...props} className="divide-y divide-[var(--biz-border)]" />,
+              TableRow: ({ item, context: _context, ...props }) => (
+                <tr {...props} className={rowClass(item, props["data-index"])} />
+              ),
+            }}
+            computeItemKey={(_index, item) => item.id}
+            fixedHeaderContent={renderHeader}
+            itemContent={(_index, item) => renderRowCells(item)}
+            increaseViewportBy={240}
+          />
+        ) : (
+          <div className="overflow-x-auto">
             <table className="w-full text-xs text-left">
               <thead className="sticky top-0 z-10 bg-[var(--biz-surface-soft)] border-b border-[var(--biz-border)]">
                 {renderHeader()}
@@ -1353,15 +1261,15 @@ export default function InventoryTable({
                 ))}
               </tbody>
             </table>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       <div className="mt-1.5 text-[10px] text-[var(--biz-muted)]">
         {filtered.length} item{filtered.length !== 1 ? "s" : ""}
         {filtered.length !== items.length && ` (of ${items.length} total)`}
         <span className="hidden sm:inline">
-          {viewMode === "table" && " \u00B7 Click cell to edit \u00B7 Double-click row to open detail"}
+          {" \u00B7 Click title or Open to view profile \u00B7 Click cell to edit"}
         </span>
         <span className="sm:hidden">
           {" \u00B7 Tap View or title to open profile"}

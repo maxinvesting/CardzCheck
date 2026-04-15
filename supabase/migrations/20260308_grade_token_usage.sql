@@ -12,14 +12,12 @@ CREATE TABLE IF NOT EXISTS grade_token_usage (
   updated_at      TIMESTAMPTZ DEFAULT NOW(),
   CONSTRAINT grade_token_usage_user_period UNIQUE (user_id, period_start)
 );
-
 -- Users can read their own usage (e.g. for a budget indicator in the UI)
 ALTER TABLE grade_token_usage ENABLE ROW LEVEL SECURITY;
-
+DROP POLICY IF EXISTS "Users can view own grade token usage" ON public.grade_token_usage;
 CREATE POLICY "Users can view own grade token usage"
   ON grade_token_usage FOR SELECT
   USING (auth.uid() = user_id);
-
 -- Atomic upsert — avoids read-modify-write races when two jobs finish simultaneously.
 -- Called from server-side only (SECURITY DEFINER so it bypasses RLS).
 CREATE OR REPLACE FUNCTION increment_grade_token_usage(

@@ -35,6 +35,8 @@ export type VerdictCardIdentity = {
   variation?: string;
   insert?: string;
   card_number?: string;
+  /** Full line typed by the owner before scan — preferred for eBay comps when present */
+  owner_declared_title?: string;
   /** From card ID pipeline: chromium ≈ thicker stock (e.g. Prizm/Chrome). */
   card_stock?: "paper" | "chromium" | "unknown";
 } | null | undefined;

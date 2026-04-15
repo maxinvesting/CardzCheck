@@ -30,12 +30,14 @@ export function CardImage({
 }: CardImageProps) {
   const candidates = useMemo(() => image?.frontCandidates ?? [], [image]);
   const [candidateIndex, setCandidateIndex] = useState(0);
+  const [hasExhaustedCandidates, setHasExhaustedCandidates] = useState(false);
 
   useEffect(() => {
     setCandidateIndex(0);
+    setHasExhaustedCandidates(false);
   }, [candidates.length, image?.frontUrl]);
 
-  const imageUrl = candidates[candidateIndex] ?? null;
+  const imageUrl = hasExhaustedCandidates ? null : candidates[candidateIndex] ?? null;
 
   return (
     <div
@@ -50,7 +52,11 @@ export function CardImage({
           onError={() => {
             setCandidateIndex((current) => {
               const next = current + 1;
-              return next < candidates.length ? next : current;
+              if (next < candidates.length) {
+                return next;
+              }
+              setHasExhaustedCandidates(true);
+              return current;
             });
           }}
         />

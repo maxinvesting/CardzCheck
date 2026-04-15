@@ -1,10 +1,10 @@
 .business-theme {
-  --biz-bg: #f7f8fa;
+  --biz-bg: #f3faf5;
   --biz-surface: #ffffff;
-  --biz-border: #e5e7eb;
-  --biz-border-subtle: #eef2f1;
-  --biz-text: #111827;
-  --biz-muted: #6b7280;
+  --biz-border: #d8e7dc;
+  --biz-border-subtle: #e7f1ea;
+  --biz-text: #10231a;
+  --biz-muted: #5d7065;
   --biz-primary: #1D9E75;
   --biz-primary-hover: #17896A;
   --biz-primary-soft: rgba(29, 158, 117, 0.1);
@@ -31,11 +31,11 @@
   --biz-profit-soft: rgba(29, 158, 117, 0.1);
   --biz-success-soft: rgba(21, 128, 61, 0.1);
   --biz-warning: #b45309;
-  --biz-surface-soft: #f9fafb;
-  --biz-hover: #f3f4f6;
-  --biz-skeleton: #e5e7eb;
-  --biz-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
-  --biz-shadow-md: 0 10px 24px rgba(15, 23, 42, 0.06);
+  --biz-surface-soft: #eef8f1;
+  --biz-hover: #e7f4ec;
+  --biz-skeleton: #dde9e0;
+  --biz-shadow-sm: 0 1px 2px rgba(18, 58, 35, 0.05);
+  --biz-shadow-md: 0 12px 28px rgba(18, 58, 35, 0.08);
 
   /* Signal tag colors */
   --tag-opportunity-bg: var(--biz-primary);
@@ -61,19 +61,22 @@
 }
 
 .business-workspace-theme {
-  --biz-bg: #f5f8f5;
+  --biz-bg: #eff8f1;
   --biz-surface: #ffffff;
-  --biz-surface-soft: #f3f8f4;
-  --biz-border: #dbe7de;
-  --biz-border-subtle: #e8efea;
-  --biz-text: #0f172a;
-  --biz-muted: #5f6f65;
-  --biz-hover: #eef6f0;
-  --biz-skeleton: #e3ebe5;
+  --biz-surface-soft: #edf8f0;
+  --biz-border: #d4e5d9;
+  --biz-border-subtle: #e2efe6;
+  --biz-text: #10231a;
+  --biz-muted: #5d7065;
+  --biz-hover: #e4f3e9;
+  --biz-skeleton: #dce9df;
+  background-image:
+    radial-gradient(circle at top left, rgba(29, 158, 117, 0.1), transparent 36%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(239, 248, 241, 0.98) 100%);
 }
 
 .business-theme .cc-surface {
-  background: var(--biz-surface);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(250, 253, 251, 1) 100%);
   border: 1px solid var(--biz-border);
   border-radius: 12px;
   box-shadow: var(--biz-shadow-sm);
@@ -91,24 +94,24 @@
 }
 
 .business-theme .cc-btn-secondary {
-  border: 0.5px solid var(--biz-border);
+  border: 0.5px solid var(--biz-primary-border);
   background: transparent;
   color: var(--biz-text);
 }
 
 .business-theme .cc-btn-secondary:hover {
-  background: var(--biz-hover);
-  border-color: #d1d5db;
+  background: var(--biz-primary-soft);
+  border-color: var(--biz-primary-border);
 }
 
 .business-theme .biz-btn-ghost {
   background: transparent;
-  border: 0.5px solid var(--biz-border);
+  border: 0.5px solid var(--biz-primary-border);
   color: var(--biz-text);
 }
 
 .business-theme .biz-btn-ghost:hover {
-  background: var(--biz-hover);
+  background: var(--biz-primary-soft);
 }
 
 .business-workspace-theme a {

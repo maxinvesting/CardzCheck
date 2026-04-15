@@ -6,7 +6,6 @@ ALTER TABLE IF EXISTS public.shop_listings
   ADD COLUMN IF NOT EXISTS inventory_item_id uuid,
   ADD COLUMN IF NOT EXISTS condition text NOT NULL DEFAULT 'graded',
   ADD COLUMN IF NOT EXISTS publish_state text NOT NULL DEFAULT 'published';
-
 DO $$
 BEGIN
   IF to_regclass('public.shop_listings') IS NOT NULL
@@ -21,7 +20,6 @@ BEGIN
       CHECK (condition IN ('raw', 'graded', 'sealed'));
   END IF;
 END $$;
-
 DO $$
 BEGIN
   IF to_regclass('public.shop_listings') IS NOT NULL
@@ -36,7 +34,6 @@ BEGIN
       CHECK (publish_state IN ('draft', 'published'));
   END IF;
 END $$;
-
 DO $$
 BEGIN
   IF to_regclass('public.business_inventory_items') IS NOT NULL
@@ -53,7 +50,6 @@ BEGIN
       ON DELETE SET NULL;
   END IF;
 END $$;
-
 UPDATE public.shop_listings
 SET condition = CASE
   WHEN lower(coalesce(grade, '')) LIKE '%raw%'
@@ -62,17 +58,13 @@ SET condition = CASE
   ELSE 'graded'
 END
 WHERE condition IS NULL OR condition NOT IN ('raw', 'graded', 'sealed');
-
 UPDATE public.shop_listings
 SET publish_state = 'draft'
 WHERE status = 'delisted'
   AND publish_state = 'published';
-
 CREATE INDEX IF NOT EXISTS idx_shop_listings_publish_status_created
   ON public.shop_listings (publish_state, status, created_at DESC);
-
 ALTER TABLE IF EXISTS public.shop_listings ENABLE ROW LEVEL SECURITY;
-
 DROP POLICY IF EXISTS "Public can read active listings" ON public.shop_listings;
 CREATE POLICY "Public can read active listings"
   ON public.shop_listings FOR SELECT

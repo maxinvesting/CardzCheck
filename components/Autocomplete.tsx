@@ -182,7 +182,7 @@ export default function Autocomplete({
       {isOpen && filteredOptions.length === 0 && value.length >= 2 && (
         <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg shadow-lg p-4 text-center">
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            No matches found. Continue typing or press Enter to use "{value}"
+            No matches found. Continue typing or press Enter to use {'"'}{value}{'"'}
           </p>
         </div>
       )}

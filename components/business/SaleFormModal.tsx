@@ -50,6 +50,17 @@ const CHANNEL_OPTIONS = [
   "other",
 ] as const;
 
+const CHANNEL_LABELS: Record<string, string> = {
+  ebay: "eBay",
+  whatnot: "Whatnot",
+  instagram: "Instagram",
+  show: "Card Show",
+  local: "Local",
+  other: "Other",
+};
+
+const EBAY_FEE_RATE = 0.135; // 13.5% assumed eBay transaction fee
+
 function centsToInput(cents: number | null | undefined): string {
   if (cents == null || !Number.isFinite(cents)) return "";
   return (cents / 100).toFixed(2);
@@ -69,6 +80,11 @@ function toDateInput(value: string | null | undefined): string {
   return dt.toISOString().slice(0, 10);
 }
 
+// Field styles — white/green standard
+const fieldCls =
+  "mt-1 w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500";
+const labelCls = "block text-xs font-medium text-gray-500";
+
 export default function SaleFormModal({
   isOpen,
   title,
@@ -84,10 +100,9 @@ export default function SaleFormModal({
   >("other");
   const [soldAt, setSoldAt] = useState(new Date().toISOString().slice(0, 10));
   const [soldPrice, setSoldPrice] = useState("");
-  const [shippingCharged, setShippingCharged] = useState("");
+  // Single shipping field — treated as both charged to buyer and cost to seller (pass-through)
+  const [shipping, setShipping] = useState("");
   const [platformFees, setPlatformFees] = useState("");
-  const [shippingCost, setShippingCost] = useState("");
-  const [tax, setTax] = useState("");
   const [cogs, setCogs] = useState("");
   const [externalOrderId, setExternalOrderId] = useState("");
   const [notes, setNotes] = useState("");
@@ -95,21 +110,26 @@ export default function SaleFormModal({
   const [manualNetPayout, setManualNetPayout] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [eseWeightOz, setEseWeightOz] = useState<1 | 2 | 3>(1);
+  /** Captured when the modal opens so submit always sends the link even if defaults change. */
+  const [linkedInventoryItemId, setLinkedInventoryItemId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
     const defaultChannel = (defaults?.channel || "other").toLowerCase();
-    const channelValue = CHANNEL_OPTIONS.includes(defaultChannel as any)
+    const channelValue = CHANNEL_OPTIONS.includes(defaultChannel as never)
       ? (defaultChannel as typeof channel)
       : "other";
 
     setChannel(channelValue);
     setSoldAt(toDateInput(defaults?.sold_at));
     setSoldPrice(centsToInput(defaults?.sold_price_cents));
-    setShippingCharged(centsToInput(defaults?.shipping_charged_cents));
+    // Initialise from whichever shipping field has a value
+    const shippingInit =
+      defaults?.shipping_charged_cents != null
+        ? centsToInput(defaults.shipping_charged_cents)
+        : centsToInput(defaults?.shipping_cost_cents);
+    setShipping(shippingInit);
     setPlatformFees(centsToInput(defaults?.platform_fees_cents));
-    setShippingCost(centsToInput(defaults?.shipping_cost_cents));
-    setTax(centsToInput(defaults?.tax_cents));
     setCogs(centsToInput(defaults?.cogs_cents));
     setExternalOrderId(defaults?.external_order_id || "");
     setNotes(defaults?.notes || "");
@@ -117,36 +137,61 @@ export default function SaleFormModal({
     const defaultAutoNet = defaults?.net_payout_cents == null;
     setAutoCalcNetPayout(defaultAutoNet);
     setManualNetPayout(centsToInput(defaults?.net_payout_cents));
+
+    const invId = defaults?.inventory_item_id;
+    setLinkedInventoryItemId(
+      typeof invId === "string" && invId.trim() ? invId.trim() : null
+    );
   }, [defaults, isOpen]);
+
+  // ── eBay: auto-estimate 13.5% platform fee ─────────────────────────────
+  const ebayAutoFeesCents = useMemo(() => {
+    if (channel !== "ebay") return 0;
+    const priceCents = inputToCents(soldPrice);
+    const shippingCents = inputToCents(shipping);
+    return Math.round((priceCents + shippingCents) * EBAY_FEE_RATE);
+  }, [channel, soldPrice, shipping]);
+
+  // Use user-entered platform fees if provided; otherwise fall back to eBay auto-estimate
+  const effectivePlatformFeesCents = useMemo(() => {
+    if (platformFees.trim()) return inputToCents(platformFees);
+    return ebayAutoFeesCents;
+  }, [platformFees, ebayAutoFeesCents]);
 
   const computedNetPayoutCents = useMemo(
     () =>
       computeNetPayout({
         sold_price_cents: inputToCents(soldPrice),
-        shipping_charged_cents: inputToCents(shippingCharged),
-        platform_fees_cents: inputToCents(platformFees),
-        shipping_cost_cents: inputToCents(shippingCost),
-        tax_cents: inputToCents(tax),
+        // shipping charged = shipping cost → they cancel out in the formula
+        shipping_charged_cents: inputToCents(shipping),
+        platform_fees_cents: effectivePlatformFeesCents,
+        shipping_cost_cents: inputToCents(shipping),
+        tax_cents: 0,
       }),
-    [platformFees, shippingCharged, shippingCost, soldPrice, tax]
+    [effectivePlatformFeesCents, shipping, soldPrice]
   );
 
+  // ── eBay Standard Envelope — only when eBay + price ≤ $20 ──────────────
+  const soldPriceNum = Number.parseFloat(soldPrice);
+  const showEse =
+    channel === "ebay" &&
+    Number.isFinite(soldPriceNum) &&
+    soldPriceNum > 0 &&
+    soldPriceNum <= ESE_MAX_ITEM_VALUE;
+
   const eseEstimate: EseProfitBreakdown | null = useMemo(() => {
-    if (channel !== "ebay") return null;
-    const price = Number.parseFloat(soldPrice);
-    if (!Number.isFinite(price) || price <= 0 || price > ESE_MAX_ITEM_VALUE) {
-      return null;
-    }
+    if (!showEse) return null;
     try {
       return calculateEseNetProfit({
-        itemPrice: price,
+        itemPrice: soldPriceNum,
         weightOz: eseWeightOz,
         storeTier,
       });
     } catch {
       return null;
     }
-  }, [channel, soldPrice, eseWeightOz, storeTier]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showEse, soldPriceNum, eseWeightOz, storeTier]);
 
   if (!isOpen) return null;
 
@@ -155,14 +200,14 @@ export default function SaleFormModal({
     if (!soldPrice.trim()) return;
 
     const payload: SaleFormPayload = {
-      inventory_item_id: defaults?.inventory_item_id ?? null,
+      inventory_item_id: linkedInventoryItemId,
       channel,
       sold_at: soldAt,
       sold_price_cents: inputToCents(soldPrice),
-      shipping_charged_cents: inputToCents(shippingCharged),
-      platform_fees_cents: inputToCents(platformFees),
-      shipping_cost_cents: inputToCents(shippingCost),
-      tax_cents: inputToCents(tax),
+      shipping_charged_cents: inputToCents(shipping),
+      platform_fees_cents: effectivePlatformFeesCents,
+      shipping_cost_cents: inputToCents(shipping),
+      tax_cents: 0,
       net_payout_cents: autoCalcNetPayout ? null : inputToCents(manualNetPayout),
       cogs_cents: showCogsField
         ? inputToCents(cogs)
@@ -182,18 +227,20 @@ export default function SaleFormModal({
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4"
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className="w-full max-w-xl rounded-xl border border-white/[0.08] bg-[#111827] shadow-none">
-        <div className="flex items-center justify-between border-b border-gray-800 px-5 py-3">
-          <h2 className="text-sm font-semibold text-white">{title}</h2>
+      <div className="w-full max-w-xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+
+        {/* ── Header ────────────────────────────────────────────────────── */}
+        <div className="flex items-start justify-between bg-[#0B1829] px-5 py-4">
+          <h2 className="text-sm font-bold leading-snug text-white pr-4">{title}</h2>
           <button
             type="button"
             onClick={onClose}
-            className="rounded p-1 text-gray-400 hover:bg-gray-800 hover:text-white"
+            className="mt-0.5 shrink-0 rounded p-1 text-white/40 hover:bg-white/10 hover:text-white transition-colors"
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -201,271 +248,260 @@ export default function SaleFormModal({
           </button>
         </div>
 
-        <form onSubmit={submit} className="space-y-3 px-5 py-4">
+        <form onSubmit={submit} className="space-y-4 px-5 py-5">
+
+          {/* ── Row 1: Price · Channel · Date ─────────────────────────── */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <label className="text-xs text-gray-400">
-              Sold Price ($)
+            <label>
+              <span className={labelCls}>Sold Price ($)</span>
               <input
                 required
                 type="number"
                 step="0.01"
+                min="0"
                 value={soldPrice}
-                onChange={(event) => setSoldPrice(event.target.value)}
-                className="mt-1 w-full rounded border border-gray-700 bg-gray-800 px-2 py-1.5 text-sm text-white"
+                onChange={(e) => setSoldPrice(e.target.value)}
+                className={fieldCls}
+                placeholder="0.00"
               />
             </label>
-            <label className="text-xs text-gray-400">
-              Channel
+            <label>
+              <span className={labelCls}>Channel</span>
               <select
                 value={channel}
-                onChange={(event) => setChannel(event.target.value as typeof channel)}
-                className="mt-1 w-full rounded border border-gray-700 bg-gray-800 px-2 py-1.5 text-sm text-white"
+                onChange={(e) => setChannel(e.target.value as typeof channel)}
+                className={fieldCls}
               >
-                {CHANNEL_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
+                {CHANNEL_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {CHANNEL_LABELS[opt] ?? opt}
                   </option>
                 ))}
               </select>
             </label>
-            <label className="text-xs text-gray-400">
-              Sold Date
+            <label>
+              <span className={labelCls}>Sold Date</span>
               <input
                 type="date"
                 value={soldAt}
-                onChange={(event) => setSoldAt(event.target.value)}
-                className="mt-1 w-full rounded border border-gray-700 bg-gray-800 px-2 py-1.5 text-sm text-white"
+                onChange={(e) => setSoldAt(e.target.value)}
+                className={fieldCls}
               />
             </label>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <label className="text-xs text-gray-400">
-              Shipping Charged ($)
+          {/* ── Row 2: Shipping · Platform fees ─────────────────────────── */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label>
+              <span className={labelCls}>Shipping ($)</span>
               <input
                 type="number"
                 step="0.01"
-                value={shippingCharged}
-                onChange={(event) => setShippingCharged(event.target.value)}
-                className="mt-1 w-full rounded border border-gray-700 bg-gray-800 px-2 py-1.5 text-sm text-white"
+                min="0"
+                value={shipping}
+                onChange={(e) => setShipping(e.target.value)}
+                className={fieldCls}
+                placeholder="0.00"
               />
             </label>
-            <label className="text-xs text-gray-400">
-              Platform Fees ($)
+            <div>
+              <span className={labelCls}>
+                Platform Fees ($)
+                {channel === "ebay" && !platformFees.trim() && (
+                  <span className="ml-1 text-emerald-600 font-semibold">13.5% est.</span>
+                )}
+              </span>
               <input
                 type="number"
                 step="0.01"
+                min="0"
                 value={platformFees}
-                onChange={(event) => setPlatformFees(event.target.value)}
-                className="mt-1 w-full rounded border border-gray-700 bg-gray-800 px-2 py-1.5 text-sm text-white"
+                onChange={(e) => setPlatformFees(e.target.value)}
+                className={fieldCls}
+                placeholder={
+                  channel === "ebay"
+                    ? centsToInput(ebayAutoFeesCents) || "0.00"
+                    : "0.00"
+                }
               />
-            </label>
-            <label className="text-xs text-gray-400">
-              Shipping Cost ($)
-              <input
-                type="number"
-                step="0.01"
-                value={shippingCost}
-                onChange={(event) => setShippingCost(event.target.value)}
-                className="mt-1 w-full rounded border border-gray-700 bg-gray-800 px-2 py-1.5 text-sm text-white"
-              />
-            </label>
-            <label className="text-xs text-gray-400">
-              Tax ($)
-              <input
-                type="number"
-                step="0.01"
-                value={tax}
-                onChange={(event) => setTax(event.target.value)}
-                className="mt-1 w-full rounded border border-gray-700 bg-gray-800 px-2 py-1.5 text-sm text-white"
-              />
-            </label>
+            </div>
           </div>
 
-          <label className="inline-flex items-center gap-2 text-xs text-gray-300">
+          {/* ── eBay info strip ────────────────────────────────────────── */}
+          {channel === "ebay" && (
+            <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+              <p>
+                <span className="font-semibold">Platform fees</span> estimated at{" "}
+                <span className="font-bold">13.5%</span> of sale + shipping. Override the field above if you know the exact amount.
+              </p>
+            </div>
+          )}
+
+          {/* ── Estimated net payout ───────────────────────────────────── */}
+          <label className="inline-flex items-center gap-2 text-xs font-medium text-gray-600">
             <input
               type="checkbox"
               checked={autoCalcNetPayout}
-              onChange={(event) => setAutoCalcNetPayout(event.target.checked)}
-              className="rounded border-gray-600 text-emerald-500 focus:ring-emerald-500"
+              onChange={(e) => setAutoCalcNetPayout(e.target.checked)}
+              className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
             />
-            Auto-calc net payout
+            Auto-calculate net payout
           </label>
 
           {autoCalcNetPayout ? (
-            <p className="rounded border border-emerald-900/50 bg-emerald-950/30 px-2 py-1.5 text-xs text-emerald-300">
-              Net payout preview: {formatMoney(computedNetPayoutCents)}
-            </p>
+            <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3">
+              <div>
+                <p className="text-xs font-medium text-emerald-700">Estimated net payout</p>
+                <p className="text-[11px] text-emerald-500 mt-0.5">
+                  Sale + shipping − fees − shipping cost
+                  {channel === "ebay" && !platformFees.trim() && " (13.5% eBay fee assumed)"}
+                </p>
+              </div>
+              <p className="text-xl font-bold text-emerald-600">
+                {formatMoney(computedNetPayoutCents)}
+              </p>
+            </div>
           ) : (
-            <label className="text-xs text-gray-400">
-              Net Payout ($)
+            <label>
+              <span className={labelCls}>Net Payout ($)</span>
               <input
                 type="number"
                 step="0.01"
                 value={manualNetPayout}
-                onChange={(event) => setManualNetPayout(event.target.value)}
-                className="mt-1 w-full rounded border border-gray-700 bg-gray-800 px-2 py-1.5 text-sm text-white"
+                onChange={(e) => setManualNetPayout(e.target.value)}
+                className={fieldCls}
+                placeholder="0.00"
               />
             </label>
           )}
 
-          {channel === "whatnot" && (
-            <div className="rounded border border-purple-900/50 bg-purple-950/20 px-3 py-2.5 text-xs">
-              <p className="font-semibold text-purple-300">Recording a Whatnot sale</p>
-              <ol className="mt-1.5 list-decimal list-inside space-y-1 text-gray-400">
-                <li>
-                  Find the order in your{" "}
-                  <span className="font-medium text-gray-300">Whatnot Seller Dashboard → Orders</span>
-                </li>
-                <li>
-                  <span className="font-medium text-gray-300">Sold Price</span> — the hammer price the buyer paid
-                </li>
-                <li>
-                  <span className="font-medium text-gray-300">Shipping Charged</span> — what you collected for shipping (often $0 if flat-rate included)
-                </li>
-                <li>
-                  <span className="font-medium text-gray-300">Platform Fees</span> — Whatnot seller fee (typically 9.5%) + 2.9% payment processing; find the exact amount under "Fee Breakdown"
-                </li>
-                <li>
-                  <span className="font-medium text-gray-300">Shipping Cost</span> — what Whatnot charged you to ship the card
-                </li>
-                <li>
-                  <span className="font-medium text-gray-300">External Order ID</span> — paste the Whatnot order number to prevent duplicates
-                </li>
-              </ol>
-              <p className="mt-2 text-[11px] text-gray-500">
-                Tip: Whatnot orders sync automatically once you export a CSV from your seller dashboard and upload it via the Bulk Import tool.
-              </p>
-            </div>
-          )}
-
-          {channel === "ebay" && (
-            <div className="space-y-2 rounded border border-gray-700 bg-gray-900/60 px-3 py-2">
+          {/* ── eBay Standard Envelope (only for eBay + price ≤ $20) ────── */}
+          {showEse && (
+            <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <div className="text-xs text-gray-300">
-                  <span className="font-semibold">eBay Standard Envelope</span>
-                  <span className="ml-1 text-gray-500">(under ${ESE_MAX_ITEM_VALUE.toFixed(2)} item value)</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <label className="text-[11px] text-gray-400">
-                    Weight
-                    <select
-                      value={eseWeightOz}
-                      onChange={(e) =>
-                        setEseWeightOz(Number(e.target.value) as 1 | 2 | 3)
-                      }
-                      className="ml-1 rounded border border-gray-600 bg-gray-800 px-1.5 py-0.5 text-[11px] text-white"
-                    >
-                      <option value={1}>1 oz</option>
-                      <option value={2}>2 oz</option>
-                      <option value={3}>3 oz</option>
-                    </select>
-                  </label>
-                </div>
+                <p className="text-xs font-semibold text-gray-700">
+                  eBay Standard Envelope
+                  <span className="ml-1.5 font-normal text-gray-400">
+                    (under ${ESE_MAX_ITEM_VALUE.toFixed(0)} items)
+                  </span>
+                </p>
+                <label className="flex items-center gap-1.5 text-[11px] text-gray-500">
+                  Weight
+                  <select
+                    value={eseWeightOz}
+                    onChange={(e) => setEseWeightOz(Number(e.target.value) as 1 | 2 | 3)}
+                    className="rounded border border-gray-200 bg-white px-1.5 py-0.5 text-[11px] text-gray-700"
+                  >
+                    <option value={1}>1 oz</option>
+                    <option value={2}>2 oz</option>
+                    <option value={3}>3 oz</option>
+                  </select>
+                </label>
               </div>
 
-              {eseEstimate ? (
-                <div className="grid grid-cols-2 gap-2 text-[11px] text-gray-300 sm:grid-cols-4">
+              {eseEstimate && (
+                <div className="grid grid-cols-3 gap-2 text-[11px]">
                   <div>
-                    <div className="text-gray-500">eBay fees</div>
-                    <div className="font-semibold">
-                      {`$${eseEstimate.totalEbayFees.toFixed(2)} `}
-                      <span className="text-gray-500">
-                        ({(eseEstimate.fvfRate * 100).toFixed(2)}% + $
-                        {eseEstimate.perOrderFee.toFixed(2)})
+                    <div className="text-gray-400">eBay fees</div>
+                    <div className="font-semibold text-gray-700">
+                      ${eseEstimate.totalEbayFees.toFixed(2)}
+                      <span className="text-gray-400 font-normal ml-1">
+                        ({(eseEstimate.fvfRate * 100).toFixed(1)}% + ${eseEstimate.perOrderFee.toFixed(2)})
                       </span>
                     </div>
                   </div>
                   <div>
-                    <div className="text-gray-500">Shipping + packaging</div>
-                    <div className="font-semibold">
-                      ${eseEstimate.shippingCost.toFixed(2)}{" "}
-                      <span className="text-gray-500">
-                        + ${eseEstimate.packagingTotal.toFixed(2)}
-                      </span>
+                    <div className="text-gray-400">Shipping + pkg</div>
+                    <div className="font-semibold text-gray-700">
+                      ${eseEstimate.shippingCost.toFixed(2)}
+                      <span className="text-gray-400 font-normal ml-1">+ ${eseEstimate.packagingTotal.toFixed(2)}</span>
                     </div>
                   </div>
                   <div>
-                    <div className="text-gray-500">Net profit (before COGS)</div>
-                    <div
-                      className={`font-semibold ${
-                        eseEstimate.isLoss ? "text-red-400" : "text-emerald-300"
-                      }`}
-                    >
-                      ${eseEstimate.netProfit.toFixed(2)}{" "}
-                      <span className="text-gray-500">
-                        ({eseEstimate.netMarginPct.toFixed(1)}% margin)
-                      </span>
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-gray-500">Assumes ESE shipping</div>
-                    <div className="text-[10px] text-gray-500">
-                      FVFs include item price, ESE postage, and estimated tax; buyer pays
-                      shipping equal to postage.
+                    <div className="text-gray-400">Net profit (pre-COGS)</div>
+                    <div className={`font-bold ${eseEstimate.isLoss ? "text-red-500" : "text-emerald-600"}`}>
+                      ${eseEstimate.netProfit.toFixed(2)}
+                      <span className="text-gray-400 font-normal ml-1">({eseEstimate.netMarginPct.toFixed(1)}%)</span>
                     </div>
                   </div>
                 </div>
-              ) : (
-                <p className="text-[11px] text-gray-500">
-                  Enter a sale price under ${ESE_MAX_ITEM_VALUE.toFixed(2)} to preview
-                  your eBay Standard Envelope profit.
-                </p>
               )}
             </div>
           )}
 
+          {/* ── Whatnot helper ─────────────────────────────────────────── */}
+          {channel === "whatnot" && (
+            <div className="rounded-lg border border-purple-100 bg-purple-50 px-3 py-2.5 text-xs">
+              <p className="font-semibold text-purple-700 mb-1.5">Recording a Whatnot sale</p>
+              <ol className="list-decimal list-inside space-y-1 text-gray-500">
+                <li>Find the order in <span className="font-medium text-gray-700">Whatnot Seller Dashboard → Orders</span></li>
+                <li><span className="font-medium text-gray-700">Sold Price</span> — the hammer price the buyer paid</li>
+                <li><span className="font-medium text-gray-700">Platform Fees</span> — Whatnot seller fee (~9.5%) + 2.9% payment processing; see "Fee Breakdown"</li>
+                <li><span className="font-medium text-gray-700">External Order ID</span> — paste the Whatnot order number to prevent duplicates</li>
+              </ol>
+            </div>
+          )}
+
+          {/* ── COGS ──────────────────────────────────────────────────── */}
           {showCogsField && (
-            <label className="text-xs text-gray-400">
-              COGS ($)
+            <label>
+              <span className={labelCls}>Cost of Goods ($)</span>
               <input
                 type="number"
                 step="0.01"
+                min="0"
                 value={cogs}
-                onChange={(event) => setCogs(event.target.value)}
-                className="mt-1 w-full rounded border border-gray-700 bg-gray-800 px-2 py-1.5 text-sm text-white"
+                onChange={(e) => setCogs(e.target.value)}
+                className={fieldCls}
+                placeholder="0.00"
               />
             </label>
           )}
 
+          {/* ── External Order ID + Notes ──────────────────────────────── */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <label className="text-xs text-gray-400">
-              External Order ID
-              <input
-                type="text"
-                value={externalOrderId}
-                onChange={(event) => setExternalOrderId(event.target.value)}
-                className="mt-1 w-full rounded border border-gray-700 bg-gray-800 px-2 py-1.5 text-sm text-white"
-              />
-              <p className="mt-0.5 text-[11px] text-gray-500">
-                Must be unique per business. Leave blank if not tracking an order ID.
+            <div>
+              <label>
+                <span className={labelCls}>External Order ID</span>
+                <input
+                  type="text"
+                  value={externalOrderId}
+                  onChange={(e) => setExternalOrderId(e.target.value)}
+                  className={fieldCls}
+                  placeholder="Optional"
+                />
+              </label>
+              <p className="mt-1 text-[11px] text-gray-400">
+                Must be unique per business. Leave blank if not tracking.
               </p>
-            </label>
-            <label className="text-xs text-gray-400">
-              Notes
+            </div>
+            <label>
+              <span className={labelCls}>Notes</span>
               <input
                 type="text"
                 value={notes}
-                onChange={(event) => setNotes(event.target.value)}
-                className="mt-1 w-full rounded border border-gray-700 bg-gray-800 px-2 py-1.5 text-sm text-white"
+                onChange={(e) => setNotes(e.target.value)}
+                className={fieldCls}
+                placeholder="Optional"
               />
             </label>
           </div>
 
-          <div className="flex items-center justify-end gap-2 pt-2">
+          {/* ── Actions ───────────────────────────────────────────────── */}
+          <div className="flex items-center justify-end gap-2 border-t border-gray-100 pt-4">
             <button
               type="button"
               onClick={onClose}
-              className="rounded border border-gray-700 px-3 py-1.5 text-xs font-medium text-gray-300 hover:bg-gray-800"
+              className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={submitting || !soldPrice.trim()}
-              className="rounded bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
+              className="rounded-lg bg-emerald-600 px-5 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
             >
-              {submitting ? "Saving..." : submitLabel}
+              {submitting ? "Saving…" : submitLabel}
             </button>
           </div>
         </form>

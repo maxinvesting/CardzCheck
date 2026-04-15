@@ -31,9 +31,10 @@ interface Props {
 
 const STRIP_STYLE: CSSProperties = {
   background:
-    "linear-gradient(180deg, rgba(255,255,255,0.99) 0%, rgba(249,250,251,0.97) 100%)",
+    "linear-gradient(180deg, rgba(255,255,255,0.99) 0%, rgba(238,248,241,0.98) 100%)",
   border: "1px solid var(--biz-border)",
   borderRadius: "14px",
+  boxShadow: "0 12px 24px rgba(18, 58, 35, 0.05)",
 };
 
 interface CellDef {
@@ -129,7 +130,7 @@ export default function BusinessMetrics({
                   {cell.label}
                 </p>
                 {cell.tag && (
-                  <span className="shrink-0 rounded bg-[var(--biz-border)] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[var(--biz-muted)]">
+                  <span className="shrink-0 rounded border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[var(--biz-primary)]">
                     {cell.tag}
                   </span>
                 )}

@@ -9,7 +9,6 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
-
 -- ============================================
 -- WATCHLIST TABLE
 -- ============================================
@@ -29,41 +28,33 @@ CREATE TABLE IF NOT EXISTS watchlist (
   created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
   updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
-
 -- Indexes for watchlist
 CREATE INDEX IF NOT EXISTS idx_watchlist_user_id ON watchlist(user_id);
 CREATE INDEX IF NOT EXISTS idx_watchlist_last_checked ON watchlist(last_checked);
-
 -- Trigger for updated_at on watchlist
 DROP TRIGGER IF EXISTS update_watchlist_updated_at ON watchlist;
 CREATE TRIGGER update_watchlist_updated_at
   BEFORE UPDATE ON watchlist
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
-
 -- RLS for watchlist
 ALTER TABLE watchlist ENABLE ROW LEVEL SECURITY;
-
 DROP POLICY IF EXISTS "Users can view own watchlist items" ON watchlist;
 CREATE POLICY "Users can view own watchlist items"
   ON watchlist FOR SELECT
   USING (auth.uid() = user_id);
-
 DROP POLICY IF EXISTS "Users can create own watchlist items" ON watchlist;
 CREATE POLICY "Users can create own watchlist items"
   ON watchlist FOR INSERT
   WITH CHECK (auth.uid() = user_id);
-
 DROP POLICY IF EXISTS "Users can update own watchlist items" ON watchlist;
 CREATE POLICY "Users can update own watchlist items"
   ON watchlist FOR UPDATE
   USING (auth.uid() = user_id);
-
 DROP POLICY IF EXISTS "Users can delete own watchlist items" ON watchlist;
 CREATE POLICY "Users can delete own watchlist items"
   ON watchlist FOR DELETE
   USING (auth.uid() = user_id);
-
 -- ============================================
 -- SUBSCRIPTIONS TABLE
 -- ============================================
@@ -81,26 +72,21 @@ CREATE TABLE IF NOT EXISTS subscriptions (
 
   CONSTRAINT subscriptions_user_id_unique UNIQUE(user_id)
 );
-
 -- Indexes for subscriptions
 CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON subscriptions(user_id);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_stripe_subscription_id ON subscriptions(stripe_subscription_id);
-
 -- Trigger for updated_at on subscriptions
 DROP TRIGGER IF EXISTS update_subscriptions_updated_at ON subscriptions;
 CREATE TRIGGER update_subscriptions_updated_at
   BEFORE UPDATE ON subscriptions
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
-
 -- RLS for subscriptions
 ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
-
 DROP POLICY IF EXISTS "Users can view own subscription" ON subscriptions;
 CREATE POLICY "Users can view own subscription"
   ON subscriptions FOR SELECT
   USING (auth.uid() = user_id);
-
 -- ============================================
 -- USAGE TABLE
 -- ============================================
@@ -114,18 +100,14 @@ CREATE TABLE IF NOT EXISTS usage (
 
   CONSTRAINT usage_user_id_unique UNIQUE(user_id)
 );
-
 -- Indexes for usage
 CREATE INDEX IF NOT EXISTS idx_usage_user_id ON usage(user_id);
-
 -- RLS for usage
 ALTER TABLE usage ENABLE ROW LEVEL SECURITY;
-
 DROP POLICY IF EXISTS "Users can view own usage" ON usage;
 CREATE POLICY "Users can view own usage"
   ON usage FOR SELECT
   USING (auth.uid() = user_id);
-
 -- ============================================
 -- MIGRATE EXISTING PAID USERS
 -- ============================================
@@ -142,7 +124,6 @@ SELECT
 FROM users
 WHERE is_paid = true
 ON CONFLICT (user_id) DO NOTHING;
-
 -- Initialize usage records for all users
 INSERT INTO usage (user_id, searches_used, ai_messages_used)
 SELECT

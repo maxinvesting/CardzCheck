@@ -8,6 +8,18 @@ import { identifyCardFromImages } from "@/lib/identify-card/client";
 import { normalizeHttpUrl, uniqueHttpUrls } from "@/lib/collection-images";
 import { normalizeGradeScanPhotos } from "@/lib/grading/scanPhotos";
 
+// ── Design tokens (red/white) ─────────────────────────────────────────────────
+const RED        = "#B91C1C";
+const RED_DIM    = "rgba(185,28,28,0.08)";
+const RED_BORDER = "rgba(185,28,28,0.25)";
+const TEXT       = "#111111";
+const MUTED      = "#888888";
+const BORDER     = "#E5E5E5";
+const SURFACE    = "#F7F7F7";
+
+const MIN_PHOTOS = 2;
+const MAX_PHOTOS = 10;
+
 interface DualCardUploaderProps {
   onIdentified: (data: CardIdentificationResult) => void;
   disabled?: boolean;
@@ -15,7 +27,8 @@ interface DualCardUploaderProps {
   onReset?: () => void;
 }
 
-type PhotoTag = "auto" | "front" | "back" | "corner" | "edges" | "surface" | "other";
+type ExtraTag = "corner" | "edges" | "surface" | "other";
+type PhotoTag = "front" | "back" | ExtraTag | "auto";
 
 interface PhotoDraft {
   id: string;
@@ -24,51 +37,42 @@ interface PhotoDraft {
   tag: PhotoTag;
 }
 
-const TAG_OPTIONS: Array<{ value: PhotoTag; label: string }> = [
-  { value: "auto", label: "Auto-detect" },
-  { value: "front", label: "Front" },
-  { value: "back", label: "Back" },
-  { value: "corner", label: "Corner" },
-  { value: "edges", label: "Edge" },
+const EXTRA_TAG_OPTIONS: Array<{ value: ExtraTag; label: string }> = [
+  { value: "corner",  label: "Corner" },
+  { value: "edges",   label: "Edge" },
   { value: "surface", label: "Surface" },
-  { value: "other", label: "Other" },
+  { value: "other",   label: "Other" },
 ];
 
-const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+const MAX_IMAGE_BYTES          = 8 * 1024 * 1024;
 const MAX_FALLBACK_DATA_URL_BYTES = 350 * 1024;
 
 function tagToKind(tag: PhotoTag): GradeScanPhotoKind {
   switch (tag) {
-    case "front": return "front";
-    case "back": return "back";
-    case "corner": return "corner_tl";
-    case "edges": return "edges";
+    case "front":   return "front";
+    case "back":    return "back";
+    case "corner":  return "corner_tl";
+    case "edges":   return "edges";
     case "surface": return "surface";
-    default: return "other";
+    default:        return "other";
   }
-}
-
-function defaultTagForIndex(index: number): PhotoTag {
-  if (index === 0) return "front";
-  if (index === 1) return "back";
-  return "auto";
 }
 
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
+    reader.onload  = () => resolve(reader.result as string);
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
 }
 
 function estimateDataUrlByteLength(dataUrl: string): number {
-  const commaIndex = dataUrl.indexOf(",");
-  if (commaIndex === -1) return 0;
-  const base64 = dataUrl.slice(commaIndex + 1);
-  const padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
-  return Math.max(0, Math.floor((base64.length * 3) / 4) - padding);
+  const idx = dataUrl.indexOf(",");
+  if (idx === -1) return 0;
+  const b64 = dataUrl.slice(idx + 1);
+  const pad = b64.endsWith("==") ? 2 : b64.endsWith("=") ? 1 : 0;
+  return Math.max(0, Math.floor((b64.length * 3) / 4) - pad);
 }
 
 function isDataUrl(value: string): boolean {
@@ -77,76 +81,126 @@ function isDataUrl(value: string): boolean {
 
 async function compressDataUrl(
   dataUrl: string,
-  options: { maxWidth: number; maxHeight: number; quality: number }
+  opts: { maxWidth: number; maxHeight: number; quality: number }
 ): Promise<string | null> {
   if (typeof window === "undefined") return null;
   return new Promise((resolve) => {
-    const image = new Image();
-    image.onload = () => {
-      const scale = Math.min(1, options.maxWidth / image.width, options.maxHeight / image.height);
-      const width = Math.max(1, Math.round(image.width * scale));
-      const height = Math.max(1, Math.round(image.height * scale));
+    const img = new Image();
+    img.onload = () => {
+      const scale  = Math.min(1, opts.maxWidth / img.width, opts.maxHeight / img.height);
       const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
+      canvas.width  = Math.max(1, Math.round(img.width  * scale));
+      canvas.height = Math.max(1, Math.round(img.height * scale));
       const ctx = canvas.getContext("2d");
       if (!ctx) { resolve(null); return; }
-      ctx.drawImage(image, 0, 0, width, height);
-      resolve(canvas.toDataURL("image/jpeg", options.quality));
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/jpeg", opts.quality));
     };
-    image.onerror = () => resolve(null);
-    image.src = dataUrl;
+    img.onerror = () => resolve(null);
+    img.src = dataUrl;
   });
 }
 
+/** Assign default tags by index: 1st = front, 2nd = back, rest = auto (then user can retag). */
+function defaultTagForIndex(i: number): PhotoTag {
+  if (i === 0) return "front";
+  if (i === 1) return "back";
+  return "auto";
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
 export default function DualCardUploader({
   onIdentified,
   disabled,
   onStart,
   onReset,
 }: DualCardUploaderProps) {
-  const [photos, setPhotos] = useState<PhotoDraft[]>([]);
-  const [dragging, setDragging] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [photos,      setPhotos]      = useState<PhotoDraft[]>([]);
+  const [dragging,    setDragging]    = useState(false);
+  const [loading,     setLoading]     = useState(false);
+  const [error,       setError]       = useState<string | null>(null);
+  const bulkInputRef  = useRef<HTMLInputElement>(null);
+  const addMoreInputRef = useRef<HTMLInputElement>(null);
 
-  const canAnalyze = photos.length >= 2;
+  const totalPhotos = photos.length;
+  const canAnalyze = totalPhotos >= MIN_PHOTOS && totalPhotos <= MAX_PHOTOS;
 
-  const validateFile = useCallback((file: File): string | null => {
+  const makePhotoId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  const validateImageFile = (file: File): string | null => {
     if (!file.type.startsWith("image/")) return "Please upload image files only.";
-    if (file.size > MAX_IMAGE_BYTES) return "Each image must be less than 8MB.";
+    if (file.size > MAX_IMAGE_BYTES) return "Each image must be less than 8 MB.";
     return null;
+  };
+
+  const replaceWithFiles = useCallback(async (files: File[]) => {
+    const imageFiles = files.filter((f) => f.type.startsWith("image/"));
+    for (const f of imageFiles) {
+      const err = validateImageFile(f);
+      if (err) { setError(err); return; }
+    }
+    if (imageFiles.length < MIN_PHOTOS) {
+      setError(`Select at least ${MIN_PHOTOS} images (maximum ${MAX_PHOTOS}).`);
+      return;
+    }
+    if (imageFiles.length > MAX_PHOTOS) {
+      setError(`Select at most ${MAX_PHOTOS} images.`);
+      return;
+    }
+    setError(null);
+    const previews = await Promise.all(imageFiles.map(readFileAsDataUrl));
+    setPhotos(
+      imageFiles.map((file, i) => ({
+        id: makePhotoId(),
+        file,
+        preview: previews[i],
+        tag: defaultTagForIndex(i),
+      }))
+    );
   }, []);
 
-  const addFiles = useCallback(
-    async (files: File[]) => {
-      if (files.length === 0) return;
-      for (const file of files) {
-        const err = validateFile(file);
-        if (err) { setError(err); return; }
+  const addMoreFiles = useCallback(async (files: File[]) => {
+    const imageFiles = files.filter((f) => f.type.startsWith("image/"));
+    for (const f of imageFiles) {
+      const err = validateImageFile(f);
+      if (err) { setError(err); return; }
+    }
+    if (imageFiles.length === 0) return;
+
+    const previews = await Promise.all(imageFiles.map(readFileAsDataUrl));
+
+    setPhotos((prev) => {
+      const room = MAX_PHOTOS - prev.length;
+      if (room <= 0) {
+        setError(`Maximum ${MAX_PHOTOS} images.`);
+        return prev;
       }
-      setError(null);
-      const previews = await Promise.all(files.map((f) => readFileAsDataUrl(f)));
-      setPhotos((prev) => {
-        const startIndex = prev.length;
-        const next = files.map((file, i): PhotoDraft => ({
-          id: `${Date.now()}-${i}-${Math.random().toString(36).slice(2, 8)}`,
+      const n = Math.min(room, imageFiles.length);
+      const toAdd = imageFiles.slice(0, n);
+      const prevSlice = previews.slice(0, n);
+      if (n < imageFiles.length) {
+        setError(`Only ${n} more image${n === 1 ? "" : "s"} fit (max ${MAX_PHOTOS}).`);
+      } else {
+        setError(null);
+      }
+      const startIdx = prev.length;
+      return [
+        ...prev,
+        ...toAdd.map((file, j) => ({
+          id: makePhotoId(),
           file,
-          preview: previews[i],
-          tag: defaultTagForIndex(startIndex + i),
-        }));
-        return [...prev, ...next];
-      });
-    },
-    [validateFile]
-  );
+          preview: prevSlice[j],
+          tag: defaultTagForIndex(startIdx + j),
+        })),
+      ];
+    });
+  }, []);
 
   const uploadFile = useCallback(async (file: File, fallbackDataUrl: string): Promise<string> => {
     try {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Authentication required for storage uploads");
+      if (!user) throw new Error("Authentication required");
       const fileName = `${user.id}/${Date.now()}-${file.name}`;
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from("card-images")
@@ -155,37 +209,37 @@ export default function DualCardUploader({
       const { data: { publicUrl } } = supabase.storage.from("card-images").getPublicUrl(uploadData.path);
       return publicUrl;
     } catch {
-      const fallbackBytes = estimateDataUrlByteLength(fallbackDataUrl);
-      if (fallbackBytes <= MAX_FALLBACK_DATA_URL_BYTES) return fallbackDataUrl;
+      const bytes = estimateDataUrlByteLength(fallbackDataUrl);
+      if (bytes <= MAX_FALLBACK_DATA_URL_BYTES) return fallbackDataUrl;
       const compressed = await compressDataUrl(fallbackDataUrl, { maxWidth: 1200, maxHeight: 1200, quality: 0.72 });
       return compressed || fallbackDataUrl;
     }
   }, []);
 
   const handleAnalyze = useCallback(async () => {
-    if (photos.length < 2) return;
+    if (photos.length < MIN_PHOTOS || photos.length > MAX_PHOTOS) return;
+    const frontPhoto = photos[0];
+    const backPhoto = photos[1];
+    if (!frontPhoto || !backPhoto) return;
+
     setError(null);
     onStart?.();
     setLoading(true);
 
     try {
-      const uploadedUrls = await Promise.all(
-        photos.map((p) => uploadFile(p.file, p.preview))
-      );
+      const allDrafts = photos;
+      const uploadedUrls = await Promise.all(allDrafts.map((p) => uploadFile(p.file, p.preview)));
 
       const scanPhotos = normalizeGradeScanPhotos(
-        photos.map((p, i) => ({
+        allDrafts.map((p, i) => ({
           url: uploadedUrls[i],
-          kind: tagToKind(p.tag),
+          kind: i === 0 ? "front" : i === 1 ? "back" : tagToKind(p.tag),
           sort_order: i,
         }))
       );
 
-      // Find front/back URLs for identification — prefer tagged, fall back to first two
-      const frontIdx = photos.findIndex((p) => p.tag === "front");
-      const backIdx = photos.findIndex((p) => p.tag === "back");
-      const frontUrl = uploadedUrls[frontIdx >= 0 ? frontIdx : 0] ?? uploadedUrls[0];
-      const backUrl = uploadedUrls[backIdx >= 0 ? backIdx : 1] ?? uploadedUrls[1];
+      const frontUrl = uploadedUrls[0];
+      const backUrl  = uploadedUrls[1];
 
       const identifyInput = [frontUrl, backUrl].some(isDataUrl)
         ? { imageUrl: frontUrl }
@@ -201,187 +255,317 @@ export default function DualCardUploader({
 
       const result = identify.data;
       const allImageUrls = scanPhotos
-        .map((photo) => photo.url)
-        .filter((url) => typeof url === "string" && url.trim().length > 0);
-      const sanitizedImageUrls = uniqueHttpUrls(allImageUrls);
-      const userImageUrl = normalizeHttpUrl(frontUrl) || normalizeHttpUrl(sanitizedImageUrls[0] || null);
-      const displayImageUrl =
-        userImageUrl ||
-        allImageUrls.find((url) => typeof url === "string" && url.trim().length > 0) ||
-        "";
+        .map((p) => p.url)
+        .filter((u) => typeof u === "string" && u.trim().length > 0);
+      const sanitizedUrls  = uniqueHttpUrls(allImageUrls);
+      const userImageUrl   = normalizeHttpUrl(frontUrl) || normalizeHttpUrl(sanitizedUrls[0] || null);
+      const displayImageUrl = userImageUrl || allImageUrls[0] || "";
 
       if (result.card_identity?.warnings?.includes("parse_error")) {
-        setError("We couldn't read the card details clearly. Please confirm the year and set.");
+        setError("Couldn't read card details clearly. Please confirm the year and set.");
       } else if (result.confidence === "low") {
-        setError(
-          `Card identified with low confidence. Player: ${result.player_name || "Unknown"}. Please verify the details manually.`
-        );
+        setError(`Identified with low confidence — player: ${result.player_name || "Unknown"}. Please verify.`);
       }
 
       onIdentified(
         normalizeIdentificationResult({
-          player_name: result.player_name,
-          players: result.players || [result.player_name],
-          year: result.year || undefined,
-          set_name: result.set_name || undefined,
-          insert: result.insert || undefined,
-          grade: result.grade || undefined,
+          player_name:  result.player_name,
+          players:      result.players || [result.player_name],
+          year:         result.year     || undefined,
+          set_name:     result.set_name || undefined,
+          insert:       result.insert   || undefined,
+          grade:        result.grade    || undefined,
           parallel_type: (result.card_identity?.parallel ?? result.variant) || undefined,
-          imageUrl: displayImageUrl,
-          imageUrls: allImageUrls,
+          imageUrl:     displayImageUrl,
+          imageUrls:    allImageUrls,
           scanPhotos,
           userImageUrl: userImageUrl || undefined,
-          confidence: result.confidence,
+          confidence:   result.confidence,
           cardIdentity: result.card_identity,
         })
       );
-    } catch (analyzeError) {
-      setError(analyzeError instanceof Error ? analyzeError.message : "Failed to process image.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to process images.");
       onReset?.();
     } finally {
       setLoading(false);
     }
   }, [photos, onStart, uploadFile, onIdentified, onReset]);
 
+  const removePhoto = useCallback((id: string) => {
+    setPhotos((prev) => {
+      const next = prev.filter((p) => p.id !== id);
+      return next.map((p, i) => {
+        let tag: PhotoTag = p.tag;
+        if (i === 0) tag = "front";
+        else if (i === 1) tag = "back";
+        else if (tag === "front" || tag === "back") tag = "auto";
+        return { ...p, tag };
+      });
+    });
+    setError(null);
+  }, []);
+
+  const updateTag = useCallback((id: string, tag: PhotoTag) => {
+    setPhotos((prev) => prev.map((p) => (p.id === id ? { ...p, tag } : p)));
+  }, []);
+
+  const clearAll = useCallback(() => {
+    setPhotos([]);
+    setError(null);
+  }, []);
+
+  // ── Loading state ─────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="w-full">
-        <div className="flex min-h-[220px] flex-col items-center justify-center gap-3 rounded-xl border border-slate-700 bg-slate-800/50">
-          <div className="h-10 w-10 animate-spin rounded-full border-2 border-slate-600 border-t-slate-300" />
-          <p className="text-sm text-slate-300">Analyzing {photos.length} photo{photos.length === 1 ? "" : "s"}...</p>
-        </div>
+      <div style={{
+        minHeight: 200, display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center", gap: 12,
+        border: `1px solid ${BORDER}`, borderRadius: 2, background: SURFACE,
+      }}>
+        <div style={{
+          width: 24, height: 24, borderRadius: "50%",
+          border: `2px solid ${RED}`, borderTopColor: "transparent",
+          animation: "spin 0.8s linear infinite",
+        }} />
+        <p style={{ fontSize: 12, color: MUTED }}>
+          Processing {totalPhotos} photo{totalPhotos === 1 ? "" : "s"}…
+        </p>
+        <style jsx global>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     );
   }
 
+  const onBulkChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const list = Array.from(e.target.files ?? []);
+    e.currentTarget.value = "";
+    void replaceWithFiles(list);
+  };
+
+  const onAddMoreChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const list = Array.from(e.target.files ?? []);
+    e.currentTarget.value = "";
+    void addMoreFiles(list);
+  };
+
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragging(false);
+    const list = Array.from(e.dataTransfer.files ?? []);
+    if (photos.length === 0) void replaceWithFiles(list);
+    else void addMoreFiles(list);
+  };
+
   return (
-    <div className="w-full space-y-4">
-      {/* Header */}
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
       <div>
-        <p className="text-sm font-semibold text-slate-100">Upload your photos</p>
-        <p className="mt-0.5 text-xs text-slate-400">
-          Front and back required — the more photos you include, the more accurate your grade prediction.
+        <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: "1.5px", color: RED, textTransform: "uppercase", marginBottom: 10 }}>
+          Card Upload
         </p>
-      </div>
 
-      {/* Drop zone */}
-      <div
-        onDrop={(e) => {
-          e.preventDefault();
-          setDragging(false);
-          void addFiles(Array.from(e.dataTransfer.files ?? []));
-        }}
-        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-        onDragLeave={(e) => { e.preventDefault(); setDragging(false); }}
-        onClick={() => !disabled && inputRef.current?.click()}
-        className={`relative cursor-pointer rounded-xl border border-dashed p-6 text-center transition-colors ${
-          dragging
-            ? "border-slate-400 bg-slate-700/50"
-            : "border-slate-600 bg-slate-800/30 hover:border-slate-500 hover:bg-slate-800/50"
-        } ${disabled ? "pointer-events-none opacity-50" : ""}`}
-      >
-        <div className="flex flex-col items-center gap-2">
-          <svg className="h-8 w-8 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
-          <p className="text-sm font-medium text-slate-300">
-            {dragging ? "Drop photos here" : "Drop photos or click to select"}
-          </p>
-          <p className="text-xs text-slate-500">JPG · PNG · WebP · up to 8 MB each</p>
-        </div>
-        <input
-          ref={inputRef}
-          type="file"
-          accept="image/*"
-          multiple
-          disabled={disabled}
-          className="hidden"
-          onChange={(e) => {
-            void addFiles(Array.from(e.target.files ?? []));
-            e.currentTarget.value = "";
+        <div
+          onDrop={onDrop}
+          onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+          onDragLeave={(e) => { e.preventDefault(); setDragging(false); }}
+          onClick={() => {
+            if (disabled || photos.length > 0) return;
+            bulkInputRef.current?.click();
           }}
-        />
-      </div>
+          style={{
+            border: `1px dashed ${dragging ? RED : BORDER}`,
+            borderRadius: 2,
+            padding: "20px 16px",
+            textAlign: "center",
+            background: dragging ? RED_DIM : SURFACE,
+            cursor: disabled ? "not-allowed" : photos.length === 0 ? "pointer" : "default",
+            transition: "all 0.1s",
+          }}
+        >
+          <input
+            ref={bulkInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            disabled={disabled}
+            style={{ display: "none" }}
+            onChange={onBulkChange}
+          />
+          <input
+            ref={addMoreInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            disabled={disabled}
+            style={{ display: "none" }}
+            onChange={onAddMoreChange}
+          />
 
-      {/* Photo count + thumbnails */}
-      {photos.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-medium text-slate-400">
-              {photos.length} photo{photos.length === 1 ? "" : "s"} selected
-            </p>
-            <button
-              type="button"
-              onClick={() => { setPhotos([]); setError(null); }}
-              className="text-xs text-slate-500 underline-offset-2 transition-colors hover:text-slate-300 hover:underline"
-            >
-              Clear all
-            </button>
-          </div>
+          <p style={{ fontSize: 11, color: MUTED, marginBottom: 12, lineHeight: 1.5 }}>
+            Add <strong style={{ color: TEXT }}>{MIN_PHOTOS}–{MAX_PHOTOS} images</strong> in one selection (or drop them here).
+            Order matters: <strong style={{ color: TEXT }}>1st = front</strong>, <strong style={{ color: TEXT }}>2nd = back</strong>, then corners, edges, or surface.
+          </p>
 
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-            {photos.map((photo, index) => (
-              <div key={photo.id} className="rounded-lg border border-slate-700 bg-slate-800/60 p-1.5">
-                <div className="relative">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!disabled) bulkInputRef.current?.click();
+            }}
+            disabled={disabled}
+            style={{
+              padding: "12px 20px",
+              fontSize: 11, fontWeight: 700, letterSpacing: "0.9px", textTransform: "uppercase",
+              color: "#fff", background: RED,
+              border: "none", borderRadius: 2,
+              cursor: disabled ? "not-allowed" : "pointer",
+              width: "100%",
+              maxWidth: 320,
+              margin: "0 auto",
+              display: "block",
+            }}
+          >
+            Insert card photos
+          </button>
+
+          <p style={{ fontSize: 9, color: MUTED, marginTop: 10 }}>
+            JPG · PNG · WebP · up to 8 MB each
+          </p>
+        </div>
+
+        {photos.length > 0 && (
+          <div style={{ marginTop: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <p style={{ fontSize: 10, color: MUTED }}>
+                {photos.length} / {MAX_PHOTOS} images
+              </p>
+              <div style={{ display: "flex", gap: 10 }}>
+                {photos.length < MAX_PHOTOS && (
+                  <button
+                    type="button"
+                    onClick={() => !disabled && addMoreInputRef.current?.click()}
+                    disabled={disabled}
+                    style={{ fontSize: 10, color: RED, background: "none", border: "none", cursor: disabled ? "not-allowed" : "pointer", fontWeight: 600 }}
+                  >
+                    Add more
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={clearAll}
+                  disabled={disabled}
+                  style={{ fontSize: 10, color: MUTED, background: "none", border: "none", cursor: "pointer" }}
+                >
+                  Clear all
+                </button>
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: 8 }}>
+              {photos.map((photo, index) => (
+                <div key={photo.id} style={{ position: "relative" }}>
                   <img
                     src={photo.preview}
-                    alt={`Photo ${index + 1}`}
-                    className="h-20 w-full rounded-md object-cover"
+                    alt={`Card ${index + 1}`}
+                    style={{
+                      width: "100%",
+                      aspectRatio: "3/4",
+                      objectFit: "cover",
+                      borderRadius: 2,
+                      border: `1px solid ${BORDER}`,
+                      display: "block",
+                    }}
                   />
                   <button
                     type="button"
-                    onClick={() => setPhotos((prev) => prev.filter((p) => p.id !== photo.id))}
-                    className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-slate-900/80 text-slate-300 transition-colors hover:bg-slate-900 hover:text-white"
-                    aria-label="Remove photo"
+                    onClick={() => removePhoto(photo.id)}
+                    disabled={disabled}
+                    style={{
+                      position: "absolute", top: 4, right: 4,
+                      width: 20, height: 20, borderRadius: 2,
+                      background: "rgba(255,255,255,0.92)",
+                      border: `1px solid ${BORDER}`,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      cursor: "pointer", color: MUTED, padding: 0,
+                    }}
+                    aria-label="Remove image"
                   >
-                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    <svg width="8" height="8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
                     </svg>
                   </button>
+                  <div style={{ marginTop: 4 }}>
+                    {index === 0 && (
+                      <p style={{ fontSize: 8, fontWeight: 700, letterSpacing: "0.5px", color: RED, textTransform: "uppercase", margin: 0 }}>Front</p>
+                    )}
+                    {index === 1 && (
+                      <p style={{ fontSize: 8, fontWeight: 700, letterSpacing: "0.5px", color: RED, textTransform: "uppercase", margin: 0 }}>Back</p>
+                    )}
+                    {index >= 2 && (
+                      <select
+                        value={photo.tag === "front" || photo.tag === "back" ? "auto" : photo.tag}
+                        onChange={(e) => {
+                          const v = e.target.value as PhotoTag;
+                          updateTag(photo.id, v);
+                        }}
+                        style={{
+                          width: "100%",
+                          fontSize: 9, padding: "2px 0",
+                          background: SURFACE, border: `1px solid ${BORDER}`,
+                          borderRadius: 2, color: TEXT, outline: "none",
+                        }}
+                      >
+                        <option value="auto">Auto</option>
+                        {EXTRA_TAG_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
                 </div>
-                <select
-                  value={photo.tag}
-                  onChange={(e) => {
-                    const tag = e.target.value as PhotoTag;
-                    setPhotos((prev) =>
-                      prev.map((p) => (p.id === photo.id ? { ...p, tag } : p))
-                    );
-                  }}
-                  className="mt-1.5 w-full rounded border border-slate-600 bg-slate-700 px-1.5 py-1 text-[11px] text-slate-200 focus:outline-none focus:ring-1 focus:ring-slate-500"
-                >
-                  {TAG_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
+        )}
+
+        {photos.length > 0 && photos.length < MIN_PHOTOS && (
+          <p style={{ fontSize: 10, color: MUTED, marginTop: 8 }}>
+            Add at least {MIN_PHOTOS} images to continue.
+          </p>
+        )}
+      </div>
+
+      {error && (
+        <div style={{
+          padding: "10px 14px",
+          background: "rgba(185,28,28,0.06)",
+          border: `1px solid ${RED_BORDER}`,
+          borderRadius: 2,
+        }}>
+          <p style={{ fontSize: 11, color: RED }}>{error}</p>
         </div>
       )}
 
-      {/* Continue button */}
       <button
         type="button"
         onClick={() => { void handleAnalyze(); }}
         disabled={!canAnalyze || Boolean(disabled)}
-        className={`w-full rounded-xl border py-3 text-sm font-semibold transition-colors ${
-          canAnalyze && !disabled
-            ? "border-slate-900 bg-slate-900 text-white hover:bg-slate-800"
-            : "cursor-not-allowed border-slate-700 bg-slate-800/50 text-slate-500"
-        }`}
+        style={{
+          padding: "13px",
+          fontSize: 11, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase",
+          color: canAnalyze && !disabled ? "#fff" : MUTED,
+          background: canAnalyze && !disabled ? RED : SURFACE,
+          border: `1px solid ${canAnalyze && !disabled ? RED : BORDER}`,
+          borderRadius: 2,
+          cursor: !canAnalyze || disabled ? "not-allowed" : "pointer",
+          width: "100%",
+        }}
       >
         {canAnalyze
-          ? `Analyze ${photos.length} photo${photos.length === 1 ? "" : "s"} →`
-          : "Add front + back photos to continue"}
+          ? `Analyze ${totalPhotos} photo${totalPhotos === 1 ? "" : "s"} →`
+          : `Insert ${MIN_PHOTOS}–${MAX_PHOTOS} photos to continue`}
       </button>
 
-      {error ? (
-        <div className="rounded-lg border border-amber-800/50 bg-amber-900/20 p-3">
-          <p className="text-xs text-amber-400">{error}</p>
-        </div>
-      ) : null}
     </div>
   );
 }

@@ -17,10 +17,8 @@ import BusinessPaywall from "@/components/business/BusinessPaywall";
 import BusinessMigrationBanner from "@/components/business/BusinessMigrationBanner";
 import InventoryTable from "@/components/business/InventoryTable";
 import InventoryCardGrid from "@/components/business/InventoryCardGrid";
-import ItemDetailDrawer from "@/components/business/ItemDetailDrawer";
 import SalesTable, { type SalesFilters } from "@/components/business/SalesTable";
 import SaleFormModal from "@/components/business/SaleFormModal";
-import EbayOrderSyncBanner from "@/components/business/EbayOrderSyncBanner";
 import AddInventoryModal from "@/components/business/AddInventoryModal";
 import AddWaxModal from "@/components/business/AddWaxModal";
 import AddCardToInventoryModal from "@/components/business/AddCardToInventoryModal";
@@ -205,7 +203,6 @@ function LedgerPageContent() {
     activeInventoryCount: 0,
   }));
   const [metricsLoading, setMetricsLoading] = useState(true);
-  const [selectedItem, setSelectedItem] = useState<BusinessInventoryItem | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showAddCardModal, setShowAddCardModal] = useState(false);
   const [showCardPicker, setShowCardPicker] = useState(false);
@@ -363,6 +360,13 @@ function LedgerPageContent() {
     [router]
   );
 
+  const openInventoryItem = useCallback(
+    (item: BusinessInventoryItem) => {
+      router.push(`/business/card/${item.id}?from=business&panel=inventory`);
+    },
+    [router]
+  );
+
   const handleFilteredChange = useCallback((filtered: BusinessInventoryItem[]) => {
     setFilteredItems(filtered);
   }, []);
@@ -379,7 +383,6 @@ function LedgerPageContent() {
 
     startTransition(() => {
       setItems((prev) => prev.map((item) => updates.get(item.id) ?? item));
-      setSelectedItem((prev) => (prev ? updates.get(prev.id) ?? prev : prev));
     });
   }, [perfEnabled]);
 
@@ -946,9 +949,6 @@ function LedgerPageContent() {
       setItems((prev) =>
         prev.map((it) => (it.id === id ? { ...it, ...updates } : it))
       );
-      setSelectedItem((prev) =>
-        prev && prev.id === id ? { ...prev, ...updates } : prev
-      );
       setToast({ type: "success", message: "Item saved" });
       return;
     }
@@ -962,7 +962,6 @@ function LedgerPageContent() {
       if (res.ok) {
         const updated = await res.json();
         setItems((prev) => prev.map((it) => (it.id === id ? updated : it)));
-        setSelectedItem(updated);
         setToast({ type: "success", message: "Item saved" });
         loadMetrics();
       }
@@ -1001,7 +1000,6 @@ function LedgerPageContent() {
       // Remove from inventory list if moved to PC
       if (targetKind === "owned") {
         setItems((prev) => prev.filter((it) => it.id !== item.id));
-        if (selectedItem?.id === item.id) setSelectedItem(null);
         setToast({ type: "success", message: "Card moved to Personal Collection." });
       } else {
         setItems((prev) =>
@@ -1087,10 +1085,15 @@ function LedgerPageContent() {
 
       setToast({ type: "success", message: "Sale recorded" });
       setSalesPage(1);
+      // Immediately drop the sold item from local state — the optimistic update
+      // already set status="sold" but we remove it entirely so it never flickers
+      // back if loadInventory races with the DB write.
+      if (inventoryId) {
+        setItems((prev) => prev.filter((it) => it.id !== inventoryId));
+      }
       if (activeTab === "sales") {
         loadSales();
       }
-      loadInventory();
       loadMetrics();
     } catch {
       if (previousItem) {
@@ -1181,6 +1184,8 @@ function LedgerPageContent() {
     card_number?: string;
     parallel_type?: string;
     grade?: string;
+    grader?: string;
+    psa_cert_number?: string;
     imageUrl?: string;
     user_image_url?: string;
     quantity?: number;
@@ -1478,8 +1483,8 @@ function LedgerPageContent() {
                   {viewMode === "grid" && (
                     <InventoryCardGrid
                       items={gridFilteredItems}
-                      selectedItemId={selectedItem?.id ?? null}
-                      onItemClick={setSelectedItem}
+                      selectedItemId={null}
+                      onItemClick={openInventoryItem}
                       onMarkSold={handleMarkSold}
                       ebayConnected={ebayConnected}
                       onAddCard={openAddInventoryModal}
@@ -1498,8 +1503,8 @@ function LedgerPageContent() {
                           >
                             <InventoryTable
                               items={items}
-                              selectedItemId={selectedItem?.id ?? null}
-                              onItemClick={setSelectedItem}
+                              selectedItemId={null}
+                              onItemClick={openInventoryItem}
                               onInlineUpdate={handleInlineUpdate}
                               onBulkAction={handleBulkAction}
                               onDelete={handleDelete}
@@ -1515,8 +1520,8 @@ function LedgerPageContent() {
                         ) : (
                           <InventoryTable
                             items={items}
-                            selectedItemId={selectedItem?.id ?? null}
-                            onItemClick={setSelectedItem}
+                            selectedItemId={null}
+                            onItemClick={openInventoryItem}
                             onInlineUpdate={handleInlineUpdate}
                             onBulkAction={handleBulkAction}
                             onDelete={handleDelete}
@@ -1539,7 +1544,6 @@ function LedgerPageContent() {
           {/* ── SALES TAB ─────────────────────────────────────────────── */}
           {activeTab === "sales" && (
             <>
-              <EbayOrderSyncBanner />
               <div className="px-4 sm:px-6 py-4 pb-6">
                 <Surface className="p-5">
                   <SalesTable
@@ -1668,14 +1672,6 @@ function LedgerPageContent() {
       </main>
 
       {/* ── MODALS ────────────────────────────────────────────────────────── */}
-
-      {selectedItem && (
-        <ItemDetailDrawer
-          item={selectedItem}
-          onClose={() => setSelectedItem(null)}
-          onSave={handleSaveItem}
-        />
-      )}
 
       <AddInventoryModal
         isOpen={showAddModal}

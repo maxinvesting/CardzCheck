@@ -122,7 +122,7 @@ export async function POST() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    await requireBusinessAccess(user.id);
+    const context = await requireBusinessAccess(user.id);
 
     const accessToken = await getValidUserAccessToken(supabase, user.id);
     if (!accessToken) {
@@ -194,6 +194,7 @@ export async function POST() {
         await supabase
           .from("collection_items")
           .update({
+            business_account_id: context.businessAccountId,
             title,
             list_price_cents: priceCents,
             status: "listed",
@@ -210,6 +211,7 @@ export async function POST() {
         // Insert new item
         await supabase.from("collection_items").insert({
           user_id: user.id,
+          business_account_id: context.businessAccountId,
           item_kind: "inventory",
           title,
           player_name: title, // best we can do from eBay data

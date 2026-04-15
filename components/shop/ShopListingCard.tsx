@@ -45,11 +45,11 @@ export default function ShopListingCard({
   skeleton = false,
   userTier,
 }: ShopListingCardProps) {
+  const { addItem } = useShopCart();
+
   if (skeleton || !listing) {
     return <ShopListingCardSkeleton />;
   }
-
-  const { addItem } = useShopCart();
   const available = Math.max(0, listing.quantity - listing.quantity_sold);
   const canAdd = available > 0;
 

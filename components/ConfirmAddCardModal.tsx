@@ -369,7 +369,7 @@ export default function ConfirmAddCardModal({
 
             {/* Card Details */}
             <div className="flex-1 min-w-0">
-              {needsConfirmation ? (
+              {needsConfirmation || psaDataApplied ? (
                 <div className="space-y-2">
                   <div>
                     <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
@@ -545,7 +545,7 @@ export default function ConfirmAddCardModal({
 
           {cardData.cardIdentity?.warnings?.includes("parse_error") ? (
             <InlineNotice type="warning">
-              We couldn't read all card details. Please confirm the year and set.
+              We couldn&apos;t read all card details. Please confirm the year and set.
             </InlineNotice>
           ) : null}
 
