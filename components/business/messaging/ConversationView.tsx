@@ -139,7 +139,7 @@ export default function ConversationView({
   }
 
   return (
-    <div className="flex h-full flex-col bg-[#FCFDFC]">
+    <div className="flex h-full min-w-0 flex-col bg-[#FCFDFC]">
       <div className="border-b border-[var(--biz-border)] bg-[linear-gradient(135deg,#ffffff_0%,#f5fbf7_65%,#eef8fb_100%)] px-5 py-3.5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
@@ -211,7 +211,7 @@ export default function ConversationView({
                 className={`flex ${isOutbound ? "justify-end" : "justify-start"}`}
               >
                 <div
-                  className={`max-w-[82%] rounded-[22px] px-4 py-3 shadow-[0_12px_30px_rgba(15,23,42,0.06)] ${
+                  className={`max-w-[82%] rounded-2xl px-4 py-3 shadow-[0_1px_3px_rgba(15,23,42,0.06)] ${
                     isOutbound
                       ? "border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] text-[var(--biz-text)]"
                       : "border border-[var(--biz-border)] bg-white text-[var(--biz-text)]"
@@ -249,7 +249,7 @@ export default function ConversationView({
             onInsertReply={(text) => setReplyText(text)}
           />
 
-          <div className="rounded-[20px] border border-[var(--biz-border)] bg-[#FCFCFD] p-3 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
+          <div className="min-w-0 rounded-2xl border border-[var(--biz-border)] bg-[#FCFCFD] p-3 shadow-[0_2px_8px_rgba(15,23,42,0.04)]">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--biz-muted)]">
@@ -286,7 +286,7 @@ export default function ConversationView({
                 type="button"
                 onClick={handleSend}
                 disabled={!replyText.trim() || sendLoading}
-	                className="rounded-xl bg-[var(--biz-primary)] px-4 py-2.5 text-sm font-semibold text-[var(--biz-primary-foreground)] shadow-[0_10px_24px_var(--biz-primary-border)] transition-all hover:bg-[var(--biz-primary-hover)] disabled:cursor-not-allowed disabled:opacity-45"
+                className="rounded-xl bg-[var(--biz-primary)] px-4 py-2 text-sm font-semibold text-[var(--biz-primary-foreground)] shadow-[0_1px_3px_var(--biz-primary-border)] transition-all hover:bg-[var(--biz-primary-hover)] disabled:cursor-not-allowed disabled:opacity-45"
               >
                 {sendLoading ? "Sending..." : "Send reply"}
               </button>

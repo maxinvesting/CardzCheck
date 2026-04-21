@@ -274,52 +274,32 @@ export default function BusinessMessagesView({
   }, [initialThreads, loadThread]);
 
   return (
-    <div className="space-y-4">
-      {/* Page header */}
-      <div className="flex items-center justify-between gap-4 rounded-2xl border border-[var(--biz-border)] bg-[linear-gradient(135deg,var(--biz-primary-soft)_0%,#ffffff_56%,var(--biz-secondary-soft)_100%)] px-5 py-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[var(--biz-text)]">
-            Buyer Inbox
-          </h1>
-          <p className="mt-0.5 text-sm text-[var(--biz-muted)]">
-            Offers, questions, and follow-ups in one place
-          </p>
+    <div className="flex min-w-0 flex-col gap-3">
+      {/* Command bar: title + stats + controls in a single card */}
+      <div className="min-w-0 overflow-hidden rounded-2xl border border-[var(--biz-border)] bg-white shadow-[0_2px_8px_rgba(15,23,42,0.04)]">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--biz-border)] bg-[linear-gradient(135deg,var(--biz-primary-soft)_0%,#ffffff_60%,var(--biz-secondary-soft)_100%)] px-4 py-3">
+          <div className="min-w-0">
+            <h1 className="truncate text-xl font-bold tracking-tight text-[var(--biz-text)]">
+              Buyer Inbox
+            </h1>
+            <p className="mt-0.5 truncate text-xs text-[var(--biz-muted)]">
+              Offers, questions, and follow-ups in one place
+            </p>
+          </div>
+          <div className="flex items-center gap-2 rounded-full border border-[var(--biz-primary-border)] bg-white/80 px-2.5 py-1 shadow-sm backdrop-blur">
+            <span className="h-1.5 w-1.5 rounded-full bg-[var(--biz-primary)]" />
+            <span className="text-[11px] font-semibold text-[var(--biz-primary)]">
+              Live
+            </span>
+          </div>
         </div>
-        <div className="flex items-center gap-2 rounded-full border border-[var(--biz-primary-border)] bg-white/80 px-3 py-1.5 shadow-sm backdrop-blur">
-          <span className="h-2 w-2 rounded-full bg-[var(--biz-primary)]" />
-          <span className="text-xs font-semibold text-[var(--biz-primary)]">
-            Live Inbox
-          </span>
-        </div>
-      </div>
 
-      {/* Stats bar */}
-      <MessagingStatsBar stats={stats} loading={false} />
+        {/* Stats strip */}
+        <MessagingStatsBar stats={stats} loading={false} />
 
-      {/* Assistant disclosure */}
-      <div className="rounded-xl border border-[var(--biz-secondary-border)] bg-[var(--biz-secondary-soft)] px-4 py-2.5">
-        <div className="flex items-center gap-2">
-          <svg className="h-3.5 w-3.5 shrink-0 text-[var(--biz-secondary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-          </svg>
-          <p className="text-xs text-[var(--biz-secondary)]">
-            <span className="font-semibold">Suggested replies stay private.</span>
-            {" "}Generate a draft when you need it, edit it, then send it yourself.
-          </p>
-        </div>
-      </div>
-      {syncRetriedAfterEmpty ? (
-        <div className="rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-2.5">
-          <p className="text-xs text-amber-800">
-            We hit a temporary inbox sync hiccup and automatically retried. If messages still look incomplete, click refresh.
-          </p>
-        </div>
-      ) : null}
-
-      {/* Outlook-style control row */}
-      <div className="rounded-2xl border border-[var(--biz-border)] bg-white px-4 py-3 shadow-sm">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative min-w-[220px] flex-1">
+        {/* Outlook-style control row */}
+        <div className="flex min-w-0 flex-wrap items-center gap-2 border-t border-[var(--biz-border)] px-3 py-2.5">
+          <div className="relative min-w-[200px] flex-1">
             <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--biz-muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35m1.85-5.15a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
@@ -327,48 +307,56 @@ export default function BusinessMessagesView({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search by buyer, listing, or message"
-              className="w-full rounded-lg border border-[var(--biz-border)] bg-[#FCFCFC] py-2 pl-9 pr-3 text-sm text-[var(--biz-text)] placeholder-[var(--biz-muted)] focus:border-[var(--biz-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--biz-primary)]"
+              className="w-full rounded-lg border border-[var(--biz-border)] bg-[#FCFCFC] py-1.5 pl-9 pr-3 text-sm text-[var(--biz-text)] placeholder-[var(--biz-muted)] focus:border-[var(--biz-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--biz-primary)]"
             />
           </div>
           <select
             value={sortMode}
             onChange={(e) => setSortMode(e.target.value as "newest" | "oldest" | "unread_first")}
-            className="rounded-lg border border-[var(--biz-border)] bg-white px-3 py-2 text-sm text-[var(--biz-text)] focus:border-[var(--biz-primary)] focus:outline-none"
+            className="rounded-lg border border-[var(--biz-border)] bg-white px-2.5 py-1.5 text-sm text-[var(--biz-text)] focus:border-[var(--biz-primary)] focus:outline-none"
           >
-            <option value="newest">Sort: Newest</option>
-            <option value="oldest">Sort: Oldest</option>
-            <option value="unread_first">Sort: Unread First</option>
+            <option value="newest">Newest</option>
+            <option value="oldest">Oldest</option>
+            <option value="unread_first">Unread first</option>
           </select>
           <button
             type="button"
             onClick={() => setUnreadOnly((prev) => !prev)}
-            className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+            className={`rounded-lg px-2.5 py-1.5 text-sm font-medium transition-colors ${
               unreadOnly
                 ? "bg-[var(--biz-primary)] text-[var(--biz-primary-foreground)]"
                 : "border border-[var(--biz-border)] text-[var(--biz-text)] hover:bg-[var(--biz-hover)]"
             }`}
           >
-            Unread Only
+            Unread only
           </button>
           <button
             type="button"
             onClick={refreshThreadList}
-            className="rounded-lg border border-[var(--biz-border)] px-3 py-2 text-sm font-medium text-[var(--biz-text)] hover:bg-[var(--biz-hover)]"
+            className="rounded-lg border border-[var(--biz-border)] px-2.5 py-1.5 text-sm font-medium text-[var(--biz-text)] hover:bg-[var(--biz-hover)]"
           >
             {listRefreshing ? "Refreshing..." : "Refresh"}
           </button>
         </div>
       </div>
 
+      {syncRetriedAfterEmpty ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-2">
+          <p className="text-xs text-amber-800">
+            We hit a temporary inbox sync hiccup and automatically retried. If messages still look incomplete, click refresh.
+          </p>
+        </div>
+      ) : null}
+
       {/* Main inbox layout */}
       <div
-        className="overflow-hidden rounded-2xl border border-[var(--biz-border)] bg-white shadow-[0_18px_50px_rgba(0,0,0,0.08)]"
-        style={{ height: "calc(100vh - 400px)", minHeight: "480px" }}
+        className="min-w-0 overflow-hidden rounded-2xl border border-[var(--biz-border)] bg-white shadow-[0_2px_8px_rgba(15,23,42,0.04)]"
+        style={{ height: "calc(100vh - 280px)", minHeight: "520px" }}
       >
-        <div className="flex h-full">
+        <div className="flex h-full min-w-0">
           {/* Thread list (left panel) */}
           <div
-            className={`h-full w-full border-r border-[var(--biz-border)] lg:w-[360px] lg:block ${
+            className={`h-full w-full min-w-0 border-r border-[var(--biz-border)] lg:w-[340px] lg:shrink-0 lg:block ${
               mobileShowThread ? "hidden" : "block"
             }`}
           >
@@ -385,7 +373,7 @@ export default function BusinessMessagesView({
 
           {/* Conversation view (right panel) */}
           <div
-            className={`h-full flex-1 lg:block ${
+            className={`h-full min-w-0 flex-1 lg:block ${
               mobileShowThread ? "block" : "hidden"
             }`}
           >
