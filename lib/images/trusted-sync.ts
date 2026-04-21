@@ -1,7 +1,11 @@
 import "server-only";
 
 import { createServiceClient } from "@/lib/supabase/server";
-import { resolveTrustedCardImageForItem } from "@/lib/images/resolver";
+import {
+  getItemCertNumber,
+  normalizeCertGrader,
+  normalizeCertNumberForGrader,
+} from "@/lib/images/cert-image";
 
 type CollectionBackfillRow = {
   id: string;
@@ -16,8 +20,10 @@ type CollectionBackfillRow = {
   cert_number?: string | null;
   psa_cert_number?: string | null;
   image_url?: string | null;
-  image_source?: "psa" | "user" | "none" | null;
+  image_source?: "psa" | "bgs" | "sgc" | "cgc" | "user" | "none" | null;
   user_image_url?: string | null;
+  cert_image_status?: "queued" | "running" | "resolved" | "no_image" | "failed" | null;
+  cert_image_last_error?: string | null;
   acquisition_date?: string | null;
   cost_basis_total_cents?: number | null;
   created_at?: string | null;
@@ -34,8 +40,10 @@ type BusinessBackfillRow = {
   cert_number: string | null;
   psa_cert_number?: string | null;
   image_url?: string | null;
-  image_source?: "psa" | "user" | "none" | null;
+  image_source?: "psa" | "bgs" | "sgc" | "cgc" | "user" | "none" | null;
   user_image_url?: string | null;
+  cert_image_status?: "queued" | "running" | "resolved" | "no_image" | "failed" | null;
+  cert_image_last_error?: string | null;
   acquisition_date: string | null;
   cost_basis_total_cents: number | null;
   created_at: string;
@@ -97,7 +105,13 @@ export async function ensureCanonicalCollectionItemForBusinessItem(
       grade: business.grade,
       grading_company: business.grading_company,
       cert_number: business.cert_number,
-      psa_cert_number: business.psa_cert_number ?? business.cert_number ?? null,
+      psa_cert_number:
+        normalizeCertGrader(business.grading_company) === "PSA"
+          ? normalizeCertNumberForGrader(
+              business.psa_cert_number ?? business.cert_number ?? null,
+              "PSA"
+            )
+          : null,
       purchase_price:
         typeof business.cost_basis_total_cents === "number"
           ? business.cost_basis_total_cents / 100
@@ -111,6 +125,8 @@ export async function ensureCanonicalCollectionItemForBusinessItem(
       image_url: business.image_url ?? null,
       image_source: business.image_source ?? "none",
       user_image_url: business.user_image_url ?? null,
+      cert_image_status: business.cert_image_status ?? null,
+      cert_image_last_error: business.cert_image_last_error ?? null,
       created_at: business.created_at,
       updated_at: business.updated_at ?? business.created_at,
     };
@@ -136,23 +152,29 @@ export async function syncTrustedImageFieldsForItem(itemId: string): Promise<voi
   const supabase = await createServiceClient();
   const { data: item } = await supabase
     .from("collection_items")
-    .select("id,user_id,cert_number,psa_cert_number,image_url,image_source,user_image_url")
+    .select(
+      "id,user_id,grading_company,cert_number,psa_cert_number,image_url,image_source,user_image_url,cert_image_status,cert_image_last_error"
+    )
     .eq("id", itemId)
     .maybeSingle();
 
   if (!item) return;
 
-  const resolved = await resolveTrustedCardImageForItem({
-    supabase,
-    item: item as CollectionBackfillRow,
-    itemId,
-    userId: (item as CollectionBackfillRow).user_id,
-  });
+  const collectionItem = item as CollectionBackfillRow;
+  const normalizedPsaCertNumber =
+    normalizeCertGrader(collectionItem.grading_company) === "PSA"
+      ? normalizeCertNumberForGrader(
+          collectionItem.psa_cert_number ?? collectionItem.cert_number ?? null,
+          "PSA"
+        )
+      : null;
 
   const updatePayload = {
-    psa_cert_number: resolved.psaCertNumber,
-    image_source: resolved.imageSource,
-    image_url: resolved.imageUrl,
+    psa_cert_number: normalizedPsaCertNumber,
+    image_source: collectionItem.image_source ?? "none",
+    image_url: collectionItem.image_url ?? null,
+    cert_image_status: collectionItem.cert_image_status ?? null,
+    cert_image_last_error: collectionItem.cert_image_last_error ?? null,
   };
 
   await supabase

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { normalizeHttpUrl } from "@/lib/collection-images";
 import { requireBusinessContext } from "@/lib/business/context";
+import { buildCertPageUrl, getItemCertGrader, getItemCertNumber } from "@/lib/images/cert-image";
 import { resolveTrustedCardImageForItem } from "@/lib/images/resolver";
 
 const UUID_REGEX =
@@ -23,8 +24,10 @@ type ImageFields = {
   cert_number?: string | null;
   psa_cert_number?: string | null;
   image_url?: string | null;
-  image_source?: "psa" | "user" | "none" | null;
+  image_source?: "psa" | "bgs" | "sgc" | "cgc" | "user" | "none" | null;
   user_image_url?: string | null;
+  cert_image_status?: "queued" | "running" | "resolved" | "no_image" | "failed" | null;
+  cert_image_last_error?: string | null;
 };
 
 function firstImageUrl(...values: Array<string | null | undefined>): string | null {
@@ -139,32 +142,49 @@ export async function GET(
     if (from === "business") {
       const context = await requireBusinessContext(userId);
 
-      // Load from business_inventory_items
-      const { data: itemById, error: itemByIdErr } = isUuid(itemId)
+      // Business inventory now lives in collection_items with item_kind='inventory'.
+      const { data: unifiedItemById, error: unifiedItemByIdErr } = isUuid(itemId)
         ? await supabase
-            .from("business_inventory_items")
+            .from("collection_items")
             .select("*")
             .eq("id", itemId)
-            .eq("business_account_id", context.businessAccountId)
+            .eq("user_id", userId)
+            .eq("item_kind", "inventory")
             .maybeSingle()
         : { data: null, error: null };
 
-      if (itemByIdErr && itemByIdErr.code !== "PGRST116") throw itemByIdErr;
+      if (unifiedItemByIdErr && unifiedItemByIdErr.code !== "PGRST116") {
+        throw unifiedItemByIdErr;
+      }
 
-      let item = itemById;
+      let item = unifiedItemById;
       if (!item) {
-        // Backward-compatibility: legacy links may pass collection `card_id`
-        // instead of business inventory `id`.
-        const { data: itemByCardIdRows, error: itemByCardIdErr } = await supabase
-          .from("business_inventory_items")
-          .select("*")
-          .eq("card_id", itemId)
-          .eq("business_account_id", context.businessAccountId)
-          .order("created_at", { ascending: false })
-          .limit(1);
+        // Legacy fallback: older rows or links may still resolve through
+        // business_inventory_items / card_id.
+        const { data: itemById, error: itemByIdErr } = isUuid(itemId)
+          ? await supabase
+              .from("business_inventory_items")
+              .select("*")
+              .eq("id", itemId)
+              .eq("business_account_id", context.businessAccountId)
+              .maybeSingle()
+          : { data: null, error: null };
 
-        if (itemByCardIdErr) throw itemByCardIdErr;
-        item = Array.isArray(itemByCardIdRows) ? itemByCardIdRows[0] ?? null : null;
+        if (itemByIdErr && itemByIdErr.code !== "PGRST116") throw itemByIdErr;
+
+        item = itemById;
+        if (!item) {
+          const { data: itemByCardIdRows, error: itemByCardIdErr } = await supabase
+            .from("business_inventory_items")
+            .select("*")
+            .eq("card_id", itemId)
+            .eq("business_account_id", context.businessAccountId)
+            .order("created_at", { ascending: false })
+            .limit(1);
+
+          if (itemByCardIdErr) throw itemByCardIdErr;
+          item = Array.isArray(itemByCardIdRows) ? itemByCardIdRows[0] ?? null : null;
+        }
       }
 
       if (!item) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -178,7 +198,7 @@ export async function GET(
       const needsIdentityHydration = hasWeakSearchIdentity(baseItem);
       if (needsImageHydration || needsIdentityHydration) {
         const cardSelect =
-          "id,title,player_name,year,set_name,parallel_type,insert,cert_number,psa_cert_number,image_url,image_source,user_image_url";
+          "id,title,player_name,year,set_name,parallel_type,insert,grading_company,cert_number,psa_cert_number,image_url,image_source,user_image_url,cert_image_status,cert_image_last_error";
         let linkedCard: ImageFields | null = null;
 
         if (isUuid(baseItem.card_id)) {

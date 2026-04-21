@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { VirtuosoGrid } from "react-virtuoso";
 import type { BusinessInventoryItem } from "@/types";
-import { uniqueHttpUrls } from "@/lib/collection-images";
 import {
   fmtCents,
   getDaysHeld,
@@ -13,6 +12,10 @@ import {
   statusColor,
   statusLabel,
   getCompsUrl,
+  getInventoryCertUrl,
+  hasInventoryImage,
+  getInventoryImageCandidates,
+  isResolvingInventoryCertImage,
   isUnderwater,
 } from "@/lib/business/inventory-display";
 
@@ -23,6 +26,20 @@ type ConsultantAction = {
   style: { background: string; color: string; border: string };
   prompt: string;
 };
+
+type GridRow = { kind: "item"; item: BusinessInventoryItem } | { kind: "add" };
+
+export interface InventoryCardGridProps {
+  items: BusinessInventoryItem[];
+  selectedItemId?: string | null;
+  onItemClick: (item: BusinessInventoryItem) => void;
+  onMarkSold?: (item: BusinessInventoryItem) => void;
+  onDelete?: (item: BusinessInventoryItem) => void;
+  ebayConnected?: boolean;
+  onEbayList?: (item: BusinessInventoryItem) => void;
+  onAddCard?: () => void;
+  onConsultant?: (prompt: string) => void;
+}
 
 function getConsultantAction(item: BusinessInventoryItem): ConsultantAction {
   const mv = item.current_market_value_cents;
@@ -64,33 +81,88 @@ function getConsultantAction(item: BusinessInventoryItem): ConsultantAction {
   };
 }
 
-type GridRow = { kind: "item"; item: BusinessInventoryItem } | { kind: "add" };
-
-export interface InventoryCardGridProps {
-  items: BusinessInventoryItem[];
-  selectedItemId?: string | null;
-  onItemClick: (item: BusinessInventoryItem) => void;
-  onMarkSold?: (item: BusinessInventoryItem) => void;
-  ebayConnected?: boolean;
-  onEbayList?: (item: BusinessInventoryItem) => void;
-  onAddCard?: () => void;
-  onConsultant?: (prompt: string) => void;
+function formatChannelLabel(channel: BusinessInventoryItem["channel"]): string | null {
+  if (!channel) return null;
+  switch (channel) {
+    case "ebay":
+      return "eBay";
+    case "whatnot":
+      return "Whatnot";
+    default:
+      return channel.charAt(0).toUpperCase() + channel.slice(1);
+  }
 }
 
-function CardImageArea({ item }: { item: BusinessInventoryItem }) {
-  const imageCandidates = useMemo(
-    () => uniqueHttpUrls([item.user_image_url, item.stock_image_url, item.ebay_image_url]),
-    [item.user_image_url, item.stock_image_url, item.ebay_image_url]
+function getConditionSummary(item: BusinessInventoryItem): string | null {
+  if (item.condition_status !== "graded") return item.condition_status === "raw" ? "Raw" : null;
+  const grader = item.grading_company?.trim().toUpperCase();
+  const grade = item.grade?.trim();
+  if (grader && grade) return `${grader} ${grade}`;
+  if (grade) return grade;
+  return "Graded";
+}
+
+function cleanActionLabel(label: string): string {
+  return label.replace(/\s*↗$/, "");
+}
+
+function getVisibleInsight(action: ConsultantAction | null): ConsultantAction | null {
+  if (!action) return null;
+  return cleanActionLabel(action.label) === "Analyze" ? null : action;
+}
+
+function SnapshotStat({
+  label,
+  value,
+  valueClassName,
+}: {
+  label: string;
+  value: string;
+  valueClassName?: string;
+}) {
+  return (
+    <div className="min-w-0">
+      <div className="text-[10px] font-medium uppercase tracking-[0.12em] text-[#8B978F]">
+        {label}
+      </div>
+      <div className={`mt-1 truncate text-[13px] font-semibold tabular-nums text-[var(--biz-text)] ${valueClassName ?? ""}`}>
+        {value}
+      </div>
+    </div>
   );
+}
+
+function MenuButtonIcon() {
+  return (
+    <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+      <path d="M10 4.25a1.25 1.25 0 110-2.5 1.25 1.25 0 010 2.5zm0 7a1.25 1.25 0 110-2.5 1.25 1.25 0 010 2.5zm0 7a1.25 1.25 0 110-2.5 1.25 1.25 0 010 2.5z" />
+    </svg>
+  );
+}
+
+function CardImageArea({
+  item,
+  menuButton,
+}: {
+  item: BusinessInventoryItem;
+  menuButton: React.ReactNode;
+}) {
+  const imageCandidates = useMemo(() => getInventoryImageCandidates(item), [item]);
   const [imageIndex, setImageIndex] = useState(0);
   const imageUrl = imageCandidates[imageIndex] || null;
+  const isResolving = isResolvingInventoryCertImage(item);
+
+  useEffect(() => {
+    setImageIndex(0);
+  }, [item.id]);
+
   return (
-    <div className="relative aspect-[3/4] bg-[#F3F4F6] overflow-hidden">
+    <div className="relative aspect-[3/4] overflow-hidden rounded-t-[20px] bg-[#F3F5F1]">
       {imageUrl ? (
         <img
           src={imageUrl}
           alt={buildDisplayTitle(item)}
-          className="w-full h-full object-cover"
+          className="h-full w-full object-cover"
           onError={() => {
             setImageIndex((prev) => {
               const next = prev + 1;
@@ -99,12 +171,13 @@ function CardImageArea({ item }: { item: BusinessInventoryItem }) {
           }}
         />
       ) : (
-        <div className="w-full h-full flex items-center justify-center">
+        <div className="flex h-full w-full flex-col items-center justify-center gap-3 px-4 text-center">
           <svg
-            className="w-10 h-10 text-[#D1D5DB]"
+            className="h-12 w-12 text-[#CAD2CB]"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
+            aria-hidden="true"
           >
             <path
               strokeLinecap="round"
@@ -113,14 +186,24 @@ function CardImageArea({ item }: { item: BusinessInventoryItem }) {
               d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
             />
           </svg>
+          {isResolving ? (
+            <p className="text-[12px] font-medium text-[var(--biz-primary)]">
+              Resolving cert image...
+            </p>
+          ) : null}
         </div>
       )}
 
-      {item.quantity > 1 && (
-        <span className="absolute top-2 right-2 px-1.5 py-0.5 rounded bg-black/60 text-white text-[10px] font-semibold">
-          ×{item.quantity}
-        </span>
-      )}
+      <div className="absolute inset-x-0 top-0 flex items-start justify-between p-3">
+        {item.quantity > 1 ? (
+          <span className="rounded-full bg-[#111827]/72 px-2 py-1 text-[10px] font-semibold text-white shadow-sm">
+            Qty {item.quantity}
+          </span>
+        ) : (
+          <span />
+        )}
+        {menuButton}
+      </div>
     </div>
   );
 }
@@ -130,6 +213,7 @@ function InventoryCardCell({
   selected,
   onItemClick,
   onMarkSold,
+  onDelete,
   ebayConnected,
   onEbayList,
   onConsultant,
@@ -138,6 +222,7 @@ function InventoryCardCell({
   selected: boolean;
   onItemClick: (item: BusinessInventoryItem) => void;
   onMarkSold?: (item: BusinessInventoryItem) => void;
+  onDelete?: (item: BusinessInventoryItem) => void;
   ebayConnected?: boolean;
   onEbayList?: (item: BusinessInventoryItem) => void;
   onConsultant?: (prompt: string) => void;
@@ -145,121 +230,281 @@ function InventoryCardCell({
   const titleStr = buildDisplayTitle(item);
   const days = getDaysHeld(item.acquisition_date);
   const daysColor = getDaysHeldColor(days);
-  const cost = fmtCents(item.cost_basis_total_cents);
+  const cost = fmtCents(item.cost_basis_total_cents) || "—";
   const listPrice = fmtCents(item.list_price_cents);
   const underwater = isUnderwater(item);
-  const hasEbayListing = !!(item as any).ebay_item_id;
+  const hasEbayListing = Boolean((item as { ebay_item_id?: string | null }).ebay_item_id);
   const canListOnEbay =
     ebayConnected &&
     !hasEbayListing &&
     item.status !== "sold" &&
     item.status !== "returned" &&
     item.status !== "pending_sale";
-
+  const hasImage = hasInventoryImage(item);
+  const certUrl = getInventoryCertUrl(item);
+  const isResolving = isResolvingInventoryCertImage(item);
   const consultantAction = onConsultant ? getConsultantAction(item) : null;
+  const visibleInsight = getVisibleInsight(consultantAction);
+  const conditionSummary = getConditionSummary(item);
+  const channelSummary = formatChannelLabel(item.channel);
+  const secondaryMeta = [conditionSummary, channelSummary].filter(Boolean).join(" • ");
+  const metrics = [
+    { label: "Cost", value: cost },
+    ...(item.status === "listed" && listPrice ? [{ label: "List", value: listPrice }] : []),
+    {
+      label: "Held",
+      value: days !== null ? `${days}d` : "—",
+      valueClassName: days !== null ? daysColor : undefined,
+    },
+  ];
+  const metricsGridClass = metrics.length === 3 ? "grid-cols-3" : "grid-cols-2";
+
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const menuButtonRef = useRef<HTMLButtonElement | null>(null);
+  const menuId = `inventory-card-menu-${item.id}`;
+
+  useEffect(() => {
+    if (!menuOpen) return;
+
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (menuRef.current?.contains(target) || menuButtonRef.current?.contains(target)) return;
+      setMenuOpen(false);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setMenuOpen(false);
+      menuButtonRef.current?.focus();
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [menuOpen]);
+
+  const openProfile = () => {
+    setMenuOpen(false);
+    onItemClick(item);
+  };
+
+  const openConsultant = () => {
+    if (!consultantAction) return;
+    setMenuOpen(false);
+    onConsultant?.(consultantAction.prompt);
+  };
+
+  const handleCardKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget) return;
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    onItemClick(item);
+  };
+
+  const menuButton = (
+    <button
+      ref={menuButtonRef}
+      type="button"
+      aria-label={`More actions for ${titleStr || "inventory item"}`}
+      aria-haspopup="menu"
+      aria-expanded={menuOpen}
+      aria-controls={menuOpen ? menuId : undefined}
+      onClick={(event) => {
+        event.stopPropagation();
+        setMenuOpen((prev) => !prev);
+      }}
+      className="flex h-8 w-8 items-center justify-center rounded-full border border-white/60 bg-white/92 text-[#2A312D] shadow-sm backdrop-blur transition-colors hover:bg-white focus:outline-none focus:ring-2 focus:ring-[var(--biz-primary)]"
+    >
+      <MenuButtonIcon />
+    </button>
+  );
 
   return (
-    <div
-      onClick={() => onItemClick(item)}
-      className={`flex flex-col rounded-xl border bg-white overflow-hidden cursor-pointer transition-all hover:shadow-md ${
-        selected
-          ? "border-[var(--biz-primary)] ring-1 ring-[var(--biz-primary)]"
-          : "border-[var(--biz-border)] hover:border-[var(--biz-primary-border)]"
-      }`}
-    >
-      {/* Image */}
-      <CardImageArea item={item} />
+    <div className="relative">
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label={`Open ${titleStr || "inventory item"} profile`}
+        onClick={() => onItemClick(item)}
+        onKeyDown={handleCardKeyDown}
+        className={`group flex h-full cursor-pointer flex-col overflow-hidden rounded-[20px] border bg-white shadow-[0_2px_10px_rgba(16,24,20,0.03)] transition-[border-color,box-shadow,transform] hover:-translate-y-0.5 hover:border-[#D4E4D8] hover:shadow-[0_16px_34px_rgba(16,24,20,0.08)] focus:outline-none focus:ring-2 focus:ring-[var(--biz-primary)] ${
+          selected
+            ? "border-[var(--biz-primary)] ring-1 ring-[var(--biz-primary)]"
+            : "border-[#E4ECE5]"
+        }`}
+      >
+        <CardImageArea item={item} menuButton={menuButton} />
 
-      {/* Info */}
-      <div className="p-2 flex flex-col gap-1 flex-1 min-w-0">
-        {/* Title */}
-        <p
-          className="text-[11px] font-semibold text-[var(--biz-text)] leading-tight line-clamp-2"
-          title={titleStr}
-        >
-          {titleStr || "Untitled"}
-        </p>
-
-        {/* Status badge */}
-        <div className="flex items-center gap-1 flex-wrap">
-          <span
-            className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-medium leading-tight ${statusColor(item.status)}`}
-          >
-            {statusLabel(item.status)}
-          </span>
-          {underwater && (
-            <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-medium leading-tight border border-red-200 bg-red-50 text-red-700">
-              Underwater
-            </span>
-          )}
-        </div>
-
-        {/* Cost / List price row */}
-        <div className="flex items-center justify-between text-[10px] tabular-nums text-[var(--biz-muted)]">
-          <span>{cost || "—"}</span>
-          {listPrice && <span className="font-medium text-[var(--biz-text)]">{listPrice}</span>}
-        </div>
-
-        {/* Days held */}
-        {days !== null && (
-          <div className={`text-[10px] font-medium tabular-nums ${daysColor}`}>
-            {days}d held
+        <div className="flex flex-1 flex-col gap-3 border-t border-[#EEF2EE] bg-white px-3.5 pb-3.5 pt-3">
+          <div className="min-w-0">
+            <div className="flex items-start justify-between gap-2">
+              <span
+                className={`inline-flex shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold leading-none ${statusColor(item.status)}`}
+              >
+                {statusLabel(item.status)}
+              </span>
+            </div>
+            <p
+              className="mt-2 line-clamp-2 text-[13px] font-semibold leading-[1.25] text-[var(--biz-text)]"
+              title={titleStr}
+            >
+              {titleStr || "Untitled"}
+            </p>
+            {secondaryMeta ? (
+              <p className="mt-1 text-[11px] font-medium text-[var(--biz-muted)]">
+                {secondaryMeta}
+              </p>
+            ) : null}
           </div>
-        )}
 
-        {/* Actions */}
+          {visibleInsight ? (
+            <div
+              className="rounded-xl px-2.5 py-2 text-[11px] font-semibold"
+              style={{
+                background: visibleInsight.style.background,
+                color: visibleInsight.style.color,
+                border: visibleInsight.style.border,
+              }}
+            >
+              {cleanActionLabel(visibleInsight.label)}
+            </div>
+          ) : underwater ? (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-2.5 py-2 text-[11px] font-semibold text-red-700">
+              Underwater
+            </div>
+          ) : null}
+
+          <div className={`grid gap-2 border-t border-[#EEF2EE] pt-3 ${metricsGridClass}`}>
+            {metrics.map((metric) => (
+              <SnapshotStat
+                key={metric.label}
+                label={metric.label}
+                value={metric.value}
+                valueClassName={metric.valueClassName}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {menuOpen ? (
         <div
-          className="flex items-center gap-1 pt-1 mt-auto border-t border-[var(--biz-border)] flex-wrap"
-          onClick={(e) => e.stopPropagation()}
+          ref={menuRef}
+          id={menuId}
+          role="menu"
+          aria-label={`Actions for ${titleStr || "inventory item"}`}
+          onClick={(event) => event.stopPropagation()}
+          className="absolute right-3 top-14 z-20 min-w-[188px] overflow-hidden rounded-2xl border border-[#DCE8DE] bg-white p-1.5 shadow-[0_18px_38px_rgba(16,24,20,0.14)]"
         >
-          <Link
-            href={`/card/${item.id}?from=business`}
-            className="rounded border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-1.5 py-0.5 text-[9px] font-medium text-[var(--biz-primary)] hover:bg-[var(--biz-hover)] whitespace-nowrap"
+          <button
+            type="button"
+            role="menuitem"
+            onClick={openProfile}
+            className="flex w-full items-center rounded-xl px-3 py-2 text-left text-[13px] font-medium text-[var(--biz-text)] transition-colors hover:bg-[#F5F8F4]"
           >
-            View
-          </Link>
+            Open profile
+          </button>
           {item.status !== "sold" ? (
             <button
               type="button"
-              onClick={() => onMarkSold?.(item)}
-              className="rounded border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] px-1.5 py-0.5 text-[9px] font-medium text-[var(--biz-primary)] hover:bg-[var(--biz-primary-soft-strong)] whitespace-nowrap"
+              role="menuitem"
+              onClick={() => {
+                setMenuOpen(false);
+                onMarkSold?.(item);
+              }}
+              className="flex w-full items-center rounded-xl px-3 py-2 text-left text-[13px] font-medium text-[var(--biz-text)] transition-colors hover:bg-[#F5F8F4]"
             >
-              Sold
+              Mark sold
             </button>
           ) : null}
-          {canListOnEbay && (
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setMenuOpen(false);
+              onDelete?.(item);
+            }}
+            className="flex w-full items-center rounded-xl px-3 py-2 text-left text-[13px] font-medium text-[#B42318] transition-colors hover:bg-[#FEF3F2]"
+          >
+            Delete card
+          </button>
+          {canListOnEbay ? (
             <button
               type="button"
-              onClick={() => onEbayList?.(item)}
-              className="rounded border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-1.5 py-0.5 text-[9px] font-medium text-[var(--biz-primary)] hover:bg-[var(--biz-hover)] whitespace-nowrap"
+              role="menuitem"
+              onClick={() => {
+                setMenuOpen(false);
+                onEbayList?.(item);
+              }}
+              className="flex w-full items-center rounded-xl px-3 py-2 text-left text-[13px] font-medium text-[var(--biz-text)] transition-colors hover:bg-[#F5F8F4]"
             >
-              List
+              List on eBay
             </button>
-          )}
+          ) : null}
           <a
+            role="menuitem"
             href={getCompsUrl(item)}
             target="_blank"
             rel="noopener noreferrer"
-            className="rounded border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-1.5 py-0.5 text-[9px] font-medium text-[var(--biz-primary)] hover:bg-[var(--biz-hover)] whitespace-nowrap"
+            onClick={() => setMenuOpen(false)}
+            className="flex w-full items-center rounded-xl px-3 py-2 text-[13px] font-medium text-[var(--biz-text)] transition-colors hover:bg-[#F5F8F4]"
           >
-            Comps
+            View comps
           </a>
-          {consultantAction && (
-            <button
-              type="button"
-              onClick={() => onConsultant?.(consultantAction.prompt)}
-              className="rounded px-1.5 py-0.5 text-[9px] font-medium whitespace-nowrap"
-              style={{
-                background: consultantAction.style.background,
-                color: consultantAction.style.color,
-                border: consultantAction.style.border,
-              }}
+          {!hasImage && !isResolving && certUrl ? (
+            <a
+              role="menuitem"
+              href={certUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setMenuOpen(false)}
+              className="flex w-full items-center rounded-xl px-3 py-2 text-[13px] font-medium text-[var(--biz-text)] transition-colors hover:bg-[#F5F8F4]"
             >
-              {consultantAction.label}
-            </button>
-          )}
+              View Cert
+            </a>
+          ) : null}
+          {!hasImage && !isResolving ? (
+            <Link
+              href={`/card/${item.id}?from=business`}
+              role="menuitem"
+              onClick={() => setMenuOpen(false)}
+              className="flex w-full items-center rounded-xl px-3 py-2 text-[13px] font-medium text-[var(--biz-text)] transition-colors hover:bg-[#F5F8F4]"
+            >
+              Set image
+            </Link>
+          ) : null}
+          {!hasImage && isResolving ? (
+            <div className="rounded-xl border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] px-3 py-2 text-[13px] font-medium text-[var(--biz-primary)]">
+              Resolving cert image...
+            </div>
+          ) : null}
+          {consultantAction ? (
+            <>
+              <div className="my-1 border-t border-[#EEF2EE]" />
+              <button
+                type="button"
+                role="menuitem"
+                onClick={openConsultant}
+                className="flex w-full items-center rounded-xl px-3 py-2 text-left text-[13px] font-medium transition-colors hover:opacity-90"
+                style={{
+                  background: consultantAction.style.background,
+                  color: consultantAction.style.color,
+                  border: consultantAction.style.border,
+                }}
+              >
+                {cleanActionLabel(consultantAction.label)}
+              </button>
+            </>
+          ) : null}
         </div>
-      </div>
+      ) : null}
     </div>
   );
 }
@@ -269,21 +514,23 @@ function AddTile({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="border-[1.5px] border-dashed border-[var(--biz-border)] rounded-xl min-h-[152px] flex flex-col items-center justify-center cursor-pointer bg-[#FAFAF8] hover:bg-[#F5F3F0] transition-colors gap-1"
+      className="flex min-h-[172px] flex-col items-center justify-center gap-2 rounded-[20px] border-[1.5px] border-dashed border-[#DCE5DC] bg-[#FAFCF9] transition-colors hover:bg-[#F4F8F2]"
     >
-      <span className="text-2xl text-[#CCCCCC] leading-none">+</span>
-      <span className="text-[11px] text-[#BBBBBB]">Add card</span>
+      <span className="text-3xl leading-none text-[#C3CBC4]">+</span>
+      <span className="text-[12px] font-medium text-[#94A097]">Add card</span>
     </button>
   );
 }
 
-const GRID_CLASS = "grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3";
+const GRID_CLASS =
+  "grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6";
 
 export default function InventoryCardGrid({
   items,
   selectedItemId,
   onItemClick,
   onMarkSold,
+  onDelete,
   ebayConnected,
   onEbayList,
   onAddCard,
@@ -308,6 +555,7 @@ export default function InventoryCardGrid({
     selected: selectedItemId === item.id,
     onItemClick,
     onMarkSold,
+    onDelete,
     ebayConnected,
     onEbayList,
     onConsultant,
@@ -340,5 +588,5 @@ export default function InventoryCardGrid({
       </div>
     );
 
-  return <div className="px-4 sm:px-6 pb-6 pt-1">{gridBody}</div>;
+  return <div className="px-4 pb-6 pt-2 sm:px-6">{gridBody}</div>;
 }

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import type { CardImage } from "@/types";
 import { getBusinessContextForUser } from "@/lib/business/context";
+import { enqueueCertImageResolution } from "@/lib/images/cert-image-jobs";
+import { normalizeCertWriteFields } from "@/lib/images/cert-image";
 import { resolveTrustedCardImageForItem } from "@/lib/images/resolver";
 import { syncTrustedImageFieldsForItem } from "@/lib/images/trusted-sync";
 
@@ -24,8 +26,10 @@ type BusinessInventoryLinkRow = {
   acquisition_date: string | null;
   cost_basis_total_cents: number | null;
   image_url?: string | null;
-  image_source?: "psa" | "user" | "none" | null;
+  image_source?: "psa" | "bgs" | "sgc" | "cgc" | "user" | "none" | null;
   user_image_url: string | null;
+  cert_image_status?: "queued" | "running" | "resolved" | "no_image" | "failed" | null;
+  cert_image_last_error?: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string | null;
@@ -69,7 +73,7 @@ export async function GET(
 
     if (!card) {
       const businessSelect =
-        "id,card_id,title,grade,grading_company,cert_number,psa_cert_number,acquisition_type,acquisition_date,cost_basis_total_cents,image_url,image_source,user_image_url,notes,created_at,updated_at";
+        "id,card_id,title,grade,grading_company,cert_number,psa_cert_number,acquisition_type,acquisition_date,cost_basis_total_cents,image_url,image_source,user_image_url,cert_image_status,cert_image_last_error,notes,created_at,updated_at";
 
       let businessByIdQuery = supabase
         .from("business_inventory_items")
@@ -248,6 +252,9 @@ export async function PATCH(
       "purchase_price",
       "purchase_date",
       "notes",
+      "image_url",
+      "image_source",
+      "user_image_url",
     ];
 
     const updates: Record<string, unknown> = {};
@@ -256,6 +263,11 @@ export async function PATCH(
         updates[field] = body[field];
       }
     }
+    Object.assign(updates, normalizeCertWriteFields({
+      grading_company: updates.grading_company,
+      cert_number: updates.cert_number,
+      psa_cert_number: updates.psa_cert_number,
+    }));
 
     if (Object.keys(updates).length === 0) {
       return NextResponse.json(
@@ -282,6 +294,7 @@ export async function PATCH(
     }
 
     await syncTrustedImageFieldsForItem(cardId);
+    await enqueueCertImageResolution({ itemId: cardId });
 
     const resolvedImage = await resolveTrustedCardImageForItem({
       supabase,

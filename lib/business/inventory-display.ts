@@ -1,4 +1,12 @@
 import type { BusinessInventoryItem } from "@/types";
+import { uniqueHttpUrls } from "@/lib/collection-images";
+import { buildClientImageUrl } from "@/lib/images/shared";
+import {
+  buildCertPageUrl,
+  getItemCertGrader,
+  getItemCertNumber,
+  isPendingCertImageStatus,
+} from "@/lib/images/cert-image";
 import { buildEbaySoldUrl } from "@/lib/ebay/comps-url";
 
 export const USD_FORMATTER = new Intl.NumberFormat("en-US", {
@@ -131,6 +139,33 @@ export function getCompsUrl(item: BusinessInventoryItem): string {
     grade: item.grade,
     gradingCompany: item.grading_company,
   });
+}
+
+export function getInventoryCertUrl(item: BusinessInventoryItem): string | null {
+  const grader = getItemCertGrader(item);
+  const certNumber = getItemCertNumber(item);
+  if (!grader || !certNumber) return null;
+  return buildCertPageUrl({ grader, certNumber });
+}
+
+export function getInventoryImageCandidates(item: BusinessInventoryItem): string[] {
+  return uniqueHttpUrls([
+    ...(item.trusted_image?.frontCandidates ?? []),
+    item.trusted_image?.frontUrl,
+    item.primary_image?.url,
+    item.user_image_url,
+    item.image_url,
+    item.stock_image_url,
+    item.ebay_image_url,
+  ]).map((url) => buildClientImageUrl(url) ?? url);
+}
+
+export function hasInventoryImage(item: BusinessInventoryItem): boolean {
+  return getInventoryImageCandidates(item).length > 0;
+}
+
+export function isResolvingInventoryCertImage(item: BusinessInventoryItem): boolean {
+  return isPendingCertImageStatus(item.cert_image_status ?? null);
 }
 
 export function isUnderwater(item: BusinessInventoryItem): boolean {

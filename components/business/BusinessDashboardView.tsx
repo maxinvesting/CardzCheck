@@ -2,14 +2,12 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import EbayImportWizard from "@/components/business/EbayImportWizard";
 import BusinessMetrics from "@/components/business/BusinessMetrics";
 import { Surface } from "@/components/ui/Surface";
 import type {
   BusinessInventoryItem,
   BusinessMetrics as MetricsType,
   BusinessSale,
-  EbayAccountStatus,
   UserStorefront,
 } from "@/types";
 import type { InventoryValueSummary } from "@/lib/business/inventory-value";
@@ -120,7 +118,6 @@ interface Props {
   recentSalesLoading: boolean;
   ebayStoreHref: string | null;
   needsMigration: boolean;
-  ebayAccount?: EbayAccountStatus | null;
   storefronts?: UserStorefront[];
 }
 
@@ -138,13 +135,9 @@ export default function BusinessDashboardView({
   recentSalesLoading,
   ebayStoreHref,
   needsMigration,
-  ebayAccount,
   storefronts = [],
 }: Props) {
   const [showStorefrontDropdown, setShowStorefrontDropdown] = useState(false);
-  const [showImportWizard, setShowImportWizard] = useState(false);
-  const [syncingEbayOrders, setSyncingEbayOrders] = useState(false);
-  const [syncError, setSyncError] = useState<string | null>(null);
 
   const primaryStorefront = storefronts.find((store) => store.is_primary) ?? storefronts[0] ?? null;
   const hasStorefronts = storefronts.length > 0;
@@ -385,38 +378,6 @@ export default function BusinessDashboardView({
 
   const funnelTotal = Math.max(unlistedCount + listedCount + soldLast30Count, 1);
 
-  const ebayKpis = useMemo(() => {
-    const ebaySales = recentSales.filter((sale) => sale.channel === "ebay");
-    return {
-      revenueCents: ebaySales.reduce(
-        (sum, sale) => sum + (sale.sold_price_cents ?? 0) + (sale.shipping_charged_cents ?? 0),
-        0
-      ),
-      profitCents: ebaySales.reduce((sum, sale) => sum + (sale.profit_cents ?? 0), 0),
-      salesCount: ebaySales.length,
-      activeEbayListings: items.filter(
-        (item) => item.channel === "ebay" && item.status === "listed"
-      ).length,
-    };
-  }, [items, recentSales]);
-
-  async function handleSyncEbayOrders() {
-    if (syncingEbayOrders) return;
-    setSyncError(null);
-    setSyncingEbayOrders(true);
-    try {
-      const res = await fetch("/api/business/ebay/orders/sync", { method: "POST" });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data?.success) {
-        throw new Error(data.error ?? "Failed to sync eBay orders");
-      }
-    } catch (err) {
-      setSyncError(err instanceof Error ? err.message : "Failed to sync eBay orders");
-    } finally {
-      setSyncingEbayOrders(false);
-    }
-  }
-
   return (
     <div className="space-y-6">
 
@@ -429,7 +390,6 @@ export default function BusinessDashboardView({
           <p className="text-xs text-[var(--muted)]">
             {new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })} overview
           </p>
-          {syncError && <p className="mt-1 text-xs font-medium text-red-700">{syncError}</p>}
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5">
@@ -546,175 +506,7 @@ export default function BusinessDashboardView({
         </div>
       )}
 
-      {/* ── Sales Channels ──────────────────────────────────────────────── */}
-      {!needsMigration && (
-        <>
-          <Surface className="p-6">
-            <div className="flex items-center justify-between gap-2 mb-4">
-              <h2 className="text-sm font-semibold text-[var(--biz-text)]">Sales Channels</h2>
-              <Link
-                href="/business/settings?section=storefronts"
-                className="text-[11px] text-[var(--biz-muted)] hover:text-[var(--biz-text)] transition-colors"
-              >
-                Manage →
-              </Link>
-            </div>
-
-            <div className="space-y-3">
-              {/* eBay row */}
-	              <div className="flex items-center justify-between gap-3 rounded-lg border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-3 py-2.5">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <span className="text-[11px] font-semibold text-[var(--biz-text)] shrink-0">eBay</span>
-                  {ebayAccount?.connected ? (
-                    <div className="flex items-center gap-1.5 min-w-0">
-	                      <span className="inline-flex items-center gap-1 rounded-full border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--biz-primary)]">
-	                        <span className="h-1.5 w-1.5 rounded-full bg-[var(--biz-primary)]" />
-                        Connected
-                      </span>
-                      {ebayAccount.ebay_username && (
-                        <span className="truncate text-[11px] text-[var(--biz-muted)]">
-                          {ebayAccount.ebay_username}
-                        </span>
-                      )}
-                      {ebayAccount.top_rated_seller && (
-                        <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
-                          TRS+
-                        </span>
-                      )}
-                    </div>
-                  ) : (
-                    <span className="text-[11px] text-[var(--biz-muted)]">Not connected</span>
-                  )}
-                </div>
-                {ebayAccount?.connected ? (
-                  <>
-                    <button
-                      onClick={() => setShowImportWizard(true)}
-                      className="cc-btn-secondary rounded-lg px-3 py-1.5 text-xs font-medium"
-                    >
-                      Import
-                    </button>
-                    <Link
-                      href="/business/ledger"
-                      className="cc-btn-secondary rounded-lg px-3 py-1.5 text-xs font-semibold"
-                    >
-                      View Listings
-                    </Link>
-                  </>
-                ) : (
-                  <a
-                    href="/api/auth/ebay"
-                    className="cc-btn-primary rounded-lg px-3 py-1.5 text-xs font-semibold"
-                  >
-                    Connect eBay
-                  </a>
-                )}
-              </div>
-
-              {/* Whatnot row */}
-              {(() => {
-                const wn = storefronts.find((s) => s.platform === "whatnot");
-                return (
-	                  <div className="flex items-center justify-between gap-3 rounded-lg border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-3 py-2.5">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <span className="text-[11px] font-semibold text-[var(--biz-text)] shrink-0">Whatnot</span>
-                      {wn ? (
-	                        <span className="inline-flex items-center gap-1 rounded-full border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--biz-primary)]">
-	                          <span className="h-1.5 w-1.5 rounded-full bg-[var(--biz-primary)]" />
-                          Connected
-                        </span>
-                      ) : (
-                        <span className="text-[11px] text-[var(--biz-muted)]">Not configured</span>
-                      )}
-                    </div>
-                    {wn ? (
-                      <a
-                        href={wn.store_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="cc-btn-secondary shrink-0 rounded px-2 py-1 text-[11px] font-medium"
-                      >
-                        View Store
-                      </a>
-                    ) : (
-                      <Link
-                        href="/business/settings?section=storefronts"
-                        className="cc-btn-secondary shrink-0 rounded px-2.5 py-1 text-[11px] font-medium"
-                      >
-                        + Add
-                      </Link>
-                    )}
-                  </div>
-                );
-              })()}
-
-              {/* Website row */}
-              {(() => {
-                const web = storefronts.find((s) => s.platform === "website" || s.platform === "shopify");
-                return (
-	                  <div className="flex items-center justify-between gap-3 rounded-lg border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-3 py-2.5">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <span className="text-[11px] font-semibold text-[var(--biz-text)] shrink-0">Website</span>
-                      {web ? (
-	                        <span className="inline-flex items-center gap-1 rounded-full border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--biz-primary)]">
-	                          <span className="h-1.5 w-1.5 rounded-full bg-[var(--biz-primary)]" />
-                          Connected
-                        </span>
-                      ) : (
-                        <span className="text-[11px] text-[var(--biz-muted)]">Not configured</span>
-                      )}
-                    </div>
-                    {web ? (
-                      <a
-                        href={web.store_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="cc-btn-secondary shrink-0 rounded px-2 py-1 text-[11px] font-medium"
-                      >
-                        View Store
-                      </a>
-                    ) : (
-                      <Link
-                        href="/business/settings?section=storefronts"
-                        className="cc-btn-secondary shrink-0 rounded px-2.5 py-1 text-[11px] font-medium"
-                      >
-                        + Add
-                      </Link>
-                    )}
-                  </div>
-                );
-              })()}
-            </div>
-
-            {ebayAccount?.connected ? (
-              <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {[
-                  { label: "Active Listings", value: String(ebayKpis.activeEbayListings) },
-                  { label: "Sales (30d)", value: String(ebayKpis.salesCount) },
-                  { label: "Revenue (30d)", value: fmt(ebayKpis.revenueCents) },
-                  { label: "Profit (30d)", value: fmt(ebayKpis.profitCents) },
-                ].map(({ label, value }) => (
-                  <div
-                    key={label}
-                    className="rounded-lg border border-[var(--biz-border)] bg-[var(--biz-bg)] px-4 py-3"
-                  >
-                    <p className="text-[10px] uppercase tracking-wide text-[var(--biz-muted)] mb-1.5">{label}</p>
-                    <p className="text-lg font-semibold tabular-nums text-[var(--biz-text)]">{value}</p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="mt-3 text-xs text-[var(--biz-muted)] max-w-lg">
-                Connect your eBay account to sync orders automatically, list cards directly from inventory, and track eBay-specific profit metrics.
-              </p>
-            )}
-
-            {syncError && (
-              <p className="mt-2 text-[10px] text-red-600">{syncError}</p>
-            )}
-          </Surface>
-
-          {/* ── Main data grid ────────────────────────────────────────────── */}
+      {/* ── Main data grid ────────────────────────────────────────────── */}
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
 
             {/* Top Movers */}
@@ -1040,12 +832,6 @@ export default function BusinessDashboardView({
               )}
             </Surface>
           </div>
-        </>
-      )}
-
-      {showImportWizard && (
-        <EbayImportWizard onClose={() => setShowImportWizard(false)} />
-      )}
     </div>
   );
 }

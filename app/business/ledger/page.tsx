@@ -362,7 +362,7 @@ function LedgerPageContent() {
 
   const openInventoryItem = useCallback(
     (item: BusinessInventoryItem) => {
-      router.push(`/business/card/${item.id}?from=business&panel=inventory`);
+      router.push(`/business/card/${item.id}?from=business`);
     },
     [router]
   );
@@ -1486,6 +1486,9 @@ function LedgerPageContent() {
                       selectedItemId={null}
                       onItemClick={openInventoryItem}
                       onMarkSold={handleMarkSold}
+                      onDelete={(item) => {
+                        void handleDelete([item.id]);
+                      }}
                       ebayConnected={ebayConnected}
                       onAddCard={openAddInventoryModal}
                       onConsultant={openConsultant}

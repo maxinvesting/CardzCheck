@@ -6,6 +6,13 @@ import Link from "next/link";
 import { CardImage as TrustedCardImageFrame } from "@/components/CardImage";
 import BusinessInventoryItemEditor from "@/components/business/BusinessInventoryItemEditor";
 import {
+  buildCertPageUrl,
+  getItemCertGrader,
+  getItemCertNumber,
+  isPendingCertImageStatus,
+} from "@/lib/images/cert-image";
+import { buildClientImageUrl, normalizeHttpUrl } from "@/lib/images/shared";
+import {
   estimateTakeHome,
   fmtCents,
 } from "@/lib/business/pricing";
@@ -55,9 +62,11 @@ interface ProfileItem {
   location?: string | null;
   ebay_item_id?: string | null;
   image_url?: string | null;
-  image_source?: "psa" | "user" | "none" | null;
+  image_source?: "psa" | "bgs" | "sgc" | "cgc" | "user" | "none" | null;
   user_image_url?: string | null;
   psa_cert_number?: string | null;
+  cert_image_status?: "queued" | "running" | "resolved" | "no_image" | "failed" | null;
+  cert_image_last_error?: string | null;
   trusted_image?: TrustedCardImage | null;
   card_images?: CardImage[] | null;
   primary_image?: CardImage | null;
@@ -88,23 +97,25 @@ type TabId = "details" | "shop";
 // ── Helpers ──────────────────────────────────────────────────────────
 
 function pickImageUrl(item: ProfileItem): string | null {
-  const certDigits = (item.psa_cert_number ?? item.cert_number ?? "").replace(/\D/g, "");
-  const certFallback =
-    certDigits.length >= 5
-      ? `https://cert-images.psa.com/${certDigits}/large/${certDigits}_f.jpg`
-      : null;
-  return (
+  const imageUrl = (
     item.trusted_image?.frontUrl ||
-    certFallback ||
     item.image_url ||
     item.user_image_url ||
     item.card_images?.find((image) => typeof image.url === "string" && image.url.length > 0)?.url ||
     null
   );
+  return buildClientImageUrl(imageUrl) ?? imageUrl;
 }
 
 function displayTitle(item: ProfileItem): string {
-  if (item.title) return item.title;
+  if (item.title) {
+    const title = item.title.trim();
+    if (!title) return "Untitled";
+    const grader = item.grading_company?.trim();
+    if (!grader) return title;
+    const duplicateGraderPattern = new RegExp(`\\b(${grader})\\s+\\1\\b`, "ig");
+    return title.replace(duplicateGraderPattern, "$1");
+  }
   const parts = [item.year, item.player_name, item.set_name, item.grade];
   return parts.filter(Boolean).join(" ") || "Untitled";
 }
@@ -126,6 +137,19 @@ function toTimestamp(value: string | null | undefined): number | null {
   if (!value) return null;
   const parsed = new Date(value).getTime();
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatGradeDisplay(
+  grade: string | null | undefined,
+  gradingCompany: string | null | undefined
+): string | null {
+  const trimmedGrade = grade?.trim();
+  if (!trimmedGrade) return null;
+  const trimmedCompany = gradingCompany?.trim();
+  if (!trimmedCompany) return trimmedGrade;
+  const companyRegex = new RegExp(`^${trimmedCompany}\\b`, "i");
+  if (companyRegex.test(trimmedGrade)) return trimmedGrade;
+  return `${trimmedCompany.toUpperCase()} ${trimmedGrade}`;
 }
 
 const MAX_IMAGE_UPLOAD_BYTES = 10 * 1024 * 1024;
@@ -180,6 +204,7 @@ export default function CardProfilePage() {
   const [showImageModal, setShowImageModal] = useState(false);
   const [imageFileInput, setImageFileInput] = useState<File | null>(null);
   const [imageFilePreviewUrl, setImageFilePreviewUrl] = useState<string | null>(null);
+  const [imageUrlInput, setImageUrlInput] = useState("");
   const [savingImage, setSavingImage] = useState(false);
   const imageFilePickerRef = useRef<HTMLInputElement | null>(null);
 
@@ -200,10 +225,10 @@ export default function CardProfilePage() {
   // Overflow menu
   const [showOverflow, setShowOverflow] = useState(false);
   const overflowRef = useRef<HTMLDivElement>(null);
+  const [showInventoryEditorModal, setShowInventoryEditorModal] = useState(false);
 
   // Active tab
   const [activeTab, setActiveTab] = useState<TabId>("details");
-  const [activePanel, setActivePanel] = useState<"none" | "inventory">("none");
 
   // Toast
   const [toast, setToast] = useState<{
@@ -224,16 +249,6 @@ export default function CardProfilePage() {
       return () => clearTimeout(t);
     }
   }, [toast]);
-
-  useEffect(() => {
-    if (!isBusinessMode) return;
-    const panel = searchParams.get("panel");
-    if (panel === "inventory") {
-      setActivePanel("inventory");
-    } else {
-      setActivePanel("none");
-    }
-  }, [isBusinessMode, searchParams]);
 
   useEffect(() => {
     if (!imageFileInput) {
@@ -343,34 +358,7 @@ export default function CardProfilePage() {
   const imageUrl = item ? pickImageUrl(item) : null;
   const trustedImageForFrame = useMemo<TrustedCardImage | null>(() => {
     if (!item) return null;
-    if (item.trusted_image?.frontCandidates?.length) return item.trusted_image;
-
-    const certDigits = (item.psa_cert_number ?? item.cert_number ?? "").replace(/\D/g, "");
-    if (certDigits.length < 5) return item.trusted_image ?? null;
-
-    const frontCandidates = [
-      `https://cert-images.psa.com/${certDigits}/large/${certDigits}_f.jpg`,
-      `https://cert-images.psa.com/${certDigits}/large/${certDigits}_front.jpg`,
-      `https://cert-images.psa.com/${certDigits}/small/${certDigits}_f.jpg`,
-      `https://cert-images.psa.com/${certDigits}/small/${certDigits}_front.jpg`,
-    ];
-    const backCandidates = [
-      `https://cert-images.psa.com/${certDigits}/large/${certDigits}_b.jpg`,
-      `https://cert-images.psa.com/${certDigits}/large/${certDigits}_back.jpg`,
-      `https://cert-images.psa.com/${certDigits}/small/${certDigits}_b.jpg`,
-      `https://cert-images.psa.com/${certDigits}/small/${certDigits}_back.jpg`,
-    ];
-    const front = frontCandidates[0];
-    const back = backCandidates[0];
-
-    return {
-      source: "psa",
-      frontUrl: front,
-      backUrl: back,
-      frontCandidates,
-      backCandidates,
-      hasFallbackCta: false,
-    };
+    return item.trusted_image ?? null;
   }, [item]);
   const title = item ? displayTitle(item) : "";
   const ebayCompsUrl = item
@@ -612,9 +600,10 @@ export default function CardProfilePage() {
     }
   };
 
-  const handleSaveBusinessInventoryItem = async (
+  const saveBusinessInventoryItem = async (
     id: string,
-    updates: Partial<BusinessInventoryItem>
+    updates: Partial<BusinessInventoryItem>,
+    options?: { successMessage?: string }
   ) => {
     try {
       const res = await fetch("/api/business/inventory", {
@@ -624,21 +613,104 @@ export default function CardProfilePage() {
       });
       if (!res.ok) {
         setToast({ type: "error", message: "Failed to save item" });
-        return;
+        return false;
       }
       await loadProfile();
-      setToast({ type: "success", message: "Item saved" });
+      setToast({ type: "success", message: options?.successMessage ?? "Item saved" });
+      return true;
     } catch {
       setToast({ type: "error", message: "Failed to save item" });
+      return false;
+    }
+  };
+
+  const handleSaveBusinessInventoryItem = async (
+    id: string,
+    updates: Partial<BusinessInventoryItem>
+  ) => {
+    await saveBusinessInventoryItem(id, updates);
+  };
+
+  const handleDeleteBusinessInventoryItem = async () => {
+    if (!item || !isBusinessMode) return;
+    const confirmed = window.confirm("Delete this card from inventory? This cannot be undone.");
+    if (!confirmed) return;
+    try {
+      const res = await fetch(`/api/business/inventory?ids=${encodeURIComponent(item.id)}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        setToast({ type: "error", message: "Failed to delete card" });
+        return;
+      }
+      setToast({ type: "success", message: "Card deleted" });
+      router.push("/business/ledger?tab=inventory");
+    } catch {
+      setToast({ type: "error", message: "Failed to delete card" });
     }
   };
 
   const openImageModal = () => {
     setImageFileInput(null);
+    setImageUrlInput("");
     if (imageFilePickerRef.current) {
       imageFilePickerRef.current.value = "";
     }
     setShowImageModal(true);
+  };
+
+  const openInventoryEditor = useCallback(() => {
+    setShowInventoryEditorModal(true);
+  }, []);
+
+  const handleImportImageUrl = async () => {
+    if (!item || savingImage) return;
+    const normalizedImageUrl = normalizeHttpUrl(imageUrlInput);
+    if (!normalizedImageUrl) {
+      setToast({ type: "error", message: "Enter a valid image URL" });
+      return;
+    }
+
+    setSavingImage(true);
+    try {
+      if (isBusinessMode) {
+        const saved = await saveBusinessInventoryItem(item.id, {
+          image_url: normalizedImageUrl,
+          image_source: "psa",
+        }, { successMessage: "Image URL imported" });
+        if (!saved) {
+          return;
+        }
+      } else {
+        const res = await fetch(`/api/cards/${item.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            image_url: normalizedImageUrl,
+            image_source: "psa",
+          }),
+        });
+
+        if (!res.ok) {
+          setToast({ type: "error", message: "Failed to import image URL" });
+          return;
+        }
+
+        await loadProfile();
+        setToast({ type: "success", message: "Image URL imported" });
+      }
+
+      setImageUrlInput("");
+      setImageFileInput(null);
+      if (imageFilePickerRef.current) {
+        imageFilePickerRef.current.value = "";
+      }
+      setShowImageModal(false);
+    } catch {
+      setToast({ type: "error", message: "Failed to import image URL" });
+    } finally {
+      setSavingImage(false);
+    }
   };
 
   const handleImageFileSelection = (
@@ -703,11 +775,15 @@ export default function CardProfilePage() {
   // ── Render: Profile ──────────────────────────────────────────────
 
   const gradeCompany = (item.grading_company ?? "PSA").toUpperCase();
-  const certNum = item.psa_cert_number ?? item.cert_number;
+  const certNum = getItemCertNumber(item);
+  const certGrader = getItemCertGrader(item);
+  const certUrl = certGrader && certNum ? buildCertPageUrl({ grader: certGrader, certNumber: certNum }) : null;
+  const isResolvingCertImage = isPendingCertImageStatus(item.cert_image_status ?? null);
   const playerName = item.player_name ?? item.title ?? "Unknown Player";
   const baseSetLabel = [item.year, item.set_name].filter(Boolean).join(" ");
   const parallelLabel = item.parallel_type || item.insert || null;
   const setLabel = [baseSetLabel, parallelLabel].filter(Boolean).join(" | ") || "Sports Card";
+  const displayGrade = formatGradeDisplay(item.grade, item.grading_company);
   const displayPlayerName = item.card_number
     ? `#${item.card_number} ${playerName}`
     : playerName;
@@ -814,12 +890,12 @@ export default function CardProfilePage() {
               style={{ borderTop: `1px solid ${palette.border}` }}
             >
               {/* Cert / PSA lookup */}
-              {certNum ? (
+              {certUrl ? (
                 <a
-                  href={`https://www.psacard.com/cert/${certNum}`}
+                  href={certUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  title="View PSA Cert"
+                  title="View Cert"
                   className="flex items-center justify-center w-10 h-10 rounded-xl text-gray-500 hover:text-gray-800 hover:border-gray-400 transition-colors"
                   style={{ border: "1.5px solid #DDDBD6", background: "transparent" }}
                 >
@@ -829,7 +905,7 @@ export default function CardProfilePage() {
                 </a>
               ) : (
                 <div
-                  title="No PSA cert number"
+                  title="No cert number"
                   className="flex items-center justify-center w-10 h-10 rounded-xl text-gray-300"
                   style={{ border: "1.5px solid #E9E7E2", background: "transparent" }}
                 >
@@ -864,20 +940,22 @@ export default function CardProfilePage() {
                 </svg>
               </button>
             </div>
+            {isResolvingCertImage ? (
+              <div className="px-6 pb-4">
+                <div
+                  className="rounded-xl px-3 py-2 text-sm font-medium"
+                  style={{ background: "#E8F5EE", color: palette.accentDark, border: `1px solid ${palette.border}` }}
+                >
+                  Resolving cert image...
+                </div>
+              </div>
+            ) : null}
           </div>
 
           {/* ── RIGHT PANEL ──────────────────────────────────────── */}
           <div className="flex-1 flex flex-col" style={{ minWidth: 0 }}>
             <div style={{ padding: "32px 32px 0 32px" }}>
-              {/* 1. Set tag */}
-              <p
-                className="uppercase tracking-widest mb-2"
-                style={{ fontSize: 10, color: palette.muted, fontWeight: 600 }}
-              >
-                {setLabel}
-              </p>
-
-              {/* 2. Player name */}
+              {/* Player name */}
               <h1
                 className="leading-tight mb-5"
                 style={{
@@ -935,7 +1013,7 @@ export default function CardProfilePage() {
                 </button>
                 {isBusinessMode && (
                   <button
-                    onClick={() => setActivePanel("inventory")}
+                    onClick={openInventoryEditor}
                     className="inline-flex items-center justify-center h-[46px] px-4 text-sm font-semibold text-white transition-colors"
                     style={{ background: "#1C8C58", borderRadius: 12 }}
                   >
@@ -976,7 +1054,7 @@ export default function CardProfilePage() {
                         <button
                           onClick={() => {
                             setShowOverflow(false);
-                            setActivePanel("inventory");
+                            openInventoryEditor();
                           }}
                           className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors"
                           style={{ color: palette.text }}
@@ -1002,6 +1080,18 @@ export default function CardProfilePage() {
                           Mark Sold
                         </button>
                       )}
+                      {isBusinessMode && (
+                        <button
+                          onClick={() => {
+                            setShowOverflow(false);
+                            void handleDeleteBusinessInventoryItem();
+                          }}
+                          className="w-full text-left px-4 py-2.5 text-sm transition-colors hover:bg-red-50"
+                          style={{ color: "#B42318" }}
+                        >
+                          Delete card
+                        </button>
+                      )}
                       <button
                         onClick={() => {
                           setShowOverflow(false);
@@ -1021,9 +1111,9 @@ export default function CardProfilePage() {
               <div className="grid gap-2 mb-6" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
                 {/* Cert Number */}
                 <DataCell label="Cert Number">
-                  {certNum ? (
+                  {certUrl && certNum ? (
                     <a
-                      href={`https://www.psacard.com/cert/${certNum}`}
+                      href={certUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       style={{
@@ -1043,9 +1133,9 @@ export default function CardProfilePage() {
 
                 {/* Grade */}
                 <DataCell label="Grade">
-                  {item.grade ? (
+                  {displayGrade ? (
                     <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, color: "#0F0E0D", fontSize: 13 }}>
-                      {gradeCompany} {item.grade}
+                      {displayGrade}
                     </span>
                   ) : (
                     <EmptyCell />
@@ -1170,6 +1260,7 @@ export default function CardProfilePage() {
                       </div>
                     </div>
                   )}
+
                 </div>
               )}
 
@@ -1232,28 +1323,6 @@ export default function CardProfilePage() {
           </div>
         </div>
       </div>
-
-      {isBusinessMode && activePanel === "inventory" && businessItemForEditor && (
-        <div className="fixed inset-0 z-50">
-          <div className="absolute inset-0 bg-black/35" onClick={() => setActivePanel("none")} />
-          <div
-            className="absolute right-0 top-0 h-full w-full max-w-2xl overflow-y-auto"
-            style={{
-              background: "#FFFFFF",
-              borderLeft: "1px solid #DCE9E1",
-              boxShadow: "0 12px 40px rgba(16, 40, 26, 0.16)",
-            }}
-          >
-            <BusinessInventoryItemEditor
-              item={businessItemForEditor}
-              onSave={handleSaveBusinessInventoryItem}
-              onClose={() => setActivePanel("none")}
-              tone="light"
-              showOpenProfileLink={false}
-            />
-          </div>
-        </div>
-      )}
 
       {/* ── Image Zoom Modal ─────────────────────────────────────────── */}
       {imageZoom && imageUrl && (
@@ -1402,6 +1471,35 @@ export default function CardProfilePage() {
         </div>
       )}
 
+      {isBusinessMode && showInventoryEditorModal && businessItemForEditor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/35"
+            onClick={() => setShowInventoryEditorModal(false)}
+          />
+          <div
+            className="relative z-10 w-full max-w-[960px] overflow-hidden rounded-2xl"
+            style={{
+              background: "#FFFFFF",
+              border: "1px solid #DCE9E1",
+              boxShadow: "0 12px 40px rgba(16, 40, 26, 0.16)",
+              maxHeight: "92vh",
+            }}
+          >
+            <div className="max-h-[92vh] overflow-y-auto">
+              <BusinessInventoryItemEditor
+                item={businessItemForEditor}
+                onSave={handleSaveBusinessInventoryItem}
+                onClose={() => setShowInventoryEditorModal(false)}
+                tone="light"
+                showOpenProfileLink={false}
+                showGradeProbabilitySection={false}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Image Modal ─────────────────────────────────────── */}
       {showImageModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
@@ -1448,7 +1546,29 @@ export default function CardProfilePage() {
                   </button>
                 )}
                 <p className="text-xs text-gray-500">
-                  PSA images are used automatically when a valid cert image exists. Uploaded images are used when no PSA image is available.
+                  Upload a card photo if you have one, or paste a working PSA image URL below.
+                </p>
+              </div>
+              <div className="space-y-2 pt-2 border-t border-gray-800">
+                <label className="block text-sm text-gray-400">
+                  Import PSA image URL
+                </label>
+                <input
+                  type="url"
+                  value={imageUrlInput}
+                  onChange={(event) => setImageUrlInput(event.target.value)}
+                  placeholder="https://..."
+                  className="w-full px-3 py-2 border border-gray-700 rounded-lg bg-gray-950 text-gray-200 placeholder-gray-500 text-sm"
+                />
+                {normalizeHttpUrl(imageUrlInput) ? (
+                  <img
+                    src={normalizeHttpUrl(imageUrlInput)!}
+                    alt="Imported image preview"
+                    className="w-full max-h-52 object-contain rounded-lg border border-gray-800 bg-gray-950"
+                  />
+                ) : null}
+                <p className="text-xs text-gray-500">
+                  Paste a direct image URL from PSA or another trusted host. This stores the URL on the card for ledger and profile rendering.
                 </p>
               </div>
             </div>
@@ -1457,6 +1577,7 @@ export default function CardProfilePage() {
                 onClick={() => {
                   setShowImageModal(false);
                   setImageFileInput(null);
+                  setImageUrlInput("");
                   if (imageFilePickerRef.current) {
                     imageFilePickerRef.current.value = "";
                   }
@@ -1472,6 +1593,14 @@ export default function CardProfilePage() {
                 style={{ background: "#111", borderRadius: 11 }}
               >
                 {savingImage ? "Uploading…" : "Upload"}
+              </button>
+              <button
+                onClick={handleImportImageUrl}
+                disabled={savingImage || !normalizeHttpUrl(imageUrlInput)}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:bg-gray-800 transition-colors"
+                style={{ background: "#146B42", borderRadius: 11 }}
+              >
+                {savingImage ? "Saving…" : "Import URL"}
               </button>
             </div>
           </div>

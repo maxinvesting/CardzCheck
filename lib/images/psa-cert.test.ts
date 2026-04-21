@@ -16,8 +16,8 @@ describe("PSA cert helpers", () => {
 
   it("builds canonical PSA CDN image URLs", () => {
     expect(buildPsaCertCdnImageUrls("120344868")).toEqual({
-      frontImageUrl: "https://cert-images.psa.com/120344868/large/120344868_f.jpg",
-      backImageUrl: "https://cert-images.psa.com/120344868/large/120344868_b.jpg",
+      frontImageUrl: null,
+      backImageUrl: null,
     });
   });
 

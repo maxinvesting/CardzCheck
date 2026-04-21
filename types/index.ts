@@ -53,9 +53,6 @@ export interface BusinessAccount {
   seats_included: number;
   seat_quantity: number;
   purchased_seats: number;
-  appearance_primary_color?: string | null;
-  appearance_secondary_color?: string | null;
-  appearance_tertiary_color?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -148,6 +145,8 @@ export interface BusinessInventoryItem {
   grade: string | null;
   cert_number: string | null;
   psa_cert_number?: string | null;
+  cert_image_status?: CertImageStatus | null;
+  cert_image_last_error?: string | null;
   location: string | null;
   channel: "ebay" | "whatnot" | "instagram" | "show" | "local" | "other";
   status: "unlisted" | "listed" | "pending_sale" | "sold" | "returned";
@@ -157,6 +156,8 @@ export interface BusinessInventoryItem {
   image_url?: string | null;
   trusted_image?: TrustedCardImage | null;
   user_image_url: string | null;
+  card_images?: CardImage[] | null;
+  primary_image?: CardImage | null;
   stock_image_url?: string | null;
   ebay_image_url?: string | null;
   notes: string | null;
@@ -256,6 +257,8 @@ export interface CollectionItem {
   grading_company?: string | null; // PSA, BGS, SGC, CGC, etc.
   cert_number?: string | null; // Certification number from grading company
   psa_cert_number?: string | null;
+  cert_image_status?: CertImageStatus | null;
+  cert_image_last_error?: string | null;
   acquisition_type?: AcquisitionType | null;
   purchase_price: number | null;
   purchase_date: string | null;
@@ -306,7 +309,8 @@ export interface CardImage {
   url?: string;
 }
 
-export type CardImageSource = "psa" | "user" | "none";
+export type CardImageSource = "psa" | "bgs" | "sgc" | "cgc" | "user" | "none";
+export type CertImageStatus = "queued" | "running" | "resolved" | "no_image" | "failed";
 
 export interface TrustedCardImage {
   source: CardImageSource;
