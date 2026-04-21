@@ -6,6 +6,8 @@ import { calculateCardCmv } from "@/lib/cmv";
 import { logDebug, redactId } from "@/lib/logging";
 import { normalizeHttpUrl, uniqueHttpUrls } from "@/lib/collection-images";
 import { hasBusinessAccess } from "@/lib/access";
+import { normalizeCertWriteFields } from "@/lib/images/cert-image";
+import { enqueueCertImageResolution } from "@/lib/images/cert-image-jobs";
 import { hydrateTrustedImagesForItems } from "@/lib/images/resolver";
 import { syncTrustedImageFieldsForItem } from "@/lib/images/trusted-sync";
 
@@ -251,6 +253,7 @@ export async function POST(request: NextRequest) {
       parallel_type,
       card_number,
       grade,
+      grading_company,
       est_cmv,
       estimated_cmv,
       acquisition_type,
@@ -346,6 +349,11 @@ export async function POST(request: NextRequest) {
     };
 
     const incomingCmv = coerceCmv(estimated_cmv) ?? coerceCmv(est_cmv);
+    const normalizedCert = normalizeCertWriteFields({
+      grading_company,
+      cert_number,
+      psa_cert_number,
+    });
 
     logDebug("💰 CMV POST payload", {
       raw_estimated_cmv: estimated_cmv ?? null,
@@ -378,8 +386,9 @@ export async function POST(request: NextRequest) {
       insert: insert || null,
       card_number: card_number || null,
       grade: grade || null,
-      cert_number: cert_number || null,
-      psa_cert_number: psa_cert_number || cert_number || null,
+      grading_company: normalizedCert.grading_company ?? grading_company ?? null,
+      cert_number: normalizedCert.cert_number ?? null,
+      psa_cert_number: normalizedCert.psa_cert_number ?? null,
       acquisition_type: acquisitionType,
       purchase_price: acquisitionType === "pulled" ? null : normalizedPurchasePrice,
       purchase_date: normalizedPurchaseDate,
@@ -474,6 +483,7 @@ export async function POST(request: NextRequest) {
     }
 
     await syncTrustedImageFieldsForItem(item.id);
+    await enqueueCertImageResolution({ itemId: item.id });
 
     const { data: syncedItem } = await supabase
       .from("collection_items")
@@ -578,6 +588,12 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Item ID required" }, { status: 400 });
     }
 
+    Object.assign(updates, normalizeCertWriteFields({
+      grading_company: updates.grading_company,
+      cert_number: updates.cert_number,
+      psa_cert_number: updates.psa_cert_number,
+    }));
+
     const { data: item, error } = await supabase
       .from("collection_items")
       .update(updates)
@@ -600,17 +616,20 @@ export async function PATCH(request: NextRequest) {
       "notes",
     ];
     const shouldRecalculate = cmvRelevantFields.some((field) => field in updates);
+    const imageRelevantFields = [
+      "grading_company",
+      "cert_number",
+      "psa_cert_number",
+      "user_image_url",
+      "image_url",
+      "image_source",
+    ];
+    const shouldRefreshCertImage = imageRelevantFields.some((field) => field in updates);
 
     if (!shouldRecalculate) {
-      const imageRelevantFields = [
-        "cert_number",
-        "psa_cert_number",
-        "user_image_url",
-        "image_url",
-        "image_source",
-      ];
-      if (imageRelevantFields.some((field) => field in updates)) {
+      if (shouldRefreshCertImage) {
         await syncTrustedImageFieldsForItem(item.id);
+        await enqueueCertImageResolution({ itemId: item.id });
       }
 
       const { data: freshItem } = await supabase
@@ -640,6 +659,11 @@ export async function PATCH(request: NextRequest) {
 
     if (updateError) {
       throw updateError;
+    }
+
+    if (shouldRefreshCertImage) {
+      await syncTrustedImageFieldsForItem(item.id);
+      await enqueueCertImageResolution({ itemId: item.id });
     }
 
     const [hydratedItem] = await hydrateTrustedImagesForItems({

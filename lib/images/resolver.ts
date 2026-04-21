@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { CardImage, CardImageSource, TrustedCardImage } from "@/types";
-import { fetchPsaCertLookup, normalizePsaCertNumber } from "@/lib/images/psa-cert";
+import { getItemCertNumber, isCertImageSource } from "@/lib/images/cert-image";
 import {
   buildTrustedCardImage,
   normalizeTrustedImageUrl,
@@ -24,6 +24,7 @@ type SupabaseLike = {
 export type TrustedImageRow = {
   id?: string | null;
   user_id?: string | null;
+  grading_company?: string | null;
   cert_number?: string | null;
   psa_cert_number?: string | null;
   image_url?: string | null;
@@ -82,10 +83,7 @@ export async function resolveTrustedCardImageForItem(params: {
       params.userId ?? params.item.user_id ?? null
     ));
 
-  const psaCertNumber = normalizePsaCertNumber(
-    params.item.psa_cert_number ?? params.item.cert_number ?? null
-  );
-  const psaLookup = await fetchPsaCertLookup(psaCertNumber);
+  const certNumber = getItemCertNumber(params.item);
   const userImages = pickUserCardImages(cardImages, {
     legacyUserImageUrl: params.item.user_image_url ?? null,
     derivedImageUrl: params.item.image_url ?? null,
@@ -93,12 +91,13 @@ export async function resolveTrustedCardImageForItem(params: {
   });
 
   const trustedImage = buildTrustedCardImage({
-    psaFrontUrl:
-      psaLookup?.frontImageUrl ??
-      (params.item.image_source === "psa"
-        ? normalizeTrustedImageUrl(params.item.image_url ?? null)
-        : null),
-    psaBackUrl: psaLookup?.backImageUrl ?? null,
+    certFrontUrl: isCertImageSource(params.item.image_source ?? null)
+      ? normalizeTrustedImageUrl(params.item.image_url ?? null)
+      : null,
+    certBackUrl: null,
+    certImageSource: isCertImageSource(params.item.image_source ?? null)
+      ? params.item.image_source ?? null
+      : null,
     userFrontUrl: userImages.frontUrl,
     userBackUrl: userImages.backUrl,
   });
@@ -109,7 +108,7 @@ export async function resolveTrustedCardImageForItem(params: {
     primaryImage: cardImages[0] ?? null,
     imageSource: trustedImage.source,
     imageUrl: trustedImage.frontUrl,
-    psaCertNumber,
+    psaCertNumber: params.item.image_source === "psa" ? certNumber : null,
   };
 }
 

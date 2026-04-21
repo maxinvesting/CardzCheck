@@ -2,15 +2,18 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useSearchParams, useRouter } from "next/navigation";
+import Image from "next/image";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { Playfair_Display } from "next/font/google";
 import { useAuth } from "@/contexts/AuthContext";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
+import GradeEstimatorValuePanel from "@/components/GradeEstimatorValuePanel";
 import CardScanSlot, {
   type CardScanSlotCompleteResult,
   type SlotState,
 } from "@/components/grading/CardScanSlot";
+import GradeProbabilityPanel from "@/components/grading/GradeProbabilityPanel";
 import MockSubmissionFlow from "@/components/grading/MockSubmissionFlow";
 import { MicButton } from "@/components/ui/MicButton";
 import {
@@ -50,6 +53,48 @@ const QUICK_FLAGS = [
   "Corner wear",
   "Edge chip",
 ] as const;
+
+function formatGradeNumber(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, "");
+}
+
+function formatEstimateRange(run: GradeEstimatorHistoryRun): string {
+  const low = run.estimate.estimated_grade_low;
+  const high = run.estimate.estimated_grade_high;
+  if (!Number.isFinite(low) || !Number.isFinite(high)) return "Grade unavailable";
+  return low === high
+    ? `PSA ${formatGradeNumber(low)}`
+    : `PSA ${formatGradeNumber(low)}-${formatGradeNumber(high)}`;
+}
+
+function formatSessionDate(iso: string): string {
+  return new Date(iso).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function buildCardMeta(run: GradeEstimatorHistoryRun): string {
+  return [
+    run.card.year,
+    run.card.set_name,
+    run.card.parallel_type,
+    run.card.card_number ? `#${run.card.card_number}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/** Light-background confidence pills (scan page theme) */
+const SCAN_CONFIDENCE_CLASS: Record<string, string> = {
+  high: "rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-800",
+  medium:
+    "rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-800",
+  low: "rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900",
+};
 
 // ── Progress step indicator ───────────────────────────────────────────────────
 const STEP_LABELS: Record<WizardStep, string> = {
@@ -162,7 +207,12 @@ function ScanPageInner() {
     Array.from({ length: TIER_MAX_SLOTS.business }, () => "idle" as SlotState)
   );
   const [completedRuns, setCompletedRuns] = useState<Record<number, GradeEstimatorHistoryRun>>({});
-  const routedToResultsRef = useRef(false);
+  const resultsSessionSavedRef = useRef(false);
+  const [savedResultsSession, setSavedResultsSession] = useState<{
+    id: string;
+    jobsParam: string;
+    createdAt: string;
+  } | null>(null);
 
   // ── Tier ────────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -195,7 +245,8 @@ function ScanPageInner() {
       return next;
     });
     if (s !== "done") {
-      routedToResultsRef.current = false;
+      resultsSessionSavedRef.current = false;
+      setSavedResultsSession(null);
       setCompletedRuns((prev) => {
         if (!(i in prev)) return prev;
         const next = { ...prev };
@@ -235,6 +286,17 @@ function ScanPageInner() {
     [activeSlots, completedRuns]
   );
 
+  /** Plan: local “results visible” gate — all slots done and history runs persisted per slot */
+  const inlineResultsVisible = useMemo(
+    () =>
+      mode === "scan" &&
+      wizardStep === 4 &&
+      tierLoaded &&
+      allDone &&
+      orderedCompletedRuns.length === activeSlots,
+    [activeSlots, allDone, mode, orderedCompletedRuns, tierLoaded, wizardStep]
+  );
+
   const gridCls =
     activeSlots === 1
       ? "max-w-2xl mx-auto"
@@ -269,7 +331,7 @@ function ScanPageInner() {
   useEffect(() => {
     if (mode !== "scan" || wizardStep !== 4 || !allDone) return;
     if (orderedCompletedRuns.length !== activeSlots) return;
-    if (routedToResultsRef.current) return;
+    if (resultsSessionSavedRef.current) return;
 
     const session = saveGradeHubResultsSession({
       createdAt: new Date().toISOString(),
@@ -282,22 +344,20 @@ function ScanPageInner() {
       runIds: orderedCompletedRuns.map((run) => run.id),
     });
 
-    routedToResultsRef.current = true;
-    router.replace(
-      `${gradeHubBasePath}/results?session=${encodeURIComponent(session.id)}&jobs=${encodeURIComponent(
-        session.jobIds.join(",")
-      )}`
-    );
+    resultsSessionSavedRef.current = true;
+    setSavedResultsSession({
+      id: session.id,
+      jobsParam: session.jobIds.join(","),
+      createdAt: session.createdAt,
+    });
   }, [
     activeSlots,
     allDone,
-    gradeHubBasePath,
     gradingCompany,
     mode,
     notes,
     orderedCompletedRuns,
     quickFlags,
-    router,
     trimmedCardTitle,
     wizardStep,
   ]);
@@ -752,6 +812,486 @@ function ScanPageInner() {
             </div>
           )}
 
+          {/* ── Step 4: full results in scan theme (no redirect) ─ */}
+          {inlineResultsVisible && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.25 }}
+                style={{ marginTop: 28 }}
+              >
+                <p
+                  style={{
+                    fontSize: 9,
+                    fontWeight: 700,
+                    letterSpacing: "2.5px",
+                    color: RED,
+                    textTransform: "uppercase",
+                    marginBottom: 10,
+                  }}
+                >
+                  Scan results
+                </p>
+                <h2
+                  className={playfair.className}
+                  style={{ fontSize: 22, color: TEXT, lineHeight: 1.25, marginBottom: 8 }}
+                >
+                  Grade probability &amp; value
+                </h2>
+                <p style={{ fontSize: 12, color: MUTED, lineHeight: 1.55, marginBottom: 20, maxWidth: 560 }}>
+                  Full grade probability output and grading value guidance for this session — same data as the
+                  standalone results page, without leaving your scan.
+                </p>
+
+                <div
+                  style={{
+                    background: CARD_BG,
+                    border: `1px solid ${BORDER}`,
+                    borderRadius: 4,
+                    padding: "20px 24px",
+                    marginBottom: 20,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      alignItems: "baseline",
+                      justifyContent: "space-between",
+                      gap: 12,
+                      marginBottom: 12,
+                    }}
+                  >
+                    <p
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        letterSpacing: "1.5px",
+                        color: MUTED,
+                        textTransform: "uppercase",
+                        margin: 0,
+                      }}
+                    >
+                      Session summary
+                    </p>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 600,
+                          color: TEXT,
+                          background: SURFACE,
+                          border: `1px solid ${BORDER}`,
+                          borderRadius: 3,
+                          padding: "4px 10px",
+                        }}
+                      >
+                        {activeSlots} card{activeSlots === 1 ? "" : "s"}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 600,
+                          color: TEXT,
+                          background: SURFACE,
+                          border: `1px solid ${BORDER}`,
+                          borderRadius: 3,
+                          padding: "4px 10px",
+                        }}
+                      >
+                        Target grader: {gradingCompany}
+                      </span>
+                      {(savedResultsSession?.createdAt || orderedCompletedRuns[0]?.created_at) ? (
+                        <span style={{ fontSize: 10, color: MUTED }}>
+                          {formatSessionDate(
+                            savedResultsSession?.createdAt ?? orderedCompletedRuns[0]!.created_at
+                          )}
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                  {trimmedCardTitle ? (
+                    <p style={{ fontSize: 14, fontWeight: 600, color: TEXT, margin: "0 0 8px" }}>
+                      {trimmedCardTitle}
+                    </p>
+                  ) : null}
+                  {notes.trim() ? (
+                    <p style={{ fontSize: 12, color: MUTED, lineHeight: 1.5, margin: 0 }}>
+                      {notes.trim()}
+                    </p>
+                  ) : null}
+                  {quickFlags.length > 0 ? (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+                      {quickFlags.map((flag) => (
+                        <span
+                          key={flag}
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 600,
+                            color: "#92400e",
+                            background: "#fffbeb",
+                            border: "1px solid #fde68a",
+                            borderRadius: 3,
+                            padding: "4px 10px",
+                          }}
+                        >
+                          {flag}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+
+                {orderedCompletedRuns.length > 1 ? (
+                  <section
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
+                      gap: 12,
+                      marginBottom: 24,
+                    }}
+                  >
+                    {orderedCompletedRuns.map((run, index) => {
+                      const imageUrl =
+                        run.card.imageUrl ||
+                        run.card.imageUrls?.[0] ||
+                        run.card.scanPhotos?.[0]?.url ||
+                        "";
+                      const confidence = run.estimate.grade_probabilities?.confidence ?? null;
+                      const confidenceClass = confidence
+                        ? (SCAN_CONFIDENCE_CLASS[confidence] ?? SCAN_CONFIDENCE_CLASS.medium)
+                        : null;
+                      return (
+                        <a
+                          key={run.id}
+                          href={`#scan-result-${index + 1}`}
+                          style={{
+                            display: "flex",
+                            gap: 14,
+                            padding: 14,
+                            background: CARD_BG,
+                            border: `1px solid ${BORDER}`,
+                            borderRadius: 4,
+                            textDecoration: "none",
+                            color: "inherit",
+                          }}
+                        >
+                          {imageUrl ? (
+                            <Image
+                              src={imageUrl}
+                              alt={run.card.player_name || `Result ${index + 1}`}
+                              width={64}
+                              height={96}
+                              unoptimized
+                              style={{
+                                height: 96,
+                                width: 64,
+                                objectFit: "cover",
+                                borderRadius: 4,
+                                border: `1px solid ${BORDER}`,
+                                flexShrink: 0,
+                              }}
+                            />
+                          ) : (
+                            <div
+                              style={{
+                                height: 96,
+                                width: 64,
+                                borderRadius: 4,
+                                border: `1px solid ${BORDER}`,
+                                background: SURFACE,
+                                flexShrink: 0,
+                              }}
+                            />
+                          )}
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <p
+                              style={{
+                                fontSize: 10,
+                                fontWeight: 700,
+                                letterSpacing: "1.2px",
+                                color: MUTED,
+                                textTransform: "uppercase",
+                                margin: 0,
+                              }}
+                            >
+                              Result {index + 1}
+                            </p>
+                            <p
+                              style={{
+                                fontSize: 14,
+                                fontWeight: 600,
+                                color: TEXT,
+                                margin: "6px 0 0",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {run.card.player_name || trimmedCardTitle || "Card"}
+                            </p>
+                            {buildCardMeta(run) ? (
+                              <p
+                                style={{
+                                  fontSize: 11,
+                                  color: MUTED,
+                                  margin: "4px 0 0",
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                {buildCardMeta(run)}
+                              </p>
+                            ) : null}
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
+                              <span
+                                style={{
+                                  fontSize: 10,
+                                  fontWeight: 600,
+                                  color: TEXT,
+                                  background: SURFACE,
+                                  border: `1px solid ${BORDER}`,
+                                  borderRadius: 3,
+                                  padding: "3px 8px",
+                                }}
+                              >
+                                {formatEstimateRange(run)}
+                              </span>
+                              {confidence && confidenceClass ? (
+                                <span className={confidenceClass}>{confidence}</span>
+                              ) : null}
+                            </div>
+                          </div>
+                        </a>
+                      );
+                    })}
+                  </section>
+                ) : null}
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+                  {orderedCompletedRuns.map((run, index) => {
+                    const galleryUrls =
+                      run.card.imageUrls && run.card.imageUrls.length > 0
+                        ? run.card.imageUrls
+                        : run.card.scanPhotos?.map((photo) => photo.url) ?? [];
+                    const imageUrl =
+                      run.card.imageUrl || galleryUrls[0] || run.card.scanPhotos?.[0]?.url || "";
+                    const confidence = run.estimate.grade_probabilities?.confidence ?? null;
+                    const confidenceClass = confidence
+                      ? (SCAN_CONFIDENCE_CLASS[confidence] ?? SCAN_CONFIDENCE_CLASS.medium)
+                      : null;
+
+                    return (
+                      <section key={run.id} id={`scan-result-${index + 1}`} style={{ scrollMarginTop: 96 }}>
+                        <div
+                          style={{
+                            background: CARD_BG,
+                            border: `1px solid ${BORDER}`,
+                            borderRadius: 4,
+                            padding: "20px 24px",
+                            marginBottom: 12,
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              flexDirection: "row",
+                              flexWrap: "wrap",
+                              gap: 20,
+                              alignItems: "flex-start",
+                            }}
+                          >
+                            {imageUrl ? (
+                              <div style={{ flexShrink: 0 }}>
+                                <Image
+                                  src={imageUrl}
+                                  alt={run.card.player_name || `Result ${index + 1}`}
+                                  width={128}
+                                  height={176}
+                                  unoptimized
+                                  style={{
+                                    height: 176,
+                                    width: 128,
+                                    objectFit: "cover",
+                                    borderRadius: 8,
+                                    border: `1px solid ${BORDER}`,
+                                  }}
+                                />
+                                {galleryUrls.length > 1 ? (
+                                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
+                                    {galleryUrls.slice(1, 5).map((url, imageIndex) => (
+                                      <Image
+                                        key={`${url}-${imageIndex}`}
+                                        src={url}
+                                        alt={`${run.card.player_name || "Card"} ${imageIndex + 2}`}
+                                        width={40}
+                                        height={56}
+                                        unoptimized
+                                        style={{
+                                          height: 56,
+                                          width: 40,
+                                          objectFit: "cover",
+                                          borderRadius: 4,
+                                          border: `1px solid ${BORDER}`,
+                                        }}
+                                      />
+                                    ))}
+                                  </div>
+                                ) : null}
+                              </div>
+                            ) : null}
+
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <div
+                                style={{
+                                  display: "flex",
+                                  flexWrap: "wrap",
+                                  justifyContent: "space-between",
+                                  gap: 12,
+                                  alignItems: "flex-start",
+                                }}
+                              >
+                                <div>
+                                  <p
+                                    style={{
+                                      fontSize: 10,
+                                      fontWeight: 700,
+                                      letterSpacing: "1.2px",
+                                      color: MUTED,
+                                      textTransform: "uppercase",
+                                      margin: 0,
+                                    }}
+                                  >
+                                    Result {index + 1}
+                                  </p>
+                                  <p
+                                    className={playfair.className}
+                                    style={{
+                                      fontSize: 22,
+                                      fontWeight: 600,
+                                      color: TEXT,
+                                      margin: "8px 0 0",
+                                      lineHeight: 1.2,
+                                    }}
+                                  >
+                                    {run.card.player_name || trimmedCardTitle || "Card"}
+                                  </p>
+                                  {buildCardMeta(run) ? (
+                                    <p style={{ fontSize: 12, color: MUTED, margin: "8px 0 0" }}>
+                                      {buildCardMeta(run)}
+                                    </p>
+                                  ) : null}
+                                </div>
+                                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                                  <span
+                                    style={{
+                                      fontSize: 10,
+                                      fontWeight: 600,
+                                      color: TEXT,
+                                      background: SURFACE,
+                                      border: `1px solid ${BORDER}`,
+                                      borderRadius: 3,
+                                      padding: "5px 10px",
+                                    }}
+                                  >
+                                    {formatEstimateRange(run)}
+                                  </span>
+                                  {confidence && confidenceClass ? (
+                                    <span className={confidenceClass}>{confidence}</span>
+                                  ) : null}
+                                  <span style={{ fontSize: 11, color: MUTED }}>
+                                    Saved {formatSessionDate(run.created_at)}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 14 }}>
+                                {run.card.year ? (
+                                  <span
+                                    style={{
+                                      fontSize: 10,
+                                      color: TEXT,
+                                      border: `1px solid ${BORDER}`,
+                                      borderRadius: 3,
+                                      padding: "4px 10px",
+                                    }}
+                                  >
+                                    Year {run.card.year}
+                                  </span>
+                                ) : null}
+                                {run.card.set_name ? (
+                                  <span
+                                    style={{
+                                      fontSize: 10,
+                                      color: TEXT,
+                                      border: `1px solid ${BORDER}`,
+                                      borderRadius: 3,
+                                      padding: "4px 10px",
+                                    }}
+                                  >
+                                    {run.card.set_name}
+                                  </span>
+                                ) : null}
+                                {run.card.parallel_type ? (
+                                  <span
+                                    style={{
+                                      fontSize: 10,
+                                      color: TEXT,
+                                      border: `1px solid ${BORDER}`,
+                                      borderRadius: 3,
+                                      padding: "4px 10px",
+                                    }}
+                                  >
+                                    {run.card.parallel_type}
+                                  </span>
+                                ) : null}
+                                {run.card.card_number ? (
+                                  <span
+                                    style={{
+                                      fontSize: 10,
+                                      color: TEXT,
+                                      border: `1px solid ${BORDER}`,
+                                      borderRadius: 3,
+                                      padding: "4px 10px",
+                                    }}
+                                  >
+                                    #{run.card.card_number}
+                                  </span>
+                                ) : null}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <GradeProbabilityPanel
+                          estimate={run.estimate}
+                          cardIdentity={{
+                            owner_declared_title: trimmedCardTitle || undefined,
+                            player_name: run.card.player_name,
+                            year: run.card.year,
+                            set_name: run.card.set_name,
+                            parallel_type: run.card.parallel_type,
+                            variation: run.card.variation,
+                            insert: run.card.insert,
+                            card_number: run.card.card_number,
+                          }}
+                          primaryImageUrl={run.card.imageUrl}
+                          imageUrls={run.card.imageUrls}
+                          scanPhotos={run.card.scanPhotos}
+                          headerLabel="Grade Probability Results"
+                        />
+
+                        {run.post_grading_value ? (
+                          <GradeEstimatorValuePanel result={run.post_grading_value} />
+                        ) : null}
+                      </section>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            )}
+
           {wizardStep === 2 && (
             <div style={{ display: "flex", gap: 10 }}>
               <button
@@ -936,7 +1476,13 @@ function ScanPageInner() {
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
-              style={{ display: "flex", justifyContent: "center", gap: 12, marginTop: 24 }}
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                justifyContent: "center",
+                gap: 12,
+                marginTop: 24,
+              }}
             >
               <Link
                 href={gradeHubBasePath}
@@ -950,6 +1496,24 @@ function ScanPageInner() {
               >
                 Back to Hub
               </Link>
+              {savedResultsSession ? (
+                <Link
+                  href={`${gradeHubBasePath}/results?session=${encodeURIComponent(
+                    savedResultsSession.id
+                  )}&jobs=${encodeURIComponent(savedResultsSession.jobsParam)}`}
+                  style={{
+                    fontSize: 11, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase",
+                    borderRadius: 4,
+                    border: `1px solid ${BORDER}`,
+                    color: TEXT,
+                    background: BG,
+                    padding: "10px 20px",
+                    textDecoration: "none",
+                  }}
+                >
+                  Open standalone results
+                </Link>
+              ) : null}
               <button
                 type="button"
                 onClick={() => router.push(gradeHubBasePath)}

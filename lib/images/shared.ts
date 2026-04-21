@@ -5,12 +5,28 @@ const PLACEHOLDER_HOSTS = new Set([
   "placehold.it",
   "via.placeholder.com",
 ]);
+const BLOCKED_IMAGE_HOSTS = new Set(["cert-images.psa.com"]);
 
 export function normalizeHttpUrl(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   if (!trimmed) return null;
   return /^https?:\/\//i.test(trimmed) ? trimmed : null;
+}
+
+export function normalizeCertDigits(value: unknown, minLength = 5): string | null {
+  if (typeof value !== "string") return null;
+  const digits = value.replace(/\D/g, "");
+  return digits.length >= minLength ? digits : null;
+}
+
+export function buildPsaFrontImageUrl(value: unknown): string | null {
+  return null;
+}
+
+export function buildClientImageUrl(value: unknown): string | null {
+  const url = normalizeTrustedImageUrl(value);
+  return url;
 }
 
 export function isPlaceholderImageUrl(value: unknown): boolean {
@@ -29,6 +45,12 @@ export function isPlaceholderImageUrl(value: unknown): boolean {
 export function normalizeTrustedImageUrl(value: unknown): string | null {
   const url = normalizeHttpUrl(value);
   if (!url || isPlaceholderImageUrl(url)) return null;
+  try {
+    const parsed = new URL(url);
+    if (BLOCKED_IMAGE_HOSTS.has(parsed.hostname)) return null;
+  } catch {
+    return null;
+  }
   return url;
 }
 
@@ -109,22 +131,23 @@ export function pickUserCardImages(
 }
 
 export function buildTrustedCardImage(input: {
-  psaFrontUrl?: string | null;
-  psaBackUrl?: string | null;
+  certFrontUrl?: string | null;
+  certBackUrl?: string | null;
+  certImageSource?: CardImageSource | null;
   userFrontUrl?: string | null;
   userBackUrl?: string | null;
 }): TrustedCardImage {
   const frontCandidates = uniqueTrustedImageUrls([
-    input.psaFrontUrl,
+    input.certFrontUrl,
     input.userFrontUrl,
   ]);
   const backCandidates = uniqueTrustedImageUrls([
-    input.psaBackUrl,
+    input.certBackUrl,
     input.userBackUrl,
   ]);
 
-  const source: CardImageSource = frontCandidates[0] === normalizeTrustedImageUrl(input.psaFrontUrl)
-    ? "psa"
+  const source: CardImageSource = frontCandidates[0] === normalizeTrustedImageUrl(input.certFrontUrl)
+    ? input.certImageSource ?? "none"
     : frontCandidates[0] === normalizeTrustedImageUrl(input.userFrontUrl)
     ? "user"
     : "none";

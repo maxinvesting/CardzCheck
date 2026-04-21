@@ -7,6 +7,8 @@ import {
 } from "@/lib/business/context";
 import type { BusinessInventoryItem, BusinessSale, BusinessMetrics } from "@/types";
 import { computeNetPayout, computeProfit } from "@/lib/business/sales-utils";
+import { enqueueCertImageResolution } from "@/lib/images/cert-image-jobs";
+import { normalizeCertWriteFields } from "@/lib/images/cert-image";
 import { hydrateTrustedImagesForItems } from "@/lib/images/resolver";
 
 // Uses unified collection_items table with item_kind = 'inventory'
@@ -46,8 +48,10 @@ type BusinessInventoryRow = {
   list_price_cents: number | null;
   current_market_value_cents: number | null;
   image_url: string | null;
-  image_source: "psa" | "user" | "none" | null;
+  image_source: "psa" | "bgs" | "sgc" | "cgc" | "user" | "none" | null;
   user_image_url: string | null;
+  cert_image_status?: "queued" | "running" | "resolved" | "no_image" | "failed" | null;
+  cert_image_last_error?: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string | null;
@@ -205,6 +209,8 @@ function toBusinessInventoryItem(row: BusinessInventoryRow): BusinessInventoryIt
     grade: row.grade,
     cert_number: row.cert_number,
     psa_cert_number: row.psa_cert_number,
+    cert_image_status: row.cert_image_status ?? null,
+    cert_image_last_error: row.cert_image_last_error ?? null,
     location: row.location,
     channel: normalizeChannel(row.channel),
     status: normalizeStatus(row.status),
@@ -231,6 +237,11 @@ function buildInventoryInsertPayload(
   >
 ): Record<string, unknown> {
   const title = item.title || "Untitled item";
+  const normalizedCert = normalizeCertWriteFields({
+    grading_company: item.grading_company,
+    cert_number: item.cert_number,
+    psa_cert_number: (item as any).psa_cert_number,
+  });
   return {
     user_id: userId,
     business_account_id: businessAccountId,
@@ -245,10 +256,10 @@ function buildInventoryInsertPayload(
     shipping_cents: item.shipping_cents ?? 0,
     fees_paid_cents: item.fees_paid_cents ?? 0,
     condition_status: item.condition_status ?? "raw",
-    grading_company: item.grading_company || null,
+    grading_company: normalizedCert.grading_company ?? item.grading_company ?? null,
     grade: item.grade || null,
-    cert_number: item.cert_number || null,
-    psa_cert_number: (item as any).psa_cert_number || item.cert_number || null,
+    cert_number: normalizedCert.cert_number ?? null,
+    psa_cert_number: normalizedCert.psa_cert_number ?? null,
     location: item.location || null,
     channel: item.channel ?? "other",
     status: item.status ?? "unlisted",
@@ -271,6 +282,11 @@ function buildInventoryUpdatePayload(
   >
 ): Record<string, unknown> {
   const payload: Record<string, unknown> = {};
+  const normalizedCert = normalizeCertWriteFields({
+    grading_company: updates.grading_company,
+    cert_number: updates.cert_number,
+    psa_cert_number: (updates as any).psa_cert_number,
+  });
   if (updates.title !== undefined) payload.title = updates.title || "Untitled item";
   if (updates.quantity !== undefined)
     payload.quantity = normalizeQuantity(updates.quantity);
@@ -288,11 +304,12 @@ function buildInventoryUpdatePayload(
   if (updates.condition_status !== undefined)
     payload.condition_status = updates.condition_status;
   if (updates.grading_company !== undefined)
-    payload.grading_company = updates.grading_company;
+    payload.grading_company = normalizedCert.grading_company ?? updates.grading_company;
   if (updates.grade !== undefined) payload.grade = updates.grade;
-  if (updates.cert_number !== undefined) payload.cert_number = updates.cert_number;
-  if ((updates as any).psa_cert_number !== undefined)
-    payload.psa_cert_number = (updates as any).psa_cert_number;
+  if (updates.cert_number !== undefined || updates.grading_company !== undefined)
+    payload.cert_number = normalizedCert.cert_number ?? null;
+  if ((updates as any).psa_cert_number !== undefined || updates.grading_company !== undefined)
+    payload.psa_cert_number = normalizedCert.psa_cert_number ?? null;
   if (updates.location !== undefined) payload.location = updates.location;
   if (updates.channel !== undefined) payload.channel = updates.channel;
   if (updates.status !== undefined) payload.status = updates.status;
@@ -405,6 +422,7 @@ export async function createInventoryItem(
 
   if (error) throw error;
   const itemRecord = toBusinessInventoryItem(data as BusinessInventoryRow);
+  await enqueueCertImageResolution({ itemId: itemRecord.id });
   const [hydrated] = await hydrateTrustedImagesForItems({
     supabase,
     items: [itemRecord],
@@ -437,6 +455,7 @@ export async function updateInventoryItem(
 
   if (error) throw error;
   const itemRecord = toBusinessInventoryItem(data as BusinessInventoryRow);
+  await enqueueCertImageResolution({ itemId: itemRecord.id });
   const [hydrated] = await hydrateTrustedImagesForItems({
     supabase,
     items: [itemRecord],

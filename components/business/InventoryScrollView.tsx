@@ -3,7 +3,6 @@
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import type { BusinessInventoryItem } from "@/types";
-import { uniqueHttpUrls } from "@/lib/collection-images";
 import {
   fmtCents,
   getDaysHeld,
@@ -14,6 +13,10 @@ import {
   gradeBadgeLabel,
   gradeBadgeColor,
   getCompsUrl,
+  getInventoryCertUrl,
+  hasInventoryImage,
+  getInventoryImageCandidates,
+  isResolvingInventoryCertImage,
   isUnderwater,
 } from "@/lib/business/inventory-display";
 
@@ -27,8 +30,8 @@ export interface InventoryScrollViewProps {
 
 function ScrollCardImage({ item }: { item: BusinessInventoryItem }) {
   const imageCandidates = useMemo(
-    () => uniqueHttpUrls([item.user_image_url, item.stock_image_url, item.ebay_image_url]),
-    [item.user_image_url, item.stock_image_url, item.ebay_image_url]
+    () => getInventoryImageCandidates(item),
+    [item]
   );
   const [imageIndex, setImageIndex] = useState(0);
 
@@ -39,6 +42,7 @@ function ScrollCardImage({ item }: { item: BusinessInventoryItem }) {
   const imageUrl = imageCandidates[imageIndex] || null;
   const gradeLabel = gradeBadgeLabel(item);
   const gradeColor = gradeBadgeColor(item);
+  const isResolving = isResolvingInventoryCertImage(item);
 
   return (
     <div className="relative aspect-[3/4] w-full bg-[#F3F4F6] rounded-xl overflow-hidden">
@@ -55,7 +59,7 @@ function ScrollCardImage({ item }: { item: BusinessInventoryItem }) {
           }}
         />
       ) : (
-        <div className="w-full h-full flex items-center justify-center">
+        <div className="w-full h-full flex flex-col items-center justify-center gap-3 px-4 text-center">
           <svg
             className="w-20 h-20 text-[#D1D5DB]"
             fill="none"
@@ -69,6 +73,11 @@ function ScrollCardImage({ item }: { item: BusinessInventoryItem }) {
               d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
             />
           </svg>
+          {isResolving ? (
+            <p className="text-sm font-medium text-[var(--biz-primary)]">
+              Resolving cert image...
+            </p>
+          ) : null}
         </div>
       )}
       {gradeLabel && (
@@ -150,6 +159,9 @@ export default function InventoryScrollView({
     item.status !== "sold" &&
     item.status !== "returned" &&
     item.status !== "pending_sale";
+  const hasImage = hasInventoryImage(item);
+  const certUrl = getInventoryCertUrl(item);
+  const isResolving = isResolvingInventoryCertImage(item);
 
   const prev = () => setCurrentIndex((i) => Math.max(0, i - 1));
   const next = () => setCurrentIndex((i) => Math.min(items.length - 1, i + 1));
@@ -274,6 +286,29 @@ export default function InventoryScrollView({
           >
             Get Comps
           </a>
+          {!hasImage && !isResolving && certUrl ? (
+            <a
+              href={certUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-1 text-center rounded-lg border border-[var(--biz-border)] bg-[#F9FAFB] px-3 py-2 text-xs font-medium text-[var(--biz-primary)] hover:bg-[#F3F4F6] transition-colors"
+            >
+              View Cert
+            </a>
+          ) : null}
+          {!hasImage && !isResolving ? (
+            <Link
+              href={`/card/${item.id}?from=business`}
+              className="flex-1 text-center rounded-lg border border-[var(--biz-border)] bg-[#F9FAFB] px-3 py-2 text-xs font-medium text-[var(--biz-primary)] hover:bg-[#F3F4F6] transition-colors"
+            >
+              Set Image
+            </Link>
+          ) : null}
+          {!hasImage && isResolving ? (
+            <span className="flex-1 rounded-lg border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] px-3 py-2 text-center text-xs font-medium text-[var(--biz-primary)]">
+              Resolving cert image...
+            </span>
+          ) : null}
           <button
             type="button"
             onClick={() => onItemClick(item)}

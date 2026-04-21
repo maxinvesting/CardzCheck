@@ -10,7 +10,6 @@ import type {
   BusinessInventoryItem,
   BusinessMetrics as MetricsType,
   BusinessSale,
-  EbayAccountStatus,
   UserStorefront,
 } from "@/types";
 import {
@@ -53,7 +52,6 @@ function BusinessDashboardContent() {
   const [recentSalesLoading, setRecentSalesLoading] = useState(false);
   const [needsMigration, setNeedsMigration] = useState(false);
   const [storefronts, setStorefronts] = useState<UserStorefront[]>([]);
-  const [ebayAccount, setEbayAccount] = useState<EbayAccountStatus | null>(null);
 
   const ebayStoreHref = useMemo(
     () => buildEbayStoreHref(ebayStoreUrl),
@@ -124,17 +122,6 @@ function BusinessDashboardContent() {
       }
     } catch {
       // storefronts are non-critical, fail silently
-    }
-  }, []);
-
-  const loadEbayAccount = useCallback(async () => {
-    try {
-      const res = await fetch("/api/business/ebay/account", { cache: "no-store" });
-      if (!res.ok) return;
-      const data: EbayAccountStatus = await res.json();
-      setEbayAccount(data);
-    } catch {
-      // account status is best-effort only
     }
   }, []);
 
@@ -236,11 +223,10 @@ function BusinessDashboardContent() {
         loadMetrics(),
         loadRecentSales(),
         loadStorefronts(),
-        loadEbayAccount(),
       ]);
     }
     init();
-  }, [router, loadUserProfile, loadInventory, loadMetrics, loadRecentSales, loadStorefronts, loadEbayAccount]);
+  }, [router, loadUserProfile, loadInventory, loadMetrics, loadRecentSales, loadStorefronts]);
 
   // Refresh profile when returning to tab (e.g. after settings update)
   useEffect(() => {
@@ -314,7 +300,6 @@ function BusinessDashboardContent() {
           recentSalesLoading={recentSalesLoading}
           ebayStoreHref={ebayStoreHref}
           needsMigration={needsMigration}
-          ebayAccount={ebayAccount}
           storefronts={storefronts}
         />
       </main>

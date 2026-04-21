@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { TrustedCardImage } from "@/types";
+import { buildClientImageUrl } from "@/lib/images/shared";
 
 interface CardImageProps {
   image?: TrustedCardImage | null;
@@ -28,7 +29,10 @@ export function CardImage({
   ctaLabel = "Add image",
   onCtaClick,
 }: CardImageProps) {
-  const candidates = useMemo(() => image?.frontCandidates ?? [], [image]);
+  const candidates = useMemo(
+    () => (image?.frontCandidates ?? []).map((candidate) => buildClientImageUrl(candidate) ?? candidate),
+    [image]
+  );
   const [candidateIndex, setCandidateIndex] = useState(0);
   const [hasExhaustedCandidates, setHasExhaustedCandidates] = useState(false);
 

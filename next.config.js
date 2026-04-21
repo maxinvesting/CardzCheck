@@ -39,6 +39,7 @@ const cspDirectives = [
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  serverExternalPackages: ["playwright"],
   images: {
     remotePatterns: [
       {

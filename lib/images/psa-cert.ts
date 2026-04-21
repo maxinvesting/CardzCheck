@@ -41,24 +41,13 @@ export function normalizePsaCertNumber(value: string | null | undefined): string
   return digits.length >= MIN_CERT_DIGITS ? digits : null;
 }
 
-/**
- * PSA serves slab scans on a predictable CDN; these work without PSA API credentials.
- * Used when the JSON payload does not include image URLs our parser recognizes.
- */
 export function buildPsaCertCdnImageUrls(certDigits: string): {
   frontImageUrl: string | null;
   backImageUrl: string | null;
 } {
-  const n = certDigits.replace(/\D/g, "");
-  if (n.length < MIN_CERT_DIGITS) {
-    return { frontImageUrl: null, backImageUrl: null };
-  }
-  const base = `https://cert-images.psa.com/${n}/large`;
-  const front = `${base}/${n}_f.jpg`;
-  const back = `${base}/${n}_b.jpg`;
   return {
-    frontImageUrl: normalizeTrustedImageUrl(front),
-    backImageUrl: normalizeTrustedImageUrl(back),
+    frontImageUrl: null,
+    backImageUrl: null,
   };
 }
 

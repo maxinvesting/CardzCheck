@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { normalizeCertWriteFields } from "@/lib/images/cert-image";
 
 export interface PendingInventoryCard {
   card_id?: string;
@@ -173,6 +174,16 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
 
     try {
       const parsedQuantity = Math.max(1, Number.parseInt(form.quantity, 10) || 1);
+      const normalizedCert = normalizeCertWriteFields({
+        grading_company: gradeFields.gradingCompany,
+        cert_number: card.psa_cert_number,
+      });
+      const resolvedImageUrl = card.user_image_url || card.imageUrl || null;
+      const resolvedImageSource = card.user_image_url
+        ? "user"
+        : resolvedImageUrl
+        ? "user"
+        : "none";
 
       const res = await fetch("/api/business/inventory", {
         method: "POST",
@@ -190,15 +201,16 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
           condition_status: gradeFields.conditionStatus,
           grading_company: gradeFields.gradingCompany,
           grade: gradeFields.gradeValue,
-          psa_cert_number: card.psa_cert_number || null,
+          cert_number: normalizedCert.cert_number ?? null,
+          psa_cert_number: normalizedCert.psa_cert_number ?? null,
           channel: form.channel,
           status: form.status,
           list_price_cents: form.list_price ? toCents(form.list_price) : null,
           current_market_value_cents: form.current_market_value
             ? toCents(form.current_market_value)
             : null,
-          image_url: card.user_image_url || card.imageUrl || null,
-          image_source: card.user_image_url ? "user" : "none",
+          image_url: resolvedImageUrl,
+          image_source: resolvedImageSource,
           user_image_url: card.user_image_url || null,
           location: form.location || null,
           notes: form.notes || null,

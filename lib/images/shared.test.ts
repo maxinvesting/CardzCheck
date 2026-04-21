@@ -9,6 +9,9 @@ import type { CardImage } from "@/types";
 describe("trusted image shared helpers", () => {
   it("filters placeholder image URLs", () => {
     expect(normalizeTrustedImageUrl("https://placehold.co/300x400?text=card")).toBeNull();
+    expect(
+      normalizeTrustedImageUrl("https://cert-images.psa.com/120344868/large/120344868_f.jpg")
+    ).toBeNull();
     expect(normalizeTrustedImageUrl("https://example.com/card-front.jpg")).toBe(
       "https://example.com/card-front.jpg"
     );
@@ -16,8 +19,9 @@ describe("trusted image shared helpers", () => {
 
   it("prioritizes PSA images over user uploads", () => {
     const trusted = buildTrustedCardImage({
-      psaFrontUrl: "https://psa.example/front.jpg",
-      psaBackUrl: "https://psa.example/back.jpg",
+      certFrontUrl: "https://psa.example/front.jpg",
+      certBackUrl: "https://psa.example/back.jpg",
+      certImageSource: "psa",
       userFrontUrl: "https://user.example/front.jpg",
       userBackUrl: "https://user.example/back.jpg",
     });

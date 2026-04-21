@@ -13,6 +13,7 @@ import type { EbayFeeRateKey } from "@/lib/ebay/parity-price";
 import EbayListingModal from "@/components/business/EbayListingModal";
 import GetCompsButton from "@/components/ui/GetCompsButton";
 import { compsParamsFromTitle } from "@/lib/ebay/comps-url";
+import { normalizeCertWriteFields } from "@/lib/images/cert-image";
 
 function fmtCents(cents: number | null): string {
   if (cents === null) return "";
@@ -27,6 +28,7 @@ interface Props {
   onClose?: () => void;
   tone?: EditorTone;
   showOpenProfileLink?: boolean;
+  showGradeProbabilitySection?: boolean;
 }
 
 const STATUS_OPTIONS = ["unlisted", "listed", "pending_sale", "sold", "returned"] as const;
@@ -54,6 +56,7 @@ export default function BusinessInventoryItemEditor({
   onClose,
   tone = "dark",
   showOpenProfileLink = true,
+  showGradeProbabilitySection = true,
 }: Props) {
   const [form, setForm] = useState<Record<string, any>>({});
   const [cmvLoading, setCmvLoading] = useState(false);
@@ -219,6 +222,10 @@ export default function BusinessInventoryItemEditor({
       const n = parseFloat(val);
       return Number.isNaN(n) ? 0 : Math.round(n * 100);
     };
+    const normalizedCert = normalizeCertWriteFields({
+      grading_company: form.grading_company,
+      cert_number: form.cert_number,
+    });
 
     onSave(item.id, {
       title: form.title,
@@ -226,9 +233,10 @@ export default function BusinessInventoryItemEditor({
       status: form.status,
       channel: form.channel,
       condition_status: form.condition_status,
-      grading_company: form.grading_company || null,
+      grading_company: normalizedCert.grading_company ?? form.grading_company ?? null,
       grade: form.grade || null,
-      cert_number: form.cert_number || null,
+      cert_number: normalizedCert.cert_number ?? null,
+      psa_cert_number: normalizedCert.psa_cert_number ?? null,
       location: form.location || null,
       acquisition_type: form.acquisition_type,
       acquisition_date: form.acquisition_date || null,
@@ -500,82 +508,84 @@ export default function BusinessInventoryItemEditor({
           </button>
         </div>
 
-        <div className={`mt-8 pt-6 ${dark ? "border-t border-gray-800" : "border-t border-[#DCE9E1]"}`} id="grade-probability-block">
-          <h3 className={`text-md font-semibold mb-3 ${dark ? "text-white" : "text-[#101A14]"}`}>{gradingCopy.page.title}</h3>
-          {!item.card_id ? (
-            <p className={`text-xs ${dark ? "text-gray-500" : "text-[#6F7D74]"}`}>
-              Grade probability is available for items linked to a card with photos.
-            </p>
-          ) : cardForGradeLoading ? (
-            <p className={`text-xs ${dark ? "text-gray-500" : "text-[#6F7D74]"}`}>Loading card photos...</p>
-          ) : !cardForGrade || cardForGrade.imageUrls.length === 0 ? (
-            <p className={`text-xs ${dark ? "text-gray-500" : "text-[#6F7D74]"}`}>
-              No photos on the linked card. Add photos in the{" "}
-              <Link href={`/card/${item.id}?from=business`} className={dark ? "text-blue-400 hover:underline" : "text-[#146B42] hover:underline"}>
-                card profile
-              </Link>{" "}
-              to run grade probability.
-            </p>
-          ) : (
-            <>
-              {!gradeEstimate.estimate && !gradeEstimate.isRunning && !gradeEstimate.error && (
-                <button
-                  type="button"
-                  onClick={() => void gradeEstimate.run()}
-                  className={`px-3 py-2.5 min-h-[44px] disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors ${dark ? "bg-blue-600 hover:bg-blue-700" : "bg-[#1C8C58] hover:bg-[#146B42]"}`}
-                >
-                  Run grade estimate
-                </button>
-              )}
-              {gradeEstimate.estimate && !gradeEstimate.isRunning && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    gradeEstimate.reset();
-                    void gradeEstimate.run();
-                  }}
-                  className={`mt-2 px-3 py-2.5 min-h-[44px] text-white text-xs font-medium rounded-lg transition-colors ${dark ? "bg-gray-700 hover:bg-gray-600" : "bg-[#2E3B33] hover:bg-[#1E2822]"}`}
-                >
-                  Re-run grade estimate
-                </button>
-              )}
-              {gradeEstimate.isRunning && gradeEstimate.job && (
-                <div className="mt-2">
-                  <GradeEstimateProgressPanel
-                    status={gradeEstimate.job.status}
-                    steps={gradeEstimate.job.steps}
-                    errorMessage={gradeEstimate.job.error ?? null}
-                  />
-                </div>
-              )}
-              {gradeEstimate.error && (
-                <div className="flex flex-wrap items-center gap-2 mt-2">
-                  <p className={`text-xs ${dark ? "text-amber-400" : "text-amber-700"}`}>{gradeEstimate.error}</p>
+        {showGradeProbabilitySection && (
+          <div className={`mt-8 pt-6 ${dark ? "border-t border-gray-800" : "border-t border-[#DCE9E1]"}`} id="grade-probability-block">
+            <h3 className={`text-md font-semibold mb-3 ${dark ? "text-white" : "text-[#101A14]"}`}>{gradingCopy.page.title}</h3>
+            {!item.card_id ? (
+              <p className={`text-xs ${dark ? "text-gray-500" : "text-[#6F7D74]"}`}>
+                Grade probability is available for items linked to a card with photos.
+              </p>
+            ) : cardForGradeLoading ? (
+              <p className={`text-xs ${dark ? "text-gray-500" : "text-[#6F7D74]"}`}>Loading card photos...</p>
+            ) : !cardForGrade || cardForGrade.imageUrls.length === 0 ? (
+              <p className={`text-xs ${dark ? "text-gray-500" : "text-[#6F7D74]"}`}>
+                No photos on the linked card. Add photos in the{" "}
+                <Link href={`/card/${item.id}?from=business`} className={dark ? "text-blue-400 hover:underline" : "text-[#146B42] hover:underline"}>
+                  card profile
+                </Link>{" "}
+                to run grade probability.
+              </p>
+            ) : (
+              <>
+                {!gradeEstimate.estimate && !gradeEstimate.isRunning && !gradeEstimate.error && (
+                  <button
+                    type="button"
+                    onClick={() => void gradeEstimate.run()}
+                    className={`px-3 py-2.5 min-h-[44px] disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors ${dark ? "bg-blue-600 hover:bg-blue-700" : "bg-[#1C8C58] hover:bg-[#146B42]"}`}
+                  >
+                    Run grade estimate
+                  </button>
+                )}
+                {gradeEstimate.estimate && !gradeEstimate.isRunning && (
                   <button
                     type="button"
                     onClick={() => {
                       gradeEstimate.reset();
                       void gradeEstimate.run();
                     }}
-                    className={dark ? "text-xs text-blue-400 hover:underline" : "text-xs text-[#146B42] hover:underline"}
+                    className={`mt-2 px-3 py-2.5 min-h-[44px] text-white text-xs font-medium rounded-lg transition-colors ${dark ? "bg-gray-700 hover:bg-gray-600" : "bg-[#2E3B33] hover:bg-[#1E2822]"}`}
                   >
-                    Retry
+                    Re-run grade estimate
                   </button>
-                </div>
-              )}
-              {gradeEstimate.estimate && (
-                <div className="mt-3">
-                  <GradeProbabilityPanel
-                    estimate={gradeEstimate.estimate}
-                    cardIdentity={cardForGrade.cardIdentity}
-                    primaryImageUrl={cardForGrade.imageUrls[0] ?? null}
-                    imageUrls={cardForGrade.imageUrls}
-                  />
-                </div>
-              )}
-            </>
-          )}
-        </div>
+                )}
+                {gradeEstimate.isRunning && gradeEstimate.job && (
+                  <div className="mt-2">
+                    <GradeEstimateProgressPanel
+                      status={gradeEstimate.job.status}
+                      steps={gradeEstimate.job.steps}
+                      errorMessage={gradeEstimate.job.error ?? null}
+                    />
+                  </div>
+                )}
+                {gradeEstimate.error && (
+                  <div className="flex flex-wrap items-center gap-2 mt-2">
+                    <p className={`text-xs ${dark ? "text-amber-400" : "text-amber-700"}`}>{gradeEstimate.error}</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        gradeEstimate.reset();
+                        void gradeEstimate.run();
+                      }}
+                      className={dark ? "text-xs text-blue-400 hover:underline" : "text-xs text-[#146B42] hover:underline"}
+                    >
+                      Retry
+                    </button>
+                  </div>
+                )}
+                {gradeEstimate.estimate && (
+                  <div className="mt-3">
+                    <GradeProbabilityPanel
+                      estimate={gradeEstimate.estimate}
+                      cardIdentity={cardForGrade.cardIdentity}
+                      primaryImageUrl={cardForGrade.imageUrls[0] ?? null}
+                      imageUrls={cardForGrade.imageUrls}
+                    />
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
       </div>
       {showEbayListingModal && item && (
         <EbayListingModal

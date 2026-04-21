@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { normalizeCertWriteFields } from "@/lib/images/cert-image";
 
 interface Props {
   isOpen: boolean;
@@ -66,6 +67,10 @@ export default function AddInventoryModal({ isOpen, onClose, onAdd }: Props) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.title.trim()) return;
+    const normalizedCert = normalizeCertWriteFields({
+      grading_company: form.grading_company,
+      cert_number: form.cert_number,
+    });
 
     onAdd({
       title: form.title.trim(),
@@ -77,9 +82,12 @@ export default function AddInventoryModal({ isOpen, onClose, onAdd }: Props) {
       shipping_cents: toCents(form.shipping),
       fees_paid_cents: toCents(form.fees_paid),
       condition_status: form.condition_status,
-      grading_company: form.grading_company || null,
+      grading_company: normalizedCert.grading_company ?? form.grading_company ?? null,
       grade: form.grade || null,
-      cert_number: form.cert_number || null,
+      cert_number: normalizedCert.cert_number ?? null,
+      psa_cert_number: normalizedCert.psa_cert_number ?? null,
+      image_url: null,
+      image_source: "none",
       location: form.location || null,
       channel: form.channel,
       status: form.status,
