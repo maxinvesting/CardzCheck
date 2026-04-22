@@ -192,11 +192,11 @@ function PERSONAL_NAV_ITEMS(): NavItem[] {
   return [
     { name: "Dashboard", href: "/dashboard", icon: <HomeIcon />, exact: true },
     { name: "Collection", href: "/collection", icon: <CollectionIcon /> },
-    { name: "Grade Probability Engine", href: "/grade-hub", icon: <BadgeIcon />, badge: "Featured" },
-    { name: "News & Updates", href: "/news", icon: <NewsIcon />, badge: "New" },
+    { name: "Grade Probability Engine", href: "/grade-hub", icon: <BadgeIcon />, badge: "dot" },
+    { name: "News & Updates", href: "/news", icon: <NewsIcon /> },
     { name: "Bulk Mode", href: "/bulk", icon: <BulkIcon /> },
     { name: "Watchlist", href: "/watchlist", icon: <EyeIcon />, isPro: true, badge: "Pro" },
-    { name: "Compare Listings", href: "/comps", icon: <ChartIcon />, badge: "Beta" },
+    { name: "Compare Listings", href: "/comps", icon: <ChartIcon /> },
     { name: "CardzCheck Analyst", href: "/analyst", icon: <AnalystIcon />, isPro: true, badge: "Pro" },
     { name: "Marketplace", href: "/shop", icon: <ShopIcon /> },
     { name: "Help & FAQ", href: "/help", icon: <HelpIcon /> },
@@ -221,16 +221,19 @@ function BUSINESS_NAV_ITEMS(): NavItem[] {
   return [
     { name: "Dashboard", href: "/business", icon: <HomeIcon />, exact: true },
     { name: "Ledger", href: "/business/ledger", icon: <LedgerIcon /> },
-    { name: "Customer Service", href: "/business/messages", icon: <MessagesIcon />, badge: "New" },
-    { name: "Grade Probability Engine", href: "/grade-hub", icon: <BadgeIcon />, badge: "Featured" },
-    { name: "News & Updates", href: "/business/news", icon: <NewsIcon />, badge: "New" },
-    { name: "Compare Listings", href: "/business/comps", icon: <ChartIcon />, badge: "Beta" },
+    { name: "Customer Service", href: "/business/messages", icon: <MessagesIcon /> },
+    { name: "Grade Probability Engine", href: "/business/grade-hub", icon: <BadgeIcon />, badge: "dot" },
+    { name: "News & Updates", href: "/business/news", icon: <NewsIcon /> },
+    { name: "Compare Listings", href: "/business/comps", icon: <ChartIcon /> },
     { name: "Business Consultant", href: "/business/consultant", icon: <AnalystIcon /> },
     { name: "Marketplace", href: "/shop", icon: <ShopIcon /> },
-    { name: "Help & FAQ", href: "/help", icon: <HelpIcon /> },
+    { name: "Help & FAQ", href: "/business/help", icon: <HelpIcon /> },
     { name: "Settings", href: "/business/settings", icon: <SettingsIcon /> },
   ];
 }
+
+// Routes that are unambiguously personal-only (not in business nav)
+const PERSONAL_ONLY_PREFIXES = ["/dashboard", "/collection", "/watchlist", "/analyst", "/analytics"];
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -238,8 +241,26 @@ export default function Sidebar() {
   const [isOpen, setIsOpen] = useState(false);
   const [remainingSearches, setRemainingSearches] = useState<number | null>(null);
   const [pricingOpen, setPricingOpen] = useState(false);
+  const [businessMode, setBusinessMode] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("sidebar-mode") === "business";
+    }
+    return false;
+  });
 
-  const isBusinessWorkspace = pathname.startsWith("/business") || pathname.startsWith("/grade-hub") || pathname.startsWith("/bulk");
+  useEffect(() => {
+    if (pathname.startsWith("/business")) {
+      setBusinessMode(true);
+      localStorage.setItem("sidebar-mode", "business");
+    } else if (PERSONAL_ONLY_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
+      setBusinessMode(false);
+      localStorage.setItem("sidebar-mode", "personal");
+    }
+    // Shared routes (/shop, /help, /grade-hub, /bulk, /news, /settings) — keep current mode
+  }, [pathname]);
+
+  const isBusinessWorkspace = pathname.startsWith("/business") || pathname.startsWith("/admin");
+  const isBusinessRoute = pathname.startsWith("/business");
   const isAdminUser = user?.app_role === "admin" || user?.app_role === "owner";
   const hasPaidWorkspace = Boolean(user?.is_paid) || isBusinessWorkspace;
   const baseNavItems = isBusinessWorkspace ? BUSINESS_NAV_ITEMS() : PERSONAL_NAV_ITEMS();
@@ -324,7 +345,14 @@ export default function Sidebar() {
             CardzCheck
           </span>
           {isBusinessWorkspace && (
-            <span className="mt-1 rounded border border-[color:var(--biz-border)] bg-[#F3F4F6] px-2 py-0.5 text-[10px] font-semibold text-[var(--biz-primary)]">
+            <span
+              className="mt-1 rounded px-2 py-0.5 text-[10px] font-bold tracking-wide"
+              style={{
+                background: "var(--biz-primary-soft)",
+                border: "1px solid var(--biz-primary-border)",
+                color: "var(--biz-primary)",
+              }}
+            >
               Business
             </span>
           )}
@@ -338,32 +366,79 @@ export default function Sidebar() {
                 key={item.href}
                 href={item.href}
                 onClick={() => setIsOpen(false)}
-                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
                   isActive(item)
                     ? item.href.includes("/shop")
                       ? "bg-cyan-600 text-white"
                       : isBusinessWorkspace
-                      ? "border border-[color:var(--biz-border)] border-l-2 border-l-[var(--biz-primary)] bg-[#F3F4F6] text-[var(--biz-text)]"
+                      ? "text-[var(--biz-text)]"
                       : "bg-blue-600 text-white"
                     : isBusinessWorkspace
-                      ? "text-[var(--biz-muted)] hover:bg-[#F9FAFB] hover:text-[var(--biz-text)]"
+                      ? "text-[var(--biz-muted)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]"
                       : "text-gray-400 hover:text-white hover:bg-gray-800"
                 }`}
+                style={
+                  isActive(item) && isBusinessWorkspace
+                    ? {
+                        background: isBusinessRoute
+                          ? "var(--biz-nav-active-bg)"
+                          : "rgba(255,255,255,0.06)",
+                        borderLeft: "2px solid var(--biz-nav-active-border)",
+                        paddingLeft: "14px",
+                        boxShadow: isBusinessRoute
+                          ? "inset 0 0 0 1px var(--biz-primary-border)"
+                          : undefined,
+                      }
+                    : {}
+                }
               >
                 {item.icon}
                 <span className="font-medium">{item.name}</span>
+                {/* AI sparkle for Business Consultant */}
+                {item.name === "Business Consultant" && isBusinessWorkspace && (
+                  <svg
+                    className="w-3.5 h-3.5 ml-1 shrink-0 opacity-60"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="#a78bfa"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M12 2l2 7h7l-6 4.5 2.3 7L12 17l-5.3 3.5L9 13 3 8.5h7z" />
+                  </svg>
+                )}
                 {item.badge && !isProFeature && (
-                  <span className={`ml-auto px-1.5 py-0.5 text-xs font-medium rounded ${
-                    item.badge === "Featured"
-                      ? isBusinessWorkspace
-                        ? "border border-amber-200 bg-amber-50 text-[var(--biz-warning)]"
-                        : "bg-blue-500/20 text-blue-400"
-                      : isBusinessWorkspace
-                        ? "border border-[color:var(--biz-border)] text-[var(--biz-muted)]"
-                        : "bg-blue-500/20 text-blue-400"
-                  }`}>
-                    {item.badge}
-                  </span>
+                  item.badge === "dot" ? (
+                    <span
+                      className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full opacity-70"
+                      style={{ backgroundColor: "#1D9E75" }}
+                    />
+                  ) : (
+                    <span
+                      className="ml-auto rounded px-1.5 py-0.5 text-[10px] font-bold"
+                      style={
+                        isBusinessWorkspace
+                          ? {
+                              background: isBusinessRoute
+                                ? "var(--biz-secondary-soft)"
+                                : "rgba(255,255,255,0.06)",
+                              border: isBusinessRoute
+                                ? "1px solid var(--biz-secondary-border)"
+                                : "1px solid rgba(255,255,255,0.1)",
+                              color: isBusinessRoute
+                                ? "var(--biz-secondary)"
+                                : "#64748b",
+                            }
+                          : {
+                              background: "rgba(59,130,246,0.2)",
+                              color: "#60a5fa",
+                            }
+                      }
+                    >
+                      {item.badge}
+                    </span>
+                  )
                 )}
                 {isProFeature && (
                   <svg className="w-4 h-4 ml-auto" fill="currentColor" viewBox="0 0 20 20">
@@ -399,7 +474,7 @@ export default function Sidebar() {
                         ? "border border-orange-200 border-l-2 border-l-orange-500 bg-orange-50 text-orange-700"
                         : "bg-orange-600 text-white"
                       : isBusinessWorkspace
-                        ? "text-[var(--biz-muted)] hover:bg-[#F9FAFB] hover:text-[var(--biz-text)]"
+                        ? "text-[var(--biz-muted)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]"
                         : "text-gray-400 hover:text-white hover:bg-gray-800"
                   }`}
                 >
@@ -442,7 +517,7 @@ export default function Sidebar() {
                 <div
                   className={`mt-2 inline-flex items-center rounded px-2 py-1 text-xs font-medium ${
                     isBusinessWorkspace
-                      ? "border border-[color:var(--biz-border)] bg-[#F0FDF4] text-[var(--biz-primary)]"
+                      ? "border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] text-[var(--biz-primary)]"
                       : "bg-blue-600 text-white"
                   }`}
                 >

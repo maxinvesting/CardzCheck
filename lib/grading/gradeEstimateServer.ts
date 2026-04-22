@@ -8,7 +8,10 @@ import {
   type ResolvedGradeEstimateImage,
 } from "@/lib/grading/gradeEstimateImages";
 import { parseGradeEstimateModelOutput } from "@/lib/grading/gradeEstimateModel";
-import type { GradeEstimateJobDependencies } from "@/lib/grading/gradeEstimateJob";
+import type {
+  GradeEstimateJobDependencies,
+  GradeEstimateModelUsage,
+} from "@/lib/grading/gradeEstimateJob";
 import type { GradeEstimate } from "@/types";
 import { isCloseupKind } from "@/lib/grading/scanPhotos";
 import {
@@ -24,7 +27,7 @@ import {
   resolveGradingCategory,
 } from "@/lib/grading/grading-profile";
 
-const SYSTEM_PROMPT = `You are an expert trading card grading specialist with comprehensive knowledge of PSA, BGS, SGC, and TAG grading standards. Support sports cards and TCG cards (including Pokemon and One Piece). Produce strict JSON only.
+const SYSTEM_PROMPT = `You are an expert trading card grading specialist with comprehensive knowledge of PSA, BGS, CGC, SGC, and TAG (Tag Rater) grading standards for trading cards. Support sports cards and TCG cards (including Pokemon and One Piece). Produce strict JSON only.
 
 Be accurate — calibrate your probabilities to the actual evidence in front of you. Do not systematically inflate or deflate grades. When the evidence clearly shows a gem-quality card, reflect that with high PSA 10 probability. When evidence is ambiguous or weak, widen the grade range and lower confidence_label rather than defaulting probabilities to lower grades.
 
@@ -33,6 +36,12 @@ CRITICAL: Grade the CARD, not the PHOTO. Photo quality issues (lighting, resolut
 const USER_PROMPT = `Analyze these photos of the SAME RAW (unslabbed) trading card.
 
 Use ALL provided images. Better images increase analysis accuracy; explicitly reflect this in image_quality and confidence.
+
+Cross-service context (inform your PSA probabilities and grader_perspectives; do not output separate probability arrays for CGC/SGC/TAG):
+- BGS: subgrades make 9.5 (all 9.5+ subs) much rarer than PSA 10; surface and corners are scrutinized heavily.
+- CGC Cards: strong emphasis on surface/edges; top grades are comparatively strict vs PSA for many modern issues.
+- SGC: popular for vintage; tux holder; generally similar numeric scale but collectors may weight eye appeal differently.
+- TAG / Tag Rater: technology-assisted visual grading; very sensitive to clarity of defects in images.
 
 PSA grade standards (these must directly calibrate your probabilities):
 - PSA 10 (Gem Mint): Near-perfect centering (55/45 or better on both axes), four sharp corners with no fraying, clean smooth surface with no scratches/stains/print lines, clean edges. ALL four categories must be exceptional.
@@ -141,6 +150,13 @@ Output ONLY valid JSON (no markdown, no prose) with this exact schema:
     { "label": "BGS 8.5", "probability": 0.0 },
     { "label": "BGS 8 or lower", "probability": 0.0 }
   ],
+  "grader_perspectives": {
+    "psa": "One sentence: how PSA would likely view this card.",
+    "bgs": "One sentence: BGS / subgrade mindset.",
+    "cgc": "One sentence: CGC-style read.",
+    "sgc": "One sentence: SGC-style read.",
+    "tag": "One sentence: Tag Rater / tech-assisted read."
+  },
   "evidence_sources": {
     "corners": ["corner_tl|corner_tr|corner_bl|corner_br|front|back|other"],
     "edges": ["edges|front|back|other"],
@@ -154,6 +170,7 @@ Hard requirements:
 - Clamp: overall/confidence scores 0-100; subscores 0-25; severities 0-3.
 - Provide 1-5 key_issues and 2-5 retake_tips.
 - Probabilities in each array must sum to 1.0.
+- grader_perspectives: include all five keys (psa, bgs, cgc, sgc, tag). Each value must be one concise sentence (max ~200 characters), grounded only in visible evidence.
 - If uncertain, widen the grade range and lower confidence_label — do NOT systematically shift probabilities lower simply due to uncertainty.`;
 
 function getAnthropicClient() {
@@ -201,7 +218,7 @@ async function runGradeModel(
   userId?: string | null,
   correctionText?: string | null,
   preScanNotes?: string | null
-): Promise<string | null> {
+): Promise<{ text: string | null; usage: GradeEstimateModelUsage | null }> {
   const closeupCount = images.filter((image) => isCloseupKind(image.kind)).length;
   const photoRoles = images
     .map(
@@ -261,15 +278,24 @@ async function runGradeModel(
     system: SYSTEM_PROMPT,
   });
 
-  // Fire-and-forget usage recording — never blocks the response.
+  const usage: GradeEstimateModelUsage | null = message.usage
+    ? {
+        inputTokens: message.usage.input_tokens,
+        outputTokens: message.usage.output_tokens,
+      }
+    : null;
+
   if (userId) {
-    recordGradeTokenUsage(userId, message.usage.input_tokens, message.usage.output_tokens).catch(
-      (err) => console.error("[token-budget] recordGradeTokenUsage failed:", err)
-    );
+    if (usage) {
+      await recordGradeTokenUsage(userId, usage.inputTokens, usage.outputTokens);
+    }
   }
 
   const textContent = message.content.find((c) => c.type === "text");
-  return textContent && textContent.type === "text" ? textContent.text : null;
+  return {
+    text: textContent && textContent.type === "text" ? textContent.text : null,
+    usage,
+  };
 }
 
 async function runOcrIdentity(images: ResolvedGradeEstimateImage[]) {
@@ -338,13 +364,27 @@ async function runPostGradingValue(options: {
   );
 }
 
-export function createGradeEstimateJobDependencies(userId?: string | null): GradeEstimateJobDependencies {
+export function createGradeEstimateJobDependencies(
+  userId?: string | null,
+  options?: { recordUsage?: boolean }
+): GradeEstimateJobDependencies {
+  const shouldRecordUsage = options?.recordUsage ?? true;
+
   return {
     resolveImages: resolveGradeEstimateImages,
     runOcrIdentity,
     // Bind userId via closure so token usage is recorded against the requesting user.
     // correctionText and preScanNotes are passed through at call time from the job input.
-    runGradeModel: (images, identity, correctionText, preScanNotes) => runGradeModel(images, identity, userId, correctionText, preScanNotes),
+    runGradeModel: async (images, identity, correctionText, preScanNotes) => {
+      const result = await runGradeModel(
+        images,
+        identity,
+        shouldRecordUsage ? userId : null,
+        correctionText,
+        preScanNotes
+      );
+      return result;
+    },
     parseModelOutput: async (options) => parseGradeEstimateModelOutput(options),
     runPostGradingValue,
   };

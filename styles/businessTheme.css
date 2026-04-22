@@ -1,14 +1,49 @@
 .business-theme {
-  --biz-bg: #f7f8fa;
+  --biz-bg: #f3faf5;
   --biz-surface: #ffffff;
-  --biz-border: #e5e7eb;
-  --biz-text: #111827;
-  --biz-muted: #6b7280;
-  --biz-primary: #0b7a4b;
+  --biz-border: #d8e7dc;
+  --biz-border-subtle: #e7f1ea;
+  --biz-text: #10231a;
+  --biz-muted: #5d7065;
+  --biz-primary: #1D9E75;
+  --biz-primary-hover: #17896A;
+  --biz-primary-soft: rgba(29, 158, 117, 0.1);
+  --biz-primary-soft-strong: rgba(29, 158, 117, 0.16);
+  --biz-primary-border: rgba(29, 158, 117, 0.28);
+  --biz-primary-foreground: #ffffff;
+  --biz-secondary: #15803D;
+  --biz-secondary-hover: #116730;
+  --biz-secondary-soft: rgba(21, 128, 61, 0.09);
+  --biz-secondary-soft-strong: rgba(21, 128, 61, 0.15);
+  --biz-secondary-border: rgba(21, 128, 61, 0.25);
+  --biz-secondary-foreground: #ffffff;
+  --biz-tertiary: #0F766E;
+  --biz-tertiary-hover: #0C5E58;
+  --biz-tertiary-soft: rgba(15, 118, 110, 0.09);
+  --biz-tertiary-soft-strong: rgba(15, 118, 110, 0.15);
+  --biz-tertiary-border: rgba(15, 118, 110, 0.25);
+  --biz-tertiary-foreground: #ffffff;
+  --biz-link: var(--biz-primary);
+  --biz-focus: rgba(29, 158, 117, 0.22);
+  --biz-nav-active-bg: rgba(29, 158, 117, 0.1);
+  --biz-nav-active-border: var(--biz-primary);
+  --biz-profit: var(--biz-primary);
+  --biz-profit-soft: rgba(29, 158, 117, 0.1);
+  --biz-success-soft: rgba(21, 128, 61, 0.1);
   --biz-warning: #b45309;
-  --biz-surface-soft: #f9fafb;
-  --biz-hover: #f3f4f6;
-  --biz-skeleton: #e5e7eb;
+  --biz-surface-soft: #eef8f1;
+  --biz-hover: #e7f4ec;
+  --biz-skeleton: #dde9e0;
+  --biz-shadow-sm: 0 1px 2px rgba(18, 58, 35, 0.05);
+  --biz-shadow-md: 0 12px 28px rgba(18, 58, 35, 0.08);
+
+  /* Signal tag colors */
+  --tag-opportunity-bg: var(--biz-primary);
+  --tag-opportunity-text: var(--biz-primary-foreground);
+  --tag-trend-bg: var(--biz-secondary-soft-strong);
+  --tag-trend-text: var(--biz-secondary);
+  --tag-alert-bg: #FCEBEB;
+  --tag-alert-text: #A32D2D;
 
   /* Compatibility aliases for existing components */
   --app-bg: var(--biz-bg);
@@ -22,32 +57,122 @@
 
   background: var(--biz-bg);
   color: var(--biz-text);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+.business-workspace-theme {
+  --biz-bg: #eff8f1;
+  --biz-surface: #ffffff;
+  --biz-surface-soft: #edf8f0;
+  --biz-border: #d4e5d9;
+  --biz-border-subtle: #e2efe6;
+  --biz-text: #10231a;
+  --biz-muted: #5d7065;
+  --biz-hover: #e4f3e9;
+  --biz-skeleton: #dce9df;
+  background-image:
+    radial-gradient(circle at top left, rgba(29, 158, 117, 0.1), transparent 36%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(239, 248, 241, 0.98) 100%);
 }
 
 .business-theme .cc-surface {
-  background: var(--biz-surface);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(250, 253, 251, 1) 100%);
   border: 1px solid var(--biz-border);
   border-radius: 12px;
-  box-shadow: none;
+  box-shadow: var(--biz-shadow-sm);
 }
 
 .business-theme .cc-btn-primary {
   border: 1px solid transparent;
   background: var(--biz-primary);
-  color: #ffffff;
+  color: var(--biz-primary-foreground);
+  border-radius: 0;
 }
 
 .business-theme .cc-btn-primary:hover {
-  background: #09643e;
+  background: var(--biz-primary-hover);
 }
 
 .business-theme .cc-btn-secondary {
-  border: 1px solid var(--biz-border);
-  background: #ffffff;
+  border: 0.5px solid var(--biz-primary-border);
+  background: transparent;
   color: var(--biz-text);
 }
 
 .business-theme .cc-btn-secondary:hover {
-  background: #f9fafb;
-  border-color: #d1d5db;
+  background: var(--biz-primary-soft);
+  border-color: var(--biz-primary-border);
+}
+
+.business-theme .biz-btn-ghost {
+  background: transparent;
+  border: 0.5px solid var(--biz-primary-border);
+  color: var(--biz-text);
+}
+
+.business-theme .biz-btn-ghost:hover {
+  background: var(--biz-primary-soft);
+}
+
+.business-workspace-theme a {
+  color: var(--biz-link);
+}
+
+.business-workspace-theme a:hover {
+  color: var(--biz-primary-hover);
+}
+
+.business-workspace-theme .text-blue-700,
+.business-workspace-theme .text-blue-600,
+.business-workspace-theme .text-blue-500,
+.business-workspace-theme .text-blue-400,
+.business-workspace-theme .text-emerald-700,
+.business-workspace-theme .text-emerald-600,
+.business-workspace-theme .text-emerald-500,
+.business-workspace-theme .text-emerald-400,
+.business-workspace-theme .text-green-500,
+.business-workspace-theme .text-green-600,
+.business-workspace-theme .text-green-700 {
+  color: var(--biz-primary) !important;
+}
+
+.business-workspace-theme .bg-blue-600,
+.business-workspace-theme .bg-emerald-600,
+.business-workspace-theme .bg-green-600 {
+  background-color: var(--biz-primary) !important;
+  color: var(--biz-primary-foreground) !important;
+}
+
+.business-workspace-theme .hover\:bg-blue-700:hover,
+.business-workspace-theme .hover\:bg-blue-500:hover,
+.business-workspace-theme .hover\:bg-blue-400:hover,
+.business-workspace-theme .hover\:bg-emerald-700:hover,
+.business-workspace-theme .hover\:bg-emerald-500:hover,
+.business-workspace-theme .hover\:bg-green-700:hover,
+.business-workspace-theme .hover\:bg-green-500:hover {
+  background-color: var(--biz-primary-hover) !important;
+}
+
+.business-workspace-theme .bg-blue-100,
+.business-workspace-theme .bg-blue-50,
+.business-workspace-theme .bg-emerald-100,
+.business-workspace-theme .bg-emerald-50,
+.business-workspace-theme .bg-green-100,
+.business-workspace-theme .bg-green-50 {
+  background-color: var(--biz-primary-soft) !important;
+}
+
+.business-workspace-theme .border-blue-500,
+.business-workspace-theme .border-blue-200,
+.business-workspace-theme .border-emerald-500,
+.business-workspace-theme .border-emerald-200,
+.business-workspace-theme .border-green-500,
+.business-workspace-theme .border-green-200 {
+  border-color: var(--biz-primary-border) !important;
+}
+
+.business-workspace-theme .focus\:ring-blue-500:focus,
+.business-workspace-theme .focus\:ring-emerald-500:focus,
+.business-workspace-theme .focus\:ring-green-500:focus {
+  --tw-ring-color: var(--biz-focus) !important;
 }

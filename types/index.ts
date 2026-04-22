@@ -5,6 +5,12 @@ export interface User {
   business_name?: string | null; // Optional business display name for business workspace
   ebay_store_url?: string | null; // Optional eBay store URL for Sales Channels shortcut
   app_role?: "member" | "admin" | "owner" | null; // App-level role for owner/admin access
+  // eBay OAuth connection (connected_username only — tokens never exposed client-side)
+  ebay_oauth_connected_username?: string | null;
+  ebay_fee_rate?: "standard" | "top_rated_plus" | null;
+  website_url?: string | null;
+  ebay_last_inventory_sync?: string | null;
+  ebay_last_sales_sync?: string | null;
   is_paid: boolean;
   stripe_customer_id: string | null;
   free_searches_used: number;
@@ -35,6 +41,9 @@ export interface BusinessAccount {
   id: string;
   owner_user_id: string;
   name: string | null;
+  appearance_primary_color?: string | null;
+  appearance_secondary_color?: string | null;
+  appearance_tertiary_color?: string | null;
   billing_interval: "monthly";
   subscription_status: string;
   current_period_end: string | null;
@@ -46,6 +55,12 @@ export interface BusinessAccount {
   purchased_seats: number;
   created_at: string;
   updated_at: string;
+}
+
+export interface BusinessAppearance {
+  primaryColor: string;
+  secondaryColor: string;
+  tertiaryColor: string;
 }
 
 export interface BusinessMembership {
@@ -129,15 +144,26 @@ export interface BusinessInventoryItem {
   grading_company: string | null;
   grade: string | null;
   cert_number: string | null;
+  psa_cert_number?: string | null;
+  cert_image_status?: CertImageStatus | null;
+  cert_image_last_error?: string | null;
   location: string | null;
   channel: "ebay" | "whatnot" | "instagram" | "show" | "local" | "other";
   status: "unlisted" | "listed" | "pending_sale" | "sold" | "returned";
   list_price_cents: number | null;
   current_market_value_cents: number | null;
+  image_source?: CardImageSource | null;
+  image_url?: string | null;
+  trusted_image?: TrustedCardImage | null;
   user_image_url: string | null;
-  stock_image_url: string | null;
-  ebay_image_url: string | null;
+  card_images?: CardImage[] | null;
+  primary_image?: CardImage | null;
+  stock_image_url?: string | null;
+  ebay_image_url?: string | null;
   notes: string | null;
+  ebay_item_id?: string | null; // eBay listing item ID for synced items
+  ebay_listing_url?: string | null; // Direct eBay listing URL
+  item_kind?: "owned" | "inventory" | null; // Ownership type
   created_at: string;
   updated_at: string;
 }
@@ -230,13 +256,16 @@ export interface CollectionItem {
   grade: string | null;
   grading_company?: string | null; // PSA, BGS, SGC, CGC, etc.
   cert_number?: string | null; // Certification number from grading company
+  psa_cert_number?: string | null;
+  cert_image_status?: CertImageStatus | null;
+  cert_image_last_error?: string | null;
   acquisition_type?: AcquisitionType | null;
   purchase_price: number | null;
   purchase_date: string | null;
   image_url: string | null;
+  image_source?: CardImageSource | null;
+  trusted_image?: TrustedCardImage | null;
   user_image_url?: string | null;
-  stock_image_url?: string | null;
-  ebay_image_url?: string | null;
   notes: string | null;
   quantity?: number | null;
   acquisition_date?: string | null;
@@ -274,10 +303,22 @@ export interface CardImage {
   user_id: string;
   storage_path: string;
   position: number;
-  label?: string | null;
+  label?: "front" | "back" | string | null;
   created_at: string;
   // URL computed on client/server
   url?: string;
+}
+
+export type CardImageSource = "psa" | "bgs" | "sgc" | "cgc" | "user" | "none";
+export type CertImageStatus = "queued" | "running" | "resolved" | "no_image" | "failed";
+
+export interface TrustedCardImage {
+  source: CardImageSource;
+  frontUrl: string | null;
+  backUrl: string | null;
+  frontCandidates: string[];
+  backCandidates: string[];
+  hasFallbackCta: boolean;
 }
 
 export interface Comp {
@@ -468,6 +509,7 @@ export interface GradeEstimateAnalysisMetadata {
   calibrated_score?: number;
   worst_axis_deviation?: number;
   parse_incomplete_flag?: boolean;
+  missing_closeups_flag?: boolean;
   limited_visibility_flag?: boolean;
 }
 
@@ -509,6 +551,8 @@ export interface GradeEstimate {
   corners_findings?: GradeFinding[];
   edges_findings?: GradeFinding[];
   grade_probabilities?: GradeProbabilities;
+  /** Short model-written notes on how each major grader would view this card (optional). */
+  grader_perspectives?: GradeGraderPerspectives;
   analysis_status?: "ok" | "low_confidence" | "unable";
   analysis_reason?: string;
   analysis_warning_code?: "parse_error" | "low_confidence" | "unable";
@@ -519,6 +563,22 @@ export interface GradeEstimate {
   analysis_metadata?: GradeEstimateAnalysisMetadata;
 }
 
+/** Four outcome bands aligned to half-point scales (BGS-style buckets; UI maps labels per company). */
+export type HalfPointGradeDistribution = {
+  "9.5": number;
+  "9": number;
+  "8.5": number;
+  "8_or_lower": number;
+};
+
+export interface GradeGraderPerspectives {
+  psa?: string;
+  bgs?: string;
+  cgc?: string;
+  sgc?: string;
+  tag?: string;
+}
+
 export interface GradeProbabilities {
   psa: {
     "10": number;
@@ -526,12 +586,10 @@ export interface GradeProbabilities {
     "8": number;
     "7_or_lower": number;
   };
-  bgs: {
-    "9.5": number;
-    "9": number;
-    "8.5": number;
-    "8_or_lower": number;
-  };
+  bgs: HalfPointGradeDistribution;
+  cgc: HalfPointGradeDistribution;
+  sgc: HalfPointGradeDistribution;
+  tag: HalfPointGradeDistribution;
   confidence?: "high" | "medium" | "low";
 }
 
@@ -702,8 +760,6 @@ export interface CardIdentification {
   variant: string; // Parallel/variant (not used for inserts)
   grade: string;
   confidence: "high" | "medium" | "low";
-  stock_image_url?: string | null;
-  ebay_image_url?: string | null;
   card_identity?: CardIdentity; // Canonical identity metadata (optional)
 }
 
@@ -738,8 +794,7 @@ export interface CardIdentificationResult extends SearchFormData {
   imageUrls?: string[];
   scanPhotos?: GradeScanPhoto[];
   userImageUrl?: string;
-  stockImageUrl?: string;
-  ebayImageUrl?: string;
+  owner_declared_title?: string;
   confidence: "high" | "medium" | "low";
   players?: string[]; // All players (for multi-player cards)
   insert?: string; // Insert type (e.g., "Downtown")
@@ -750,9 +805,9 @@ export interface CardIdentificationResult extends SearchFormData {
 
 export type CardImageFields = {
   image_url?: string;
+  image_source?: CardImageSource | null;
+  psa_cert_number?: string | null;
   user_image_url?: string;
-  stock_image_url?: string;
-  ebay_image_url?: string;
 };
 
 export type AcquisitionType =

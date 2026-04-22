@@ -14,6 +14,7 @@ interface GradeEstimatorHistoryPanelProps {
   refreshToken?: number;
   compact?: boolean;
   initialExpanded?: boolean;
+  flat?: boolean;
 }
 
 export default function GradeEstimatorHistoryPanel({
@@ -21,6 +22,7 @@ export default function GradeEstimatorHistoryPanel({
   refreshToken = 0,
   compact = false,
   initialExpanded,
+  flat = false,
 }: GradeEstimatorHistoryPanelProps) {
   const [runs, setRuns] = useState<GradeEstimatorHistoryRun[]>([]);
   const [loading, setLoading] = useState(true);
@@ -112,60 +114,65 @@ export default function GradeEstimatorHistoryPanel({
   );
 
   const runCountLabel = useMemo(() => runs.length, [runs.length]);
+  const isOpen = flat || isExpanded;
 
   return (
     <div className={compact ? "" : "mb-6"}>
-      {/* Section toggle */}
-      <button
-        onClick={() => setIsExpanded((prev) => !prev)}
-        className="flex w-full items-center gap-2 text-xs font-medium text-[var(--muted)] transition-colors hover:text-[var(--biz-text)]"
-      >
-        <svg
-          className="w-3.5 h-3.5"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-          aria-hidden="true"
+      {!flat ? (
+        <button
+          onClick={() => setIsExpanded((prev) => !prev)}
+          className="flex w-full items-center gap-2 text-xs font-medium text-[var(--muted)] transition-colors hover:text-[var(--biz-text)]"
         >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-          />
-        </svg>
-        <span>Recent Scans</span>
-        {runCountLabel > 0 ? (
-          <span className="text-[var(--muted)]">({runCountLabel})</span>
-        ) : null}
-        <svg
-          className={`w-3.5 h-3.5 ml-auto transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-          aria-hidden="true"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M19 9l-7 7-7-7"
-          />
-        </svg>
-      </button>
+          <svg
+            className="w-3.5 h-3.5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+          </svg>
+          <span>Recent Scans</span>
+          {runCountLabel > 0 ? (
+            <span className="text-[var(--muted)]">({runCountLabel})</span>
+          ) : null}
+          <svg
+            className={`w-3.5 h-3.5 ml-auto transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M19 9l-7 7-7-7"
+            />
+          </svg>
+        </button>
+      ) : null}
 
-      {isExpanded ? (
-        <div className={`cc-surface mt-3 ${compact ? "p-3" : "p-4"}`}>
+      {isOpen ? (
+        <div className={flat ? "mt-4" : `cc-surface mt-3 ${compact ? "p-3" : "p-4"}`}>
           {loading ? (
-            <div className={`space-y-2 ${compact ? "" : "py-1"}`}>
+            <div className={`space-y-2 ${compact ? "" : flat ? "py-0" : "py-1"}`}>
               {[1, 2, 3].map((i) => (
-                <div key={i} className="h-14 rounded-lg bg-[color:var(--biz-hover)] animate-pulse" />
+                <div
+                  key={i}
+                  className={`h-14 animate-pulse ${flat ? "border-b border-white/8 bg-white/[0.03]" : "rounded-lg bg-[color:var(--biz-hover)]"}`}
+                />
               ))}
             </div>
           ) : runs.length === 0 ? (
             <div className="py-2">
-              <p className="text-sm text-[var(--biz-text)]">No scans yet.</p>
-              <p className="mt-1 text-xs text-[var(--muted)]">
+              <p className={`text-sm ${flat ? "text-white/78" : "text-[var(--biz-text)]"}`}>No scans yet.</p>
+              <p className={`mt-1 text-xs ${flat ? "text-white/42" : "text-[var(--muted)]"}`}>
                 Upload a card photo to run your first analysis.
               </p>
               {error ? (
@@ -181,7 +188,9 @@ export default function GradeEstimatorHistoryPanel({
               ) : null}
             </div>
           ) : (
-            <div className={`space-y-1 overflow-y-auto ${compact ? "max-h-56" : "max-h-80"}`}>
+            <div
+              className={`${flat ? "divide-y divide-white/8" : "space-y-1"} overflow-y-auto ${compact ? "max-h-56" : "max-h-80"}`}
+            >
               {runs.map((run) => {
                 const imageUrl = run.card.imageUrl || run.card.imageUrls?.[0];
                 const title = run.card.player_name || "Unknown card";
@@ -209,31 +218,37 @@ export default function GradeEstimatorHistoryPanel({
                         onSelect(run);
                       }
                     }}
-                    className="group flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors hover:bg-[color:var(--biz-hover)]"
+                    className={`group flex w-full items-center gap-3 text-left transition-colors ${
+                      flat
+                        ? "px-0 py-3 hover:bg-white/[0.02]"
+                        : "rounded-lg px-3 py-3 hover:bg-[color:var(--biz-hover)]"
+                    }`}
                   >
                     {/* Card thumbnail */}
                     {imageUrl ? (
                       <img
                         src={imageUrl}
                         alt={title}
-                        className="h-12 w-9 shrink-0 rounded-md border border-[color:var(--border)] object-cover"
+                        className={`h-12 w-9 shrink-0 rounded-md object-cover ${flat ? "border border-white/10" : "border border-[color:var(--border)]"}`}
                       />
                     ) : (
-                      <div className="h-12 w-9 shrink-0 rounded-md border border-[color:var(--border)] bg-[color:var(--biz-surface-soft)]" />
+                      <div
+                        className={`h-12 w-9 shrink-0 rounded-md ${flat ? "border border-white/10 bg-white/[0.03]" : "border border-[color:var(--border)] bg-[color:var(--biz-surface-soft)]"}`}
+                      />
                     )}
 
                     {/* Content */}
                     <div className="flex-1 min-w-0">
-                      <p className="truncate text-sm font-medium leading-snug text-[var(--biz-text)]">{title}</p>
+                      <p className={`truncate text-sm font-medium leading-snug ${flat ? "text-white/82" : "text-[var(--biz-text)]"}`}>{title}</p>
                       {meta ? (
-                        <p className="mt-0.5 truncate text-xs text-[var(--muted)]">{meta}</p>
+                        <p className={`mt-0.5 truncate text-xs ${flat ? "text-white/42" : "text-[var(--muted)]"}`}>{meta}</p>
                       ) : null}
                       <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                        <span className="text-[10px] text-[var(--muted)]">
+                        <span className={`text-[10px] ${flat ? "text-white/36" : "text-[var(--muted)]"}`}>
                           {formatTimeAgo(run.created_at)}
                         </span>
                         {rangeLabel ? (
-                          <span className="text-[10px] font-medium text-[var(--muted)]">{rangeLabel}</span>
+                          <span className={`text-[10px] font-medium ${flat ? "text-white/46" : "text-[var(--muted)]"}`}>{rangeLabel}</span>
                         ) : null}
                         {confidence && pillClass ? (
                           <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold uppercase tracking-wide ${pillClass}`}>
@@ -247,7 +262,7 @@ export default function GradeEstimatorHistoryPanel({
                     <div className="flex items-center gap-1 shrink-0">
                       <button
                         onClick={(e) => void handleDeleteRun(run.id, e)}
-                        className="rounded p-1.5 text-[var(--muted)] opacity-0 transition-all group-hover:opacity-100 hover:text-rose-400"
+                        className={`rounded p-1.5 ${flat ? "text-white/28 opacity-100 hover:text-rose-300" : "text-[var(--muted)] opacity-0 transition-all group-hover:opacity-100 hover:text-rose-400"}`}
                         title="Delete this scan"
                         aria-label="Delete this scan"
                       >
@@ -256,7 +271,7 @@ export default function GradeEstimatorHistoryPanel({
                         </svg>
                       </button>
                       <svg
-                        className="h-4 w-4 text-[var(--muted)] transition-colors group-hover:text-[var(--biz-text)]"
+                        className={`h-4 w-4 transition-colors ${flat ? "text-white/24 group-hover:text-white/58" : "text-[var(--muted)] group-hover:text-[var(--biz-text)]"}`}
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"

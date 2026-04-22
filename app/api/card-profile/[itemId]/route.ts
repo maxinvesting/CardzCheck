@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { normalizeHttpUrl, resolveStoredImagePath } from "@/lib/collection-images";
+import { normalizeHttpUrl } from "@/lib/collection-images";
 import { requireBusinessContext } from "@/lib/business/context";
+import { buildCertPageUrl, getItemCertGrader, getItemCertNumber } from "@/lib/images/cert-image";
+import { resolveTrustedCardImageForItem } from "@/lib/images/resolver";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -19,10 +21,13 @@ type ImageFields = {
   set_name?: string | null;
   parallel_type?: string | null;
   insert?: string | null;
+  cert_number?: string | null;
+  psa_cert_number?: string | null;
   image_url?: string | null;
+  image_source?: "psa" | "bgs" | "sgc" | "cgc" | "user" | "none" | null;
   user_image_url?: string | null;
-  stock_image_url?: string | null;
-  ebay_image_url?: string | null;
+  cert_image_status?: "queued" | "running" | "resolved" | "no_image" | "failed" | null;
+  cert_image_last_error?: string | null;
 };
 
 function firstImageUrl(...values: Array<string | null | undefined>): string | null {
@@ -51,8 +56,6 @@ function hasAnyImage(item: ImageFields | null | undefined): boolean {
   return Boolean(
     firstImageUrl(
       item?.user_image_url,
-      item?.stock_image_url,
-      item?.ebay_image_url,
       item?.image_url
     )
   );
@@ -78,12 +81,14 @@ function mergeImageFields(
     ...base,
     user_image_url:
       firstImageUrl(base.user_image_url, linked?.user_image_url) ?? null,
-    stock_image_url:
-      firstImageUrl(base.stock_image_url, linked?.stock_image_url) ?? null,
-    ebay_image_url:
-      firstImageUrl(base.ebay_image_url, linked?.ebay_image_url) ?? null,
     image_url:
       firstImageUrl(base.image_url, linked?.image_url, linkedCardImageUrl) ?? null,
+    image_source:
+      base.image_source ??
+      linked?.image_source ??
+      (firstImageUrl(base.user_image_url, linked?.user_image_url) ? "user" : "none"),
+    psa_cert_number:
+      firstTextValue(base.psa_cert_number, linked?.psa_cert_number, base.cert_number, linked?.cert_number) ?? null,
   };
 }
 
@@ -137,32 +142,49 @@ export async function GET(
     if (from === "business") {
       const context = await requireBusinessContext(userId);
 
-      // Load from business_inventory_items
-      const { data: itemById, error: itemByIdErr } = isUuid(itemId)
+      // Business inventory now lives in collection_items with item_kind='inventory'.
+      const { data: unifiedItemById, error: unifiedItemByIdErr } = isUuid(itemId)
         ? await supabase
-            .from("business_inventory_items")
+            .from("collection_items")
             .select("*")
             .eq("id", itemId)
-            .eq("business_account_id", context.businessAccountId)
+            .eq("user_id", userId)
+            .eq("item_kind", "inventory")
             .maybeSingle()
         : { data: null, error: null };
 
-      if (itemByIdErr && itemByIdErr.code !== "PGRST116") throw itemByIdErr;
+      if (unifiedItemByIdErr && unifiedItemByIdErr.code !== "PGRST116") {
+        throw unifiedItemByIdErr;
+      }
 
-      let item = itemById;
+      let item = unifiedItemById;
       if (!item) {
-        // Backward-compatibility: legacy links may pass collection `card_id`
-        // instead of business inventory `id`.
-        const { data: itemByCardIdRows, error: itemByCardIdErr } = await supabase
-          .from("business_inventory_items")
-          .select("*")
-          .eq("card_id", itemId)
-          .eq("business_account_id", context.businessAccountId)
-          .order("created_at", { ascending: false })
-          .limit(1);
+        // Legacy fallback: older rows or links may still resolve through
+        // business_inventory_items / card_id.
+        const { data: itemById, error: itemByIdErr } = isUuid(itemId)
+          ? await supabase
+              .from("business_inventory_items")
+              .select("*")
+              .eq("id", itemId)
+              .eq("business_account_id", context.businessAccountId)
+              .maybeSingle()
+          : { data: null, error: null };
 
-        if (itemByCardIdErr) throw itemByCardIdErr;
-        item = Array.isArray(itemByCardIdRows) ? itemByCardIdRows[0] ?? null : null;
+        if (itemByIdErr && itemByIdErr.code !== "PGRST116") throw itemByIdErr;
+
+        item = itemById;
+        if (!item) {
+          const { data: itemByCardIdRows, error: itemByCardIdErr } = await supabase
+            .from("business_inventory_items")
+            .select("*")
+            .eq("card_id", itemId)
+            .eq("business_account_id", context.businessAccountId)
+            .order("created_at", { ascending: false })
+            .limit(1);
+
+          if (itemByCardIdErr) throw itemByCardIdErr;
+          item = Array.isArray(itemByCardIdRows) ? itemByCardIdRows[0] ?? null : null;
+        }
       }
 
       if (!item) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -176,7 +198,7 @@ export async function GET(
       const needsIdentityHydration = hasWeakSearchIdentity(baseItem);
       if (needsImageHydration || needsIdentityHydration) {
         const cardSelect =
-          "id,title,player_name,year,set_name,parallel_type,insert,image_url,user_image_url,stock_image_url,ebay_image_url";
+          "id,title,player_name,year,set_name,parallel_type,insert,grading_company,cert_number,psa_cert_number,image_url,image_source,user_image_url,cert_image_status,cert_image_last_error";
         let linkedCard: ImageFields | null = null;
 
         if (isUuid(baseItem.card_id)) {
@@ -203,26 +225,7 @@ export async function GET(
             : null;
         }
 
-        let linkedCardImageUrl: string | null = null;
-        if (needsImageHydration && linkedCard?.id) {
-          const { data: cardImages } = await supabase
-            .from("card_images")
-            .select("storage_path")
-            .eq("card_id", linkedCard.id)
-            .eq("user_id", userId)
-            .order("position", { ascending: true })
-            .limit(1);
-
-          const storagePath =
-            Array.isArray(cardImages) && cardImages.length > 0
-              ? (cardImages[0] as { storage_path?: string | null }).storage_path
-              : null;
-
-          linkedCardImageUrl = resolveStoredImagePath(
-            storagePath,
-            (path) => supabase.storage.from("card-images").getPublicUrl(path).data.publicUrl
-          );
-        }
+        const linkedCardImageUrl = null;
 
         hydratedItem = {
           ...item,
@@ -234,6 +237,15 @@ export async function GET(
             : {}),
         };
       }
+
+      const resolvedImage = await resolveTrustedCardImageForItem({
+        supabase,
+        item: hydratedItem as ImageFields,
+        itemId: isUuid(String((hydratedItem as { card_id?: string }).card_id ?? ""))
+          ? String((hydratedItem as { card_id?: string }).card_id)
+          : item.id,
+        userId,
+      });
 
       // Load sales for this item (use business_id to match RLS; order by sold_at)
       let sales: unknown[] = [];
@@ -248,7 +260,15 @@ export async function GET(
       // If sales query errors (e.g. schema/RLS), still return profile with empty sales
 
       return NextResponse.json({
-        item: hydratedItem,
+        item: {
+          ...hydratedItem,
+          trusted_image: resolvedImage.trustedImage,
+          image_source: resolvedImage.imageSource,
+          image_url: resolvedImage.imageUrl,
+          psa_cert_number: resolvedImage.psaCertNumber,
+          card_images: resolvedImage.cardImages,
+          primary_image: resolvedImage.primaryImage,
+        },
         sales,
         mode: "business",
       });
@@ -270,8 +290,23 @@ export async function GET(
     if (!item)
       return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+    const resolvedImage = await resolveTrustedCardImageForItem({
+      supabase,
+      item: item as ImageFields,
+      itemId: item.id,
+      userId,
+    });
+
     return NextResponse.json({
-      item,
+      item: {
+        ...item,
+        trusted_image: resolvedImage.trustedImage,
+        image_source: resolvedImage.imageSource,
+        image_url: resolvedImage.imageUrl,
+        psa_cert_number: resolvedImage.psaCertNumber,
+        card_images: resolvedImage.cardImages,
+        primary_image: resolvedImage.primaryImage,
+      },
       sales: [],
       mode: "collection",
     });

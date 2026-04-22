@@ -2,7 +2,6 @@ alter table if exists collection_items
   add column if not exists estimated_cmv numeric,
   add column if not exists cmv_confidence text default 'unavailable',
   add column if not exists cmv_last_updated timestamptz;
-
 do $$
 begin
   if not exists (
@@ -15,7 +14,6 @@ begin
       check (cmv_confidence in ('high', 'medium', 'low', 'unavailable'));
   end if;
 end $$;
-
 update collection_items
 set cmv_confidence = 'unavailable'
 where cmv_confidence is null;

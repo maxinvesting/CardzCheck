@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { formatSetLabel, needsYearConfirmation, shouldDisplayYear } from "@/lib/card-identity/ui";
 import { normalizeIdentificationResult } from "@/lib/card-identity/result";
 import { identifyCardFromImages } from "@/lib/identify-card/client";
 import { normalizeHttpUrl, uniqueHttpUrls } from "@/lib/collection-images";
+import { usePsaLookup, type PsaLookupResult } from "@/hooks/usePsaLookup";
 import {
   CONDITION_OPTIONS,
   type AcquisitionType,
@@ -32,15 +33,22 @@ interface AddCardModalNewProps {
     card_number?: string;
     parallel_type?: string;
     grade?: string;
+    grader?: string;
+    psa_cert_number?: string;
     imageUrl?: string;
     user_image_url?: string;
-    stock_image_url?: string;
-    ebay_image_url?: string;
     quantity?: number;
   }) => void;
 }
 
-type ModalMode = "select" | "upload" | "manual" | "confirm";
+type ModalMode =
+  | "kind"
+  | "select"
+  | "upload"
+  | "manual"
+  | "confirm"
+  | "graded_cert"
+  | "graded_confirm";
 const MAX_IDENTIFY_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_FALLBACK_DATA_URL_BYTES = 350 * 1024;
 const GRADE_WITH_COMPANY_PATTERN = /^(PSA|BGS|SGC|CGC)\s*(\d+(?:\.\d+)?)$/i;
@@ -118,6 +126,48 @@ function normalizeDetectedGrade(rawGrade?: string | null): string | null {
   return null;
 }
 
+function buildCardIdentificationFromPsa(psa: PsaLookupResult): CardIdentificationResult {
+  const yearStr = psa.year?.trim() || "";
+  const cardIdentity: CardIdentity = {
+    player: psa.player_name?.trim() || null,
+    year: yearStr && /^\d{4}$/.test(yearStr) ? Number(yearStr) : null,
+    brand: null,
+    setName: psa.set_name?.trim() || null,
+    subset: null,
+    sport: null,
+    league: null,
+    cardNumber: psa.card_number?.trim() || null,
+    rookie: null,
+    parallel: psa.parallel_type?.trim() || null,
+    cardStock: "unknown",
+    confidence: "high",
+    fieldConfidence: {
+      player: psa.player_name?.trim() ? "high" : "low",
+      setName: psa.set_name?.trim() ? "high" : "low",
+      year: yearStr && /^\d{4}$/.test(yearStr) ? "high" : "low",
+    },
+    sources: {
+      player: "user",
+      setName: psa.set_name?.trim() ? "user" : "inferred",
+      year: yearStr && /^\d{4}$/.test(yearStr) ? "user" : "inferred",
+    },
+    warnings: [],
+    evidenceSummary: null,
+  };
+
+  return {
+    player_name: psa.player_name || "",
+    year: psa.year || undefined,
+    set_name: psa.set_name || undefined,
+    card_number: psa.card_number || undefined,
+    parallel_type: psa.parallel_type || undefined,
+    grade: psa.grade || undefined,
+    imageUrl: "",
+    confidence: "high",
+    cardIdentity,
+  };
+}
+
 export default function AddCardModalNew({
   isOpen,
   onClose,
@@ -128,10 +178,25 @@ export default function AddCardModalNew({
   onOpenSmartSearch,
   onCardSelected,
 }: AddCardModalNewProps) {
-  const [mode, setMode] = useState<ModalMode>("select");
+  const hasCardPicker = Boolean(onOpenSmartSearch);
+  /**
+   * Raw vs graded first step for business inventory and personal collection.
+   * Intentionally does NOT require `onOpenSmartSearch` (dashboard quick-add had no picker and skipped this entirely).
+   */
+  const showKindStep = addMode === "business" || addMode === "collection";
+
+  const [mode, setMode] = useState<ModalMode>(() => (showKindStep ? "kind" : "select"));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const hasCardPicker = Boolean(onOpenSmartSearch);
+  const [gradedCertInput, setGradedCertInput] = useState("");
+  const {
+    lookup: lookupPsaCert,
+    lookupImmediate: lookupPsaCertImmediate,
+    isLoading: psaLoading,
+    result: psaResult,
+    error: psaError,
+    clearResult: clearPsa,
+  } = usePsaLookup();
 
   // Upload mode state
   const [previews, setPreviews] = useState<string[]>([]);
@@ -153,9 +218,13 @@ export default function AddCardModalNew({
   const [condition, setCondition] = useState<string>("Raw");
   const [editingYear, setEditingYear] = useState(false);
   const [yearDraft, setYearDraft] = useState("");
+  /** Set when collection flow continues from graded PSA confirm → acquisition step. */
+  const [collectionGradedCertDigits, setCollectionGradedCertDigits] = useState<string | null>(
+    null
+  );
 
-  const resetForm = () => {
-    setMode("select");
+  const resetForm = useCallback(() => {
+    setMode(showKindStep ? "kind" : "select");
     setLoading(false);
     setError(null);
     setPreviews([]);
@@ -168,11 +237,60 @@ export default function AddCardModalNew({
     setCondition("Raw");
     setEditingYear(false);
     setYearDraft("");
-  };
+    setGradedCertInput("");
+    setCollectionGradedCertDigits(null);
+    clearPsa();
+  }, [showKindStep, clearPsa]);
+
+  const prevIsOpen = useRef(false);
+  useEffect(() => {
+    if (isOpen && !prevIsOpen.current) {
+      resetForm();
+    }
+    prevIsOpen.current = isOpen;
+  }, [isOpen, resetForm]);
 
   const handleClose = () => {
     resetForm();
     onClose();
+  };
+
+  const handleGradedInventoryConfirm = () => {
+    if (!onCardSelected || !psaResult?.player_name) {
+      setError("Card details are missing. Check the cert number and try again.");
+      return;
+    }
+    const parsedQuantity = Math.max(1, Number.parseInt(quantity, 10) || 1);
+    const certDigits = gradedCertInput.replace(/\D/g, "");
+    onCardSelected({
+      player_name: psaResult.player_name,
+      year: psaResult.year ?? undefined,
+      set_name: psaResult.set_name ?? undefined,
+      card_number: psaResult.card_number ?? undefined,
+      parallel_type: psaResult.parallel_type ?? undefined,
+      grade: psaResult.grade ?? undefined,
+      grader: "PSA",
+      psa_cert_number: certDigits || undefined,
+      quantity: parsedQuantity,
+    });
+    resetForm();
+    onClose();
+  };
+
+  const proceedGradedToCollectionConfirm = () => {
+    if (!psaResult?.player_name || addMode !== "collection") {
+      setError("Card details are missing. Check the cert number and try again.");
+      return;
+    }
+    setError(null);
+    setIdentifiedCard(buildCardIdentificationFromPsa(psaResult));
+    const gradeValue = psaResult.grade?.trim();
+    const optionMatch = gradeValue
+      ? CONDITION_OPTIONS.find((o) => o.value === gradeValue)
+      : undefined;
+    setCondition(optionMatch?.value ?? (gradeValue || "Raw"));
+    setCollectionGradedCertDigits(gradedCertInput.replace(/\D/g, "") || null);
+    setMode("confirm");
   };
 
   const handleFiles = useCallback(async (files: FileList) => {
@@ -252,8 +370,8 @@ export default function AddCardModalNew({
       const hasFallbackDataUrls = imageInputs.some(isDataUrl);
       const identifyInput =
         imageInputs.length > 1 && !hasFallbackDataUrls
-          ? { imageUrls: imageInputs, includeStockImage: false }
-          : { imageUrl: primaryIdentifyImage, includeStockImage: false };
+          ? { imageUrls: imageInputs }
+          : { imageUrl: primaryIdentifyImage };
 
       const identify = await identifyCardFromImages(identifyInput);
 
@@ -285,8 +403,6 @@ export default function AddCardModalNew({
         imageUrl: displayImageUrl,
         imageUrls: selectedImageUrls.length > 0 ? selectedImageUrls : undefined,
         userImageUrl: primaryUserImage || undefined,
-        stockImageUrl: undefined,
-        ebayImageUrl: undefined,
         confidence: result.confidence,
         cardIdentity: result.card_identity,
       }));
@@ -441,8 +557,6 @@ export default function AddCardModalNew({
         grade: effectiveGrade,
         imageUrl: identifiedCard.imageUrl || undefined,
         user_image_url: identifiedCard.userImageUrl || undefined,
-        stock_image_url: identifiedCard.stockImageUrl || undefined,
-        ebay_image_url: identifiedCard.ebayImageUrl || undefined,
         quantity: parsedQuantity,
       };
       onCardSelected(cardData);
@@ -495,9 +609,9 @@ export default function AddCardModalNew({
       ]);
       const canonicalImageUrl =
         normalizeHttpUrl(identifiedCard.userImageUrl || null) ||
-        normalizeHttpUrl(identifiedCard.stockImageUrl || null) ||
-        normalizeHttpUrl(identifiedCard.ebayImageUrl || null) ||
         normalizeHttpUrl(identifiedCard.imageUrl || null);
+
+      const certDigits = collectionGradedCertDigits;
 
       const body = {
         player_name: identifiedCard.player_name,
@@ -511,12 +625,13 @@ export default function AddCardModalNew({
         purchase_price: acquisitionType === "pulled" ? null : normalizedPurchasePrice,
         purchase_date: purchaseDate || null,
         user_image_url: normalizeHttpUrl(identifiedCard.userImageUrl || null),
-        stock_image_url: normalizeHttpUrl(identifiedCard.stockImageUrl || null),
-        ebay_image_url: normalizeHttpUrl(identifiedCard.ebayImageUrl || null),
         image_url: canonicalImageUrl,
         image_urls: persistedImageUrls,
         notes: notesParts.length > 0 ? notesParts.join(" | ") : null,
         quantity: normalizedQuantity,
+        ...(certDigits
+          ? { cert_number: certDigits, psa_cert_number: certDigits }
+          : {}),
       };
 
       const response = await fetch("/api/collection", {
@@ -556,9 +671,7 @@ export default function AddCardModalNew({
   const showingBestMatchInDatabase = identifiedCard
     ? !identifiedCard.userImageUrl &&
       Boolean(identifiedCard.imageUrl) &&
-      !isDataUrl(identifiedCard.imageUrl || "") &&
-      (identifiedCard.imageUrl === identifiedCard.stockImageUrl ||
-        identifiedCard.imageUrl === identifiedCard.ebayImageUrl)
+      !isDataUrl(identifiedCard.imageUrl || "")
     : false;
 
   if (!isOpen) return null;
@@ -576,10 +689,20 @@ export default function AddCardModalNew({
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-800">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-            {mode === "select" && (modalTitle ?? (addMode === "watchlist" ? "Add Card to Watchlist" : addMode === "business" ? "Add Card to Inventory" : "Add Card to Collection"))}
+            {mode === "kind" &&
+              (modalTitle ??
+                (addMode === "watchlist"
+                  ? "Add Card to Watchlist"
+                  : addMode === "business"
+                    ? "Add Card to Inventory"
+                    : "Add Card to Collection"))}
+            {mode === "select" &&
+              (modalTitle ?? (addMode === "watchlist" ? "Add Card to Watchlist" : addMode === "business" ? "Add Card to Inventory" : "Add Card to Collection"))}
             {mode === "upload" && "Upload Card Photo"}
             {mode === "manual" && "Enter Card Details"}
             {mode === "confirm" && "Confirm Card"}
+            {mode === "graded_cert" && "Add graded card (PSA)"}
+            {mode === "graded_confirm" && "Confirm graded card"}
           </h2>
           <button
             onClick={handleClose}
@@ -599,9 +722,70 @@ export default function AddCardModalNew({
             </div>
           )}
 
+          {/* Raw vs graded (business inventory only) */}
+          {mode === "kind" && (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Is this card graded (slabbed) or raw?
+              </p>
+              <button
+                type="button"
+                onClick={() => setMode("select")}
+                className="w-full p-4 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl hover:border-blue-500 dark:hover:border-blue-500 transition-colors group text-left"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center justify-center group-hover:bg-slate-200 dark:group-hover:bg-slate-700 transition-colors">
+                    <svg className="w-6 h-6 text-slate-600 dark:text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900 dark:text-white">Raw card</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      Upload a photo or find the card in the database
+                    </p>
+                  </div>
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setError(null);
+                  setGradedCertInput("");
+                  clearPsa();
+                  setMode("graded_cert");
+                }}
+                className="w-full p-4 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl hover:border-emerald-500 dark:hover:border-emerald-500 transition-colors group text-left"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg flex items-center justify-center group-hover:bg-emerald-200 dark:group-hover:bg-emerald-800/30 transition-colors">
+                    <svg className="w-6 h-6 text-emerald-700 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900 dark:text-white">Graded card</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      Enter a PSA certification number — we&apos;ll load the card details
+                    </p>
+                  </div>
+                </div>
+              </button>
+            </div>
+          )}
+
           {/* Select Mode */}
           {mode === "select" && (
             <div className="space-y-4">
+              {showKindStep && (
+                <button
+                  type="button"
+                  onClick={() => setMode("kind")}
+                  className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+                >
+                  ← Back
+                </button>
+              )}
               <button
                 onClick={() => setMode("upload")}
                 className="w-full p-4 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl hover:border-blue-500 dark:hover:border-blue-500 transition-colors group"
@@ -648,6 +832,156 @@ export default function AddCardModalNew({
                   </div>
                 </div>
               </button>
+            </div>
+          )}
+
+          {/* Graded: PSA cert entry */}
+          {mode === "graded_cert" && (
+            <div className="space-y-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setError(null);
+                  setMode("kind");
+                }}
+                className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+              >
+                ← Back
+              </button>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  PSA certification number
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  value={gradedCertInput}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setGradedCertInput(val);
+                    if (psaResult || psaError) clearPsa();
+                    lookupPsaCert(val);
+                  }}
+                  onBlur={(e) => lookupPsaCertImmediate(e.target.value)}
+                  placeholder="e.g., 12345678"
+                  className="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+                {psaLoading && (
+                  <p className="mt-2 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                    <span className="inline-block h-3.5 w-3.5 rounded-full border border-gray-400 border-t-transparent animate-spin" />
+                    Looking up cert…
+                  </p>
+                )}
+                {psaError && (
+                  <p className="mt-2 text-xs text-red-600 dark:text-red-400">{psaError}</p>
+                )}
+                {psaResult && !psaLoading && (
+                  <p className="mt-2 text-xs text-emerald-600 dark:text-emerald-400">
+                    Cert found — review details on the next step
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!psaResult?.player_name) {
+                    setError("Enter a valid PSA cert number and wait for verification.");
+                    return;
+                  }
+                  setError(null);
+                  setMode("graded_confirm");
+                }}
+                disabled={!psaResult?.player_name || psaLoading}
+                className="w-full px-4 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+              >
+                Continue to confirm
+              </button>
+            </div>
+          )}
+
+          {/* Graded: confirm PSA details */}
+          {mode === "graded_confirm" && psaResult && (
+            <div className="space-y-4">
+              <button
+                type="button"
+                onClick={() => setMode("graded_cert")}
+                className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+              >
+                ← Back
+              </button>
+              <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 p-4 space-y-2 text-sm">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  PSA registry
+                </p>
+                <p className="text-base font-semibold text-gray-900 dark:text-white">{psaResult.player_name}</p>
+                {psaResult.year && (
+                  <p className="text-gray-700 dark:text-gray-300">
+                    <span className="text-gray-500 dark:text-gray-400">Year:</span> {psaResult.year}
+                  </p>
+                )}
+                {psaResult.set_name && (
+                  <p className="text-gray-700 dark:text-gray-300">
+                    <span className="text-gray-500 dark:text-gray-400">Set:</span> {psaResult.set_name}
+                  </p>
+                )}
+                {psaResult.card_number && (
+                  <p className="text-gray-700 dark:text-gray-300">
+                    <span className="text-gray-500 dark:text-gray-400">Card #:</span> {psaResult.card_number}
+                  </p>
+                )}
+                {psaResult.parallel_type && (
+                  <p className="text-gray-700 dark:text-gray-300">
+                    <span className="text-gray-500 dark:text-gray-400">Parallel / variety:</span>{" "}
+                    {psaResult.parallel_type}
+                  </p>
+                )}
+                {psaResult.grade && (
+                  <p className="text-gray-700 dark:text-gray-300">
+                    <span className="text-gray-500 dark:text-gray-400">Grade:</span> {psaResult.grade}
+                  </p>
+                )}
+                <p className="text-gray-700 dark:text-gray-300">
+                  <span className="text-gray-500 dark:text-gray-400">Cert #:</span>{" "}
+                  {gradedCertInput.replace(/\D/g, "") || "—"}
+                </p>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Confirm this matches your slab. If anything looks wrong, go back and double-check the cert number.
+              </p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Quantity</label>
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={quantity}
+                  onChange={(e) => setQuantity(e.target.value)}
+                  className="w-full max-w-40 px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                />
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setMode("graded_cert")}
+                  className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors font-medium"
+                >
+                  Not the right card
+                </button>
+                <button
+                  type="button"
+                  onClick={
+                    addMode === "business"
+                      ? handleGradedInventoryConfirm
+                      : proceedGradedToCollectionConfirm
+                  }
+                  className="flex-1 px-4 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium"
+                >
+                  {addMode === "business"
+                    ? "Continue to inventory details"
+                    : "Set purchase info & add to collection"}
+                </button>
+              </div>
             </div>
           )}
 
@@ -789,6 +1123,16 @@ export default function AddCardModalNew({
             <div className="space-y-5">
               {/* Card Preview */}
               <div className="flex gap-4">
+                {collectionGradedCertDigits && !identifiedCard.imageUrl ? (
+                  <div className="flex-shrink-0 w-24 h-32 rounded-lg border border-emerald-500/50 bg-emerald-500/10 flex flex-col items-center justify-center p-2">
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+                      PSA
+                    </span>
+                    <span className="text-xs text-center font-mono text-emerald-800 dark:text-emerald-200 mt-1 break-all">
+                      {collectionGradedCertDigits}
+                    </span>
+                  </div>
+                ) : null}
                 {identifiedCard.imageUrl && (
                   <div className="flex-shrink-0 space-y-2">
                     <img
@@ -983,9 +1327,17 @@ export default function AddCardModalNew({
               <div className="flex gap-3 pt-2">
                 <button
                   onClick={() => {
+                    if (addMode === "collection" && collectionGradedCertDigits) {
+                      setIdentifiedCard(null);
+                      setCollectionGradedCertDigits(null);
+                      setPreviews([]);
+                      setMode("graded_confirm");
+                      return;
+                    }
                     setIdentifiedCard(null);
-                    setMode("select");
+                    setCollectionGradedCertDigits(null);
                     setPreviews([]);
+                    setMode("select");
                   }}
                   disabled={loading}
                   className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors font-medium disabled:opacity-50"

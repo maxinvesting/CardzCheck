@@ -1,28 +1,29 @@
 /**
  * Test mode utilities for bypassing authentication and payment checks during development.
  *
- * SECURITY: Test mode is ALWAYS disabled in production regardless of the env var value.
- * The NEXT_PUBLIC_TEST_MODE env var must never be set to "true" in a production deployment.
+ * SECURITY: Test mode MUST only be active in local development.
+ * Enabling it in production bypasses all authentication, feature gating, and rate
+ * limiting — anyone can access the app as a fully-authenticated Pro user.
+ *
+ * Set NEXT_PUBLIC_TEST_MODE=true only in .env.local (never in .env.production).
  */
 import type { User } from "@/types";
 
 export function isTestMode(): boolean {
-  // Hard production guard — cannot be overridden by env var
-  if (process.env.NODE_ENV === "production") {
-    if (process.env.NEXT_PUBLIC_TEST_MODE === "true") {
-      const msg =
-        "[SECURITY] CRITICAL: NEXT_PUBLIC_TEST_MODE=true in production! " +
-        "Disable immediately. Test mode bypasses authentication checks.";
-      console.error(msg);
-      if (typeof window === "undefined") {
-        // Server-side: throw to halt the request
-        throw new Error(msg);
-      }
-    }
+  const enabled = process.env.NEXT_PUBLIC_TEST_MODE === "true";
+
+  // Safety guard: refuse to activate test mode in production.
+  // This prevents accidental deployments with test mode enabled.
+  if (enabled && process.env.NODE_ENV === "production") {
+    console.error(
+      "[SECURITY] NEXT_PUBLIC_TEST_MODE=true is set in a production environment. " +
+        "Test mode bypasses all authentication — it has been disabled. " +
+        "Remove this env var from your production deployment immediately."
+    );
     return false;
   }
 
-  return process.env.NEXT_PUBLIC_TEST_MODE === "true";
+  return enabled;
 }
 
 /**

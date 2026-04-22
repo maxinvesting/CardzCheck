@@ -216,12 +216,8 @@ export default function CardUploader({
       const result = identify.data;
       const sanitizedImageUrls = uniqueHttpUrls(imageUrls);
       const userImageUrl = normalizeHttpUrl(sanitizedImageUrls[0] || null);
-      const stockImageUrl = normalizeHttpUrl(result.stock_image_url || null);
-      const ebayImageUrl = normalizeHttpUrl(result.ebay_image_url || null);
       const displayImageUrl =
         userImageUrl ||
-        stockImageUrl ||
-        ebayImageUrl ||
         imageUrls.find((url) => typeof url === "string" && url.trim().length > 0) ||
         "";
 
@@ -245,8 +241,6 @@ export default function CardUploader({
           imageUrl: displayImageUrl,
           imageUrls: sanitizedImageUrls.length > 0 ? sanitizedImageUrls : undefined,
           userImageUrl: userImageUrl || undefined,
-          stockImageUrl: stockImageUrl || undefined,
-          ebayImageUrl: ebayImageUrl || undefined,
           confidence: result.confidence,
           cardIdentity: result.card_identity,
         })

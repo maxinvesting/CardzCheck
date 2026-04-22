@@ -1,23 +1,39 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { useParams, useSearchParams, useRouter } from "next/navigation";
+import { useParams, usePathname, useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import Image from "next/image";
-import { createClient as createSupabaseClient } from "@/lib/supabase/client";
+import { CardImage as TrustedCardImageFrame } from "@/components/CardImage";
+import BusinessInventoryItemEditor from "@/components/business/BusinessInventoryItemEditor";
+import {
+  buildCertPageUrl,
+  getItemCertGrader,
+  getItemCertNumber,
+  isPendingCertImageStatus,
+} from "@/lib/images/cert-image";
+import { buildClientImageUrl, normalizeHttpUrl } from "@/lib/images/shared";
 import {
   estimateTakeHome,
   fmtCents,
 } from "@/lib/business/pricing";
-import { useGradeEstimateFromImages } from "@/lib/grading/useGradeEstimateFromImages";
-import type { GradeEstimatorCardInput } from "@/lib/grade-estimator/value";
-import type { WorthGradingResult } from "@/types";
+import type { BusinessInventoryItem, CardImage, TrustedCardImage } from "@/types";
 import { buildEbaySoldUrl } from "@/lib/ebay/comps-url";
+import {
+  buildBeckettMarketplaceSearchUrl,
+  buildComcSearchUrl,
+  buildEbaySearchUrl,
+  buildFanaticsCollectSearchUrl,
+  buildFacebookMarketplaceSearchUrl,
+  buildMySlabsSearchUrl,
+} from "@/lib/marketplace-search";
 
 // ── Types ────────────────────────────────────────────────────────────
 
 interface ProfileItem {
   id: string;
+  card_id?: string | null;
+  user_id?: string;
+  business_account_id?: string;
   title?: string | null;
   player_name?: string | null;
   year?: string | null;
@@ -27,21 +43,33 @@ interface ProfileItem {
   cert_number?: string | null;
   parallel_type?: string | null;
   insert?: string | null;
+  card_number?: string | null;
   quantity?: number | null;
   status?: string | null;
   channel?: string | null;
+  acquisition_type?: "buy" | "trade" | "rip" | "consignment" | "other" | null;
   condition_status?: string | null;
   list_price_cents?: number | null;
   cost_basis_total_cents?: number | null;
+  tax_cents?: number | null;
+  shipping_cents?: number | null;
+  fees_paid_cents?: number | null;
   current_market_value_cents?: number | null;
   acquisition_date?: string | null;
   purchase_price?: number | null;
   purchase_date?: string | null;
   notes?: string | null;
+  location?: string | null;
+  ebay_item_id?: string | null;
   image_url?: string | null;
+  image_source?: "psa" | "bgs" | "sgc" | "cgc" | "user" | "none" | null;
   user_image_url?: string | null;
-  stock_image_url?: string | null;
-  ebay_image_url?: string | null;
+  psa_cert_number?: string | null;
+  cert_image_status?: "queued" | "running" | "resolved" | "no_image" | "failed" | null;
+  cert_image_last_error?: string | null;
+  trusted_image?: TrustedCardImage | null;
+  card_images?: CardImage[] | null;
+  primary_image?: CardImage | null;
   created_at?: string | null;
   updated_at?: string | null;
 }
@@ -69,57 +97,27 @@ type TabId = "details" | "shop";
 // ── Helpers ──────────────────────────────────────────────────────────
 
 function pickImageUrl(item: ProfileItem): string | null {
-  return (
-    item.user_image_url ||
-    item.stock_image_url ||
-    item.ebay_image_url ||
+  const imageUrl = (
+    item.trusted_image?.frontUrl ||
     item.image_url ||
+    item.user_image_url ||
+    item.card_images?.find((image) => typeof image.url === "string" && image.url.length > 0)?.url ||
     null
   );
+  return buildClientImageUrl(imageUrl) ?? imageUrl;
 }
 
 function displayTitle(item: ProfileItem): string {
-  if (item.title) return item.title;
+  if (item.title) {
+    const title = item.title.trim();
+    if (!title) return "Untitled";
+    const grader = item.grading_company?.trim();
+    if (!grader) return title;
+    const duplicateGraderPattern = new RegExp(`\\b(${grader})\\s+\\1\\b`, "ig");
+    return title.replace(duplicateGraderPattern, "$1");
+  }
   const parts = [item.year, item.player_name, item.set_name, item.grade];
   return parts.filter(Boolean).join(" ") || "Untitled";
-}
-
-function buildGradeSearchTerm(
-  grade?: string | null,
-  gradingCompany?: string | null
-): string | null {
-  const normalizedGrade = grade?.trim();
-  if (!normalizedGrade) return null;
-  if (/^(PSA|BGS|SGC|CGC)\s/i.test(normalizedGrade)) {
-    return normalizedGrade;
-  }
-  return `${(gradingCompany || "PSA").toUpperCase()} ${normalizedGrade}`;
-}
-
-function buildEbayActiveSearchQuery(item: ProfileItem, fallbackTitle: string): string {
-  const rawTitle = item.title?.trim();
-  if (rawTitle && !/^(PSA|BGS|SGC|CGC)?\s*\d+(\.\d+)?$/i.test(rawTitle)) {
-    return rawTitle;
-  }
-
-  const identityParts = [
-    item.year,
-    item.player_name,
-    item.set_name,
-    item.parallel_type,
-    item.insert,
-  ]
-    .map((part) => part?.trim())
-    .filter((part): part is string => Boolean(part));
-
-  const gradePart = buildGradeSearchTerm(item.grade, item.grading_company);
-  const parts = identityParts.length > 0 && gradePart
-    ? [...identityParts, gradePart]
-    : identityParts;
-  if (parts.length > 0) return parts.join(" ");
-  if (gradePart) return gradePart;
-  if (fallbackTitle.trim()) return fallbackTitle.trim();
-  return "sports trading card";
 }
 
 function fmtDate(d: string | null | undefined): string {
@@ -141,8 +139,17 @@ function toTimestamp(value: string | null | undefined): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function isValidHttpUrl(value: string): boolean {
-  return /^https?:\/\//i.test(value);
+function formatGradeDisplay(
+  grade: string | null | undefined,
+  gradingCompany: string | null | undefined
+): string | null {
+  const trimmedGrade = grade?.trim();
+  if (!trimmedGrade) return null;
+  const trimmedCompany = gradingCompany?.trim();
+  if (!trimmedCompany) return trimmedGrade;
+  const companyRegex = new RegExp(`^${trimmedCompany}\\b`, "i");
+  if (companyRegex.test(trimmedGrade)) return trimmedGrade;
+  return `${trimmedCompany.toUpperCase()} ${trimmedGrade}`;
 }
 
 const MAX_IMAGE_UPLOAD_BYTES = 10 * 1024 * 1024;
@@ -178,11 +185,13 @@ function severityBadge(severity: string) {
 
 export default function CardProfilePage() {
   const params = useParams();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
   const itemId = params.itemId as string;
-  const from = (searchParams.get("from") as Mode) || "collection";
-  const isBusinessMode = from === "business";
+  const routeIsBusiness = pathname?.startsWith("/business") ?? false;
+  const from = ((searchParams.get("from") as Mode) || (routeIsBusiness ? "business" : "collection"));
+  const isBusinessMode = routeIsBusiness || from === "business";
 
   // Data state
   const [item, setItem] = useState<ProfileItem | null>(null);
@@ -193,12 +202,11 @@ export default function CardProfilePage() {
   // Image zoom
   const [imageZoom, setImageZoom] = useState(false);
   const [showImageModal, setShowImageModal] = useState(false);
-  const [imageUrlInput, setImageUrlInput] = useState("");
   const [imageFileInput, setImageFileInput] = useState<File | null>(null);
   const [imageFilePreviewUrl, setImageFilePreviewUrl] = useState<string | null>(null);
+  const [imageUrlInput, setImageUrlInput] = useState("");
   const [savingImage, setSavingImage] = useState(false);
   const imageFilePickerRef = useRef<HTMLInputElement | null>(null);
-  const attemptedImageHydrationRef = useRef(false);
 
   // Update Price modal
   const [showPriceModal, setShowPriceModal] = useState(false);
@@ -217,6 +225,7 @@ export default function CardProfilePage() {
   // Overflow menu
   const [showOverflow, setShowOverflow] = useState(false);
   const overflowRef = useRef<HTMLDivElement>(null);
+  const [showInventoryEditorModal, setShowInventoryEditorModal] = useState(false);
 
   // Active tab
   const [activeTab, setActiveTab] = useState<TabId>("details");
@@ -227,14 +236,12 @@ export default function CardProfilePage() {
     message: string;
   } | null>(null);
 
-  // Business grade estimate + worth-grading summary
-  const [cardForGrade, setCardForGrade] = useState<{
-    imageUrls: string[];
-    cardIdentity: GradeEstimatorCardInput;
-  } | null>(null);
-  const [valueResult, setValueResult] = useState<WorthGradingResult | null>(null);
-  const [valueLoading, setValueLoading] = useState(false);
-  const [valueError, setValueError] = useState<string | null>(null);
+  const buildProfilePath = useCallback((resolvedId: string, mode: Mode) => {
+    if (mode === "business") {
+      return `/business/card/${resolvedId}`;
+    }
+    return `/card/${resolvedId}?from=collection`;
+  }, []);
 
   useEffect(() => {
     if (toast) {
@@ -259,35 +266,6 @@ export default function CardProfilePage() {
     const applyProfile = (data: any, mode: Mode) => {
       setItem(data.item);
       setSales(data.sales ?? []);
-
-      if (mode === "business" && data.item) {
-        const businessItem = data.item as ProfileItem;
-        const imageCandidates = [
-          businessItem.user_image_url,
-          businessItem.stock_image_url,
-          businessItem.ebay_image_url,
-          businessItem.image_url,
-        ].filter((u): u is string => typeof u === "string" && u.length > 0);
-        if (imageCandidates.length > 0) {
-          const cardIdentity: GradeEstimatorCardInput = {
-            player_name: businessItem.player_name ?? businessItem.title ?? "",
-            year: businessItem.year ?? undefined,
-            set_name: businessItem.set_name ?? undefined,
-            card_number: undefined,
-            parallel_type: businessItem.parallel_type ?? undefined,
-            variation: businessItem.insert ?? undefined,
-            insert: undefined,
-          };
-          setCardForGrade({
-            imageUrls: imageCandidates,
-            cardIdentity,
-          });
-        } else {
-          setCardForGrade(null);
-        }
-      } else {
-        setCardForGrade(null);
-      }
     };
 
     const fetchProfile = async (mode: Mode) => {
@@ -329,7 +307,7 @@ export default function CardProfilePage() {
             ? data.item.id
             : itemId;
         if (resolvedId !== itemId) {
-          router.replace(`/card/${resolvedId}?from=${primaryMode}`);
+          router.replace(buildProfilePath(resolvedId, primaryMode));
         }
         return;
       }
@@ -350,7 +328,7 @@ export default function CardProfilePage() {
             typeof data?.item?.id === "string" && data.item.id.length > 0
               ? data.item.id
               : itemId;
-          router.replace(`/card/${resolvedId}?from=${fallbackMode}`);
+          router.replace(buildProfilePath(resolvedId, fallbackMode));
           return;
         }
 
@@ -369,26 +347,20 @@ export default function CardProfilePage() {
     } finally {
       setLoading(false);
     }
-  }, [itemId, from, router]);
+  }, [itemId, from, router, buildProfilePath]);
 
   useEffect(() => {
     loadProfile();
   }, [loadProfile]);
 
-  useEffect(() => {
-    attemptedImageHydrationRef.current = false;
-  }, [itemId, from]);
-
   // ── Derived State ────────────────────────────────────────────────
 
   const imageUrl = item ? pickImageUrl(item) : null;
+  const trustedImageForFrame = useMemo<TrustedCardImage | null>(() => {
+    if (!item) return null;
+    return item.trusted_image ?? null;
+  }, [item]);
   const title = item ? displayTitle(item) : "";
-  const ebayActiveSearchQuery = item
-    ? buildEbayActiveSearchQuery(item, title)
-    : "sports trading card";
-  const ebayActiveSearchUrl = `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(
-    ebayActiveSearchQuery
-  )}&_sacat=212`;
   const ebayCompsUrl = item
     ? buildEbaySoldUrl({
         player: item.player_name,
@@ -400,48 +372,87 @@ export default function CardProfilePage() {
         title: item.title ?? title,
       })
     : buildEbaySoldUrl({ title: "sports trading card" });
-
-  useEffect(() => {
-    if (!isBusinessMode || !item || imageUrl || attemptedImageHydrationRef.current) {
-      return;
-    }
-    attemptedImageHydrationRef.current = true;
-
-    let cancelled = false;
-    fetch(`/api/business/inventory/fetch-cmv?item_id=${encodeURIComponent(item.id)}`)
-      .then(async (res) => {
-        if (!res.ok) return null;
-        return res.json().catch(() => null);
-      })
-      .then((data) => {
-        if (cancelled || !data) return;
-        const updatedItem = data.item as Partial<ProfileItem> | undefined;
-        if (updatedItem) {
-          setItem((prev) => (prev ? { ...prev, ...updatedItem } : prev));
-          return;
+  const marketplaceLinks = useMemo(() => {
+    const params = item
+      ? {
+          player: item.player_name,
+          year: item.year,
+          setName: item.set_name,
+          parallel: item.parallel_type,
+          cardNumber: item.card_number,
+          gradingCompany: item.grading_company,
+          grade: item.grade,
+          title: item.title ?? title,
         }
-        const stockImage = typeof data.stock_image_url === "string" ? data.stock_image_url : null;
-        const ebayImage = typeof data.ebay_image_url === "string" ? data.ebay_image_url : null;
-        if (stockImage || ebayImage) {
-          setItem((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  stock_image_url: prev.stock_image_url || stockImage,
-                  ebay_image_url: prev.ebay_image_url || ebayImage,
-                }
-              : prev
-          );
-        }
-      })
-      .catch(() => {
-        // Best-effort background hydration for missing image data.
-      });
+      : { title: "sports trading card" };
 
-    return () => {
-      cancelled = true;
-    };
-  }, [isBusinessMode, item, imageUrl]);
+    const q = encodeURIComponent(
+      [
+        (params as { player?: string }).player,
+        (params as { year?: string }).year,
+        (params as { setName?: string }).setName,
+        (params as { parallel?: string }).parallel,
+        (params as { gradingCompany?: string }).gradingCompany,
+        (params as { grade?: string }).grade,
+      ]
+        .filter(Boolean)
+        .join(" ")
+    );
+    const playerQ = encodeURIComponent((params as { player?: string }).player ?? "");
+
+    return [
+      {
+        label: "eBay Sold",
+        description: "Completed & sold listings",
+        href: buildEbaySoldUrl(params as Parameters<typeof buildEbaySoldUrl>[0]),
+      },
+      {
+        label: "eBay Active",
+        description: "Current buy it now & auctions",
+        href: buildEbaySearchUrl(params),
+      },
+      {
+        label: "130point",
+        description: "eBay sold comps aggregator",
+        href: `https://www.130point.com/sales?q=${q}`,
+      },
+      {
+        label: "PWCC",
+        description: "Premium auctions & weekly",
+        href: `https://www.pwccmarketplace.com/marketplace?query=${q}`,
+      },
+      {
+        label: "Goldin",
+        description: "High-end card auctions",
+        href: `https://goldin.co/search?q=${playerQ}`,
+      },
+      {
+        label: "MySlabs",
+        description: "Graded slab marketplace",
+        href: buildMySlabsSearchUrl(params),
+      },
+      {
+        label: "COMC",
+        description: "Raw & graded marketplace",
+        href: buildComcSearchUrl(params),
+      },
+      {
+        label: "Fanatics Collect",
+        description: "Buy now marketplace",
+        href: buildFanaticsCollectSearchUrl(params),
+      },
+      {
+        label: "Beckett",
+        description: "Price guide & market data",
+        href: buildBeckettMarketplaceSearchUrl(params),
+      },
+      {
+        label: "Alt",
+        description: "Fractional & direct sales",
+        href: `https://app.alt.xyz/search?q=${playerQ}`,
+      },
+    ];
+  }, [item, title]);
 
   const takeHome = useMemo(() => {
     if (!item) return [];
@@ -455,45 +466,11 @@ export default function CardProfilePage() {
     return null;
   }, [item]);
 
-  const gradeEstimate = useGradeEstimateFromImages({
-    imageUrls: cardForGrade?.imageUrls ?? [],
-    card: cardForGrade?.cardIdentity ?? null,
-  });
-
-  const fetchWorthGrading = useCallback(async () => {
-    if (!cardForGrade?.cardIdentity || !gradeEstimate.estimate?.grade_probabilities) return;
-    setValueLoading(true);
-    setValueError(null);
-    try {
-      const response = await fetch("/api/grade-estimator/value", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          card: cardForGrade.cardIdentity,
-          gradeProbabilities: gradeEstimate.estimate.grade_probabilities,
-          estimatorConfidence: gradeEstimate.estimate.grade_probabilities.confidence,
-        }),
-      });
-      if (!response.ok) throw new Error("POST_GRADING_VALUE_UNAVAILABLE");
-      const result: WorthGradingResult = await response.json();
-      setValueResult(result);
-    } catch {
-      setValueResult(null);
-      setValueError("Unable to estimate post-grading value right now.");
-    } finally {
-      setValueLoading(false);
-    }
-  }, [cardForGrade, gradeEstimate.estimate]);
-
-  useEffect(() => {
-    if (!cardForGrade?.cardIdentity || !gradeEstimate.estimate?.grade_probabilities) {
-      setValueResult(null);
-      setValueError(null);
-      setValueLoading(false);
-      return;
-    }
-    void fetchWorthGrading();
-  }, [cardForGrade, gradeEstimate.estimate, fetchWorthGrading]);
+  const marketValue = useMemo(() => {
+    if (!item || item.current_market_value_cents == null) return null;
+    const qty = item.quantity ?? 1;
+    return item.current_market_value_cents * qty;
+  }, [item]);
 
   // Unrealized P/L
   const plData = useMemo(() => {
@@ -551,13 +528,13 @@ export default function CardProfilePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           inventory_item_id: item.id,
-          sale_price_cents: priceCents,
+          sold_price_cents: priceCents,
           channel: soldForm.channel,
-          sale_date: soldForm.sale_date,
+          sold_at: soldForm.sale_date,
           platform_fees_cents: 0,
           shipping_charged_cents: 0,
-          shipping_paid_cents: 0,
-          other_costs_cents: 0,
+          shipping_cost_cents: 0,
+          tax_cents: 0,
         }),
       });
       if (res.ok) {
@@ -568,7 +545,8 @@ export default function CardProfilePage() {
         setSoldForm({ sale_price: "", channel: "ebay", sale_date: new Date().toISOString().slice(0, 10) });
         setToast({ type: "success", message: "Sale recorded" });
       } else {
-        setToast({ type: "error", message: "Failed to record sale" });
+        const data = await res.json().catch(() => ({}));
+        setToast({ type: "error", message: data.error || "Failed to record sale" });
       }
     } catch {
       setToast({ type: "error", message: "Failed to record sale" });
@@ -577,137 +555,162 @@ export default function CardProfilePage() {
     }
   };
 
-  const handleSaveImageUrl = async () => {
+  const handleUploadImage = async () => {
     if (!item || savingImage) return;
-    const trimmed = imageUrlInput.trim();
-    if (!imageFileInput && trimmed && !isValidHttpUrl(trimmed)) {
-      setToast({
-        type: "error",
-        message: "Please enter a full image URL that starts with http:// or https://",
-      });
+    if (!imageFileInput) {
+      setToast({ type: "error", message: "Choose an image file to upload" });
       return;
     }
 
     setSavingImage(true);
     try {
-      let payloadUrl: string | null = trimmed || null;
-      if (imageFileInput) {
-        if (!imageFileInput.type.startsWith("image/")) {
-          setToast({ type: "error", message: "Please choose an image file" });
-          return;
-        }
-        if (imageFileInput.size > MAX_IMAGE_UPLOAD_BYTES) {
-          setToast({ type: "error", message: "Image must be under 10MB" });
-          return;
-        }
-
-        const supabase = createSupabaseClient();
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) {
-          setToast({ type: "error", message: "Please log in to upload images" });
-          return;
-        }
-
-        const sanitizedName = imageFileInput.name.replace(/[^\w.-]+/g, "_");
-        const extension = sanitizedName.includes(".")
-          ? sanitizedName.split(".").pop()
-          : imageFileInput.type.split("/")[1] || "jpg";
-        const randomPart = Math.random().toString(36).slice(2, 10);
-        const storagePath = `${user.id}/profile/${Date.now()}-${randomPart}.${extension}`;
-
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from("card-images")
-          .upload(storagePath, imageFileInput, {
-            cacheControl: "3600",
-            contentType: imageFileInput.type || undefined,
-            upsert: false,
-          });
-
-        if (uploadError) {
-          setToast({ type: "error", message: "Failed to upload image" });
-          return;
-        }
-
-        payloadUrl = supabase.storage
-          .from("card-images")
-          .getPublicUrl(uploadData.path).data.publicUrl;
+      if (!imageFileInput.type.startsWith("image/")) {
+        setToast({ type: "error", message: "Please choose an image file" });
+        return;
       }
-      const endpoint = isBusinessMode
-        ? "/api/business/inventory"
-        : `/api/cards/${item.id}`;
-      const body = isBusinessMode
-        ? { id: item.id, user_image_url: payloadUrl }
-        : { user_image_url: payloadUrl };
-
-      const res = await fetch(endpoint, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-
-      if (!res.ok) {
-        setToast({ type: "error", message: "Failed to save image" });
+      if (imageFileInput.size > MAX_IMAGE_UPLOAD_BYTES) {
+        setToast({ type: "error", message: "Image must be under 10MB" });
         return;
       }
 
-      if (isBusinessMode) {
-        const updated = await res.json().catch(() => null);
-        setItem((prev) =>
-          prev
-            ? {
-                ...prev,
-                user_image_url:
-                  typeof updated?.user_image_url === "string"
-                    ? updated.user_image_url
-                    : payloadUrl,
-              }
-            : prev
-        );
-      } else {
-        const response = await res.json().catch(() => null);
-        const updatedCard = response?.card as Partial<ProfileItem> | undefined;
-        setItem((prev) =>
-          prev
-            ? {
-                ...prev,
-                user_image_url:
-                  typeof updatedCard?.user_image_url === "string"
-                    ? updatedCard.user_image_url
-                    : payloadUrl,
-                image_url:
-                  typeof updatedCard?.image_url === "string"
-                    ? updatedCard.image_url
-                    : prev.image_url,
-              }
-            : prev
-        );
+      const formData = new FormData();
+      formData.append("front", imageFileInput);
+
+      const res = await fetch(`/api/cards/${item.id}/images`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        setToast({ type: "error", message: "Failed to upload image" });
+        return;
       }
 
+      await loadProfile();
       setImageFileInput(null);
       if (imageFilePickerRef.current) {
         imageFilePickerRef.current.value = "";
       }
       setShowImageModal(false);
-      setToast({
-        type: "success",
-        message: payloadUrl ? "Image saved" : "Image removed",
-      });
+      setToast({ type: "success", message: "Image uploaded" });
     } catch {
-      setToast({ type: "error", message: "Failed to save image" });
+      setToast({ type: "error", message: "Failed to upload image" });
     } finally {
       setSavingImage(false);
     }
   };
 
-  const openImageModal = (currentUrl: string | null) => {
-    setImageUrlInput(currentUrl ?? "");
+  const saveBusinessInventoryItem = async (
+    id: string,
+    updates: Partial<BusinessInventoryItem>,
+    options?: { successMessage?: string }
+  ) => {
+    try {
+      const res = await fetch("/api/business/inventory", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, ...updates }),
+      });
+      if (!res.ok) {
+        setToast({ type: "error", message: "Failed to save item" });
+        return false;
+      }
+      await loadProfile();
+      setToast({ type: "success", message: options?.successMessage ?? "Item saved" });
+      return true;
+    } catch {
+      setToast({ type: "error", message: "Failed to save item" });
+      return false;
+    }
+  };
+
+  const handleSaveBusinessInventoryItem = async (
+    id: string,
+    updates: Partial<BusinessInventoryItem>
+  ) => {
+    await saveBusinessInventoryItem(id, updates);
+  };
+
+  const handleDeleteBusinessInventoryItem = async () => {
+    if (!item || !isBusinessMode) return;
+    const confirmed = window.confirm("Delete this card from inventory? This cannot be undone.");
+    if (!confirmed) return;
+    try {
+      const res = await fetch(`/api/business/inventory?ids=${encodeURIComponent(item.id)}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        setToast({ type: "error", message: "Failed to delete card" });
+        return;
+      }
+      setToast({ type: "success", message: "Card deleted" });
+      router.push("/business/ledger?tab=inventory");
+    } catch {
+      setToast({ type: "error", message: "Failed to delete card" });
+    }
+  };
+
+  const openImageModal = () => {
     setImageFileInput(null);
+    setImageUrlInput("");
     if (imageFilePickerRef.current) {
       imageFilePickerRef.current.value = "";
     }
     setShowImageModal(true);
+  };
+
+  const openInventoryEditor = useCallback(() => {
+    setShowInventoryEditorModal(true);
+  }, []);
+
+  const handleImportImageUrl = async () => {
+    if (!item || savingImage) return;
+    const normalizedImageUrl = normalizeHttpUrl(imageUrlInput);
+    if (!normalizedImageUrl) {
+      setToast({ type: "error", message: "Enter a valid image URL" });
+      return;
+    }
+
+    setSavingImage(true);
+    try {
+      if (isBusinessMode) {
+        const saved = await saveBusinessInventoryItem(item.id, {
+          user_image_url: normalizedImageUrl,
+          image_source: "user",
+        }, { successMessage: "Image URL imported" });
+        if (!saved) {
+          return;
+        }
+      } else {
+        const res = await fetch(`/api/cards/${item.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            user_image_url: normalizedImageUrl,
+            image_source: "user",
+          }),
+        });
+
+        if (!res.ok) {
+          setToast({ type: "error", message: "Failed to import image URL" });
+          return;
+        }
+
+        await loadProfile();
+        setToast({ type: "success", message: "Image URL imported" });
+      }
+
+      setImageUrlInput("");
+      setImageFileInput(null);
+      if (imageFilePickerRef.current) {
+        imageFilePickerRef.current.value = "";
+      }
+      setShowImageModal(false);
+    } catch {
+      setToast({ type: "error", message: "Failed to import image URL" });
+    } finally {
+      setSavingImage(false);
+    }
   };
 
   const handleImageFileSelection = (
@@ -731,7 +734,6 @@ export default function CardProfilePage() {
       return;
     }
     setImageFileInput(file);
-    setImageUrlInput("");
   };
 
   // ── Render: Loading / Error ──────────────────────────────────────
@@ -740,7 +742,7 @@ export default function CardProfilePage() {
     return (
       <div
         className="min-h-screen flex items-center justify-center"
-        style={{ background: "#EEECE8", fontFamily: "'Sora', sans-serif" }}
+        style={{ background: "#F6FAF7", fontFamily: "'Sora', sans-serif" }}
       >
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-2 border-gray-300 border-t-gray-700 rounded-full animate-spin" />
@@ -754,14 +756,14 @@ export default function CardProfilePage() {
     return (
       <div
         className="min-h-screen flex items-center justify-center px-4"
-        style={{ background: "#EEECE8", fontFamily: "'Sora', sans-serif" }}
+        style={{ background: "#F6FAF7", fontFamily: "'Sora', sans-serif" }}
       >
         <div className="bg-white rounded-2xl p-10 text-center shadow-sm max-w-sm w-full">
           <p className="text-lg font-semibold text-gray-800 mb-2">{error || "Item not found"}</p>
           <button
             onClick={() => router.push(isBusinessMode ? "/business" : "/collection")}
             className="mt-4 px-6 py-2.5 text-white rounded-xl text-sm font-medium hover:bg-gray-800 transition-colors"
-            style={{ background: "#111" }}
+            style={{ background: "#146B42" }}
           >
             {isBusinessMode ? "Back to Inventory" : "Back to Collection"}
           </button>
@@ -772,139 +774,128 @@ export default function CardProfilePage() {
 
   // ── Render: Profile ──────────────────────────────────────────────
 
-  const marketValue = item.current_market_value_cents;
   const gradeCompany = (item.grading_company ?? "PSA").toUpperCase();
-  const gradeNum = item.grade ?? "—";
-  const certNum = item.cert_number;
+  const certNum = getItemCertNumber(item);
+  const certGrader = getItemCertGrader(item);
+  const certUrl = certGrader && certNum ? buildCertPageUrl({ grader: certGrader, certNumber: certNum }) : null;
+  const isResolvingCertImage = isPendingCertImageStatus(item.cert_image_status ?? null);
   const playerName = item.player_name ?? item.title ?? "Unknown Player";
-  const setLabel = [item.year, item.set_name].filter(Boolean).join(" · ");
-  const hasParallel = !!(item.parallel_type || item.insert);
+  const baseSetLabel = [item.year, item.set_name].filter(Boolean).join(" ");
+  const parallelLabel = item.parallel_type || item.insert || null;
+  const setLabel = [baseSetLabel, parallelLabel].filter(Boolean).join(" | ") || "Sports Card";
+  const displayGrade = formatGradeDisplay(item.grade, item.grading_company);
+  const displayPlayerName = item.card_number
+    ? `#${item.card_number} ${playerName}`
+    : playerName;
 
   const tabs: { id: TabId; label: string }[] = [
     { id: "details", label: "Details" },
-    { id: "shop", label: "Shop" },
+    { id: "shop", label: "Comps" },
   ];
+  const businessItemForEditor =
+    isBusinessMode && item ? (item as unknown as BusinessInventoryItem) : null;
+
+  const palette = {
+    appBg: "#F6FAF7",
+    panelBg: "#FFFFFF",
+    subtleGreen: "#EAF6EE",
+    border: "#DCE9E1",
+    text: "#101A14",
+    muted: "#6F7D74",
+    accent: "#1C8C58",
+    accentDark: "#146B42",
+  };
 
   return (
     <div
       className="min-h-screen"
-      style={{ background: "#EEECE8", fontFamily: "'Sora', sans-serif" }}
+      style={{
+        background: `radial-gradient(circle at 10% 0%, ${palette.subtleGreen} 0%, ${palette.appBg} 45%, #FFFFFF 100%)`,
+        fontFamily: "'Sora', sans-serif",
+      }}
     >
       <div className="max-w-[1100px] mx-auto px-4 py-8">
-        {/* Back link */}
-        <button
-          onClick={() => router.push(isBusinessMode ? "/business" : "/collection")}
-          className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors mb-5"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-          {isBusinessMode ? "Back to Inventory" : "Back to Collection"}
-        </button>
+        {/* Top nav */}
+        <div className="flex items-center justify-between mb-6">
+          <button
+            onClick={() => router.push(isBusinessMode ? "/business" : "/collection")}
+            className="flex items-center gap-1.5 text-sm transition-colors px-3 py-1.5 rounded-full border"
+            style={{ color: palette.muted, borderColor: palette.border, background: "#FFFFFFCC" }}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            {isBusinessMode ? "Back to Inventory" : "Back to Collection"}
+          </button>
+        </div>
 
         {/* Main card */}
         <div
           className="flex overflow-hidden"
           style={{
-            background: "#fff",
-            borderRadius: 20,
-            boxShadow: "0 4px 40px rgba(0,0,0,0.08)",
+            background: palette.panelBg,
+            borderRadius: 24,
+            border: `1px solid ${palette.border}`,
+            boxShadow: "0 14px 40px rgba(16, 40, 26, 0.08)",
           }}
         >
           {/* ── LEFT PANEL ───────────────────────────────────────── */}
           <div
             className="shrink-0 flex flex-col"
-            style={{ width: 380, background: "#F7F6F2", borderRadius: "20px 0 0 20px" }}
+            style={{
+              width: 380,
+              background: "linear-gradient(180deg, #F7FCF9 0%, #F1F8F4 100%)",
+              borderRight: `1px solid ${palette.border}`,
+            }}
           >
             {/* Image area */}
             <div className="relative flex flex-col items-center" style={{ flex: 1 }}>
-              {/* PSA-style slab label */}
-              <div
-                className="w-full flex items-center justify-between px-3 py-2"
-                style={{ background: "#fff", borderBottom: "1px solid #E8E6E1" }}
-              >
-                <div
-                  className="flex flex-col gap-0.5 leading-none"
-                  style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 7, color: "#555" }}
-                >
-                  {item.set_name && (
-                    <span className="uppercase tracking-widest">{item.set_name}</span>
-                  )}
-                  <span className="uppercase tracking-widest font-semibold" style={{ color: "#1a1a1a" }}>
-                    {playerName}
-                  </span>
-                  {item.insert && (
-                    <span className="uppercase tracking-widest">{item.insert}</span>
-                  )}
-                </div>
-                <div
-                  className="font-bold leading-none"
-                  style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 24, color: "#C8102E" }}
-                >
-                  {gradeNum}
-                </div>
-              </div>
-
               {/* Card image */}
               <div className="relative w-full flex items-center justify-center py-6 px-8">
-                {imageUrl ? (
-                  <div
-                    className="relative cursor-pointer"
-                    style={{ width: 260, height: 360 }}
-                    onClick={() => setImageZoom(true)}
-                  >
-                    <Image
-                      src={imageUrl}
-                      alt={title}
-                      fill
-                      unoptimized
-                      className="object-contain hover:scale-[1.02] transition-transform duration-200"
-                    />
-                  </div>
-                ) : (
-                  <div
-                    className="flex flex-col items-center justify-center"
-                    style={{
-                      width: 260,
-                      height: 360,
-                      borderRadius: 8,
-                      background: "linear-gradient(160deg, #0b1f3a 0%, #1f4d78 100%)",
-                    }}
-                  >
-                    <svg className="w-16 h-16 mb-2 opacity-30" fill="none" stroke="white" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    <p className="text-white/40 text-xs font-medium tracking-wide">No Image</p>
-                  </div>
-                )}
+                <div
+                  className={`block ${imageUrl ? "cursor-zoom-in" : "cursor-default"}`}
+                  style={{ width: 260 }}
+                  onClick={() => {
+                    if (imageUrl) {
+                      setImageZoom(true);
+                    }
+                  }}
+                  role={imageUrl ? "button" : undefined}
+                  tabIndex={imageUrl ? 0 : undefined}
+                  onKeyDown={(event) => {
+                    if (imageUrl && (event.key === "Enter" || event.key === " ")) {
+                      event.preventDefault();
+                      setImageZoom(true);
+                    }
+                  }}
+                >
+                  <TrustedCardImageFrame
+                    image={trustedImageForFrame}
+                    alt={title}
+                    className="w-full rounded-[8px] bg-white"
+                    imageClassName="transition-transform duration-200 hover:scale-[1.02]"
+                    fallbackClassName="bg-[#F4F1EC]"
+                    allowUploadCta={!imageUrl}
+                    ctaLabel="Add image"
+                    onCtaClick={openImageModal}
+                  />
+                </div>
               </div>
 
-              {/* Player name bar */}
-              <div
-                className="w-full px-4 py-2.5"
-                style={{ background: "rgba(10,15,28,0.72)" }}
-              >
-                <p className="text-white font-semibold text-sm truncate" style={{ fontFamily: "'Sora', sans-serif" }}>
-                  {playerName}
-                </p>
-                {item.year && (
-                  <p className="text-white/50 text-xs mt-0.5">{item.year}</p>
-                )}
-              </div>
             </div>
 
             {/* 3 ghost icon buttons */}
             <div
               className="flex items-center justify-center gap-3 px-6 py-4"
-              style={{ borderTop: "1px solid #E8E6E1" }}
+              style={{ borderTop: `1px solid ${palette.border}` }}
             >
               {/* Cert / PSA lookup */}
-              {certNum ? (
+              {certUrl ? (
                 <a
-                  href={`https://www.psacard.com/cert/${certNum}`}
+                  href={certUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  title="View PSA Cert"
+                  title="View Cert"
                   className="flex items-center justify-center w-10 h-10 rounded-xl text-gray-500 hover:text-gray-800 hover:border-gray-400 transition-colors"
                   style={{ border: "1.5px solid #DDDBD6", background: "transparent" }}
                 >
@@ -914,21 +905,20 @@ export default function CardProfilePage() {
                 </a>
               ) : (
                 <div
-                  className="w-full aspect-[3/4] flex flex-col items-center justify-center text-gray-500 cursor-pointer hover:bg-gray-800/50 transition-colors"
-                  onClick={() => openImageModal(null)}
+                  title="No cert number"
+                  className="flex items-center justify-center w-10 h-10 rounded-xl text-gray-300"
+                  style={{ border: "1.5px solid #E9E7E2", background: "transparent" }}
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
                   </svg>
-                  <p className="text-sm font-medium text-gray-400">Add your photo</p>
-                  <p className="text-xs text-gray-600 mt-1">Upload from your files</p>
                 </div>
               )}
 
               {/* Change image */}
               <button
-                onClick={() => { setImageUrlInput(imageUrl ?? ""); setShowImageModal(true); }}
-                title="Change image"
+                onClick={openImageModal}
+                title="Upload image"
                 className="flex items-center justify-center w-10 h-10 rounded-xl text-gray-500 hover:text-gray-800 hover:border-gray-400 transition-colors"
                 style={{ border: "1.5px solid #DDDBD6", background: "transparent" }}
               >
@@ -950,109 +940,105 @@ export default function CardProfilePage() {
                 </svg>
               </button>
             </div>
+            {isResolvingCertImage ? (
+              <div className="px-6 pb-4">
+                <div
+                  className="rounded-xl px-3 py-2 text-sm font-medium"
+                  style={{ background: "#E8F5EE", color: palette.accentDark, border: `1px solid ${palette.border}` }}
+                >
+                  Resolving cert image...
+                </div>
+              </div>
+            ) : null}
           </div>
 
           {/* ── RIGHT PANEL ──────────────────────────────────────── */}
           <div className="flex-1 flex flex-col" style={{ minWidth: 0 }}>
             <div style={{ padding: "32px 32px 0 32px" }}>
-              {/* 1. Set tag */}
-              <p
-                className="uppercase tracking-widest mb-2"
-                style={{ fontSize: 10, color: "#B0ADA8", fontWeight: 500 }}
-              >
-                {setLabel || "Sports Card"}
-              </p>
-
-              {/* 2. Player name */}
+              {/* Player name */}
               <h1
-                className="leading-tight mb-3"
+                className="leading-tight mb-5"
                 style={{
                   fontSize: 34,
                   fontWeight: 800,
                   letterSpacing: "-0.02em",
-                  color: "#0F0E0D",
+                  color: palette.text,
                   lineHeight: 1.1,
                 }}
               >
-                {playerName}
+                {displayPlayerName}
               </h1>
 
-              {/* 3. Parallel pill */}
-              {hasParallel && (
-                <div className="flex items-center gap-2 mb-4">
-                  <span
-                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold"
-                    style={{
-                      background: "#F0FAF4",
-                      border: "1px solid #B8E6CC",
-                      color: "#167A40",
-                    }}
-                  >
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
-                    {[item.parallel_type, item.insert].filter(Boolean).join(" · ")}
-                    {item.cert_number && ` · #${item.cert_number}`}
-                  </span>
+              {/* 3. Price section */}
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div style={{ border: `1px solid ${palette.border}`, borderRadius: 14, padding: "14px 16px", background: "#FBFEFC" }}>
+                  <p className="uppercase tracking-widest mb-2" style={{ fontSize: 9, color: palette.muted, fontWeight: 600 }}>
+                    Market Estimate
+                  </p>
+                  {marketValue ? (
+                    <p style={{ fontSize: 26, fontWeight: 700, color: palette.text, lineHeight: 1 }}>
+                      {fmtCents(marketValue)}
+                    </p>
+                  ) : (
+                    <p style={{ fontSize: 26, fontWeight: 700, color: "#C0BDBA", lineHeight: 1 }}>—</p>
+                  )}
                 </div>
-              )}
+                <div style={{ border: `1px solid ${palette.border}`, borderRadius: 14, padding: "14px 16px", background: "#FBFEFC" }}>
+                  <p className="uppercase tracking-widest mb-2" style={{ fontSize: 9, color: palette.muted, fontWeight: 600 }}>
+                    eBay Comps
+                  </p>
+                  <a
+                    href={ebayCompsUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 font-bold hover:underline"
+                    style={{ fontSize: 16, color: palette.accentDark }}
+                  >
+                    View Sold
+                    <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                  </a>
+                </div>
+              </div>
 
-              {/* 5. CTA row */}
+              {/* 4. Primary CTA + Item Actions */}
               <div className="flex items-center gap-2 mb-6">
-                {/* Primary: List on eBay / Set Price */}
                 <button
-                  onClick={() => openImageModal(imageUrl)}
-                  className="flex-1 px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-100 rounded-lg text-sm font-medium transition-colors"
+                  onClick={() => setActiveTab("shop")}
+                  className="flex-1 flex items-center justify-center py-3 text-white font-semibold text-sm transition-colors"
+                  style={{ background: palette.accentDark, borderRadius: 12, border: "none", cursor: "pointer" }}
                 >
-                  {imageUrl ? "Change Image" : "Set Image"}
+                  View Comps
                 </button>
-
-                {/* Edit */}
-                {isBusinessMode ? (
+                {isBusinessMode && (
                   <button
-                    onClick={() => { setImageUrlInput(imageUrl ?? ""); setShowImageModal(true); }}
-                    className="flex items-center justify-center gap-1.5 px-5 text-sm font-semibold transition-colors hover:bg-gray-50"
-                    style={{
-                      height: 44,
-                      borderRadius: 11,
-                      border: "1.5px solid #E4E2DE",
-                      color: "#3D3A37",
-                      background: "#fff",
-                    }}
+                    onClick={openInventoryEditor}
+                    className="inline-flex items-center justify-center h-[46px] px-4 text-sm font-semibold text-white transition-colors"
+                    style={{ background: "#1C8C58", borderRadius: 12 }}
                   >
-                    Edit
+                    Edit Inventory
                   </button>
-                ) : (
-                  <Link
-                    href={`/cards/${item.id}`}
-                    className="flex items-center justify-center gap-1.5 px-5 text-sm font-semibold transition-colors hover:bg-gray-50"
-                    style={{
-                      height: 44,
-                      borderRadius: 11,
-                      border: "1.5px solid #E4E2DE",
-                      color: "#3D3A37",
-                      background: "#fff",
-                    }}
-                  >
-                    Edit
-                  </Link>
                 )}
-
-                {/* Overflow ··· */}
                 <div className="relative" ref={overflowRef}>
                   <button
                     onClick={() => setShowOverflow((v) => !v)}
-                    className="flex items-center justify-center font-bold transition-colors hover:bg-gray-50"
+                    className="flex items-center gap-1.5 text-sm font-semibold transition-colors hover:bg-gray-50"
                     style={{
-                      width: 44,
-                      height: 44,
-                      borderRadius: 11,
-                      border: "1.5px solid #E4E2DE",
-                      color: "#3D3A37",
-                      background: "#fff",
-                      fontSize: 18,
-                      letterSpacing: 2,
+                      height: 46,
+                      paddingLeft: 14,
+                      paddingRight: 14,
+                      borderRadius: 12,
+                      border: `1.5px solid ${palette.border}`,
+                      color: palette.text,
+                      background: "#FFFFFF",
+                      whiteSpace: "nowrap",
                     }}
                   >
-                    ···
+                    Item Actions
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
                   </button>
                   {showOverflow && (
                     <div
@@ -1060,35 +1046,61 @@ export default function CardProfilePage() {
                       style={{
                         background: "#fff",
                         borderRadius: 12,
-                        border: "1px solid #E4E2DE",
+                        border: `1px solid ${palette.border}`,
                         boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
                       }}
                     >
+                      {isBusinessMode ? (
+                        <button
+                          onClick={() => {
+                            setShowOverflow(false);
+                            openInventoryEditor();
+                          }}
+                          className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors"
+                          style={{ color: palette.text }}
+                        >
+                          Edit Inventory
+                        </button>
+                      ) : (
+                        <Link
+                          href={`/cards/${item.id}`}
+                          onClick={() => setShowOverflow(false)}
+                          className="block w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors"
+                          style={{ color: palette.text }}
+                        >
+                          Edit
+                        </Link>
+                      )}
                       {isBusinessMode && item.status !== "sold" && (
                         <button
                           onClick={() => { setShowOverflow(false); setShowSoldModal(true); }}
                           className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors"
-                          style={{ color: "#3D3A37" }}
+                          style={{ color: palette.text }}
                         >
                           Mark Sold
                         </button>
                       )}
-                      <a
-                        href={ebayCompsUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={() => setShowOverflow(false)}
-                        className="block w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors"
-                        style={{ color: "#3D3A37" }}
-                      >
-                        Find Comps on eBay
-                      </a>
+                      {isBusinessMode && (
+                        <button
+                          onClick={() => {
+                            setShowOverflow(false);
+                            void handleDeleteBusinessInventoryItem();
+                          }}
+                          className="w-full text-left px-4 py-2.5 text-sm transition-colors hover:bg-red-50"
+                          style={{ color: "#B42318" }}
+                        >
+                          Delete card
+                        </button>
+                      )}
                       <button
-                        onClick={() => { setShowOverflow(false); setImageUrlInput(imageUrl ?? ""); setShowImageModal(true); }}
+                        onClick={() => {
+                          setShowOverflow(false);
+                          openImageModal();
+                        }}
                         className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors"
-                        style={{ color: "#3D3A37" }}
+                        style={{ color: palette.text }}
                       >
-                        {imageUrl ? "Change Image URL" : "Set Image URL"}
+                        {imageUrl ? "Change Image" : "Set Image"}
                       </button>
                     </div>
                   )}
@@ -1099,9 +1111,9 @@ export default function CardProfilePage() {
               <div className="grid gap-2 mb-6" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
                 {/* Cert Number */}
                 <DataCell label="Cert Number">
-                  {certNum ? (
+                  {certUrl && certNum ? (
                     <a
-                      href={`https://www.psacard.com/cert/${certNum}`}
+                      href={certUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       style={{
@@ -1121,39 +1133,20 @@ export default function CardProfilePage() {
 
                 {/* Grade */}
                 <DataCell label="Grade">
-                  {item.grade ? (
+                  {displayGrade ? (
                     <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, color: "#0F0E0D", fontSize: 13 }}>
-                      {gradeCompany} {item.grade}
+                      {displayGrade}
                     </span>
                   ) : (
                     <EmptyCell />
                   )}
                 </DataCell>
 
-                {/* Cost Basis */}
-                <DataCell label="Cost Basis">
+                {/* My Cost */}
+                <DataCell label="My Cost">
                   {costCents != null ? (
                     <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, color: "#0F0E0D", fontSize: 13 }}>
                       {fmtCents(costCents)}
-                    </span>
-                  ) : (
-                    <EmptyCell />
-                  )}
-                </DataCell>
-
-                {/* Unrealized P/L */}
-                <DataCell label="Unrealized P/L">
-                  {plData ? (
-                    <span
-                      style={{
-                        fontFamily: "'JetBrains Mono', monospace",
-                        fontWeight: 600,
-                        fontSize: 13,
-                        color: plData.diff >= 0 ? "#16A34A" : "#DC2626",
-                      }}
-                    >
-                      {plData.diff >= 0 ? "+" : ""}
-                      {fmtCents(plData.diff)}
                     </span>
                   ) : (
                     <EmptyCell />
@@ -1165,6 +1158,17 @@ export default function CardProfilePage() {
                   {item.acquisition_date || item.purchase_date ? (
                     <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, color: "#0F0E0D", fontSize: 13 }}>
                       {fmtDate(item.acquisition_date ?? item.purchase_date)}
+                    </span>
+                  ) : (
+                    <EmptyCell />
+                  )}
+                </DataCell>
+
+                {/* My Value */}
+                <DataCell label="My Value">
+                  {item.list_price_cents != null ? (
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, color: "#0F0E0D", fontSize: 13 }}>
+                      {fmtCents(item.list_price_cents)}
                     </span>
                   ) : (
                     <EmptyCell />
@@ -1189,7 +1193,7 @@ export default function CardProfilePage() {
               {/* 7. Tab bar */}
               <div
                 className="flex items-center gap-6 -mx-8 px-8"
-                style={{ borderTop: "1.5px solid #EBEBEA" }}
+                style={{ borderTop: `1.5px solid ${palette.border}` }}
               >
                 {tabs.map((tab) => (
                   <button
@@ -1197,7 +1201,7 @@ export default function CardProfilePage() {
                     onClick={() => setActiveTab(tab.id)}
                     className="relative text-sm font-medium transition-colors py-3"
                     style={{
-                      color: activeTab === tab.id ? "#0F0E0D" : "#A09D9A",
+                      color: activeTab === tab.id ? palette.text : palette.muted,
                       background: "none",
                       border: "none",
                       cursor: "pointer",
@@ -1207,7 +1211,7 @@ export default function CardProfilePage() {
                     {activeTab === tab.id && (
                       <span
                         className="absolute top-0 left-0 right-0"
-                        style={{ height: 2, background: "#0F0E0D", borderRadius: "0 0 2px 2px" }}
+                        style={{ height: 2, background: palette.accentDark, borderRadius: "0 0 2px 2px" }}
                       />
                     )}
                   </button>
@@ -1232,51 +1236,14 @@ export default function CardProfilePage() {
                   </div>
 
                   {item.notes && (
-                    <div className="mt-4 p-3 rounded-xl" style={{ background: "#F7F6F2", border: "1px solid #EBEBEA" }}>
+                    <div className="mt-4 p-3 rounded-xl" style={{ background: "#F8FCFA", border: "1px solid #DCE9E1" }}>
                       <p className="text-xs uppercase tracking-widest text-gray-400 mb-1">Notes</p>
                       <p className="text-sm text-gray-700">{item.notes}</p>
                     </div>
                   )}
 
-                  {isBusinessMode && cardForGrade && gradeEstimate.estimate && (
-                    <div className="mt-4 p-3 rounded-xl" style={{ background: "#F7F6F2", border: "1px solid #EBEBEA" }}>
-                      <p className="text-xs uppercase tracking-widest text-gray-400 mb-2">Grade Estimate</p>
-                      <p className="text-sm text-gray-700">
-                        Most likely: PSA {gradeEstimate.estimate.estimated_grade_low}–{gradeEstimate.estimate.estimated_grade_high}
-                        {gradeEstimate.estimate.grade_probabilities?.confidence && (
-                          <span className="text-gray-400 ml-2">· {gradeEstimate.estimate.grade_probabilities.confidence} confidence</span>
-                        )}
-                      </p>
-                      {valueResult && (
-                        <p className="text-sm text-gray-700 mt-1">
-                          Should grade?{" "}
-                          <span className="font-semibold text-emerald-600">
-                            {valueResult.rating === "strong_yes"
-                              ? "Strong Yes"
-                              : valueResult.rating === "yes"
-                              ? "Yes"
-                              : valueResult.rating === "maybe"
-                              ? "Maybe"
-                              : "No"}
-                          </span>
-                          {valueResult.bestOption !== "none" && (
-                            <span className="text-gray-400 ml-2">· Best: {valueResult.bestOption.toUpperCase()}</span>
-                          )}
-                        </p>
-                      )}
-                      {!valueResult && valueLoading && (
-                        <p className="text-xs text-gray-400 mt-1">Analyzing grading value…</p>
-                      )}
-                      {valueError && (
-                        <button onClick={() => void fetchWorthGrading()} className="mt-1 text-xs text-blue-500 hover:text-blue-400">
-                          Retry analysis
-                        </button>
-                      )}
-                    </div>
-                  )}
-
                   {isBusinessMode && takeHome.length > 0 && (
-                    <div className="mt-4 p-3 rounded-xl" style={{ background: "#F7F6F2", border: "1px solid #EBEBEA" }}>
+                    <div className="mt-4 p-3 rounded-xl" style={{ background: "#F8FCFA", border: "1px solid #DCE9E1" }}>
                       <p className="text-xs uppercase tracking-widest text-gray-400 mb-2">Est. Take-Home at List Price</p>
                       <div className="space-y-1">
                         {takeHome.map((th) => (
@@ -1293,27 +1260,63 @@ export default function CardProfilePage() {
                       </div>
                     </div>
                   )}
+
                 </div>
               )}
 
               {/* Shop tab */}
               {activeTab === "shop" && (
-                <div className="flex flex-col items-center justify-center py-10 gap-4">
-                  <p className="text-sm text-center max-w-xs" style={{ color: "#9D9A97" }}>
-                    Search for comparable listings on eBay to track live market prices.
-                  </p>
-                  <a
-                    href={ebayCompsUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-gray-800"
-                    style={{ background: "#111", borderRadius: 11 }}
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                    </svg>
-                    Find Comps on eBay
-                  </a>
+                <div className="py-8">
+                  <div className="mb-4">
+                    <p
+                      className="uppercase tracking-widest mb-2"
+                      style={{ fontSize: 9, color: palette.muted, fontWeight: 600 }}
+                    >
+                      Marketplace Comps
+                    </p>
+                    <p className="text-sm max-w-md" style={{ color: "#9D9A97" }}>
+                      Search this card across every major platform — sold comps, active listings, and price guides.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {marketplaceLinks.map((marketplace) => (
+                      <a
+                        key={marketplace.label}
+                        href={marketplace.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group flex items-center justify-between gap-3 p-4 transition-colors hover:bg-[#F8FCFA]"
+                        style={{
+                          border: `1px solid ${palette.border}`,
+                          borderRadius: 16,
+                          background: "#FFFFFF",
+                        }}
+                      >
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold" style={{ color: palette.text }}>
+                            {marketplace.label}
+                          </p>
+                          <p className="text-xs mt-1" style={{ color: palette.muted }}>
+                            {marketplace.description}
+                          </p>
+                        </div>
+                        <svg
+                          className="w-4 h-4 shrink-0 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
+                          fill="none"
+                          stroke={palette.accentDark}
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                          />
+                        </svg>
+                      </a>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -1468,15 +1471,44 @@ export default function CardProfilePage() {
         </div>
       )}
 
+      {isBusinessMode && showInventoryEditorModal && businessItemForEditor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/35"
+            onClick={() => setShowInventoryEditorModal(false)}
+          />
+          <div
+            className="relative z-10 w-full max-w-[960px] overflow-hidden rounded-2xl"
+            style={{
+              background: "#FFFFFF",
+              border: "1px solid #DCE9E1",
+              boxShadow: "0 12px 40px rgba(16, 40, 26, 0.16)",
+              maxHeight: "92vh",
+            }}
+          >
+            <div className="max-h-[92vh] overflow-y-auto">
+              <BusinessInventoryItemEditor
+                item={businessItemForEditor}
+                onSave={handleSaveBusinessInventoryItem}
+                onClose={() => setShowInventoryEditorModal(false)}
+                tone="light"
+                showOpenProfileLink={false}
+                showGradeProbabilitySection={false}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Image Modal ─────────────────────────────────────── */}
       {showImageModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
           <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-lg">
-            <h3 className="text-lg font-semibold mb-4">Set Image</h3>
+            <h3 className="text-lg font-semibold mb-4">Upload Image</h3>
             <div className="space-y-4">
               <div className="space-y-2">
                 <label className="block text-sm text-gray-400">
-                  Upload from your files
+                  Upload a real card photo
                 </label>
                 <input
                   ref={imageFilePickerRef}
@@ -1513,29 +1545,30 @@ export default function CardProfilePage() {
                     Clear selected file
                   </button>
                 )}
+                <p className="text-xs text-gray-500">
+                  Upload a card photo if you have one, or paste a working PSA image URL below.
+                </p>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 pt-2 border-t border-gray-800">
                 <label className="block text-sm text-gray-400">
-                  Or paste an image URL (optional)
+                  Import PSA image URL
                 </label>
                 <input
                   type="url"
                   value={imageUrlInput}
-                  onChange={(e) => {
-                    setImageUrlInput(e.target.value);
-                    if (imageFileInput) {
-                      setImageFileInput(null);
-                      if (imageFilePickerRef.current) {
-                        imageFilePickerRef.current.value = "";
-                      }
-                    }
-                  }}
+                  onChange={(event) => setImageUrlInput(event.target.value)}
                   placeholder="https://..."
-                  autoFocus
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-700 rounded-lg bg-gray-950 text-gray-200 placeholder-gray-500 text-sm"
                 />
+                {normalizeHttpUrl(imageUrlInput) ? (
+                  <img
+                    src={normalizeHttpUrl(imageUrlInput)!}
+                    alt="Imported image preview"
+                    className="w-full max-h-52 object-contain rounded-lg border border-gray-800 bg-gray-950"
+                  />
+                ) : null}
                 <p className="text-xs text-gray-500">
-                  Leave both file and URL blank to remove your custom image.
+                  Paste a direct image URL from PSA or another trusted host. This stores the URL on the card for ledger and profile rendering.
                 </p>
               </div>
             </div>
@@ -1544,6 +1577,7 @@ export default function CardProfilePage() {
                 onClick={() => {
                   setShowImageModal(false);
                   setImageFileInput(null);
+                  setImageUrlInput("");
                   if (imageFilePickerRef.current) {
                     imageFilePickerRef.current.value = "";
                   }
@@ -1553,12 +1587,20 @@ export default function CardProfilePage() {
                 Cancel
               </button>
               <button
-                onClick={handleSaveImageUrl}
-                disabled={savingImage}
+                onClick={handleUploadImage}
+                disabled={savingImage || !imageFileInput}
                 className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:bg-gray-800 transition-colors"
                 style={{ background: "#111", borderRadius: 11 }}
               >
-                {savingImage ? "Saving…" : "Save"}
+                {savingImage ? "Uploading…" : "Upload"}
+              </button>
+              <button
+                onClick={handleImportImageUrl}
+                disabled={savingImage || !normalizeHttpUrl(imageUrlInput)}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:bg-gray-800 transition-colors"
+                style={{ background: "#146B42", borderRadius: 11 }}
+              >
+                {savingImage ? "Saving…" : "Import URL"}
               </button>
             </div>
           </div>
@@ -1593,11 +1635,11 @@ function DataCell({ label, children }: { label: string; children: React.ReactNod
   return (
     <div
       className="flex flex-col gap-1.5 p-3 rounded-[11px]"
-      style={{ background: "#F7F6F2", border: "1px solid #EBEBEA" }}
+      style={{ background: "#FBFEFC", border: "1px solid #DCE9E1" }}
     >
       <span
         className="uppercase tracking-widest"
-        style={{ fontSize: 9, color: "#C0BDBA", fontWeight: 500 }}
+        style={{ fontSize: 9, color: "#6F7D74", fontWeight: 600 }}
       >
         {label}
       </span>
@@ -1617,10 +1659,10 @@ function FactRow({ label, value }: { label: string; value: string | null | undef
   return (
     <div
       className="flex justify-between items-center py-1.5"
-      style={{ borderBottom: "1px solid #F3F2F0" }}
+      style={{ borderBottom: "1px solid #ECF4EF" }}
     >
-      <span className="text-xs font-medium" style={{ color: "#A09D9A" }}>{label}</span>
-      <span className="text-xs font-medium capitalize" style={{ color: "#3D3A37" }}>{value}</span>
+      <span className="text-xs font-medium" style={{ color: "#6F7D74" }}>{label}</span>
+      <span className="text-xs font-medium capitalize" style={{ color: "#101A14" }}>{value}</span>
     </div>
   );
 }

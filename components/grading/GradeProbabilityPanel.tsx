@@ -19,33 +19,52 @@ import {
   GRADE_SCAN_KIND_LABELS,
   normalizeGradeScanPhotos,
 } from "@/lib/grading/scanPhotos";
-import { buildGradeVerdict, type GradeVerdict } from "@/lib/grading/verdict";
+import {
+  buildGradeVerdict,
+  type GradeVerdict,
+  type VerdictCardIdentity,
+} from "@/lib/grading/verdict";
+import { normalizeProbabilities } from "@/lib/grade-estimator/value";
+import {
+  HALF_POINT_GRADER_ROWS,
+  getHalfPointOutcomes,
+} from "@/lib/grading/graderDistributionUi";
+import type { GradeProbabilities } from "@/types";
 import { SpeakButton } from "@/components/ui/SpeakButton";
-import { buildCompsLinks } from "@/lib/ebay/comps-url";
+import { buildCompsLinks, type CompsParams } from "@/lib/ebay/comps-url";
 import PreSubmissionAnalysisSection from "@/components/grading/PreSubmissionAnalysisSection";
 
 interface GradeProbabilityPanelProps {
   estimate: GradeEstimate;
-  cardIdentity?: {
-    player_name?: string;
-    year?: string;
-    set_name?: string;
-    parallel_type?: string;
-    card_number?: string;
-    variation?: string;
-    insert?: string;
-  } | null;
+  cardIdentity?: VerdictCardIdentity;
   primaryImageUrl?: string | null;
   imageUrls?: string[] | null;
   scanPhotos?: GradeScanPhoto[] | null;
   showPreliminaryBadge?: boolean;
   compact?: boolean;
+  flat?: boolean;
+  headerLabel?: string;
   /** Correction text applied during a refinement re-run — shows a "Refined" badge */
   appliedRefinement?: string | null;
+  /**
+   * "liquidity" (default): PSA unless chromium stock or ultra high-end signals → BGS.
+   * "speed_cost": prefer SGC for modern Grade/Borderline when turnaround and fees matter.
+   */
+  gradingPriority?: "liquidity" | "speed_cost";
 }
 
 const PSA_ORDER = ["PSA 10", "PSA 9", "PSA 8", "PSA 7 or lower"];
-const BGS_ORDER = ["BGS 9.5", "BGS 9", "BGS 8.5", "BGS 8 or lower"];
+type BarAccent = "blue" | "emerald" | "violet" | "amber" | "rose";
+
+const BAR_ACCENTS: Record<BarAccent, { bar: string; barDim: string }> = {
+  blue: { bar: "bg-blue-500", barDim: "bg-blue-500/30" },
+  emerald: { bar: "bg-emerald-500", barDim: "bg-emerald-500/30" },
+  violet: { bar: "bg-violet-500", barDim: "bg-violet-500/30" },
+  amber: { bar: "bg-amber-500", barDim: "bg-amber-500/30" },
+  rose: { bar: "bg-rose-500", barDim: "bg-rose-500/30" },
+};
+
+const HALF_POINT_ACCENTS: BarAccent[] = ["emerald", "violet", "amber", "rose"];
 
 const RECOMMENDATION_CLASSES: Record<GradeVerdict["recommendation"], string> = {
   Grade: "border-emerald-200 bg-emerald-50 text-emerald-700",
@@ -115,17 +134,12 @@ function getPsaOutcomes(
   });
 }
 
-function getBgsOutcomes(estimate: GradeEstimate): GradeOutcome[] | null {
-  if (!estimate.grade_probabilities?.bgs) return null;
-  return normalizeDistribution([
-    { label: "BGS 9.5", probability: estimate.grade_probabilities.bgs["9.5"] },
-    { label: "BGS 9", probability: estimate.grade_probabilities.bgs["9"] },
-    { label: "BGS 8.5", probability: estimate.grade_probabilities.bgs["8.5"] },
-    {
-      label: "BGS 8 or lower",
-      probability: estimate.grade_probabilities.bgs["8_or_lower"],
-    },
-  ]);
+function resolveFullGradeProbabilities(
+  estimate: GradeEstimate
+): GradeProbabilities | null {
+  const g = estimate.grade_probabilities;
+  if (!g?.psa) return null;
+  return normalizeProbabilities(g as GradeProbabilities);
 }
 
 function expectedValue(outcomes: GradeOutcome[]): number {
@@ -236,13 +250,60 @@ function hasPhotoQualityFlag(notes?: string | null): boolean {
   );
 }
 
+function buildPsaPopUrl(cardIdentity: {
+  player_name?: string;
+  year?: string;
+  set_name?: string;
+  parallel_type?: string;
+}): string {
+  const parts = [
+    cardIdentity.player_name,
+    cardIdentity.year,
+    cardIdentity.set_name,
+    cardIdentity.parallel_type,
+  ].filter(Boolean) as string[];
+  const q = parts.join(" ");
+  return `https://www.psacard.com/pop/search?q=${encodeURIComponent(q)}`;
+}
+
+function buildBgsPopUrl(cardIdentity: {
+  player_name?: string;
+  year?: string;
+  set_name?: string;
+}): string {
+  const parts = [
+    cardIdentity.player_name,
+    cardIdentity.year,
+    cardIdentity.set_name,
+  ].filter(Boolean) as string[];
+  const q = parts.join(" ");
+  return `https://www.beckett.com/search/#q=${encodeURIComponent(q)}&tab=population`;
+}
+
+function compsParamsForPanel(cardIdentity: VerdictCardIdentity): CompsParams {
+  const owner = cardIdentity?.owner_declared_title?.trim();
+  if (owner) {
+    return { title: owner };
+  }
+  return {
+    player: cardIdentity?.player_name,
+    year: cardIdentity?.year,
+    setName: cardIdentity?.set_name,
+    parallel: cardIdentity?.parallel_type,
+  };
+}
+
 function buildCardIdentityLabel(cardIdentity?: {
   player_name?: string;
   year?: string;
   set_name?: string;
   parallel_type?: string;
+  owner_declared_title?: string;
 } | null): string | null {
   if (!cardIdentity) return null;
+  if (cardIdentity.owner_declared_title?.trim()) {
+    return cardIdentity.owner_declared_title.trim();
+  }
   const parts: string[] = [];
   if (cardIdentity.player_name) parts.push(cardIdentity.player_name);
   if (cardIdentity.year) parts.push(cardIdentity.year);
@@ -304,11 +365,10 @@ function ProbabilityBar({
   label: string;
   probability: number;
   isHighlighted: boolean;
-  accentColor: "blue" | "emerald";
+  accentColor: BarAccent;
 }) {
   const percent = Math.round(probability * 100);
-  const barColor = accentColor === "blue" ? "bg-blue-500" : "bg-emerald-500";
-  const barColorDim = accentColor === "blue" ? "bg-blue-500/30" : "bg-emerald-500/30";
+  const { bar: barColor, barDim: barColorDim } = BAR_ACCENTS[accentColor];
 
   return (
     <div className={`transition-opacity ${percent === 0 ? "opacity-40" : ""}`}>
@@ -379,6 +439,75 @@ function EvidenceBlock({
   );
 }
 
+function GraderPerspectiveNote({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mb-2">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="text-left text-[9px] text-white/30 hover:text-white/55 transition-colors underline-offset-2 hover:underline"
+      >
+        {open ? "Hide note" : "How they’d look at this"}
+      </button>
+      {open ? (
+        <p className="mt-1 text-[9px] leading-snug text-white/40">{text}</p>
+      ) : null}
+    </div>
+  );
+}
+
+function HalfPointGraderColumn({
+  title,
+  outcomes,
+  accent,
+  perspective,
+}: {
+  title: string;
+  outcomes: GradeOutcome[];
+  accent: BarAccent;
+  perspective?: string;
+}) {
+  const [perspectiveOpen, setPerspectiveOpen] = useState(false);
+  const top = mostLikely(outcomes);
+  return (
+    <div className="min-w-[128px] shrink-0 px-1">
+      <p className="text-[9px] font-bold uppercase tracking-widest text-white/35 mb-1">{title}</p>
+      {top ? (
+        <p className="text-[10px] text-white/45 mb-1.5 leading-snug">
+          Top: <span className="text-white/70 font-medium">{top.label}</span>{" "}
+          <span className="font-mono">{formatPercent(top.probability)}</span>
+        </p>
+      ) : null}
+      {perspective ? (
+        <>
+          <button
+            type="button"
+            onClick={() => setPerspectiveOpen((o) => !o)}
+            className="mb-1.5 text-left text-[9px] text-white/30 hover:text-white/55 transition-colors underline-offset-2 hover:underline"
+          >
+            {perspectiveOpen ? "Hide note" : "How they’d look at this"}
+          </button>
+          {perspectiveOpen ? (
+            <p className="text-[9px] leading-snug text-white/40 mb-2">{perspective}</p>
+          ) : null}
+        </>
+      ) : null}
+      <div className="space-y-2">
+        {outcomes.map((outcome) => (
+          <ProbabilityBar
+            key={outcome.label}
+            label={outcome.label}
+            probability={outcome.probability}
+            isHighlighted={outcome.label === top?.label}
+            accentColor={accent}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─────────────────────────────────────────────────────────
 // Main component
 // ─────────────────────────────────────────────────────────
@@ -391,12 +520,14 @@ export default function GradeProbabilityPanel({
   scanPhotos,
   showPreliminaryBadge,
   compact = false,
+  flat = false,
+  headerLabel = "CardzCheck · AI Estimate",
   appliedRefinement,
+  gradingPriority = "liquidity",
 }: GradeProbabilityPanelProps) {
   const confidence = estimate.grade_probabilities?.confidence;
 
   const [selectedPhotoIdx, setSelectedPhotoIdx] = useState(0);
-  const [showBgsDistribution, setShowBgsDistribution] = useState(false);
   const [evidenceOpen, setEvidenceOpen] = useState(false);
   const [verdictOpen, setVerdictOpen] = useState(false);
   const [exportingPng, setExportingPng] = useState(false);
@@ -406,7 +537,10 @@ export default function GradeProbabilityPanel({
     estimate.grade_probabilities?.confidence === "high" &&
     meetsTopTierEvidence(estimate);
   const psaOutcomes = getPsaOutcomes(estimate, { allowPsa10Override });
-  const bgsOutcomes = getBgsOutcomes(estimate);
+  const resolvedGradeProbabilities = useMemo(
+    () => resolveFullGradeProbabilities(estimate),
+    [estimate]
+  );
   const psaTotal = psaOutcomes.reduce((sum, outcome) => sum + outcome.probability, 0);
   const likely = mostLikely(psaOutcomes);
   const ev = expectedValue(psaOutcomes);
@@ -421,9 +555,22 @@ export default function GradeProbabilityPanel({
     : undefined;
   const cardLabel = buildCardIdentityLabel(cardIdentity);
   const verdict = useMemo(
-    () => buildGradeVerdict(estimate, cardIdentity),
-    [estimate, cardIdentity]
+    () => buildGradeVerdict(estimate, cardIdentity, { gradingPriority }),
+    [estimate, cardIdentity, gradingPriority]
   );
+  const analysisSpeechText = [
+    cardLabel ? `Card: ${cardLabel}.` : "",
+    likely ? `Most likely grade: ${likely.label} with ${Math.round(likely.probability * 100)} percent probability.` : "",
+    `Recommendation: ${verdict.recommendation}.`,
+    `Suggested grader: ${verdict.suggestedGrader}.`,
+    verdict.reasoning ? `Reasoning: ${verdict.reasoning}.` : "",
+    estimate.centering ? `Centering: ${estimate.centering}.` : "",
+    estimate.corners ? `Corners: ${estimate.corners}.` : "",
+    estimate.surface ? `Surface: ${estimate.surface}.` : "",
+    estimate.edges ? `Edges: ${estimate.edges}.` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   const confidencePillClass = confidence
     ? (confidencePillClasses[confidence] ?? confidencePillClasses.medium)
@@ -503,6 +650,7 @@ export default function GradeProbabilityPanel({
         imageUrls,
         generatedAt: new Date().toISOString(),
         slabId,
+        gradingPriority,
       });
     } catch (err) {
       console.error("Failed to open PDF print page:", err);
@@ -524,7 +672,7 @@ export default function GradeProbabilityPanel({
       {/* ── DARK GALLERY VIEWER ─────────────────────────────────────────── */}
       <div
         ref={panelRef}
-        className="flex flex-col lg:flex-row overflow-hidden rounded-xl border border-white/8 bg-[#111]"
+        className={`flex flex-col overflow-hidden lg:flex-row ${flat ? "border-y border-white/8 bg-[#111]" : "rounded-xl border border-white/8 bg-[#111]"}`}
         style={{ minHeight: 560 }}
       >
 
@@ -534,7 +682,7 @@ export default function GradeProbabilityPanel({
           {/* Brand label */}
           <div className="px-5 pt-5 pb-3">
             <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-[#c8a951]">
-              CardzCheck · AI Estimate
+              {headerLabel}
             </p>
             {showPreliminaryBadge && (
               <span className="mt-1 inline-flex items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-400">
@@ -589,7 +737,7 @@ export default function GradeProbabilityPanel({
 
           {/* Warning banner */}
           {inlineBanner && (
-            <div className="mx-5 mb-4 rounded-lg border border-amber-500/20 bg-amber-500/8 px-3 py-2">
+            <div className={flat ? "mx-5 mb-4 border-l border-amber-500/30 pl-3" : "mx-5 mb-4 rounded-lg border border-amber-500/20 bg-amber-500/8 px-3 py-2"}>
               <p className="text-[10px] leading-snug text-amber-400">{inlineBanner}</p>
             </div>
           )}
@@ -597,49 +745,47 @@ export default function GradeProbabilityPanel({
           {/* Grade Probability Distribution */}
           <div className="px-5 pt-4 pb-5 border-t border-white/8">
             <p className="text-[9px] font-semibold uppercase tracking-widest text-white/30 mb-3">
-              Grade Probability · PSA
+              Grade probability · five services
             </p>
-            <div className="space-y-2.5">
-              {psaOutcomes.map((outcome) => (
-                <ProbabilityBar
-                  key={outcome.label}
-                  label={outcome.label}
-                  probability={outcome.probability}
-                  isHighlighted={outcome.label === likely?.label}
-                  accentColor="blue"
-                />
-              ))}
-            </div>
-            {bgsOutcomes && (
-              <div className="mt-3">
-                <button
-                  type="button"
-                  onClick={() => setShowBgsDistribution((prev) => !prev)}
-                  className="flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-widest text-white/25 transition-colors hover:text-white/60"
-                >
-                  <svg className={`h-3 w-3 transition-transform duration-200 ${showBgsDistribution ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                  BGS Distribution
-                </button>
-                {showBgsDistribution && (
-                  <div className="mt-2.5 space-y-2.5">
-                    {BGS_ORDER.map((label) => {
-                      const outcome = bgsOutcomes.find((item) => item.label === label);
-                      return (
-                        <ProbabilityBar
-                          key={label}
-                          label={label}
-                          probability={outcome?.probability ?? 0}
-                          isHighlighted={false}
-                          accentColor="emerald"
-                        />
-                      );
-                    })}
-                  </div>
-                )}
+            <div className="-mx-1 flex gap-2 overflow-x-auto pb-1 snap-x snap-mandatory">
+              <div className="min-w-[128px] shrink-0 snap-start px-1">
+                <p className="text-[9px] font-bold uppercase tracking-widest text-white/35 mb-2">PSA</p>
+                {estimate.grader_perspectives?.psa ? (
+                  <GraderPerspectiveNote text={estimate.grader_perspectives.psa} />
+                ) : null}
+                <div className="space-y-2.5">
+                  {psaOutcomes.map((outcome) => (
+                    <ProbabilityBar
+                      key={outcome.label}
+                      label={outcome.label}
+                      probability={outcome.probability}
+                      isHighlighted={outcome.label === likely?.label}
+                      accentColor="blue"
+                    />
+                  ))}
+                </div>
               </div>
-            )}
+              {resolvedGradeProbabilities
+                ? HALF_POINT_GRADER_ROWS.map((row, idx) => (
+                    <HalfPointGraderColumn
+                      key={row.key}
+                      title={row.title}
+                      outcomes={getHalfPointOutcomes(
+                        resolvedGradeProbabilities,
+                        row.labels,
+                        row.key
+                      )}
+                      accent={HALF_POINT_ACCENTS[idx] ?? "emerald"}
+                      perspective={estimate.grader_perspectives?.[row.perspectiveField]}
+                    />
+                  ))
+                : null}
+            </div>
+            {resolvedGradeProbabilities ? (
+              <p className="mt-2 text-[8px] leading-snug text-white/22">
+                {gradingCopy.panel.multiGraderBandsNote}
+              </p>
+            ) : null}
           </div>
 
           {/* Evidence (collapsible) */}
@@ -762,16 +908,9 @@ export default function GradeProbabilityPanel({
                 {exportingPng ? "…" : "PNG"}
               </button>
               <SpeakButton
-                text={[
-                  likely ? `Most likely grade: ${likely.label} with ${Math.round(likely.probability * 100)} percent probability.` : "",
-                  `Recommendation: ${verdict.recommendation}.`,
-                  `Suggested grader: ${verdict.suggestedGrader}.`,
-                  estimate.centering ? `Centering: ${estimate.centering}.` : "",
-                  estimate.corners ? `Corners: ${estimate.corners}.` : "",
-                  estimate.surface ? `Surface: ${estimate.surface}.` : "",
-                  estimate.edges ? `Edges: ${estimate.edges}.` : "",
-                ].filter(Boolean).join(" ")}
+                text={analysisSpeechText}
                 size="sm"
+                label={compact ? undefined : "Read analysis"}
               />
             </div>
             {exportError && (
@@ -829,50 +968,93 @@ export default function GradeProbabilityPanel({
       </div>
 
       {/* ── VERIFY COMPS ─────────────────────────────────────────────────── */}
-      {cardIdentity && (cardIdentity.player_name || cardIdentity.set_name) && (() => {
-        const { psa10Url, psa9Url, rawUrl } = buildCompsLinks({
-          player: cardIdentity.player_name,
-          year: cardIdentity.year,
-          setName: cardIdentity.set_name,
-          parallel: cardIdentity.parallel_type,
-        });
-        return (
-          <div className="mt-3 rounded-lg border border-white/[0.07] bg-[#0d1b2a] px-4 py-3">
-            <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.18em] text-blue-400/70">
-              Verify Comps on eBay
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <a
-                href={psa10Url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 rounded border border-blue-900/40 bg-blue-950/40 px-2.5 py-1 text-[11px] font-medium text-blue-300 hover:bg-blue-900/50 transition-colors"
-              >
-                PSA 10 sold →
-              </a>
-              <a
-                href={psa9Url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 rounded border border-blue-900/40 bg-blue-950/40 px-2.5 py-1 text-[11px] font-medium text-blue-300 hover:bg-blue-900/50 transition-colors"
-              >
-                PSA 9 sold →
-              </a>
-              <a
-                href={rawUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 rounded border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-white/50 hover:text-white/70 hover:bg-white/[0.07] transition-colors"
-              >
-                Raw sold →
-              </a>
-            </div>
-            <p className="mt-2 text-[9px] text-white/25">
-              Click to verify current eBay sold prices
-            </p>
+      {cardIdentity &&
+        (cardIdentity.owner_declared_title || cardIdentity.player_name || cardIdentity.set_name) && (
+        <div className={flat ? "mt-6 border-t border-white/[0.07] px-0 py-4" : "mt-3 rounded-lg border border-white/[0.07] bg-[#0d1b2a] px-4 py-3"}>
+          <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.18em] text-blue-400/70">
+            Verify Comps on eBay
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <a
+              href={buildCompsLinks(compsParamsForPanel(cardIdentity)).psa10Url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 rounded border border-blue-900/40 bg-blue-950/40 px-2.5 py-1 text-[11px] font-medium text-blue-300 hover:bg-blue-900/50 transition-colors"
+            >
+              PSA 10 sold →
+            </a>
+            <a
+              href={buildCompsLinks(compsParamsForPanel(cardIdentity)).psa9Url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 rounded border border-blue-900/40 bg-blue-950/40 px-2.5 py-1 text-[11px] font-medium text-blue-300 hover:bg-blue-900/50 transition-colors"
+            >
+              PSA 9 sold →
+            </a>
+            <a
+              href={buildCompsLinks(compsParamsForPanel(cardIdentity)).rawUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 rounded border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-white/50 hover:text-white/70 hover:bg-white/[0.07] transition-colors"
+            >
+              Raw sold →
+            </a>
           </div>
-        );
-      })()}
+          <p className="mt-2 text-[9px] text-white/25">
+            Click to verify current eBay sold prices
+          </p>
+        </div>
+      )}
+
+      {/* ── Footer ─────────────────────────────────────────────────── */}
+      <div className={`flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.06] py-4 ${flat ? "px-0" : "px-5"}`}>
+        <p className="text-[10px] text-[#3a5068] leading-relaxed max-w-prose" data-export-disclaimer="true">
+          {gradingCopy.panel.disclaimer}
+        </p>
+
+        <div className="flex flex-wrap items-center gap-3" data-export-ignore="true">
+          {/* PSA Pop Report link */}
+          {cardIdentity?.player_name ? (
+            <a
+              href={buildPsaPopUrl(cardIdentity)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs text-[#3a5068] hover:text-blue-400 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              PSA Pop
+            </a>
+          ) : null}
+
+          {/* BGS Pop Report link */}
+          {cardIdentity?.player_name ? (
+            <a
+              href={buildBgsPopUrl(cardIdentity)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs text-[#3a5068] hover:text-emerald-400 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              BGS Pop
+            </a>
+          ) : null}
+
+          <button
+            type="button"
+            onClick={handleExportPdf}
+            className="inline-flex items-center gap-1.5 text-xs text-[#3a5068] hover:text-[#7a91a8] transition-colors"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            Export report
+          </button>
+        </div>
+      </div>
 
       {cardIdentity && cardIdentity.player_name ? (
         <PreSubmissionAnalysisSection estimate={estimate} cardIdentity={cardIdentity} />
@@ -898,6 +1080,7 @@ export default function GradeProbabilityPanel({
           imageUrls={normalizedScanPhotos.map((photo) => photo.url)}
           generatedAt={new Date().toISOString()}
           slabId={slabId}
+          gradingPriority={gradingPriority}
         />
       </div>
     </>

@@ -11,6 +11,7 @@ type ProgressPanelProps = {
   identityLabel?: string | null;
   errorMessage?: string | null;
   elapsedLabel?: string | null;
+  flat?: boolean;
 };
 
 const STEP_LABELS: Array<{
@@ -69,23 +70,24 @@ export default function GradeEstimateProgressPanel({
   identityLabel,
   errorMessage,
   elapsedLabel,
+  flat = false,
 }: ProgressPanelProps) {
   const statusLabel =
     status === "done" ? "Complete" : status === "error" ? "Needs attention" : "In progress";
 
   return (
-    <div className="cc-surface rounded-xl p-5">
+    <div className={flat ? "border-t border-white/8 pt-5" : "cc-surface rounded-xl p-5"}>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <h3 className="text-sm font-semibold text-[var(--biz-muted)] uppercase tracking-normal">
+        <h3 className={`text-sm font-semibold uppercase tracking-normal ${flat ? "text-white/45" : "text-[var(--biz-muted)]"}`}>
           Analysis progress
         </h3>
         <div className="flex items-center gap-2">
           {elapsedLabel ? (
-            <span className="rounded-full border border-[var(--biz-border)] bg-[color:var(--biz-surface-soft)] px-2.5 py-1 text-xs text-[var(--biz-muted)]">
+            <span className={`rounded-full px-2.5 py-1 text-xs ${flat ? "border border-white/10 bg-white/[0.03] text-white/42" : "border border-[var(--biz-border)] bg-[color:var(--biz-surface-soft)] text-[var(--biz-muted)]"}`}>
               {elapsedLabel}
             </span>
           ) : null}
-          <span className="rounded-full border border-[var(--biz-border)] bg-[color:var(--biz-surface-soft)] px-3 py-1 text-xs text-[var(--biz-text)]">
+          <span className={`rounded-full px-3 py-1 text-xs ${flat ? "border border-white/10 bg-white/[0.03] text-white/74" : "border border-[var(--biz-border)] bg-[color:var(--biz-surface-soft)] text-[var(--biz-text)]"}`}>
             {statusLabel}
           </span>
         </div>
@@ -93,8 +95,8 @@ export default function GradeEstimateProgressPanel({
 
       {identityLabel ? (
         <div className="mb-3">
-          <p className="text-sm font-medium text-[var(--biz-text)]">{identityLabel}</p>
-          <p className="text-xs text-[var(--biz-muted)]">Identity verified for this run</p>
+          <p className={`text-sm font-medium ${flat ? "text-white/82" : "text-[var(--biz-text)]"}`}>{identityLabel}</p>
+          <p className={`text-xs ${flat ? "text-white/42" : "text-[var(--biz-muted)]"}`}>Identity verified for this run</p>
         </div>
       ) : null}
 
@@ -106,11 +108,11 @@ export default function GradeEstimateProgressPanel({
           return (
             <div key={step.key} className="space-y-1">
               <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 text-sm text-[var(--biz-text)]">
+                <div className={`flex items-center gap-2 text-sm ${flat ? "text-white/78" : "text-[var(--biz-text)]"}`}>
                   <StatusIcon status={entry.status} />
                   <span>{step.label}</span>
                 </div>
-                <div className="text-xs text-[var(--biz-muted)]">
+                <div className={`text-xs ${flat ? "text-white/40" : "text-[var(--biz-muted)]"}`}>
                   {entry.status === "queued" ? "Queued" : null}
                   {entry.status === "running" ? "Running" : null}
                   {entry.status === "skipped" ? "Skipped" : null}
@@ -130,7 +132,7 @@ export default function GradeEstimateProgressPanel({
       </div>
 
       {errorMessage ? (
-        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+        <div className={`mt-4 text-xs ${flat ? "border-l border-amber-500/35 pl-3 text-amber-200" : "rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-700"}`}>
           {errorMessage}
         </div>
       ) : null}

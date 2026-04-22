@@ -1,248 +1,200 @@
 "use client";
 
-import { useState } from "react";
-import type { MessageThread, Message } from "@/lib/messaging/types";
-
-const TONES: { id: string; label: string; description: string }[] = [
-  { id: "professional", label: "Professional", description: "Clear, direct, helpful" },
-  { id: "friendly",     label: "Friendly",     description: "Warm and personable" },
-  { id: "firm",         label: "Hold Price",   description: "Politely decline to negotiate" },
-  { id: "negotiate",    label: "Counter Offer",description: "Open or continue negotiation" },
-  { id: "decline",      label: "Decline",      description: "Politely decline their ask" },
-  { id: "accept",       label: "Accept Deal",  description: "Accept with clear next steps" },
-  { id: "ask_details",  label: "Ask Details",  description: "Request more info" },
-];
+import { useEffect, useMemo, useState } from "react";
+import {
+  MARKETPLACE_REPLY_ACTIONS,
+  getMarketplaceReplyActionMeta,
+  type MarketplaceReplyAction,
+  type MarketplaceReplyDraftResult,
+  type MarketplaceReplyGenerationContext,
+  type MarketplaceReplyRecommendation,
+} from "@/lib/messaging/reply-drafts";
 
 interface Props {
-  thread: MessageThread;
-  lastBuyerMessage: Message | null;
-  generatedReply: string | null;
-  replySource: "ai" | "fallback" | null;
+  context: MarketplaceReplyGenerationContext;
+  recommendation: MarketplaceReplyRecommendation;
+  draftResult: MarketplaceReplyDraftResult | null;
   replyLoading: boolean;
-  onGenerateReply: (tone: string, hint?: string) => void;
-  onUseReply: (text: string) => void;
-  onClose: () => void;
-  businessName?: string | null;
+  replyError: string | null;
+  onGenerateReply: (action: MarketplaceReplyAction, sellerNote?: string) => void;
+  onInsertReply: (text: string) => void;
 }
 
 export default function AIActionsPanel({
-  lastBuyerMessage,
-  generatedReply,
-  replySource,
+  context,
+  recommendation,
+  draftResult,
   replyLoading,
+  replyError,
   onGenerateReply,
-  onUseReply,
-  onClose,
-  businessName,
+  onInsertReply,
 }: Props) {
-  const panelTitle = businessName ? `${businessName} Support Advisor` : "Support Advisor";
-  const [selectedTone, setSelectedTone] = useState("professional");
-  const [showTones, setShowTones] = useState(false);
+  const [selectedAction, setSelectedAction] = useState<MarketplaceReplyAction>(
+    recommendation.action
+  );
+  const [sellerNote, setSellerNote] = useState("");
+  const [draftEditorText, setDraftEditorText] = useState("");
+  const [showSellerNote, setShowSellerNote] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [hint, setHint] = useState("");
 
-  function handleCopy(text: string) {
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const activeDraft = useMemo(
+    () =>
+      draftResult && draftResult.action === selectedAction ? draftResult : null,
+    [draftResult, selectedAction]
+  );
+
+  useEffect(() => {
+    setSelectedAction(recommendation.action);
+    setSellerNote("");
+    setShowSellerNote(false);
+    setCopied(false);
+  }, [context.thread.id, recommendation.action]);
+
+  useEffect(() => {
+    setDraftEditorText(activeDraft?.reply ?? "");
+  }, [activeDraft]);
+
+  async function handleCopyDraft() {
+    if (!draftEditorText.trim()) return;
+    if (typeof navigator === "undefined" || !navigator.clipboard) return;
+    try {
+      await navigator.clipboard.writeText(draftEditorText.trim());
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch {
+      setCopied(false);
+    }
   }
 
-  const selectedToneLabel = TONES.find((t) => t.id === selectedTone)?.label ?? "Professional";
+  const selectedActionMeta = getMarketplaceReplyActionMeta(selectedAction);
 
   return (
-    <div className="border-t border-[var(--biz-border)] bg-gradient-to-b from-slate-50 to-white px-4 py-4">
-
-      {/* Header */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-emerald-700 shadow-sm">
-            <svg className="h-3.5 w-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
+    <div className="min-w-0 rounded-2xl border border-[var(--biz-border)] bg-[#FCFDFC] p-3 shadow-[0_2px_8px_rgba(15,23,42,0.04)]">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--biz-muted)]">
+            Suggested Reply
+          </p>
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+            <h3 className="text-sm font-semibold text-[var(--biz-text)]">
+              {recommendation.headline}
+            </h3>
+            <span className="text-[11px] text-[var(--biz-muted)]">
+              {selectedActionMeta.label}
+            </span>
           </div>
-          <span className="text-sm font-bold text-gray-900">{panelTitle}</span>
         </div>
         <button
           type="button"
-          onClick={onClose}
-          className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+          onClick={() => onGenerateReply(selectedAction, sellerNote)}
+          disabled={replyLoading}
+          className="rounded-xl bg-[var(--biz-primary)] px-3.5 py-2 text-[12px] font-semibold text-[var(--biz-primary-foreground)] shadow-[0_10px_24px_var(--biz-primary-border)] transition-colors hover:bg-[var(--biz-primary-hover)] disabled:cursor-not-allowed disabled:opacity-50"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
+          {replyLoading ? "Drafting..." : activeDraft ? "Regenerate" : "Generate draft"}
         </button>
       </div>
 
-      {/* What we're replying to */}
-      {lastBuyerMessage && (
-        <div className="mb-3 flex items-start gap-2 rounded-lg border border-gray-100 bg-white px-3 py-2 shadow-sm">
-          <svg className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-          </svg>
-          <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
-              Replying to {lastBuyerMessage.sender_username}
-            </p>
-            <p className="mt-0.5 truncate text-xs text-gray-700 italic">
-              &ldquo;{lastBuyerMessage.body}&rdquo;
-            </p>
-          </div>
-        </div>
-      )}
+      <p className="mt-2 text-[12px] leading-relaxed text-[var(--biz-muted)]">
+        {recommendation.reason}
+      </p>
 
-      {/* Hint input */}
-      {!replyLoading && (
-        <div className="mb-3">
-          <textarea
-            value={hint}
-            onChange={(e) => setHint(e.target.value)}
-            placeholder="Add context… e.g. 'let them know the bundle ships Friday' or 'mention we can do $40'"
-            rows={2}
-            className="w-full resize-none rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 placeholder-gray-400 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
-          />
-        </div>
-      )}
-
-      {/* Generate controls (only when no draft shown) */}
-      {!generatedReply && !replyLoading && (
-        <div className="space-y-2">
-          <div className="flex gap-2">
+      <div className="mt-3 flex min-w-0 flex-wrap gap-1.5">
+        {MARKETPLACE_REPLY_ACTIONS.map((action) => {
+          const isActive = action.id === selectedAction;
+          const isRecommended = action.id === recommendation.action;
+          return (
             <button
+              key={action.id}
               type="button"
-              onClick={() => onGenerateReply(selectedTone, hint)}
-              className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:brightness-110 active:scale-[0.98]"
+              onClick={() => setSelectedAction(action.id)}
+              className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                isActive
+                  ? "border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] text-[var(--biz-primary)]"
+                  : "border-[var(--biz-border)] bg-white text-[var(--biz-muted)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]"
+              }`}
             >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-              Draft a Reply
+              {isRecommended ? (
+                <span className="h-1.5 w-1.5 rounded-full bg-[var(--biz-primary)]" />
+              ) : null}
+              {action.label}
             </button>
-            <button
-              type="button"
-              onClick={() => setShowTones(!showTones)}
-              className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
-            >
-              {selectedToneLabel}
-              <svg
-                className={`h-3 w-3 transition-transform ${showTones ? "rotate-180" : ""}`}
-                fill="none" stroke="currentColor" viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-          </div>
+          );
+        })}
+      </div>
 
-          {showTones && (
-            <div className="rounded-lg border border-gray-100 bg-white p-2 shadow-sm">
-              <p className="mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Choose tone</p>
-              <div className="grid grid-cols-2 gap-1 sm:grid-cols-3">
-                {TONES.map(({ id, label, description }) => (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => { setSelectedTone(id); setShowTones(false); }}
-                    className={`rounded-md px-2.5 py-2 text-left transition-colors ${
-                      selectedTone === id
-                        ? "bg-emerald-50 border border-emerald-200 text-emerald-800"
-                        : "border border-transparent hover:bg-gray-50 text-gray-700"
-                    }`}
-                  >
-                    <p className="text-[11px] font-semibold">{label}</p>
-                    <p className="text-[10px] text-gray-400">{description}</p>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setShowSellerNote((current) => !current)}
+          className="rounded-full border border-[var(--biz-border)] bg-white px-3 py-1.5 text-[11px] font-semibold text-[var(--biz-muted)] transition-colors hover:bg-[var(--biz-hover)]"
+        >
+          {showSellerNote ? "Hide note" : "Add note"}
+        </button>
+        {activeDraft ? (
+          <span className="text-[11px] text-[var(--biz-muted)]">
+            {activeDraft.source === "ai" ? "Draft ready" : "Quick template ready"}
+          </span>
+        ) : null}
+      </div>
+
+      {showSellerNote ? (
+        <input
+          value={sellerNote}
+          onChange={(event) => setSellerNote(event.target.value)}
+          placeholder="Optional note: shipping timing, price floor, bundle detail..."
+          className="mt-2 w-full rounded-[14px] border border-[var(--biz-border)] bg-white px-3 py-2 text-sm text-[var(--biz-text)] placeholder-[var(--biz-muted)] focus:border-[var(--biz-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--biz-primary)]"
+        />
+      ) : null}
+
+      {replyError ? (
+        <div className="mt-3 rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-700">
+          {replyError}
         </div>
-      )}
+      ) : null}
 
-      {/* Loading state */}
-      {replyLoading && (
-        <div className="flex items-center gap-3 rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3.5">
-          <svg className="h-5 w-5 shrink-0 animate-spin text-emerald-600" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-          </svg>
-          <div>
-            <p className="text-sm font-semibold text-emerald-800">Reading your conversation…</p>
-            <p className="text-[11px] text-emerald-600">Drafting a contextual reply based on the full thread</p>
-          </div>
-        </div>
-      )}
-
-      {/* Generated draft */}
-      {generatedReply && !replyLoading && (
-        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-md">
-
-          {/* Draft header */}
-          <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-3 py-2">
-            <div className="flex items-center gap-1.5">
-              {replySource === "ai" ? (
-                <>
-                  <svg className="h-3.5 w-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                  </svg>
-                  <span className="text-[11px] font-semibold text-emerald-700">Draft ready</span>
-                  <span className="text-[10px] text-gray-400">· {selectedToneLabel}</span>
-                </>
-              ) : (
-                <>
-                  <svg className="h-3.5 w-3.5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
-                  <span className="text-[11px] font-semibold text-amber-700">Template — AI not configured</span>
-                </>
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={() => onGenerateReply(selectedTone, hint)}
-              className="flex items-center gap-1 text-[11px] font-medium text-gray-500 hover:text-emerald-700 transition-colors"
-            >
-              <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              Regenerate
-            </button>
-          </div>
-
-          {/* Draft body */}
-          <p className="px-4 py-3.5 text-sm leading-relaxed text-gray-800 whitespace-pre-wrap">
-            {generatedReply}
-          </p>
-
-          {/* AI not configured warning */}
-          {replySource === "fallback" && (
-            <div className="mx-3 mb-3 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2">
-              <p className="text-[11px] text-amber-700">
-                <span className="font-semibold">AI unavailable.</span> Add{" "}
-                <code className="rounded bg-amber-100 px-1 font-mono text-[10px]">ANTHROPIC_API_KEY</code>{" "}
-                to Vercel → Settings → Environment Variables to enable real AI replies.
+      {replyLoading ? (
+        <div className="mt-3 rounded-[18px] border border-[var(--biz-primary-border)] bg-white px-3.5 py-3">
+          <div className="flex items-center gap-2">
+            <div className="h-7 w-7 animate-pulse rounded-full bg-[var(--biz-primary-soft)]" />
+            <div>
+              <p className="text-sm font-semibold text-[var(--biz-text)]">Building draft</p>
+              <p className="text-[11px] text-[var(--biz-primary)]">
+                Pulling in the thread and your selected move.
               </p>
             </div>
-          )}
-
-          {/* Actions */}
-          <div className="flex items-center gap-2 border-t border-gray-100 px-3 py-2.5">
+          </div>
+        </div>
+      ) : activeDraft ? (
+        <div className="mt-3 rounded-[18px] border border-[var(--biz-border)] bg-white">
+          <textarea
+            value={draftEditorText}
+            onChange={(event) => setDraftEditorText(event.target.value)}
+            rows={3}
+            className="min-h-[96px] w-full resize-y border-0 bg-transparent px-3.5 py-3 text-sm leading-relaxed text-[var(--biz-text)] focus:outline-none"
+          />
+          <div className="flex flex-wrap items-center gap-2 border-t border-[var(--biz-border)] px-3.5 py-2.5">
             <button
               type="button"
-              onClick={() => onUseReply(generatedReply)}
-              className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-700 px-4 py-2 text-xs font-bold text-white shadow-sm transition-all hover:brightness-110"
+              onClick={() => onInsertReply(draftEditorText.trim())}
+              disabled={!draftEditorText.trim()}
+              className="rounded-xl bg-[var(--biz-primary)] px-3 py-2 text-[12px] font-semibold text-[var(--biz-primary-foreground)] transition-colors hover:bg-[var(--biz-primary-hover)] disabled:cursor-not-allowed disabled:opacity-45"
             >
-              Use This Reply
-              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-              </svg>
+              Use draft
             </button>
             <button
               type="button"
-              onClick={() => handleCopy(generatedReply)}
-              className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50"
+              onClick={handleCopyDraft}
+              className="rounded-xl border border-[var(--biz-border)] bg-white px-3 py-2 text-[12px] font-semibold text-[var(--biz-text)] transition-colors hover:bg-[var(--biz-hover)]"
             >
-              {copied ? "Copied!" : "Copy"}
+              {copied ? "Copied" : "Copy"}
             </button>
           </div>
+        </div>
+      ) : (
+        <div className="mt-3 rounded-[18px] border border-dashed border-[var(--biz-border)] bg-white px-3.5 py-3">
+          <p className="text-[12px] text-[var(--biz-muted)]">
+            Generate a draft when you want a quick starting point.
+          </p>
         </div>
       )}
     </div>

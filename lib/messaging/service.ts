@@ -7,6 +7,8 @@
  * Platform-specific logic lives in lib/messaging/adapters/.
  */
 
+import Anthropic from "@anthropic-ai/sdk";
+import { createClient } from "@/lib/supabase/server";
 import type {
   MessageThread,
   Message,
@@ -21,37 +23,45 @@ import {
   sendEbayMessage,
 } from "./adapters/ebay";
 import { computeNegotiationAnalysis } from "./mock-data";
+import {
+  buildFallbackMarketplaceReply,
+  createMarketplaceReplyContext,
+  formatCurrencyFromCents,
+  parseMarketplaceOfferAmount,
+  recommendMarketplaceReplyAction,
+  type MarketplaceReplyAction,
+  type MarketplaceReplyDraftResult,
+} from "./reply-drafts";
 
-// ─── Thread queries ──────────────────────────────────────────────────────────
+type EbayListingLookupRow = {
+  ebay_listing_id: string;
+  inventory_source_id: string | null;
+  listed_price_cents: number | null;
+  title: string | null;
+};
 
-export async function getMessagingStats(
-  userId: string
-): Promise<MessagingStats> {
-  try {
-    const threads = await getEbayThreads(userId);
-    return buildStatsFromThreads(threads);
-  } catch {
-    return {
-      total_threads: 0,
-      unread_count: 0,
-      needs_response: 0,
-      open_offers: 0,
-      avg_response_time_hours: null,
-    };
-  }
-}
+type InventoryLookupRow = {
+  id: string;
+  title: string | null;
+  cost_basis_total_cents: number | null;
+  list_price_cents: number | null;
+  ebay_item_id?: string | null;
+};
 
-export async function getThreads(
-  userId: string,
-  filter: ThreadFilter = "all"
-): Promise<MessageThread[]> {
-  let threads: MessageThread[];
-  try {
-    threads = await getEbayThreads(userId);
-  } catch {
-    threads = [];
-  }
+type ThreadListingContext = {
+  inventoryItemId: string | null;
+  listingPriceCents: number | null;
+  costBasisCents: number | null;
+  title: string | null;
+};
 
+const DEFAULT_EBAY_FEE_PERCENT = 13.25;
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function applyThreadFilter(
+  threads: MessageThread[],
+  filter: ThreadFilter
+): MessageThread[] {
   switch (filter) {
     case "unread":
       return threads.filter((t) => t.unread_count > 0);
@@ -81,12 +91,267 @@ function buildStatsFromThreads(threads: MessageThread[]): MessagingStats {
   };
 }
 
+function roundCounterCents(value: number): number {
+  return Math.max(0, Math.round(value / 500) * 500);
+}
+
+function deriveSuggestedCounter(
+  offerAmountCents: number,
+  listingPriceCents: number
+): { suggestedAction: MessageThread["suggested_action"]; suggestedCounterCents: number | null } {
+  const offerRatio = offerAmountCents / listingPriceCents;
+
+  if (offerRatio >= 0.94) {
+    return {
+      suggestedAction: "hold_firm",
+      suggestedCounterCents: listingPriceCents,
+    };
+  }
+
+  if (offerRatio <= 0.65) {
+    return {
+      suggestedAction: "decline",
+      suggestedCounterCents: null,
+    };
+  }
+
+  const gap = listingPriceCents - offerAmountCents;
+  const suggestedCounterCents = roundCounterCents(
+    Math.min(listingPriceCents, offerAmountCents + gap * 0.6)
+  );
+
+  return {
+    suggestedAction: "counter",
+    suggestedCounterCents,
+  };
+}
+
+function enrichThreadWithDerivedContext(
+  thread: MessageThread,
+  listingContext: ThreadListingContext | null,
+  lastInboundOfferCents: number | null
+): MessageThread {
+  const offerAmountCents = thread.offer_amount_cents ?? lastInboundOfferCents;
+  const listingPriceCents =
+    thread.listing_price_cents ??
+    listingContext?.listingPriceCents ??
+    null;
+  const costBasisCents =
+    thread.cost_basis_cents ??
+    listingContext?.costBasisCents ??
+    null;
+  const feePercent =
+    thread.fee_percent ??
+    (thread.platform === "ebay" && (listingPriceCents !== null || offerAmountCents !== null)
+      ? DEFAULT_EBAY_FEE_PERCENT
+      : null);
+
+  let next: MessageThread = {
+    ...thread,
+    category: offerAmountCents !== null ? "offer" : thread.category,
+    inventory_item_id: thread.inventory_item_id ?? listingContext?.inventoryItemId ?? null,
+    item_title: thread.item_title ?? listingContext?.title ?? null,
+    offer_amount_cents: offerAmountCents,
+    listing_price_cents: listingPriceCents,
+    cost_basis_cents: costBasisCents,
+    fee_percent: feePercent,
+  };
+
+  const negotiation = computeNegotiationAnalysis(next);
+  if (negotiation) {
+    return {
+      ...next,
+      suggested_action: negotiation.recommended_action,
+      estimated_net_cents: negotiation.estimated_net_cents,
+      estimated_profit_cents: negotiation.estimated_profit_cents,
+      suggested_counter_cents: negotiation.suggested_counter_cents,
+    };
+  }
+
+  if (offerAmountCents !== null && listingPriceCents !== null) {
+    const derived = deriveSuggestedCounter(offerAmountCents, listingPriceCents);
+    next = {
+      ...next,
+      suggested_action: thread.suggested_action ?? derived.suggestedAction,
+      suggested_counter_cents:
+        thread.suggested_counter_cents ?? derived.suggestedCounterCents,
+    };
+  }
+
+  return next;
+}
+
+async function loadThreadListingContextMap(
+  userId: string,
+  threads: MessageThread[]
+): Promise<Map<string, ThreadListingContext>> {
+  const listingIds = Array.from(
+    new Set(
+      threads
+        .map((thread) => thread.listing_id)
+        .filter((value): value is string => Boolean(value))
+    )
+  );
+
+  if (listingIds.length === 0) {
+    return new Map();
+  }
+
+  try {
+    const supabase = await createClient();
+    const { data: listingRows, error: listingError } = await supabase
+      .from("ebay_listings")
+      .select("ebay_listing_id, inventory_source_id, listed_price_cents, title")
+      .eq("user_id", userId)
+      .in("ebay_listing_id", listingIds);
+
+    if (listingError) {
+      console.warn("[messaging] Failed to load ebay listing context:", listingError);
+      return new Map();
+    }
+
+    const inventoryIds = Array.from(
+      new Set(
+        ((listingRows ?? []) as EbayListingLookupRow[])
+          .map((row: EbayListingLookupRow) => row.inventory_source_id)
+          .filter(
+            (value: string | null): value is string =>
+              typeof value === "string" && UUID_REGEX.test(value)
+          )
+      )
+    );
+
+    const inventoryById = new Map<string, InventoryLookupRow>();
+    if (inventoryIds.length > 0) {
+      const { data: inventoryRows, error: inventoryError } = await supabase
+        .from("business_inventory_items")
+        .select("id, title, cost_basis_total_cents, list_price_cents")
+        .eq("user_id", userId)
+        .in("id", inventoryIds);
+
+      if (inventoryError) {
+        console.warn("[messaging] Failed to load inventory pricing context:", inventoryError);
+      } else {
+        for (const row of (inventoryRows ?? []) as InventoryLookupRow[]) {
+          inventoryById.set(row.id, row);
+        }
+      }
+    }
+
+    const missingListingIds = listingIds.filter(
+      (listingId) =>
+        !((listingRows ?? []) as EbayListingLookupRow[]).some(
+          (row: EbayListingLookupRow) => row.ebay_listing_id === listingId
+        )
+    );
+
+    const inventoryByListingId = new Map<string, InventoryLookupRow>();
+    if (missingListingIds.length > 0) {
+      const { data: inventoryRowsByListingId, error: inventoryByListingError } = await supabase
+        .from("business_inventory_items")
+        .select("id, title, cost_basis_total_cents, list_price_cents, ebay_item_id")
+        .eq("user_id", userId)
+        .in("ebay_item_id", missingListingIds);
+
+      if (inventoryByListingError) {
+        console.warn(
+          "[messaging] Failed to load inventory context by eBay item id:",
+          inventoryByListingError
+        );
+      } else {
+        for (const row of (inventoryRowsByListingId ?? []) as InventoryLookupRow[]) {
+          if (row.ebay_item_id) {
+            inventoryByListingId.set(row.ebay_item_id, row);
+          }
+        }
+      }
+    }
+
+    const lookup = new Map<string, ThreadListingContext>();
+
+    for (const row of (listingRows ?? []) as EbayListingLookupRow[]) {
+      const inventory = row.inventory_source_id
+        ? inventoryById.get(row.inventory_source_id)
+        : undefined;
+      lookup.set(row.ebay_listing_id, {
+        inventoryItemId: row.inventory_source_id ?? inventory?.id ?? null,
+        listingPriceCents: inventory?.list_price_cents ?? row.listed_price_cents ?? null,
+        costBasisCents: inventory?.cost_basis_total_cents ?? null,
+        title: inventory?.title ?? row.title ?? null,
+      });
+    }
+
+    for (const listingId of missingListingIds) {
+      const inventory = inventoryByListingId.get(listingId);
+      if (!inventory) continue;
+      lookup.set(listingId, {
+        inventoryItemId: inventory.id,
+        listingPriceCents: inventory.list_price_cents ?? null,
+        costBasisCents: inventory.cost_basis_total_cents ?? null,
+        title: inventory.title ?? null,
+      });
+    }
+
+    return lookup;
+  } catch (error) {
+    console.warn("[messaging] Pricing context enrichment failed:", error);
+    return new Map();
+  }
+}
+
+async function enrichThreads(
+  userId: string,
+  threads: MessageThread[]
+): Promise<MessageThread[]> {
+  if (threads.length === 0) return [];
+  const listingContextById = await loadThreadListingContextMap(userId, threads);
+
+  return threads.map((thread) => {
+    const listingContext = thread.listing_id
+      ? listingContextById.get(thread.listing_id) ?? null
+      : null;
+    const previewOfferCents = parseMarketplaceOfferAmount(thread.last_message_preview);
+    return enrichThreadWithDerivedContext(thread, listingContext, previewOfferCents);
+  });
+}
+
+// ─── Thread queries ──────────────────────────────────────────────────────────
+
+export async function getMessagingStats(
+  userId: string
+): Promise<MessagingStats> {
+  try {
+    const threads = await enrichThreads(userId, await getEbayThreads(userId));
+    return buildStatsFromThreads(threads);
+  } catch {
+    return {
+      total_threads: 0,
+      unread_count: 0,
+      needs_response: 0,
+      open_offers: 0,
+      avg_response_time_hours: null,
+    };
+  }
+}
+
+export async function getThreads(
+  userId: string,
+  filter: ThreadFilter = "all"
+): Promise<MessageThread[]> {
+  try {
+    const threads = await enrichThreads(userId, await getEbayThreads(userId));
+    return applyThreadFilter(threads, filter);
+  } catch {
+    return [];
+  }
+}
+
 export async function getMessagingOverview(
   userId: string,
   filter: ThreadFilter = "all"
 ): Promise<{ stats: MessagingStats; threads: MessageThread[] }> {
   try {
-    const allThreads = await getEbayThreads(userId);
+    const allThreads = await enrichThreads(userId, await getEbayThreads(userId));
     const stats = buildStatsFromThreads(allThreads);
     const threads = applyThreadFilter(allThreads, filter);
     return { stats, threads };
@@ -96,32 +361,19 @@ export async function getMessagingOverview(
   }
 }
 
-function applyThreadFilter(
-  threads: MessageThread[],
-  filter: ThreadFilter
-): MessageThread[] {
-  switch (filter) {
-    case "unread":
-      return threads.filter((t) => t.unread_count > 0);
-    case "needs_response":
-      return threads.filter((t) => t.status === "needs_response");
-    case "offers":
-      return threads.filter((t) => t.category === "offer");
-    case "resolved":
-      return threads.filter((t) => t.status === "resolved");
-    case "archived":
-      return threads.filter((t) => t.status === "archived");
-    default:
-      return threads;
-  }
-}
-
 export async function getThread(
   userId: string,
   threadId: string
 ): Promise<MessageThread | null> {
   try {
-    return await getEbayThread(userId, threadId);
+    const thread = await getEbayThread(userId, threadId);
+    if (!thread) return null;
+
+    const listingContextById = await loadThreadListingContextMap(userId, [thread]);
+    const listingContext = thread.listing_id
+      ? listingContextById.get(thread.listing_id) ?? null
+      : null;
+    return enrichThreadWithDerivedContext(thread, listingContext, null);
   } catch {
     return null;
   }
@@ -168,133 +420,175 @@ export function getNegotiationAnalysisForThread(
 
 // ─── AI reply generation ─────────────────────────────────────────────────────
 
-export type AIReplyTone =
-  | "professional"
-  | "friendly"
-  | "firm"
-  | "negotiate"
-  | "decline"
-  | "accept"
-  | "ask_details";
-
-const TONE_INSTRUCTIONS: Record<AIReplyTone, string> = {
-  professional:
-    "Write a professional, helpful reply that directly addresses the buyer's question or concern. Be clear and concise.",
-  friendly:
-    "Write a warm, enthusiastic reply that builds rapport. Be personable and upbeat while still being helpful.",
-  firm:
-    "Write a polite but firm reply that holds the listed price. Briefly justify the price (condition, market value) without being aggressive.",
-  negotiate:
-    "Write a reply that opens or continues a negotiation. If there's a suggested counter price, use it. Be flexible but protect your margin.",
+const ACTION_INSTRUCTIONS: Record<MarketplaceReplyAction, string> = {
+  smart_reply:
+    "Write the best next reply for this thread. If the recommendation clearly suggests a move, lean into it naturally.",
+  counteroffer:
+    "Write a clean counteroffer. Use the suggested counter if one is provided. Lead with the number and keep the door open.",
+  hold_firm:
+    "Write a short, confident message that holds the current price without sounding stiff or defensive.",
   decline:
-    "Write a polite decline. Acknowledge their interest, explain you can't meet their ask, and leave the door open.",
-  accept:
-    "Write a reply that accepts the deal and gives clear next steps for completing the purchase.",
-  ask_details:
-    "Write a reply that asks for more information needed to help them. Be specific about what you need.",
+    "Write a polite decline. Keep it brief, avoid overexplaining, and leave room for the buyer to come back stronger if appropriate.",
+  accept_close:
+    "Write a reply that accepts the deal and moves the buyer toward immediate payment or checkout.",
+  ask_payment:
+    "Write a direct nudge that asks the buyer to send payment now and locks the deal in.",
+  ask_time:
+    "Write a reply that asks for a little more time. Keep it confident and give a clear expectation if possible.",
+  reengage:
+    "Write a short follow-up to wake up a stale buyer and give them a clear path to close now.",
+  clarify:
+    "Write a precise reply that clears up condition, shipping, or price questions without sounding like customer support.",
 };
-
-export type AIReplyResult = { text: string; source: "ai" | "fallback" };
 
 export async function generateAIReply(
   userId: string,
   threadId: string,
-  tone: AIReplyTone,
-  hint?: string
-): Promise<AIReplyResult> {
-  const [thread, messages] = await Promise.all([
-    getThread(userId, threadId),
-    getMessages(userId, threadId),
-  ]);
-  if (!thread) return { text: "Unable to generate reply — thread not found.", source: "fallback" };
+  action: MarketplaceReplyAction,
+  sellerNote?: string
+): Promise<MarketplaceReplyDraftResult> {
+  const messages = await getMessages(userId, threadId);
+  const baseThread = await getEbayThread(userId, threadId);
 
-  // Check for API key before attempting
+  if (!baseThread) {
+    return {
+      reply: "Unable to generate a draft right now.",
+      source: "fallback",
+      action,
+      stage: "new_inquiry",
+      recommendation: {
+        action: "smart_reply",
+        headline: "Best move: send a clean reply",
+        reason: "Thread context could not be loaded.",
+      },
+    };
+  }
+
+  const listingContextById = await loadThreadListingContextMap(userId, [baseThread]);
+  const listingContext = baseThread.listing_id
+    ? listingContextById.get(baseThread.listing_id) ?? null
+    : null;
+  const lastInboundOfferCents = parseMarketplaceOfferAmount(
+    [...messages]
+      .reverse()
+      .find((message) => message.direction === "inbound")?.body ??
+      baseThread.last_message_preview
+  );
+  const thread = enrichThreadWithDerivedContext(
+    baseThread,
+    listingContext,
+    lastInboundOfferCents
+  );
+  const negotiation = getNegotiationAnalysisForThread(thread);
+  const context = createMarketplaceReplyContext({
+    thread,
+    messages,
+    negotiation,
+  });
+  const recommendation = recommendMarketplaceReplyAction(context);
+
   if (!process.env.ANTHROPIC_API_KEY) {
-    console.warn("[messaging] ANTHROPIC_API_KEY not set — using fallback template");
-    return { text: buildFallback(tone, thread), source: "fallback" };
+    return {
+      reply: buildFallbackMarketplaceReply({ context, action, sellerNote }),
+      source: "fallback",
+      action,
+      stage: context.stage,
+      recommendation,
+    };
   }
 
   try {
-    const Anthropic = (await import("@anthropic-ai/sdk")).default;
     const client = new Anthropic();
-
-    // Build conversation transcript (last 15 messages for context)
     const transcript = messages
       .slice(-15)
-      .map((m) => `${m.direction === "outbound" ? "You (seller)" : `Buyer (${m.sender_username})`}: ${m.body}`)
+      .map((message) =>
+        `${message.direction === "outbound" ? "Seller" : `Buyer (${message.sender_username})`}: ${message.body}`
+      )
       .join("\n\n");
 
     const priceContext = [
-      thread.listing_price_cents && `Listed at $${(thread.listing_price_cents / 100).toFixed(2)}`,
-      thread.offer_amount_cents && `Buyer offered $${(thread.offer_amount_cents / 100).toFixed(2)}`,
-      thread.suggested_counter_cents && `Suggested counter: $${(thread.suggested_counter_cents / 100).toFixed(2)}`,
+      context.deal.askingPriceCents !== null
+        ? `Ask: ${formatCurrencyFromCents(context.deal.askingPriceCents)}`
+        : null,
+      context.deal.latestOfferCents !== null
+        ? `Latest buyer offer: ${formatCurrencyFromCents(context.deal.latestOfferCents)}`
+        : null,
+      context.deal.suggestedCounterCents !== null
+        ? `Suggested counter: ${formatCurrencyFromCents(context.deal.suggestedCounterCents)}`
+        : null,
+      context.deal.estimatedProfitCents !== null
+        ? `Estimated profit after fees: ${formatCurrencyFromCents(context.deal.estimatedProfitCents)}`
+        : null,
     ]
       .filter(Boolean)
       .join(" | ");
 
-    // Find the last inbound (buyer) message to respond to specifically
-    const lastBuyerMessage = [...messages]
-      .reverse()
-      .find((m) => m.direction === "inbound");
+    const systemPrompt = `You draft seller messages for a premium sports card marketplace inbox.
 
-    const systemPrompt = `You are a professional sports card and collectibles seller on eBay. You're drafting a reply to a buyer on behalf of the seller.
+The seller reviews and sends every message. You are not pretending to be an AI agent, support rep, or assistant.
 
 Rules:
-- Write ONLY the reply body — no subject line, no greeting like "Dear buyer", no sign-off
-- Your reply MUST directly respond to the buyer's most recent message — do not write a generic intro
-- If the buyer said "Just checking in" or is following up, acknowledge their follow-up and give them a status update or next step
-- Keep it concise and natural (1-3 sentences unless more detail is clearly needed)
-- NEVER repeat or echo back the item title verbatim in the reply`;
+- Output only the message draft. No bullets, no labels, no subject line, no sign-off.
+- Sound like a real seller in a marketplace thread.
+- Be concise. Usually 1-3 short sentences, under 65 words unless the issue genuinely needs more detail.
+- Lead with the decision when negotiating (counter, hold firm, decline, accept).
+- Use direct numbers when pricing context is available.
+- Avoid corporate or support phrasing like "Thank you for your interest", "Based on market trends", "Please feel free", or "I apologize for any inconvenience".
+- Avoid obvious AI rhythm, fake urgency, or excessive punctuation.
+- Never mention AI, automation, internal policy, margin, fees, cost basis, or hidden reasoning.
+- Do not invent facts that are not in the context.
+- If the seller note gives a concrete shipping, timing, or pricing detail, work it in naturally.`;
 
-    const userPrompt = `${TONE_INSTRUCTIONS[tone]}
+    const userPrompt = `${ACTION_INSTRUCTIONS[action]}
 
-Item: ${thread.item_title ?? "this item"}
-Buyer: ${thread.buyer_username}
+Thread stage: ${context.stage}
+Recommended move: ${recommendation.headline}
+Why: ${recommendation.reason}
+Marketplace: ${thread.platform}
+Listing: ${thread.item_title ?? "Unknown item"}
+Buyer: ${thread.buyer_display_name ?? thread.buyer_username}
+Thread status: ${thread.status}
+Thread category: ${thread.category}
 ${priceContext ? `Pricing context: ${priceContext}` : ""}
-${thread.category === "complaint" ? "Situation: buyer has a complaint or issue with the item" : ""}
-${thread.category === "shipping" ? "Situation: buyer has a shipping or delivery question/issue" : ""}
-${thread.category === "return_refund" ? "Situation: buyer is requesting a return or refund" : ""}
-${hint ? `\nSeller's note — make sure to include this in the reply: "${hint}"` : ""}
-${lastBuyerMessage ? `The buyer's most recent message (what you are replying to):\n"${lastBuyerMessage.body}"` : ""}
+${context.latestBuyerMessage ? `Latest buyer message: "${context.latestBuyerMessage.body}"` : ""}
+${sellerNote ? `Seller note to include if it fits: "${sellerNote.trim()}"` : ""}
 
-Full conversation history for context:
+Conversation history:
 ${transcript || "(No prior messages)"}
 
-Write the reply now:`;
+Write the message draft now.`;
 
     const response = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 400,
+      max_tokens: 300,
       system: systemPrompt,
       messages: [{ role: "user", content: userPrompt }],
     });
 
-    const text =
-      response.content[0]?.type === "text" ? response.content[0].text.trim() : null;
-    if (text) return { text, source: "ai" };
+    const text = response.content
+      .filter((block) => block.type === "text")
+      .map((block) => block.text.trim())
+      .join("\n")
+      .trim();
+
+    if (text) {
+      return {
+        reply: text,
+        source: "ai",
+        action,
+        stage: context.stage,
+        recommendation,
+      };
+    }
   } catch (err) {
     console.warn("[messaging] AI reply generation failed, falling back:", err);
   }
 
-  return { text: buildFallback(tone, thread), source: "fallback" };
-}
-
-function buildFallback(tone: AIReplyTone, thread: Awaited<ReturnType<typeof getThread>>): string {
-  if (!thread) return "Unable to generate reply.";
-  const item = thread.item_title ?? "this item";
-  const buyer = thread.buyer_display_name ?? thread.buyer_username;
-  const fallbacks: Record<AIReplyTone, string> = {
-    professional: `Thank you for your message about ${item}. I'll look into this and get back to you shortly.`,
-    friendly: `Hey ${buyer}! Thanks for reaching out about ${item}. Happy to help!`,
-    firm: thread.listing_price_cents
-      ? `I appreciate the interest, but I'm firm at $${(thread.listing_price_cents / 100).toFixed(2)} on this one.`
-      : `I appreciate the interest, but I'm holding firm on the listed price.`,
-    negotiate: thread.suggested_counter_cents
-      ? `Thanks for the offer. I can meet you at $${(thread.suggested_counter_cents / 100).toFixed(2)} — let me know if that works.`
-      : `Thanks for the offer. I have some room to work with — what price were you thinking?`,
-    decline: `I appreciate the offer, but I can't go that low on ${item}. I'm holding at the current price for now.`,
-    accept: `You've got a deal! Go ahead and complete the purchase and I'll ship it right away. Thanks!`,
-    ask_details: `Thanks for reaching out about ${item}. Could you give me a bit more detail so I can help you out?`,
+  return {
+    reply: buildFallbackMarketplaceReply({ context, action, sellerNote }),
+    source: "fallback",
+    action,
+    stage: context.stage,
+    recommendation,
   };
-  return fallbacks[tone];
 }

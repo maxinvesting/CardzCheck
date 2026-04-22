@@ -10,36 +10,28 @@ CREATE TABLE IF NOT EXISTS grade_estimator_runs (
   post_grading_value JSONB,
   created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
-
 CREATE UNIQUE INDEX IF NOT EXISTS idx_grade_estimator_runs_user_job
   ON grade_estimator_runs(user_id, job_id);
-
 CREATE INDEX IF NOT EXISTS idx_grade_estimator_runs_user_created
   ON grade_estimator_runs(user_id, created_at DESC);
-
 ALTER TABLE grade_estimator_runs ENABLE ROW LEVEL SECURITY;
-
 DROP POLICY IF EXISTS "Users can view own grade estimator runs" ON grade_estimator_runs;
 CREATE POLICY "Users can view own grade estimator runs"
   ON grade_estimator_runs FOR SELECT
   USING (auth.uid() = user_id);
-
 DROP POLICY IF EXISTS "Users can create own grade estimator runs" ON grade_estimator_runs;
 CREATE POLICY "Users can create own grade estimator runs"
   ON grade_estimator_runs FOR INSERT
   WITH CHECK (auth.uid() = user_id);
-
 DROP POLICY IF EXISTS "Users can update own grade estimator runs" ON grade_estimator_runs;
 CREATE POLICY "Users can update own grade estimator runs"
   ON grade_estimator_runs FOR UPDATE
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
-
 DROP POLICY IF EXISTS "Users can delete own grade estimator runs" ON grade_estimator_runs;
 CREATE POLICY "Users can delete own grade estimator runs"
   ON grade_estimator_runs FOR DELETE
   USING (auth.uid() = user_id);
-
 -- Function to clean up old runs and keep only last 25 per user
 CREATE OR REPLACE FUNCTION cleanup_old_grade_estimator_runs()
 RETURNS TRIGGER AS $$
@@ -54,7 +46,6 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
-
 DROP TRIGGER IF EXISTS cleanup_old_grade_estimator_runs_trigger ON grade_estimator_runs;
 CREATE TRIGGER cleanup_old_grade_estimator_runs_trigger
   AFTER INSERT ON grade_estimator_runs

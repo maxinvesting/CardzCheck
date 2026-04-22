@@ -79,6 +79,12 @@ export interface PurchaseSyncResult {
 export async function syncEbayPurchases(userId: string): Promise<PurchaseSyncResult> {
   const supabase = await createServiceClient();
   const result: PurchaseSyncResult = { imported: 0, skipped: 0, errors: 0 };
+  const { data: businessAccount } = await supabase
+    .from("business_accounts")
+    .select("id")
+    .eq("owner_user_id", userId)
+    .maybeSingle();
+  const businessAccountId = businessAccount?.id ?? null;
 
   // Look up last sync time for incremental fetch
   const { data: account } = await supabase
@@ -143,7 +149,13 @@ export async function syncEbayPurchases(userId: string): Promise<PurchaseSyncRes
       }
 
       try {
-        await importLineItem(supabase, userId, order, li);
+        await importLineItem(
+          supabase,
+          userId,
+          businessAccountId,
+          order,
+          li
+        );
         result.imported++;
       } catch (err) {
         console.error("[ebay/purchase-sync] Failed to import line item", key, err);
@@ -167,6 +179,7 @@ async function importLineItem(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any,
   userId: string,
+  businessAccountId: string | null,
   order: NormalizedPurchaseOrder,
   li: NormalizedPurchaseLineItem
 ): Promise<void> {
@@ -184,6 +197,7 @@ async function importLineItem(
 
   const payload = {
     user_id: userId,
+    ...(businessAccountId ? { business_account_id: businessAccountId } : {}),
     item_kind: "inventory",
     acquisition_type: "buy",
     channel: "ebay",
@@ -202,7 +216,6 @@ async function importLineItem(
     tax_cents: taxCents,
     fees_paid_cents: 0,
     quantity: li.quantity,
-    ebay_image_url: li.imageUrl,
     ebay_purchase_order_id: order.purchaseOrderId,
     ebay_purchase_line_item_id: li.lineItemId,
   };

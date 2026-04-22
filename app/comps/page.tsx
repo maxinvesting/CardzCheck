@@ -525,16 +525,16 @@ function CompsPageContent() {
 
   return (
     <AuthenticatedLayout>
-      <main className="max-w-5xl mx-auto px-4 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
         {/* Page Header */}
-        <div className="mb-8">
+        <div className="mb-6">
           <div className="flex items-center gap-2 mb-2">
-            <h1 className="text-3xl font-bold text-gray-900">Compare Listings</h1>
+            <h1 className="text-2xl lg:text-3xl font-semibold text-white">Compare Listings</h1>
             <span className="px-2 py-0.5 bg-amber-500/20 text-amber-400 text-xs font-medium rounded">
               Beta
             </span>
           </div>
-          <p className="text-gray-400">
+          <p className="text-sm text-gray-400">
             Review listing history and estimated values for any trading card
           </p>
         </div>
@@ -575,7 +575,7 @@ function CompsPageContent() {
         )}
 
         {/* Card Picker */}
-        <div className="mb-8">
+        <div className="mb-6">
           <CardPicker
             mode="comps"
             onSelect={handleCardPickerSelect}
@@ -593,7 +593,7 @@ function CompsPageContent() {
         </div>
 
         {/* Card Upload Section (collapsible) */}
-        <div className="mb-8">
+        <div className="mb-6">
           <button
             type="button"
             onClick={() => setShowUploader(!showUploader)}
@@ -664,7 +664,7 @@ function CompsPageContent() {
 
         {/* Grade Estimate & Add to Collection (after card identification) */}
         {identifiedCard && (
-          <div className="mb-8 space-y-4">
+          <div className="mb-6 space-y-4">
             {/* Add to Collection Button */}
             <div className="flex items-center justify-between p-4 bg-blue-900/20 border border-blue-800/50 rounded-xl">
               <div className="flex items-center gap-3">
@@ -772,7 +772,7 @@ function CompsPageContent() {
 
         {/* Error */}
         {error && (
-          <div className="mb-8 p-4 bg-red-900/20 border border-red-800 rounded-xl">
+          <div className="mb-6 p-4 bg-red-900/20 border border-red-800 rounded-xl">
             <p className="text-red-400">{error}</p>
             <div className="mt-3 flex flex-wrap gap-3">
               {formData && (
@@ -838,7 +838,7 @@ function CompsPageContent() {
                   <div className="space-y-5">
                     {results._compEvaluation && results._compEvaluation.exactComps.length > 0 && (
                       <div className="space-y-3">
-                        <h2 className="text-xl font-semibold text-white">
+                        <h2 className="text-lg font-medium text-white">
                           Exact Matches ({results._compEvaluation.exactComps.length})
                         </h2>
                         <CompsTable
@@ -853,7 +853,7 @@ function CompsPageContent() {
 
                     {results._compEvaluation && results._compEvaluation.similarComps.length > 0 && (
                       <div className="space-y-3">
-                        <h2 className="text-xl font-semibold text-white">
+                        <h2 className="text-lg font-medium text-white">
                           Similar Support Matches ({results._compEvaluation.similarComps.length})
                         </h2>
                         <CompsTable
@@ -868,7 +868,7 @@ function CompsPageContent() {
 
                     {results._compEvaluation && results._compEvaluation.supportComps.length > 0 && (
                       <div className="space-y-3">
-                        <h2 className="text-xl font-semibold text-white">
+                        <h2 className="text-lg font-medium text-white">
                           Fallback Active Support ({results._compEvaluation.supportComps.length})
                         </h2>
                         <CompsTable
@@ -957,7 +957,7 @@ function CompsPageContent() {
               Search for any trading card to get estimated values from active listings
             </p>
             <p className="text-sm text-gray-500">
-              Try searching "Michael Jordan Fleer 1986 PSA 10" or upload a card photo
+              Try searching {'"'}Michael Jordan Fleer 1986 PSA 10{'"'} or upload a card photo
             </p>
           </div>
         )}
@@ -980,7 +980,7 @@ function CompsPageContent() {
                 />
               </svg>
               <h3 className="text-lg font-semibold text-white mb-2">
-                You've used all your free searches
+                You&apos;ve used all your free searches
               </h3>
               <p className="text-gray-400 mb-4">
                 Upgrade for unlimited searches and collection tracking.

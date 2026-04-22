@@ -39,25 +39,18 @@ CREATE TABLE IF NOT EXISTS public.market_sold_events (
       OR (identity_confidence >= 0 AND identity_confidence <= 1)
     )
 );
-
 CREATE UNIQUE INDEX IF NOT EXISTS idx_market_sold_events_source_external_sold_at
   ON public.market_sold_events(source, external_listing_id, sold_at)
   WHERE external_listing_id IS NOT NULL;
-
 CREATE INDEX IF NOT EXISTS idx_market_sold_events_fingerprint_sold_at
   ON public.market_sold_events(card_fingerprint, sold_at DESC);
-
 CREATE INDEX IF NOT EXISTS idx_market_sold_events_title_fts
   ON public.market_sold_events USING gin (to_tsvector('simple', COALESCE(title_normalized, title_raw)));
-
 CREATE INDEX IF NOT EXISTS idx_market_sold_events_player_set_sold_at
   ON public.market_sold_events(player, set_name, sold_at DESC);
-
 ALTER TABLE public.market_sold_events ENABLE ROW LEVEL SECURITY;
-
 DROP POLICY IF EXISTS "market_sold_events_select" ON public.market_sold_events;
 DROP POLICY IF EXISTS "market_sold_events_insert" ON public.market_sold_events;
 DROP POLICY IF EXISTS "market_sold_events_update" ON public.market_sold_events;
 DROP POLICY IF EXISTS "market_sold_events_delete" ON public.market_sold_events;
-
 REVOKE ALL ON public.market_sold_events FROM anon, authenticated;

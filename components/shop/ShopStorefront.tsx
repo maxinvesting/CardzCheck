@@ -2,11 +2,13 @@
 
 import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
+import ShopHeroListingCard from "./ShopHeroListingCard";
 import ShopListingCard from "./ShopListingCard";
 import ShopFilterBar, {
   type SortValue,
   type PriceRangeValue,
 } from "./ShopFilterBar";
+import { selectHeroListings } from "./shop-hero-listings";
 import type { ShopListing } from "@/types/shop";
 import type { ShopStats } from "@/lib/shop/server";
 import type { SubscriptionTier } from "@/lib/subscription-tier";
@@ -66,6 +68,7 @@ export default function ShopStorefront({
   const [gradeFilter, setGradeFilter] = useState<string | null>(null);
   const [priceRange, setPriceRange] = useState<PriceRangeValue>("");
   const [sort, setSort] = useState<SortValue>("newest");
+  const [offersOnly, setOffersOnly] = useState(false);
   const [catalogPage, setCatalogPage] = useState(1);
 
   const categories = useMemo(() => {
@@ -107,10 +110,22 @@ export default function ShopStorefront({
       list = list.filter((listing) => listing.grade === gradeFilter);
     }
 
+    if (offersOnly) {
+      list = list.filter((listing) => listing.accepts_offers === true);
+    }
+
     list = applyPriceRange(list, priceRange);
     sortListings(list, sort);
     return list;
-  }, [initialListings, searchLower, categoryFilter, gradeFilter, priceRange, sort]);
+  }, [
+    initialListings,
+    searchLower,
+    categoryFilter,
+    gradeFilter,
+    offersOnly,
+    priceRange,
+    sort,
+  ]);
 
   const catalogPageCount = Math.max(
     1,
@@ -126,6 +141,7 @@ export default function ShopStorefront({
     Boolean(categoryFilter) ||
     Boolean(gradeFilter) ||
     Boolean(priceRange) ||
+    offersOnly ||
     sort !== "newest";
 
   const clearFilters = useCallback(() => {
@@ -133,6 +149,7 @@ export default function ShopStorefront({
     setCategoryFilter(null);
     setGradeFilter(null);
     setPriceRange("");
+    setOffersOnly(false);
     setSort("newest");
     setCatalogPage(1);
   }, []);
@@ -145,156 +162,234 @@ export default function ShopStorefront({
   }, []);
 
   const isEmpty = initialListings.length === 0;
-  const heroBadges = ["Below Comps", "eBay-Verified Pricing", "New Drops"];
+  const heroBadges = ["Subscriber-only", "Below eBay", "New drops"];
+  const heroListings = useMemo(
+    () => selectHeroListings(initialListings, 3),
+    [initialListings]
+  );
+  const showHeroRail = !isEmpty && !hasActiveFilters && heroListings.length > 0;
+  const liveDealLabel = `${stats.activeCount} live ${
+    stats.activeCount === 1 ? "subscriber deal" : "subscriber deals"
+  }`;
+  const topSummary = isEmpty
+    ? "Subscriber deals land here as soon as CardzCheck publishes fresh inventory."
+    : hasActiveFilters
+    ? "Filtering live CardzCheck inventory. Reset filters to bring back the featured deals rail."
+    : "Shop live CardzCheck inventory first. Every deal is published directly by our team and priced for subscribers.";
 
   return (
     <div className="space-y-0">
-      <section className="border-b border-slate-200 bg-white">
-        <div className="mx-auto max-w-7xl px-4 py-10 md:py-12">
-          <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-cyan-50/50 p-6 md:p-9">
-            <div className="flex flex-wrap gap-2">
-              {heroBadges.map((badge) => (
-                <span
-                  key={badge}
-                  className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-600"
-                >
-                  {badge}
-                </span>
-              ))}
-            </div>
-
-            <h1 className="mt-4 text-3xl font-semibold tracking-tight text-slate-900 md:text-4xl">
-              CardzCheck Deals
-            </h1>
-            <p className="mt-3 max-w-2xl text-slate-600">
-              Exclusive sports card deals for paid CardzCheck subscribers. Shop
-              curated CardzCheck inventory priced at least 13.5% below our eBay
-              storefront. Some deals may also come in below market comps.
-            </p>
-            <p className="mt-2 max-w-2xl text-sm text-slate-500">
-              All listings are published directly by CardzCheck. This is a
-              buyer-focused storefront, not a peer-to-peer marketplace.
-            </p>
-
-            {/* Trust strip */}
-            <div className="mt-5 flex flex-wrap gap-4 border-t border-slate-100 pt-5">
-              <div className="flex items-center gap-2 text-xs text-slate-600">
-                <svg className="h-4 w-4 shrink-0 text-cyan-600" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Subscriber-exclusive pricing
-              </div>
-              <div className="flex items-center gap-2 text-xs text-slate-600">
-                <svg className="h-4 w-4 shrink-0 text-cyan-600" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                At least 13.5% below our eBay storefront
-              </div>
-              <div className="flex items-center gap-2 text-xs text-slate-600">
-                <svg className="h-4 w-4 shrink-0 text-cyan-600" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                5% off every 15th purchase
-              </div>
-            </div>
-
-            {/* Business tier callout / pro upsell */}
-            {isBusiness ? (
-              <div className="mt-5 flex items-center gap-2 rounded-lg border border-cyan-200 bg-cyan-50 px-4 py-3">
-                <svg className="h-4 w-4 shrink-0 text-cyan-600" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span className="text-sm font-medium text-cyan-800">
-                  Business plan active — free shipping applied to every order automatically.
-                </span>
-              </div>
-            ) : userTier === "pro" ? (
-              <div className="mt-5 flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
-                <svg className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
-                </svg>
-                <p className="text-sm text-slate-600">
-                  <span className="font-medium text-slate-800">Business plan members also get free shipping on every order.</span>{" "}
-                  <a href="/upgrade" className="ml-1 font-medium text-cyan-700 hover:underline">Upgrade to Business →</a>
-                </p>
-              </div>
-            ) : null}
-
-            {!isEmpty && (
-              <p className="mt-4 text-sm text-slate-500">
-                {stats.activeCount} subscriber {stats.activeCount === 1 ? "deal" : "deals"} live now
-              </p>
-            )}
-            {!isEmpty && (
-              <button
-                onClick={scrollToCatalog}
-                className="mt-4 rounded-lg bg-cyan-600 px-5 py-3 min-h-[44px] text-sm font-medium text-white transition-colors hover:bg-cyan-500"
+      <section
+        data-testid="shop-top-section"
+        className="border-b border-slate-200 bg-white"
+      >
+        <div className="mx-auto max-w-7xl px-4 py-4 md:py-6">
+          <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-cyan-50/60 p-4 md:p-6">
+            <div
+              className={
+                showHeroRail
+                  ? heroListings.length === 1
+                    ? "grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] lg:items-start"
+                    : "grid gap-5 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.2fr)] lg:items-start min-[1400px]:grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)]"
+                  : "space-y-4"
+              }
+            >
+              <div
+                className={
+                  showHeroRail
+                    ? "space-y-4 lg:col-start-1 lg:row-start-1"
+                    : "space-y-4"
+                }
               >
-                Shop exclusive deals
-              </button>
-            )}
+                <div className="flex flex-wrap gap-2">
+                  {heroBadges.map((badge) => (
+                    <span
+                      key={badge}
+                      className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-600"
+                    >
+                      {badge}
+                    </span>
+                  ))}
+                </div>
+
+                <div className="space-y-2.5">
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <h1 className="text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
+                      CardzCheck Deals
+                    </h1>
+                    {!isEmpty && (
+                      <span className="rounded-full border border-cyan-100 bg-cyan-50 px-3 py-1 text-xs font-medium text-cyan-800">
+                        {liveDealLabel}
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="max-w-2xl text-sm leading-6 text-slate-600 md:text-base">
+                    {topSummary}
+                  </p>
+
+                  {showHeroRail && (
+                    <div className="hidden flex-wrap gap-x-4 gap-y-2 border-t border-slate-100 pt-3 text-xs text-slate-600 md:flex">
+                      <span className="flex items-center gap-2">
+                        <span className="h-1.5 w-1.5 rounded-full bg-cyan-500" />
+                        At least 13.5% below our eBay storefront
+                      </span>
+                      <span className="flex items-center gap-2">
+                        <span className="h-1.5 w-1.5 rounded-full bg-cyan-500" />
+                        Buyer-focused inventory, not peer-to-peer listings
+                      </span>
+                      <span className="flex items-center gap-2">
+                        <span className="h-1.5 w-1.5 rounded-full bg-cyan-500" />
+                        Every 15th purchase gets 5% off
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {showHeroRail && (
+                <div
+                  className={
+                    heroListings.length === 1
+                      ? "order-2 lg:col-start-2 lg:row-span-2 lg:justify-self-end lg:w-full lg:max-w-[360px]"
+                      : "order-2 lg:col-start-2 lg:row-span-2"
+                  }
+                >
+                  <div
+                    data-testid="shop-hero-rail"
+                    className="-mx-1 flex snap-x gap-3 overflow-x-auto px-1 pb-1 lg:mx-0 lg:grid lg:grid-cols-2 lg:overflow-visible lg:px-0 lg:pb-0 min-[1400px]:grid-cols-3"
+                  >
+                    {heroListings.map((listing) => (
+                      <div
+                        key={listing.id}
+                        className="w-[min(84vw,320px)] shrink-0 snap-start lg:w-auto lg:shrink"
+                      >
+                        <ShopHeroListingCard
+                          listing={listing}
+                          userTier={userTier}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div
+                className={
+                  showHeroRail
+                    ? "order-3 space-y-3 lg:col-start-1 lg:row-start-2"
+                    : "space-y-3"
+                }
+              >
+                {isBusiness ? (
+                  <div className="flex items-center gap-2 rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm text-cyan-800">
+                    <svg
+                      className="h-4 w-4 shrink-0 text-cyan-600"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      strokeWidth={2}
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                    <span>
+                      <strong className="font-semibold">
+                        Business plan active
+                      </strong>{" "}
+                      — free shipping is applied to every order.
+                    </span>
+                  </div>
+                ) : userTier === "pro" ? (
+                  <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-600">
+                    <svg
+                      className="h-4 w-4 shrink-0 text-slate-400"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      strokeWidth={2}
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z"
+                      />
+                    </svg>
+                    <span>
+                      Business members also get free shipping on every order.
+                    </span>
+                    <Link
+                      href="/upgrade"
+                      className="font-medium text-cyan-700 transition-colors hover:text-cyan-600"
+                    >
+                      Upgrade to Business →
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                    <div className="flex items-center gap-2 text-sm text-amber-800">
+                      <svg
+                        className="h-4 w-4 shrink-0 text-amber-500"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                      <span>
+                        <strong className="font-semibold">
+                          Free members can browse,
+                        </strong>{" "}
+                        but subscriber pricing unlocks the real deal values.
+                      </span>
+                    </div>
+                    <Link
+                      href="/upgrade"
+                      className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-amber-400"
+                    >
+                      Subscribe now →
+                    </Link>
+                  </div>
+                )}
+
+                {showHeroRail && (
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      onClick={scrollToCatalog}
+                      className="rounded-xl bg-cyan-600 px-5 py-3 min-h-[44px] text-sm font-medium text-white transition-colors hover:bg-cyan-500"
+                    >
+                      Browse full catalog
+                    </button>
+                    <p className="text-sm text-slate-500">
+                      Inventory updates land here first, then flow into the
+                      full catalog below.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </section>
-
-      {/* Business free-shipping banner */}
-      {isBusiness && (
-        <section className="border-b border-cyan-100 bg-cyan-50 px-4 py-2.5">
-          <div className="mx-auto flex max-w-7xl items-center gap-2 text-sm text-cyan-800">
-            <svg className="h-4 w-4 shrink-0" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
-            </svg>
-            <span>
-              <strong className="font-semibold">Business plan active</strong> — free shipping applied to every order automatically.
-            </span>
-          </div>
-        </section>
-      )}
-
-      {/* Free / unauthenticated user upgrade banner */}
-      {isLocked && (
-        <section className="border-b border-amber-100 bg-amber-50 px-4 py-3">
-          <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2 text-sm text-amber-800">
-              <svg className="h-4 w-4 shrink-0 text-amber-500" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clipRule="evenodd" />
-              </svg>
-              <span>
-                <strong className="font-semibold">You&apos;re browsing as a free member.</strong>{" "}
-                Subscribe to access exclusive pricing on all deals.
-              </span>
-            </div>
-            <a
-              href="/upgrade"
-              className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-amber-400"
-            >
-              Subscribe now →
-            </a>
-          </div>
-        </section>
-      )}
-
-      {/* Loyalty perks info */}
-      {!isLocked && (
-        <section className="border-b border-slate-100 bg-slate-50 px-4 py-3">
-          <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-6 gap-y-1 text-xs text-slate-500">
-            <span className="font-medium text-slate-700">Repeat Buyer Perks</span>
-            <span>Every 15th purchase = <strong className="text-slate-700">5% off</strong> your order (15, 30, 45…)</span>
-            {isBusiness && <span>Business members get <strong className="text-slate-700">free shipping</strong> on all orders.</span>}
-          </div>
-        </section>
-      )}
 
       <section
         id={CATALOG_ID}
         className="scroll-mt-28 border-b border-slate-200 bg-white"
       >
-        <div className="mx-auto max-w-7xl space-y-6 px-4 py-12">
+        <div className="mx-auto max-w-7xl space-y-4 px-4 py-8 md:space-y-5 md:py-9">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <h2 className="text-2xl font-semibold text-slate-900">Live Deals</h2>
+              <h2 className="text-2xl font-semibold text-slate-900">
+                Live Deals
+              </h2>
               <p className="mt-1 text-sm text-slate-500">
-                Sold directly by CardzCheck from in-house inventory. Priced at least 13.5% below our eBay storefront.
+                Filter by card, sport, grade, price, and offers to zero in fast.
               </p>
             </div>
             {hasActiveFilters && (
@@ -342,6 +437,7 @@ export default function ShopStorefront({
                 gradeFilter={gradeFilter}
                 priceRange={priceRange}
                 sort={sort}
+                offersOnly={offersOnly}
                 onSearchChange={(value) => {
                   setSearch(value);
                   setCatalogPage(1);
@@ -360,6 +456,10 @@ export default function ShopStorefront({
                 }}
                 onSortChange={(value) => {
                   setSort(value);
+                  setCatalogPage(1);
+                }}
+                onOffersOnlyChange={(value) => {
+                  setOffersOnly(value);
                   setCatalogPage(1);
                 }}
                 resultCount={catalogFiltered.length}

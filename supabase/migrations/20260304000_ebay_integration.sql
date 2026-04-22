@@ -21,27 +21,24 @@ CREATE TABLE IF NOT EXISTS public.ebay_accounts (
   updated_at                  TIMESTAMPTZ NOT NULL DEFAULT now(),
   CONSTRAINT ebay_accounts_user_id_unique UNIQUE (user_id)
 );
-
 CREATE INDEX IF NOT EXISTS idx_ebay_accounts_user_id ON public.ebay_accounts (user_id);
-
 ALTER TABLE public.ebay_accounts ENABLE ROW LEVEL SECURITY;
-
+DROP POLICY IF EXISTS "ebay_accounts_owner_select" ON public.ebay_accounts;
 CREATE POLICY "ebay_accounts_owner_select"
   ON public.ebay_accounts FOR SELECT
   USING (auth.uid() = user_id);
-
+DROP POLICY IF EXISTS "ebay_accounts_owner_insert" ON public.ebay_accounts;
 CREATE POLICY "ebay_accounts_owner_insert"
   ON public.ebay_accounts FOR INSERT
   WITH CHECK (auth.uid() = user_id);
-
+DROP POLICY IF EXISTS "ebay_accounts_owner_update" ON public.ebay_accounts;
 CREATE POLICY "ebay_accounts_owner_update"
   ON public.ebay_accounts FOR UPDATE
   USING (auth.uid() = user_id);
-
+DROP POLICY IF EXISTS "ebay_accounts_owner_delete" ON public.ebay_accounts;
 CREATE POLICY "ebay_accounts_owner_delete"
   ON public.ebay_accounts FOR DELETE
   USING (auth.uid() = user_id);
-
 -- Auto-update updated_at
 CREATE OR REPLACE FUNCTION public.trg_ebay_accounts_updated_at()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
@@ -50,11 +47,10 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
+DROP TRIGGER IF EXISTS trg_ebay_accounts_updated_at ON public.ebay_accounts;
 CREATE TRIGGER trg_ebay_accounts_updated_at
   BEFORE UPDATE ON public.ebay_accounts
   FOR EACH ROW EXECUTE FUNCTION public.trg_ebay_accounts_updated_at();
-
 -- ============================================================
 -- 2. ebay_listings — polymorphic inventory ↔ eBay listing map
 -- ============================================================
@@ -82,34 +78,29 @@ CREATE TABLE IF NOT EXISTS public.ebay_listings (
   updated_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
   CONSTRAINT ebay_listings_user_listing_unique UNIQUE (user_id, ebay_listing_id)
 );
-
 CREATE INDEX IF NOT EXISTS idx_ebay_listings_user_id
   ON public.ebay_listings (user_id);
-
 CREATE INDEX IF NOT EXISTS idx_ebay_listings_inventory_source
   ON public.ebay_listings (inventory_source, inventory_source_id);
-
 CREATE INDEX IF NOT EXISTS idx_ebay_listings_user_status
   ON public.ebay_listings (user_id, status);
-
 ALTER TABLE public.ebay_listings ENABLE ROW LEVEL SECURITY;
-
+DROP POLICY IF EXISTS "ebay_listings_owner_select" ON public.ebay_listings;
 CREATE POLICY "ebay_listings_owner_select"
   ON public.ebay_listings FOR SELECT
   USING (auth.uid() = user_id);
-
+DROP POLICY IF EXISTS "ebay_listings_owner_insert" ON public.ebay_listings;
 CREATE POLICY "ebay_listings_owner_insert"
   ON public.ebay_listings FOR INSERT
   WITH CHECK (auth.uid() = user_id);
-
+DROP POLICY IF EXISTS "ebay_listings_owner_update" ON public.ebay_listings;
 CREATE POLICY "ebay_listings_owner_update"
   ON public.ebay_listings FOR UPDATE
   USING (auth.uid() = user_id);
-
+DROP POLICY IF EXISTS "ebay_listings_owner_delete" ON public.ebay_listings;
 CREATE POLICY "ebay_listings_owner_delete"
   ON public.ebay_listings FOR DELETE
   USING (auth.uid() = user_id);
-
 CREATE OR REPLACE FUNCTION public.trg_ebay_listings_updated_at()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
@@ -117,11 +108,10 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
+DROP TRIGGER IF EXISTS trg_ebay_listings_updated_at ON public.ebay_listings;
 CREATE TRIGGER trg_ebay_listings_updated_at
   BEFORE UPDATE ON public.ebay_listings
   FOR EACH ROW EXECUTE FUNCTION public.trg_ebay_listings_updated_at();
-
 -- ============================================================
 -- 3. ebay_import_jobs — async bulk import progress tracking
 -- ============================================================
@@ -139,24 +129,21 @@ CREATE TABLE IF NOT EXISTS public.ebay_import_jobs (
   completed_at      TIMESTAMPTZ,
   created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-
 CREATE INDEX IF NOT EXISTS idx_ebay_import_jobs_user_id
   ON public.ebay_import_jobs (user_id, created_at DESC);
-
 ALTER TABLE public.ebay_import_jobs ENABLE ROW LEVEL SECURITY;
-
+DROP POLICY IF EXISTS "ebay_import_jobs_owner_select" ON public.ebay_import_jobs;
 CREATE POLICY "ebay_import_jobs_owner_select"
   ON public.ebay_import_jobs FOR SELECT
   USING (auth.uid() = user_id);
-
+DROP POLICY IF EXISTS "ebay_import_jobs_owner_insert" ON public.ebay_import_jobs;
 CREATE POLICY "ebay_import_jobs_owner_insert"
   ON public.ebay_import_jobs FOR INSERT
   WITH CHECK (auth.uid() = user_id);
-
+DROP POLICY IF EXISTS "ebay_import_jobs_owner_update" ON public.ebay_import_jobs;
 CREATE POLICY "ebay_import_jobs_owner_update"
   ON public.ebay_import_jobs FOR UPDATE
   USING (auth.uid() = user_id);
-
 -- ============================================================
 -- 4. business_inventory_items — add denormalized ebay_item_id
 -- ============================================================
@@ -165,7 +152,6 @@ CREATE POLICY "ebay_import_jobs_owner_update"
 
 ALTER TABLE public.business_inventory_items
   ADD COLUMN IF NOT EXISTS ebay_item_id TEXT;
-
 CREATE INDEX IF NOT EXISTS idx_business_inventory_items_ebay_item_id
   ON public.business_inventory_items (ebay_item_id)
   WHERE ebay_item_id IS NOT NULL;

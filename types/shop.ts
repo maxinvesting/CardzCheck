@@ -1,3 +1,5 @@
+import type { TrustedCardImage } from "@/types";
+
 export interface ShopListing {
   id: string;
   created_at: string;
@@ -28,10 +30,13 @@ export interface ShopListing {
   quantity_sold: number;
   image_urls: string[];
   thumbnail_url: string | null;
+  trusted_image?: TrustedCardImage | null;
   status: "active" | "sold" | "reserved" | "delisted" | "archived";
   publish_state: "draft" | "published";
   featured: boolean;
   is_premium: boolean;
+  /** When true, listing appears in "Offers only" filter and shows an offers badge */
+  accepts_offers: boolean;
   shipping_method: string;
   shipping_cost: number;
   notes: string | null;

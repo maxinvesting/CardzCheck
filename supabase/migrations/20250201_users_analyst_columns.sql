@@ -14,7 +14,6 @@ CREATE TABLE IF NOT EXISTS public.users (
   plan_selected BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
-
 -- Add analyst_queries_used if missing (table may already exist from another migration)
 DO $$
 BEGIN
@@ -25,7 +24,6 @@ BEGIN
     ALTER TABLE public.users ADD COLUMN analyst_queries_used INTEGER DEFAULT 0;
   END IF;
 END $$;
-
 -- Add name if missing
 DO $$
 BEGIN
@@ -36,7 +34,6 @@ BEGIN
     ALTER TABLE public.users ADD COLUMN name TEXT;
   END IF;
 END $$;
-
 -- RLS: ensure users can read/update own row (id = auth.uid())
 DO $$
 BEGIN

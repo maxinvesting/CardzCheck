@@ -1,39 +1,49 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import DualCardUploader from "@/components/DualCardUploader";
+import GradeEstimatorValuePanel from "@/components/GradeEstimatorValuePanel";
 import GradeProbabilityPanel from "@/components/grading/GradeProbabilityPanel";
 import GradeEstimateProgressPanel from "@/components/grading/GradeEstimateProgressPanel";
 import GradeAnalysisAnimation from "@/components/grading/GradeAnalysisAnimation";
+import { MicButton } from "@/components/ui/MicButton";
 import { gradingCopy } from "@/copy/grading";
 import { normalizeGradeScanPhotos } from "@/lib/grading/scanPhotos";
+import { appendSpeechTranscript } from "@/lib/speech";
 import type {
   CardIdentificationResult,
   GradeEstimate,
   GradeScanPhoto,
+  WorthGradingResult,
 } from "@/types";
 import type {
   GradeEstimateJobStatusResponse,
-  GradeEstimateJobSteps,
 } from "@/lib/grading/gradeEstimateJob";
 
 export type SlotState = "idle" | "ready" | "analyzing" | "done" | "error";
+export type CardScanSlotCompleteResult = {
+  jobId: string;
+  card: CardIdentificationResult;
+  estimate: GradeEstimate;
+  postGradingValue?: WorthGradingResult | null;
+};
 
 interface CardScanSlotProps {
   slotIndex: number;
   totalSlots: number;
   disabled?: boolean;
   onStateChange?: (index: number, state: SlotState) => void;
-}
-
-function buildQueuedSteps(): GradeEstimateJobSteps {
-  return {
-    ocr_identity: { status: "queued" },
-    grade_model: { status: "queued" },
-    parse_validate: { status: "queued" },
-    post_grading_value: { status: "queued" },
-  };
+  onComplete?: (result: CardScanSlotCompleteResult) => void;
+  /** Optional pre-filled notes injected from the wizard flow */
+  initialNotes?: string;
+  /**
+   * When true, identification finishes but grade analysis waits until this becomes false
+   * (e.g. Grade Hub wizard: upload in step 2, analyze in step 4).
+   */
+  deferAnalysis?: boolean;
+  /** Hide the inline pre-scan notes editor; notes come only from `initialNotes` (wizard steps). */
+  hidePreScanNotesEditor?: boolean;
 }
 
 // Slot accent — left-border color per slot index
@@ -46,6 +56,10 @@ export default function CardScanSlot({
   totalSlots,
   disabled = false,
   onStateChange,
+  onComplete,
+  initialNotes = "",
+  deferAnalysis = false,
+  hidePreScanNotesEditor = false,
 }: CardScanSlotProps) {
   const accentBorder = SLOT_COLORS[slotIndex % SLOT_COLORS.length];
   const accentText = SLOT_LABEL_COLORS[slotIndex % SLOT_LABEL_COLORS.length];
@@ -53,15 +67,15 @@ export default function CardScanSlot({
 
   const [identifiedCard, setIdentifiedCard] = useState<CardIdentificationResult | null>(null);
   const [gradeEstimate, setGradeEstimate] = useState<GradeEstimate | null>(null);
+  const [postGradingValue, setPostGradingValue] = useState<WorthGradingResult | null>(null);
   const [gradeJob, setGradeJob] = useState<GradeEstimateJobStatusResponse | null>(null);
   const [gradeJobId, setGradeJobId] = useState<string | null>(null);
-  const [analyzing, setAnalyzing] = useState(false);
   const [showAnimation, setShowAnimation] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [slotState, setSlotState] = useState<SlotState>("idle");
 
   // Pre-scan notes (typed before upload — fed to AI as initial context)
-  const [preScanNotes, setPreScanNotes] = useState("");
+  const [preScanNotes, setPreScanNotes] = useState(initialNotes);
 
   // Refinement state (post-scan correction)
   const [refinePanelOpen, setRefinePanelOpen] = useState(false);
@@ -75,28 +89,36 @@ export default function CardScanSlot({
     [slotIndex, onStateChange]
   );
 
+  /** After deferred identification, run analysis once when `deferAnalysis` turns off (e.g. wizard step 4). */
+  const deferredAnalysisStartedRef = useRef(false);
+
   const handleReset = useCallback(() => {
     setIdentifiedCard(null);
     setGradeEstimate(null);
+    setPostGradingValue(null);
     setGradeJob(null);
     setGradeJobId(null);
-    setAnalyzing(false);
     setShowAnimation(false);
     setError(null);
-    setPreScanNotes("");
+    setPreScanNotes(hidePreScanNotesEditor ? initialNotes : "");
     setRefinePanelOpen(false);
     setRefinementText("");
     setRefining(false);
     setRefineError(null);
     setAppliedRefinement(null);
+    deferredAnalysisStartedRef.current = false;
     notify("idle");
-  }, [notify]);
+  }, [hidePreScanNotesEditor, initialNotes, notify]);
 
   /**
    * Core grade-analysis logic. Accepts the card data directly so it can be
    * called immediately after identification (before React state has flushed).
    */
-  const runGradeAnalysis = useCallback(async (card: CardIdentificationResult) => {
+  const runGradeAnalysis = useCallback(async (
+    card: CardIdentificationResult,
+    preScanNotesOverride?: string
+  ) => {
+    const notesPayload = (preScanNotesOverride ?? preScanNotes).trim() || undefined;
     const rawUrls = card.imageUrls ??
       (card.imageUrl ? [card.imageUrl] : []);
     const fallbackPhotos: GradeScanPhoto[] = rawUrls.map((url, i) => ({
@@ -117,9 +139,9 @@ export default function CardScanSlot({
     }
     const closeups = scanPhotos.filter((p) => p.kind !== "front" && p.kind !== "back");
 
-    setAnalyzing(true);
     setError(null);
     setGradeEstimate(null);
+    setPostGradingValue(null);
     setGradeJob(null);
     setGradeJobId(null);
     setShowAnimation(true);
@@ -145,7 +167,7 @@ export default function CardScanSlot({
             variation: card.variation,
             insert: card.insert,
           },
-          preScanNotes: preScanNotes.trim() || undefined,
+          preScanNotes: notesPayload,
         }),
       });
 
@@ -162,10 +184,21 @@ export default function CardScanSlot({
       // The start endpoint runs the pipeline synchronously and returns the
       // completed (or errored) job state. Handle it without polling.
       if (payload.status === "done") {
-        if (payload.final?.estimate) setGradeEstimate(payload.final.estimate);
-        setAnalyzing(false);
+        const estimate = payload.final?.estimate;
+        if (!estimate) {
+          throw new Error("Analysis finished without a result. Please rerun the scan.");
+        }
+        const valueResult = payload.final?.postGradingValue ?? null;
+        setGradeEstimate(estimate);
+        setPostGradingValue(valueResult);
         setShowAnimation(false);
         notify("done");
+        onComplete?.({
+          jobId: payload.jobId,
+          card,
+          estimate,
+          postGradingValue: valueResult,
+        });
       } else if (payload.status === "error") {
         throw new Error(payload.error ?? gradingCopy.status.estimateFailedFallback);
       } else {
@@ -174,32 +207,60 @@ export default function CardScanSlot({
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : gradingCopy.status.estimateFailedFallback);
-      setAnalyzing(false);
       setShowAnimation(false);
       notify("error");
     }
-  }, [notify, preScanNotes]);
+  }, [notify, onComplete, preScanNotes]);
+
+  useEffect(() => {
+    if (!hidePreScanNotesEditor) return;
+    setPreScanNotes(initialNotes);
+  }, [initialNotes, hidePreScanNotesEditor]);
+
+  useEffect(() => {
+    if (deferAnalysis) {
+      deferredAnalysisStartedRef.current = false;
+    }
+  }, [deferAnalysis]);
+
+  /**
+   * When the wizard reaches the analysis step, merge latest notes and start the pipeline once.
+   */
+  useEffect(() => {
+    if (deferAnalysis) return;
+    if (slotState !== "ready" || !identifiedCard) return;
+    if (deferredAnalysisStartedRef.current) return;
+    deferredAnalysisStartedRef.current = true;
+    const notesSnap = hidePreScanNotesEditor ? initialNotes : preScanNotes;
+    void runGradeAnalysis(identifiedCard, notesSnap);
+  }, [
+    deferAnalysis,
+    slotState,
+    identifiedCard,
+    runGradeAnalysis,
+    hidePreScanNotesEditor,
+    initialNotes,
+    preScanNotes,
+  ]);
 
   /**
    * Called by DualCardUploader once photos are uploaded and identified.
-   * Immediately triggers grade analysis — no extra button click needed.
+   * Immediately triggers grade analysis unless deferred for a multi-step wizard.
    */
   const handleIdentified = useCallback((data: CardIdentificationResult) => {
     setIdentifiedCard(data);
     setGradeEstimate(null);
+    setPostGradingValue(null);
     setGradeJob(null);
     setGradeJobId(null);
     setError(null);
     setShowAnimation(false);
-    // Auto-trigger grade analysis with fresh data (skip the "ready" intermediate state)
-    void runGradeAnalysis(data);
-  }, [runGradeAnalysis]);
-
-  /** Retry — re-runs analysis using stored card data. */
-  const handleAnalyze = useCallback(async () => {
-    if (!identifiedCard) return;
-    await runGradeAnalysis(identifiedCard);
-  }, [identifiedCard, runGradeAnalysis]);
+    if (deferAnalysis) {
+      notify("ready");
+    } else {
+      void runGradeAnalysis(data);
+    }
+  }, [deferAnalysis, notify, runGradeAnalysis]);
 
   /** Refinement — re-runs grade model with user correction text injected. No credit consumed. */
   const runRefinement = useCallback(async () => {
@@ -281,19 +342,33 @@ export default function CardScanSlot({
 
         setGradeJob(payload);
         if (payload.final?.estimate) setGradeEstimate(payload.final.estimate);
+        setPostGradingValue(payload.final?.postGradingValue ?? null);
 
         if (payload.status === "done") {
-          setAnalyzing(false); setShowAnimation(false); notify("done");
+          const estimate = payload.final?.estimate;
+          if (!estimate || !identifiedCard) {
+            throw new Error("Analysis finished without a result. Please rerun the scan.");
+          }
+          setGradeEstimate(estimate);
+          setPostGradingValue(payload.final?.postGradingValue ?? null);
+          setShowAnimation(false);
+          notify("done");
+          onComplete?.({
+            jobId: payload.jobId,
+            card: identifiedCard,
+            estimate,
+            postGradingValue: payload.final?.postGradingValue ?? null,
+          });
           if (timer) clearInterval(timer);
         } else if (payload.status === "error") {
           setError(payload.error ?? gradingCopy.status.estimateFailedFallback);
-          setAnalyzing(false); setShowAnimation(false); notify("error");
+          setShowAnimation(false); notify("error");
           if (timer) clearInterval(timer);
         }
       } catch (err) {
         if (cancelled) return;
         setError(err instanceof Error ? err.message : gradingCopy.status.estimateFailedFallback);
-        setAnalyzing(false); setShowAnimation(false); notify("error");
+        setShowAnimation(false); notify("error");
         if (timer) clearInterval(timer);
       }
     };
@@ -301,7 +376,7 @@ export default function CardScanSlot({
     void poll();
     timer = setInterval(poll, 900);
     return () => { cancelled = true; if (timer) clearInterval(timer); };
-  }, [gradeJobId, notify]);
+  }, [gradeJobId, identifiedCard, notify, onComplete]);
 
   const isDone = slotState === "done";
   const isAnalyzing = slotState === "analyzing";
@@ -352,6 +427,12 @@ export default function CardScanSlot({
                 appliedRefinement={appliedRefinement}
               />
 
+              {postGradingValue && (
+                <div className="mt-4">
+                  <GradeEstimatorValuePanel result={postGradingValue} />
+                </div>
+              )}
+
               {/* Refine Analysis — collapsible correction panel */}
               <div className="mt-3 rounded-xl border border-white/8 bg-white/[0.03] overflow-hidden">
                 <button
@@ -388,6 +469,18 @@ export default function CardScanSlot({
                             <p className="text-[10px] text-white/40 pt-3">
                               Saw something the AI missed? Describe it and we&apos;ll re-analyze — no credit used.
                             </p>
+                            <div className="flex items-center justify-between gap-3">
+                              <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-400/70">
+                                Correction
+                              </p>
+                              <MicButton
+                                size="sm"
+                                onResult={(text) =>
+                                  setRefinementText((prev) => appendSpeechTranscript(prev, text, "newline"))
+                                }
+                                className="h-7 w-7 rounded-md border border-white/12 bg-white/5 text-white/50 hover:bg-white/10"
+                              />
+                            </div>
                             <textarea
                               rows={3}
                               maxLength={500}
@@ -450,16 +543,50 @@ export default function CardScanSlot({
             </motion.div>
           )}
 
+          {slotState === "ready" && identifiedCard && deferAnalysis && (
+            <motion.div
+              key="ready"
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="space-y-3 rounded-xl border border-emerald-500/25 bg-emerald-500/5 px-4 py-4"
+            >
+              <p className="text-sm font-medium text-emerald-300/90">
+                Card images ready
+              </p>
+              <p className="text-[11px] leading-relaxed text-white/45">
+                Continue to notes if you want to add context. Grade analysis starts automatically when you open the final step.
+              </p>
+              <button
+                type="button"
+                onClick={handleReset}
+                className="text-[11px] font-medium text-white/40 underline decoration-white/20 underline-offset-2 hover:text-white/70"
+              >
+                Replace photos
+              </button>
+            </motion.div>
+          )}
+
           {slotState === "idle" && (
             <motion.div key="upload" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
               {/* Pre-scan notes — optional context the user types before uploading */}
+              {!hidePreScanNotesEditor && (
               <div className="rounded-xl border border-white/8 bg-white/[0.03] px-4 py-3 space-y-2">
-                <label className="flex items-center gap-1.5 text-[11px] font-semibold text-white/50 tracking-wide">
-                  <svg className="h-3 w-3 text-amber-400/70" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clipRule="evenodd"/>
-                  </svg>
-                  Your observations <span className="font-normal text-white/25">(optional)</span>
-                </label>
+                <div className="flex items-center justify-between gap-3">
+                  <label className="flex items-center gap-1.5 text-[11px] font-semibold text-white/50 tracking-wide">
+                    <svg className="h-3 w-3 text-amber-400/70" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clipRule="evenodd"/>
+                    </svg>
+                    Your observations <span className="font-normal text-white/25">(optional)</span>
+                  </label>
+                  <MicButton
+                    size="sm"
+                    onResult={(text) =>
+                      setPreScanNotes((prev) => appendSpeechTranscript(prev, text, "newline"))
+                    }
+                    className="h-7 w-7 rounded-md border border-white/12 bg-white/5 text-white/50 hover:bg-white/10"
+                  />
+                </div>
                 <textarea
                   rows={2}
                   maxLength={400}
@@ -474,6 +601,7 @@ export default function CardScanSlot({
                   </p>
                 )}
               </div>
+              )}
               <DualCardUploader
                 onIdentified={handleIdentified}
                 disabled={disabled || isAnalyzing}

@@ -67,16 +67,93 @@ function toArray<T>(value: unknown): T[] {
 }
 
 function extractJsonBlock(text: string): string | null {
-  // Prefer fenced ```json blocks if present
+  // Prefer fully-fenced ```json ... ``` blocks if present
   const fencedMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fencedMatch && fencedMatch[1]) {
     return fencedMatch[1].trim();
   }
 
-  const firstBrace = text.indexOf("{");
-  const lastBrace = text.lastIndexOf("}");
-  if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) return null;
-  return text.slice(firstBrace, lastBrace + 1);
+  // Strip a leading ```json fence that wasn't closed (truncated output)
+  let working = text.replace(/^\s*```(?:json)?\s*/i, "");
+  working = working.replace(/\s*```\s*$/i, "");
+
+  const firstBrace = working.indexOf("{");
+  if (firstBrace === -1) return null;
+  const lastBrace = working.lastIndexOf("}");
+  if (lastBrace > firstBrace) {
+    return working.slice(firstBrace, lastBrace + 1);
+  }
+  // No closing brace — return from first brace so repair can attempt to close it
+  return working.slice(firstBrace);
+}
+
+// Attempts to repair a truncated JSON string by closing any open string,
+// then balancing unclosed arrays/objects. Returns null if unrecoverable.
+function repairTruncatedJson(input: string): string | null {
+  const stack: Array<"{" | "["> = [];
+  let inString = false;
+  let escape = false;
+  let lastCompleteIndex = -1;
+
+  for (let i = 0; i < input.length; i++) {
+    const ch = input[i];
+    if (inString) {
+      if (escape) {
+        escape = false;
+      } else if (ch === "\\") {
+        escape = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+    if (ch === "{" || ch === "[") {
+      stack.push(ch);
+    } else if (ch === "}" || ch === "]") {
+      stack.pop();
+      if (stack.length === 0) lastCompleteIndex = i;
+    }
+  }
+
+  if (stack.length === 0 && !inString) return input;
+
+  let repaired = input;
+  // Trim to last comma or opening bracket to drop a partial element
+  const trimMatch = repaired.match(/[,{\[]\s*(?:"[^"]*"\s*:\s*)?[^,{}\[\]]*$/);
+  if (trimMatch && !inString) {
+    const idx = trimMatch.index!;
+    repaired = repaired.slice(0, idx + 1).replace(/,\s*$/, "");
+  } else if (inString) {
+    repaired += '"';
+  }
+
+  // Rebuild stack after trim
+  const newStack: Array<"{" | "["> = [];
+  let s2 = false;
+  let e2 = false;
+  for (let i = 0; i < repaired.length; i++) {
+    const ch = repaired[i];
+    if (s2) {
+      if (e2) e2 = false;
+      else if (ch === "\\") e2 = true;
+      else if (ch === '"') s2 = false;
+      continue;
+    }
+    if (ch === '"') { s2 = true; continue; }
+    if (ch === "{" || ch === "[") newStack.push(ch);
+    else if (ch === "}" || ch === "]") newStack.pop();
+  }
+
+  while (newStack.length > 0) {
+    const open = newStack.pop();
+    repaired += open === "{" ? "}" : "]";
+  }
+
+  return repaired;
 }
 
 export function parseBusinessConsultantReport(
@@ -93,7 +170,13 @@ export function parseBusinessConsultantReport(
   try {
     parsed = JSON.parse(jsonCandidate);
   } catch {
-    return { report: null, rawText };
+    const repaired = repairTruncatedJson(jsonCandidate);
+    if (!repaired) return { report: null, rawText };
+    try {
+      parsed = JSON.parse(repaired);
+    } catch {
+      return { report: null, rawText };
+    }
   }
 
   if (!parsed || typeof parsed !== "object") {

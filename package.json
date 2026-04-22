@@ -14,7 +14,7 @@
     "grading:upload-model": "node scripts/upload_model_version.mjs",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "test": "vitest",
     "test:smart-search": "SMART_SEARCH_HARNESS=1 vitest run lib/smartSearch/__tests__/smart-search-harness.test.ts"
   },
@@ -30,6 +30,7 @@
     "framer-motion": "^12.34.5",
     "html2canvas": "^1.4.1",
     "next": "^16.1.4",
+    "playwright": "^1.59.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-virtuoso": "^4.18.1",

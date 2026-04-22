@@ -49,16 +49,46 @@ export function needsBuyerScope(grantedScopes: string[]): boolean {
   );
 }
 
-function getCredentials(): { clientId: string; clientSecret: string; redirectUri: string } {
-  const clientId = process.env.EBAY_CLIENT_ID;
-  const clientSecret = process.env.EBAY_CLIENT_SECRET;
-  const redirectUri = process.env.EBAY_REDIRECT_URI;
+function stripTrailingSlashes(path: string): string {
+  return path.replace(/\/+$/, "");
+}
 
-  if (!clientId || !clientSecret || !redirectUri) {
+/**
+ * OAuth redirect URI registered in the eBay Developer app must match this value exactly.
+ * If EBAY_REDIRECT_URI is unset, it is derived from the public site URL (same pattern as
+ * `/api/auth/ebay/callback` route) so local dev works with only NEXT_PUBLIC_APP_URL set.
+ */
+export function resolveEbayRedirectUri(): string {
+  const explicit = process.env.EBAY_REDIRECT_URI?.trim();
+  if (explicit) return explicit;
+
+  const base =
+    process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
+    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+    (process.env.VERCEL_URL?.trim()
+      ? `https://${process.env.VERCEL_URL.replace(/^https?:\/\//, "")}`
+      : "");
+
+  if (base) {
+    return `${stripTrailingSlashes(base)}/api/auth/ebay/callback`;
+  }
+
+  throw new Error(
+    "Set EBAY_REDIRECT_URI, or set NEXT_PUBLIC_APP_URL / NEXT_PUBLIC_SITE_URL (e.g. http://localhost:3000) so the eBay OAuth callback URL can be built."
+  );
+}
+
+function getCredentials(): { clientId: string; clientSecret: string; redirectUri: string } {
+  const clientId = process.env.EBAY_CLIENT_ID?.trim();
+  const clientSecret = process.env.EBAY_CLIENT_SECRET?.trim();
+
+  if (!clientId || !clientSecret) {
     throw new Error(
-      "EBAY_CLIENT_ID, EBAY_CLIENT_SECRET, and EBAY_REDIRECT_URI must be set"
+      "EBAY_CLIENT_ID and EBAY_CLIENT_SECRET must be set (eBay Developer Program → your application)."
     );
   }
+
+  const redirectUri = resolveEbayRedirectUri();
   return { clientId, clientSecret, redirectUri };
 }
 

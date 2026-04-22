@@ -7,6 +7,10 @@ import type {
   GradeEstimateCenteringDetail,
 } from "@/types";
 import { distributionFromRange, type GradeOutcome } from "./gradeProbability";
+import {
+  deriveHalfPointGradersFromPsa,
+  mapPsaToBgs,
+} from "@/lib/grading/halfPointGraderMaps";
 
 export type GradeEstimateStatus = "ok" | "low_confidence" | "unable";
 export type GradeEstimateWarningCode = "parse_error" | "low_confidence" | "unable";
@@ -54,15 +58,6 @@ function mapOutcomesToPsa(outcomes: GradeOutcome[]): GradeProbabilities["psa"] {
     else map["7_or_lower"] += outcome.probability;
   });
   return normalizeMap(map);
-}
-
-function mapPsaToBgs(psa: GradeProbabilities["psa"]): GradeProbabilities["bgs"] {
-  return normalizeMap({
-    "9.5": psa["10"],
-    "9": psa["9"],
-    "8.5": psa["8"],
-    "8_or_lower": psa["7_or_lower"],
-  });
 }
 
 function derivePhotoQuality(stats: ImageStats): number {
@@ -195,7 +190,7 @@ export function buildFallbackGradeEstimate(options: {
   const rangeLabel = `PSA ${range.low}-${range.high}`;
   const outcomes = distributionFromRange(rangeLabel, confidence);
   const psa = applyJitter(mapOutcomesToPsa(outcomes), jitterFromStats(options.imageStats));
-  const bgs = mapPsaToBgs(psa);
+  const halfPoint = deriveHalfPointGradersFromPsa(psa, mapPsaToBgs(psa));
   const qualityScore = qualityScoreFromRatio(quality);
   const qualitySubscores = qualitySubscoresFromRatio(quality);
   const confidenceScore = confidenceScoreFromLabel(confidence);
@@ -239,7 +234,10 @@ export function buildFallbackGradeEstimate(options: {
     edges_findings: [unknownFinding("Edges are partially visible; micro-chipping cannot be ruled out.")],
     grade_probabilities: {
       psa,
-      bgs,
+      bgs: halfPoint.bgs,
+      cgc: halfPoint.cgc,
+      sgc: halfPoint.sgc,
+      tag: halfPoint.tag,
       confidence,
     },
     analysis_status: options.status ?? "unable",

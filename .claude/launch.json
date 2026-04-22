@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "Next.js Dev (webpack)",
-      "runtimeExecutable": "pnpm",
+      "runtimeExecutable": "/Users/maxwellhilliard/.nvm/versions/node/v24.12.0/bin/pnpm",
       "runtimeArgs": ["dev"],
       "port": 3000
     },
@@ -12,13 +12,16 @@
       "runtimeExecutable": "/Users/maxwellhilliard/.nvm/versions/node/v24.12.0/bin/node",
       "runtimeArgs": ["/Users/maxwellhilliard/.nvm/versions/node/v24.12.0/bin/pnpm", "dev:turbo"],
       "port": 3000,
-      "autoPort": true
+      "autoPort": true,
+      "env": {
+        "PATH": "/Users/maxwellhilliard/.nvm/versions/node/v24.12.0/bin:/usr/local/bin:/usr/bin:/bin"
+      }
     },
     {
       "name": "CardzCheck Main",
-      "runtimeExecutable": "/Users/maxwellhilliard/.nvm/versions/node/v24.12.0/bin/node",
-      "runtimeArgs": ["/Users/maxwellhilliard/cardzcheck/node_modules/.bin/next", "dev", "--port", "3001"],
-      "port": 3001,
+      "runtimeExecutable": "/Users/maxwellhilliard/cardzcheck/node_modules/.bin/next",
+      "runtimeArgs": ["dev"],
+      "port": 3000,
       "autoPort": true
     }
   ]

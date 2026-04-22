@@ -7,9 +7,13 @@ import {
 } from "@/lib/business/context";
 import type { BusinessInventoryItem, BusinessSale, BusinessMetrics } from "@/types";
 import { computeNetPayout, computeProfit } from "@/lib/business/sales-utils";
+import { enqueueCertImageResolution } from "@/lib/images/cert-image-jobs";
+import { normalizeCertWriteFields } from "@/lib/images/cert-image";
+import { hydrateTrustedImagesForItems } from "@/lib/images/resolver";
 
-// Uses business_inventory_items table (unified collection_items migration not yet applied)
-const BUSINESS_TABLE = "business_inventory_items" as const;
+// Uses unified collection_items table with item_kind = 'inventory'
+const BUSINESS_TABLE = "collection_items" as const;
+const BUSINESS_ITEM_KIND = "inventory" as const;
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function assertUUIDs(ids: string[]): void {
@@ -23,8 +27,8 @@ function assertUUIDs(ids: string[]): void {
 type BusinessInventoryRow = {
   id: string;
   user_id: string;
-  business_account_id?: string | null;
-  card_id: string | null;
+  business_account_id: string | null;
+  item_kind: string | null;
   title: string;
   quantity: number | null;
   acquisition_date: string | null;
@@ -37,14 +41,17 @@ type BusinessInventoryRow = {
   grading_company: string | null;
   grade: string | null;
   cert_number: string | null;
+  psa_cert_number: string | null;
   location: string | null;
   channel: string | null;
   status: string | null;
   list_price_cents: number | null;
   current_market_value_cents: number | null;
+  image_url: string | null;
+  image_source: "psa" | "bgs" | "sgc" | "cgc" | "user" | "none" | null;
   user_image_url: string | null;
-  stock_image_url: string | null;
-  ebay_image_url: string | null;
+  cert_image_status?: "queued" | "running" | "resolved" | "no_image" | "failed" | null;
+  cert_image_last_error?: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string | null;
@@ -188,7 +195,7 @@ function toBusinessInventoryItem(row: BusinessInventoryRow): BusinessInventoryIt
     id: row.id,
     user_id: row.user_id,
     business_account_id: row.business_account_id ?? row.user_id,
-    card_id: row.card_id || row.id,
+    card_id: row.id,
     title: row.title || "Untitled item",
     quantity: normalizeQuantity(row.quantity),
     acquisition_date: row.acquisition_date ?? null,
@@ -201,15 +208,21 @@ function toBusinessInventoryItem(row: BusinessInventoryRow): BusinessInventoryIt
     grading_company: row.grading_company,
     grade: row.grade,
     cert_number: row.cert_number,
+    psa_cert_number: row.psa_cert_number,
+    cert_image_status: row.cert_image_status ?? null,
+    cert_image_last_error: row.cert_image_last_error ?? null,
     location: row.location,
     channel: normalizeChannel(row.channel),
     status: normalizeStatus(row.status),
     list_price_cents: row.list_price_cents ?? null,
     current_market_value_cents: row.current_market_value_cents ?? null,
+    image_url: row.image_url ?? null,
+    image_source: row.image_source ?? "none",
     user_image_url: row.user_image_url ?? null,
-    stock_image_url: row.stock_image_url ?? null,
-    ebay_image_url: row.ebay_image_url ?? null,
     notes: row.notes,
+    ebay_item_id: (row as any).ebay_item_id ?? null,
+    ebay_listing_url: (row as any).ebay_listing_url ?? null,
+    item_kind: (row.item_kind as "owned" | "inventory" | null) ?? null,
     created_at: row.created_at,
     updated_at: row.updated_at || row.created_at,
   };
@@ -223,11 +236,18 @@ function buildInventoryInsertPayload(
     "id" | "user_id" | "business_account_id" | "created_at" | "updated_at"
   >
 ): Record<string, unknown> {
+  const title = item.title || "Untitled item";
+  const normalizedCert = normalizeCertWriteFields({
+    grading_company: item.grading_company,
+    cert_number: item.cert_number,
+    psa_cert_number: (item as any).psa_cert_number,
+  });
   return {
     user_id: userId,
     business_account_id: businessAccountId,
-    card_id: normalizeCardId((item as any).card_id),
-    title: item.title || "Untitled item",
+    item_kind: BUSINESS_ITEM_KIND,
+    title,
+    player_name: (item as any).player_name || title,
     quantity: normalizeQuantity(item.quantity),
     acquisition_type: item.acquisition_type ?? "other",
     acquisition_date: normalizeAcquisitionDate(item.acquisition_date),
@@ -236,17 +256,19 @@ function buildInventoryInsertPayload(
     shipping_cents: item.shipping_cents ?? 0,
     fees_paid_cents: item.fees_paid_cents ?? 0,
     condition_status: item.condition_status ?? "raw",
-    grading_company: item.grading_company || null,
+    grading_company: normalizedCert.grading_company ?? item.grading_company ?? null,
     grade: item.grade || null,
-    cert_number: item.cert_number || null,
+    cert_number: normalizedCert.cert_number ?? null,
+    psa_cert_number: normalizedCert.psa_cert_number ?? null,
     location: item.location || null,
     channel: item.channel ?? "other",
     status: item.status ?? "unlisted",
     list_price_cents: item.list_price_cents ?? null,
     current_market_value_cents: item.current_market_value_cents ?? null,
+    image_url: (item as any).image_url || (item as any).user_image_url || null,
+    image_source:
+      (item as any).image_source || ((item as any).user_image_url ? "user" : "none"),
     user_image_url: (item as any).user_image_url || null,
-    stock_image_url: (item as any).stock_image_url || null,
-    ebay_image_url: (item as any).ebay_image_url || null,
     notes: item.notes || null,
   };
 }
@@ -260,6 +282,11 @@ function buildInventoryUpdatePayload(
   >
 ): Record<string, unknown> {
   const payload: Record<string, unknown> = {};
+  const normalizedCert = normalizeCertWriteFields({
+    grading_company: updates.grading_company,
+    cert_number: updates.cert_number,
+    psa_cert_number: (updates as any).psa_cert_number,
+  });
   if (updates.title !== undefined) payload.title = updates.title || "Untitled item";
   if (updates.quantity !== undefined)
     payload.quantity = normalizeQuantity(updates.quantity);
@@ -277,9 +304,12 @@ function buildInventoryUpdatePayload(
   if (updates.condition_status !== undefined)
     payload.condition_status = updates.condition_status;
   if (updates.grading_company !== undefined)
-    payload.grading_company = updates.grading_company;
+    payload.grading_company = normalizedCert.grading_company ?? updates.grading_company;
   if (updates.grade !== undefined) payload.grade = updates.grade;
-  if (updates.cert_number !== undefined) payload.cert_number = updates.cert_number;
+  if (updates.cert_number !== undefined || updates.grading_company !== undefined)
+    payload.cert_number = normalizedCert.cert_number ?? null;
+  if ((updates as any).psa_cert_number !== undefined || updates.grading_company !== undefined)
+    payload.psa_cert_number = normalizedCert.psa_cert_number ?? null;
   if (updates.location !== undefined) payload.location = updates.location;
   if (updates.channel !== undefined) payload.channel = updates.channel;
   if (updates.status !== undefined) payload.status = updates.status;
@@ -287,13 +317,12 @@ function buildInventoryUpdatePayload(
     payload.list_price_cents = updates.list_price_cents;
   if (updates.current_market_value_cents !== undefined)
     payload.current_market_value_cents = updates.current_market_value_cents;
+  if ((updates as any).image_url !== undefined) payload.image_url = (updates as any).image_url;
+  if ((updates as any).image_source !== undefined)
+    payload.image_source = (updates as any).image_source;
   if (updates.notes !== undefined) payload.notes = updates.notes;
   if (updates.user_image_url !== undefined)
     payload.user_image_url = updates.user_image_url;
-  if (updates.stock_image_url !== undefined)
-    payload.stock_image_url = updates.stock_image_url;
-  if (updates.ebay_image_url !== undefined)
-    payload.ebay_image_url = updates.ebay_image_url;
   return payload;
 }
 
@@ -316,10 +345,16 @@ export async function listInventory(
   let query = supabase
     .from(BUSINESS_TABLE)
     .select("*")
-    .eq("business_account_id", context.businessAccountId)
+    .eq("user_id", userId)
+    .eq("item_kind", BUSINESS_ITEM_KIND)
     .order("created_at", { ascending: false });
 
-  if (filters?.status) query = query.eq("status", filters.status);
+  if (filters?.status) {
+    query = query.eq("status", filters.status);
+  } else {
+    // By default, exclude sold and returned items from inventory listings
+    query = query.neq("status", "sold").neq("status", "returned");
+  }
   if (filters?.channel) query = query.eq("channel", filters.channel);
   if (filters?.condition_status)
     query = query.eq("condition_status", filters.condition_status);
@@ -335,7 +370,12 @@ export async function listInventory(
   const { data, error } = await query;
   if (error) throw error;
 
-  return ((data ?? []) as BusinessInventoryRow[]).map(toBusinessInventoryItem);
+  const items = ((data ?? []) as BusinessInventoryRow[]).map(toBusinessInventoryItem);
+  return hydrateTrustedImagesForItems({
+    supabase,
+    items,
+    userId,
+  });
 }
 
 export async function getInventoryItem(
@@ -349,12 +389,19 @@ export async function getInventoryItem(
     .from(BUSINESS_TABLE)
     .select("*")
     .eq("id", itemId)
-    .eq("business_account_id", context.businessAccountId)
+    .eq("user_id", userId)
+    .eq("item_kind", BUSINESS_ITEM_KIND)
     .maybeSingle();
 
   if (error && error.code !== "PGRST116") throw error;
   if (!data) return null;
-  return toBusinessInventoryItem(data as BusinessInventoryRow);
+  const item = toBusinessInventoryItem(data as BusinessInventoryRow);
+  const [hydrated] = await hydrateTrustedImagesForItems({
+    supabase,
+    items: [item],
+    userId,
+  });
+  return hydrated ?? item;
 }
 
 export async function createInventoryItem(
@@ -374,7 +421,14 @@ export async function createInventoryItem(
     .single();
 
   if (error) throw error;
-  return toBusinessInventoryItem(data as BusinessInventoryRow);
+  const itemRecord = toBusinessInventoryItem(data as BusinessInventoryRow);
+  await enqueueCertImageResolution({ itemId: itemRecord.id });
+  const [hydrated] = await hydrateTrustedImagesForItems({
+    supabase,
+    items: [itemRecord],
+    userId,
+  });
+  return hydrated ?? itemRecord;
 }
 
 export async function updateInventoryItem(
@@ -394,12 +448,20 @@ export async function updateInventoryItem(
     .from(BUSINESS_TABLE)
     .update(buildInventoryUpdatePayload(updates))
     .eq("id", itemId)
-    .eq("business_account_id", context.businessAccountId)
+    .eq("user_id", userId)
+    .eq("item_kind", BUSINESS_ITEM_KIND)
     .select("*")
     .single();
 
   if (error) throw error;
-  return toBusinessInventoryItem(data as BusinessInventoryRow);
+  const itemRecord = toBusinessInventoryItem(data as BusinessInventoryRow);
+  await enqueueCertImageResolution({ itemId: itemRecord.id });
+  const [hydrated] = await hydrateTrustedImagesForItems({
+    supabase,
+    items: [itemRecord],
+    userId,
+  });
+  return hydrated ?? itemRecord;
 }
 
 export async function deleteInventoryItems(
@@ -418,7 +480,40 @@ export async function deleteInventoryItems(
     .from(BUSINESS_TABLE)
     .delete()
     .in("id", itemIds)
-    .eq("business_account_id", context.businessAccountId);
+    .eq("user_id", userId)
+    .eq("item_kind", BUSINESS_ITEM_KIND);
+
+  if (error) throw error;
+}
+
+/**
+ * Toggle an item between personal collection ('owned') and business inventory ('inventory').
+ * When moving to inventory, cost_basis_total_cents can be provided if not already set.
+ * Requires Business access since toggling affects inventory tracking.
+ */
+export async function updateItemKind(
+  userId: string,
+  itemId: string,
+  targetKind: "owned" | "inventory",
+  options?: { cost_basis_total_cents?: number }
+): Promise<void> {
+  const context = await requireBusinessAccess(userId);
+  const supabase = await createClient();
+
+  const payload: Record<string, unknown> = {
+    item_kind: targetKind,
+    business_account_id:
+      targetKind === "inventory" ? context.businessAccountId : null,
+  };
+  if (targetKind === "inventory" && options?.cost_basis_total_cents !== undefined) {
+    payload.cost_basis_total_cents = options.cost_basis_total_cents;
+  }
+
+  const { error } = await supabase
+    .from("collection_items")
+    .update(payload)
+    .eq("id", itemId)
+    .eq("user_id", userId);
 
   if (error) throw error;
 }
@@ -439,7 +534,8 @@ export async function bulkUpdateInventory(
     .from(BUSINESS_TABLE)
     .update(payload)
     .in("id", itemIds)
-    .eq("business_account_id", context.businessAccountId);
+    .eq("user_id", userId)
+    .eq("item_kind", BUSINESS_ITEM_KIND);
 
   if (error) throw error;
 }
@@ -688,7 +784,7 @@ function toBusinessSale(row: BusinessSaleRow): BusinessSale {
 }
 
 async function attachInventoryTitles(
-  businessAccountId: string,
+  _businessAccountId: string,
   sales: BusinessSale[]
 ): Promise<BusinessSale[]> {
   const inventoryIds = Array.from(
@@ -704,11 +800,13 @@ async function attachInventoryTitles(
   if (validInventoryIds.length === 0) return sales;
 
   const supabase = await createClient();
+  // Do not filter by business_account_id here: legacy collection_items rows may have
+  // a null or stale business_account_id while still belonging to this user. RLS on
+  // collection_items scopes rows to the authenticated user.
   const { data, error } = await supabase
     .from(BUSINESS_TABLE)
     .select("id, title")
-    .in("id", validInventoryIds)
-    .eq("business_account_id", businessAccountId);
+    .in("id", validInventoryIds);
   if (error) return sales;
 
   const titleById = new Map<string, string>();
@@ -729,62 +827,60 @@ async function attachInventoryTitles(
   }));
 }
 
-/**
- * Ensure a minimal collection_items mirror row exists for inventory-backed sales.
- * This supports deployments where business_sales.inventory_item_id references collection_items(id).
- */
-async function ensureCollectionItemMirrorForSale(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  userId: string,
-  inventoryContext: { id: string; title: string | null } | null
-): Promise<void> {
-  if (!inventoryContext) return;
-
-  const label = inventoryContext.title?.trim() || "Inventory Item";
-  const collection = supabase.from("collection_items") as {
-    upsert?: (
-      values: Record<string, unknown>,
-      options: { onConflict: string; ignoreDuplicates: boolean }
-    ) => Promise<{ error: unknown }>;
-  };
-
-  if (typeof collection.upsert !== "function") return;
-
-  const { error } = await collection.upsert(
-    {
-      id: inventoryContext.id,
-      user_id: userId,
-      player_name: label,
-      notes: "Auto-linked from business inventory for sale record consistency",
-    },
-    { onConflict: "id", ignoreDuplicates: true }
-  );
-
-  if (!error) return;
-
-  const { code, message, details } = getDbErrorMeta(error);
-  // Mirror row is best-effort; never block sale writes on mirror schema mismatches.
-  console.warn("Skipping collection mirror for sale:", {
-    code,
-    message,
-    details,
-  });
-}
-
 async function getInventoryContextForSale(
-  businessAccountId: string,
-  inventoryItemId?: string | null
+  args: {
+    businessAccountId: string;
+    userId: string;
+    ownerUserId: string;
+    inventoryItemId?: string | null;
+  }
 ): Promise<{ id: string; title: string | null; channel: string | null; cost_basis_total_cents: number | null } | null> {
+  const { businessAccountId, userId, ownerUserId, inventoryItemId } = args;
   if (!inventoryItemId) return null;
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const scopedLookup = await supabase
     .from(BUSINESS_TABLE)
     .select("id, title, channel, cost_basis_total_cents")
     .eq("id", inventoryItemId)
     .eq("business_account_id", businessAccountId)
     .maybeSingle();
 
-  if (error) throw error;
+  if (
+    scopedLookup.error &&
+    !isBusinessSalesSchemaMismatch(scopedLookup.error)
+  ) {
+    throw scopedLookup.error;
+  }
+
+  let data = scopedLookup.data;
+
+  // Older inventory rows may not have business_account_id populated yet.
+  if (!data) {
+    const fallbackUserIds = Array.from(
+      new Set(
+        [userId, ownerUserId].filter(
+          (value): value is string => typeof value === "string" && value.length > 0
+        )
+      )
+    );
+
+    let fallbackQuery = supabase
+      .from(BUSINESS_TABLE)
+      .select("id, title, channel, cost_basis_total_cents")
+      .eq("id", inventoryItemId)
+      .eq("item_kind", BUSINESS_ITEM_KIND);
+
+    if (fallbackUserIds.length === 1) {
+      fallbackQuery = fallbackQuery.eq("user_id", fallbackUserIds[0]);
+    } else if (fallbackUserIds.length > 1) {
+      fallbackQuery = fallbackQuery.in("user_id", fallbackUserIds);
+    }
+
+    const fallbackLookup = await fallbackQuery.maybeSingle();
+    if (fallbackLookup.error) throw fallbackLookup.error;
+    data = fallbackLookup.data;
+  }
+
   if (!data) return null;
 
   return {
@@ -793,6 +889,72 @@ async function getInventoryContextForSale(
     channel: data.channel ?? null,
     cost_basis_total_cents: data.cost_basis_total_cents ?? 0,
   };
+}
+
+/**
+ * No-op: inventory items are now stored directly in collection_items,
+ * so no mirror row needs to be created before recording a sale.
+ * The inventory item IS already a collection_items row.
+ */
+async function ensureCollectionItemMirrorForSale(
+  _supabase: Awaited<ReturnType<typeof createClient>>,
+  _userId: string,
+  _inventoryContext: { id: string; title: string | null } | null
+): Promise<void> {
+  // Nothing to do — business inventory lives in collection_items directly.
+}
+
+async function markInventoryItemSold(args: {
+  supabase: Awaited<ReturnType<typeof createClient>>;
+  inventoryItemId: string;
+  businessAccountId: string;
+  userId: string;
+  ownerUserId: string;
+}): Promise<void> {
+  const { supabase, inventoryItemId, businessAccountId, userId, ownerUserId } = args;
+
+  const scopedUpdate = await supabase
+    .from(BUSINESS_TABLE)
+    .update({ status: "sold" })
+    .eq("id", inventoryItemId)
+    .eq("item_kind", BUSINESS_ITEM_KIND)
+    .eq("business_account_id", businessAccountId)
+    .select("id")
+    .maybeSingle();
+
+  if (
+    scopedUpdate.error &&
+    !isBusinessSalesSchemaMismatch(scopedUpdate.error)
+  ) {
+    normalizeBusinessSaleError(scopedUpdate.error);
+  }
+
+  if (scopedUpdate.data) return;
+
+  const fallbackUserIds = Array.from(
+    new Set(
+      [userId, ownerUserId].filter(
+        (value): value is string => typeof value === "string" && value.length > 0
+      )
+    )
+  );
+
+  let fallbackUpdate = supabase
+    .from(BUSINESS_TABLE)
+    .update({ status: "sold" })
+    .eq("id", inventoryItemId)
+    .eq("item_kind", BUSINESS_ITEM_KIND);
+
+  if (fallbackUserIds.length === 1) {
+    fallbackUpdate = fallbackUpdate.eq("user_id", fallbackUserIds[0]);
+  } else if (fallbackUserIds.length > 1) {
+    fallbackUpdate = fallbackUpdate.in("user_id", fallbackUserIds);
+  }
+
+  const fallbackResult = await fallbackUpdate.select("id").maybeSingle();
+  if (fallbackResult.error) {
+    normalizeBusinessSaleError(fallbackResult.error);
+  }
 }
 
 function buildComputedSalePayload(args: {
@@ -1069,10 +1231,12 @@ export async function createSale(
   const context = await requireBusinessAccess(userId);
   const supabase = await createClient();
 
-  const inventoryContext = await getInventoryContextForSale(
-    context.businessAccountId,
-    sale.inventory_item_id
-  );
+  const inventoryContext = await getInventoryContextForSale({
+    businessAccountId: context.businessAccountId,
+    userId,
+    ownerUserId: context.ownerUserId,
+    inventoryItemId: sale.inventory_item_id,
+  });
 
   if (sale.inventory_item_id && !inventoryContext) {
     const err = new Error("Inventory item not found for this business");
@@ -1117,12 +1281,13 @@ export async function createSale(
 
     // Mark the linked inventory row as sold if present.
     if (insertPayload.inventory_item_id) {
-      const { error: updateError } = await supabase
-        .from(BUSINESS_TABLE)
-        .update({ status: "sold" })
-        .eq("id", insertPayload.inventory_item_id)
-        .eq("business_account_id", context.businessAccountId);
-      if (updateError) normalizeBusinessSaleError(updateError);
+      await markInventoryItemSold({
+        supabase,
+        inventoryItemId: insertPayload.inventory_item_id,
+        businessAccountId: context.businessAccountId,
+        userId,
+        ownerUserId: context.ownerUserId,
+      });
     }
 
     if (!created) {
@@ -1197,10 +1362,12 @@ export async function updateSale(
     external_order_id: updates.external_order_id ?? existing.external_order_id ?? existing.order_id,
   };
 
-  const inventoryContext = await getInventoryContextForSale(
-    context.businessAccountId,
-    mergedBase.inventory_item_id
-  );
+  const inventoryContext = await getInventoryContextForSale({
+    businessAccountId: context.businessAccountId,
+    userId,
+    ownerUserId: context.ownerUserId,
+    inventoryItemId: mergedBase.inventory_item_id,
+  });
 
   await ensureCollectionItemMirrorForSale(supabase, userId, inventoryContext);
 
@@ -1426,7 +1593,8 @@ export async function getBusinessMetrics(userId: string): Promise<BusinessMetric
   const { count: activeCount } = await supabase
     .from(BUSINESS_TABLE)
     .select("id", { count: "exact", head: true })
-    .eq("business_account_id", context.businessAccountId)
+    .eq("user_id", userId)
+    .eq("item_kind", BUSINESS_ITEM_KIND)
     .neq("status", "sold");
 
   return {
