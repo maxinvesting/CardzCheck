@@ -229,8 +229,8 @@ export async function POST(request: NextRequest) {
       const isReportMode = modeHint === "report";
       const model = !shouldUseWebSearch && !isReportMode
         ? "claude-haiku-4-5-20251001"
-        : "claude-sonnet-4-20250514";
-      const maxTokens = isReportMode ? 4096 : shouldUseWebSearch ? 1536 : 512;
+        : "claude-sonnet-4-6";
+      const maxTokens = isReportMode ? 4096 : shouldUseWebSearch ? 4096 : 1024;
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const modelRequest: any = {
