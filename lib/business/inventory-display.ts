@@ -174,3 +174,109 @@ export function isUnderwater(item: BusinessInventoryItem): boolean {
   if (!cost || !cmv || cmv <= 0) return false;
   return cmv < cost;
 }
+
+// ── Projected net margin ─────────────────────────────────────────────────────
+// Simple fee heuristic used for at-a-glance margin on the inventory grid.
+// 13% FVF blended + $0.40 per-order + ~$1.25 packaging/shipping allowance.
+// For truly precise math, the sale form uses EbayProfitEngine.calculateNetProfit.
+const FEE_RATE = 0.13;
+const PER_ORDER_CENTS = 40;
+const SHIP_PACK_CENTS = 125;
+
+export type MarginBasis = "list" | "cmv";
+
+export interface ProjectedMargin {
+  basis: MarginBasis;
+  salePriceCents: number;
+  netCents: number;
+  netPct: number;
+}
+
+export function getProjectedMargin(
+  item: BusinessInventoryItem
+): ProjectedMargin | null {
+  const cost = item.cost_basis_total_cents;
+  if (!cost || cost <= 0) return null;
+
+  const list = item.list_price_cents;
+  const cmv = item.current_market_value_cents;
+  const basis: MarginBasis | null =
+    list && list > 0 ? "list" : cmv && cmv > 0 ? "cmv" : null;
+  if (!basis) return null;
+
+  const salePriceCents = basis === "list" ? (list as number) : (cmv as number);
+  const feesCents = Math.round(salePriceCents * FEE_RATE) + PER_ORDER_CENTS;
+  const netCents = salePriceCents - cost - feesCents - SHIP_PACK_CENTS;
+  const netPct = (netCents / salePriceCents) * 100;
+
+  return { basis, salePriceCents, netCents, netPct };
+}
+
+export function formatMarginPct(pct: number): string {
+  const rounded = Math.round(pct);
+  return `${rounded > 0 ? "+" : ""}${rounded}%`;
+}
+
+export function getMarginColor(netCents: number): string {
+  if (netCents < 0) return "text-red-600";
+  if (netCents < 500) return "text-amber-700";
+  return "text-[var(--biz-primary)]";
+}
+
+// ── Aging buckets ────────────────────────────────────────────────────────────
+export type AgingBucketKey = "0-30" | "31-60" | "61-90" | "91-180" | "180+";
+
+export interface AgingBucketDef {
+  key: AgingBucketKey;
+  label: string;
+  min: number;
+  max: number | null;
+}
+
+export const AGING_BUCKETS: AgingBucketDef[] = [
+  { key: "0-30", label: "0–30d", min: 0, max: 30 },
+  { key: "31-60", label: "31–60d", min: 31, max: 60 },
+  { key: "61-90", label: "61–90d", min: 61, max: 90 },
+  { key: "91-180", label: "91–180d", min: 91, max: 180 },
+  { key: "180+", label: "180d+", min: 181, max: null },
+];
+
+export function getAgingBucket(days: number | null): AgingBucketKey | null {
+  if (days == null || days < 0) return null;
+  for (const b of AGING_BUCKETS) {
+    if (days >= b.min && (b.max == null || days <= b.max)) return b.key;
+  }
+  return null;
+}
+
+export interface AgingBucketStat {
+  key: AgingBucketKey;
+  label: string;
+  count: number;
+  capitalCents: number;
+}
+
+export function computeAgingBuckets(
+  items: BusinessInventoryItem[]
+): AgingBucketStat[] {
+  const stats = new Map<AgingBucketKey, AgingBucketStat>();
+  for (const b of AGING_BUCKETS) {
+    stats.set(b.key, { key: b.key, label: b.label, count: 0, capitalCents: 0 });
+  }
+  for (const item of items) {
+    if (item.status === "sold" || item.status === "returned") continue;
+    const key = getAgingBucket(getDaysHeld(item.acquisition_date));
+    if (!key) continue;
+    const bucket = stats.get(key)!;
+    bucket.count += 1;
+    bucket.capitalCents += item.cost_basis_total_cents ?? 0;
+  }
+  return AGING_BUCKETS.map((b) => stats.get(b.key)!);
+}
+
+export function formatCapitalShort(cents: number): string {
+  if (cents <= 0) return "$0";
+  const dollars = cents / 100;
+  if (dollars >= 1000) return `$${(dollars / 1000).toFixed(dollars >= 10_000 ? 0 : 1)}k`;
+  return `$${Math.round(dollars)}`;
+}

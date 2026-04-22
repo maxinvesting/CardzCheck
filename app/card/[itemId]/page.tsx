@@ -675,8 +675,8 @@ export default function CardProfilePage() {
     try {
       if (isBusinessMode) {
         const saved = await saveBusinessInventoryItem(item.id, {
-          image_url: normalizedImageUrl,
-          image_source: "psa",
+          user_image_url: normalizedImageUrl,
+          image_source: "user",
         }, { successMessage: "Image URL imported" });
         if (!saved) {
           return;
@@ -686,8 +686,8 @@ export default function CardProfilePage() {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            image_url: normalizedImageUrl,
-            image_source: "psa",
+            user_image_url: normalizedImageUrl,
+            image_source: "user",
           }),
         });
 

@@ -17,6 +17,9 @@ import {
   getInventoryImageCandidates,
   isResolvingInventoryCertImage,
   isUnderwater,
+  getProjectedMargin,
+  formatMarginPct,
+  getMarginColor,
 } from "@/lib/business/inventory-display";
 
 const VIRTUALIZE_THRESHOLD = 200;
@@ -233,6 +236,7 @@ function InventoryCardCell({
   const cost = fmtCents(item.cost_basis_total_cents) || "—";
   const listPrice = fmtCents(item.list_price_cents);
   const underwater = isUnderwater(item);
+  const projected = getProjectedMargin(item);
   const hasEbayListing = Boolean((item as { ebay_item_id?: string | null }).ebay_item_id);
   const canListOnEbay =
     ebayConnected &&
@@ -248,9 +252,16 @@ function InventoryCardCell({
   const conditionSummary = getConditionSummary(item);
   const channelSummary = formatChannelLabel(item.channel);
   const secondaryMeta = [conditionSummary, channelSummary].filter(Boolean).join(" • ");
+  const marginMetric = projected
+    ? {
+        label: projected.basis === "list" ? "Margin" : "Margin est",
+        value: formatMarginPct(projected.netPct),
+        valueClassName: getMarginColor(projected.netCents),
+      }
+    : null;
   const metrics = [
     { label: "Cost", value: cost },
-    ...(item.status === "listed" && listPrice ? [{ label: "List", value: listPrice }] : []),
+    ...(marginMetric ? [marginMetric] : []),
     {
       label: "Held",
       value: days !== null ? `${days}d` : "—",
@@ -344,12 +355,17 @@ function InventoryCardCell({
 
         <div className="flex flex-1 flex-col gap-3 border-t border-[#EEF2EE] bg-white px-3.5 pb-3.5 pt-3">
           <div className="min-w-0">
-            <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center justify-between gap-2">
               <span
                 className={`inline-flex shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold leading-none ${statusColor(item.status)}`}
               >
                 {statusLabel(item.status)}
               </span>
+              {item.status === "listed" && listPrice ? (
+                <span className="text-[11px] font-semibold tabular-nums text-[var(--biz-text)]">
+                  {listPrice}
+                </span>
+              ) : null}
             </div>
             <p
               className="mt-2 line-clamp-2 text-[13px] font-semibold leading-[1.25] text-[var(--biz-text)]"
