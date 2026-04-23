@@ -1211,7 +1211,7 @@ export default function InventoryTable({
       {/* Desktop table (>= 640px) — ledger style: tight rows, right-align money */}
       <div
         ref={tableContainerRef}
-        className="hidden sm:block border border-[var(--biz-border)] rounded-lg overflow-hidden"
+        className="hidden sm:block border border-[var(--biz-border)] rounded-lg overflow-x-auto"
         onScrollCapture={() => {
           if (perfEnabled) setPerfInteraction("scroll");
         }}
@@ -1233,7 +1233,7 @@ export default function InventoryTable({
             style={{ height: virtualTableHeight }}
             components={{
               Scroller: VirtuosoScroller,
-              Table: (props) => <table {...props} className="w-full text-xs text-left" />,
+              Table: (props) => <table {...props} className="w-full min-w-[1200px] text-xs text-left" />,
               TableHead: (props) => (
                 <thead {...props} className="bg-[var(--biz-surface-soft)] border-b border-[var(--biz-border)]" />
               ),
@@ -1248,8 +1248,8 @@ export default function InventoryTable({
             increaseViewportBy={240}
           />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left">
+          <div>
+            <table className="w-full min-w-[1200px] text-xs text-left">
               <thead className="sticky top-0 z-10 bg-[var(--biz-surface-soft)] border-b border-[var(--biz-border)]">
                 {renderHeader()}
               </thead>
