@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import {
   hasRole,
   requireBusinessContext,
@@ -474,22 +474,54 @@ export async function deleteInventoryItems(
     ["owner", "manager"],
     "Only owners and managers can remove inventory items"
   );
-  const supabase = await createClient();
 
-  const { data, error } = await supabase
+  // Authorize each id by looking it up via the service client so the check
+  // isn't subject to RLS — old rows can have a stale item_kind or a missing
+  // business_account_id even though they legitimately belong to this business.
+  const admin = await createServiceClient();
+  const { data: owned, error: lookupError } = await admin
+    .from(BUSINESS_TABLE)
+    .select("id, user_id, business_account_id, item_kind")
+    .in("id", itemIds);
+
+  if (lookupError) throw lookupError;
+
+  const ownedIds = new Set<string>();
+  for (const row of (owned ?? []) as Array<{
+    id: string;
+    user_id: string | null;
+    business_account_id: string | null;
+  }>) {
+    const isUserOwned = row.user_id === userId;
+    const isBusinessOwned =
+      !!row.business_account_id &&
+      row.business_account_id === context.businessAccountId;
+    if (isUserOwned || isBusinessOwned) {
+      ownedIds.add(row.id);
+    }
+  }
+
+  const unauthorized = itemIds.filter((id) => !ownedIds.has(id));
+  if (unauthorized.length) {
+    const err = new Error(
+      `Not authorized to delete ${unauthorized.length} item(s)`
+    );
+    (err as { status?: number }).status = 403;
+    throw err;
+  }
+
+  const { data: deleted, error: deleteError } = await admin
     .from(BUSINESS_TABLE)
     .delete()
     .in("id", itemIds)
-    .eq("user_id", userId)
-    .eq("item_kind", BUSINESS_ITEM_KIND)
     .select("id");
 
-  if (error) throw error;
+  if (deleteError) throw deleteError;
 
-  const deletedCount = data?.length ?? 0;
+  const deletedCount = deleted?.length ?? 0;
   if (deletedCount < itemIds.length) {
     const err = new Error(
-      `Deleted ${deletedCount} of ${itemIds.length} items — remaining rows were blocked by RLS or not found`
+      `Deleted ${deletedCount} of ${itemIds.length} items — some rows could not be removed`
     );
     (err as { status?: number }).status = 409;
     throw err;
