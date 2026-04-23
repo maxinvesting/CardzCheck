@@ -102,7 +102,7 @@ export default function AuthenticatedLayout({
       {!isGradeWorkspace ? <Sidebar /> : null}
       {/* Main content area with padding for sidebar and bottom tab */}
       <div
-        className={`relative z-10 flex-1 pb-20 lg:pb-0 ${
+        className={`relative z-10 flex-1 min-w-0 pb-20 lg:pb-0 ${
           isGradeWorkspace ? "" : "lg:ml-64"
         }`}
       >
