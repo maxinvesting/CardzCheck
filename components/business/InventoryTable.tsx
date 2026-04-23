@@ -1233,7 +1233,7 @@ export default function InventoryTable({
             style={{ height: virtualTableHeight }}
             components={{
               Scroller: VirtuosoScroller,
-              Table: (props) => <table {...props} className="w-full text-xs text-left" />,
+              Table: (props) => <table {...props} className="w-full min-w-[1200px] text-xs text-left" />,
               TableHead: (props) => (
                 <thead {...props} className="bg-[var(--biz-surface-soft)] border-b border-[var(--biz-border)]" />
               ),
@@ -1249,7 +1249,7 @@ export default function InventoryTable({
           />
         ) : (
           <div>
-            <table className="w-full text-xs text-left">
+            <table className="w-full min-w-[1200px] text-xs text-left">
               <thead className="sticky top-0 z-10 bg-[var(--biz-surface-soft)] border-b border-[var(--biz-border)]">
                 {renderHeader()}
               </thead>
