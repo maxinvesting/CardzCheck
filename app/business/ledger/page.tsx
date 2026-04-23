@@ -890,14 +890,22 @@ function LedgerPageContent() {
     }
 
     try {
-      await fetch(`/api/business/inventory?ids=${ids.join(",")}`, {
-        method: "DELETE",
-      });
+      const res = await fetch(
+        `/api/business/inventory?ids=${ids.join(",")}`,
+        { method: "DELETE" }
+      );
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Delete failed (${res.status})`);
+      }
       setItems((prev) => prev.filter((it) => !ids.includes(it.id)));
       setToast({ type: "success", message: `Deleted ${ids.length} items` });
       loadMetrics();
-    } catch {
-      setToast({ type: "error", message: "Delete failed" });
+      loadInventory();
+    } catch (err) {
+      const message =
+        err instanceof Error && err.message ? err.message : "Delete failed";
+      setToast({ type: "error", message });
     }
   };
 
