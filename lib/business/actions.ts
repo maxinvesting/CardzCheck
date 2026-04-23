@@ -476,14 +476,24 @@ export async function deleteInventoryItems(
   );
   const supabase = await createClient();
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from(BUSINESS_TABLE)
     .delete()
     .in("id", itemIds)
     .eq("user_id", userId)
-    .eq("item_kind", BUSINESS_ITEM_KIND);
+    .eq("item_kind", BUSINESS_ITEM_KIND)
+    .select("id");
 
   if (error) throw error;
+
+  const deletedCount = data?.length ?? 0;
+  if (deletedCount < itemIds.length) {
+    const err = new Error(
+      `Deleted ${deletedCount} of ${itemIds.length} items — remaining rows were blocked by RLS or not found`
+    );
+    (err as { status?: number }).status = 409;
+    throw err;
+  }
 }
 
 /**

@@ -134,10 +134,13 @@ export async function DELETE(request: NextRequest) {
   } catch (err: any) {
     if (err?.status === 403)
       return NextResponse.json({ error: err.message }, { status: 403 });
+    if (err?.status === 409)
+      return NextResponse.json({ error: err.message }, { status: 409 });
     console.error("Business inventory DELETE error:", err);
-    return NextResponse.json(
-      { error: "Failed to delete items" },
-      { status: 500 }
-    );
+    const detail =
+      typeof err?.message === "string" && err.message.trim().length > 0
+        ? err.message
+        : "Failed to delete items";
+    return NextResponse.json({ error: detail }, { status: 500 });
   }
 }
