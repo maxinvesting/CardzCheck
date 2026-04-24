@@ -205,58 +205,91 @@ export default function ConversationView({
         recommendation={recommendation}
       />
 
-      <div className="flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top_left,#effaf4_0%,#ffffff_38%)] px-5 py-4">
-        <div className="mx-auto flex max-w-3xl flex-col gap-4">
-          {messages.map((message) => {
-            const isOutbound = message.direction === "outbound";
-            return (
-              <div
-                key={message.id}
-                className={`flex ${isOutbound ? "justify-end" : "justify-start"}`}
-              >
-                <div
-                  className={`max-w-[82%] rounded-[22px] px-4 py-3 shadow-[0_12px_30px_rgba(15,23,42,0.06)] ${
-                    isOutbound
-                      ? "border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] text-[var(--biz-text)]"
-                      : "border border-[var(--biz-border)] bg-white text-[var(--biz-text)]"
-                  }`}
-                >
-                  <div className="mb-1.5 flex flex-wrap items-center gap-2 text-[10px]">
-                    <span
-                      className={`font-semibold ${
-                        isOutbound ? "text-[var(--biz-primary)]" : "text-[var(--biz-muted)]"
+      <div className="flex min-h-0 flex-1">
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top_left,#effaf4_0%,#ffffff_38%)] px-5 py-4">
+            <div className="mx-auto flex max-w-3xl flex-col gap-4">
+              {messages.map((message) => {
+                const isOutbound = message.direction === "outbound";
+                return (
+                  <div
+                    key={message.id}
+                    className={`flex ${isOutbound ? "justify-end" : "justify-start"}`}
+                  >
+                    <div
+                      className={`max-w-[82%] rounded-[22px] px-4 py-3 shadow-[0_12px_30px_rgba(15,23,42,0.06)] ${
+                        isOutbound
+                          ? "border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] text-[var(--biz-text)]"
+                          : "border border-[var(--biz-border)] bg-white text-[var(--biz-text)]"
                       }`}
                     >
-                      {isOutbound ? "You" : message.sender_username}
-                    </span>
-                    <span className="text-[var(--biz-muted)]">
-                      {formatThreadTime(message.created_at)}
-                    </span>
+                      <div className="mb-1.5 flex flex-wrap items-center gap-2 text-[10px]">
+                        <span
+                          className={`font-semibold ${
+                            isOutbound ? "text-[var(--biz-primary)]" : "text-[var(--biz-muted)]"
+                          }`}
+                        >
+                          {isOutbound ? "You" : message.sender_username}
+                        </span>
+                        <span className="text-[var(--biz-muted)]">
+                          {formatThreadTime(message.created_at)}
+                        </span>
+                      </div>
+                      <MessageBody body={message.body} isOutbound={isOutbound} />
+                    </div>
                   </div>
-                  <MessageBody body={message.body} isOutbound={isOutbound} />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+                );
+              })}
+            </div>
+          </div>
 
-      <div className="border-t border-[var(--biz-border)] bg-white px-5 py-3">
-        <AIActionsPanel
-          context={replyContext}
-          recommendation={recommendation}
-          draftResult={draftResult}
-          replyLoading={replyLoading}
-          replyError={replyError}
-          replyText={replyText}
-          onReplyTextChange={setReplyText}
-          onGenerateReply={onGenerateReply}
-          onSend={handleSend}
-          sendLoading={sendLoading}
-          sendError={sendError}
-          selectedAction={selectedAction}
-          onSelectAction={setSelectedAction}
-        />
+          <div className="border-t border-[var(--biz-border)] bg-white px-5 py-3">
+            <div className="rounded-2xl border border-[var(--biz-border)] bg-white">
+              <textarea
+                value={replyText}
+                onChange={(event) => setReplyText(event.target.value)}
+                placeholder="Write your reply to the buyer."
+                rows={3}
+                style={{ resize: "none" }}
+                className="block w-full border-0 bg-transparent px-4 py-3 text-sm leading-relaxed text-[var(--biz-text)] placeholder-[var(--biz-muted)] focus:outline-none"
+              />
+              <div className="flex items-center justify-between gap-3 border-t border-[var(--biz-border)] px-4 py-2">
+                <span className="min-w-0 truncate text-[11px] text-[var(--biz-muted)]">
+                  Send as seller via eBay
+                </span>
+                <button
+                  type="button"
+                  onClick={handleSend}
+                  disabled={!replyText.trim() || sendLoading}
+                  style={{ flexShrink: 0 }}
+                  className="rounded-xl bg-[var(--biz-primary)] px-4 py-2 text-[13px] font-semibold text-[var(--biz-primary-foreground)] shadow-[0_8px_18px_var(--biz-primary-border)] transition-colors hover:bg-[var(--biz-primary-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {sendLoading ? "Sending..." : "Send"}
+                </button>
+              </div>
+            </div>
+            {sendError ? (
+              <p className="mt-2 text-[12px] text-red-600">{sendError}</p>
+            ) : null}
+          </div>
+        </div>
+
+        <div
+          className="hidden lg:flex"
+          style={{ width: 320, flexShrink: 0 }}
+        >
+          <AIActionsPanel
+            context={replyContext}
+            recommendation={recommendation}
+            draftResult={draftResult}
+            replyLoading={replyLoading}
+            replyError={replyError}
+            selectedAction={selectedAction}
+            onSelectAction={setSelectedAction}
+            onGenerateReply={onGenerateReply}
+            onUseDraft={(text) => setReplyText(text)}
+          />
+        </div>
       </div>
     </div>
   );
