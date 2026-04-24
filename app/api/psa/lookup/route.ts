@@ -1,60 +1,45 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import {
+  findPsaCertObject,
+  getPsaServerMessage,
+  isPsaInvalidRequestPayload,
+  isPsaNotFoundPayload,
+  mapPsaCert,
+  parsePsaCertHtml,
+} from "@/lib/psa/lookup";
 
-interface PsaCertObject {
-  CertNumber?: string;
-  Subject?: string;
-  Year?: string;
-  Brand?: string;
-  CardNumber?: string;
-  GradeName?: string;
-  CardGrade?: string;
-  SpecLevel?: string;
-  /** PSA often uses Variety for parallels / variations */
-  Variety?: string;
-  [key: string]: unknown;
-}
+async function lookupPsaViaPublicCertPage(certDigits: string) {
+  const urls = [
+    `https://www.psacard.com/cert/${encodeURIComponent(certDigits)}/psa`,
+    `https://www.psacard.com/cert/${encodeURIComponent(certDigits)}`,
+  ];
 
-interface PsaApiResponse {
-  PSACert?: PsaCertObject;
-  [key: string]: unknown;
-}
+  for (const url of urls) {
+    try {
+      const response = await fetch(url, {
+        headers: {
+          Accept: "text/html,application/xhtml+xml",
+          "Accept-Language": "en-US,en;q=0.9",
+          "User-Agent": "Mozilla/5.0 (compatible; CardzCheck PSA Lookup)",
+        },
+        cache: "no-store",
+        redirect: "follow",
+        signal: AbortSignal.timeout(8000),
+      });
 
-interface PsaMappedResult {
-  player_name: string | null;
-  year: string | null;
-  set_name: string | null;
-  card_number: string | null;
-  grade: string | null;
-  grading_company: "PSA";
-  parallel_type: string | null;
-}
-
-function normalizePsaGradeLabel(cert: PsaCertObject): string | null {
-  const cardGrade = cert.CardGrade?.trim();
-  if (cardGrade) {
-    return /^PSA\s/i.test(cardGrade) ? cardGrade : `PSA ${cardGrade}`;
+      if (!response.ok) continue;
+      const html = await response.text();
+      const parsed = parsePsaCertHtml(html, certDigits);
+      if (parsed?.player_name || parsed?.set_name || parsed?.card_number) {
+        return parsed;
+      }
+    } catch {
+      // Best-effort fallback.
+    }
   }
-  const gradeName = cert.GradeName?.trim();
-  if (!gradeName) return null;
-  if (/^PSA\s/i.test(gradeName)) return gradeName;
-  const numeric = gradeName.match(/(\d+(?:\.\d+)?)/);
-  if (numeric) return `PSA ${numeric[1]}`;
-  return `PSA ${gradeName}`;
-}
 
-function mapPsaCert(cert: PsaCertObject): PsaMappedResult {
-  const grade = normalizePsaGradeLabel(cert);
-
-  return {
-    player_name: cert.Subject?.trim() || null,
-    year: cert.Year?.trim() || null,
-    set_name: cert.Brand?.trim() || null,
-    card_number: cert.CardNumber?.trim() || null,
-    grade,
-    grading_company: "PSA",
-    parallel_type: cert.SpecLevel?.trim() || cert.Variety?.trim() || null,
-  };
+  return null;
 }
 
 export async function POST(request: NextRequest) {
@@ -87,11 +72,19 @@ export async function POST(request: NextRequest) {
 
   const token = (process.env.PSA_ACCESS_TOKEN ?? process.env.PSA_API_TOKEN)?.trim();
   if (!token) {
+    const fallback = await lookupPsaViaPublicCertPage(certDigits);
+    if (fallback) {
+      return NextResponse.json({ found: true, ...fallback });
+    }
+
     console.error("[psa/lookup] PSA_ACCESS_TOKEN (or PSA_API_TOKEN) not configured");
-    return NextResponse.json({ error: "PSA lookup failed", found: false }, { status: 503 });
+    return NextResponse.json(
+      { error: "PSA lookup unavailable right now", found: false },
+      { status: 503 }
+    );
   }
 
-  let psaData: PsaApiResponse;
+  let psaData: unknown = null;
   try {
     const res = await fetch(
       `https://api.psacard.com/publicapi/cert/GetByCertNumber/${encodeURIComponent(certDigits)}`,
@@ -99,36 +92,65 @@ export async function POST(request: NextRequest) {
         headers: {
           Accept: "application/json",
           Authorization: `Bearer ${token}`,
-          "X-Api-Key": token,
         },
         cache: "no-store",
+        signal: AbortSignal.timeout(8000),
       }
     );
 
-    if (res.status === 404) {
+    if (res.status === 404 || res.status === 204) {
       return NextResponse.json({ error: "Cert not found", found: false });
     }
 
+    psaData = await res.json().catch(() => null);
+
     if (!res.ok) {
-      console.error("[psa/lookup] PSA API error", res.status);
-      return NextResponse.json({ error: "PSA lookup failed", found: false });
+      const fallback = await lookupPsaViaPublicCertPage(certDigits);
+      if (fallback) {
+        return NextResponse.json({ found: true, ...fallback });
+      }
+
+      console.error("[psa/lookup] PSA API error", res.status, getPsaServerMessage(psaData));
+      return NextResponse.json(
+        { error: "PSA lookup unavailable right now", found: false },
+        { status: res.status >= 500 ? 503 : 502 }
+      );
+    }
+  } catch (err) {
+    const fallback = await lookupPsaViaPublicCertPage(certDigits);
+    if (fallback) {
+      return NextResponse.json({ found: true, ...fallback });
     }
 
-    psaData = await res.json();
-  } catch (err) {
     console.error("[psa/lookup] PSA fetch failed", err);
-    return NextResponse.json({ error: "PSA lookup failed", found: false });
+    return NextResponse.json(
+      { error: "PSA lookup unavailable right now", found: false },
+      { status: 503 }
+    );
   }
 
-  const certPayload = psaData?.PSACert ?? (psaData as unknown as PsaCertObject | undefined);
-  const cert =
-    certPayload && typeof certPayload === "object" && !Array.isArray(certPayload)
-      ? (certPayload as PsaCertObject)
-      : null;
-  const certNo = cert?.CertNumber?.trim();
-  if (!cert || (!certNo && !cert.Subject?.trim())) {
+  if (isPsaInvalidRequestPayload(psaData) || isPsaNotFoundPayload(psaData)) {
     return NextResponse.json({ error: "Cert not found", found: false });
   }
 
-  return NextResponse.json({ found: true, ...mapPsaCert(cert) });
+  const cert = findPsaCertObject(psaData);
+  if (!cert) {
+    const fallback = await lookupPsaViaPublicCertPage(certDigits);
+    if (fallback) {
+      return NextResponse.json({ found: true, ...fallback });
+    }
+
+    console.error("[psa/lookup] PSA response missing cert payload", getPsaServerMessage(psaData));
+    return NextResponse.json(
+      { error: "PSA lookup unavailable right now", found: false },
+      { status: 502 }
+    );
+  }
+
+  const mapped = mapPsaCert(cert);
+  if (!mapped.player_name && !mapped.set_name && !mapped.card_number) {
+    return NextResponse.json({ error: "Cert not found", found: false });
+  }
+
+  return NextResponse.json({ found: true, ...mapped });
 }

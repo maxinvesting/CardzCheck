@@ -37,15 +37,6 @@ import type {
   UserStorefront,
 } from "@/types";
 import type { StoreTier } from "@/lib/business/EbayProfitEngine";
-import {
-  computeInventoryValueSummary,
-  type InventoryValueSummary,
-} from "@/lib/business/inventory-value";
-import {
-  getAgingBucket,
-  getDaysHeld,
-  type AgingBucketKey,
-} from "@/lib/business/inventory-display";
 import { normalizeEbayStoreUrl, buildEbayStoreHref } from "@/lib/ebay-store-url";
 import {
   isPerfEnabled,
@@ -218,7 +209,6 @@ function LedgerPageContent() {
   const [showAddDropdown, setShowAddDropdown] = useState(false);
   const [needsMigration, setNeedsMigration] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
-  const [filteredItems, setFilteredItems] = useState<BusinessInventoryItem[]>([]);
   const [activeTab, setActiveTab] = useState<"inventory" | "sales">(() =>
     resolveBusinessTab(searchParams.get("tab"))
   );
@@ -268,14 +258,6 @@ function LedgerPageContent() {
     },
     [perfEnabled]
   );
-
-  const inventorySummary = useMemo((): InventoryValueSummary | null => {
-    const list = filteredItems.length > 0 ? filteredItems : items;
-    const activeItems = list.filter(
-      (it) => it.status !== "sold" && it.status !== "returned"
-    );
-    return computeInventoryValueSummary(activeItems);
-  }, [filteredItems, items]);
 
   const ebayStoreHref = useMemo(
     () => buildEbayStoreHref(ebayStoreUrl),
@@ -383,10 +365,6 @@ function LedgerPageContent() {
     },
     [router]
   );
-
-  const handleFilteredChange = useCallback((filtered: BusinessInventoryItem[]) => {
-    setFilteredItems(filtered);
-  }, []);
 
   const flushFloorUpdates = useCallback(() => {
     floorFlushTimerRef.current = null;
@@ -1276,12 +1254,10 @@ function LedgerPageContent() {
   }
 
   // ── Stat strip formatted values ───────────────────────────────────────────
-  const portfolioValue = inventorySummary?.totalCmvCents
-    ? `$${Math.round(inventorySummary.totalCmvCents / 100).toLocaleString("en-US")}`
-    : "—";
-  const portfolioSub = inventorySummary
-    ? `${inventorySummary.itemCount} items · $${Math.round(inventorySummary.totalCostCents / 100).toLocaleString("en-US")} basis`
-    : "—";
+  const profitYtd =
+    metrics && metrics.revenueYtd > 0
+      ? `$${Math.round(metrics.profitYtd / 100).toLocaleString("en-US")}`
+      : "—";
   const revenueYtd =
     metrics && metrics.revenueYtd > 0
       ? `$${Math.round(metrics.revenueYtd / 100).toLocaleString("en-US")}`
@@ -1352,13 +1328,13 @@ function LedgerPageContent() {
 
           {/* STAT STRIP */}
           <div className="grid grid-cols-2 lg:grid-cols-4 divide-x divide-[#E5E2DD] border-b border-[#E5E2DD] pb-4">
-            {/* Stat 1: Portfolio value */}
+            {/* Stat 1: Profit YTD */}
             <div className="px-4 sm:px-5 pt-3.5 first:pl-4 sm:first:pl-6">
-              <div className="text-xl font-medium text-[#1A1A1A] tabular-nums">
-                {portfolioValue}
+              <div className="text-xl font-medium text-[#2D7A4F] tabular-nums">
+                {profitYtd}
               </div>
-              <div className="text-[11px] text-[#888] mt-0.5">Portfolio value</div>
-              <div className="text-[10px] text-[#AAA] mt-0.5 truncate">{portfolioSub}</div>
+              <div className="text-[11px] text-[#888] mt-0.5">Profit YTD</div>
+              <div className="text-[10px] text-[#AAA] mt-0.5">gross profit</div>
             </div>
 
             {/* Stat 2: Revenue YTD */}
@@ -1512,9 +1488,11 @@ function LedgerPageContent() {
                       selectedItemId={null}
                       onItemClick={openInventoryItem}
                       onMarkSold={handleMarkSold}
-                      onDelete={(item) => {
+                      onDeleteItem={(item) => {
                         void handleDelete([item.id]);
                       }}
+                      onBulkAction={handleBulkAction}
+                      onBulkDelete={handleDelete}
                       ebayConnected={ebayConnected}
                       onAddCard={openAddInventoryModal}
                       onConsultant={openConsultant}
@@ -1538,7 +1516,6 @@ function LedgerPageContent() {
                               onBulkAction={handleBulkAction}
                               onDelete={handleDelete}
                               onMarkSold={handleMarkSold}
-                              onFilteredChange={handleFilteredChange}
                               ebayConnected={ebayConnected}
                               ebayTopRated={ebayTopRated}
                               dense
@@ -1555,7 +1532,6 @@ function LedgerPageContent() {
                             onBulkAction={handleBulkAction}
                             onDelete={handleDelete}
                             onMarkSold={handleMarkSold}
-                            onFilteredChange={handleFilteredChange}
                             ebayConnected={ebayConnected}
                             ebayTopRated={ebayTopRated}
                             dense
