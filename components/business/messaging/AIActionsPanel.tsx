@@ -91,14 +91,17 @@ export default function AIActionsPanel({
       </div>
 
       <div
-        className="mt-3 grid gap-2"
-        style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))" }}
+        className="mt-3 grid"
+        style={{
+          gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+          gap: 6,
+        }}
       >
         {VISIBLE_ACTIONS.map((action) => {
           const isRecommended = action.id === recommendation.action;
           const isSelected = action.id === selectedAction;
           const baseClasses =
-            "min-w-0 truncate rounded-xl border px-2 py-2 text-[12px] font-semibold transition-colors focus:outline-none focus:ring-1 focus:ring-[var(--biz-primary)]";
+            "flex items-center justify-center text-center rounded-lg border font-semibold transition-colors focus:outline-none focus:ring-1 focus:ring-[var(--biz-primary)]";
           const styleClasses = isRecommended
             ? "border-[var(--biz-primary)] text-[var(--biz-primary)] bg-[var(--biz-primary-soft)] hover:bg-[var(--biz-primary-soft-strong)]"
             : isSelected
@@ -111,6 +114,15 @@ export default function AIActionsPanel({
               onClick={() => handleActionClick(action.id)}
               disabled={replyLoading}
               title={action.description}
+              style={{
+                minWidth: 0,
+                minHeight: 44,
+                padding: "6px 4px",
+                fontSize: 11,
+                lineHeight: 1.2,
+                whiteSpace: "normal",
+                wordBreak: "break-word",
+              }}
               className={`${baseClasses} ${styleClasses} disabled:cursor-not-allowed disabled:opacity-60`}
             >
               {action.label}
