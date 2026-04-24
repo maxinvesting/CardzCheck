@@ -14,6 +14,7 @@ import {
 } from "@/lib/messaging/reply-drafts";
 import NegotiationPanel from "./NegotiationPanel";
 import AIActionsPanel from "./AIActionsPanel";
+import { SALES_STATUS_LABELS, SALES_STATUS_STYLES } from "./salesDealDesk";
 
 const IMAGE_URL_RE = /https?:\/\/\S+\.(?:jpg|jpeg|png|gif|webp|bmp|tiff?)(?:\?\S*)?/gi;
 
@@ -139,7 +140,7 @@ export default function ConversationView({
   }
 
   return (
-    <div className="flex h-full min-w-0 flex-col bg-[#FCFDFC]">
+    <div className="flex h-full flex-col bg-[#FCFDFC]">
       <div className="border-b border-[var(--biz-border)] bg-[linear-gradient(135deg,#ffffff_0%,#f5fbf7_65%,#eef8fb_100%)] px-5 py-3.5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
@@ -182,7 +183,7 @@ export default function ConversationView({
               onClick={() => onUpdateThreadStatus(thread.id, "resolved")}
               className="rounded-xl border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] px-3 py-1.5 text-[12px] font-semibold text-[var(--biz-primary)] transition-colors hover:bg-[var(--biz-primary-soft-strong)]"
             >
-              Mark resolved
+              Resolve thread
             </button>
             <button
               type="button"
@@ -211,7 +212,7 @@ export default function ConversationView({
                 className={`flex ${isOutbound ? "justify-end" : "justify-start"}`}
               >
                 <div
-                  className={`max-w-[82%] rounded-2xl px-4 py-3 shadow-[0_1px_3px_rgba(15,23,42,0.06)] ${
+                  className={`max-w-[82%] rounded-[22px] px-4 py-3 shadow-[0_12px_30px_rgba(15,23,42,0.06)] ${
                     isOutbound
                       ? "border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] text-[var(--biz-text)]"
                       : "border border-[var(--biz-border)] bg-white text-[var(--biz-text)]"
@@ -249,7 +250,7 @@ export default function ConversationView({
             onInsertReply={(text) => setReplyText(text)}
           />
 
-          <div className="min-w-0 rounded-2xl border border-[var(--biz-border)] bg-[#FCFCFD] p-3 shadow-[0_2px_8px_rgba(15,23,42,0.04)]">
+          <div className="rounded-[20px] border border-[var(--biz-border)] bg-[#FCFCFD] p-3 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--biz-muted)]">
@@ -280,13 +281,13 @@ export default function ConversationView({
 
             <div className="mt-2.5 flex flex-wrap items-center justify-between gap-3">
               <p className="text-[11px] leading-relaxed text-[var(--biz-muted)]">
-                Review and edit anything you want before it goes out.
+                Review, tighten, and send the final seller message when you are ready.
               </p>
               <button
                 type="button"
                 onClick={handleSend}
                 disabled={!replyText.trim() || sendLoading}
-                className="rounded-xl bg-[var(--biz-primary)] px-4 py-2 text-sm font-semibold text-[var(--biz-primary-foreground)] shadow-[0_1px_3px_var(--biz-primary-border)] transition-all hover:bg-[var(--biz-primary-hover)] disabled:cursor-not-allowed disabled:opacity-45"
+	                className="rounded-xl bg-[var(--biz-primary)] px-4 py-2.5 text-sm font-semibold text-[var(--biz-primary-foreground)] shadow-[0_10px_24px_var(--biz-primary-border)] transition-all hover:bg-[var(--biz-primary-hover)] disabled:cursor-not-allowed disabled:opacity-45"
               >
                 {sendLoading ? "Sending..." : "Send reply"}
               </button>
@@ -311,26 +312,11 @@ function PlatformChip({ platform }: { platform: MessageThread["platform"] }) {
 }
 
 function StatusChip({ status }: { status: MessageThread["status"] }) {
-  const styles: Record<MessageThread["status"], string> = {
-    needs_response: "border-amber-200 bg-amber-50 text-amber-700",
-    open: "border-[var(--biz-secondary-border)] bg-[var(--biz-secondary-soft)] text-[var(--biz-secondary)]",
-    awaiting_buyer: "border-violet-200 bg-violet-50 text-violet-700",
-    resolved: "border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] text-[var(--biz-primary)]",
-    archived: "border-slate-200 bg-slate-100 text-slate-500",
-  };
-  const labels: Record<MessageThread["status"], string> = {
-    needs_response: "Needs reply",
-    open: "Open",
-    awaiting_buyer: "Awaiting buyer",
-    resolved: "Resolved",
-    archived: "Archived",
-  };
-
   return (
     <span
-      className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${styles[status]}`}
+      className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${SALES_STATUS_STYLES[status]}`}
     >
-      {labels[status]}
+      {SALES_STATUS_LABELS[status]}
     </span>
   );
 }
