@@ -17,6 +17,7 @@ import BusinessPaywall from "@/components/business/BusinessPaywall";
 import BusinessMigrationBanner from "@/components/business/BusinessMigrationBanner";
 import InventoryTable from "@/components/business/InventoryTable";
 import InventoryCardGrid from "@/components/business/InventoryCardGrid";
+import InventoryAgingStrip from "@/components/business/InventoryAgingStrip";
 import SalesTable, { type SalesFilters } from "@/components/business/SalesTable";
 import SaleFormModal from "@/components/business/SaleFormModal";
 import AddInventoryModal from "@/components/business/AddInventoryModal";
@@ -232,6 +233,7 @@ function LedgerPageContent() {
   );
   const [gridSearch, setGridSearch] = useState("");
   const [activePills, setActivePills] = useState<Set<string>>(new Set(["all"]));
+  const [activeAgingBucket, setActiveAgingBucket] = useState<AgingBucketKey | null>(null);
   const perfEnabled = useMemo(() => isPerfEnabled(), []);
   const perfMockMode = useMemo(
     () => perfEnabled && searchParams.get("perfMock") === "1",
@@ -286,8 +288,18 @@ function LedgerPageContent() {
       const q = gridSearch.toLowerCase();
       result = result.filter((it) => it.title?.toLowerCase().includes(q));
     }
+    if (activeAgingBucket) {
+      result = result.filter(
+        (it) => getAgingBucket(getDaysHeld(it.acquisition_date)) === activeAgingBucket
+      );
+    }
     return result;
-  }, [items, activePills, gridSearch]);
+  }, [items, activePills, gridSearch, activeAgingBucket]);
+
+  const activeInventoryItems = useMemo(
+    () => items.filter((it) => it.status !== "sold" && it.status !== "returned"),
+    [items]
+  );
 
   const activeItemCount = useMemo(
     () => items.filter((it) => it.status !== "sold" && it.status !== "returned").length,
@@ -1458,6 +1470,15 @@ function LedgerPageContent() {
                         </svg>
                       </button>
                     </div>
+                  </div>
+
+                  {/* AGING STRIP */}
+                  <div className="px-4 sm:px-6 pb-3">
+                    <InventoryAgingStrip
+                      items={activeInventoryItems}
+                      activeBucket={activeAgingBucket}
+                      onBucketChange={setActiveAgingBucket}
+                    />
                   </div>
 
                   {/* GRID VIEW */}
