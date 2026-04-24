@@ -2,31 +2,16 @@
 
 import { formatPrice } from "@/lib/pricing";
 import type { MessageThread, ThreadFilter } from "@/lib/messaging/types";
+import { SALES_STATUS_LABELS, SALES_STATUS_STYLES } from "./salesDealDesk";
 
 const FILTER_TABS: { key: ThreadFilter; label: string }[] = [
-  { key: "all", label: "All" },
+  { key: "all", label: "All deals" },
   { key: "unread", label: "Unread" },
-  { key: "needs_response", label: "Needs Reply" },
+  { key: "needs_response", label: "Needs action" },
   { key: "offers", label: "Offers" },
   { key: "resolved", label: "Resolved" },
   { key: "archived", label: "Archived" },
 ];
-
-const STATUS_STYLES: Record<MessageThread["status"], string> = {
-  needs_response: "border-amber-200 bg-amber-50 text-amber-700",
-  open: "border-[var(--biz-secondary-border)] bg-[var(--biz-secondary-soft)] text-[var(--biz-secondary)]",
-  awaiting_buyer: "border-violet-200 bg-violet-50 text-violet-700",
-  resolved: "border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] text-[var(--biz-primary)]",
-  archived: "border-slate-200 bg-slate-100 text-slate-500",
-};
-
-const STATUS_LABELS: Record<MessageThread["status"], string> = {
-  needs_response: "Needs reply",
-  open: "Open",
-  awaiting_buyer: "Awaiting buyer",
-  resolved: "Resolved",
-  archived: "Archived",
-};
 
 function relativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -88,7 +73,7 @@ export default function ThreadList({
       <div className="flex-1 overflow-y-auto">
         {threads.length === 0 ? (
           <div className="px-5 py-10 text-center text-sm text-[var(--biz-muted)]">
-            No conversations match this view.
+            No buyer threads match this view.
           </div>
         ) : (
           threads.map((thread) => {
@@ -161,9 +146,9 @@ export default function ThreadList({
 
                     <div className="mt-2.5 flex flex-wrap items-center gap-2">
                       <span
-                        className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${STATUS_STYLES[thread.status]}`}
+                        className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${SALES_STATUS_STYLES[thread.status]}`}
                       >
-                        {STATUS_LABELS[thread.status]}
+                        {SALES_STATUS_LABELS[thread.status]}
                       </span>
                       {offerText ? (
                         <span className="rounded-full border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] px-2 py-0.5 text-[10px] font-semibold text-[var(--biz-primary)]">

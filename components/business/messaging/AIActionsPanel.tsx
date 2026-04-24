@@ -69,7 +69,7 @@ export default function AIActionsPanel({
   const selectedActionMeta = getMarketplaceReplyActionMeta(selectedAction);
 
   return (
-    <div className="min-w-0 rounded-2xl border border-[var(--biz-border)] bg-[#FCFDFC] p-3 shadow-[0_2px_8px_rgba(15,23,42,0.04)]">
+    <div className="rounded-[20px] border border-[var(--biz-border)] bg-[#FCFDFC] p-3 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--biz-muted)]">
@@ -98,24 +98,20 @@ export default function AIActionsPanel({
         {recommendation.reason}
       </p>
 
-      <div className="mt-3 flex min-w-0 flex-wrap gap-1.5">
+      <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
         {MARKETPLACE_REPLY_ACTIONS.map((action) => {
           const isActive = action.id === selectedAction;
-          const isRecommended = action.id === recommendation.action;
           return (
             <button
               key={action.id}
               type="button"
               onClick={() => setSelectedAction(action.id)}
-              className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+              className={`whitespace-nowrap rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
                 isActive
                   ? "border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] text-[var(--biz-primary)]"
                   : "border-[var(--biz-border)] bg-white text-[var(--biz-muted)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]"
               }`}
             >
-              {isRecommended ? (
-                <span className="h-1.5 w-1.5 rounded-full bg-[var(--biz-primary)]" />
-              ) : null}
               {action.label}
             </button>
           );
