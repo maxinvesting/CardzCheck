@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect } from "react";
 import {
   MARKETPLACE_REPLY_ACTIONS,
   getMarketplaceReplyActionMeta,
@@ -10,14 +10,35 @@ import {
   type MarketplaceReplyRecommendation,
 } from "@/lib/messaging/reply-drafts";
 
+const VISIBLE_ACTION_IDS: MarketplaceReplyAction[] = [
+  "smart_reply",
+  "counteroffer",
+  "hold_firm",
+  "decline",
+  "accept_close",
+  "ask_payment",
+  "ask_time",
+  "reengage",
+];
+
+const VISIBLE_ACTIONS = VISIBLE_ACTION_IDS.map((id) =>
+  MARKETPLACE_REPLY_ACTIONS.find((action) => action.id === id)!
+);
+
 interface Props {
   context: MarketplaceReplyGenerationContext;
   recommendation: MarketplaceReplyRecommendation;
   draftResult: MarketplaceReplyDraftResult | null;
   replyLoading: boolean;
   replyError: string | null;
+  replyText: string;
+  onReplyTextChange: (value: string) => void;
   onGenerateReply: (action: MarketplaceReplyAction, sellerNote?: string) => void;
-  onInsertReply: (text: string) => void;
+  onSend: () => void | Promise<void>;
+  sendLoading: boolean;
+  sendError: string | null;
+  selectedAction: MarketplaceReplyAction;
+  onSelectAction: (action: MarketplaceReplyAction) => void;
 }
 
 export default function AIActionsPanel({
@@ -26,91 +47,71 @@ export default function AIActionsPanel({
   draftResult,
   replyLoading,
   replyError,
+  replyText,
+  onReplyTextChange,
   onGenerateReply,
-  onInsertReply,
+  onSend,
+  sendLoading,
+  sendError,
+  selectedAction,
+  onSelectAction,
 }: Props) {
-  const [selectedAction, setSelectedAction] = useState<MarketplaceReplyAction>(
-    recommendation.action
-  );
-  const [sellerNote, setSellerNote] = useState("");
-  const [draftEditorText, setDraftEditorText] = useState("");
-  const [showSellerNote, setShowSellerNote] = useState(false);
-  const [copied, setCopied] = useState(false);
-
-  const activeDraft = useMemo(
-    () =>
-      draftResult && draftResult.action === selectedAction ? draftResult : null,
-    [draftResult, selectedAction]
-  );
-
   useEffect(() => {
-    setSelectedAction(recommendation.action);
-    setSellerNote("");
-    setShowSellerNote(false);
-    setCopied(false);
-  }, [context.thread.id, recommendation.action]);
-
-  useEffect(() => {
-    setDraftEditorText(activeDraft?.reply ?? "");
-  }, [activeDraft]);
-
-  async function handleCopyDraft() {
-    if (!draftEditorText.trim()) return;
-    if (typeof navigator === "undefined" || !navigator.clipboard) return;
-    try {
-      await navigator.clipboard.writeText(draftEditorText.trim());
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1800);
-    } catch {
-      setCopied(false);
+    if (draftResult && draftResult.action === selectedAction) {
+      onReplyTextChange(draftResult.reply);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftResult]);
+
+  const recommendedMeta = getMarketplaceReplyActionMeta(recommendation.action);
+
+  function handleActionClick(action: MarketplaceReplyAction) {
+    onSelectAction(action);
+    if (replyLoading) return;
+    onGenerateReply(action);
   }
 
-  const selectedActionMeta = getMarketplaceReplyActionMeta(selectedAction);
+  const canSend = Boolean(replyText.trim()) && !sendLoading;
 
   return (
     <div className="rounded-[20px] border border-[var(--biz-border)] bg-[#FCFDFC] p-3 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--biz-muted)]">
-            Suggested Reply
-          </p>
-          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
-            <h3 className="text-sm font-semibold text-[var(--biz-text)]">
-              {recommendation.headline}
-            </h3>
-            <span className="text-[11px] text-[var(--biz-muted)]">
-              {selectedActionMeta.label}
-            </span>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={() => onGenerateReply(selectedAction, sellerNote)}
-          disabled={replyLoading}
-          className="rounded-xl bg-[var(--biz-primary)] px-3.5 py-2 text-[12px] font-semibold text-[var(--biz-primary-foreground)] shadow-[0_10px_24px_var(--biz-primary-border)] transition-colors hover:bg-[var(--biz-primary-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--biz-muted)]">
+          Suggested reply
+        </span>
+        <span className="text-[12px] font-semibold text-[var(--biz-primary)]">
+          {recommendedMeta.label}
+        </span>
+        <span
+          className="min-w-0 flex-1 truncate text-[12px] text-[var(--biz-muted)]"
+          title={recommendation.reason}
         >
-          {replyLoading ? "Drafting..." : activeDraft ? "Regenerate" : "Generate draft"}
-        </button>
+          {recommendation.reason}
+        </span>
       </div>
 
-      <p className="mt-2 text-[12px] leading-relaxed text-[var(--biz-muted)]">
-        {recommendation.reason}
-      </p>
-
-      <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-        {MARKETPLACE_REPLY_ACTIONS.map((action) => {
-          const isActive = action.id === selectedAction;
+      <div
+        className="mt-3 grid gap-2"
+        style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))" }}
+      >
+        {VISIBLE_ACTIONS.map((action) => {
+          const isRecommended = action.id === recommendation.action;
+          const isSelected = action.id === selectedAction;
+          const baseClasses =
+            "min-w-0 truncate rounded-xl border px-2 py-2 text-[12px] font-semibold transition-colors focus:outline-none focus:ring-1 focus:ring-[var(--biz-primary)]";
+          const styleClasses = isRecommended
+            ? "border-[var(--biz-primary)] text-[var(--biz-primary)] bg-[var(--biz-primary-soft)] hover:bg-[var(--biz-primary-soft-strong)]"
+            : isSelected
+              ? "border-[var(--biz-text)]/40 bg-white text-[var(--biz-text)]"
+              : "border-[var(--biz-border)] bg-white text-[var(--biz-muted)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]";
           return (
             <button
               key={action.id}
               type="button"
-              onClick={() => setSelectedAction(action.id)}
-              className={`whitespace-nowrap rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
-                isActive
-                  ? "border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] text-[var(--biz-primary)]"
-                  : "border-[var(--biz-border)] bg-white text-[var(--biz-muted)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]"
-              }`}
+              onClick={() => handleActionClick(action.id)}
+              disabled={replyLoading}
+              title={action.description}
+              className={`${baseClasses} ${styleClasses} disabled:cursor-not-allowed disabled:opacity-60`}
             >
               {action.label}
             </button>
@@ -118,81 +119,45 @@ export default function AIActionsPanel({
         })}
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setShowSellerNote((current) => !current)}
-          className="rounded-full border border-[var(--biz-border)] bg-white px-3 py-1.5 text-[11px] font-semibold text-[var(--biz-muted)] transition-colors hover:bg-[var(--biz-hover)]"
-        >
-          {showSellerNote ? "Hide note" : "Add note"}
-        </button>
-        {activeDraft ? (
-          <span className="text-[11px] text-[var(--biz-muted)]">
-            {activeDraft.source === "ai" ? "Draft ready" : "Quick template ready"}
-          </span>
-        ) : null}
-      </div>
-
-      {showSellerNote ? (
-        <input
-          value={sellerNote}
-          onChange={(event) => setSellerNote(event.target.value)}
-          placeholder="Optional note: shipping timing, price floor, bundle detail..."
-          className="mt-2 w-full rounded-[14px] border border-[var(--biz-border)] bg-white px-3 py-2 text-sm text-[var(--biz-text)] placeholder-[var(--biz-muted)] focus:border-[var(--biz-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--biz-primary)]"
-        />
-      ) : null}
-
       {replyError ? (
-        <div className="mt-3 rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-700">
+        <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-700">
           {replyError}
         </div>
       ) : null}
 
-      {replyLoading ? (
-        <div className="mt-3 rounded-[18px] border border-[var(--biz-primary-border)] bg-white px-3.5 py-3">
-          <div className="flex items-center gap-2">
-            <div className="h-7 w-7 animate-pulse rounded-full bg-[var(--biz-primary-soft)]" />
-            <div>
-              <p className="text-sm font-semibold text-[var(--biz-text)]">Building draft</p>
-              <p className="text-[11px] text-[var(--biz-primary)]">
-                Pulling in the thread and your selected move.
-              </p>
-            </div>
-          </div>
+      <div className="mt-3 rounded-[16px] border border-[var(--biz-border)] bg-white">
+        <textarea
+          value={replyText}
+          onChange={(event) => onReplyTextChange(event.target.value)}
+          placeholder={
+            replyLoading
+              ? "Drafting reply..."
+              : "Write your reply, or pick an action above to draft one."
+          }
+          rows={3}
+          style={{ resize: "none" }}
+          className="block w-full border-0 bg-transparent px-3.5 py-2.5 text-sm leading-relaxed text-[var(--biz-text)] placeholder-[var(--biz-muted)] focus:outline-none"
+        />
+        <div className="flex items-center justify-between gap-3 border-t border-[var(--biz-border)] px-3.5 py-2">
+          <span className="min-w-0 truncate text-[11px] text-[var(--biz-muted)]">
+            Send as seller via eBay
+          </span>
+          <button
+            type="button"
+            onClick={() => void onSend()}
+            disabled={!canSend}
+            className="flex-shrink-0 rounded-xl bg-[var(--biz-primary)] px-4 py-2 text-[13px] font-semibold text-[var(--biz-primary-foreground)] shadow-[0_8px_18px_var(--biz-primary-border)] transition-colors hover:bg-[var(--biz-primary-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {sendLoading ? "Sending..." : "Send"}
+          </button>
         </div>
-      ) : activeDraft ? (
-        <div className="mt-3 rounded-[18px] border border-[var(--biz-border)] bg-white">
-          <textarea
-            value={draftEditorText}
-            onChange={(event) => setDraftEditorText(event.target.value)}
-            rows={3}
-            className="min-h-[96px] w-full resize-y border-0 bg-transparent px-3.5 py-3 text-sm leading-relaxed text-[var(--biz-text)] focus:outline-none"
-          />
-          <div className="flex flex-wrap items-center gap-2 border-t border-[var(--biz-border)] px-3.5 py-2.5">
-            <button
-              type="button"
-              onClick={() => onInsertReply(draftEditorText.trim())}
-              disabled={!draftEditorText.trim()}
-              className="rounded-xl bg-[var(--biz-primary)] px-3 py-2 text-[12px] font-semibold text-[var(--biz-primary-foreground)] transition-colors hover:bg-[var(--biz-primary-hover)] disabled:cursor-not-allowed disabled:opacity-45"
-            >
-              Use draft
-            </button>
-            <button
-              type="button"
-              onClick={handleCopyDraft}
-              className="rounded-xl border border-[var(--biz-border)] bg-white px-3 py-2 text-[12px] font-semibold text-[var(--biz-text)] transition-colors hover:bg-[var(--biz-hover)]"
-            >
-              {copied ? "Copied" : "Copy"}
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="mt-3 rounded-[18px] border border-dashed border-[var(--biz-border)] bg-white px-3.5 py-3">
-          <p className="text-[12px] text-[var(--biz-muted)]">
-            Generate a draft when you want a quick starting point.
-          </p>
-        </div>
-      )}
+      </div>
+
+      {sendError ? (
+        <p className="mt-2 text-[12px] text-red-600">{sendError}</p>
+      ) : null}
+
+      <p className="sr-only">Conversation stage: {context.stage}</p>
     </div>
   );
 }

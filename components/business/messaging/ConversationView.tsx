@@ -9,7 +9,6 @@ import type {
 } from "@/lib/messaging/reply-drafts";
 import {
   createMarketplaceReplyContext,
-  describeConversationStage,
   recommendMarketplaceReplyAction,
 } from "@/lib/messaging/reply-drafts";
 import NegotiationPanel from "./NegotiationPanel";
@@ -126,8 +125,14 @@ export default function ConversationView({
   const recommendation: MarketplaceReplyRecommendation =
     draftResult?.recommendation ?? recommendMarketplaceReplyAction(replyContext);
 
+  const [selectedAction, setSelectedAction] = useState<MarketplaceReplyAction>(
+    recommendation.action
+  );
+
   useEffect(() => {
     setReplyText("");
+    setSelectedAction(recommendation.action);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [thread.id]);
 
   async function handleSend() {
@@ -142,57 +147,55 @@ export default function ConversationView({
   return (
     <div className="flex h-full flex-col bg-[#FCFDFC]">
       <div className="border-b border-[var(--biz-border)] bg-[linear-gradient(135deg,#ffffff_0%,#f5fbf7_65%,#eef8fb_100%)] px-5 py-3.5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] text-sm font-semibold text-[var(--biz-primary)]">
+            {getAvatarLabel(thread)}
+          </div>
           <div className="min-w-0 flex-1">
-            <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] text-sm font-semibold text-[var(--biz-primary)]">
-                {getAvatarLabel(thread)}
-              </div>
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="truncate text-base font-semibold text-[var(--biz-text)]">
-                    {thread.buyer_display_name ?? thread.buyer_username}
-                  </h2>
-                  <span className="text-[12px] text-[var(--biz-muted)]">
-                    @{thread.buyer_username}
-                  </span>
-                  <PlatformChip platform={thread.platform} />
-                  <StatusChip status={thread.status} />
-                </div>
-                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[var(--biz-muted)]">
-                  <span>{describeConversationStage(replyContext.stage)}</span>
-                  <span>Updated {formatThreadTime(thread.last_message_at)}</span>
-                  {thread.unread_count > 0 ? (
-                    <span className="font-medium text-[#B45309]">
-                      {thread.unread_count} unread
-                    </span>
-                  ) : null}
-                </div>
-                {thread.item_title ? (
-                  <p className="mt-2 max-w-3xl text-sm font-medium leading-snug text-[var(--biz-text)]">
-                    {thread.item_title}
-                  </p>
-                ) : null}
-              </div>
+            <div
+              className="flex items-center"
+              style={{ flexWrap: "wrap", gap: 8 }}
+            >
+              <h2 className="text-base font-semibold text-[var(--biz-text)]">
+                {thread.buyer_display_name ?? thread.buyer_username}
+              </h2>
+              <span className="text-[12px] text-[var(--biz-muted)]">
+                @{thread.buyer_username}
+              </span>
+              <PlatformChip platform={thread.platform} />
+              <StatusChip status={thread.status} />
+              {thread.unread_count > 0 ? (
+                <span className="rounded-full bg-[#FEF3C7] px-2 py-0.5 text-[10px] font-semibold text-[#B45309]">
+                  {thread.unread_count} unread
+                </span>
+              ) : null}
             </div>
+            {thread.item_title ? (
+              <p
+                className="mt-1 text-sm font-medium text-[var(--biz-text)]"
+                style={{
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+                title={thread.item_title}
+              >
+                {thread.item_title}
+              </p>
+            ) : null}
+            <p className="mt-1 text-[11px] text-[var(--biz-muted)]">
+              Updated {formatThreadTime(thread.last_message_at)}
+            </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => onUpdateThreadStatus(thread.id, "resolved")}
-              className="rounded-xl border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] px-3 py-1.5 text-[12px] font-semibold text-[var(--biz-primary)] transition-colors hover:bg-[var(--biz-primary-soft-strong)]"
-            >
-              Resolve thread
-            </button>
-            <button
-              type="button"
-              onClick={() => onUpdateThreadStatus(thread.id, "archived")}
-              className="rounded-xl border border-[var(--biz-border)] bg-white px-3 py-1.5 text-[12px] font-semibold text-[var(--biz-muted)] transition-colors hover:bg-[#F8FAFC]"
-            >
-              Archive
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => onUpdateThreadStatus(thread.id, "resolved")}
+            style={{ flexShrink: 0 }}
+            className="ml-auto self-start rounded-xl border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] px-3 py-1.5 text-[12px] font-semibold text-[var(--biz-primary)] transition-colors hover:bg-[var(--biz-primary-soft-strong)]"
+          >
+            Resolve
+          </button>
         </div>
       </div>
 
@@ -239,65 +242,21 @@ export default function ConversationView({
       </div>
 
       <div className="border-t border-[var(--biz-border)] bg-white px-5 py-3">
-        <div className="space-y-3">
-          <AIActionsPanel
-            context={replyContext}
-            recommendation={recommendation}
-            draftResult={draftResult}
-            replyLoading={replyLoading}
-            replyError={replyError}
-            onGenerateReply={onGenerateReply}
-            onInsertReply={(text) => setReplyText(text)}
-          />
-
-          <div className="rounded-[20px] border border-[var(--biz-border)] bg-[#FCFCFD] p-3 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--biz-muted)]">
-                  Reply
-                </p>
-                <h3 className="text-sm font-semibold text-[var(--biz-text)]">
-                  Send as seller
-                </h3>
-              </div>
-              {draftResult ? (
-                <button
-                  type="button"
-                  onClick={() => setReplyText(draftResult.reply)}
-                  className="rounded-full border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] px-3 py-1.5 text-[11px] font-semibold text-[var(--biz-primary)] transition-colors hover:bg-[var(--biz-primary-soft-strong)]"
-                >
-                  Load latest draft
-                </button>
-              ) : null}
-            </div>
-
-            <textarea
-              value={replyText}
-              onChange={(event) => setReplyText(event.target.value)}
-              placeholder="Write the final message you'll send to the buyer."
-              rows={4}
-              className="mt-3 w-full resize-y rounded-[16px] border border-[var(--biz-border)] bg-white px-3.5 py-3 text-sm text-[var(--biz-text)] placeholder-[var(--biz-muted)] focus:border-[var(--biz-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--biz-primary)]"
-            />
-
-            <div className="mt-2.5 flex flex-wrap items-center justify-between gap-3">
-              <p className="text-[11px] leading-relaxed text-[var(--biz-muted)]">
-                Review, tighten, and send the final seller message when you are ready.
-              </p>
-              <button
-                type="button"
-                onClick={handleSend}
-                disabled={!replyText.trim() || sendLoading}
-	                className="rounded-xl bg-[var(--biz-primary)] px-4 py-2.5 text-sm font-semibold text-[var(--biz-primary-foreground)] shadow-[0_10px_24px_var(--biz-primary-border)] transition-all hover:bg-[var(--biz-primary-hover)] disabled:cursor-not-allowed disabled:opacity-45"
-              >
-                {sendLoading ? "Sending..." : "Send reply"}
-              </button>
-            </div>
-
-            {sendError ? (
-              <p className="mt-2 text-[12px] text-red-600">{sendError}</p>
-            ) : null}
-          </div>
-        </div>
+        <AIActionsPanel
+          context={replyContext}
+          recommendation={recommendation}
+          draftResult={draftResult}
+          replyLoading={replyLoading}
+          replyError={replyError}
+          replyText={replyText}
+          onReplyTextChange={setReplyText}
+          onGenerateReply={onGenerateReply}
+          onSend={handleSend}
+          sendLoading={sendLoading}
+          sendError={sendError}
+          selectedAction={selectedAction}
+          onSelectAction={setSelectedAction}
+        />
       </div>
     </div>
   );
