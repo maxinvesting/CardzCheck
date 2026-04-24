@@ -14,6 +14,7 @@ import {
 } from "@/lib/messaging/reply-drafts";
 import NegotiationPanel from "./NegotiationPanel";
 import AIActionsPanel from "./AIActionsPanel";
+import { SALES_STATUS_LABELS, SALES_STATUS_STYLES } from "./salesDealDesk";
 
 const IMAGE_URL_RE = /https?:\/\/\S+\.(?:jpg|jpeg|png|gif|webp|bmp|tiff?)(?:\?\S*)?/gi;
 
@@ -182,7 +183,7 @@ export default function ConversationView({
               onClick={() => onUpdateThreadStatus(thread.id, "resolved")}
               className="rounded-xl border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] px-3 py-1.5 text-[12px] font-semibold text-[var(--biz-primary)] transition-colors hover:bg-[var(--biz-primary-soft-strong)]"
             >
-              Mark resolved
+              Resolve thread
             </button>
             <button
               type="button"
@@ -280,7 +281,7 @@ export default function ConversationView({
 
             <div className="mt-2.5 flex flex-wrap items-center justify-between gap-3">
               <p className="text-[11px] leading-relaxed text-[var(--biz-muted)]">
-                Review and edit anything you want before it goes out.
+                Review, tighten, and send the final seller message when you are ready.
               </p>
               <button
                 type="button"
@@ -311,26 +312,11 @@ function PlatformChip({ platform }: { platform: MessageThread["platform"] }) {
 }
 
 function StatusChip({ status }: { status: MessageThread["status"] }) {
-  const styles: Record<MessageThread["status"], string> = {
-    needs_response: "border-amber-200 bg-amber-50 text-amber-700",
-    open: "border-[var(--biz-secondary-border)] bg-[var(--biz-secondary-soft)] text-[var(--biz-secondary)]",
-    awaiting_buyer: "border-violet-200 bg-violet-50 text-violet-700",
-    resolved: "border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] text-[var(--biz-primary)]",
-    archived: "border-slate-200 bg-slate-100 text-slate-500",
-  };
-  const labels: Record<MessageThread["status"], string> = {
-    needs_response: "Needs reply",
-    open: "Open",
-    awaiting_buyer: "Awaiting buyer",
-    resolved: "Resolved",
-    archived: "Archived",
-  };
-
   return (
     <span
-      className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${styles[status]}`}
+      className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${SALES_STATUS_STYLES[status]}`}
     >
-      {labels[status]}
+      {SALES_STATUS_LABELS[status]}
     </span>
   );
 }

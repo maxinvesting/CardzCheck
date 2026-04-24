@@ -1,5 +1,3 @@
-import { redirect } from "next/navigation";
+import BusinessSalesPage from "@/components/business/sales/BusinessSalesPage";
 
-export default function BusinessSalesPage() {
-  redirect("/business/ledger?tab=sales");
-}
+export default BusinessSalesPage;

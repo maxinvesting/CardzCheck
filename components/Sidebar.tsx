@@ -204,15 +204,16 @@ function PERSONAL_NAV_ITEMS(): NavItem[] {
   ];
 }
 
-function MessagesIcon() {
+function SalesIcon() {
   return (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
         strokeWidth={2}
-        d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
+        d="M3 7.5A2.5 2.5 0 015.5 5h10A2.5 2.5 0 0118 7.5v1.086a2 2 0 00.586 1.414l1.828 1.828A1 1 0 0120.707 13H18v3.5A2.5 2.5 0 0115.5 19h-10A2.5 2.5 0 013 16.5v-9z"
       />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 10h6m-6 3h4" />
     </svg>
   );
 }
@@ -221,7 +222,7 @@ function BUSINESS_NAV_ITEMS(): NavItem[] {
   return [
     { name: "Dashboard", href: "/business", icon: <HomeIcon />, exact: true },
     { name: "Ledger", href: "/business/ledger", icon: <LedgerIcon /> },
-    { name: "Customer Service", href: "/business/messages", icon: <MessagesIcon /> },
+    { name: "Sales", href: "/business/sales", icon: <SalesIcon /> },
     { name: "Grade Probability Engine", href: "/business/grade-hub", icon: <BadgeIcon />, badge: "dot" },
     { name: "News & Updates", href: "/business/news", icon: <NewsIcon /> },
     { name: "Compare Listings", href: "/business/comps", icon: <ChartIcon /> },

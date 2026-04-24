@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+} from "react";
 import Link from "next/link";
 import { VirtuosoGrid } from "react-virtuoso";
 import type { BusinessInventoryItem } from "@/types";
@@ -21,6 +28,8 @@ import {
 
 const VIRTUALIZE_THRESHOLD = 200;
 
+const STATUS_OPTIONS = ["unlisted", "listed", "pending_sale", "sold", "returned"] as const;
+
 type ConsultantAction = {
   label: string;
   style: { background: string; color: string; border: string };
@@ -34,7 +43,12 @@ export interface InventoryCardGridProps {
   selectedItemId?: string | null;
   onItemClick: (item: BusinessInventoryItem) => void;
   onMarkSold?: (item: BusinessInventoryItem) => void;
-  onDelete?: (item: BusinessInventoryItem) => void;
+  /** Single-item delete from card menu */
+  onDeleteItem?: (item: BusinessInventoryItem) => void;
+  /** Bulk status / storage updates */
+  onBulkAction?: (action: string, ids: string[], payload?: unknown) => void | Promise<void>;
+  /** Bulk delete */
+  onBulkDelete?: (ids: string[]) => void | Promise<void>;
   ebayConnected?: boolean;
   onEbayList?: (item: BusinessInventoryItem) => void;
   onAddCard?: () => void;
@@ -143,9 +157,11 @@ function MenuButtonIcon() {
 function CardImageArea({
   item,
   menuButton,
+  selectControl,
 }: {
   item: BusinessInventoryItem;
-  menuButton: React.ReactNode;
+  menuButton: ReactNode;
+  selectControl?: ReactNode;
 }) {
   const imageCandidates = useMemo(() => getInventoryImageCandidates(item), [item]);
   const [imageIndex, setImageIndex] = useState(0);
@@ -194,15 +210,16 @@ function CardImageArea({
         </div>
       )}
 
-      <div className="absolute inset-x-0 top-0 flex items-start justify-between p-3">
-        {item.quantity > 1 ? (
-          <span className="rounded-full bg-[#111827]/72 px-2 py-1 text-[10px] font-semibold text-white shadow-sm">
-            Qty {item.quantity}
-          </span>
-        ) : (
-          <span />
-        )}
-        {menuButton}
+      <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-3">
+        <div className="flex min-w-0 items-start gap-2">
+          {selectControl}
+          {item.quantity > 1 ? (
+            <span className="rounded-full bg-[#111827]/72 px-2 py-1 text-[10px] font-semibold text-white shadow-sm">
+              Qty {item.quantity}
+            </span>
+          ) : null}
+        </div>
+        <div className="shrink-0">{menuButton}</div>
       </div>
     </div>
   );
@@ -213,7 +230,8 @@ function InventoryCardCell({
   selected,
   onItemClick,
   onMarkSold,
-  onDelete,
+  onDeleteItem,
+  selection,
   ebayConnected,
   onEbayList,
   onConsultant,
@@ -222,7 +240,8 @@ function InventoryCardCell({
   selected: boolean;
   onItemClick: (item: BusinessInventoryItem) => void;
   onMarkSold?: (item: BusinessInventoryItem) => void;
-  onDelete?: (item: BusinessInventoryItem) => void;
+  onDeleteItem?: (item: BusinessInventoryItem) => void;
+  selection?: { checked: boolean; onToggle: () => void };
   ebayConnected?: boolean;
   onEbayList?: (item: BusinessInventoryItem) => void;
   onConsultant?: (prompt: string) => void;
@@ -301,12 +320,26 @@ function InventoryCardCell({
     onConsultant?.(consultantAction.prompt);
   };
 
-  const handleCardKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+  const handleCardKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (event.target !== event.currentTarget) return;
     if (event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
     onItemClick(item);
   };
+
+  const selectControl = selection ? (
+    <input
+      type="checkbox"
+      checked={selection.checked}
+      onChange={(e) => {
+        e.stopPropagation();
+        selection.onToggle();
+      }}
+      onClick={(e) => e.stopPropagation()}
+      aria-label={`Select ${titleStr || "inventory item"}`}
+      className="mt-0.5 h-4 w-4 shrink-0 rounded border-[#C8D4CA] text-[#2D7A4F] focus:ring-2 focus:ring-[#2D7A4F]/30"
+    />
+  ) : null;
 
   const menuButton = (
     <button
@@ -340,7 +373,7 @@ function InventoryCardCell({
             : "border-[#E4ECE5]"
         }`}
       >
-        <CardImageArea item={item} menuButton={menuButton} />
+        <CardImageArea item={item} menuButton={menuButton} selectControl={selectControl} />
 
         <div className="flex flex-1 flex-col gap-3 border-t border-[#EEF2EE] bg-white px-3.5 pb-3.5 pt-3">
           <div className="min-w-0">
@@ -429,7 +462,7 @@ function InventoryCardCell({
             role="menuitem"
             onClick={() => {
               setMenuOpen(false);
-              onDelete?.(item);
+              onDeleteItem?.(item);
             }}
             className="flex w-full items-center rounded-xl px-3 py-2 text-left text-[13px] font-medium text-[#B42318] transition-colors hover:bg-[#FEF3F2]"
           >
@@ -530,17 +563,62 @@ export default function InventoryCardGrid({
   selectedItemId,
   onItemClick,
   onMarkSold,
-  onDelete,
+  onDeleteItem,
+  onBulkAction,
+  onBulkDelete,
   ebayConnected,
   onEbayList,
   onAddCard,
   onConsultant,
 }: InventoryCardGridProps) {
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkAction, setBulkAction] = useState("");
+  const [bulkPayload, setBulkPayload] = useState("");
+
+  const bulkEnabled = Boolean(onBulkAction && onBulkDelete);
+
+  useEffect(() => {
+    if (!bulkEnabled) return;
+    setSelected((prev) => {
+      const valid = new Set(items.map((i) => i.id));
+      let changed = false;
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (valid.has(id)) next.add(id);
+        else changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [items, bulkEnabled]);
+
   const rows: GridRow[] = useMemo(() => {
     const itemRows = items.map((item) => ({ kind: "item" as const, item }));
     if (onAddCard) return [...itemRows, { kind: "add" as const }];
     return itemRows;
   }, [items, onAddCard]);
+
+  const toggleSelectAll = () => {
+    if (selected.size === items.length && items.length > 0) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(items.map((i) => i.id)));
+    }
+  };
+
+  const handleBulkExecute = () => {
+    if (!onBulkAction || !onBulkDelete) return;
+    const ids = Array.from(selected);
+    if (!ids.length || !bulkAction) return;
+
+    if (bulkAction === "delete") {
+      void onBulkDelete(ids);
+    } else {
+      void onBulkAction(bulkAction, ids, bulkPayload || undefined);
+    }
+    setSelected(new Set());
+    setBulkAction("");
+    setBulkPayload("");
+  };
 
   if (rows.length === 0) {
     return (
@@ -555,7 +633,21 @@ export default function InventoryCardGrid({
     selected: selectedItemId === item.id,
     onItemClick,
     onMarkSold,
-    onDelete,
+    onDeleteItem,
+    selection:
+      bulkEnabled ?
+        {
+          checked: selected.has(item.id),
+          onToggle: () => {
+            setSelected((prev) => {
+              const next = new Set(prev);
+              if (next.has(item.id)) next.delete(item.id);
+              else next.add(item.id);
+              return next;
+            });
+          },
+        }
+      : undefined,
     ebayConnected,
     onEbayList,
     onConsultant,
@@ -588,5 +680,81 @@ export default function InventoryCardGrid({
       </div>
     );
 
-  return <div className="px-4 pb-6 pt-2 sm:px-6">{gridBody}</div>;
+  return (
+    <div className="px-4 pb-6 pt-2 sm:px-6">
+      {items.length > 0 && bulkEnabled ?
+        <div className="mb-2 flex flex-wrap items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={toggleSelectAll}
+            className="cursor-pointer border-0 bg-transparent text-[11px] font-medium text-[#666] underline-offset-2 hover:text-[#1A1A1A] hover:underline"
+          >
+            {selected.size === items.length && items.length > 0 ? "Deselect all" : "Select all"}
+          </button>
+        </div>
+      : null}
+
+      {selected.size > 0 && bulkEnabled ?
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-[#E5E2DD] bg-[#FAFAF8] px-3 py-2">
+          <span className="text-[11px] font-medium text-[#444] tabular-nums">
+            {selected.size} selected
+          </span>
+          <select
+            value={bulkAction}
+            onChange={(e) => setBulkAction(e.target.value)}
+            className="max-w-[160px] rounded-md border border-[#E5E2DD] bg-white px-2 py-1.5 text-[11px] text-[#1A1A1A]"
+          >
+            <option value="">Bulk action…</option>
+            <option value="set_status">Set status</option>
+            <option value="set_location">Set storage</option>
+            <option value="delete">Delete</option>
+          </select>
+          {bulkAction === "set_status" ?
+            <select
+              value={bulkPayload}
+              onChange={(e) => setBulkPayload(e.target.value)}
+              className="max-w-[140px] rounded-md border border-[#E5E2DD] bg-white px-2 py-1.5 text-[11px] text-[#1A1A1A]"
+            >
+              <option value="">Status…</option>
+              {STATUS_OPTIONS.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          : null}
+          {bulkAction === "set_location" ?
+            <input
+              type="text"
+              value={bulkPayload}
+              onChange={(e) => setBulkPayload(e.target.value)}
+              placeholder="Storage"
+              className="min-w-[120px] flex-1 rounded-md border border-[#E5E2DD] bg-white px-2 py-1.5 text-[11px] text-[#1A1A1A] placeholder:text-[#AAA]"
+            />
+          : null}
+          <button
+            type="button"
+            onClick={handleBulkExecute}
+            disabled={!bulkAction || (bulkAction !== "delete" && !bulkPayload)}
+            className="rounded-md bg-[#1A1A1A] px-3 py-1.5 text-[11px] font-medium text-[#F0EDE8] disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Apply
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setSelected(new Set());
+              setBulkAction("");
+              setBulkPayload("");
+            }}
+            className="cursor-pointer border-0 bg-transparent text-[11px] text-[#888] hover:text-[#1A1A1A]"
+          >
+            Clear
+          </button>
+        </div>
+      : null}
+
+      {gridBody}
+    </div>
+  );
 }
