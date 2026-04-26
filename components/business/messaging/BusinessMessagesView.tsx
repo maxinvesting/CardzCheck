@@ -6,9 +6,7 @@ import {
   useEffect,
   useMemo,
   useDeferredValue,
-  type ReactNode,
 } from "react";
-import { formatPrice } from "@/lib/pricing";
 import type {
   MessageThread,
   Message,
@@ -22,11 +20,20 @@ import type {
 } from "@/lib/messaging/reply-drafts";
 import ThreadList from "./ThreadList";
 import ConversationView from "./ConversationView";
+import SalesBriefingCard from "./SalesBriefingCard";
+import SalesPulseStrip from "./SalesPulseStrip";
 import {
-  buildSalesDealDeskSnapshot,
   isStaleSalesThread,
   matchesThreadFilter,
 } from "./salesDealDesk";
+import { buildSalesPulseSnapshot } from "@/lib/messaging/pulse";
+import {
+  buildBriefingChips,
+  buildBriefingObservations,
+  buildFallbackBriefingNarrative,
+  type BriefingChip,
+  type BriefingChipKey,
+} from "@/lib/messaging/briefing";
 
 interface Props {
   initialStats: MessagingStats;
@@ -45,29 +52,23 @@ interface ThreadCollectionResponse {
 
 type SortMode = "newest" | "oldest" | "unread_first";
 
-function formatMoney(cents: number | null | undefined): string {
-  if (typeof cents !== "number" || !Number.isFinite(cents)) return "—";
-  return formatPrice(cents / 100);
-}
+const DAY_MS = 24 * 60 * 60 * 1000;
 
-function relativeTime(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60_000);
-  if (mins < 1) return "now";
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d ago`;
-  return `${Math.floor(days / 7)}w ago`;
-}
-
-function threadTitle(thread: MessageThread): string {
-  return thread.item_title?.trim() || "Untitled listing";
-}
-
-function threadBuyer(thread: MessageThread): string {
-  return thread.buyer_display_name ?? thread.buyer_username;
+function matchesBriefingFilter(thread: MessageThread, key: BriefingChipKey): boolean {
+  switch (key) {
+    case "needs_reply":
+      return thread.status === "needs_response";
+    case "quiet_long":
+      return isStaleSalesThread(thread);
+    case "new_today":
+      return Date.now() - new Date(thread.last_message_at).getTime() <= DAY_MS;
+    case "open_offers":
+      return (
+        thread.category === "offer" || typeof thread.offer_amount_cents === "number"
+      );
+    default:
+      return true;
+  }
 }
 
 export default function BusinessMessagesView({
@@ -102,6 +103,12 @@ export default function BusinessMessagesView({
   const [syncRetriedAfterEmpty, setSyncRetriedAfterEmpty] = useState(
     initialSyncRetriedAfterEmpty
   );
+  const [activeBriefingChip, setActiveBriefingChip] = useState<BriefingChipKey | null>(null);
+  const [briefingNarrative, setBriefingNarrative] = useState<string>(() =>
+    buildFallbackBriefingNarrative(buildBriefingObservations(initialThreads))
+  );
+  const [briefingSource, setBriefingSource] = useState<"ai" | "fallback">("fallback");
+  const [briefingLoading, setBriefingLoading] = useState(false);
   const deferredSearchQuery = useDeferredValue(searchQuery);
 
   const selectedThreadMeta = useMemo(
@@ -109,14 +116,27 @@ export default function BusinessMessagesView({
     [allThreads, selectedId]
   );
 
-  const dealDesk = useMemo(
-    () => buildSalesDealDeskSnapshot(allThreads),
+  const observations = useMemo(
+    () => buildBriefingObservations(allThreads),
     [allThreads]
+  );
+
+  const localChips = useMemo<BriefingChip[]>(
+    () => buildBriefingChips(observations),
+    [observations]
+  );
+
+  const pulseSnapshot = useMemo(
+    () => buildSalesPulseSnapshot(allThreads, stats),
+    [allThreads, stats]
   );
 
   const visibleThreads = useMemo(() => {
     const query = deferredSearchQuery.trim().toLowerCase();
     let next = [...threads];
+    if (activeBriefingChip) {
+      next = next.filter((thread) => matchesBriefingFilter(thread, activeBriefingChip));
+    }
     if (unreadOnly) {
       next = next.filter((thread) => thread.unread_count > 0);
     }
@@ -151,7 +171,31 @@ export default function BusinessMessagesView({
       return 0;
     });
     return next;
-  }, [threads, unreadOnly, deferredSearchQuery, sortMode, pinnedThreadIds]);
+  }, [threads, unreadOnly, deferredSearchQuery, sortMode, pinnedThreadIds, activeBriefingChip]);
+
+  const fetchBriefing = useCallback(async () => {
+    setBriefingLoading(true);
+    try {
+      const res = await fetch(`/api/business/sales/briefing`, { cache: "no-store" });
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        narrative?: string;
+        source?: "ai" | "fallback";
+      };
+      if (data?.narrative) {
+        setBriefingNarrative(data.narrative);
+        setBriefingSource(data.source ?? "fallback");
+      }
+    } catch {
+      // keep prior narrative
+    } finally {
+      setBriefingLoading(false);
+    }
+  }, []);
+
+  const handleBriefingChipClick = useCallback((key: BriefingChipKey) => {
+    setActiveBriefingChip((prev) => (prev === key ? null : key));
+  }, []);
 
   const loadThread = useCallback(async (threadId: string) => {
     setThreadLoading(true);
@@ -211,15 +255,6 @@ export default function BusinessMessagesView({
     [loadThread]
   );
 
-  const handleJumpToThread = useCallback(
-    (id: string) => {
-      setFilter("all");
-      setThreads(allThreads);
-      handleSelectThread(id);
-    },
-    [allThreads, handleSelectThread]
-  );
-
   const handleFilterChange = useCallback(
     async (nextFilter: ThreadFilter) => {
       setFilter(nextFilter);
@@ -252,6 +287,7 @@ export default function BusinessMessagesView({
 
   const refreshThreadList = useCallback(async () => {
     setListRefreshing(true);
+    void fetchBriefing();
     try {
       const [currentData, allData] = await Promise.all([
         loadThreadCollection(filter),
@@ -277,7 +313,7 @@ export default function BusinessMessagesView({
     } finally {
       setListRefreshing(false);
     }
-  }, [filter, loadThread, loadThreadCollection, selectedId]);
+  }, [filter, loadThread, loadThreadCollection, selectedId, fetchBriefing]);
 
   const handleTogglePin = useCallback((threadId: string) => {
     setPinnedThreadIds((prev) =>
@@ -377,137 +413,34 @@ export default function BusinessMessagesView({
     }
   }, [initialThreads, loadThread]);
 
+  useEffect(() => {
+    fetchBriefing();
+  }, [fetchBriefing]);
+
+  useEffect(() => {
+    if (briefingSource === "fallback") {
+      setBriefingNarrative(buildFallbackBriefingNarrative(observations));
+    }
+  }, [observations, briefingSource]);
+
   const greetingName =
     businessName?.trim() || "your shop";
 
   return (
     <div className="space-y-5">
-      <section className="overflow-hidden rounded-[28px] border border-[var(--biz-border)] bg-[radial-gradient(circle_at_top_left,rgba(46,160,103,0.22)_0%,rgba(255,255,255,0.98)_42%,rgba(245,250,247,0.98)_100%)] shadow-[0_24px_80px_rgba(15,23,42,0.08)]">
-        <div className="flex flex-col gap-6 px-5 py-5 sm:px-6 lg:px-7">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-3xl">
-              <div className="inline-flex items-center gap-2 rounded-full border border-[var(--biz-primary-border)] bg-white/85 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--biz-primary)]">
-                <span className="h-2 w-2 rounded-full bg-[var(--biz-primary)]" />
-                Live deal desk
-              </div>
-              <h1 className="mt-4 text-3xl font-semibold tracking-tight text-[var(--biz-text)] sm:text-4xl">
-                Sales
-              </h1>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--biz-muted)] sm:text-[15px]">
-                Run active offers, follow up with quiet buyers, and close more deals for{" "}
-                <span className="font-semibold text-[var(--biz-text)]">{greetingName}</span>.
-                Closed sale records still live in Ledger, but this workspace is for the live buyer pipeline.
-              </p>
-            </div>
+      <SalesBriefingCard
+        narrative={briefingNarrative}
+        chips={localChips}
+        loading={briefingLoading && briefingSource === "fallback"}
+        source={briefingSource}
+        activeChip={activeBriefingChip}
+        onChipClick={handleBriefingChipClick}
+        greetingName={greetingName}
+        onRefresh={refreshThreadList}
+        refreshing={listRefreshing || briefingLoading}
+      />
 
-            <div className="flex flex-wrap items-center gap-2">
-              <a
-                href="/business/ledger?tab=sales"
-                className="inline-flex items-center gap-2 rounded-full border border-[var(--biz-border)] bg-white px-4 py-2 text-sm font-semibold text-[var(--biz-text)] transition-colors hover:bg-[var(--biz-hover)]"
-              >
-                Open ledger sales
-              </a>
-              <button
-                type="button"
-                onClick={refreshThreadList}
-                className="inline-flex items-center gap-2 rounded-full bg-[var(--biz-primary)] px-4 py-2 text-sm font-semibold text-[var(--biz-primary-foreground)] shadow-[0_12px_30px_var(--biz-primary-border)] transition-colors hover:bg-[var(--biz-primary-hover)]"
-              >
-                {listRefreshing ? "Refreshing..." : "Refresh live feed"}
-              </button>
-            </div>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-            <SalesMetricCard
-              label="Open deals"
-              value={dealDesk.openDealCount.toString()}
-              tone="neutral"
-              detail={`${stats.total_threads} buyer threads synced`}
-            />
-            <SalesMetricCard
-              label="Active offers"
-              value={dealDesk.activeOfferThreads.length.toString()}
-              tone="positive"
-              detail={`${formatMoney(dealDesk.pipelineOfferValueCents)} live offer value`}
-            />
-            <SalesMetricCard
-              label="Needs action"
-              value={dealDesk.needsReplyThreads.length.toString()}
-              tone="warning"
-              detail="buyers waiting on your move"
-            />
-            <SalesMetricCard
-              label="Stale follow-ups"
-              value={dealDesk.staleThreads.length.toString()}
-              tone="neutral"
-              detail={`${dealDesk.awaitingBuyerCount} awaiting buyer`}
-            />
-            <SalesMetricCard
-              label="Unread buyers"
-              value={dealDesk.unreadThreads.length.toString()}
-              tone="danger"
-              detail="new activity to triage"
-            />
-          </div>
-        </div>
-      </section>
-
-      <section className="grid gap-4 xl:grid-cols-3">
-        <SalesQueueCard
-          title="Active offers"
-          description="Highest-signal buyer threads with real numbers on the table."
-          count={dealDesk.activeOfferThreads.length}
-          tone="positive"
-          emptyLabel="No active offers are live right now."
-        >
-          {dealDesk.activeOfferThreads.slice(0, 3).map((thread) => (
-            <QueueThreadRow
-              key={thread.id}
-              thread={thread}
-              metaLabel={`Offer ${formatMoney(thread.offer_amount_cents)}`}
-              onOpen={() => handleJumpToThread(thread.id)}
-            />
-          ))}
-        </SalesQueueCard>
-
-        <SalesQueueCard
-          title="Needs reply"
-          description="Conversations that are still warm and need a seller move."
-          count={dealDesk.needsReplyThreads.length}
-          tone="warning"
-          emptyLabel="Nothing is waiting on you at the moment."
-        >
-          {dealDesk.needsReplyThreads.slice(0, 3).map((thread) => (
-            <QueueThreadRow
-              key={thread.id}
-              thread={thread}
-              metaLabel={`${thread.unread_count} unread`}
-              onOpen={() => handleJumpToThread(thread.id)}
-            />
-          ))}
-        </SalesQueueCard>
-
-        <SalesQueueCard
-          title="Re-engage buyers"
-          description="Quiet threads worth nudging before the buyer disappears."
-          count={dealDesk.staleThreads.length}
-          tone="neutral"
-          emptyLabel="No stale follow-ups need a nudge."
-        >
-          {dealDesk.staleThreads.slice(0, 3).map((thread) => (
-            <QueueThreadRow
-              key={thread.id}
-              thread={thread}
-              metaLabel={
-                isStaleSalesThread(thread)
-                  ? `Quiet since ${relativeTime(thread.last_message_at)}`
-                  : "Monitor"
-              }
-              onOpen={() => handleJumpToThread(thread.id)}
-            />
-          ))}
-        </SalesQueueCard>
-      </section>
+      <SalesPulseStrip snapshot={pulseSnapshot} />
 
       <div className="rounded-2xl border border-[var(--biz-border)] bg-[linear-gradient(135deg,#ffffff_0%,#f9fcfa_100%)] px-4 py-3 shadow-sm">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -658,123 +591,3 @@ export default function BusinessMessagesView({
   );
 }
 
-function SalesMetricCard({
-  label,
-  value,
-  detail,
-  tone,
-}: {
-  label: string;
-  value: string;
-  detail: string;
-  tone: "neutral" | "positive" | "warning" | "danger";
-}) {
-  const toneClass =
-    tone === "positive"
-      ? "text-emerald-700"
-      : tone === "warning"
-        ? "text-amber-700"
-        : tone === "danger"
-          ? "text-red-600"
-          : "text-[var(--biz-text)]";
-
-  return (
-    <div className="rounded-2xl border border-white/70 bg-white/90 px-4 py-3 shadow-[0_14px_34px_rgba(15,23,42,0.05)] backdrop-blur">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--biz-muted)]">
-        {label}
-      </p>
-      <p className={`mt-2 text-2xl font-semibold tabular-nums ${toneClass}`}>{value}</p>
-      <p className="mt-1 text-[12px] text-[var(--biz-muted)]">{detail}</p>
-    </div>
-  );
-}
-
-function SalesQueueCard({
-  title,
-  description,
-  count,
-  tone,
-  emptyLabel,
-  children,
-}: {
-  title: string;
-  description: string;
-  count: number;
-  tone: "positive" | "warning" | "neutral";
-  emptyLabel: string;
-  children: ReactNode;
-}) {
-  const accentClass =
-    tone === "positive"
-      ? "from-emerald-50 to-white text-emerald-700 border-emerald-100"
-      : tone === "warning"
-        ? "from-amber-50 to-white text-amber-700 border-amber-100"
-        : "from-slate-50 to-white text-slate-700 border-slate-200";
-
-  return (
-    <section className="rounded-[24px] border border-[var(--biz-border)] bg-white shadow-[0_16px_40px_rgba(15,23,42,0.06)]">
-      <div className={`rounded-t-[24px] border-b bg-gradient-to-br px-4 py-4 ${accentClass}`}>
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em]">{title}</p>
-            <p className="mt-2 text-sm leading-6 text-[var(--biz-muted)]">{description}</p>
-          </div>
-          <div className="rounded-full border border-current/15 bg-white px-3 py-1 text-sm font-semibold tabular-nums">
-            {count}
-          </div>
-        </div>
-      </div>
-      <div className="space-y-3 px-4 py-4">
-        {count === 0 ? (
-          <div className="rounded-2xl border border-dashed border-[var(--biz-border)] bg-[#FBFCFD] px-4 py-5 text-sm text-[var(--biz-muted)]">
-            {emptyLabel}
-          </div>
-        ) : (
-          children
-        )}
-      </div>
-    </section>
-  );
-}
-
-function QueueThreadRow({
-  thread,
-  metaLabel,
-  onOpen,
-}: {
-  thread: MessageThread;
-  metaLabel: string;
-  onOpen: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="w-full rounded-2xl border border-[var(--biz-border)] bg-[#FCFDFC] px-4 py-3 text-left transition-colors hover:bg-white"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-[var(--biz-text)]">
-            {threadBuyer(thread)}
-          </p>
-          <p className="mt-1 truncate text-[12px] text-[var(--biz-muted)]">
-            {threadTitle(thread)}
-          </p>
-        </div>
-        <span className="shrink-0 text-[11px] font-medium text-[var(--biz-muted)]">
-          {relativeTime(thread.last_message_at)}
-        </span>
-      </div>
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <span className="rounded-full border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] px-2 py-0.5 text-[10px] font-semibold text-[var(--biz-primary)]">
-          {metaLabel}
-        </span>
-        {thread.unread_count > 0 ? (
-          <span className="rounded-full border border-red-100 bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-600">
-            {thread.unread_count} unread
-          </span>
-        ) : null}
-      </div>
-    </button>
-  );
-}
