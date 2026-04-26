@@ -18,6 +18,11 @@ import BusinessMigrationBanner from "@/components/business/BusinessMigrationBann
 import InventoryTable from "@/components/business/InventoryTable";
 import InventoryCardGrid from "@/components/business/InventoryCardGrid";
 import InventoryAgingStrip from "@/components/business/InventoryAgingStrip";
+import {
+  type AgingBucketKey,
+  getAgingBucket,
+  getDaysHeld,
+} from "@/lib/business/inventory-display";
 import SalesTable, { type SalesFilters } from "@/components/business/SalesTable";
 import SaleFormModal from "@/components/business/SaleFormModal";
 import AddInventoryModal from "@/components/business/AddInventoryModal";
