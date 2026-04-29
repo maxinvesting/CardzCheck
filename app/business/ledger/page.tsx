@@ -38,6 +38,7 @@ import type {
 } from "@/types";
 import type { StoreTier } from "@/lib/business/EbayProfitEngine";
 import { normalizeEbayStoreUrl, buildEbayStoreHref } from "@/lib/ebay-store-url";
+import { getDaysHeld, getAgingBucket, type AgingBucketKey } from "@/lib/business/inventory-display";
 import {
   isPerfEnabled,
   setPerfInteraction,
