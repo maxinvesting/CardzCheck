@@ -10,6 +10,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { TableVirtuoso } from "react-virtuoso";
+import { MicButton } from "@/components/ui/MicButton";
 import type { BusinessInventoryItem } from "@/types";
 import {
   setPerfInteraction,
@@ -91,6 +92,7 @@ interface Props {
   onBulkAction: (action: string, ids: string[], payload?: any) => void;
   onDelete: (ids: string[]) => void;
   onMarkSold?: (item: BusinessInventoryItem) => void;
+  onVoiceCommand?: (item: BusinessInventoryItem, transcript: string) => void;
   /** Called when filtered items change so parent can display filter-aware inventory value */
   onFilteredChange?: (filtered: BusinessInventoryItem[]) => void;
   /** Called when user wants to move item from inventory to personal collection */
@@ -224,6 +226,7 @@ export default function InventoryTable({
   onBulkAction,
   onDelete,
   onMarkSold,
+  onVoiceCommand,
   onFilteredChange,
   onToggleItemKind,
   dense = false,
@@ -598,12 +601,11 @@ export default function InventoryTable({
       );
     }
     if (field === "_actions") {
-      if (item.status === "sold") {
-        return <span className="text-[10px] text-[var(--biz-muted)]">Recorded</span>;
-      }
+      const isSold = item.status === "sold";
       const hasEbayListing = !!(item as any).ebay_item_id;
       const canList =
         !hasEbayListing &&
+        !isSold &&
         item.status !== "returned" &&
         item.status !== "pending_sale";
       const listingTitle = buildDisplayTitle(item);
@@ -615,16 +617,28 @@ export default function InventoryTable({
       });
       return (
         <div className="flex flex-col items-start gap-1">
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onMarkSold?.(item);
-            }}
-            className="rounded border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] px-2 py-0.5 text-[10px] font-medium text-[var(--biz-primary)] hover:bg-[var(--biz-primary-soft-strong)]"
-          >
-            Mark Sold
-          </button>
+          {onVoiceCommand && (
+            <MicButton
+              size="sm"
+              title={`Voice actions for ${item.title || "inventory item"}`}
+              onResult={(text) => onVoiceCommand(item, text)}
+              className="bg-[var(--biz-surface-soft)] text-[var(--biz-muted)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]"
+            />
+          )}
+          {isSold ? (
+            <span className="text-[10px] text-[var(--biz-muted)]">Recorded</span>
+          ) : (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onMarkSold?.(item);
+              }}
+              className="rounded border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] px-2 py-0.5 text-[10px] font-medium text-[var(--biz-primary)] hover:bg-[var(--biz-primary-soft-strong)]"
+            >
+              Mark Sold
+            </button>
+          )}
           {canList && (
             <a
               href={listUrl}
@@ -837,6 +851,16 @@ export default function InventoryTable({
           </span>
           {item.channel && channelBadge(item.channel, item)}
           <div className="ml-auto flex items-center gap-1.5">
+            {onVoiceCommand && (
+              <div onClick={(e) => e.stopPropagation()}>
+                <MicButton
+                  size="sm"
+                  title={`Voice actions for ${titleStr || "inventory item"}`}
+                  onResult={(text) => onVoiceCommand(item, text)}
+                  className="bg-[var(--biz-surface-soft)] text-[var(--biz-muted)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]"
+                />
+              </div>
+            )}
             {onToggleItemKind && (
               <button
                 type="button"

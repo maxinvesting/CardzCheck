@@ -7,6 +7,8 @@ interface MicButtonProps {
   onResult: (text: string) => void;
   className?: string;
   size?: "sm" | "md";
+  label?: string;
+  title?: string;
   onError?: (message: string) => void;
 }
 
@@ -14,6 +16,8 @@ export function MicButton({
   onResult,
   className = "",
   size = "md",
+  label,
+  title,
   onError,
 }: MicButtonProps) {
   const {
@@ -34,16 +38,24 @@ export function MicButton({
 
   if (!isSupported) return null;
 
-  const sizeClasses = size === "sm" ? "p-1.5 h-8 w-8" : "p-2 h-10 w-10";
+  const hasLabel = Boolean(label);
+  const sizeClasses = hasLabel
+    ? size === "sm"
+      ? "gap-1.5 px-2.5 py-1.5 text-[11px]"
+      : "gap-2 px-3 py-2 text-sm"
+    : size === "sm"
+      ? "p-1.5 h-8 w-8"
+      : "p-2 h-10 w-10";
   const iconSize = size === "sm" ? "w-3.5 h-3.5" : "w-4 h-4";
+  const accessibleLabel = error ?? (isListening ? "Stop recording" : title ?? label ?? "Voice input");
 
   return (
     <div className="relative shrink-0">
       <button
         type="button"
         onClick={isListening ? stopListening : () => void startListening(onResult, onError)}
-        title={error ?? (isListening ? "Stop recording" : "Voice input")}
-        aria-label={error ?? (isListening ? "Stop recording" : "Voice input")}
+        title={accessibleLabel}
+        aria-label={accessibleLabel}
         className={`flex shrink-0 items-center justify-center rounded-lg transition-colors ${sizeClasses} ${
           isListening
             ? "animate-pulse bg-red-500 text-white"
@@ -70,6 +82,7 @@ export function MicButton({
             />
           </svg>
         )}
+        {hasLabel ? <span>{isListening ? "Listening" : label}</span> : null}
       </button>
       {error ? (
         <div className="absolute right-0 top-full z-20 mt-2 w-48 rounded-md border border-amber-300/40 bg-amber-50 px-2 py-1.5 text-[10px] leading-snug text-amber-900 shadow-lg">

@@ -28,6 +28,7 @@ import AddCardModalNew from "@/components/AddCardModalNew";
 import CardPickerModal from "@/components/CardPickerModal";
 import type { CardPickerSelection } from "@/components/CardPicker";
 import { Surface } from "@/components/ui/Surface";
+import { MicButton } from "@/components/ui/MicButton";
 import { createClient } from "@/lib/supabase/client";
 import type {
   BusinessInventoryItem,
@@ -39,6 +40,10 @@ import type {
 import type { StoreTier } from "@/lib/business/EbayProfitEngine";
 import { normalizeEbayStoreUrl, buildEbayStoreHref } from "@/lib/ebay-store-url";
 import { getDaysHeld, getAgingBucket, type AgingBucketKey } from "@/lib/business/inventory-display";
+import {
+  parseInventoryVoiceCommand,
+  type VoiceSalesChannel,
+} from "@/lib/voice-commands";
 import {
   isPerfEnabled,
   setPerfInteraction,
@@ -56,6 +61,20 @@ const EBAY_STORE_URL_STORAGE_KEY = "cardzcheck_ebay_store_url";
 const EBAY_STORE_URL_UPDATED_EVENT = "cardzcheck:ebay-store-url-updated";
 const PERF_MOCK_ITEM_COUNT = 1200;
 const PERF_MOCK_BUSINESS_ACCOUNT_ID = "perf-business-account";
+const SALES_CHANNELS: VoiceSalesChannel[] = [
+  "ebay",
+  "whatnot",
+  "instagram",
+  "show",
+  "local",
+  "other",
+];
+
+function coerceSalesChannel(value: string | null | undefined): VoiceSalesChannel {
+  return SALES_CHANNELS.includes(value as VoiceSalesChannel)
+    ? (value as VoiceSalesChannel)
+    : "ebay";
+}
 
 function readStoredEbayStoreUrl(): string | null {
   if (typeof window === "undefined") return null;
@@ -225,6 +244,15 @@ function LedgerPageContent() {
   const [storeTier, setStoreTier] = useState<StoreTier>("none");
   const [ebayConnected, setEbayConnected] = useState(false);
   const [ebayTopRated, setEbayTopRated] = useState(false);
+  const [markSoldVoiceDefaults, setMarkSoldVoiceDefaults] = useState<
+    Partial<BusinessSale> & {
+      inventory_item_id?: string | null;
+      channel?: string | null;
+      sold_at?: string | null;
+    } | null
+  >(null);
+  const [pendingVoiceDeleteItem, setPendingVoiceDeleteItem] =
+    useState<BusinessInventoryItem | null>(null);
   const [whatnotStorefront, setWhatnotStorefront] = useState<UserStorefront | null>(null);
   const [websiteStorefront, setWebsiteStorefront] = useState<UserStorefront | null>(null);
   const [viewMode, setViewMode] = useState<"grid" | "list">(() =>
@@ -859,9 +887,7 @@ function LedgerPageContent() {
     }
   };
 
-  const handleDelete = async (ids: string[]) => {
-    if (!confirm(`Delete ${ids.length} item(s)? This cannot be undone.`)) return;
-
+  const deleteInventoryItems = async (ids: string[]) => {
     if (perfMockMode) {
       setItems((prev) => prev.filter((it) => !ids.includes(it.id)));
       setToast({ type: "success", message: `Deleted ${ids.length} items` });
@@ -869,15 +895,21 @@ function LedgerPageContent() {
     }
 
     try {
-      await fetch(`/api/business/inventory?ids=${ids.join(",")}`, {
+      const res = await fetch(`/api/business/inventory?ids=${ids.join(",")}`, {
         method: "DELETE",
       });
+      if (!res.ok) throw new Error("Delete failed");
       setItems((prev) => prev.filter((it) => !ids.includes(it.id)));
       setToast({ type: "success", message: `Deleted ${ids.length} items` });
       loadMetrics();
     } catch {
       setToast({ type: "error", message: "Delete failed" });
     }
+  };
+
+  const handleDelete = async (ids: string[]) => {
+    if (!confirm(`Delete ${ids.length} item(s)? This cannot be undone.`)) return;
+    await deleteInventoryItems(ids);
   };
 
   const handleAddItem = async (item: Record<string, unknown>) => {
@@ -972,6 +1004,7 @@ function LedgerPageContent() {
       setPerfInteraction("click:mark-sold");
       markClickStart("open-mark-sold-modal", { itemId: item.id });
     }
+    setMarkSoldVoiceDefaults(null);
     setMarkSoldItem(item);
   };
 
@@ -1099,6 +1132,69 @@ function LedgerPageContent() {
       }
       setToast({ type: "error", message: "Failed to record sale" });
     }
+  };
+
+  const handleInventoryVoiceCommand = async (
+    item: BusinessInventoryItem,
+    transcript: string
+  ) => {
+    const command = parseInventoryVoiceCommand(transcript);
+
+    if (command.type === "cancel") {
+      setPendingVoiceDeleteItem(null);
+      setMarkSoldItem(null);
+      setMarkSoldVoiceDefaults(null);
+      setToast({ type: "success", message: "Voice action canceled" });
+      return;
+    }
+
+    if (command.type === "confirm") {
+      if (!pendingVoiceDeleteItem) {
+        setToast({ type: "error", message: "No voice action is waiting for confirmation" });
+        return;
+      }
+      const deleteId = pendingVoiceDeleteItem.id;
+      setPendingVoiceDeleteItem(null);
+      await deleteInventoryItems([deleteId]);
+      return;
+    }
+
+    if (command.type === "delete_card") {
+      setMarkSoldItem(null);
+      setMarkSoldVoiceDefaults(null);
+      setPendingVoiceDeleteItem(item);
+      setToast({ type: "success", message: "Say confirm delete, or use the confirm button" });
+      return;
+    }
+
+    if (command.type === "mark_sold") {
+      if (item.status === "sold") {
+        setToast({ type: "error", message: "This item is already marked sold" });
+        return;
+      }
+      setPendingVoiceDeleteItem(null);
+      setMarkSoldVoiceDefaults({
+        inventory_item_id: item.id,
+        channel: command.channel ?? coerceSalesChannel(item.channel),
+        sold_at: command.soldAt ?? new Date().toISOString(),
+        sold_price_cents: command.salePriceCents ?? undefined,
+        cogs_cents: item.cost_basis_total_cents,
+      });
+      setMarkSoldItem(item);
+      setToast({
+        type: "success",
+        message: command.salePriceCents
+          ? "Voice sale draft ready"
+          : "Voice sale draft opened. Add a sold price to record it.",
+      });
+      return;
+    }
+
+    router.push(
+      `/business/consultant?prompt=${encodeURIComponent(
+        `For ${item.title || "this inventory item"}, ${command.transcript}`
+      )}`
+    );
   };
 
   const handleUpdateSale = async (
@@ -1497,6 +1593,9 @@ function LedgerPageContent() {
                       ebayConnected={ebayConnected}
                       onAddCard={openAddInventoryModal}
                       onConsultant={openConsultant}
+                      onVoiceCommand={(item, transcript) => {
+                        void handleInventoryVoiceCommand(item, transcript);
+                      }}
                     />
                   )}
 
@@ -1517,6 +1616,9 @@ function LedgerPageContent() {
                               onBulkAction={handleBulkAction}
                               onDelete={handleDelete}
                               onMarkSold={handleMarkSold}
+                              onVoiceCommand={(item, transcript) => {
+                                void handleInventoryVoiceCommand(item, transcript);
+                              }}
                               ebayConnected={ebayConnected}
                               ebayTopRated={ebayTopRated}
                               dense
@@ -1533,6 +1635,9 @@ function LedgerPageContent() {
                             onBulkAction={handleBulkAction}
                             onDelete={handleDelete}
                             onMarkSold={handleMarkSold}
+                            onVoiceCommand={(item, transcript) => {
+                              void handleInventoryVoiceCommand(item, transcript);
+                            }}
                             ebayConnected={ebayConnected}
                             ebayTopRated={ebayTopRated}
                             dense
@@ -1735,17 +1840,67 @@ function LedgerPageContent() {
                 channel: markSoldItem.channel,
                 sold_at: new Date().toISOString(),
                 cogs_cents: markSoldItem.cost_basis_total_cents,
+                ...markSoldVoiceDefaults,
               }
             : undefined
         }
-        onClose={() => setMarkSoldItem(null)}
+        onClose={() => {
+          setMarkSoldItem(null);
+          setMarkSoldVoiceDefaults(null);
+        }}
         onSubmit={async (payload) => {
           await handleCreateSale(payload as unknown as Record<string, unknown>);
           setMarkSoldItem(null);
+          setMarkSoldVoiceDefaults(null);
         }}
         showCogsField={false}
         storeTier={storeTier}
       />
+
+      {pendingVoiceDeleteItem && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-gray-900 shadow-2xl">
+            <h3 className="text-lg font-bold">Delete this card?</h3>
+            <p className="mt-2 text-sm leading-6 text-gray-600">
+              {pendingVoiceDeleteItem.title || "This inventory item"} will be removed from
+              business inventory. This cannot be undone.
+            </p>
+            <div className="mt-5 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setPendingVoiceDeleteItem(null);
+                  setToast({ type: "success", message: "Voice delete canceled" });
+                }}
+                className="flex-1 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const deleteId = pendingVoiceDeleteItem.id;
+                  setPendingVoiceDeleteItem(null);
+                  void deleteInventoryItems([deleteId]);
+                }}
+                className="flex-1 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-700"
+              >
+                Confirm Delete
+              </button>
+              <MicButton
+                label="Confirm by voice"
+                title="Say confirm delete"
+                size="sm"
+                onResult={(text) => {
+                  void handleInventoryVoiceCommand(pendingVoiceDeleteItem, text);
+                }}
+                onError={(message) => setToast({ type: "error", message })}
+                className="w-full justify-center bg-gray-100 text-gray-700 hover:bg-gray-200"
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {toast && (
         <div

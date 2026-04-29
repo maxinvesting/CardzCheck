@@ -5,6 +5,7 @@ import SportsCardBackground from "./SportsCardBackground";
 import type { AnalystThread, AnalystThreadMessage, CardContext } from "@/types";
 import { MicButton } from "@/components/ui/MicButton";
 import { SpeakButton } from "@/components/ui/SpeakButton";
+import { appendSpeechTranscript } from "@/lib/speech";
 
 interface Message {
   id?: string;
@@ -18,6 +19,7 @@ interface CardAnalystProps {
   onClose?: () => void;
   remainingQueries?: number;
   totalQueries?: number;
+  initialPrompt?: string;
 }
 
 const SUGGESTED_PROMPTS = [
@@ -40,6 +42,7 @@ export default function CardAnalyst({
   onClose,
   remainingQueries,
   totalQueries,
+  initialPrompt,
 }: CardAnalystProps) {
   // Thread state
   const [threads, setThreads] = useState<AnalystThread[]>([]);
@@ -64,6 +67,12 @@ export default function CardAnalyst({
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  useEffect(() => {
+    if (initialPrompt?.trim()) {
+      setInput(initialPrompt.trim());
+    }
+  }, [initialPrompt]);
 
   // Load threads on mount (do not auto-open any thread)
   useEffect(() => {
@@ -644,7 +653,7 @@ export default function CardAnalyst({
         className="p-4 border-t border-gray-800 relative z-10 bg-[#0f1419]/90 backdrop-blur-sm"
       >
         <div className="flex gap-2">
-          <MicButton onResult={(text) => setInput(text)} />
+          <MicButton onResult={(text) => setInput((prev) => appendSpeechTranscript(prev, text))} />
           <input
             type="text"
             value={input}
