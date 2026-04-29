@@ -17,9 +17,7 @@ import {
   deactivatePerfBucket,
   recordDomMetrics,
 } from "@/lib/dev/perf";
-import EbayListingBadge from "./EbayListingBadge";
-import EbayListingModal from "./EbayListingModal";
-import { buildEbaySoldUrl } from "@/lib/ebay/comps-url";
+import { buildEbaySoldUrl, buildEbayListUrl } from "@/lib/ebay/comps-url";
 
 function fmtCents(cents: number | null): string {
   if (cents === null) return "";
@@ -230,8 +228,8 @@ export default function InventoryTable({
   onToggleItemKind,
   dense = false,
   perfEnabled = false,
-  ebayTopRated = false,
-  ebayConnected = false,
+  ebayTopRated: _ebayTopRated = false,
+  ebayConnected: _ebayConnected = false,
   listView = false,
 }: Props) {
   const router = useRouter();
@@ -251,7 +249,6 @@ export default function InventoryTable({
   const [bulkAction, setBulkAction] = useState("");
   const [bulkPayload, setBulkPayload] = useState("");
   const [fetchingCmvId, setFetchingCmvId] = useState<string | null>(null);
-  const [ebayListingItem, setEbayListingItem] = useState<BusinessInventoryItem | null>(null);
   const [sortKey, setSortKey] = useState<SortableColumnKey | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
@@ -605,13 +602,13 @@ export default function InventoryTable({
         return <span className="text-[10px] text-[var(--biz-muted)]">Recorded</span>;
       }
       const hasEbayListing = !!(item as any).ebay_item_id;
-      // status === "sold" already handled by early return above; only check remaining terminal states
-      const canListOnEbay =
-        ebayConnected &&
+      const canList =
         !hasEbayListing &&
         item.status !== "returned" &&
         item.status !== "pending_sale";
-      const compsUrl = buildEbaySoldUrl({
+      const listingTitle = buildDisplayTitle(item);
+      const listUrl = buildEbayListUrl(listingTitle);
+      const soldUrl = buildEbaySoldUrl({
         title: item.title,
         grade: item.grade,
         gradingCompany: item.grading_company,
@@ -628,26 +625,25 @@ export default function InventoryTable({
           >
             Mark Sold
           </button>
-          {canListOnEbay && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setEbayListingItem(item);
-              }}
-              className="rounded border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-2 py-0.5 text-[10px] font-medium text-[var(--biz-primary)] hover:bg-[var(--biz-hover)]"
+          {canList && (
+            <a
+              href={listUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="rounded border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-2 py-0.5 text-[10px] font-medium text-[var(--biz-primary)] hover:bg-[var(--biz-hover)] transition-colors"
             >
-              List eBay
-            </button>
+              List on eBay ↗
+            </a>
           )}
           <a
-            href={compsUrl}
+            href={soldUrl}
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
             className="rounded border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-2 py-0.5 text-[10px] font-medium text-[var(--biz-primary)] hover:bg-[var(--biz-hover)] transition-colors"
           >
-            Get Comps
+            View Sold ↗
           </a>
         </div>
       );
@@ -1276,21 +1272,6 @@ export default function InventoryTable({
         </span>
       </div>
 
-      {/* eBay Listing Modal — opened via "List eBay" button in _actions cell */}
-      {ebayListingItem && (
-        <EbayListingModal
-          item={ebayListingItem}
-          isTopRated={ebayTopRated}
-          onClose={() => setEbayListingItem(null)}
-          onSuccess={(listingId, listingUrl) => {
-            // Update item state locally: mark listed, set channel=ebay, set ebay_item_id
-            onInlineUpdate(ebayListingItem.id, "ebay_item_id", listingId);
-            onInlineUpdate(ebayListingItem.id, "status", "listed");
-            onInlineUpdate(ebayListingItem.id, "channel", "ebay");
-            setEbayListingItem(null);
-          }}
-        />
-      )}
     </div>
   );
 }

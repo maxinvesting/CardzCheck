@@ -28,6 +28,7 @@ import {
   formatMarginPct,
   getMarginColor,
 } from "@/lib/business/inventory-display";
+import { buildEbayListUrl, buildEbaySoldUrl } from "@/lib/ebay/comps-url";
 
 const VIRTUALIZE_THRESHOLD = 200;
 
@@ -235,8 +236,8 @@ function InventoryCardCell({
   onMarkSold,
   onDeleteItem,
   selection,
-  ebayConnected,
-  onEbayList,
+  ebayConnected: _ebayConnected,
+  onEbayList: _onEbayList,
   onConsultant,
 }: {
   item: BusinessInventoryItem;
@@ -257,12 +258,6 @@ function InventoryCardCell({
   const underwater = isUnderwater(item);
   const projected = getProjectedMargin(item);
   const hasEbayListing = Boolean((item as { ebay_item_id?: string | null }).ebay_item_id);
-  const canListOnEbay =
-    ebayConnected &&
-    !hasEbayListing &&
-    item.status !== "sold" &&
-    item.status !== "returned" &&
-    item.status !== "pending_sale";
   const hasImage = hasInventoryImage(item);
   const certUrl = getInventoryCertUrl(item);
   const isResolving = isResolvingInventoryCertImage(item);
@@ -484,28 +479,27 @@ function InventoryCardCell({
           >
             Delete card
           </button>
-          {canListOnEbay ? (
-            <button
-              type="button"
+          {!hasEbayListing && item.status !== "sold" && item.status !== "returned" && item.status !== "pending_sale" ? (
+            <a
               role="menuitem"
-              onClick={() => {
-                setMenuOpen(false);
-                onEbayList?.(item);
-              }}
-              className="flex w-full items-center rounded-xl px-3 py-2 text-left text-[13px] font-medium text-[var(--biz-text)] transition-colors hover:bg-[#F5F8F4]"
+              href={buildEbayListUrl(buildDisplayTitle(item))}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setMenuOpen(false)}
+              className="flex w-full items-center rounded-xl px-3 py-2 text-[13px] font-medium text-[var(--biz-text)] transition-colors hover:bg-[#F5F8F4]"
             >
-              List on eBay
-            </button>
+              List on eBay ↗
+            </a>
           ) : null}
           <a
             role="menuitem"
-            href={getCompsUrl(item)}
+            href={buildEbaySoldUrl({ title: item.title, grade: item.grade, gradingCompany: item.grading_company })}
             target="_blank"
             rel="noopener noreferrer"
             onClick={() => setMenuOpen(false)}
             className="flex w-full items-center rounded-xl px-3 py-2 text-[13px] font-medium text-[var(--biz-text)] transition-colors hover:bg-[#F5F8F4]"
           >
-            View comps
+            View eBay Sold ↗
           </a>
           {!hasImage && !isResolving && certUrl ? (
             <a

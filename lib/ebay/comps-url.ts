@@ -91,6 +91,14 @@ export function buildCompsLinks(params: CompsParams): {
 }
 
 /**
+ * Build an eBay pre-filled sell form URL.
+ * categoryId=213 = Sports Trading Cards. eBay title limit is 80 chars.
+ */
+export function buildEbayListUrl(title: string): string {
+  return `https://www.ebay.com/sell/listing?title=${encodeURIComponent(title.trim().slice(0, 80))}&categoryId=213`;
+}
+
+/**
  * Build a CompsParams object from a BusinessInventoryItem title + grade fields.
  * Used when only the denormalized title is available (InventoryTable rows).
  */
