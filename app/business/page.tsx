@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import BusinessPaywall from "@/components/business/BusinessPaywall";
 import BusinessDashboardView from "@/components/business/BusinessDashboardView";
+import SaleFormModal from "@/components/business/SaleFormModal";
+import { MicButton } from "@/components/ui/MicButton";
 import { createClient } from "@/lib/supabase/client";
 import type {
   BusinessInventoryItem,
@@ -17,9 +19,27 @@ import {
   type InventoryValueSummary,
 } from "@/lib/business/inventory-value";
 import { normalizeEbayStoreUrl, buildEbayStoreHref } from "@/lib/ebay-store-url";
+import {
+  parseInventoryVoiceCommand,
+  type VoiceSalesChannel,
+} from "@/lib/voice-commands";
 
 const EBAY_STORE_URL_STORAGE_KEY = "cardzcheck_ebay_store_url";
 const EBAY_STORE_URL_UPDATED_EVENT = "cardzcheck:ebay-store-url-updated";
+const SALES_CHANNELS: VoiceSalesChannel[] = [
+  "ebay",
+  "whatnot",
+  "instagram",
+  "show",
+  "local",
+  "other",
+];
+
+function coerceSalesChannel(value: string | null | undefined): VoiceSalesChannel {
+  return SALES_CHANNELS.includes(value as VoiceSalesChannel)
+    ? (value as VoiceSalesChannel)
+    : "ebay";
+}
 
 function readStoredEbayStoreUrl(): string | null {
   if (typeof window === "undefined") return null;
@@ -52,6 +72,17 @@ function BusinessDashboardContent() {
   const [recentSalesLoading, setRecentSalesLoading] = useState(false);
   const [needsMigration, setNeedsMigration] = useState(false);
   const [storefronts, setStorefronts] = useState<UserStorefront[]>([]);
+  const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [markSoldItem, setMarkSoldItem] = useState<BusinessInventoryItem | null>(null);
+  const [markSoldVoiceDefaults, setMarkSoldVoiceDefaults] = useState<
+    Partial<BusinessSale> & {
+      inventory_item_id?: string | null;
+      channel?: string | null;
+      sold_at?: string | null;
+    } | null
+  >(null);
+  const [pendingVoiceDeleteItem, setPendingVoiceDeleteItem] =
+    useState<BusinessInventoryItem | null>(null);
 
   const ebayStoreHref = useMemo(
     () => buildEbayStoreHref(ebayStoreUrl),
@@ -256,6 +287,149 @@ function BusinessDashboardContent() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(null), 3000);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
+  const deleteInventoryItem = useCallback(
+    async (item: BusinessInventoryItem) => {
+      try {
+        const res = await fetch(`/api/business/inventory?ids=${encodeURIComponent(item.id)}`, {
+          method: "DELETE",
+        });
+        if (!res.ok) throw new Error("Delete failed");
+        setItems((prev) => prev.filter((it) => it.id !== item.id));
+        setToast({ type: "success", message: "Card deleted" });
+        await Promise.all([loadMetrics(), loadRecentSales()]);
+      } catch {
+        setToast({ type: "error", message: "Delete failed" });
+      }
+    },
+    [loadMetrics, loadRecentSales]
+  );
+
+  const handleCreateSale = useCallback(
+    async (sale: Record<string, unknown>) => {
+      const inventoryId = (sale.inventory_item_id as string | null) || null;
+      try {
+        const res = await fetch("/api/business/sales", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(sale),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || "Failed to record sale");
+        }
+        if (inventoryId) {
+          setItems((prev) => prev.filter((it) => it.id !== inventoryId));
+        }
+        setToast({ type: "success", message: "Sale recorded" });
+        await Promise.all([loadMetrics(), loadRecentSales()]);
+      } catch (error) {
+        setToast({
+          type: "error",
+          message: error instanceof Error ? error.message : "Failed to record sale",
+        });
+      }
+    },
+    [loadMetrics, loadRecentSales]
+  );
+
+  const handleDashboardVoiceCommand = useCallback(
+    (transcript: string) => {
+      const command = parseInventoryVoiceCommand(transcript);
+      if (command.type === "cancel") {
+        setPendingVoiceDeleteItem(null);
+        setMarkSoldItem(null);
+        setMarkSoldVoiceDefaults(null);
+        setToast({ type: "success", message: "Voice action canceled" });
+        return;
+      }
+      if (command.type === "confirm") {
+        if (!pendingVoiceDeleteItem) {
+          setToast({ type: "error", message: "No voice action is waiting for confirmation" });
+          return;
+        }
+        const item = pendingVoiceDeleteItem;
+        setPendingVoiceDeleteItem(null);
+        void deleteInventoryItem(item);
+        return;
+      }
+      if (command.type === "delete_card" || command.type === "mark_sold") {
+        setToast({ type: "error", message: "Use the mic beside a card for card actions" });
+        return;
+      }
+      router.push(`/business/consultant?prompt=${encodeURIComponent(command.transcript)}`);
+    },
+    [deleteInventoryItem, pendingVoiceDeleteItem, router]
+  );
+
+  const handleItemVoiceCommand = useCallback(
+    (item: BusinessInventoryItem, transcript: string) => {
+      const command = parseInventoryVoiceCommand(transcript);
+
+      if (command.type === "cancel") {
+        setPendingVoiceDeleteItem(null);
+        setMarkSoldItem(null);
+        setMarkSoldVoiceDefaults(null);
+        setToast({ type: "success", message: "Voice action canceled" });
+        return;
+      }
+
+      if (command.type === "confirm") {
+        if (!pendingVoiceDeleteItem) {
+          setToast({ type: "error", message: "No voice action is waiting for confirmation" });
+          return;
+        }
+        const itemToDelete = pendingVoiceDeleteItem;
+        setPendingVoiceDeleteItem(null);
+        void deleteInventoryItem(itemToDelete);
+        return;
+      }
+
+      if (command.type === "delete_card") {
+        setMarkSoldItem(null);
+        setMarkSoldVoiceDefaults(null);
+        setPendingVoiceDeleteItem(item);
+        setToast({ type: "success", message: "Say confirm delete, or use the confirm button" });
+        return;
+      }
+
+      if (command.type === "mark_sold") {
+        if (item.status === "sold") {
+          setToast({ type: "error", message: "This item is already marked sold" });
+          return;
+        }
+        setPendingVoiceDeleteItem(null);
+        setMarkSoldVoiceDefaults({
+          inventory_item_id: item.id,
+          channel: command.channel ?? coerceSalesChannel(item.channel),
+          sold_at: command.soldAt ?? new Date().toISOString(),
+          sold_price_cents: command.salePriceCents ?? undefined,
+          cogs_cents: item.cost_basis_total_cents,
+        });
+        setMarkSoldItem(item);
+        setToast({
+          type: "success",
+          message: command.salePriceCents
+            ? "Voice sale draft ready"
+            : "Voice sale draft opened. Add a sold price to record it.",
+        });
+        return;
+      }
+
+      router.push(
+        `/business/consultant?prompt=${encodeURIComponent(
+          `For ${item.title || "this inventory item"}, ${command.transcript}`
+        )}`
+      );
+    },
+    [deleteInventoryItem, pendingVoiceDeleteItem, router]
+  );
+
   if (loading) {
     return (
       <AuthenticatedLayout>
@@ -301,7 +475,88 @@ function BusinessDashboardContent() {
           ebayStoreHref={ebayStoreHref}
           needsMigration={needsMigration}
           storefronts={storefronts}
+          onDashboardVoiceCommand={handleDashboardVoiceCommand}
+          onItemVoiceCommand={handleItemVoiceCommand}
         />
+        <SaleFormModal
+          isOpen={Boolean(markSoldItem)}
+          title={markSoldItem ? `Mark as sold: ${markSoldItem.title}` : "Mark as sold"}
+          submitLabel="Record sale"
+          defaults={
+            markSoldItem
+              ? {
+                  inventory_item_id: markSoldItem.id,
+                  channel: markSoldItem.channel,
+                  sold_at: new Date().toISOString(),
+                  cogs_cents: markSoldItem.cost_basis_total_cents,
+                  ...markSoldVoiceDefaults,
+                }
+              : undefined
+          }
+          onClose={() => {
+            setMarkSoldItem(null);
+            setMarkSoldVoiceDefaults(null);
+          }}
+          onSubmit={async (payload) => {
+            await handleCreateSale(payload as unknown as Record<string, unknown>);
+            setMarkSoldItem(null);
+            setMarkSoldVoiceDefaults(null);
+          }}
+          showCogsField={false}
+        />
+        {pendingVoiceDeleteItem && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-gray-900 shadow-2xl">
+              <h3 className="text-lg font-bold">Delete this card?</h3>
+              <p className="mt-2 text-sm leading-6 text-gray-600">
+                {pendingVoiceDeleteItem.title || "This inventory item"} will be removed from
+                business inventory. This cannot be undone.
+              </p>
+              <div className="mt-5 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPendingVoiceDeleteItem(null);
+                    setToast({ type: "success", message: "Voice delete canceled" });
+                  }}
+                  className="flex-1 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const itemToDelete = pendingVoiceDeleteItem;
+                    setPendingVoiceDeleteItem(null);
+                    void deleteInventoryItem(itemToDelete);
+                  }}
+                  className="flex-1 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-700"
+                >
+                  Confirm Delete
+                </button>
+                <MicButton
+                  label="Confirm by voice"
+                  title="Say confirm delete"
+                  size="sm"
+                  onResult={handleDashboardVoiceCommand}
+                  onError={(message) => setToast({ type: "error", message })}
+                  className="w-full justify-center bg-gray-100 text-gray-700 hover:bg-gray-200"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+        {toast && (
+          <div
+            className={`fixed bottom-4 right-4 z-[110] rounded-lg border px-4 py-3 text-sm shadow-lg ${
+              toast.type === "success"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                : "border-red-200 bg-red-50 text-red-700"
+            }`}
+          >
+            {toast.message}
+          </div>
+        )}
       </main>
     </AuthenticatedLayout>
   );

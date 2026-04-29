@@ -24,6 +24,7 @@ interface CardContext {
 function AnalystPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const initialPrompt = searchParams.get("prompt") ?? undefined;
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [cardContext, setCardContext] = useState<CardContext | undefined>();
@@ -189,6 +190,7 @@ function AnalystPageContent() {
             cardContext={cardContext}
             remainingQueries={remainingQueries}
             totalQueries={ANALYST_QUERY_LIMIT}
+            initialPrompt={initialPrompt}
           />
         </div>
       </div>

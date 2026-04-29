@@ -9,6 +9,7 @@ import CompactQuickActions from "@/components/dashboard/CompactQuickActions";
 import ActivityFeed from "@/components/dashboard/ActivityFeed";
 import LoyaltyPerksWidget from "@/components/dashboard/LoyaltyPerksWidget";
 import { Surface } from "@/components/ui/Surface";
+import { MicButton } from "@/components/ui/MicButton";
 import AddCardModalNew from "@/components/AddCardModalNew";
 import PaywallModal from "@/components/PaywallModal";
 import { createClient } from "@/lib/supabase/client";
@@ -148,13 +149,25 @@ export default function DashboardPage() {
     <AuthenticatedLayout>
       <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
         {/* Greeting */}
-        <header className="mb-6">
-          <h1 className="text-2xl lg:text-3xl font-semibold leading-snug text-[var(--biz-text)]">
-            Welcome back{userName ? `, ${userName}` : ""}
-          </h1>
-          <p className="mt-1 text-sm text-[var(--biz-muted)]">
-            Overview of your collection value and recent activity.
-          </p>
+        <header className="mb-6 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl lg:text-3xl font-semibold leading-snug text-[var(--biz-text)]">
+              Welcome back{userName ? `, ${userName}` : ""}
+            </h1>
+            <p className="mt-1 text-sm text-[var(--biz-muted)]">
+              Overview of your collection value and recent activity.
+            </p>
+          </div>
+          <MicButton
+            label="Ask by Voice"
+            title="Ask CardzCheck Analyst by voice"
+            size="sm"
+            onResult={(text) => {
+              router.push(`/analyst?prompt=${encodeURIComponent(text)}`);
+            }}
+            onError={(message) => setToast({ type: "error", message })}
+            className="border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] text-[var(--biz-text)] hover:bg-[var(--biz-hover)]"
+          />
         </header>
 
         {/* Metrics band */}

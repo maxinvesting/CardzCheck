@@ -10,6 +10,7 @@ import {
 } from "react";
 import Link from "next/link";
 import { VirtuosoGrid } from "react-virtuoso";
+import { MicButton } from "@/components/ui/MicButton";
 import type { BusinessInventoryItem } from "@/types";
 import {
   fmtCents,
@@ -57,6 +58,7 @@ export interface InventoryCardGridProps {
   onEbayList?: (item: BusinessInventoryItem) => void;
   onAddCard?: () => void;
   onConsultant?: (prompt: string) => void;
+  onVoiceCommand?: (item: BusinessInventoryItem, transcript: string) => void;
 }
 
 function getConsultantAction(item: BusinessInventoryItem): ConsultantAction {
@@ -161,10 +163,12 @@ function MenuButtonIcon() {
 function CardImageArea({
   item,
   menuButton,
+  voiceControl,
   selectControl,
 }: {
   item: BusinessInventoryItem;
   menuButton: ReactNode;
+  voiceControl?: ReactNode;
   selectControl?: ReactNode;
 }) {
   const imageCandidates = useMemo(() => getInventoryImageCandidates(item), [item]);
@@ -223,7 +227,10 @@ function CardImageArea({
             </span>
           ) : null}
         </div>
-        <div className="shrink-0">{menuButton}</div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {voiceControl}
+          {menuButton}
+        </div>
       </div>
     </div>
   );
@@ -239,6 +246,7 @@ function InventoryCardCell({
   ebayConnected: _ebayConnected,
   onEbayList: _onEbayList,
   onConsultant,
+  onVoiceCommand,
 }: {
   item: BusinessInventoryItem;
   selected: boolean;
@@ -249,6 +257,7 @@ function InventoryCardCell({
   ebayConnected?: boolean;
   onEbayList?: (item: BusinessInventoryItem) => void;
   onConsultant?: (prompt: string) => void;
+  onVoiceCommand?: (item: BusinessInventoryItem, transcript: string) => void;
 }) {
   const titleStr = buildDisplayTitle(item);
   const days = getDaysHeld(item.acquisition_date);
@@ -365,6 +374,17 @@ function InventoryCardCell({
     </button>
   );
 
+  const voiceControl = onVoiceCommand ? (
+    <div onClick={(event) => event.stopPropagation()}>
+      <MicButton
+        size="sm"
+        title={`Voice actions for ${titleStr || "inventory item"}`}
+        onResult={(text) => onVoiceCommand(item, text)}
+        className="border border-white/60 bg-white/92 text-[#2A312D] shadow-sm backdrop-blur hover:bg-white"
+      />
+    </div>
+  ) : null;
+
   return (
     <div className="relative">
       <div
@@ -379,7 +399,12 @@ function InventoryCardCell({
             : "border-[#E4ECE5]"
         }`}
       >
-        <CardImageArea item={item} menuButton={menuButton} selectControl={selectControl} />
+        <CardImageArea
+          item={item}
+          menuButton={menuButton}
+          voiceControl={voiceControl}
+          selectControl={selectControl}
+        />
 
         <div className="flex flex-1 flex-col gap-3 border-t border-[#EEF2EE] bg-white px-3.5 pb-3.5 pt-3">
           <div className="min-w-0">
@@ -580,6 +605,7 @@ export default function InventoryCardGrid({
   onEbayList,
   onAddCard,
   onConsultant,
+  onVoiceCommand,
 }: InventoryCardGridProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkAction, setBulkAction] = useState("");
@@ -661,6 +687,7 @@ export default function InventoryCardGrid({
     ebayConnected,
     onEbayList,
     onConsultant,
+    onVoiceCommand,
   });
 
   const gridBody =

@@ -10,6 +10,7 @@ import {
 } from "react";
 import { MicButton } from "@/components/ui/MicButton";
 import { SpeakButton } from "@/components/ui/SpeakButton";
+import { appendSpeechTranscript } from "@/lib/speech";
 import type { BusinessConsultation } from "@/types";
 import type { BusinessConsultantReport } from "@/lib/business/consultant-report";
 import { parseBusinessConsultantReport } from "@/lib/business/consultant-report";
@@ -935,7 +936,7 @@ export default function BusinessConsultantPanel({ initialPrompt }: { initialProm
                     onResult={(text) => {
                       setActiveConsultationId(null);
                       setSelectedTemplateId("custom");
-                      setPrompt(text);
+                      setPrompt((prev) => appendSpeechTranscript(prev, text));
                       textareaRef.current?.focus();
                     }}
                     size="sm"
