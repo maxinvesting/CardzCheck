@@ -20,6 +20,7 @@ import InventoryCardGrid from "@/components/business/InventoryCardGrid";
 import InventoryAgingStrip from "@/components/business/InventoryAgingStrip";
 import SalesTable, { type SalesFilters } from "@/components/business/SalesTable";
 import SaleFormModal from "@/components/business/SaleFormModal";
+import BusinessVoiceMode from "@/components/business/BusinessVoiceMode";
 import AddInventoryModal from "@/components/business/AddInventoryModal";
 import AddWaxModal from "@/components/business/AddWaxModal";
 import AddCardToInventoryModal from "@/components/business/AddCardToInventoryModal";
@@ -28,7 +29,6 @@ import AddCardModalNew from "@/components/AddCardModalNew";
 import CardPickerModal from "@/components/CardPickerModal";
 import type { CardPickerSelection } from "@/components/CardPicker";
 import { Surface } from "@/components/ui/Surface";
-import { MicButton } from "@/components/ui/MicButton";
 import { createClient } from "@/lib/supabase/client";
 import type {
   BusinessInventoryItem,
@@ -41,7 +41,7 @@ import type { StoreTier } from "@/lib/business/EbayProfitEngine";
 import { normalizeEbayStoreUrl, buildEbayStoreHref } from "@/lib/ebay-store-url";
 import { getDaysHeld, getAgingBucket, type AgingBucketKey } from "@/lib/business/inventory-display";
 import {
-  parseInventoryVoiceCommand,
+  type InventoryVoiceCommand,
   type VoiceSalesChannel,
 } from "@/lib/voice-commands";
 import {
@@ -1134,43 +1134,56 @@ function LedgerPageContent() {
     }
   };
 
-  const handleInventoryVoiceCommand = async (
-    item: BusinessInventoryItem,
-    transcript: string
-  ) => {
-    const command = parseInventoryVoiceCommand(transcript);
-
+  const handleVoiceModeCommand = async ({
+    command,
+    item,
+  }: {
+    transcript: string;
+    command: InventoryVoiceCommand;
+    item: BusinessInventoryItem | null;
+  }) => {
     if (command.type === "cancel") {
       setPendingVoiceDeleteItem(null);
       setMarkSoldItem(null);
       setMarkSoldVoiceDefaults(null);
       setToast({ type: "success", message: "Voice action canceled" });
-      return;
+      return "Canceled.";
     }
 
     if (command.type === "confirm") {
       if (!pendingVoiceDeleteItem) {
         setToast({ type: "error", message: "No voice action is waiting for confirmation" });
-        return;
+        return "Nothing is waiting for confirmation.";
       }
       const deleteId = pendingVoiceDeleteItem.id;
+      const deleteTitle = pendingVoiceDeleteItem.title || "that card";
       setPendingVoiceDeleteItem(null);
       await deleteInventoryItems([deleteId]);
-      return;
+      return `Deleted ${deleteTitle}.`;
     }
 
     if (command.type === "delete_card") {
+      if (!item) {
+        const message = "Which card should I delete? Say delete plus the card name.";
+        setToast({ type: "error", message });
+        return message;
+      }
       setMarkSoldItem(null);
       setMarkSoldVoiceDefaults(null);
       setPendingVoiceDeleteItem(item);
       setToast({ type: "success", message: "Say confirm delete, or use the confirm button" });
-      return;
+      return `I found ${item.title || "that card"}. Confirm before I delete it.`;
     }
 
     if (command.type === "mark_sold") {
+      if (!item) {
+        const message = "Which card should I mark sold? Say the card name and sale price.";
+        setToast({ type: "error", message });
+        return message;
+      }
       if (item.status === "sold") {
         setToast({ type: "error", message: "This item is already marked sold" });
-        return;
+        return "That item is already marked sold.";
       }
       setPendingVoiceDeleteItem(null);
       setMarkSoldVoiceDefaults({
@@ -1187,14 +1200,19 @@ function LedgerPageContent() {
           ? "Voice sale draft ready"
           : "Voice sale draft opened. Add a sold price to record it.",
       });
-      return;
+      return command.salePriceCents
+        ? `I opened a sale draft for ${item.title || "that card"}. Review it, then record the sale.`
+        : `I opened a sale draft for ${item.title || "that card"}. Add the sale price, then record it.`;
     }
 
     router.push(
       `/business/consultant?prompt=${encodeURIComponent(
-        `For ${item.title || "this inventory item"}, ${command.transcript}`
+        item
+          ? `For ${item.title || "this inventory item"}, ${command.transcript}`
+          : command.transcript
       )}`
     );
+    return "I'll open that with the Business Consultant.";
   };
 
   const handleUpdateSale = async (
@@ -1593,9 +1611,6 @@ function LedgerPageContent() {
                       ebayConnected={ebayConnected}
                       onAddCard={openAddInventoryModal}
                       onConsultant={openConsultant}
-                      onVoiceCommand={(item, transcript) => {
-                        void handleInventoryVoiceCommand(item, transcript);
-                      }}
                     />
                   )}
 
@@ -1616,9 +1631,6 @@ function LedgerPageContent() {
                               onBulkAction={handleBulkAction}
                               onDelete={handleDelete}
                               onMarkSold={handleMarkSold}
-                              onVoiceCommand={(item, transcript) => {
-                                void handleInventoryVoiceCommand(item, transcript);
-                              }}
                               ebayConnected={ebayConnected}
                               ebayTopRated={ebayTopRated}
                               dense
@@ -1635,9 +1647,6 @@ function LedgerPageContent() {
                             onBulkAction={handleBulkAction}
                             onDelete={handleDelete}
                             onMarkSold={handleMarkSold}
-                            onVoiceCommand={(item, transcript) => {
-                              void handleInventoryVoiceCommand(item, transcript);
-                            }}
                             ebayConnected={ebayConnected}
                             ebayTopRated={ebayTopRated}
                             dense
@@ -1782,6 +1791,15 @@ function LedgerPageContent() {
         </div>
       </main>
 
+      <BusinessVoiceMode
+        businessName={businessName}
+        contextLabel={activeTab === "sales" ? "Sales ledger" : "Inventory ledger"}
+        items={items}
+        pendingDeleteItem={pendingVoiceDeleteItem}
+        onCommand={handleVoiceModeCommand}
+        onError={(message) => setToast({ type: "error", message })}
+      />
+
       {/* ── MODALS ────────────────────────────────────────────────────────── */}
 
       <AddInventoryModal
@@ -1887,16 +1905,6 @@ function LedgerPageContent() {
               >
                 Confirm Delete
               </button>
-              <MicButton
-                label="Confirm by voice"
-                title="Say confirm delete"
-                size="sm"
-                onResult={(text) => {
-                  void handleInventoryVoiceCommand(pendingVoiceDeleteItem, text);
-                }}
-                onError={(message) => setToast({ type: "error", message })}
-                className="w-full justify-center bg-gray-100 text-gray-700 hover:bg-gray-200"
-              />
             </div>
           </div>
         </div>

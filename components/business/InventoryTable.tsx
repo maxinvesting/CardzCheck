@@ -10,7 +10,6 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { TableVirtuoso } from "react-virtuoso";
-import { MicButton } from "@/components/ui/MicButton";
 import type { BusinessInventoryItem } from "@/types";
 import {
   setPerfInteraction,
@@ -92,7 +91,6 @@ interface Props {
   onBulkAction: (action: string, ids: string[], payload?: any) => void;
   onDelete: (ids: string[]) => void;
   onMarkSold?: (item: BusinessInventoryItem) => void;
-  onVoiceCommand?: (item: BusinessInventoryItem, transcript: string) => void;
   /** Called when filtered items change so parent can display filter-aware inventory value */
   onFilteredChange?: (filtered: BusinessInventoryItem[]) => void;
   /** Called when user wants to move item from inventory to personal collection */
@@ -226,7 +224,6 @@ export default function InventoryTable({
   onBulkAction,
   onDelete,
   onMarkSold,
-  onVoiceCommand,
   onFilteredChange,
   onToggleItemKind,
   dense = false,
@@ -617,14 +614,6 @@ export default function InventoryTable({
       });
       return (
         <div className="flex flex-col items-start gap-1">
-          {onVoiceCommand && (
-            <MicButton
-              size="sm"
-              title={`Voice actions for ${item.title || "inventory item"}`}
-              onResult={(text) => onVoiceCommand(item, text)}
-              className="bg-[var(--biz-surface-soft)] text-[var(--biz-muted)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]"
-            />
-          )}
           {isSold ? (
             <span className="text-[10px] text-[var(--biz-muted)]">Recorded</span>
           ) : (
@@ -851,16 +840,6 @@ export default function InventoryTable({
           </span>
           {item.channel && channelBadge(item.channel, item)}
           <div className="ml-auto flex items-center gap-1.5">
-            {onVoiceCommand && (
-              <div onClick={(e) => e.stopPropagation()}>
-                <MicButton
-                  size="sm"
-                  title={`Voice actions for ${titleStr || "inventory item"}`}
-                  onResult={(text) => onVoiceCommand(item, text)}
-                  className="bg-[var(--biz-surface-soft)] text-[var(--biz-muted)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]"
-                />
-              </div>
-            )}
             {onToggleItemKind && (
               <button
                 type="button"

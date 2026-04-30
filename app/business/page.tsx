@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import BusinessPaywall from "@/components/business/BusinessPaywall";
 import BusinessDashboardView from "@/components/business/BusinessDashboardView";
+import BusinessVoiceMode from "@/components/business/BusinessVoiceMode";
 import SaleFormModal from "@/components/business/SaleFormModal";
-import { MicButton } from "@/components/ui/MicButton";
 import { createClient } from "@/lib/supabase/client";
 import type {
   BusinessInventoryItem,
@@ -20,7 +20,7 @@ import {
 } from "@/lib/business/inventory-value";
 import { normalizeEbayStoreUrl, buildEbayStoreHref } from "@/lib/ebay-store-url";
 import {
-  parseInventoryVoiceCommand,
+  type InventoryVoiceCommand,
   type VoiceSalesChannel,
 } from "@/lib/voice-commands";
 
@@ -338,70 +338,54 @@ function BusinessDashboardContent() {
     [loadMetrics, loadRecentSales]
   );
 
-  const handleDashboardVoiceCommand = useCallback(
-    (transcript: string) => {
-      const command = parseInventoryVoiceCommand(transcript);
+  const handleVoiceModeCommand = useCallback(
+    async ({
+      command,
+      item,
+    }: {
+      transcript: string;
+      command: InventoryVoiceCommand;
+      item: BusinessInventoryItem | null;
+    }) => {
       if (command.type === "cancel") {
         setPendingVoiceDeleteItem(null);
         setMarkSoldItem(null);
         setMarkSoldVoiceDefaults(null);
         setToast({ type: "success", message: "Voice action canceled" });
-        return;
+        return "Canceled.";
       }
       if (command.type === "confirm") {
         if (!pendingVoiceDeleteItem) {
           setToast({ type: "error", message: "No voice action is waiting for confirmation" });
-          return;
-        }
-        const item = pendingVoiceDeleteItem;
-        setPendingVoiceDeleteItem(null);
-        void deleteInventoryItem(item);
-        return;
-      }
-      if (command.type === "delete_card" || command.type === "mark_sold") {
-        setToast({ type: "error", message: "Use the mic beside a card for card actions" });
-        return;
-      }
-      router.push(`/business/consultant?prompt=${encodeURIComponent(command.transcript)}`);
-    },
-    [deleteInventoryItem, pendingVoiceDeleteItem, router]
-  );
-
-  const handleItemVoiceCommand = useCallback(
-    (item: BusinessInventoryItem, transcript: string) => {
-      const command = parseInventoryVoiceCommand(transcript);
-
-      if (command.type === "cancel") {
-        setPendingVoiceDeleteItem(null);
-        setMarkSoldItem(null);
-        setMarkSoldVoiceDefaults(null);
-        setToast({ type: "success", message: "Voice action canceled" });
-        return;
-      }
-
-      if (command.type === "confirm") {
-        if (!pendingVoiceDeleteItem) {
-          setToast({ type: "error", message: "No voice action is waiting for confirmation" });
-          return;
+          return "Nothing is waiting for confirmation.";
         }
         const itemToDelete = pendingVoiceDeleteItem;
         setPendingVoiceDeleteItem(null);
-        void deleteInventoryItem(itemToDelete);
-        return;
+        await deleteInventoryItem(itemToDelete);
+        return `Deleted ${itemToDelete.title || "that card"}.`;
       }
-
       if (command.type === "delete_card") {
+        if (!item) {
+          const message = "Which card should I delete? Say delete plus the card name.";
+          setToast({ type: "error", message });
+          return message;
+        }
         setMarkSoldItem(null);
         setMarkSoldVoiceDefaults(null);
         setPendingVoiceDeleteItem(item);
         setToast({ type: "success", message: "Say confirm delete, or use the confirm button" });
-        return;
+        return `I found ${item.title || "that card"}. Confirm before I delete it.`;
       }
 
       if (command.type === "mark_sold") {
+        if (!item) {
+          const message = "Which card should I mark sold? Say the card name and sale price.";
+          setToast({ type: "error", message });
+          return message;
+        }
         if (item.status === "sold") {
           setToast({ type: "error", message: "This item is already marked sold" });
-          return;
+          return "That item is already marked sold.";
         }
         setPendingVoiceDeleteItem(null);
         setMarkSoldVoiceDefaults({
@@ -418,14 +402,19 @@ function BusinessDashboardContent() {
             ? "Voice sale draft ready"
             : "Voice sale draft opened. Add a sold price to record it.",
         });
-        return;
+        return command.salePriceCents
+          ? `I opened a sale draft for ${item.title || "that card"}. Review it, then record the sale.`
+          : `I opened a sale draft for ${item.title || "that card"}. Add the sale price, then record it.`;
       }
 
       router.push(
         `/business/consultant?prompt=${encodeURIComponent(
-          `For ${item.title || "this inventory item"}, ${command.transcript}`
+          item
+            ? `For ${item.title || "this inventory item"}, ${command.transcript}`
+            : command.transcript
         )}`
       );
+      return "I'll open that with the Business Consultant.";
     },
     [deleteInventoryItem, pendingVoiceDeleteItem, router]
   );
@@ -475,8 +464,14 @@ function BusinessDashboardContent() {
           ebayStoreHref={ebayStoreHref}
           needsMigration={needsMigration}
           storefronts={storefronts}
-          onDashboardVoiceCommand={handleDashboardVoiceCommand}
-          onItemVoiceCommand={handleItemVoiceCommand}
+        />
+        <BusinessVoiceMode
+          businessName={businessName}
+          contextLabel="Business dashboard"
+          items={items}
+          pendingDeleteItem={pendingVoiceDeleteItem}
+          onCommand={handleVoiceModeCommand}
+          onError={(message) => setToast({ type: "error", message })}
         />
         <SaleFormModal
           isOpen={Boolean(markSoldItem)}
@@ -534,14 +529,6 @@ function BusinessDashboardContent() {
                 >
                   Confirm Delete
                 </button>
-                <MicButton
-                  label="Confirm by voice"
-                  title="Say confirm delete"
-                  size="sm"
-                  onResult={handleDashboardVoiceCommand}
-                  onError={(message) => setToast({ type: "error", message })}
-                  className="w-full justify-center bg-gray-100 text-gray-700 hover:bg-gray-200"
-                />
               </div>
             </div>
           </div>

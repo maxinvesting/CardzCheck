@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import BusinessMetrics from "@/components/business/BusinessMetrics";
-import { MicButton } from "@/components/ui/MicButton";
 import { Surface } from "@/components/ui/Surface";
 import type {
   BusinessInventoryItem,
@@ -120,8 +119,6 @@ interface Props {
   ebayStoreHref: string | null;
   needsMigration: boolean;
   storefronts?: UserStorefront[];
-  onDashboardVoiceCommand?: (transcript: string) => void;
-  onItemVoiceCommand?: (item: BusinessInventoryItem, transcript: string) => void;
 }
 
 function SkeletonLine({ w = "w-full" }: { w?: string }) {
@@ -139,8 +136,6 @@ export default function BusinessDashboardView({
   ebayStoreHref,
   needsMigration,
   storefronts = [],
-  onDashboardVoiceCommand,
-  onItemVoiceCommand,
 }: Props) {
   const [showStorefrontDropdown, setShowStorefrontDropdown] = useState(false);
 
@@ -398,15 +393,6 @@ export default function BusinessDashboardView({
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5">
-          {onDashboardVoiceCommand && (
-            <MicButton
-              label="Ask by Voice"
-              title="Ask the Business Consultant by voice"
-              size="sm"
-              onResult={onDashboardVoiceCommand}
-              className="cc-btn-secondary whitespace-nowrap rounded-lg text-xs font-medium"
-            />
-          )}
           {hasStorefronts ? (
             storefronts.length > 1 ? (
               <div className="relative">
@@ -548,19 +534,9 @@ export default function BusinessDashboardView({
                       >
                         {clipTitle(item.title, 42)}
                       </Link>
-                      <div className="flex shrink-0 items-center gap-1.5">
-                        {onItemVoiceCommand && (
-                          <MicButton
-                            size="sm"
-                            title={`Voice actions for ${item.title || "inventory item"}`}
-                            onResult={(text) => onItemVoiceCommand(item, text)}
-                            className="bg-[var(--biz-surface-soft)] text-[var(--biz-muted)] hover:bg-[var(--biz-hover)]"
-                          />
-                        )}
-                        <span className="text-xs font-semibold tabular-nums text-[var(--biz-primary)]">
-                          {fmt(item.current_market_value_cents!)}
-                        </span>
-                      </div>
+                      <span className="shrink-0 text-xs font-semibold tabular-nums text-[var(--biz-primary)]">
+                        {fmt(item.current_market_value_cents!)}
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -779,19 +755,9 @@ export default function BusinessDashboardView({
                           {item.title}
                         </Link>
                       </div>
-                      <div className="flex shrink-0 items-center gap-1.5">
-                        {onItemVoiceCommand && (
-                          <MicButton
-                            size="sm"
-                            title={`Voice actions for ${item.title || "inventory item"}`}
-                            onResult={(text) => onItemVoiceCommand(item, text)}
-                            className="bg-[var(--biz-surface-soft)] text-[var(--biz-muted)] hover:bg-[var(--biz-hover)]"
-                          />
-                        )}
-                        <span className="text-[10px] text-[var(--biz-muted)] tabular-nums">
-                          {fmtDate(item.created_at)}
-                        </span>
-                      </div>
+                      <span className="shrink-0 text-[10px] text-[var(--biz-muted)] tabular-nums">
+                        {fmtDate(item.created_at)}
+                      </span>
                     </li>
                   ))}
                 </ul>

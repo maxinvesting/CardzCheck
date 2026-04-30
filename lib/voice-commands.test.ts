@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  findInventoryVoiceTarget,
   parseInventoryVoiceCommand,
   parseVoiceSalePrice,
   parseVoiceSalesChannel,
@@ -81,5 +82,26 @@ describe("voice command helpers", () => {
     expect(parseVoiceSoldDate("sold yesterday", { referenceDate })).toBe("2026-04-27");
     expect(parseVoiceSoldDate("sold on March 21", { referenceDate })).toBe("2026-03-21");
     expect(parseVoiceSoldDate("sold 2026-04-20", { referenceDate })).toBe("2026-04-20");
+  });
+
+  it("matches a named inventory target from natural speech", () => {
+    const items = [
+      { id: "1", title: "2024 Jayden Daniels Topps Finest Rookie Auto 9.5" },
+      { id: "2", title: "2023 CJ Stroud Topps Composite Chrome" },
+    ];
+
+    expect(
+      findInventoryVoiceTarget("mark Jayden Daniels sold for 25 dollars on eBay", items)
+    )?.toEqual(items[0]);
+    expect(findInventoryVoiceTarget("delete CJ Stroud", items))?.toEqual(items[1]);
+  });
+
+  it("does not guess when multiple targets are tied", () => {
+    const items = [
+      { id: "1", title: "2024 Jayden Daniels Topps Finest" },
+      { id: "2", title: "2024 Jayden Daniels Panini Prizm" },
+    ];
+
+    expect(findInventoryVoiceTarget("delete Jayden Daniels", items)).toBeNull();
   });
 });
