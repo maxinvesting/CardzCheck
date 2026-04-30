@@ -4,8 +4,8 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useParams, usePathname, useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { CardImage as TrustedCardImageFrame } from "@/components/CardImage";
+import BusinessVoiceMode from "@/components/business/BusinessVoiceMode";
 import BusinessInventoryItemEditor from "@/components/business/BusinessInventoryItemEditor";
-import { MicButton } from "@/components/ui/MicButton";
 import {
   buildCertPageUrl,
   getItemCertGrader,
@@ -20,7 +20,7 @@ import {
 import type { BusinessInventoryItem, CardImage, TrustedCardImage } from "@/types";
 import {
   centsToVoiceInputValue,
-  parseInventoryVoiceCommand,
+  type InventoryVoiceCommand,
   type VoiceSalesChannel,
 } from "@/lib/voice-commands";
 import { buildEbaySoldUrl } from "@/lib/ebay/comps-url";
@@ -677,38 +677,43 @@ export default function CardProfilePage() {
   };
 
   const handleCardVoiceCommand = useCallback(
-    async (transcript: string) => {
+    async ({
+      command,
+    }: {
+      transcript: string;
+      command: InventoryVoiceCommand;
+      item: BusinessInventoryItem | null;
+    }) => {
       if (!item || !isBusinessMode) return;
-      const command = parseInventoryVoiceCommand(transcript);
 
       if (command.type === "cancel") {
         setPendingVoiceDelete(false);
         setShowSoldModal(false);
         setToast({ type: "success", message: "Voice action canceled" });
-        return;
+        return "Canceled.";
       }
 
       if (command.type === "confirm") {
         if (pendingVoiceDelete) {
           setPendingVoiceDelete(false);
           await performDeleteBusinessInventoryItem();
-          return;
+          return `Deleted ${displayTitle(item)}.`;
         }
         setToast({ type: "error", message: "No voice action is waiting for confirmation" });
-        return;
+        return "Nothing is waiting for confirmation.";
       }
 
       if (command.type === "delete_card") {
         setPendingVoiceDelete(true);
         setShowSoldModal(false);
         setToast({ type: "success", message: "Say confirm delete, or use the confirm button" });
-        return;
+        return `I found ${displayTitle(item)}. Confirm before I delete it.`;
       }
 
       if (command.type === "mark_sold") {
         if (item.status === "sold") {
           setToast({ type: "error", message: "This card is already marked sold" });
-          return;
+          return "That card is already marked sold.";
         }
         setPendingVoiceDelete(false);
         setSoldForm({
@@ -723,13 +728,16 @@ export default function CardProfilePage() {
             ? "Voice sale draft ready"
             : "Voice sale draft opened. Add a sold price to record it.",
         });
-        return;
+        return command.salePriceCents
+          ? `I opened a sale draft for ${displayTitle(item)}. Review it, then record the sale.`
+          : `I opened a sale draft for ${displayTitle(item)}. Add the sale price, then record it.`;
       }
 
       const title = displayTitle(item);
       router.push(
         `/business/consultant?prompt=${encodeURIComponent(`For ${title}, ${command.transcript}`)}`
       );
+      return "I'll open that with the Business Consultant.";
     },
     [isBusinessMode, item, pendingVoiceDelete, performDeleteBusinessInventoryItem, router]
   );
@@ -1103,15 +1111,6 @@ export default function CardProfilePage() {
                   >
                     Edit Inventory
                   </button>
-                )}
-                {isBusinessMode && (
-                  <MicButton
-                    label="Voice Actions"
-                    title="Voice actions for this card"
-                    onResult={(text) => void handleCardVoiceCommand(text)}
-                    onError={(message) => setToast({ type: "error", message })}
-                    className="h-[46px] rounded-xl border border-[#DCE9E1] bg-white text-[#2A312D] hover:bg-gray-50"
-                  />
                 )}
                 <div className="relative" ref={overflowRef}>
                   <button
@@ -1564,6 +1563,18 @@ export default function CardProfilePage() {
         </div>
       )}
 
+      {isBusinessMode && businessItemForEditor && (
+        <BusinessVoiceMode
+          businessName="CardzCheck Business"
+          contextLabel="Card detail"
+          items={[businessItemForEditor]}
+          currentItem={businessItemForEditor}
+          pendingDeleteItem={pendingVoiceDelete ? businessItemForEditor : null}
+          onCommand={handleCardVoiceCommand}
+          onError={(message) => setToast({ type: "error", message })}
+        />
+      )}
+
       {pendingVoiceDelete && item && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-gray-900 shadow-2xl">
@@ -1592,14 +1603,6 @@ export default function CardProfilePage() {
               >
                 Confirm Delete
               </button>
-              <MicButton
-                label="Confirm by voice"
-                title="Say confirm delete"
-                size="sm"
-                onResult={(text) => void handleCardVoiceCommand(text)}
-                onError={(message) => setToast({ type: "error", message })}
-                className="w-full justify-center bg-gray-100 text-gray-700 hover:bg-gray-200"
-              />
             </div>
           </div>
         </div>

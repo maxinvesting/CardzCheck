@@ -19,6 +19,17 @@ export type InventoryVoiceCommand =
   | { type: "cancel"; transcript: string }
   | { type: "unknown"; transcript: string };
 
+export type VoiceTargetCandidate = {
+  id: string;
+  title?: string | null;
+  player_name?: string | null;
+  year?: string | null;
+  set_name?: string | null;
+  grade?: string | null;
+  grading_company?: string | null;
+  cert_number?: string | null;
+};
+
 interface ParseOptions {
   referenceDate?: Date;
 }
@@ -265,4 +276,98 @@ export function parseInventoryVoiceCommand(
 export function centsToVoiceInputValue(cents: number | null): string {
   if (cents == null) return "";
   return (cents / 100).toFixed(2);
+}
+
+const TARGET_STOP_WORDS = new Set([
+  "a",
+  "an",
+  "and",
+  "as",
+  "at",
+  "card",
+  "confirm",
+  "delete",
+  "dollar",
+  "dollars",
+  "for",
+  "from",
+  "it",
+  "local",
+  "mark",
+  "on",
+  "sale",
+  "sold",
+  "the",
+  "this",
+  "to",
+  "with",
+]);
+
+function normalizeVoiceTargetText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function tokenizeVoiceTarget(value: string): string[] {
+  return normalizeVoiceTargetText(value)
+    .split(" ")
+    .filter((token) => token.length > 1 && !TARGET_STOP_WORDS.has(token));
+}
+
+export function findInventoryVoiceTarget<T extends VoiceTargetCandidate>(
+  transcript: string,
+  candidates: T[],
+  preferred?: T | null
+): T | null {
+  if (preferred) return preferred;
+
+  const normalizedTranscript = normalizeVoiceTargetText(transcript);
+  const transcriptTokens = new Set(tokenizeVoiceTarget(transcript));
+  if (!normalizedTranscript || transcriptTokens.size === 0) return null;
+
+  let best: { item: T; score: number } | null = null;
+  let tied = false;
+
+  for (const item of candidates) {
+    const searchable = [
+      item.title,
+      item.player_name,
+      item.year,
+      item.set_name,
+      item.grade,
+      item.grading_company,
+      item.cert_number,
+    ]
+      .filter(Boolean)
+      .join(" ");
+    const normalizedItem = normalizeVoiceTargetText(searchable);
+    if (!normalizedItem) continue;
+
+    const uniqueItemTokens = Array.from(new Set(tokenizeVoiceTarget(searchable)));
+    let score = 0;
+
+    if (normalizedTranscript.includes(normalizedItem)) {
+      score += 20;
+    }
+
+    for (const token of uniqueItemTokens) {
+      if (transcriptTokens.has(token)) {
+        score += /\d/.test(token) ? 1 : 2;
+      }
+    }
+
+    if (score < 4) continue;
+
+    if (!best || score > best.score) {
+      best = { item, score };
+      tied = false;
+    } else if (score === best.score) {
+      tied = true;
+    }
+  }
+
+  return best && !tied ? best.item : null;
 }

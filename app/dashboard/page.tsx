@@ -8,8 +8,8 @@ import CompactTopPerformers from "@/components/dashboard/CompactTopPerformers";
 import CompactQuickActions from "@/components/dashboard/CompactQuickActions";
 import ActivityFeed from "@/components/dashboard/ActivityFeed";
 import LoyaltyPerksWidget from "@/components/dashboard/LoyaltyPerksWidget";
+import BusinessVoiceMode from "@/components/business/BusinessVoiceMode";
 import { Surface } from "@/components/ui/Surface";
-import { MicButton } from "@/components/ui/MicButton";
 import AddCardModalNew from "@/components/AddCardModalNew";
 import PaywallModal from "@/components/PaywallModal";
 import { createClient } from "@/lib/supabase/client";
@@ -158,17 +158,22 @@ export default function DashboardPage() {
               Overview of your collection value and recent activity.
             </p>
           </div>
-          <MicButton
-            label="Ask by Voice"
-            title="Ask CardzCheck Analyst by voice"
-            size="sm"
-            onResult={(text) => {
-              router.push(`/analyst?prompt=${encodeURIComponent(text)}`);
-            }}
-            onError={(message) => setToast({ type: "error", message })}
-            className="border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] text-[var(--biz-text)] hover:bg-[var(--biz-hover)]"
-          />
         </header>
+        <BusinessVoiceMode
+          businessName="CardzCheck Analyst"
+          contextLabel="Collection dashboard"
+          operatorLabel="Collection Analyst"
+          examples={[
+            "What changed in my collection?",
+            "Which cards should I watch?",
+            "What should I add next?",
+          ]}
+          onCommand={({ transcript }) => {
+            router.push(`/analyst?prompt=${encodeURIComponent(transcript)}`);
+            return "I'll open that with the CardzCheck Analyst.";
+          }}
+          onError={(message) => setToast({ type: "error", message })}
+        />
 
         {/* Metrics band */}
         <section className="mb-6">
