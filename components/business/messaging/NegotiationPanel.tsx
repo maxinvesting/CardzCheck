@@ -41,7 +41,7 @@ export default function NegotiationPanel({
   }
 
   return (
-    <div className="border-b border-[var(--biz-border)] bg-[#F8FBF9] px-5 py-3.5">
+    <div className="border-b border-[var(--biz-border)] bg-[var(--biz-surface)] px-5 py-3.5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--biz-muted)]">
@@ -55,7 +55,7 @@ export default function NegotiationPanel({
           </p>
         </div>
         {thread.fee_percent != null ? (
-          <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+          <span className="rounded-full border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--biz-muted)]">
             Fees {thread.fee_percent}%
           </span>
         ) : null}
@@ -65,7 +65,7 @@ export default function NegotiationPanel({
         {metrics.map((metric) => (
           <div
             key={metric.label}
-            className="rounded-2xl border border-[var(--biz-border)] bg-white px-3 py-2.5"
+            className="rounded-2xl border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-3 py-2.5"
           >
             <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--biz-muted)]">
               {metric.label}

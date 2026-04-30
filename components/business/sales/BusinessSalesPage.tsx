@@ -216,7 +216,7 @@ export default function BusinessSalesPage() {
 
   return (
     <AuthenticatedLayout>
-      <main className="mx-auto max-w-7xl px-4 py-4">
+      <main className="sales-mono-theme flex h-screen flex-col overflow-hidden">
         <BusinessMessagesView
           initialStats={stats}
           initialThreads={threads}

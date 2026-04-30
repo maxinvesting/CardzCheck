@@ -145,8 +145,8 @@ export default function ConversationView({
   }
 
   return (
-    <div className="flex h-full flex-col bg-[#FCFDFC]">
-      <div className="border-b border-[var(--biz-border)] bg-[linear-gradient(135deg,#ffffff_0%,#f5fbf7_65%,#eef8fb_100%)] px-5 py-3.5">
+    <div className="flex h-full flex-col bg-[var(--biz-bg)]">
+      <div className="border-b border-[var(--biz-border)] bg-[var(--biz-surface)] px-5 py-3.5">
         <div className="flex items-start gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] text-sm font-semibold text-[var(--biz-primary)]">
             {getAvatarLabel(thread)}
@@ -165,7 +165,7 @@ export default function ConversationView({
               <PlatformChip platform={thread.platform} />
               <StatusChip status={thread.status} />
               {thread.unread_count > 0 ? (
-                <span className="rounded-full bg-[#FEF3C7] px-2 py-0.5 text-[10px] font-semibold text-[#B45309]">
+                <span className="rounded-full bg-amber-900/30 px-2 py-0.5 text-[10px] font-semibold text-amber-400">
                   {thread.unread_count} unread
                 </span>
               ) : null}
@@ -192,7 +192,7 @@ export default function ConversationView({
             type="button"
             onClick={() => onUpdateThreadStatus(thread.id, "resolved")}
             style={{ flexShrink: 0 }}
-            className="ml-auto self-start rounded-xl border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] px-3 py-1.5 text-[12px] font-semibold text-[var(--biz-primary)] transition-colors hover:bg-[var(--biz-primary-soft-strong)]"
+            className="ml-auto self-start rounded-xl border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-3 py-1.5 text-[12px] font-semibold text-[var(--biz-text)] transition-colors hover:bg-[var(--biz-hover)]"
           >
             Resolve
           </button>
@@ -205,7 +205,7 @@ export default function ConversationView({
         recommendation={recommendation}
       />
 
-      <div className="flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top_left,#effaf4_0%,#ffffff_38%)] px-5 py-4">
+      <div className="flex-1 overflow-y-auto bg-[var(--biz-bg)] px-5 py-4">
         <div className="mx-auto flex max-w-3xl flex-col gap-4">
           {messages.map((message) => {
             const isOutbound = message.direction === "outbound";
@@ -215,10 +215,10 @@ export default function ConversationView({
                 className={`flex ${isOutbound ? "justify-end" : "justify-start"}`}
               >
                 <div
-                  className={`max-w-[82%] rounded-[22px] px-4 py-3 shadow-[0_12px_30px_rgba(15,23,42,0.06)] ${
+                  className={`max-w-[82%] rounded-[22px] px-4 py-3 shadow-[0_4px_16px_rgba(0,0,0,0.4)] ${
                     isOutbound
                       ? "border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] text-[var(--biz-text)]"
-                      : "border border-[var(--biz-border)] bg-white text-[var(--biz-text)]"
+                      : "border border-[var(--biz-border)] bg-[var(--biz-surface)] text-[var(--biz-text)]"
                   }`}
                 >
                   <div className="mb-1.5 flex flex-wrap items-center gap-2 text-[10px]">
@@ -241,7 +241,7 @@ export default function ConversationView({
         </div>
       </div>
 
-      <div className="border-t border-[var(--biz-border)] bg-white px-5 py-3">
+      <div className="border-t border-[var(--biz-border)] bg-[var(--biz-surface)] px-5 py-3">
         <AIActionsPanel
           context={replyContext}
           recommendation={recommendation}
@@ -264,7 +264,7 @@ export default function ConversationView({
 
 function PlatformChip({ platform }: { platform: MessageThread["platform"] }) {
   return (
-    <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+    <span className="rounded-full border border-[var(--biz-border)] bg-[var(--biz-surface)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--biz-muted)]">
       {platform === "ebay" ? "eBay" : platform}
     </span>
   );

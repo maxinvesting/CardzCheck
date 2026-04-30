@@ -427,7 +427,8 @@ export default function BusinessMessagesView({
     businessName?.trim() || "your shop";
 
   return (
-    <div className="space-y-5">
+    <div className="flex h-full flex-col gap-4 overflow-hidden px-4 py-4">
+      <div className="shrink-0">
       <SalesBriefingCard
         narrative={briefingNarrative}
         chips={localChips}
@@ -439,10 +440,13 @@ export default function BusinessMessagesView({
         onRefresh={refreshThreadList}
         refreshing={listRefreshing || briefingLoading}
       />
+      </div>
 
-      <SalesPulseStrip snapshot={pulseSnapshot} />
+      <div className="shrink-0">
+        <SalesPulseStrip snapshot={pulseSnapshot} />
+      </div>
 
-      <div className="rounded-2xl border border-[var(--biz-border)] bg-[linear-gradient(135deg,#ffffff_0%,#f9fcfa_100%)] px-4 py-3 shadow-sm">
+      <div className="shrink-0 rounded-2xl border border-[var(--biz-border)] bg-[var(--biz-surface)] px-4 py-3">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--biz-muted)]">
@@ -460,14 +464,14 @@ export default function BusinessMessagesView({
             </p>
           </div>
           {syncRetriedAfterEmpty ? (
-            <div className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px] font-medium text-amber-800">
+            <div className="rounded-full border border-amber-700/40 bg-amber-900/25 px-3 py-1.5 text-[11px] font-medium text-amber-400">
               Inbox sync retried automatically. Refresh if something still looks off.
             </div>
           ) : null}
         </div>
       </div>
 
-      <div className="rounded-2xl border border-[var(--biz-border)] bg-white px-4 py-3 shadow-sm">
+      <div className="shrink-0 rounded-2xl border border-[var(--biz-border)] bg-[var(--biz-surface)] px-4 py-3">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative min-w-[220px] flex-1">
             <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--biz-muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -477,13 +481,13 @@ export default function BusinessMessagesView({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search buyers, cards, or recent messages"
-              className="w-full rounded-lg border border-[var(--biz-border)] bg-[#FCFCFC] py-2 pl-9 pr-3 text-sm text-[var(--biz-text)] placeholder-[var(--biz-muted)] focus:border-[var(--biz-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--biz-primary)]"
+              className="w-full rounded-lg border border-[var(--biz-border)] bg-[var(--biz-bg)] py-2 pl-9 pr-3 text-sm text-[var(--biz-text)] placeholder-[var(--biz-muted)] focus:border-[var(--biz-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--biz-primary)]"
             />
           </div>
           <select
             value={sortMode}
             onChange={(e) => setSortMode(e.target.value as SortMode)}
-            className="rounded-lg border border-[var(--biz-border)] bg-white px-3 py-2 text-sm text-[var(--biz-text)] focus:border-[var(--biz-primary)] focus:outline-none"
+            className="rounded-lg border border-[var(--biz-border)] bg-[var(--biz-bg)] px-3 py-2 text-sm text-[var(--biz-text)] focus:border-[var(--biz-primary)] focus:outline-none"
           >
             <option value="newest">Sort: Newest activity</option>
             <option value="oldest">Sort: Oldest activity</option>
@@ -503,13 +507,10 @@ export default function BusinessMessagesView({
         </div>
       </div>
 
-      <div
-        className="overflow-hidden rounded-[28px] border border-[var(--biz-border)] bg-white shadow-[0_24px_70px_rgba(15,23,42,0.08)]"
-        style={{ height: "calc(100vh - 510px)", minHeight: "620px" }}
-      >
-        <div className="flex h-full">
+      <div className="flex min-h-0 flex-1 overflow-hidden rounded-[28px] border border-[var(--biz-border)] bg-[var(--biz-bg)]">
+        <div className="flex h-full w-full">
           <div
-            className={`h-full w-full border-r border-[var(--biz-border)] bg-[#FBFCFD] lg:w-[360px] lg:block ${
+            className={`h-full w-full border-r border-[var(--biz-border)] bg-[var(--biz-surface)] lg:w-[360px] lg:block ${
               mobileShowThread ? "hidden" : "block"
             }`}
           >
@@ -530,7 +531,7 @@ export default function BusinessMessagesView({
             }`}
           >
             {threadLoading ? (
-              <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_top,#effaf4_0%,#ffffff_45%)]">
+              <div className="flex h-full items-center justify-center bg-[var(--biz-bg)]">
                 <div className="text-center">
                   <svg className="mx-auto h-6 w-6 animate-spin text-[var(--biz-muted)]" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -568,7 +569,7 @@ export default function BusinessMessagesView({
                 />
               </>
             ) : (
-              <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_top,#effaf4_0%,#ffffff_46%)] px-6">
+              <div className="flex h-full items-center justify-center bg-[var(--biz-bg)] px-6">
                 <div className="max-w-sm text-center">
                   <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] text-[var(--biz-primary)]">
                     <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
