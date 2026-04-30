@@ -74,7 +74,7 @@ export default function AIActionsPanel({
   const canSend = Boolean(replyText.trim()) && !sendLoading;
 
   return (
-    <div className="rounded-[20px] border border-[var(--biz-border)] bg-[#FCFDFC] p-3 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
+    <div className="rounded-[20px] border border-[var(--biz-border)] bg-[var(--biz-surface)] p-3 shadow-[0_10px_24px_rgba(0,0,0,0.4)]">
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
         <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--biz-muted)]">
           Suggested reply
@@ -102,8 +102,8 @@ export default function AIActionsPanel({
           const styleClasses = isRecommended
             ? "border-[var(--biz-primary)] text-[var(--biz-primary)] bg-[var(--biz-primary-soft)] hover:bg-[var(--biz-primary-soft-strong)]"
             : isSelected
-              ? "border-[var(--biz-text)]/40 bg-white text-[var(--biz-text)]"
-              : "border-[var(--biz-border)] bg-white text-[var(--biz-muted)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]";
+              ? "border-[var(--biz-primary-border)] bg-[var(--biz-surface-soft)] text-[var(--biz-text)]"
+              : "border-[var(--biz-border)] bg-[var(--biz-surface-soft)] text-[var(--biz-muted)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]";
           return (
             <button
               key={action.id}
@@ -125,7 +125,7 @@ export default function AIActionsPanel({
         </div>
       ) : null}
 
-      <div className="mt-3 rounded-[16px] border border-[var(--biz-border)] bg-white">
+      <div className="mt-3 rounded-[16px] border border-[var(--biz-border)] bg-[var(--biz-surface-soft)]">
         <textarea
           value={replyText}
           onChange={(event) => onReplyTextChange(event.target.value)}

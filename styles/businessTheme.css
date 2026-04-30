@@ -176,3 +176,26 @@
 .business-workspace-theme .focus\:ring-green-500:focus {
   --tw-ring-color: var(--biz-focus) !important;
 }
+
+.sales-mono-theme {
+  --biz-bg: #000000;
+  --biz-surface: #0d0d0d;
+  --biz-surface-soft: #111111;
+  --biz-border: #252525;
+  --biz-border-subtle: #1a1a1a;
+  --biz-text: #f0f0f0;
+  --biz-muted: #808080;
+  --biz-hover: #1a1a1a;
+  --biz-skeleton: #1e1e1e;
+  --biz-primary: #ffffff;
+  --biz-primary-hover: #e0e0e0;
+  --biz-primary-soft: rgba(255, 255, 255, 0.07);
+  --biz-primary-soft-strong: rgba(255, 255, 255, 0.13);
+  --biz-primary-border: rgba(255, 255, 255, 0.16);
+  --biz-primary-foreground: #000000;
+  --biz-focus: rgba(255, 255, 255, 0.2);
+  --biz-link: #d0d0d0;
+  --biz-warning: #f59e0b;
+  background-image: none;
+  background: #000000;
+}

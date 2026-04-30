@@ -50,8 +50,8 @@ export default function ThreadList({
   onTogglePin,
 }: Props) {
   return (
-    <div className="flex h-full flex-col bg-[#FBFCFD]">
-      <div className="border-b border-[var(--biz-border)] bg-white px-3 py-3">
+    <div className="flex h-full flex-col bg-[var(--biz-surface)]">
+      <div className="border-b border-[var(--biz-border)] bg-[var(--biz-bg)] px-3 py-3">
         <div className="flex gap-1 overflow-x-auto">
           {FILTER_TABS.map((tab) => (
             <button
@@ -89,12 +89,12 @@ export default function ThreadList({
                 onClick={() => onSelectThread(thread.id)}
                 className={`w-full border-b border-[var(--biz-border)] px-4 py-3 text-left transition-all ${
                   isSelected
-                    ? "bg-[linear-gradient(135deg,#eefaf4_0%,#ffffff_72%)] shadow-[inset_3px_0_0_0_var(--biz-primary)]"
-                    : "bg-transparent hover:bg-white"
+                    ? "bg-[var(--biz-hover)] shadow-[inset_3px_0_0_0_var(--biz-primary)]"
+                    : "bg-transparent hover:bg-[var(--biz-surface-soft)]"
                 }`}
               >
                 <div className="flex items-start gap-3">
-                  <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-xs font-semibold text-slate-600">
+                  <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-[var(--biz-border)] bg-[var(--biz-surface)] text-xs font-semibold text-[var(--biz-muted)]">
                     {(thread.buyer_display_name ?? thread.buyer_username).slice(0, 1).toUpperCase()}
                   </div>
 
@@ -117,7 +117,7 @@ export default function ThreadList({
                             </span>
                           ) : null}
                           {isPinned ? (
-                            <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-amber-700">
+                            <span className="rounded-full border border-amber-700/40 bg-amber-900/25 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-amber-400">
                               Pinned
                             </span>
                           ) : null}
@@ -155,7 +155,7 @@ export default function ThreadList({
                           Offer {offerText}
                         </span>
                       ) : (
-                        <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-500">
+                        <span className="rounded-full border border-[var(--biz-border)] bg-[var(--biz-surface)] px-2 py-0.5 text-[10px] font-semibold text-[var(--biz-muted)]">
                           {thread.platform === "ebay" ? "eBay" : thread.platform}
                         </span>
                       )}
@@ -166,7 +166,7 @@ export default function ThreadList({
                             event.stopPropagation();
                             onTogglePin(thread.id);
                           }}
-                          className="rounded-full border border-[var(--biz-border)] bg-white px-2 py-0.5 text-[10px] font-semibold text-[var(--biz-muted)] transition-colors hover:bg-[var(--biz-hover)]"
+                          className="rounded-full border border-[var(--biz-border)] bg-[var(--biz-surface)] px-2 py-0.5 text-[10px] font-semibold text-[var(--biz-muted)] transition-colors hover:bg-[var(--biz-hover)]"
                         >
                           {isPinned ? "Unpin" : "Pin"}
                         </button>

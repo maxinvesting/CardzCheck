@@ -1,11 +1,11 @@
 import type { MessageThread, ThreadFilter } from "@/lib/messaging/types";
 
 export const SALES_STATUS_STYLES: Record<MessageThread["status"], string> = {
-  needs_response: "border-amber-200 bg-amber-50 text-amber-700",
-  open: "border-[var(--biz-secondary-border)] bg-[var(--biz-secondary-soft)] text-[var(--biz-secondary)]",
-  awaiting_buyer: "border-violet-200 bg-violet-50 text-violet-700",
-  resolved: "border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] text-[var(--biz-primary)]",
-  archived: "border-slate-200 bg-slate-100 text-slate-500",
+  needs_response: "border-amber-700/40 bg-amber-900/25 text-amber-400",
+  open: "border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] text-[var(--biz-primary)]",
+  awaiting_buyer: "border-violet-700/40 bg-violet-900/25 text-violet-400",
+  resolved: "border-[var(--biz-border)] bg-[var(--biz-surface-soft)] text-[var(--biz-muted)]",
+  archived: "border-[#222] bg-[#111] text-[#555]",
 };
 
 export const SALES_STATUS_LABELS: Record<MessageThread["status"], string> = {
