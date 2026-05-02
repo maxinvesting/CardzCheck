@@ -30,6 +30,12 @@ type BusinessInventoryRow = {
   business_account_id: string | null;
   item_kind: string | null;
   title: string;
+  player_name?: string | null;
+  year?: string | null;
+  set_name?: string | null;
+  insert_type?: string | null;
+  parallel_type?: string | null;
+  card_number?: string | null;
   quantity: number | null;
   acquisition_date: string | null;
   acquisition_type: string | null;
@@ -47,6 +53,15 @@ type BusinessInventoryRow = {
   status: string | null;
   list_price_cents: number | null;
   current_market_value_cents: number | null;
+  estimated_cmv?: number | null;
+  est_cmv?: number | null;
+  last_known_price_cents?: number | null;
+  last_price_cents?: number | null;
+  last_price?: number | null;
+  lowest_listing_cents?: number | null;
+  lowest_listing_price_cents?: number | null;
+  market_floor_cents?: number | null;
+  market_floor_price_cents?: number | null;
   image_url: string | null;
   image_source: "psa" | "bgs" | "sgc" | "cgc" | "user" | "none" | null;
   user_image_url: string | null;
@@ -197,6 +212,12 @@ function toBusinessInventoryItem(row: BusinessInventoryRow): BusinessInventoryIt
     business_account_id: row.business_account_id ?? row.user_id,
     card_id: row.id,
     title: row.title || "Untitled item",
+    player_name: row.player_name ?? null,
+    year: row.year ?? null,
+    set_name: row.set_name ?? null,
+    insert_type: row.insert_type ?? null,
+    parallel_type: row.parallel_type ?? null,
+    card_number: row.card_number ?? null,
     quantity: normalizeQuantity(row.quantity),
     acquisition_date: row.acquisition_date ?? null,
     acquisition_type: normalizeAcquisitionType(row.acquisition_type),
@@ -216,6 +237,15 @@ function toBusinessInventoryItem(row: BusinessInventoryRow): BusinessInventoryIt
     status: normalizeStatus(row.status),
     list_price_cents: row.list_price_cents ?? null,
     current_market_value_cents: row.current_market_value_cents ?? null,
+    estimated_cmv: row.estimated_cmv ?? null,
+    est_cmv: row.est_cmv ?? null,
+    last_known_price_cents: row.last_known_price_cents ?? null,
+    last_price_cents: row.last_price_cents ?? null,
+    last_price: row.last_price ?? null,
+    lowest_listing_cents: row.lowest_listing_cents ?? null,
+    lowest_listing_price_cents: row.lowest_listing_price_cents ?? null,
+    market_floor_cents: row.market_floor_cents ?? null,
+    market_floor_price_cents: row.market_floor_price_cents ?? null,
     image_url: row.image_url ?? null,
     image_source: row.image_source ?? "none",
     user_image_url: row.user_image_url ?? null,
@@ -237,6 +267,7 @@ function buildInventoryInsertPayload(
   >
 ): Record<string, unknown> {
   const title = item.title || "Untitled item";
+  const rawItem = item as Record<string, unknown>;
   const normalizedCert = normalizeCertWriteFields({
     grading_company: item.grading_company,
     cert_number: item.cert_number,
@@ -247,7 +278,12 @@ function buildInventoryInsertPayload(
     business_account_id: businessAccountId,
     item_kind: BUSINESS_ITEM_KIND,
     title,
-    player_name: (item as any).player_name || title,
+    player_name: rawItem.player_name || title,
+    year: rawItem.year || null,
+    set_name: rawItem.set_name || null,
+    insert_type: rawItem.insert_type || null,
+    parallel_type: rawItem.parallel_type || null,
+    card_number: rawItem.card_number || null,
     quantity: normalizeQuantity(item.quantity),
     acquisition_type: item.acquisition_type ?? "other",
     acquisition_date: normalizeAcquisitionDate(item.acquisition_date),

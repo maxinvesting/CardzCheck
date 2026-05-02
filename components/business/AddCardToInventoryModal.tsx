@@ -191,6 +191,11 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
         body: JSON.stringify({
           card_id: card.card_id ?? null,
           title,
+          player_name: card.player_name,
+          year: card.year ?? null,
+          set_name: card.set_name ?? null,
+          parallel_type: card.parallel_type ?? null,
+          card_number: card.card_number ?? null,
           quantity: parsedQuantity,
           acquisition_type: form.acquisition_type,
           acquisition_date: form.acquisition_date || null,

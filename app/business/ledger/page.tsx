@@ -1,1254 +1,217 @@
 "use client";
 
-import {
-  Suspense,
-  useState,
-  useEffect,
-  useCallback,
-  useMemo,
-  useRef,
-  Profiler,
-  type ProfilerOnRenderCallback,
-  startTransition,
-} from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import BusinessPaywall from "@/components/business/BusinessPaywall";
 import BusinessMigrationBanner from "@/components/business/BusinessMigrationBanner";
-import InventoryTable from "@/components/business/InventoryTable";
-import InventoryCardGrid from "@/components/business/InventoryCardGrid";
-import InventoryAgingStrip from "@/components/business/InventoryAgingStrip";
-import SalesTable, { type SalesFilters } from "@/components/business/SalesTable";
-import SaleFormModal from "@/components/business/SaleFormModal";
-import AddInventoryModal from "@/components/business/AddInventoryModal";
-import AddWaxModal from "@/components/business/AddWaxModal";
+import LedgerTable from "@/components/business/LedgerTable";
 import AddCardToInventoryModal from "@/components/business/AddCardToInventoryModal";
 import type { PendingInventoryCard } from "@/components/business/AddCardToInventoryModal";
 import AddCardModalNew from "@/components/AddCardModalNew";
 import CardPickerModal from "@/components/CardPickerModal";
 import type { CardPickerSelection } from "@/components/CardPicker";
-import { Surface } from "@/components/ui/Surface";
-import { MicButton } from "@/components/ui/MicButton";
 import { createClient } from "@/lib/supabase/client";
-import type {
-  BusinessInventoryItem,
-  BusinessMetrics as MetricsType,
-  BusinessSale,
-  EbayAccountStatus,
-  UserStorefront,
-} from "@/types";
-import type { StoreTier } from "@/lib/business/EbayProfitEngine";
-import { normalizeEbayStoreUrl, buildEbayStoreHref } from "@/lib/ebay-store-url";
-import { getDaysHeld, getAgingBucket, type AgingBucketKey } from "@/lib/business/inventory-display";
 import {
-  parseInventoryVoiceCommand,
-  type VoiceSalesChannel,
-} from "@/lib/voice-commands";
-import {
-  isPerfEnabled,
-  setPerfInteraction,
-  activatePerfBucket,
-  deactivatePerfBucket,
-  recordInventoryCommit,
-  markClickStart,
-  markClickEnd,
-  startEventLoopLagMonitor,
-  getPerfSnapshot,
-  perfLog,
-} from "@/lib/dev/perf";
+  computeLedgerSummary,
+  mapInventoryToLedgerRows,
+  type LedgerSummary,
+  type LedgerTableRow,
+} from "@/lib/business/ledger-table";
+import type { BusinessInventoryItem } from "@/types";
 
-const EBAY_STORE_URL_STORAGE_KEY = "cardzcheck_ebay_store_url";
-const EBAY_STORE_URL_UPDATED_EVENT = "cardzcheck:ebay-store-url-updated";
-const PERF_MOCK_ITEM_COUNT = 1200;
-const PERF_MOCK_BUSINESS_ACCOUNT_ID = "perf-business-account";
-const SALES_CHANNELS: VoiceSalesChannel[] = [
-  "ebay",
-  "whatnot",
-  "instagram",
-  "show",
-  "local",
-  "other",
-];
+const MONEY_FORMATTER = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+});
 
-function coerceSalesChannel(value: string | null | undefined): VoiceSalesChannel {
-  return SALES_CHANNELS.includes(value as VoiceSalesChannel)
-    ? (value as VoiceSalesChannel)
-    : "ebay";
+function formatSummaryMoney(cents: number | null): string {
+  if (cents == null) return "—";
+  return MONEY_FORMATTER.format(cents / 100);
 }
 
-function readStoredEbayStoreUrl(): string | null {
-  if (typeof window === "undefined") return null;
-  return normalizeEbayStoreUrl(
-    window.sessionStorage.getItem(EBAY_STORE_URL_STORAGE_KEY)
-  );
+function pnlClassName(cents: number | null): string {
+  if (cents == null) return "text-[#77808C]";
+  if (cents > 0) return "text-[#20B26B]";
+  if (cents < 0) return "text-[#E05C5C]";
+  return "text-[#B8C0CC]";
 }
 
-function persistEbayStoreUrl(value: string | null) {
-  if (typeof window === "undefined") return;
-  if (value) {
-    window.sessionStorage.setItem(EBAY_STORE_URL_STORAGE_KEY, value);
-  } else {
-    window.sessionStorage.removeItem(EBAY_STORE_URL_STORAGE_KEY);
-  }
-}
-
-function defaultSalesFilters(): SalesFilters {
-  const now = new Date();
-  const from = new Date(now.getTime() - 29 * 24 * 60 * 60 * 1000);
-  return {
-    from: from.toISOString().slice(0, 10),
-    to: now.toISOString().slice(0, 10),
-    channel: "",
-    search: "",
-  };
-}
-
-function resolveBusinessTab(tabParam: string | null): "inventory" | "sales" {
-  return tabParam === "sales" ? "sales" : "inventory";
-}
-
-function buildPerfMockInventory(count = PERF_MOCK_ITEM_COUNT): BusinessInventoryItem[] {
-  const channels: BusinessInventoryItem["channel"][] = [
-    "ebay",
-    "whatnot",
-    "instagram",
-    "show",
-    "local",
-    "other",
+function LedgerSummaryStrip({ summary }: { summary: LedgerSummary }) {
+  const cells = [
+    {
+      label: "Total Inventory Count",
+      value: summary.inventoryCount.toLocaleString("en-US"),
+      valueClassName: "text-[#E6E8EB]",
+    },
+    {
+      label: "Total Cost Basis",
+      value: formatSummaryMoney(summary.totalCostBasisCents),
+      valueClassName: "text-[#E6E8EB]",
+    },
+    {
+      label: "Total Estimated Value",
+      value: formatSummaryMoney(summary.totalEstimatedValueCents),
+      valueClassName: "text-[#E6E8EB]",
+    },
+    {
+      label: "Estimated P&L",
+      value: formatSummaryMoney(summary.estimatedPnlCents),
+      valueClassName: pnlClassName(summary.estimatedPnlCents),
+    },
   ];
-  const statuses: BusinessInventoryItem["status"][] = [
-    "unlisted",
-    "listed",
-    "pending_sale",
-    "sold",
-    "returned",
-  ];
-  const now = Date.now();
 
-  return Array.from({ length: count }, (_, index) => {
-    const listPrice =
-      index % 3 === 0 ? null : 2500 + ((index % 120) * 125);
-    const cmv = index % 5 === 0 ? null : 2200 + ((index % 100) * 135);
-    const createdAt = new Date(now - index * 3600_000).toISOString();
-    const grade = index % 4 === 0 ? "10" : index % 4 === 1 ? "9" : null;
-
-    return {
-      id: `perf-item-${index + 1}`,
-      user_id: "perf-user",
-      business_account_id: PERF_MOCK_BUSINESS_ACCOUNT_ID,
-      card_id: `perf-card-${index + 1}`,
-      title: `2024 Topps Chrome Prospect ${index + 1}`,
-      quantity: (index % 3) + 1,
-      acquisition_date: new Date(now - index * 86_400_000)
-        .toISOString()
-        .slice(0, 10),
-      acquisition_type: "buy",
-      cost_basis_total_cents: 1400 + ((index % 80) * 110),
-      tax_cents: 0,
-      shipping_cents: 0,
-      fees_paid_cents: 0,
-      condition_status: grade ? "graded" : "raw",
-      grading_company: grade ? "PSA" : null,
-      grade,
-      cert_number: grade ? `CERT-${100000 + index}` : null,
-      location: index % 2 === 0 ? "Shelf A" : "Bin B",
-      channel: channels[index % channels.length]!,
-      status: statuses[index % statuses.length]!,
-      list_price_cents: listPrice,
-      current_market_value_cents: cmv,
-      image_url: null,
-      image_source: "none",
-      user_image_url: null,
-      notes: index % 10 === 0 ? "[WAX] Sealed product" : null,
-      created_at: createdAt,
-      updated_at: createdAt,
-    };
-  });
-}
-
-// ── Rail action card ─────────────────────────────────────────────────────────
-function RailActionCard({
-  label,
-  count,
-  countLabel,
-  badgeBg,
-  badgeColor,
-  onClick,
-}: {
-  label: string;
-  count?: number;
-  countLabel?: string;
-  badgeBg: string;
-  badgeColor: string;
-  onClick: () => void;
-}) {
-  const displayCount = countLabel ?? (count != null ? String(count) : "—");
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex w-full items-center justify-between rounded-lg border border-[#E8E5E0] px-2.5 py-2 mb-2 text-left transition-colors hover:bg-[#FAFAF8] bg-white cursor-pointer"
-    >
-      <span className="text-[11px] text-[#444]">{label}</span>
-      <span
-        className="text-[11px] font-semibold px-[7px] py-0.5 rounded-full tabular-nums"
-        style={{ background: badgeBg, color: badgeColor }}
-      >
-        {displayCount}
-      </span>
-    </button>
+    <div className="overflow-x-auto border-y border-[#24282D] bg-[#0B0D0F]">
+      <div className="grid min-w-[760px] grid-cols-4 divide-x divide-[#24282D]">
+        {cells.map((cell) => (
+          <div key={cell.label} className="px-3 py-2">
+            <div className="text-[10px] font-medium uppercase tracking-[0.08em] text-[#77808C]">
+              {cell.label}
+            </div>
+            <div className={`mt-0.5 font-data text-[13px] font-semibold tabular-nums ${cell.valueClassName}`}>
+              {cell.value}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
-function LedgerPageContent() {
+function LoadingLedger() {
+  return (
+    <AuthenticatedLayout>
+      <main className="min-h-screen bg-[#090B0D] text-[#E6E8EB]">
+        <div className="animate-pulse p-4">
+          <div className="mb-3 h-7 w-40 bg-[#1E2227]" />
+          <div className="mb-4 grid grid-cols-4 divide-x divide-[#24282D] border-y border-[#24282D]">
+            {[0, 1, 2, 3].map((idx) => (
+              <div key={idx} className="px-3 py-2">
+                <div className="h-3 w-28 bg-[#1E2227]" />
+                <div className="mt-2 h-4 w-20 bg-[#1E2227]" />
+              </div>
+            ))}
+          </div>
+          <div className="h-[520px] border border-[#24282D] bg-[#0B0D0F]" />
+        </div>
+      </main>
+    </AuthenticatedLayout>
+  );
+}
+
+export default function LedgerPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [hasAccess, setHasAccess] = useState<boolean | null>(null);
-  const [businessName, setBusinessName] = useState<string | null>(null);
-  const [ebayStoreUrl, setEbayStoreUrl] = useState<string | null>(() =>
-    readStoredEbayStoreUrl()
-  );
+  const [needsMigration, setNeedsMigration] = useState(false);
   const [items, setItems] = useState<BusinessInventoryItem[]>([]);
-  const [metrics, setMetrics] = useState<MetricsType | null>(() => ({
-    revenueMtd: 0,
-    revenueYtd: 0,
-    profitMtd: 0,
-    profitYtd: 0,
-    salesCountMtd: 0,
-    salesCountYtd: 0,
-    activeInventoryCount: 0,
-  }));
-  const [metricsLoading, setMetricsLoading] = useState(true);
-  const [showAddModal, setShowAddModal] = useState(false);
+  const [selectedLedgerItemId, setSelectedLedgerItemId] = useState<string | null>(null);
   const [showAddCardModal, setShowAddCardModal] = useState(false);
   const [showCardPicker, setShowCardPicker] = useState(false);
   const [showAddCardToInventory, setShowAddCardToInventory] = useState(false);
-  const [pendingInventoryCard, setPendingInventoryCard] = useState<PendingInventoryCard | null>(null);
-  const [showAddWaxModal, setShowAddWaxModal] = useState(false);
-  const [showAddDropdown, setShowAddDropdown] = useState(false);
-  const [needsMigration, setNeedsMigration] = useState(false);
-  const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
-  const [activeTab, setActiveTab] = useState<"inventory" | "sales">(() =>
-    resolveBusinessTab(searchParams.get("tab"))
+  const [pendingInventoryCard, setPendingInventoryCard] =
+    useState<PendingInventoryCard | null>(null);
+  const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(
+    null
   );
-  const [markSoldItem, setMarkSoldItem] = useState<BusinessInventoryItem | null>(null);
-  const [sales, setSales] = useState<BusinessSale[]>([]);
-  const [salesLoading, setSalesLoading] = useState(false);
-  const [salesFilters, setSalesFilters] = useState<SalesFilters>(() =>
-    defaultSalesFilters()
-  );
-  const [salesPage, setSalesPage] = useState(1);
-  const [salesPageSize] = useState(50);
-  const [salesTotal, setSalesTotal] = useState(0);
-  const [storeTier, setStoreTier] = useState<StoreTier>("none");
-  const [ebayConnected, setEbayConnected] = useState(false);
-  const [ebayTopRated, setEbayTopRated] = useState(false);
-  const [markSoldVoiceDefaults, setMarkSoldVoiceDefaults] = useState<
-    Partial<BusinessSale> & {
-      inventory_item_id?: string | null;
-      channel?: string | null;
-      sold_at?: string | null;
-    } | null
-  >(null);
-  const [pendingVoiceDeleteItem, setPendingVoiceDeleteItem] =
-    useState<BusinessInventoryItem | null>(null);
-  const [whatnotStorefront, setWhatnotStorefront] = useState<UserStorefront | null>(null);
-  const [websiteStorefront, setWebsiteStorefront] = useState<UserStorefront | null>(null);
-  const [viewMode, setViewMode] = useState<"grid" | "list">(() =>
-    typeof window !== "undefined"
-      ? ((localStorage.getItem("ledger_view") as "grid" | "list") ?? "grid")
-      : "grid"
-  );
-  const [gridSearch, setGridSearch] = useState("");
-  const [activePills, setActivePills] = useState<Set<string>>(new Set(["all"]));
-  const [activeAgingBucket, setActiveAgingBucket] = useState<AgingBucketKey | null>(null);
-  const perfEnabled = useMemo(() => isPerfEnabled(), []);
-  const perfMockMode = useMemo(
-    () => perfEnabled && searchParams.get("perfMock") === "1",
-    [perfEnabled, searchParams]
-  );
-  const initialBucketStartedRef = useRef(false);
-  const pendingFloorUpdatesRef = useRef<Map<string, BusinessInventoryItem>>(
-    new Map()
-  );
-  const floorFlushTimerRef = useRef<number | null>(null);
-
-  const handleInventoryProfilerRender = useCallback<ProfilerOnRenderCallback>(
-    (_id, phase, actualDuration, baseDuration, startTime, commitTime) => {
-      if (!perfEnabled) return;
-      recordInventoryCommit({
-        phase,
-        actualDuration,
-        baseDuration,
-        startTime,
-        commitTime,
-      });
-    },
-    [perfEnabled]
-  );
-
-  const ebayStoreHref = useMemo(
-    () => buildEbayStoreHref(ebayStoreUrl),
-    [ebayStoreUrl]
-  );
-
-  const avgHoldDays = useMemo(() => {
-    const active = items.filter(
-      (it) => it.status !== "sold" && it.status !== "returned" && it.acquisition_date
-    );
-    if (!active.length) return null;
-    const now = Date.now();
-    const sum = active.reduce((acc, it) => {
-      return acc + Math.floor((now - new Date(it.acquisition_date!).getTime()) / 86_400_000);
-    }, 0);
-    return Math.round(sum / active.length);
-  }, [items]);
-
-  const gridFilteredItems = useMemo(() => {
-    let result = items.filter((it) => it.status !== "sold" && it.status !== "returned");
-    if (!activePills.has("all")) {
-      if (activePills.has("Listed")) result = result.filter((it) => it.status === "listed");
-      if (activePills.has("Unlisted")) result = result.filter((it) => it.status === "unlisted");
-      if (activePills.has("Raw")) result = result.filter((it) => it.condition_status === "raw");
-      if (activePills.has("Graded")) result = result.filter((it) => it.condition_status === "graded");
-    }
-    if (gridSearch.trim()) {
-      const q = gridSearch.toLowerCase();
-      result = result.filter((it) => it.title?.toLowerCase().includes(q));
-    }
-    if (activeAgingBucket) {
-      result = result.filter(
-        (it) => getAgingBucket(getDaysHeld(it.acquisition_date)) === activeAgingBucket
-      );
-    }
-    return result;
-  }, [items, activePills, gridSearch, activeAgingBucket]);
 
   const activeInventoryItems = useMemo(
-    () => items.filter((it) => it.status !== "sold" && it.status !== "returned"),
+    () => items.filter((item) => item.status !== "sold" && item.status !== "returned"),
     [items]
   );
 
-  const activeItemCount = useMemo(
-    () => items.filter((it) => it.status !== "sold" && it.status !== "returned").length,
-    [items]
+  const ledgerRows = useMemo(
+    () => mapInventoryToLedgerRows(activeInventoryItems),
+    [activeInventoryItems]
   );
 
-  const needsActionCount = useMemo(() => {
-    const now = Date.now();
-    return items.filter((it) => {
-      if (it.status === "sold" || it.status === "returned") return false;
-      if (it.status === "unlisted") return true;
-      if (it.status === "listed" && it.acquisition_date) {
-        const days = Math.floor((now - new Date(it.acquisition_date).getTime()) / 86_400_000);
-        return days > 21;
-      }
-      return false;
-    }).length;
-  }, [items]);
-
-  const unlistedCount = useMemo(
-    () => items.filter((it) => it.status === "unlisted").length,
-    [items]
-  );
-
-  const mvCoveragePct = useMemo(() => {
-    const active = items.filter((it) => it.status !== "sold" && it.status !== "returned");
-    if (!active.length) return null;
-    const withMv = active.filter(
-      (it) => it.current_market_value_cents != null && it.current_market_value_cents > 0
-    );
-    return Math.round((withMv.length / active.length) * 100);
-  }, [items]);
-
-  const handleViewModeChange = useCallback((next: "grid" | "list") => {
-    setViewMode(next);
-    if (typeof window !== "undefined") localStorage.setItem("ledger_view", next);
-  }, []);
-
-  const handlePillToggle = useCallback((pill: string) => {
-    if (pill === "all") {
-      setActivePills(new Set(["all"]));
-      return;
-    }
-    setActivePills((prev) => {
-      const next = new Set(prev);
-      next.delete("all");
-      if (next.has(pill)) next.delete(pill);
-      else next.add(pill);
-      return next.size === 0 ? new Set(["all"]) : next;
-    });
-  }, []);
-
-  const openConsultant = useCallback(
-    (prompt: string) => {
-      router.push(`/business/consultant?prompt=${encodeURIComponent(prompt)}`);
-    },
-    [router]
-  );
-
-  const openInventoryItem = useCallback(
-    (item: BusinessInventoryItem) => {
-      router.push(`/business/card/${item.id}?from=business`);
-    },
-    [router]
-  );
-
-  const flushFloorUpdates = useCallback(() => {
-    floorFlushTimerRef.current = null;
-    const updates = new Map(pendingFloorUpdatesRef.current);
-    pendingFloorUpdatesRef.current.clear();
-    if (updates.size === 0) return;
-
-    if (perfEnabled) {
-      perfLog("market-floor flush", { updates: updates.size });
-    }
-
-    startTransition(() => {
-      setItems((prev) => prev.map((item) => updates.get(item.id) ?? item));
-    });
-  }, [perfEnabled]);
-
-  const queueFloorUpdate = useCallback(
-    (updated: BusinessInventoryItem) => {
-      pendingFloorUpdatesRef.current.set(updated.id, updated);
-      if (floorFlushTimerRef.current !== null) return;
-      floorFlushTimerRef.current = window.setTimeout(flushFloorUpdates, 320);
-    },
-    [flushFloorUpdates]
-  );
-
-  useEffect(() => {
-    if (!perfEnabled) return;
-    const stopMonitor = startEventLoopLagMonitor();
-    return () => {
-      stopMonitor?.();
-    };
-  }, [perfEnabled]);
-
-  useEffect(
-    () => () => {
-      if (floorFlushTimerRef.current !== null) {
-        window.clearTimeout(floorFlushTimerRef.current);
-      }
-      floorFlushTimerRef.current = null;
-      pendingFloorUpdatesRef.current.clear();
-    },
-    []
-  );
-
-  useEffect(() => {
-    if (toast) {
-      const timer = setTimeout(() => setToast(null), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [toast]);
-
-  useEffect(() => {
-    if (!showAddDropdown) return;
-    const handleClick = () => setShowAddDropdown(false);
-    const timer = setTimeout(() => document.addEventListener("click", handleClick), 0);
-    return () => {
-      clearTimeout(timer);
-      document.removeEventListener("click", handleClick);
-    };
-  }, [showAddDropdown]);
-
-  useEffect(() => {
-    if (searchParams.get("notice") === "business_mode") {
-      setToast({
-        type: "success",
-        message: "Business accounts use Inventory/Prospects.",
-      });
-    }
-  }, [searchParams]);
-
-  // Sync tab with ?tab= search param
-  useEffect(() => {
-    setActiveTab(resolveBusinessTab(searchParams.get("tab")));
-  }, [searchParams]);
-
-  const handleTabChange = useCallback(
-    (tab: "inventory" | "sales") => {
-      setActiveTab(tab);
-      router.push(`/business/ledger?tab=${tab}`, { scroll: false });
-    },
-    [router]
+  const ledgerSummary = useMemo(
+    () => computeLedgerSummary(ledgerRows),
+    [ledgerRows]
   );
 
   const loadInventory = useCallback(async () => {
-    if (perfMockMode) {
-      if (perfEnabled && !initialBucketStartedRef.current) {
-        initialBucketStartedRef.current = true;
-        activatePerfBucket("initial-load");
-        setPerfInteraction("load");
-      }
-      const mockItems = buildPerfMockInventory();
-      setHasAccess(true);
-      setNeedsMigration(false);
-      setItems(mockItems);
-      setLoading(false);
-      setMetrics({
-        revenueMtd: 0,
-        revenueYtd: 0,
-        profitMtd: 0,
-        profitYtd: 0,
-        salesCountMtd: 0,
-        salesCountYtd: 0,
-        activeInventoryCount: mockItems.length,
-      });
-      setMetricsLoading(false);
-      if (perfEnabled) {
-        window.setTimeout(() => {
-          deactivatePerfBucket("initial-load", {
-            itemCount: mockItems.length,
-            source: "perfMock",
-          });
-        }, 300);
-      }
-      return;
-    }
-
-    if (perfEnabled && !initialBucketStartedRef.current) {
-      activatePerfBucket("initial-load");
-      setPerfInteraction("load");
-      initialBucketStartedRef.current = true;
-    }
-
-    let loadedItemCount = 0;
     try {
       const res = await fetch("/api/business/inventory", { cache: "no-store" });
-      if (res.status === 403) {
-        setHasAccess(false);
-        setLoading(false);
+
+      if (res.status === 401) {
+        router.push("/login?redirect=/business/ledger");
         return;
       }
+
+      if (res.status === 403) {
+        setHasAccess(false);
+        setItems([]);
+        return;
+      }
+
       const data = await res.json();
-      if (res.status === 503 && data.needs_migration) {
+
+      if (res.status === 503 && data?.needs_migration) {
         setNeedsMigration(true);
         setHasAccess(true);
         setItems([]);
         return;
       }
+
+      if (!res.ok) {
+        throw new Error(data?.error || "Failed to load inventory");
+      }
+
       setNeedsMigration(false);
       setHasAccess(true);
-      const nextItems = data.items ?? [];
-      loadedItemCount = nextItems.length;
-      setItems(nextItems);
+      setItems(Array.isArray(data.items) ? data.items : []);
     } catch {
       setHasAccess(false);
+      setItems([]);
     } finally {
       setLoading(false);
-      if (perfEnabled && initialBucketStartedRef.current) {
-        window.setTimeout(() => {
-          deactivatePerfBucket("initial-load", {
-            itemCount: loadedItemCount,
-            source: "api",
-          });
-        }, 300);
-      }
     }
-  }, [perfEnabled, perfMockMode]);
-
-  const loadMetrics = useCallback(async () => {
-    if (perfMockMode) {
-      setMetricsLoading(false);
-      return;
-    }
-    setMetricsLoading(true);
-    const defaultMetrics = {
-      revenueMtd: 0,
-      revenueYtd: 0,
-      profitMtd: 0,
-      profitYtd: 0,
-      salesCountMtd: 0,
-      salesCountYtd: 0,
-      activeInventoryCount: 0,
-    };
-    try {
-      const res = await fetch("/api/business/kpis?range=mtd", { cache: "no-store" });
-      if (res.ok) {
-        const data = await res.json();
-        setMetrics({
-          revenueMtd: data.revenue_mtd_cents ?? 0,
-          revenueYtd: data.revenue_ytd_cents ?? 0,
-          profitMtd: data.profit_mtd_cents ?? 0,
-          profitYtd: data.profit_ytd_cents ?? 0,
-          salesCountMtd: data.sales_count_mtd ?? 0,
-          salesCountYtd: data.sales_count_ytd ?? 0,
-          activeInventoryCount: data.active_inventory_count ?? 0,
-        });
-      } else {
-        setMetrics(defaultMetrics);
-      }
-    } catch {
-      setMetrics(defaultMetrics);
-    } finally {
-      setMetricsLoading(false);
-    }
-  }, [perfMockMode]);
-
-  const loadSales = useCallback(async () => {
-    if (perfMockMode) {
-      setSales([]);
-      setSalesTotal(0);
-      setSalesLoading(false);
-      return;
-    }
-    setSalesLoading(true);
-    try {
-      const params = new URLSearchParams();
-      params.set("from", salesFilters.from);
-      params.set("to", salesFilters.to);
-      params.set("page", String(salesPage));
-      params.set("page_size", String(salesPageSize));
-      if (salesFilters.channel) params.set("channel", salesFilters.channel);
-      if (salesFilters.search.trim()) params.set("search", salesFilters.search.trim());
-
-      const res = await fetch(`/api/business/sales?${params.toString()}`, {
-        cache: "no-store",
-      });
-      if (!res.ok) return;
-      const data = await res.json();
-      setSales(data.sales ?? []);
-      setSalesTotal(data.total ?? 0);
-    } catch {
-      // ignore
-    } finally {
-      setSalesLoading(false);
-    }
-  }, [perfMockMode, salesFilters, salesPage, salesPageSize]);
-
-  const loadEbayStoreTier = useCallback(async () => {
-    try {
-      const res = await fetch("/api/business/ebay/account", { cache: "no-store" });
-      if (!res.ok) return;
-      const data: EbayAccountStatus = await res.json();
-      setStoreTier(data.store_tier ?? "none");
-      setEbayConnected(Boolean(data.connected));
-      setEbayTopRated(Boolean(data.top_rated_seller));
-    } catch {
-      // Best-effort only; defaults are safe.
-    }
-  }, []);
-
-  const loadStorefronts = useCallback(async () => {
-    try {
-      const res = await fetch("/api/business/storefronts", { cache: "no-store" });
-      if (!res.ok) return;
-      const data: { storefronts: UserStorefront[] } = await res.json();
-      const storefronts = data.storefronts ?? [];
-      setWhatnotStorefront(storefronts.find((s) => s.platform === "whatnot") ?? null);
-      setWebsiteStorefront(storefronts.find((s) => s.platform === "website") ?? null);
-    } catch {
-      // Best-effort; channel bar will show "not connected" state.
-    }
-  }, []);
-
-  const loadUserProfile = useCallback(async () => {
-    if (perfMockMode) {
-      setBusinessName("Perf Mock Business");
-      setEbayStoreUrl(null);
-      return { id: "perf-user" } as { id: string };
-    }
-
-    const supabase = createClient();
-    await supabase.auth.refreshSession();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return null;
-
-    try {
-      const res = await fetch("/api/user/name", { cache: "no-store" });
-      if (res.ok) {
-        const data = await res.json();
-        const apiBusinessName =
-          typeof data.business_name === "string" ? data.business_name.trim() || null : null;
-        const apiEbayStoreUrl = normalizeEbayStoreUrl(data.ebay_store_url);
-        setBusinessName(apiBusinessName ?? null);
-        setEbayStoreUrl(apiEbayStoreUrl);
-        persistEbayStoreUrl(apiEbayStoreUrl);
-        return user;
-      }
-    } catch {
-      // fall through to client-side resolution
-    }
-
-    const metadataEbayStoreUrl = normalizeEbayStoreUrl(
-      typeof user.user_metadata?.ebay_store_url === "string"
-        ? user.user_metadata.ebay_store_url
-        : null
-    );
-    const storedEbayStoreUrl = readStoredEbayStoreUrl();
-
-    const { data: userData, error: userDataError } = await supabase
-      .from("users")
-      .select("business_name, ebay_store_url")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    if (
-      userDataError &&
-      String(userDataError.message || "").toLowerCase().includes("ebay_store_url")
-    ) {
-      const { data: fallbackUserData } = await supabase
-        .from("users")
-        .select("business_name")
-        .eq("id", user.id)
-        .maybeSingle();
-      setBusinessName(fallbackUserData?.business_name || null);
-      const resolvedEbayStoreUrl = metadataEbayStoreUrl || storedEbayStoreUrl;
-      setEbayStoreUrl(resolvedEbayStoreUrl);
-      persistEbayStoreUrl(resolvedEbayStoreUrl);
-    } else {
-      setBusinessName(userData?.business_name || null);
-      const resolvedEbayStoreUrl =
-        normalizeEbayStoreUrl(userData?.ebay_store_url) ||
-        metadataEbayStoreUrl ||
-        storedEbayStoreUrl;
-      setEbayStoreUrl(resolvedEbayStoreUrl);
-      persistEbayStoreUrl(resolvedEbayStoreUrl);
-    }
-    return user;
-  }, [perfMockMode]);
+  }, [router]);
 
   useEffect(() => {
     async function init() {
-      const user = await loadUserProfile();
+      const supabase = createClient();
+      await supabase.auth.refreshSession();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
       if (!user) {
-        router.push("/login?redirect=/business");
+        router.push("/login?redirect=/business/ledger");
         return;
       }
-      await Promise.all([loadInventory(), loadMetrics(), loadEbayStoreTier(), loadStorefronts()]);
+
+      await loadInventory();
     }
+
     init();
-  }, [router, loadUserProfile, loadInventory, loadMetrics, loadEbayStoreTier, loadStorefronts]);
+  }, [loadInventory, router]);
 
   useEffect(() => {
-    if (activeTab !== "sales" || hasAccess === false || needsMigration) return;
-    loadSales();
-  }, [activeTab, hasAccess, needsMigration, loadSales]);
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(null), 3000);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
 
-  useEffect(() => {
-    const handler = () => {
-      if (document.visibilityState === "visible") {
-        loadUserProfile();
-      }
-    };
-    document.addEventListener("visibilitychange", handler);
-    return () => document.removeEventListener("visibilitychange", handler);
-  }, [loadUserProfile]);
-
-  useEffect(() => {
-    const handleEbayStoreUrlUpdated = (event: Event) => {
-      const customEvent = event as CustomEvent<{ value?: string | null }>;
-      setEbayStoreUrl(normalizeEbayStoreUrl(customEvent.detail?.value ?? null));
-    };
-
-    window.addEventListener(
-      EBAY_STORE_URL_UPDATED_EVENT,
-      handleEbayStoreUrlUpdated as EventListener
-    );
-    return () => {
-      window.removeEventListener(
-        EBAY_STORE_URL_UPDATED_EVENT,
-        handleEbayStoreUrlUpdated as EventListener
-      );
-    };
+  const handleLedgerRowClick = useCallback((row: LedgerTableRow) => {
+    // Future detail drawer entrypoint.
+    setSelectedLedgerItemId(row.id);
   }, []);
 
-  useEffect(() => {
-    if (!perfEnabled || !showAddCardModal) return;
-    markClickEnd("open-add-inventory-modal", { modalVisible: true });
-    window.setTimeout(() => {
-      deactivatePerfBucket("button-click", {
-        action: "open-add-inventory-modal",
-      });
-    }, 0);
-  }, [showAddCardModal, perfEnabled]);
+  const handleCardAdded = useCallback(
+    (playerName: string) => {
+      setPendingInventoryCard(null);
+      setToast({ type: "success", message: `Added "${playerName}" to inventory` });
+      void loadInventory();
+    },
+    [loadInventory]
+  );
 
-  useEffect(() => {
-    if (!perfEnabled || !markSoldItem) return;
-    markClickEnd("open-mark-sold-modal", {
-      modalVisible: true,
-      itemId: markSoldItem.id,
-    });
-    window.setTimeout(() => {
-      deactivatePerfBucket("button-click", {
-        action: "open-mark-sold-modal",
-      });
-    }, 0);
-  }, [markSoldItem, perfEnabled]);
-
-  useEffect(() => {
-    if (!perfEnabled) return;
-    const timer = window.setTimeout(() => {
-      const snapshot = getPerfSnapshot();
-      if (!snapshot) return;
-      perfLog("summary", {
-        commitAvgMs: snapshot.commitAvgMs,
-        commitP50Ms: snapshot.commitP50Ms,
-        commitP95Ms: snapshot.commitP95Ms,
-        commitCount: snapshot.commitCount,
-        renderedRows: snapshot.renderedRows,
-        domNodeCount: snapshot.domNodeCount,
-        eventLoopLagSpikes: snapshot.eventLoopLagSpikes.length,
-      });
-    }, 700);
-    return () => window.clearTimeout(timer);
-  }, [activeTab, items.length, loading, perfEnabled]);
-
-  const handleInlineUpdate = async (id: string, field: string, value: unknown) => {
-    if (perfMockMode) {
-      const updated = { id, [field]: value } as Partial<BusinessInventoryItem> &
-        Pick<BusinessInventoryItem, "id">;
-      if (field === "current_market_value_cents") {
-        const existing = items.find((it) => it.id === id);
-        if (existing) {
-          queueFloorUpdate({ ...existing, ...updated });
-        }
-      } else {
-        startTransition(() => {
-          setItems((prev) =>
-            prev.map((it) => (it.id === id ? { ...it, [field]: value } : it))
-          );
-        });
-      }
-      return;
-    }
-    try {
-      const res = await fetch("/api/business/inventory", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, [field]: value }),
-      });
-      if (res.ok) {
-        const updated = (await res.json()) as BusinessInventoryItem;
-        if (field === "current_market_value_cents") {
-          queueFloorUpdate(updated);
-        } else {
-          startTransition(() => {
-            setItems((prev) => prev.map((it) => (it.id === id ? updated : it)));
-          });
-        }
-      } else {
-        const data = await res.json().catch(() => ({}));
-        setToast({
-          type: "error",
-          message:
-            (typeof data?.error === "string" && data.error) ||
-            `Failed to update ${field}`,
-        });
-      }
-    } catch {
-      setToast({ type: "error", message: "Failed to update item" });
-    }
-  };
-
-  const handleBulkAction = async (
-    action: string,
-    ids: string[],
-    payload?: unknown
-  ) => {
-    if (perfMockMode) {
-      setItems((prev) =>
-        prev.map((it) => {
-          if (!ids.includes(it.id)) return it;
-          if (action === "set_status") {
-            return { ...it, status: payload as BusinessInventoryItem["status"] ?? it.status };
-          }
-          if (action === "set_location") {
-            return { ...it, location: payload as string ?? it.location };
-          }
-          return it;
-        })
-      );
-      setToast({ type: "success", message: `Updated ${ids.length} items` });
-      return;
-    }
-
-    try {
-      const updates: Record<string, unknown> = {};
-      if (action === "set_status") updates.status = payload;
-      if (action === "set_location") updates.location = payload;
-
-      await fetch("/api/business/inventory/bulk", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids, updates }),
-      });
-
-      setToast({ type: "success", message: `Updated ${ids.length} items` });
-      loadInventory();
-    } catch {
-      setToast({ type: "error", message: "Bulk update failed" });
-    }
-  };
-
-  const deleteInventoryItems = async (ids: string[]) => {
-    if (perfMockMode) {
-      setItems((prev) => prev.filter((it) => !ids.includes(it.id)));
-      setToast({ type: "success", message: `Deleted ${ids.length} items` });
-      return;
-    }
-
-    try {
-      const res = await fetch(`/api/business/inventory?ids=${ids.join(",")}`, {
-        method: "DELETE",
-      });
-      if (!res.ok) throw new Error("Delete failed");
-      setItems((prev) => prev.filter((it) => !ids.includes(it.id)));
-      setToast({ type: "success", message: `Deleted ${ids.length} items` });
-      loadMetrics();
-    } catch {
-      setToast({ type: "error", message: "Delete failed" });
-    }
-  };
-
-  const handleDelete = async (ids: string[]) => {
-    if (!confirm(`Delete ${ids.length} item(s)? This cannot be undone.`)) return;
-    await deleteInventoryItems(ids);
-  };
-
-  const handleAddItem = async (item: Record<string, unknown>) => {
-    if (perfMockMode) {
-      const now = new Date().toISOString();
-      const created: BusinessInventoryItem = {
-        id: `perf-new-${Date.now()}`,
-        user_id: "perf-user",
-        business_account_id: PERF_MOCK_BUSINESS_ACCOUNT_ID,
-        card_id: null,
-        title: (item.title as string) || "Untitled item",
-        quantity: (item.quantity as number) || 1,
-        acquisition_date: (item.acquisition_date as string) || null,
-        acquisition_type: (item.acquisition_type as BusinessInventoryItem["acquisition_type"]) || "buy",
-        cost_basis_total_cents: (item.cost_basis_total_cents as number) || 0,
-        tax_cents: (item.tax_cents as number) || 0,
-        shipping_cents: (item.shipping_cents as number) || 0,
-        fees_paid_cents: (item.fees_paid_cents as number) || 0,
-        condition_status: (item.condition_status as BusinessInventoryItem["condition_status"]) || "raw",
-        grading_company: (item.grading_company as string) || null,
-        grade: (item.grade as string) || null,
-        cert_number: (item.cert_number as string) || null,
-        location: (item.location as string) || null,
-        channel: (item.channel as BusinessInventoryItem["channel"]) || "other",
-        status: (item.status as BusinessInventoryItem["status"]) || "unlisted",
-        list_price_cents: (item.list_price_cents as number) ?? null,
-        current_market_value_cents: (item.current_market_value_cents as number) ?? null,
-        image_url: null,
-        image_source: "none",
-        user_image_url: null,
-        notes: (item.notes as string) || null,
-        created_at: now,
-        updated_at: now,
-      };
-      setItems((prev) => [created, ...prev]);
-      setToast({ type: "success", message: `Added "${created.title}"` });
-      return;
-    }
-
-    try {
-      const res = await fetch("/api/business/inventory", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(item),
-      });
-      if (res.ok) {
-        const created = await res.json();
-        setItems((prev) => [created, ...prev]);
-        setToast({ type: "success", message: `Added "${item.title}"` });
-        loadMetrics();
-      } else {
-        const data = await res.json().catch(() => ({}));
-        setToast({ type: "error", message: data.error || "Failed to add item" });
-      }
-    } catch {
-      setToast({ type: "error", message: "Failed to add item" });
-    }
-  };
-
-  const handleSaveItem = async (
-    id: string,
-    updates: Partial<BusinessInventoryItem>
-  ) => {
-    if (perfMockMode) {
-      setItems((prev) =>
-        prev.map((it) => (it.id === id ? { ...it, ...updates } : it))
-      );
-      setToast({ type: "success", message: "Item saved" });
-      return;
-    }
-
-    try {
-      const res = await fetch("/api/business/inventory", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, ...updates }),
-      });
-      if (res.ok) {
-        const updated = await res.json();
-        setItems((prev) => prev.map((it) => (it.id === id ? updated : it)));
-        setToast({ type: "success", message: "Item saved" });
-        loadMetrics();
-      }
-    } catch {
-      setToast({ type: "error", message: "Failed to save item" });
-    }
-  };
-
-  const handleMarkSold = (item: BusinessInventoryItem) => {
-    if (perfEnabled) {
-      activatePerfBucket("button-click");
-      setPerfInteraction("click:mark-sold");
-      markClickStart("open-mark-sold-modal", { itemId: item.id });
-    }
-    setMarkSoldVoiceDefaults(null);
-    setMarkSoldItem(item);
-  };
-
-  const handleToggleItemKind = async (
-    item: BusinessInventoryItem,
-    targetKind: "owned" | "inventory"
-  ) => {
-    const confirmed = window.confirm(
-      targetKind === "owned"
-        ? "Move this card to your Personal Collection? P&L data will be hidden but not deleted."
-        : "Move this card to Business Inventory? Full P&L tracking will be enabled."
-    );
-    if (!confirmed) return;
-
-    try {
-      const res = await fetch("/api/business/inventory/toggle-kind", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: item.id, target_kind: targetKind }),
-      });
-      if (!res.ok) throw new Error("Failed to toggle item kind");
-      // Remove from inventory list if moved to PC
-      if (targetKind === "owned") {
-        setItems((prev) => prev.filter((it) => it.id !== item.id));
-        setToast({ type: "success", message: "Card moved to Personal Collection." });
-      } else {
-        setItems((prev) =>
-          prev.map((it) => (it.id === item.id ? { ...it, item_kind: "inventory" } : it))
-        );
-        setToast({ type: "success", message: "Card moved to Business Inventory." });
-      }
-    } catch {
-      setToast({ type: "error", message: "Failed to move card. Please try again." });
-    }
-  };
-
-  const handleCreateSale = async (sale: Record<string, unknown>) => {
-    const inventoryId = (sale.inventory_item_id as string | null) || null;
-    let previousItem: BusinessInventoryItem | null = null;
-    if (inventoryId) {
-      previousItem = items.find((it) => it.id === inventoryId) || null;
-      setItems((prev) =>
-        prev.map((it) =>
-          it.id === inventoryId
-            ? { ...it, status: "sold" as BusinessInventoryItem["status"] }
-            : it
-        )
-      );
-    }
-
-    if (perfMockMode) {
-      const mockSale: BusinessSale = {
-        id: `perf-sale-${Date.now()}`,
-        user_id: "perf-user",
-        business_id: "perf-business",
-        business_account_id: PERF_MOCK_BUSINESS_ACCOUNT_ID,
-        inventory_item_id: inventoryId,
-        channel: (sale.channel as BusinessSale["channel"]) || "ebay",
-        sold_at:
-          (sale.sold_at as string | undefined) ||
-          new Date().toISOString(),
-        sold_price_cents: (sale.sold_price_cents as number | undefined) || 0,
-        platform_fees_cents: (sale.platform_fees_cents as number | undefined) || 0,
-        shipping_charged_cents:
-          (sale.shipping_charged_cents as number | undefined) || 0,
-        shipping_cost_cents: (sale.shipping_cost_cents as number | undefined) || 0,
-        tax_cents: (sale.tax_cents as number | undefined) || 0,
-        net_payout_cents: (sale.net_payout_cents as number | undefined) || 0,
-        cogs_cents: (sale.cogs_cents as number | undefined) || 0,
-        gross_revenue_cents: (sale.sold_price_cents as number | undefined) || 0,
-        profit_cents: 0,
-        external_order_id: null,
-        notes: null,
-        is_deleted: false,
-        inventory_item: previousItem
-          ? { id: previousItem.id, title: previousItem.title }
-          : null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-      setSales((prev) => [mockSale, ...prev]);
-      setToast({ type: "success", message: "Sale recorded" });
-      setSalesPage(1);
-      return;
-    }
-
-    try {
-      const res = await fetch("/api/business/sales", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(sale),
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        if (previousItem) {
-          setItems((prev) =>
-            prev.map((it) => (it.id === previousItem!.id ? previousItem! : it))
-          );
-        }
-        setToast({
-          type: "error",
-          message: data.error || "Failed to record sale",
-        });
-        return;
-      }
-
-      setToast({ type: "success", message: "Sale recorded" });
-      setSalesPage(1);
-      // Immediately drop the sold item from local state — the optimistic update
-      // already set status="sold" but we remove it entirely so it never flickers
-      // back if loadInventory races with the DB write.
-      if (inventoryId) {
-        setItems((prev) => prev.filter((it) => it.id !== inventoryId));
-      }
-      if (activeTab === "sales") {
-        loadSales();
-      }
-      loadMetrics();
-    } catch {
-      if (previousItem) {
-        setItems((prev) =>
-          prev.map((it) => (it.id === previousItem!.id ? previousItem! : it))
-        );
-      }
-      setToast({ type: "error", message: "Failed to record sale" });
-    }
-  };
-
-  const handleInventoryVoiceCommand = async (
-    item: BusinessInventoryItem,
-    transcript: string
-  ) => {
-    const command = parseInventoryVoiceCommand(transcript);
-
-    if (command.type === "cancel") {
-      setPendingVoiceDeleteItem(null);
-      setMarkSoldItem(null);
-      setMarkSoldVoiceDefaults(null);
-      setToast({ type: "success", message: "Voice action canceled" });
-      return;
-    }
-
-    if (command.type === "confirm") {
-      if (!pendingVoiceDeleteItem) {
-        setToast({ type: "error", message: "No voice action is waiting for confirmation" });
-        return;
-      }
-      const deleteId = pendingVoiceDeleteItem.id;
-      setPendingVoiceDeleteItem(null);
-      await deleteInventoryItems([deleteId]);
-      return;
-    }
-
-    if (command.type === "delete_card") {
-      setMarkSoldItem(null);
-      setMarkSoldVoiceDefaults(null);
-      setPendingVoiceDeleteItem(item);
-      setToast({ type: "success", message: "Say confirm delete, or use the confirm button" });
-      return;
-    }
-
-    if (command.type === "mark_sold") {
-      if (item.status === "sold") {
-        setToast({ type: "error", message: "This item is already marked sold" });
-        return;
-      }
-      setPendingVoiceDeleteItem(null);
-      setMarkSoldVoiceDefaults({
-        inventory_item_id: item.id,
-        channel: command.channel ?? coerceSalesChannel(item.channel),
-        sold_at: command.soldAt ?? new Date().toISOString(),
-        sold_price_cents: command.salePriceCents ?? undefined,
-        cogs_cents: item.cost_basis_total_cents,
-      });
-      setMarkSoldItem(item);
-      setToast({
-        type: "success",
-        message: command.salePriceCents
-          ? "Voice sale draft ready"
-          : "Voice sale draft opened. Add a sold price to record it.",
-      });
-      return;
-    }
-
-    router.push(
-      `/business/consultant?prompt=${encodeURIComponent(
-        `For ${item.title || "this inventory item"}, ${command.transcript}`
-      )}`
-    );
-  };
-
-  const handleUpdateSale = async (
-    saleId: string,
-    updates: Record<string, unknown>
-  ) => {
-    if (perfMockMode) {
-      setSales((prev) =>
-        prev.map((sale) => (sale.id === saleId ? { ...sale, ...updates } : sale))
-      );
-      setToast({ type: "success", message: "Sale updated" });
-      return;
-    }
-
-    const res = await fetch(`/api/business/sales/${saleId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(updates),
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error(data.error || "Failed to update sale");
-    }
-    setToast({ type: "success", message: "Sale updated" });
-    await Promise.all([loadSales(), loadMetrics(), loadInventory()]);
-  };
-
-  const handleDeleteSale = async (saleId: string) => {
-    if (perfMockMode) {
-      setSales((prev) => prev.filter((sale) => sale.id !== saleId));
-      setToast({ type: "success", message: "Sale deleted" });
-      return;
-    }
-
-    const res = await fetch(`/api/business/sales/${saleId}`, {
-      method: "DELETE",
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error(data.error || "Failed to delete sale");
-    }
-    setToast({ type: "success", message: "Sale deleted" });
-    await Promise.all([loadSales(), loadMetrics(), loadInventory()]);
-  };
-
-  const handleCardAdded = (playerName: string) => {
-    setPendingInventoryCard(null);
-    setToast({ type: "success", message: `Added "${playerName}" to inventory` });
-    if (perfMockMode) return;
-    loadInventory();
-    loadMetrics();
-  };
-
-  const handleCardPickerSelect = (card: CardPickerSelection) => {
+  const handleCardPickerSelect = useCallback((card: CardPickerSelection) => {
     setShowCardPicker(false);
     setPendingInventoryCard({
       card_id: card.id || undefined,
@@ -1259,689 +222,151 @@ function LedgerPageContent() {
       card_number: card.card_number,
       grader: card.grader,
       grade: card.grade,
-      imageUrl:
-        card.user_image_url ||
-        card.image_url,
+      imageUrl: card.user_image_url || card.image_url,
       user_image_url: card.user_image_url,
       quantity: card.quantity,
     });
     setShowAddCardToInventory(true);
-  };
+  }, []);
 
-  const handleCardIdentified = (cardData: {
-    card_id?: string;
-    player_name: string;
-    year?: string;
-    set_name?: string;
-    card_number?: string;
-    parallel_type?: string;
-    grade?: string;
-    grader?: string;
-    psa_cert_number?: string;
-    imageUrl?: string;
-    user_image_url?: string;
-    quantity?: number;
-  }) => {
-    setShowAddCardModal(false);
-    setPendingInventoryCard(cardData);
-    setShowAddCardToInventory(true);
-  };
+  const handleCardIdentified = useCallback(
+    (cardData: {
+      card_id?: string;
+      player_name: string;
+      year?: string;
+      set_name?: string;
+      card_number?: string;
+      parallel_type?: string;
+      grade?: string;
+      grader?: string;
+      psa_cert_number?: string;
+      imageUrl?: string;
+      user_image_url?: string;
+      quantity?: number;
+    }) => {
+      setShowAddCardModal(false);
+      setPendingInventoryCard(cardData);
+      setShowAddCardToInventory(true);
+    },
+    []
+  );
 
-  const openAddInventoryModal = useCallback(() => {
-    if (perfEnabled) {
-      activatePerfBucket("button-click");
-      setPerfInteraction("click:add-inventory");
-      markClickStart("open-add-inventory-modal");
-    }
-    setShowAddCardModal(true);
-  }, [perfEnabled]);
-
-  const handleAddWax = async (item: Record<string, unknown>) => {
-    if (perfMockMode) {
-      await handleAddItem({ ...item, notes: "[WAX] Sealed product" });
-      return;
-    }
-
-    try {
-      const res = await fetch("/api/business/inventory", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(item),
-      });
-      if (res.ok) {
-        const created = await res.json();
-        setItems((prev) => [created, ...prev]);
-        setToast({ type: "success", message: `Added "${item.title}"` });
-        loadMetrics();
-      } else {
-        const data = await res.json().catch(() => ({}));
-        setToast({ type: "error", message: data.error || "Failed to add wax item" });
-      }
-    } catch {
-      setToast({ type: "error", message: "Failed to add wax item" });
-    }
-  };
-
-  if (loading) {
-    return (
-      <AuthenticatedLayout>
-        <main className="bg-[#F7F5F2] min-h-screen">
-          <div className="animate-pulse p-6 space-y-4">
-            <div className="h-8 w-48 rounded bg-[#E5E2DD]" />
-            <div className="flex gap-4">
-              {[...Array(4)].map((_, i) => (
-                <div key={i} className="h-16 flex-1 rounded bg-[#E5E2DD]" />
-              ))}
-            </div>
-            <div className="h-64 rounded bg-[#E5E2DD]" />
-          </div>
-        </main>
-      </AuthenticatedLayout>
-    );
-  }
+  if (loading) return <LoadingLedger />;
 
   if (hasAccess === false) {
     return (
       <AuthenticatedLayout>
-        <main className="bg-[#F7F5F2] min-h-screen px-4 py-4">
+        <main className="min-h-screen bg-[#090B0D] px-4 py-4">
           <BusinessPaywall />
         </main>
       </AuthenticatedLayout>
     );
   }
 
-  // ── Stat strip formatted values ───────────────────────────────────────────
-  const profitYtd =
-    metrics && metrics.revenueYtd > 0
-      ? `$${Math.round(metrics.profitYtd / 100).toLocaleString("en-US")}`
-      : "—";
-  const revenueYtd =
-    metrics && metrics.revenueYtd > 0
-      ? `$${Math.round(metrics.revenueYtd / 100).toLocaleString("en-US")}`
-      : "—";
-  const revenueYtdSub =
-    metrics && metrics.salesCountYtd > 0 ? `${metrics.salesCountYtd} sales closed` : "—";
-  const avgMargin =
-    metrics && metrics.revenueYtd > 0
-      ? `${((metrics.profitYtd / metrics.revenueYtd) * 100).toFixed(1)}%`
-      : "—";
-  const avgHoldStr = avgHoldDays != null ? `${avgHoldDays}d` : "—";
-
-  // ── Right-rail MTD values ─────────────────────────────────────────────────
-  const mtdRevenue =
-    metrics && metrics.revenueMtd > 0
-      ? `$${Math.round(metrics.revenueMtd / 100).toLocaleString("en-US")}`
-      : "—";
-  const mtdMargin =
-    metrics && metrics.revenueMtd > 0
-      ? `${((metrics.profitMtd / metrics.revenueMtd) * 100).toFixed(1)}%`
-      : "—";
-  const mtdAvgSale =
-    metrics && metrics.salesCountMtd > 0
-      ? `$${Math.round(metrics.revenueMtd / metrics.salesCountMtd / 100).toLocaleString("en-US")}`
-      : "—";
-
-  // ── Filter pills config ───────────────────────────────────────────────────
-  const PILLS = [
-    { key: "all", label: `All ${activeItemCount}` },
-    { key: "Listed", label: "Listed" },
-    { key: "Unlisted", label: "Unlisted" },
-    { key: "Raw", label: "Raw" },
-    { key: "Graded", label: "Graded" },
-  ];
-
   return (
     <AuthenticatedLayout>
-      <main className="bg-[#F7F5F2] min-h-screen flex">
-        {/* ── CENTER COLUMN ─────────────────────────────────────────────── */}
-        <div className="flex-1 flex flex-col min-w-0">
-
-          {/* TOPBAR */}
-          <div className="flex items-center justify-between px-4 sm:px-6 pt-5 pb-3">
+      <main className="min-h-screen bg-[#090B0D] text-[#E6E8EB]">
+        <div className="flex min-h-screen flex-col">
+          <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#24282D] px-4 py-3">
             <div>
-              <p className="text-[10px] text-[#AAA] tracking-[0.08em] uppercase m-0">
-                INVENTORY
-              </p>
-              <h1 className="text-[22px] font-medium tracking-tight text-[#1A1A1A] mt-0.5">
+              <div className="text-[10px] font-medium uppercase tracking-[0.12em] text-[#77808C]">
+                Inventory
+              </div>
+              <h1 className="mt-0.5 text-[18px] font-semibold tracking-normal text-[#E6E8EB]">
                 Ledger
               </h1>
             </div>
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                className="px-3 py-1.5 text-xs border border-[#E5E2DD] rounded-lg bg-transparent text-[#1A1A1A] hover:bg-[#F0EDE8] transition-colors cursor-pointer"
+              <a
+                href="/api/business/export?type=inventory"
+                className="border border-[#343941] px-3 py-1.5 text-[12px] font-medium text-[#B8C0CC] transition-colors hover:border-[#5A626E] hover:text-[#E6E8EB]"
               >
                 Export
-              </button>
+              </a>
               <button
                 type="button"
-                onClick={openAddInventoryModal}
-                className="px-3 py-1.5 text-xs rounded-lg bg-[#1A1A1A] text-[#F0EDE8] border-0 hover:bg-[#333] transition-colors cursor-pointer"
+                onClick={() => setShowAddCardModal(true)}
+                className="border border-[#20B26B] bg-[#20B26B] px-3 py-1.5 text-[12px] font-semibold text-[#07100B] transition-colors hover:bg-[#33C47C]"
               >
                 Add card
               </button>
             </div>
-          </div>
+          </header>
 
-          {/* STAT STRIP */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 divide-x divide-[#E5E2DD] border-b border-[#E5E2DD] pb-4">
-            {/* Stat 1: Profit YTD */}
-            <div className="px-4 sm:px-5 pt-3.5 first:pl-4 sm:first:pl-6">
-              <div className="text-xl font-medium text-[#2D7A4F] tabular-nums">
-                {profitYtd}
-              </div>
-              <div className="text-[11px] text-[#888] mt-0.5">Profit YTD</div>
-              <div className="text-[10px] text-[#AAA] mt-0.5">gross profit</div>
-            </div>
+          <LedgerSummaryStrip summary={ledgerSummary} />
 
-            {/* Stat 2: Revenue YTD */}
-            <div className="px-4 sm:px-5 pt-3.5">
-              <div className="text-xl font-medium text-[#2D7A4F] tabular-nums">
-                {revenueYtd}
-              </div>
-              <div className="text-[11px] text-[#888] mt-0.5">Revenue YTD</div>
-              <div className="text-[10px] text-[#AAA] mt-0.5">{revenueYtdSub}</div>
-            </div>
-
-            {/* Stat 3: Avg margin */}
-            <div className="px-4 sm:px-5 pt-3.5">
-              <div className="text-xl font-medium text-[#2D7A4F] tabular-nums">
-                {avgMargin}
-              </div>
-              <div className="text-[11px] text-[#888] mt-0.5">Avg margin</div>
-              <div className="text-[10px] text-[#AAA] mt-0.5">gross, YTD</div>
-            </div>
-
-            {/* Stat 4: Avg hold time */}
-            <div className="px-4 sm:px-5 pt-3.5">
-              <div className="text-xl font-medium text-[#1A1A1A] tabular-nums">
-                {avgHoldStr}
-              </div>
-              <div className="text-[11px] text-[#888] mt-0.5">Avg hold time</div>
-              <div className="text-[10px] text-[#AAA] mt-0.5">across active items</div>
-            </div>
-          </div>
-
-          {/* TAB SWITCHER */}
-          <div className="flex gap-4 px-4 sm:px-6 border-b border-[#E5E2DD]">
-            <button
-              type="button"
-              onClick={() => handleTabChange("inventory")}
-              className={`py-2 px-1 text-[13px] border-b-2 bg-transparent border-0 cursor-pointer transition-colors ${
-                activeTab === "inventory"
-                  ? "text-[#1A1A1A] font-medium border-b-[#1A1A1A]"
-                  : "text-[#888] font-normal border-b-transparent"
-              }`}
-            >
-              Inventory
-            </button>
-            <button
-              type="button"
-              onClick={() => handleTabChange("sales")}
-              className={`py-2 px-1 text-[13px] border-b-2 bg-transparent border-0 cursor-pointer transition-colors ${
-                activeTab === "sales"
-                  ? "text-[#1A1A1A] font-medium border-b-[#1A1A1A]"
-                  : "text-[#888] font-normal border-b-transparent"
-              }`}
-            >
-              Sales
-            </button>
-          </div>
-
-          {/* ── INVENTORY TAB ──────────────────────────────────────────── */}
-          {activeTab === "inventory" && (
-            <>
-              {needsMigration && (
-                <div className="px-4 sm:px-6 py-4">
-                  <BusinessMigrationBanner
-                    onRetry={() => {
-                      setLoading(true);
-                      loadInventory();
-                    }}
-                  />
-                </div>
-              )}
-
-              {!needsMigration && (
-                <>
-                  {/* TOOLBAR */}
-                  <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3 flex-wrap">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {/* Search */}
-                      <input
-                        type="text"
-                        value={gridSearch}
-                        onChange={(e) => setGridSearch(e.target.value)}
-                        placeholder="Search inventory..."
-                        className="max-w-xs w-full bg-white border border-[#E5E2DD] rounded-lg px-3 py-1.5 text-xs text-[#1A1A1A] outline-none focus:border-[#AAA] transition-colors"
-                      />
-                      {/* Filter pills */}
-                      {PILLS.map((pill) => {
-                        const isActive = activePills.has(pill.key);
-                        return (
-                          <button
-                            key={pill.key}
-                            type="button"
-                            onClick={() => handlePillToggle(pill.key)}
-                            className={`px-2.5 py-1 text-xs rounded-full border border-[#E5E2DD] cursor-pointer whitespace-nowrap transition-colors ${
-                              isActive
-                                ? "bg-[#1A1A1A] text-[#F0EDE8] font-medium"
-                                : "bg-white text-[#777] font-normal hover:bg-[#F5F2EE]"
-                            }`}
-                          >
-                            {pill.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    {/* View toggle */}
-                    <div className="flex gap-1 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => handleViewModeChange("grid")}
-                        title="Grid view"
-                        className={`p-1.5 border border-[#E5E2DD] rounded-md cursor-pointer leading-none transition-colors ${
-                          viewMode === "grid" ? "bg-[#1A1A1A] text-[#F0EDE8]" : "bg-white text-[#AAA] hover:bg-[#F5F2EE]"
-                        }`}
-                      >
-                        <svg width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
-                          <rect x="1" y="1" width="6" height="6" rx="1" />
-                          <rect x="9" y="1" width="6" height="6" rx="1" />
-                          <rect x="1" y="9" width="6" height="6" rx="1" />
-                          <rect x="9" y="9" width="6" height="6" rx="1" />
-                        </svg>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleViewModeChange("list")}
-                        title="List view"
-                        className={`p-1.5 border border-[#E5E2DD] rounded-md cursor-pointer leading-none transition-colors ${
-                          viewMode === "list" ? "bg-[#1A1A1A] text-[#F0EDE8]" : "bg-white text-[#AAA] hover:bg-[#F5F2EE]"
-                        }`}
-                      >
-                        <svg width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
-                          <rect x="1" y="2" width="14" height="2" rx="1" />
-                          <rect x="1" y="7" width="14" height="2" rx="1" />
-                          <rect x="1" y="12" width="14" height="2" rx="1" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* AGING STRIP */}
-                  <div className="px-4 sm:px-6 pb-3">
-                    <InventoryAgingStrip
-                      items={activeInventoryItems}
-                      activeBucket={activeAgingBucket}
-                      onBucketChange={setActiveAgingBucket}
-                    />
-                  </div>
-
-                  {/* GRID VIEW */}
-                  {viewMode === "grid" && (
-                    <InventoryCardGrid
-                      items={gridFilteredItems}
-                      selectedItemId={null}
-                      onItemClick={openInventoryItem}
-                      onMarkSold={handleMarkSold}
-                      onDeleteItem={(item) => {
-                        void handleDelete([item.id]);
-                      }}
-                      onBulkAction={handleBulkAction}
-                      onBulkDelete={handleDelete}
-                      ebayConnected={ebayConnected}
-                      onAddCard={openAddInventoryModal}
-                      onConsultant={openConsultant}
-                      onVoiceCommand={(item, transcript) => {
-                        void handleInventoryVoiceCommand(item, transcript);
-                      }}
-                    />
-                  )}
-
-                  {/* LIST VIEW */}
-                  {viewMode === "list" && (
-                    <div className="px-4 sm:px-6 pb-6">
-                      <Surface className="p-5">
-                        {perfEnabled ? (
-                          <Profiler
-                            id="BusinessInventoryTable"
-                            onRender={handleInventoryProfilerRender}
-                          >
-                            <InventoryTable
-                              items={items}
-                              selectedItemId={null}
-                              onItemClick={openInventoryItem}
-                              onInlineUpdate={handleInlineUpdate}
-                              onBulkAction={handleBulkAction}
-                              onDelete={handleDelete}
-                              onMarkSold={handleMarkSold}
-                              onVoiceCommand={(item, transcript) => {
-                                void handleInventoryVoiceCommand(item, transcript);
-                              }}
-                              ebayConnected={ebayConnected}
-                              ebayTopRated={ebayTopRated}
-                              dense
-                              perfEnabled={perfEnabled}
-                              listView
-                            />
-                          </Profiler>
-                        ) : (
-                          <InventoryTable
-                            items={items}
-                            selectedItemId={null}
-                            onItemClick={openInventoryItem}
-                            onInlineUpdate={handleInlineUpdate}
-                            onBulkAction={handleBulkAction}
-                            onDelete={handleDelete}
-                            onMarkSold={handleMarkSold}
-                            onVoiceCommand={(item, transcript) => {
-                              void handleInventoryVoiceCommand(item, transcript);
-                            }}
-                            ebayConnected={ebayConnected}
-                            ebayTopRated={ebayTopRated}
-                            dense
-                            listView
-                          />
-                        )}
-                      </Surface>
-                    </div>
-                  )}
-                </>
-              )}
-            </>
-          )}
-
-          {/* ── SALES TAB ─────────────────────────────────────────────── */}
-          {activeTab === "sales" && (
-            <>
-              <div className="px-4 sm:px-6 py-4 pb-6">
-                <Surface className="p-5">
-                  <SalesTable
-                    sales={sales}
-                    loading={salesLoading}
-                    filters={salesFilters}
-                    onFiltersChange={(next) => {
-                      setSalesFilters(next);
-                      setSalesPage(1);
-                    }}
-                    onEditSale={handleUpdateSale}
-                    onDeleteSale={handleDeleteSale}
-                    page={salesPage}
-                    pageSize={salesPageSize}
-                    total={salesTotal}
-                    onPageChange={(next) => setSalesPage(next)}
-                    storeTier={storeTier}
-                  />
-                </Surface>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* ── RIGHT RAIL ────────────────────────────────────────────────── */}
-        <div className="hidden lg:flex flex-col w-56 shrink-0 bg-white border-l border-[#E5E2DD]">
-          {/* SECTION 1: NEEDS ACTION */}
-          <div className="border-b border-[#F0EDE8] p-4">
-            <p className="text-[10px] text-[#AAA] tracking-[0.08em] uppercase mb-2.5">
-              NEEDS ACTION
-            </p>
-
-            <RailActionCard
-              label="List or reprice"
-              count={needsActionCount}
-              badgeBg="#FBF5E8"
-              badgeColor="#8A5C0A"
-              onClick={() =>
-                openConsultant(
-                  "Show me all cards I should list or reprice right now, sorted by margin potential."
-                )
-              }
-            />
-
-            <RailActionCard
-              label="Unlisted"
-              count={unlistedCount}
-              badgeBg="#F2EFE9"
-              badgeColor="#777"
-              onClick={() => {
-                handleTabChange("inventory");
-                handlePillToggle("Unlisted");
-              }}
-            />
-
-            <RailActionCard
-              label="MV coverage"
-              countLabel={mvCoveragePct != null ? `${mvCoveragePct}%` : "—"}
-              badgeBg="#F0F8F4"
-              badgeColor="#2D7A4F"
-              onClick={() =>
-                openConsultant(
-                  `My market value coverage is ${mvCoveragePct ?? "—"}%. What should I focus on next?`
-                )
-              }
-            />
-          </div>
-
-          {/* SECTION 2: MONTH TO DATE */}
-          <div className="border-b border-[#F0EDE8] p-4">
-            <p className="text-[10px] text-[#AAA] tracking-[0.08em] uppercase mb-2">
-              MONTH TO DATE
-            </p>
-            {[
-              { label: "Sales", value: metrics?.salesCountMtd ?? "—", color: "#1A1A1A" },
-              { label: "Revenue", value: mtdRevenue, color: "#2D7A4F" },
-              { label: "Margin", value: mtdMargin, color: "#2D7A4F" },
-              { label: "Avg sale", value: mtdAvgSale, color: "#1A1A1A" },
-              {
-                label: "Avg hold",
-                value: avgHoldDays != null ? `${avgHoldDays}d` : "—",
-                color: avgHoldDays != null && avgHoldDays > 21 ? "#C08A20" : "#1A1A1A",
-              },
-            ].map((row, idx, arr) => (
-              <div
-                key={row.label}
-                className={`flex justify-between items-center py-1.5 ${idx < arr.length - 1 ? "border-b border-[#F5F2EE]" : ""}`}
-              >
-                <span className="text-[11px] text-[#888]">{row.label}</span>
-                <span className="text-xs font-medium tabular-nums" style={{ color: row.color }}>
-                  {row.value}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          {/* SECTION 3: QUICK ACTIONS */}
-          <div className="p-4">
-            <p className="text-[10px] text-[#AAA] tracking-[0.08em] uppercase mb-2.5">
-              QUICK ACTIONS
-            </p>
-            <button
-              type="button"
-              onClick={() =>
-                openConsultant(
-                  "Run a full analysis of my inventory. What should I act on this week?"
-                )
-              }
-              className="block w-full text-left mb-1.5 px-2.5 py-2 text-[11px] border border-[#E5E2DD] rounded-md bg-white text-[#1A1A1A] hover:bg-[#FAFAF8] transition-colors cursor-pointer"
-            >
-              AI inventory review ↗
-            </button>
-            <button
-              type="button"
-              onClick={() =>
-                openConsultant(
-                  "Which cards in my inventory are best candidates for PSA grading right now?"
-                )
-              }
-              className="block w-full text-left px-2.5 py-2 text-[11px] border border-[#E5E2DD] rounded-md bg-white text-[#1A1A1A] hover:bg-[#FAFAF8] transition-colors cursor-pointer"
-            >
-              Grading candidates ↗
-            </button>
-          </div>
-        </div>
-      </main>
-
-      {/* ── MODALS ────────────────────────────────────────────────────────── */}
-
-      <AddInventoryModal
-        isOpen={showAddModal}
-        onClose={() => setShowAddModal(false)}
-        onAdd={handleAddItem}
-      />
-
-      <AddCardModalNew
-        isOpen={showAddCardModal}
-        onClose={() => setShowAddCardModal(false)}
-        onSuccess={() => {}}
-        onLimitReached={() => {}}
-        addMode="business"
-        modalTitle="Add Card to Inventory"
-        onOpenSmartSearch={() => {
-          setShowAddCardModal(false);
-          setShowCardPicker(true);
-        }}
-        onCardSelected={handleCardIdentified}
-      />
-
-      <CardPickerModal
-        isOpen={showCardPicker}
-        title="Add Card to Inventory"
-        mode="collection"
-        onClose={() => setShowCardPicker(false)}
-        onSelect={handleCardPickerSelect}
-        quantityEnabled
-      />
-
-      <AddCardToInventoryModal
-        isOpen={showAddCardToInventory}
-        card={pendingInventoryCard}
-        onClose={() => {
-          setShowAddCardToInventory(false);
-          setPendingInventoryCard(null);
-        }}
-        onSuccess={handleCardAdded}
-      />
-
-      <AddWaxModal
-        isOpen={showAddWaxModal}
-        onClose={() => setShowAddWaxModal(false)}
-        onAdd={handleAddWax}
-      />
-
-      <SaleFormModal
-        isOpen={Boolean(markSoldItem)}
-        title={markSoldItem ? `Mark as sold: ${markSoldItem.title}` : "Mark as sold"}
-        submitLabel="Record sale"
-        defaults={
-          markSoldItem
-            ? {
-                inventory_item_id: markSoldItem.id,
-                channel: markSoldItem.channel,
-                sold_at: new Date().toISOString(),
-                cogs_cents: markSoldItem.cost_basis_total_cents,
-                ...markSoldVoiceDefaults,
-              }
-            : undefined
-        }
-        onClose={() => {
-          setMarkSoldItem(null);
-          setMarkSoldVoiceDefaults(null);
-        }}
-        onSubmit={async (payload) => {
-          await handleCreateSale(payload as unknown as Record<string, unknown>);
-          setMarkSoldItem(null);
-          setMarkSoldVoiceDefaults(null);
-        }}
-        showCogsField={false}
-        storeTier={storeTier}
-      />
-
-      {pendingVoiceDeleteItem && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-gray-900 shadow-2xl">
-            <h3 className="text-lg font-bold">Delete this card?</h3>
-            <p className="mt-2 text-sm leading-6 text-gray-600">
-              {pendingVoiceDeleteItem.title || "This inventory item"} will be removed from
-              business inventory. This cannot be undone.
-            </p>
-            <div className="mt-5 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setPendingVoiceDeleteItem(null);
-                  setToast({ type: "success", message: "Voice delete canceled" });
+          {needsMigration ? (
+            <div className="px-4 py-4">
+              <BusinessMigrationBanner
+                onRetry={() => {
+                  setLoading(true);
+                  void loadInventory();
                 }}
-                className="flex-1 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const deleteId = pendingVoiceDeleteItem.id;
-                  setPendingVoiceDeleteItem(null);
-                  void deleteInventoryItems([deleteId]);
-                }}
-                className="flex-1 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-700"
-              >
-                Confirm Delete
-              </button>
-              <MicButton
-                label="Confirm by voice"
-                title="Say confirm delete"
-                size="sm"
-                onResult={(text) => {
-                  void handleInventoryVoiceCommand(pendingVoiceDeleteItem, text);
-                }}
-                onError={(message) => setToast({ type: "error", message })}
-                className="w-full justify-center bg-gray-100 text-gray-700 hover:bg-gray-200"
               />
             </div>
+          ) : (
+            <section className="min-w-0 flex-1 px-4 py-4">
+              <LedgerTable
+                rows={ledgerRows}
+                selectedRowId={selectedLedgerItemId}
+                onRowClick={handleLedgerRowClick}
+              />
+            </section>
+          )}
+        </div>
+
+        <AddCardModalNew
+          isOpen={showAddCardModal}
+          onClose={() => setShowAddCardModal(false)}
+          onSuccess={() => {}}
+          onLimitReached={() => {}}
+          addMode="business"
+          modalTitle="Add Card to Inventory"
+          onOpenSmartSearch={() => {
+            setShowAddCardModal(false);
+            setShowCardPicker(true);
+          }}
+          onCardSelected={handleCardIdentified}
+        />
+
+        <CardPickerModal
+          isOpen={showCardPicker}
+          title="Add Card to Inventory"
+          mode="collection"
+          onClose={() => setShowCardPicker(false)}
+          onSelect={handleCardPickerSelect}
+          quantityEnabled
+        />
+
+        <AddCardToInventoryModal
+          isOpen={showAddCardToInventory}
+          card={pendingInventoryCard}
+          onClose={() => {
+            setShowAddCardToInventory(false);
+            setPendingInventoryCard(null);
+          }}
+          onSuccess={handleCardAdded}
+        />
+
+        {toast && (
+          <div
+            className={`fixed bottom-4 right-4 z-50 border px-4 py-3 text-sm ${
+              toast.type === "success"
+                ? "border-[#1F5F45] bg-[#0E251B] text-[#20B26B]"
+                : "border-[#723030] bg-[#2A1111] text-[#E05C5C]"
+            }`}
+          >
+            <span>{toast.message}</span>
+            <button
+              type="button"
+              onClick={() => setToast(null)}
+              className="ml-3 text-current opacity-70 hover:opacity-100"
+            >
+              x
+            </button>
           </div>
-        </div>
-      )}
-
-      {toast && (
-        <div
-          className={`fixed bottom-4 right-4 z-50 flex items-center gap-3 rounded-lg border p-4 ${
-            toast.type === "success"
-              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-              : "border-red-200 bg-red-50 text-red-700"
-          }`}
-        >
-          <span>{toast.message}</span>
-          <button type="button" onClick={() => setToast(null)} className="hover:opacity-75">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-      )}
+        )}
+      </main>
     </AuthenticatedLayout>
-  );
-}
-
-export default function LedgerPage() {
-  return (
-    <Suspense
-      fallback={
-        <AuthenticatedLayout>
-          <main className="bg-[#F7F5F2] min-h-screen">
-            <div className="animate-pulse p-6 space-y-4">
-              <div className="h-8 w-48 rounded bg-[#E5E2DD]" />
-              <div className="flex gap-4">
-                {[...Array(4)].map((_, i) => (
-                  <div key={i} className="h-16 flex-1 rounded bg-[#E5E2DD]" />
-                ))}
-              </div>
-              <div className="h-64 rounded bg-[#E5E2DD]" />
-            </div>
-          </main>
-        </AuthenticatedLayout>
-      }
-    >
-      <LedgerPageContent />
-    </Suspense>
   );
 }

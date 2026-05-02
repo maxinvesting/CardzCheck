@@ -133,6 +133,12 @@ export interface BusinessInventoryItem {
   business_account_id: string;
   card_id: string | null;
   title: string;
+  player_name?: string | null;
+  year?: string | null;
+  set_name?: string | null;
+  insert_type?: string | null;
+  parallel_type?: string | null;
+  card_number?: string | null;
   quantity: number;
   acquisition_date: string | null;
   acquisition_type: "buy" | "trade" | "rip" | "consignment" | "other";
@@ -152,6 +158,15 @@ export interface BusinessInventoryItem {
   status: "unlisted" | "listed" | "pending_sale" | "sold" | "returned";
   list_price_cents: number | null;
   current_market_value_cents: number | null;
+  estimated_cmv?: number | null;
+  est_cmv?: number | null;
+  last_known_price_cents?: number | null;
+  last_price_cents?: number | null;
+  last_price?: number | null;
+  lowest_listing_cents?: number | null;
+  lowest_listing_price_cents?: number | null;
+  market_floor_cents?: number | null;
+  market_floor_price_cents?: number | null;
   image_source?: CardImageSource | null;
   image_url?: string | null;
   trusted_image?: TrustedCardImage | null;
