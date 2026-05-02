@@ -271,7 +271,7 @@ export default function Sidebar() {
         { name: "Admin", href: "/admin", icon: <AdminIcon />, badge: "Admin" },
       ]
     : baseNavItems;
-  const businessSurfaceClass = "bg-[var(--biz-surface)] border-[color:var(--biz-border)]";
+  const businessSurfaceClass = "bg-[var(--biz-near-black)] border-[color:var(--biz-border)]";
 
   useEffect(() => {
     async function loadUser() {
@@ -329,7 +329,7 @@ export default function Sidebar() {
       <div
         className={`fixed top-0 left-0 z-40 flex h-full w-64 flex-col border-r transition-transform duration-300 ${
           isBusinessWorkspace
-            ? businessSurfaceClass
+            ? "bg-[var(--biz-near-black)] border-[color:var(--biz-border)]"
             : "bg-[#0f1419] border-gray-800"
         } ${
           isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
@@ -337,29 +337,55 @@ export default function Sidebar() {
       >
         <Link
           href={isBusinessWorkspace ? "/business" : "/dashboard"}
-          className={`flex cursor-pointer flex-col items-center justify-center border-b p-6 transition-opacity hover:opacity-90 ${
+          className={`flex cursor-pointer items-center justify-between gap-3 border-b px-4 py-4 transition-opacity hover:opacity-90 ${
             isBusinessWorkspace ? "border-[color:var(--biz-border)]" : "border-gray-800"
           }`}
           onClick={() => setIsOpen(false)}
         >
-          <span className={`text-2xl font-bold tracking-tight ${isBusinessWorkspace ? "text-[var(--biz-text)]" : "text-white"}`}>
-            CardzCheck
-          </span>
+          <div className="flex items-center gap-2 min-w-0">
+            {isBusinessWorkspace ? (
+              <span
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm font-mono-num text-[11px] font-bold"
+                style={{
+                  background: "var(--biz-primary-soft-strong)",
+                  border: "1px solid var(--biz-primary-border)",
+                  color: "var(--biz-primary)",
+                }}
+              >
+                CC
+              </span>
+            ) : null}
+            <span
+              className={`truncate text-base font-semibold tracking-tight ${
+                isBusinessWorkspace ? "text-[var(--biz-text-strong)]" : "text-white"
+              }`}
+            >
+              CardzCheck
+            </span>
+          </div>
           {isBusinessWorkspace && (
             <span
-              className="mt-1 rounded px-2 py-0.5 text-[10px] font-bold tracking-wide"
+              className="rounded-sm px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em]"
               style={{
                 background: "var(--biz-primary-soft)",
                 border: "1px solid var(--biz-primary-border)",
                 color: "var(--biz-primary)",
               }}
             >
-              Business
+              Biz
             </span>
           )}
         </Link>
 
-        <nav className="flex-1 overflow-y-auto p-4 space-y-2">
+        {isBusinessWorkspace ? (
+          <div className="border-b border-[color:var(--biz-border)] px-4 pt-3 pb-2">
+            <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-[var(--biz-muted)] font-mono-num">
+              Workspace
+            </p>
+          </div>
+        ) : null}
+
+        <nav className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
           {navItems.map((item) => {
             const isProFeature = Boolean(item.isPro && user && !user.is_paid);
             return (
@@ -367,15 +393,15 @@ export default function Sidebar() {
                 key={item.href}
                 href={item.href}
                 onClick={() => setIsOpen(false)}
-                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                className={`flex items-center gap-3 px-3 py-2 rounded transition-all ${
                   isActive(item)
                     ? item.href.includes("/marketplace")
                       ? "bg-cyan-600 text-white"
                       : isBusinessWorkspace
-                      ? "text-[var(--biz-text)]"
+                      ? "text-[var(--biz-text-strong)]"
                       : "bg-blue-600 text-white"
                     : isBusinessWorkspace
-                      ? "text-[var(--biz-muted)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]"
+                      ? "text-[var(--biz-muted-strong)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]"
                       : "text-gray-400 hover:text-white hover:bg-gray-800"
                 }`}
                 style={
@@ -385,16 +411,13 @@ export default function Sidebar() {
                           ? "var(--biz-nav-active-bg)"
                           : "rgba(255,255,255,0.06)",
                         borderLeft: "2px solid var(--biz-nav-active-border)",
-                        paddingLeft: "14px",
-                        boxShadow: isBusinessRoute
-                          ? "inset 0 0 0 1px var(--biz-primary-border)"
-                          : undefined,
+                        paddingLeft: "13px",
                       }
                     : {}
                 }
               >
-                {item.icon}
-                <span className="font-medium">{item.name}</span>
+                <span className="shrink-0 opacity-90">{item.icon}</span>
+                <span className="truncate text-[13px] font-medium tracking-tight">{item.name}</span>
                 {/* AI sparkle for Business Consultant */}
                 {item.name === "Business Consultant" && isBusinessWorkspace && (
                   <svg
@@ -456,7 +479,7 @@ export default function Sidebar() {
 
           {user && (user.app_role === "admin" || user.app_role === "owner") && (
             <>
-              <div className={`pt-3 pb-1 px-4 text-[10px] font-semibold uppercase tracking-widest ${
+              <div className={`mt-3 pb-1 px-3 text-[9px] font-semibold uppercase tracking-[0.16em] font-mono-num ${
                 isBusinessWorkspace ? "text-[var(--biz-muted)]" : "text-gray-600"
               }`}>
                 Admin
@@ -469,21 +492,21 @@ export default function Sidebar() {
                   key={item.href}
                   href={item.href}
                   onClick={() => setIsOpen(false)}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                  className={`flex items-center gap-3 px-3 py-2 rounded transition-colors ${
                     pathname === item.href || pathname.startsWith(`${item.href}/`)
                       ? isBusinessWorkspace
-                        ? "border border-orange-200 border-l-2 border-l-orange-500 bg-orange-50 text-orange-700"
+                        ? "border-l-2 border-l-orange-500 bg-orange-500/10 text-orange-300"
                         : "bg-orange-600 text-white"
                       : isBusinessWorkspace
-                        ? "text-[var(--biz-muted)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]"
+                        ? "text-[var(--biz-muted-strong)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]"
                         : "text-gray-400 hover:text-white hover:bg-gray-800"
                   }`}
                 >
-                  {item.icon}
-                  <span className="font-medium">{item.name}</span>
-                  <span className={`ml-auto px-1.5 py-0.5 text-[10px] font-semibold rounded ${
+                  <span className="shrink-0 opacity-90">{item.icon}</span>
+                  <span className="truncate text-[13px] font-medium tracking-tight">{item.name}</span>
+                  <span className={`ml-auto px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] rounded-sm ${
                     isBusinessWorkspace
-                      ? "bg-orange-50 border border-orange-200 text-orange-600"
+                      ? "bg-orange-500/15 border border-orange-500/30 text-orange-300"
                       : "bg-orange-500/20 text-orange-400"
                   }`}>
                     Admin
@@ -495,34 +518,34 @@ export default function Sidebar() {
         </nav>
 
         <div
-          className={`space-y-4 border-t p-4 ${
+          className={`space-y-3 border-t p-3 ${
             isBusinessWorkspace ? "border-[color:var(--biz-border)]" : "border-gray-800"
           }`}
         >
           {user && !hasPaidWorkspace && remainingSearches !== null && (
-            <div className={`rounded-lg px-4 py-3 ${isBusinessWorkspace ? "cc-surface" : "bg-gray-800"}`}>
-              <div className="mb-1 text-xs text-[var(--biz-muted)]">Free Plan</div>
-              <div className={`text-sm font-medium ${isBusinessWorkspace ? "text-[var(--biz-text)]" : "text-white"}`}>
+            <div className={`rounded px-3 py-2 ${isBusinessWorkspace ? "border border-[var(--biz-border)] bg-[var(--biz-surface-soft)]" : "bg-gray-800"}`}>
+              <div className="mb-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-[var(--biz-muted)] font-mono-num">Free Plan</div>
+              <div className={`text-[12px] font-medium ${isBusinessWorkspace ? "text-[var(--biz-text)]" : "text-white"}`}>
                 {remainingSearches} / 3 searches remaining
               </div>
             </div>
           )}
 
           {user && (
-            <div className={`rounded-lg px-4 py-3 ${isBusinessWorkspace ? "cc-surface" : "bg-gray-800"}`}>
-              <div className="mb-1 text-xs text-[var(--biz-muted)]">Signed in as</div>
-              <div className={`truncate text-sm font-medium ${isBusinessWorkspace ? "text-[var(--biz-text)]" : "text-white"}`}>
+            <div className={`rounded px-3 py-2 ${isBusinessWorkspace ? "border border-[var(--biz-border)] bg-[var(--biz-surface-soft)]" : "bg-gray-800"}`}>
+              <div className="mb-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-[var(--biz-muted)] font-mono-num">Operator</div>
+              <div className={`truncate text-[12px] font-medium ${isBusinessWorkspace ? "text-[var(--biz-text-strong)]" : "text-white"}`}>
                 {user.email}
               </div>
               {hasPaidWorkspace && (
                 <div
-                  className={`mt-2 inline-flex items-center rounded px-2 py-1 text-xs font-medium ${
+                  className={`mt-1.5 inline-flex items-center rounded-sm px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em] ${
                     isBusinessWorkspace
                       ? "border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] text-[var(--biz-primary)]"
                       : "bg-blue-600 text-white"
                   }`}
                 >
-                  {isBusinessWorkspace ? "Business Workspace" : "Pro Member"}
+                  {isBusinessWorkspace ? "Workspace · Pro" : "Pro Member"}
                 </div>
               )}
             </div>
@@ -534,7 +557,7 @@ export default function Sidebar() {
                 setIsOpen(false);
                 setPricingOpen(true);
               }}
-              className={`w-full rounded-lg px-4 py-3 text-center font-medium transition-colors ${
+              className={`w-full rounded px-3 py-2 text-center text-[13px] font-semibold transition-colors ${
                 isBusinessWorkspace ? "cc-btn-primary" : "bg-blue-600 hover:bg-blue-700 text-white"
               }`}
             >
@@ -542,7 +565,7 @@ export default function Sidebar() {
             </button>
           )}
 
-          <div className={`flex items-center justify-center gap-4 pt-2 text-xs ${isBusinessWorkspace ? "text-[var(--biz-muted)]" : "text-gray-500"}`}>
+          <div className={`flex items-center justify-center gap-3 pt-1 text-[11px] ${isBusinessWorkspace ? "text-[var(--biz-muted)]" : "text-gray-500"}`}>
             <Link
               href="/terms"
               onClick={() => setIsOpen(false)}
