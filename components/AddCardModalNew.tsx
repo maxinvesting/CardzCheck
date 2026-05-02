@@ -48,6 +48,7 @@ type ModalMode =
   | "manual"
   | "confirm"
   | "graded_cert"
+  | "graded_manual"
   | "graded_confirm";
 const MAX_IDENTIFY_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_FALLBACK_DATA_URL_BYTES = 350 * 1024;
@@ -168,6 +169,14 @@ function buildCardIdentificationFromPsa(psa: PsaLookupResult): CardIdentificatio
   };
 }
 
+function normalizePsaManualGrade(rawGrade: string): string | undefined {
+  const trimmed = rawGrade.trim();
+  if (!trimmed) return undefined;
+  if (/^PSA\s+/i.test(trimmed)) return trimmed.replace(/^psa/i, "PSA");
+  if (/^\d+(?:\.\d+)?$/.test(trimmed)) return `PSA ${trimmed}`;
+  return trimmed;
+}
+
 export default function AddCardModalNew({
   isOpen,
   onClose,
@@ -209,6 +218,14 @@ export default function AddCardModalNew({
     set_name: "",
     parallel_type: "",
   });
+  const [gradedManualForm, setGradedManualForm] = useState({
+    player_name: "",
+    year: "",
+    set_name: "",
+    card_number: "",
+    parallel_type: "",
+    grade: "",
+  });
 
   // Confirm mode state
   const [acquisitionType, setAcquisitionType] = useState<AcquisitionType>("pulled");
@@ -230,6 +247,14 @@ export default function AddCardModalNew({
     setPreviews([]);
     setIdentifiedCard(null);
     setManualForm({ player_name: "", year: "", set_name: "", parallel_type: "" });
+    setGradedManualForm({
+      player_name: "",
+      year: "",
+      set_name: "",
+      card_number: "",
+      parallel_type: "",
+      grade: "",
+    });
     setAcquisitionType("pulled");
     setQuantity("1");
     setPurchasePrice("");
@@ -275,6 +300,101 @@ export default function AddCardModalNew({
     });
     resetForm();
     onClose();
+  };
+
+  const openGradedManualEntry = () => {
+    setError(null);
+    setGradedManualForm((prev) => ({
+      player_name: psaResult?.player_name ?? prev.player_name,
+      year: psaResult?.year ?? prev.year,
+      set_name: psaResult?.set_name ?? prev.set_name,
+      card_number: psaResult?.card_number ?? prev.card_number,
+      parallel_type: psaResult?.parallel_type ?? prev.parallel_type,
+      grade: psaResult?.grade?.replace(/^PSA\s*/i, "") ?? prev.grade,
+    }));
+    setMode("graded_manual");
+  };
+
+  const handleGradedManualSubmit = () => {
+    const playerName = gradedManualForm.player_name.trim();
+    const year = gradedManualForm.year.trim();
+
+    if (!playerName) {
+      setError("Player name is required.");
+      return;
+    }
+
+    if (year && !/^\d{4}$/.test(year)) {
+      setError("Year must be a 4-digit number.");
+      return;
+    }
+
+    const parsedQuantity = Math.max(1, Number.parseInt(quantity, 10) || 1);
+    const certDigits = gradedCertInput.replace(/\D/g, "");
+    const grade = normalizePsaManualGrade(gradedManualForm.grade);
+    const setName = gradedManualForm.set_name.trim();
+    const cardNumber = gradedManualForm.card_number.trim();
+    const parallelType = gradedManualForm.parallel_type.trim();
+
+    if ((addMode === "watchlist" || addMode === "business") && onCardSelected) {
+      onCardSelected({
+        player_name: playerName,
+        year: year || undefined,
+        set_name: setName || undefined,
+        card_number: cardNumber || undefined,
+        parallel_type: parallelType || undefined,
+        grade,
+        grader: "PSA",
+        psa_cert_number: certDigits || undefined,
+        quantity: parsedQuantity,
+      });
+      resetForm();
+      onClose();
+      return;
+    }
+
+    const manualIdentity: CardIdentity = {
+      player: playerName,
+      year: year ? Number(year) : null,
+      brand: null,
+      setName: setName || null,
+      subset: null,
+      sport: null,
+      league: null,
+      cardNumber: cardNumber || null,
+      rookie: null,
+      parallel: parallelType || null,
+      cardStock: "unknown",
+      confidence: "high",
+      fieldConfidence: {
+        player: "high",
+        setName: setName ? "high" : "low",
+        year: year ? "high" : "low",
+      },
+      sources: {
+        player: "user",
+        setName: setName ? "user" : "inferred",
+        year: year ? "user" : "inferred",
+      },
+      warnings: certDigits ? [`PSA cert ${certDigits} entered manually`] : [],
+      evidenceSummary: null,
+    };
+
+    setIdentifiedCard({
+      player_name: playerName,
+      year: year || undefined,
+      set_name: setName || undefined,
+      card_number: cardNumber || undefined,
+      parallel_type: parallelType || undefined,
+      grade,
+      imageUrl: "",
+      confidence: "high",
+      cardIdentity: manualIdentity,
+    });
+    setCondition(grade || "Raw");
+    setCollectionGradedCertDigits(certDigits || null);
+    setError(null);
+    setMode("confirm");
   };
 
   const proceedGradedToCollectionConfirm = () => {
@@ -673,6 +793,7 @@ export default function AddCardModalNew({
       Boolean(identifiedCard.imageUrl) &&
       !isDataUrl(identifiedCard.imageUrl || "")
     : false;
+  const currentGradedCertDigits = gradedCertInput.replace(/\D/g, "");
 
   if (!isOpen) return null;
 
@@ -702,6 +823,7 @@ export default function AddCardModalNew({
             {mode === "manual" && "Enter Card Details"}
             {mode === "confirm" && "Confirm Card"}
             {mode === "graded_cert" && "Add graded card (PSA)"}
+            {mode === "graded_manual" && "Enter graded card details"}
             {mode === "graded_confirm" && "Confirm graded card"}
           </h2>
           <button
@@ -896,6 +1018,155 @@ export default function AddCardModalNew({
                 className="w-full px-4 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
               >
                 Continue to confirm
+              </button>
+              {currentGradedCertDigits.length >= 5 && !psaLoading && (
+                <button
+                  type="button"
+                  onClick={openGradedManualEntry}
+                  className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors font-medium"
+                >
+                  Enter details manually
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Graded: manual entry fallback when PSA lookup is unavailable */}
+          {mode === "graded_manual" && (
+            <div className="space-y-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setError(null);
+                  setMode("graded_cert");
+                }}
+                className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+              >
+                ← Back
+              </button>
+              <div className="rounded-lg border border-amber-300/40 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
+                PSA lookup can enrich the card, but it is not required. Enter the slab details here and continue.
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  PSA certification number
+                </label>
+                <input
+                  type="text"
+                  value={currentGradedCertDigits}
+                  readOnly
+                  className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-500 dark:text-gray-400"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Player Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={gradedManualForm.player_name}
+                  onChange={(e) =>
+                    setGradedManualForm((prev) => ({ ...prev, player_name: e.target.value }))
+                  }
+                  placeholder="e.g., Michael Jordan"
+                  className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                />
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Year
+                  </label>
+                  <input
+                    type="text"
+                    value={gradedManualForm.year}
+                    onChange={(e) =>
+                      setGradedManualForm((prev) => ({ ...prev, year: e.target.value }))
+                    }
+                    placeholder="e.g., 1986"
+                    className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Grade
+                  </label>
+                  <input
+                    type="text"
+                    value={gradedManualForm.grade}
+                    onChange={(e) =>
+                      setGradedManualForm((prev) => ({ ...prev, grade: e.target.value }))
+                    }
+                    placeholder="e.g., 10"
+                    className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Set / Brand
+                </label>
+                <input
+                  type="text"
+                  value={gradedManualForm.set_name}
+                  onChange={(e) =>
+                    setGradedManualForm((prev) => ({ ...prev, set_name: e.target.value }))
+                  }
+                  placeholder="e.g., Topps Chrome"
+                  className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                />
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Card #
+                  </label>
+                  <input
+                    type="text"
+                    value={gradedManualForm.card_number}
+                    onChange={(e) =>
+                      setGradedManualForm((prev) => ({ ...prev, card_number: e.target.value }))
+                    }
+                    placeholder="e.g., 57"
+                    className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Parallel / Variant
+                  </label>
+                  <input
+                    type="text"
+                    value={gradedManualForm.parallel_type}
+                    onChange={(e) =>
+                      setGradedManualForm((prev) => ({ ...prev, parallel_type: e.target.value }))
+                    }
+                    placeholder="Optional"
+                    className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Quantity
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={quantity}
+                  onChange={(e) => setQuantity(e.target.value)}
+                  className="w-full max-w-40 px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleGradedManualSubmit}
+                className="w-full px-4 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium"
+              >
+                {addMode === "business"
+                  ? "Continue to inventory details"
+                  : "Set purchase info & add to collection"}
               </button>
             </div>
           )}
