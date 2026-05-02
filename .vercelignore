@@ -1,0 +1,10 @@
+.claude/
+.clone/
+.playwright-cli/
+.next/
+node_modules/
+coverage/
+out/
+tmp/
+output/
+supabase/.temp/
