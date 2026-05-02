@@ -198,7 +198,7 @@ function PERSONAL_NAV_ITEMS(): NavItem[] {
     { name: "Watchlist", href: "/watchlist", icon: <EyeIcon />, isPro: true, badge: "Pro" },
     { name: "Compare Listings", href: "/comps", icon: <ChartIcon /> },
     { name: "CardzCheck Analyst", href: "/analyst", icon: <AnalystIcon />, isPro: true, badge: "Pro" },
-    { name: "Marketplace", href: "/shop", icon: <ShopIcon /> },
+    { name: "Marketplace", href: "/marketplace", icon: <ShopIcon /> },
     { name: "Help & FAQ", href: "/help", icon: <HelpIcon /> },
     { name: "Settings", href: "/settings", icon: <SettingsIcon /> },
   ];
@@ -227,7 +227,7 @@ function BUSINESS_NAV_ITEMS(): NavItem[] {
     { name: "News & Updates", href: "/business/news", icon: <NewsIcon /> },
     { name: "Compare Listings", href: "/business/comps", icon: <ChartIcon /> },
     { name: "Business Consultant", href: "/business/consultant", icon: <AnalystIcon /> },
-    { name: "Marketplace", href: "/shop", icon: <ShopIcon /> },
+    { name: "Marketplace", href: "/marketplace", icon: <ShopIcon /> },
     { name: "Help & FAQ", href: "/business/help", icon: <HelpIcon /> },
     { name: "Settings", href: "/business/settings", icon: <SettingsIcon /> },
   ];
@@ -257,7 +257,7 @@ export default function Sidebar() {
       setBusinessMode(false);
       localStorage.setItem("sidebar-mode", "personal");
     }
-    // Shared routes (/shop, /help, /grade-hub, /bulk, /news, /settings) — keep current mode
+    // Shared routes (/marketplace, /help, /grade-hub, /bulk, /news, /settings) — keep current mode
   }, [pathname]);
 
   const isBusinessWorkspace = pathname.startsWith("/business") || pathname.startsWith("/admin");
@@ -369,7 +369,7 @@ export default function Sidebar() {
                 onClick={() => setIsOpen(false)}
                 className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
                   isActive(item)
-                    ? item.href.includes("/shop")
+                    ? item.href.includes("/marketplace")
                       ? "bg-cyan-600 text-white"
                       : isBusinessWorkspace
                       ? "text-[var(--biz-text)]"
@@ -462,7 +462,7 @@ export default function Sidebar() {
                 Admin
               </div>
               {[
-                { name: "Marketplace", href: "/admin/shop", icon: <ShopIcon /> },
+                { name: "Marketplace", href: "/admin/marketplace", icon: <ShopIcon /> },
                 { name: "News", href: "/admin/news", icon: <NewsIcon /> },
               ].map((item) => (
                 <Link

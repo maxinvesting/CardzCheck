@@ -21,7 +21,7 @@ export default async function AdminNewsPage() {
               Create and manage platform announcements that appear in the News section for users.
             </p>
             <Link
-              href="/admin/shop"
+              href="/admin"
               className="mt-2 inline-block text-sm text-cyan-400 hover:text-cyan-300"
             >
               ← Back to admin

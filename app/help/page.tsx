@@ -234,7 +234,7 @@ const QUICK_LINKS = [
   { label: "Sales Search", href: "/comps", desc: "Review listing and sold-history data", color: "emerald" },
   { label: "Grade Probability Engine", href: "/grade-probability", desc: "Estimate grading probabilities with AI", color: "amber" },
   { label: "Bulk Mode", href: "/bulk", desc: "Add or evaluate cards in bulk", color: "rose" },
-  { label: "Marketplace", href: "/shop", desc: "Browse cards for sale", color: "cyan" },
+  { label: "Marketplace", href: "/marketplace", desc: "Browse cards for sale", color: "cyan" },
 ];
 
 function AccordionItem({ q, a }: { q: string; a: string }) {

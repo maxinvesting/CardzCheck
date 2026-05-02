@@ -9,7 +9,7 @@ const MAIN_TABS = [
   { name: "Home", href: "/dashboard", icon: HomeIcon },
   { name: "Collection", href: "/collection", icon: CollectionIcon },
   { name: "Analytics", href: "/analytics", icon: ChartIcon },
-  { name: "Marketplace", href: "/shop", icon: ShopIcon, cyan: true },
+  { name: "Marketplace", href: "/marketplace", icon: ShopIcon, cyan: true },
   { name: "More", href: "#more", icon: MoreIcon },
 ] as const;
 
@@ -28,8 +28,8 @@ const TAB_BASE_PATHS = [
   "/dashboard",
   "/collection",
   "/analytics",
-  "/shop",
-  "/admin/shop",
+  "/marketplace",
+  "/admin/marketplace",
   "/watchlist",
   "/comps",
   "/grade-hub",
