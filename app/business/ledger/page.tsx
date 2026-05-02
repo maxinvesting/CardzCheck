@@ -5,7 +5,11 @@ import { useRouter } from "next/navigation";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import BusinessPaywall from "@/components/business/BusinessPaywall";
 import BusinessMigrationBanner from "@/components/business/BusinessMigrationBanner";
+import BusinessInventoryItemEditor from "@/components/business/BusinessInventoryItemEditor";
+import EbayListingModal from "@/components/business/EbayListingModal";
 import LedgerTable from "@/components/business/LedgerTable";
+import SaleFormModal from "@/components/business/SaleFormModal";
+import TradeFormModal, { type TradeFormPayload } from "@/components/business/TradeFormModal";
 import AddCardToInventoryModal from "@/components/business/AddCardToInventoryModal";
 import type { PendingInventoryCard } from "@/components/business/AddCardToInventoryModal";
 import AddCardModalNew from "@/components/AddCardModalNew";
@@ -109,6 +113,9 @@ export default function LedgerPage() {
   const [needsMigration, setNeedsMigration] = useState(false);
   const [items, setItems] = useState<BusinessInventoryItem[]>([]);
   const [selectedLedgerItemId, setSelectedLedgerItemId] = useState<string | null>(null);
+  const [markSoldItem, setMarkSoldItem] = useState<BusinessInventoryItem | null>(null);
+  const [tradeItem, setTradeItem] = useState<BusinessInventoryItem | null>(null);
+  const [listItem, setListItem] = useState<BusinessInventoryItem | null>(null);
   const [showAddCardModal, setShowAddCardModal] = useState(false);
   const [showCardPicker, setShowCardPicker] = useState(false);
   const [showAddCardToInventory, setShowAddCardToInventory] = useState(false);
@@ -119,8 +126,19 @@ export default function LedgerPage() {
   );
 
   const activeInventoryItems = useMemo(
-    () => items.filter((item) => item.status !== "sold" && item.status !== "returned"),
+    () =>
+      items.filter(
+        (item) =>
+          item.status !== "sold" &&
+          item.status !== "returned" &&
+          item.status !== "traded"
+      ),
     [items]
+  );
+
+  const selectedItem = useMemo(
+    () => items.find((item) => item.id === selectedLedgerItemId) ?? null,
+    [items, selectedLedgerItemId]
   );
 
   const ledgerRows = useMemo(
@@ -198,9 +216,99 @@ export default function LedgerPage() {
   }, [toast]);
 
   const handleLedgerRowClick = useCallback((row: LedgerTableRow) => {
-    // Future detail drawer entrypoint.
     setSelectedLedgerItemId(row.id);
   }, []);
+
+  const handleSaveItem = useCallback(
+    async (id: string, updates: Partial<BusinessInventoryItem>) => {
+      try {
+        const res = await fetch("/api/business/inventory", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id, ...updates }),
+        });
+
+        const data = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(data?.error || "Failed to save item");
+
+        const updated = data as BusinessInventoryItem;
+        setItems((prev) => prev.map((item) => (item.id === id ? updated : item)));
+        setToast({ type: "success", message: "Item saved" });
+      } catch (error) {
+        setToast({
+          type: "error",
+          message: error instanceof Error ? error.message : "Failed to save item",
+        });
+      }
+    },
+    []
+  );
+
+  const handleCreateSale = useCallback(
+    async (sale: Record<string, unknown>) => {
+      const inventoryId = (sale.inventory_item_id as string | null) || null;
+      try {
+        const res = await fetch("/api/business/sales", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(sale),
+        });
+
+        const data = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(data?.error || "Failed to record sale");
+
+        if (inventoryId) {
+          setItems((prev) => prev.filter((item) => item.id !== inventoryId));
+          if (selectedLedgerItemId === inventoryId) setSelectedLedgerItemId(null);
+        }
+        setToast({ type: "success", message: "Sale recorded" });
+        setMarkSoldItem(null);
+      } catch (error) {
+        setToast({
+          type: "error",
+          message: error instanceof Error ? error.message : "Failed to record sale",
+        });
+      }
+    },
+    [selectedLedgerItemId]
+  );
+
+  const handleCreateTrade = useCallback(
+    async (payload: TradeFormPayload) => {
+      try {
+        const res = await fetch("/api/business/trades", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        const data = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(data?.error || "Failed to record trade");
+
+        setItems((prev) => prev.filter((item) => item.id !== payload.inventory_item_id));
+        if (selectedLedgerItemId === payload.inventory_item_id) {
+          setSelectedLedgerItemId(null);
+        }
+        setTradeItem(null);
+        setToast({ type: "success", message: "Trade recorded" });
+      } catch (error) {
+        setToast({
+          type: "error",
+          message: error instanceof Error ? error.message : "Failed to record trade",
+        });
+      }
+    },
+    [selectedLedgerItemId]
+  );
+
+  const handleListSuccess = useCallback(
+    async (_listingId: string, _listingUrl: string) => {
+      setListItem(null);
+      setToast({ type: "success", message: "Listing created" });
+      await loadInventory();
+    },
+    [loadInventory]
+  );
 
   const handleCardAdded = useCallback(
     (playerName: string) => {
@@ -315,6 +423,82 @@ export default function LedgerPage() {
           )}
         </div>
 
+        {selectedItem && (
+          <>
+            <div
+              className="fixed inset-0 z-40 bg-black/50"
+              onClick={() => setSelectedLedgerItemId(null)}
+            />
+            <aside className="fixed right-0 top-0 z-50 h-full w-full max-w-xl overflow-y-auto border-l border-[#24282D] bg-[#0F1317] shadow-2xl">
+              <div className="sticky top-0 z-10 border-b border-[#24282D] bg-[#0B0D0F]/95 px-4 py-3 backdrop-blur">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-[10px] font-medium uppercase tracking-[0.12em] text-[#77808C]">
+                      Ledger action
+                    </div>
+                    <h2 className="mt-1 truncate text-sm font-semibold text-[#E6E8EB]">
+                      {selectedItem.title}
+                    </h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedLedgerItemId(null)}
+                    className="px-2 text-xl leading-none text-[#77808C] hover:text-[#E6E8EB]"
+                    aria-label="Close item drawer"
+                  >
+                    x
+                  </button>
+                </div>
+
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setMarkSoldItem(selectedItem)}
+                    className="border border-[#1F5F45] bg-[#0E251B] px-3 py-2 text-xs font-semibold text-[#20B26B] hover:bg-[#143624]"
+                  >
+                    Sell
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTradeItem(selectedItem)}
+                    className="border border-[#5A4A1F] bg-[#251E0E] px-3 py-2 text-xs font-semibold text-[#F0B429] hover:bg-[#33290F]"
+                  >
+                    Trade
+                  </button>
+                  {selectedItem.ebay_listing_url ? (
+                    <a
+                      href={selectedItem.ebay_listing_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="border border-[#343941] bg-[#111315] px-3 py-2 text-center text-xs font-semibold text-[#B8C0CC] hover:text-[#E6E8EB]"
+                    >
+                      View listing
+                    </a>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setListItem(selectedItem)}
+                      className="border border-[#86B817] bg-[#1F2B0A] px-3 py-2 text-xs font-semibold text-[#C5F06A] hover:bg-[#29380F]"
+                    >
+                      List
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <BusinessInventoryItemEditor
+                item={selectedItem}
+                onSave={handleSaveItem}
+                onClose={() => setSelectedLedgerItemId(null)}
+                tone="dark"
+                showOpenProfileLink
+                showGradeProbabilitySection={false}
+                showEbayListingAction={false}
+              />
+            </aside>
+          </>
+        )}
+
         <AddCardModalNew
           isOpen={showAddCardModal}
           onClose={() => setShowAddCardModal(false)}
@@ -347,6 +531,42 @@ export default function LedgerPage() {
           }}
           onSuccess={handleCardAdded}
         />
+
+        <SaleFormModal
+          isOpen={Boolean(markSoldItem)}
+          title={markSoldItem ? `Mark as sold: ${markSoldItem.title}` : "Mark as sold"}
+          submitLabel="Record sale"
+          defaults={
+            markSoldItem
+              ? {
+                  inventory_item_id: markSoldItem.id,
+                  channel: markSoldItem.channel,
+                  sold_at: new Date().toISOString(),
+                  cogs_cents: markSoldItem.cost_basis_total_cents,
+                }
+              : undefined
+          }
+          onClose={() => setMarkSoldItem(null)}
+          onSubmit={async (payload) => {
+            await handleCreateSale(payload as unknown as Record<string, unknown>);
+          }}
+          showCogsField={false}
+        />
+
+        <TradeFormModal
+          isOpen={Boolean(tradeItem)}
+          item={tradeItem}
+          onClose={() => setTradeItem(null)}
+          onSubmit={handleCreateTrade}
+        />
+
+        {listItem && (
+          <EbayListingModal
+            item={listItem}
+            onClose={() => setListItem(null)}
+            onSuccess={handleListSuccess}
+          />
+        )}
 
         {toast && (
           <div

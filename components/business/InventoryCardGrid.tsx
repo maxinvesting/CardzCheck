@@ -480,7 +480,7 @@ function InventoryCardCell({
           >
             Open profile
           </button>
-          {item.status !== "sold" ? (
+          {item.status !== "sold" && item.status !== "returned" && item.status !== "traded" ? (
             <button
               type="button"
               role="menuitem"
@@ -504,7 +504,11 @@ function InventoryCardCell({
           >
             Delete card
           </button>
-          {!hasEbayListing && item.status !== "sold" && item.status !== "returned" && item.status !== "pending_sale" ? (
+          {!hasEbayListing &&
+          item.status !== "sold" &&
+          item.status !== "returned" &&
+          item.status !== "traded" &&
+          item.status !== "pending_sale" ? (
             <a
               role="menuitem"
               href={buildEbayListUrl(buildDisplayTitle(item))}

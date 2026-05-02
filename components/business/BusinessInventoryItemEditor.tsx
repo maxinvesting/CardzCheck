@@ -29,9 +29,10 @@ interface Props {
   tone?: EditorTone;
   showOpenProfileLink?: boolean;
   showGradeProbabilitySection?: boolean;
+  showEbayListingAction?: boolean;
 }
 
-const STATUS_OPTIONS = ["unlisted", "listed", "pending_sale", "sold", "returned"] as const;
+const STATUS_OPTIONS = ["unlisted", "listed", "pending_sale", "sold", "returned", "traded"] as const;
 const CHANNEL_OPTIONS = ["ebay", "whatnot", "instagram", "show", "local", "other"] as const;
 const ACQ_OPTIONS = ["buy", "trade", "rip", "consignment", "other"] as const;
 
@@ -57,6 +58,7 @@ export default function BusinessInventoryItemEditor({
   tone = "dark",
   showOpenProfileLink = true,
   showGradeProbabilitySection = true,
+  showEbayListingAction = true,
 }: Props) {
   const [form, setForm] = useState<Record<string, any>>({});
   const [cmvLoading, setCmvLoading] = useState(false);
@@ -311,7 +313,11 @@ export default function BusinessInventoryItemEditor({
         <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
           <h2 className={`text-lg font-bold ${dark ? "text-white" : "text-[#101A14]"}`}>Edit Item</h2>
           <div className="flex items-center gap-2">
-            {item.status !== "sold" && !item.ebay_item_id && (
+            {showEbayListingAction &&
+              item.status !== "sold" &&
+              item.status !== "returned" &&
+              item.status !== "traded" &&
+              !item.ebay_item_id && (
               <button
                 type="button"
                 onClick={() => setShowEbayListingModal(true)}

@@ -152,7 +152,9 @@ export default function BusinessDashboardView({
   );
 
   const dashboardData = useMemo(() => {
-    const activeItems = items.filter((item) => item.status !== "sold" && item.status !== "returned");
+    const activeItems = items.filter(
+      (item) => item.status !== "sold" && item.status !== "returned" && item.status !== "traded"
+    );
     const listedItems = activeItems.filter(
       (item) => item.status === "listed" || item.status === "pending_sale"
     );

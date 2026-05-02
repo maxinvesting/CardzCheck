@@ -86,8 +86,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ error: "Inventory item not found" }, { status: 404 });
     }
 
-    if (inventoryItem.status === "sold") {
-      return NextResponse.json({ error: "Cannot list a sold item on eBay" }, { status: 400 });
+    if (
+      inventoryItem.status === "sold" ||
+      inventoryItem.status === "returned" ||
+      inventoryItem.status === "traded"
+    ) {
+      return NextResponse.json({ error: "Cannot list a closed item on eBay" }, { status: 400 });
     }
 
     const resolvedCategoryId =

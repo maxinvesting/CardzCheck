@@ -91,6 +91,7 @@ export function statusColor(status: string): string {
       return "border border-[var(--biz-secondary-border)] bg-[var(--biz-secondary-soft)] text-[var(--biz-secondary)]";
     case "pending_sale": return "border border-amber-200 bg-amber-50 text-amber-700";
     case "returned": return "border border-red-200 bg-red-50 text-red-700";
+    case "traded": return "border border-amber-200 bg-amber-50 text-amber-700";
     default:
       return "border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] text-[var(--biz-muted)]";
   }
@@ -99,6 +100,7 @@ export function statusColor(status: string): string {
 export function statusLabel(status: string): string {
   switch (status) {
     case "pending_sale": return "Pending";
+    case "traded": return "Traded";
     default: return status.charAt(0).toUpperCase() + status.slice(1);
   }
 }
@@ -264,7 +266,13 @@ export function computeAgingBuckets(
     stats.set(b.key, { key: b.key, label: b.label, count: 0, capitalCents: 0 });
   }
   for (const item of items) {
-    if (item.status === "sold" || item.status === "returned") continue;
+    if (
+      item.status === "sold" ||
+      item.status === "returned" ||
+      item.status === "traded"
+    ) {
+      continue;
+    }
     const key = getAgingBucket(getDaysHeld(item.acquisition_date));
     if (!key) continue;
     const bucket = stats.get(key)!;

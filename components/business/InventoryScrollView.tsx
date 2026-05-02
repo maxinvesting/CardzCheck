@@ -260,7 +260,7 @@ export default function InventoryScrollView({
           >
             View Profile
           </Link>
-          {item.status !== "sold" && (
+          {item.status !== "sold" && item.status !== "returned" && item.status !== "traded" && (
             <button
               type="button"
               onClick={() => onMarkSold?.(item)}

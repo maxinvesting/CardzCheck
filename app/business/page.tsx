@@ -91,7 +91,7 @@ function BusinessDashboardContent() {
 
   const inventorySummary = useMemo((): InventoryValueSummary | null => {
     const activeItems = items.filter(
-      (it) => it.status !== "sold" && it.status !== "returned"
+      (it) => it.status !== "sold" && it.status !== "returned" && it.status !== "traded"
     );
     return computeInventoryValueSummary(activeItems);
   }, [items]);

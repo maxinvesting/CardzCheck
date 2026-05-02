@@ -137,7 +137,8 @@ function normalizeStatus(
     normalized === "listed" ||
     normalized === "pending_sale" ||
     normalized === "sold" ||
-    normalized === "returned"
+    normalized === "returned" ||
+    normalized === "traded"
   ) {
     return normalized;
   }
@@ -388,8 +389,8 @@ export async function listInventory(
   if (filters?.status) {
     query = query.eq("status", filters.status);
   } else {
-    // By default, exclude sold and returned items from inventory listings
-    query = query.neq("status", "sold").neq("status", "returned");
+    // By default, exclude closed items from inventory listings.
+    query = query.neq("status", "sold").neq("status", "returned").neq("status", "traded");
   }
   if (filters?.channel) query = query.eq("channel", filters.channel);
   if (filters?.condition_status)
@@ -1631,7 +1632,9 @@ export async function getBusinessMetrics(userId: string): Promise<BusinessMetric
     .select("id", { count: "exact", head: true })
     .eq("user_id", userId)
     .eq("item_kind", BUSINESS_ITEM_KIND)
-    .neq("status", "sold");
+    .neq("status", "sold")
+    .neq("status", "returned")
+    .neq("status", "traded");
 
   return {
     revenueMtd: toInt(mtd.revenue_cents),

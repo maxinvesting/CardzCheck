@@ -94,7 +94,7 @@ export function generateBusinessAnalystInsights(
   }
 
   const activeItems = items.filter(
-    (item) => item.status !== "sold" && item.status !== "returned"
+    (item) => item.status !== "sold" && item.status !== "returned" && item.status !== "traded"
   );
 
   // Coverage stats ----------------------------------------------------------

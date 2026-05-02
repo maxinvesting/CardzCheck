@@ -886,7 +886,7 @@ export default function InventoryTable({
                 Grade
               </button>
             )}
-            {item.status !== "sold" ? (
+            {item.status !== "sold" && item.status !== "returned" && item.status !== "traded" ? (
               <button
                 type="button"
                 onClick={(e) => {

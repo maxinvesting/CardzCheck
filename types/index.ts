@@ -155,7 +155,7 @@ export interface BusinessInventoryItem {
   cert_image_last_error?: string | null;
   location: string | null;
   channel: "ebay" | "whatnot" | "instagram" | "show" | "local" | "other";
-  status: "unlisted" | "listed" | "pending_sale" | "sold" | "returned";
+  status: "unlisted" | "listed" | "pending_sale" | "sold" | "returned" | "traded";
   list_price_cents: number | null;
   current_market_value_cents: number | null;
   estimated_cmv?: number | null;
@@ -290,7 +290,7 @@ export interface CollectionItem {
   fees_paid_cents?: number | null;
   condition_status?: "raw" | "graded" | null;
   channel?: "ebay" | "whatnot" | "instagram" | "show" | "local" | "other" | null;
-  status?: "unlisted" | "listed" | "pending_sale" | "sold" | "returned" | null;
+  status?: "unlisted" | "listed" | "pending_sale" | "sold" | "returned" | "traded" | null;
   list_price_cents?: number | null;
   current_market_value_cents?: number | null;
   target_price?: number | null;

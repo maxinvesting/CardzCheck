@@ -116,7 +116,7 @@ export function buildBusinessConsultantContext(args: {
   const { inventory, sales, metrics, now = new Date() } = args;
 
   const activeInventory = inventory.filter(
-    (item) => item.status !== "sold" && item.status !== "returned"
+    (item) => item.status !== "sold" && item.status !== "returned" && item.status !== "traded"
   );
 
   const listedActiveItems = activeInventory.filter(
