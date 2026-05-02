@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import type { LedgerTableRow } from "@/lib/business/ledger-table";
 
 interface LedgerTableProps {
@@ -52,6 +53,10 @@ function signedClassName(value: number | null): string {
 
 function neutralMoneyClassName(value: number | null): string {
   return value == null ? "text-[#77808C]" : "text-[#E6E8EB]";
+}
+
+function stopRowClick(event: React.MouseEvent<HTMLElement>) {
+  event.stopPropagation();
 }
 
 function HeaderCell({
@@ -111,7 +116,7 @@ export default function LedgerTable({
   return (
     <div className="overflow-hidden border border-[#24282D] bg-[#0B0D0F]">
       <div className="max-h-[calc(100vh-190px)] min-h-[360px] overflow-auto">
-        <table className="w-full min-w-[1180px] border-collapse font-data">
+        <table className="w-full min-w-[1300px] border-collapse font-data">
           <thead>
             <tr>
               <HeaderCell className="min-w-[300px]">Card</HeaderCell>
@@ -140,6 +145,9 @@ export default function LedgerTable({
               <HeaderCell align="center" className="w-[104px]">
                 Status
               </HeaderCell>
+              <HeaderCell align="center" className="w-[132px]">
+                Actions
+              </HeaderCell>
             </tr>
           </thead>
           <tbody>
@@ -162,9 +170,14 @@ export default function LedgerTable({
                 >
                   <Cell className="max-w-[360px]">
                     <div className="min-w-0">
-                      <div className="truncate font-medium text-[#E6E8EB]">
+                      <Link
+                        href={`/card/${row.id}?from=business`}
+                        onClick={stopRowClick}
+                        className="block truncate font-medium text-[#E6E8EB] underline-offset-2 transition-colors hover:text-[#20B26B] hover:underline focus:text-[#20B26B] focus:underline focus:outline-none"
+                        aria-label={`Open profile for ${row.cardLabel}`}
+                      >
                         {row.cardLabel}
-                      </div>
+                      </Link>
                       {row.cardMeta && (
                         <div className="mt-0.5 truncate text-[10px] text-[#77808C]">
                           {row.cardMeta}
@@ -217,9 +230,32 @@ export default function LedgerTable({
                           ? "border-[#1F5F45] bg-[#0E251B] text-[#20B26B]"
                           : "border-[#343941] bg-[#111315] text-[#8D96A3]"
                       }`}
-                    >
-                      {row.status}
-                    </span>
+                      >
+                        {row.status}
+                      </span>
+                  </Cell>
+                  <Cell align="center">
+                    <div className="flex items-center justify-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onRowClick?.(row);
+                        }}
+                        className="border border-[#1F5F45] bg-[#0E251B] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.04em] text-[#20B26B] transition-colors hover:bg-[#143624] focus:outline-none focus:ring-1 focus:ring-[#20B26B]"
+                        aria-label={`Edit ${row.cardLabel}`}
+                      >
+                        Edit
+                      </button>
+                      <Link
+                        href={`/card/${row.id}?from=business`}
+                        onClick={stopRowClick}
+                        className="border border-[#343941] bg-[#111315] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.04em] text-[#B8C0CC] transition-colors hover:border-[#5A626E] hover:text-[#E6E8EB] focus:outline-none focus:ring-1 focus:ring-[#77808C]"
+                        aria-label={`Open profile for ${row.cardLabel}`}
+                      >
+                        Profile
+                      </Link>
+                    </div>
                   </Cell>
                 </tr>
               );
