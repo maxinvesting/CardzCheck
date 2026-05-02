@@ -23,7 +23,7 @@ export default async function AdminHubPage() {
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Link
-              href="/admin/shop"
+              href="/admin/marketplace"
               className="group rounded-xl border border-gray-800 bg-gray-900 p-6 hover:border-cyan-500 transition-colors"
             >
               <div className="flex items-center gap-3 mb-3">
@@ -35,7 +35,7 @@ export default async function AdminHubPage() {
                 <h2 className="text-lg font-semibold group-hover:text-cyan-400 transition-colors">Marketplace</h2>
               </div>
               <p className="text-sm text-gray-400">
-                Create, edit, and manage CardzCheck shop listings. Upload photos, set prices, and control visibility.
+                Intake queue, flagged listings, vault inventory, and transactions for the fixed-price exchange.
               </p>
             </Link>
 

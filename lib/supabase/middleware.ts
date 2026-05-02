@@ -22,7 +22,7 @@ const PERSONAL_WORKSPACE_PATHS = [
   "/grade-probability",
   "/grade-estimator",
   "/help",
-  "/shop",
+  "/marketplace",
   "/card",
   "/analyst",
 ];
