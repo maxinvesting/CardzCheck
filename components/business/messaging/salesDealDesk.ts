@@ -1,4 +1,5 @@
 import type { MessageThread, ThreadFilter } from "@/lib/messaging/types";
+import type { StatusTone } from "@/components/business/ui/StatusPill";
 
 export const SALES_STATUS_STYLES: Record<MessageThread["status"], string> = {
   needs_response: "border-amber-700/40 bg-amber-900/25 text-amber-400",
@@ -6,6 +7,14 @@ export const SALES_STATUS_STYLES: Record<MessageThread["status"], string> = {
   awaiting_buyer: "border-violet-700/40 bg-violet-900/25 text-violet-400",
   resolved: "border-[var(--biz-border)] bg-[var(--biz-surface-soft)] text-[var(--biz-muted)]",
   archived: "border-[#222] bg-[#111] text-[#555]",
+};
+
+export const SALES_STATUS_TONE: Record<MessageThread["status"], StatusTone> = {
+  needs_response: "warning",
+  open: "primary",
+  awaiting_buyer: "automation",
+  resolved: "muted",
+  archived: "muted",
 };
 
 export const SALES_STATUS_LABELS: Record<MessageThread["status"], string> = {
@@ -89,6 +98,151 @@ export function matchesThreadFilter(
       return true;
   }
 }
+
+// ─── Priority + recommended action ──────────────────────────────────────
+
+export type RecommendedActionLabel =
+  | "Reply now"
+  | "Send counter"
+  | "Accept if price works"
+  | "Follow up"
+  | "Archive / low priority"
+  | "Awaiting buyer";
+
+export type PriorityLevel = "urgent" | "high" | "medium" | "low";
+
+export const PRIORITY_TONE: Record<PriorityLevel, StatusTone> = {
+  urgent: "danger",
+  high: "warning",
+  medium: "primary",
+  low: "muted",
+};
+
+export const PRIORITY_LABEL: Record<PriorityLevel, string> = {
+  urgent: "Urgent",
+  high: "High",
+  medium: "Watch",
+  low: "Low",
+};
+
+const QUESTION_PATTERN = /\?\s*$/;
+const PAYMENT_PATTERN = /\b(pay|payment|invoice|paypal|venmo|zelle)\b/i;
+const SHIPPING_PATTERN = /\b(ship|shipping|tracking|mail|deliver|arrived)\b/i;
+const AVAILABILITY_PATTERN = /\b(available|in stock|still have|do you have)\b/i;
+const HOUR_MS = 60 * 60 * 1000;
+
+export interface PriorityRationale {
+  level: PriorityLevel;
+  reasons: string[];
+  hoursSinceLastActivity: number | null;
+}
+
+export function buildPriorityRationale(
+  thread: MessageThread,
+  now = Date.now()
+): PriorityRationale {
+  const reasons: string[] = [];
+  const lastTouch = getTimeValue(thread.last_message_at);
+  const hoursSinceLastActivity =
+    lastTouch === 0 ? null : Math.max(0, (now - lastTouch) / HOUR_MS);
+
+  if (thread.status === "needs_response") {
+    reasons.push("Buyer is waiting on your reply");
+  }
+  if (thread.unread_count > 0) {
+    reasons.push(
+      `${thread.unread_count} unread message${thread.unread_count === 1 ? "" : "s"}`
+    );
+  }
+  if (typeof thread.offer_amount_cents === "number") {
+    reasons.push("Open offer on the table");
+  } else if (thread.category === "offer") {
+    reasons.push("Thread is in active negotiation");
+  }
+  if (isStaleSalesThread(thread, now)) {
+    reasons.push(
+      thread.status === "awaiting_buyer"
+        ? "Buyer has gone quiet over 36h"
+        : "Quiet over 72h — at risk of going cold"
+    );
+  } else if (
+    hoursSinceLastActivity !== null &&
+    hoursSinceLastActivity <= 24
+  ) {
+    reasons.push("Recent activity in last 24h");
+  }
+  const preview = thread.last_message_preview ?? "";
+  if (preview && QUESTION_PATTERN.test(preview.trim())) {
+    reasons.push("Last message ended with a direct question");
+  }
+  if (preview && PAYMENT_PATTERN.test(preview)) {
+    reasons.push("Buyer mentioned payment");
+  } else if (preview && SHIPPING_PATTERN.test(preview)) {
+    reasons.push("Buyer asked about shipping");
+  } else if (preview && AVAILABILITY_PATTERN.test(preview)) {
+    reasons.push("Buyer asked about availability");
+  }
+
+  let level: PriorityLevel = "low";
+  if (
+    thread.status === "needs_response" ||
+    (typeof thread.offer_amount_cents === "number" && !isClosedSalesThread(thread))
+  ) {
+    level = "urgent";
+  } else if (isStaleSalesThread(thread, now) && !isClosedSalesThread(thread)) {
+    level = "high";
+  } else if (thread.unread_count > 0) {
+    level = "high";
+  } else if (
+    hoursSinceLastActivity !== null &&
+    hoursSinceLastActivity <= 24 &&
+    !isClosedSalesThread(thread)
+  ) {
+    level = "medium";
+  }
+
+  if (isClosedSalesThread(thread)) {
+    level = "low";
+  }
+
+  return { level, reasons, hoursSinceLastActivity };
+}
+
+export function recommendThreadAction(
+  thread: MessageThread,
+  now = Date.now()
+): RecommendedActionLabel {
+  if (isClosedSalesThread(thread)) return "Archive / low priority";
+  const offerCents = thread.offer_amount_cents;
+  const askCents = thread.listing_price_cents;
+  if (typeof offerCents === "number" && thread.status !== "resolved") {
+    if (typeof askCents === "number" && askCents > 0) {
+      const ratio = offerCents / askCents;
+      if (ratio >= 0.92) return "Accept if price works";
+      return "Send counter";
+    }
+    return "Send counter";
+  }
+  if (thread.status === "needs_response" || thread.unread_count > 0) {
+    return "Reply now";
+  }
+  if (isStaleSalesThread(thread, now)) {
+    return thread.status === "awaiting_buyer" ? "Follow up" : "Follow up";
+  }
+  if (thread.status === "awaiting_buyer") {
+    return "Awaiting buyer";
+  }
+  return "Reply now";
+}
+
+export const ACTION_TONE: Record<RecommendedActionLabel, StatusTone> = {
+  "Reply now": "warning",
+  "Send counter": "primary",
+  "Accept if price works": "profit",
+  "Follow up": "info",
+  "Archive / low priority": "muted",
+  "Awaiting buyer": "automation",
+};
 
 export function buildSalesDealDeskSnapshot(
   threads: MessageThread[],

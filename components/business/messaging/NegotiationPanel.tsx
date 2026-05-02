@@ -41,36 +41,36 @@ export default function NegotiationPanel({
   }
 
   return (
-    <div className="border-b border-[var(--biz-border)] bg-[var(--biz-surface)] px-5 py-3.5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--biz-muted)]">
+    <div className="border-b border-[var(--biz-border)] bg-[var(--biz-surface)] px-3 py-2.5">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--biz-muted)] font-mono-num">
             Deal context
           </p>
-          <p className="mt-1 text-sm font-semibold text-[var(--biz-text)]">
+          <p className="mt-1 text-[13px] font-semibold text-[var(--biz-text-strong)]">
             {recommendation.headline}
           </p>
-          <p className="mt-1 max-w-3xl text-[12px] leading-relaxed text-[var(--biz-muted)]">
+          <p className="mt-0.5 max-w-3xl text-[11px] leading-relaxed text-[var(--biz-muted)]">
             {recommendation.reason}
           </p>
         </div>
         {thread.fee_percent != null ? (
-          <span className="rounded-full border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--biz-muted)]">
+          <span className="rounded-sm border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.10em] text-[var(--biz-muted)]">
             Fees {thread.fee_percent}%
           </span>
         ) : null}
       </div>
 
-      <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-2 grid gap-1.5 sm:grid-cols-2 xl:grid-cols-4">
         {metrics.map((metric) => (
           <div
             key={metric.label}
-            className="rounded-2xl border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-3 py-2.5"
+            className="rounded border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-2.5 py-1.5"
           >
-            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--biz-muted)]">
+            <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-[var(--biz-muted)] font-mono-num">
               {metric.label}
             </p>
-            <p className="mt-1 text-sm font-semibold tabular-nums text-[var(--biz-text)]">
+            <p className="mt-0.5 text-[14px] font-semibold biz-mono text-[var(--biz-text-strong)]">
               {metric.value}
             </p>
           </div>

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import BusinessPaywall from "@/components/business/BusinessPaywall";
-import BusinessMessagesView from "@/components/business/messaging/BusinessMessagesView";
+import SalesAgentTerminal from "@/components/business/messaging/SalesAgentTerminal";
 import { createClient } from "@/lib/supabase/client";
 import type { MessageThread, MessagingStats } from "@/lib/messaging/types";
 
@@ -83,20 +83,17 @@ export default function BusinessSalesPage() {
   if (loading) {
     return (
       <AuthenticatedLayout>
-        <main className="mx-auto max-w-7xl px-4 py-4">
-          <div className="animate-pulse space-y-4">
-            <div className="h-28 rounded-[28px] bg-[#E5E7EB]" />
-            <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
+        <main className="sales-mono-theme min-h-screen px-3 py-3">
+          <div className="animate-pulse space-y-3">
+            <div className="h-12 w-72 rounded bg-[var(--biz-skeleton)]" />
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
               {[...Array(5)].map((_, i) => (
-                <div key={i} className="h-24 rounded-2xl bg-[#E5E7EB]" />
+                <div key={i} className="h-20 rounded-md bg-[var(--biz-skeleton)]" />
               ))}
             </div>
-            <div className="grid gap-4 xl:grid-cols-3">
-              {[...Array(3)].map((_, i) => (
-                <div key={i} className="h-48 rounded-2xl bg-[#E5E7EB]" />
-              ))}
-            </div>
-            <div className="h-[520px] rounded-[28px] bg-[#E5E7EB]" />
+            <div className="h-24 rounded-md bg-[var(--biz-skeleton)]" />
+            <div className="h-10 rounded-md bg-[var(--biz-skeleton)]" />
+            <div className="h-[520px] rounded-md bg-[var(--biz-skeleton)]" />
           </div>
         </main>
       </AuthenticatedLayout>
@@ -106,7 +103,7 @@ export default function BusinessSalesPage() {
   if (hasAccess === false) {
     return (
       <AuthenticatedLayout>
-        <main className="max-w-7xl mx-auto px-4 py-4">
+        <main className="sales-mono-theme min-h-screen px-4 py-4">
           <BusinessPaywall />
         </main>
       </AuthenticatedLayout>
@@ -116,32 +113,32 @@ export default function BusinessSalesPage() {
   if (!stats) {
     return (
       <AuthenticatedLayout>
-        <main className="mx-auto max-w-7xl px-4 py-8">
-          <div className="flex flex-col items-center justify-center rounded-[28px] border border-dashed border-[var(--biz-border)] bg-white py-20 text-center shadow-sm">
-            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-red-50">
-              <svg className="h-8 w-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <main className="sales-mono-theme min-h-screen px-4 py-8">
+          <div className="mx-auto flex max-w-xl flex-col items-center justify-center rounded-md border border-dashed border-[var(--biz-border)] bg-[var(--biz-surface)] py-12 text-center">
+            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-md border border-[var(--biz-danger-border)] bg-[var(--biz-danger-soft)]">
+              <svg className="h-6 w-6 text-[var(--biz-danger)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
               </svg>
             </div>
-            <h2 className="mb-2 text-lg font-semibold text-[var(--biz-text)]">
-              Unable to load sales workspace
+            <h2 className="text-[15px] font-semibold text-[var(--biz-text)]">
+              Unable to load sales terminal
             </h2>
-            <p className="mb-6 max-w-sm text-sm text-[var(--biz-muted)]">
+            <p className="mt-1 max-w-sm text-[12px] text-[var(--biz-muted)]">
               {msgError ?? "Something went wrong. Try refreshing or reconnecting your eBay account."}
             </p>
-            <div className="flex gap-3">
+            <div className="mt-5 flex gap-2">
               <button
                 onClick={() => {
                   setLoading(true);
                   loadData();
                 }}
-                className="inline-flex items-center gap-2 rounded-lg bg-[var(--biz-primary)] px-5 py-2.5 text-sm font-semibold text-[var(--biz-primary-foreground)] transition-colors hover:bg-[var(--biz-primary-hover)]"
+                className="rounded bg-[var(--biz-primary)] px-3 py-1.5 text-[12px] font-semibold text-[var(--biz-primary-foreground)] transition-colors hover:bg-[var(--biz-primary-hover)]"
               >
                 Try Again
               </button>
               <a
                 href="/api/auth/ebay"
-                className="inline-flex items-center gap-2 rounded-lg border border-[var(--biz-border)] bg-white px-5 py-2.5 text-sm font-semibold text-[var(--biz-text)] transition-colors hover:bg-gray-50"
+                className="rounded border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-3 py-1.5 text-[12px] font-semibold text-[var(--biz-text)] transition-colors hover:bg-[var(--biz-hover)]"
               >
                 Reconnect eBay
               </a>
@@ -156,32 +153,31 @@ export default function BusinessSalesPage() {
     const isConnected = ebayConnected === true;
     return (
       <AuthenticatedLayout>
-        <main className="mx-auto max-w-7xl px-4 py-8">
-          <div className="flex flex-col items-center justify-center rounded-[28px] border border-dashed border-[var(--biz-border)] bg-white py-20 text-center shadow-sm">
-            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--biz-primary-soft)]">
-              <svg className="h-8 w-8 text-[var(--biz-primary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <main className="sales-mono-theme min-h-screen px-4 py-8">
+          <div className="mx-auto flex max-w-xl flex-col items-center justify-center rounded-md border border-dashed border-[var(--biz-border)] bg-[var(--biz-surface)] py-12 text-center">
+            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-md border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)]">
+              <svg className="h-6 w-6 text-[var(--biz-primary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 13V7a2 2 0 00-2-2h-3m-2 14H6a2 2 0 01-2-2V7a2 2 0 012-2h2m3 14l5-5m0 0l5-5m-5 5H9" />
               </svg>
             </div>
             {isConnected ? (
               <>
-                <h2 className="mb-2 text-lg font-semibold text-[var(--biz-text)]">
-                  eBay is connected, but there are no live buyer threads yet
+                <h2 className="text-[15px] font-semibold text-[var(--biz-text)]">
+                  eBay connected — no live threads yet
                 </h2>
-                <p className="mb-6 max-w-md text-sm text-[var(--biz-muted)]">
-                  The sales desk is ready. Offers, buyer questions, and follow-ups will show up here
-                  as soon as they land. If you expected activity already, reconnect to refresh marketplace access.
+                <p className="mt-1 max-w-md text-[12px] leading-relaxed text-[var(--biz-muted)]">
+                  Offers, buyer questions, and follow-ups will surface here automatically. Reconnect to force a refresh.
                 </p>
-                <div className="flex flex-wrap items-center justify-center gap-3">
+                <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
                   <a
                     href="/api/auth/ebay"
-                    className="inline-flex items-center gap-2 rounded-lg border border-[var(--biz-border)] bg-white px-5 py-2.5 text-sm font-semibold text-[var(--biz-text)] transition-colors hover:bg-gray-50"
+                    className="rounded border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-3 py-1.5 text-[12px] font-semibold text-[var(--biz-text)] transition-colors hover:bg-[var(--biz-hover)]"
                   >
                     Reconnect eBay
                   </a>
                   <a
                     href="/business/ledger?tab=sales"
-                    className="inline-flex items-center gap-2 rounded-lg bg-[var(--biz-primary)] px-5 py-2.5 text-sm font-semibold text-[var(--biz-primary-foreground)] transition-colors hover:bg-[var(--biz-primary-hover)]"
+                    className="rounded bg-[var(--biz-primary)] px-3 py-1.5 text-[12px] font-semibold text-[var(--biz-primary-foreground)] transition-colors hover:bg-[var(--biz-primary-hover)]"
                   >
                     Open ledger sales
                   </a>
@@ -189,23 +185,23 @@ export default function BusinessSalesPage() {
               </>
             ) : (
               <>
-                <h2 className="mb-2 text-lg font-semibold text-[var(--biz-text)]">
-                  Connect eBay to power the sales desk
+                <h2 className="text-[15px] font-semibold text-[var(--biz-text)]">
+                  Connect eBay to power the terminal
                 </h2>
-                <p className="mb-6 max-w-md text-sm text-[var(--biz-muted)]">
+                <p className="mt-1 max-w-md text-[12px] leading-relaxed text-[var(--biz-muted)]">
                   Link your eBay account to pull in live offers, buyer questions, and follow-ups.
                 </p>
                 <a
                   href="/api/auth/ebay"
-                  className="inline-flex items-center gap-2 rounded-lg bg-[var(--biz-primary)] px-5 py-2.5 text-sm font-semibold text-[var(--biz-primary-foreground)] transition-colors hover:bg-[var(--biz-primary-hover)]"
+                  className="mt-5 rounded bg-[var(--biz-primary)] px-3 py-1.5 text-[12px] font-semibold text-[var(--biz-primary-foreground)] transition-colors hover:bg-[var(--biz-primary-hover)]"
                 >
                   Connect eBay Account
                 </a>
               </>
             )}
             {syncRetriedAfterEmpty ? (
-              <p className="mt-5 text-xs text-amber-700">
-                We retried a background sync automatically while checking for live threads.
+              <p className="mt-4 text-[11px] text-[var(--biz-warning)]">
+                Background sync retried automatically while checking for live threads.
               </p>
             ) : null}
           </div>
@@ -217,7 +213,7 @@ export default function BusinessSalesPage() {
   return (
     <AuthenticatedLayout>
       <main className="sales-mono-theme flex h-screen flex-col overflow-hidden">
-        <BusinessMessagesView
+        <SalesAgentTerminal
           initialStats={stats}
           initialThreads={threads}
           businessName={businessName}

@@ -146,44 +146,36 @@ export default function ConversationView({
 
   return (
     <div className="flex h-full flex-col bg-[var(--biz-bg)]">
-      <div className="border-b border-[var(--biz-border)] bg-[var(--biz-surface)] px-5 py-3.5">
-        <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] text-sm font-semibold text-[var(--biz-primary)]">
+      <div className="border-b border-[var(--biz-border)] bg-[var(--biz-surface)] px-3 py-2.5">
+        <div className="flex items-start gap-2.5">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] text-[12px] font-semibold text-[var(--biz-primary)]">
             {getAvatarLabel(thread)}
           </div>
           <div className="min-w-0 flex-1">
-            <div
-              className="flex items-center"
-              style={{ flexWrap: "wrap", gap: 8 }}
-            >
-              <h2 className="text-base font-semibold text-[var(--biz-text)]">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <h2 className="text-[14px] font-semibold text-[var(--biz-text-strong)]">
                 {thread.buyer_display_name ?? thread.buyer_username}
               </h2>
-              <span className="text-[12px] text-[var(--biz-muted)]">
+              <span className="biz-mono text-[11px] text-[var(--biz-muted)]">
                 @{thread.buyer_username}
               </span>
               <PlatformChip platform={thread.platform} />
               <StatusChip status={thread.status} />
               {thread.unread_count > 0 ? (
-                <span className="rounded-full bg-amber-900/30 px-2 py-0.5 text-[10px] font-semibold text-amber-400">
+                <span className="rounded-sm border border-[var(--biz-warning-border)] bg-[var(--biz-warning-soft)] px-1.5 py-px text-[10px] font-semibold text-[var(--biz-warning)]">
                   {thread.unread_count} unread
                 </span>
               ) : null}
             </div>
             {thread.item_title ? (
               <p
-                className="mt-1 text-sm font-medium text-[var(--biz-text)]"
-                style={{
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
+                className="mt-1 truncate text-[12px] font-medium text-[var(--biz-text)]"
                 title={thread.item_title}
               >
                 {thread.item_title}
               </p>
             ) : null}
-            <p className="mt-1 text-[11px] text-[var(--biz-muted)]">
+            <p className="mt-0.5 text-[10px] text-[var(--biz-muted)] biz-mono uppercase tracking-[0.10em]">
               Updated {formatThreadTime(thread.last_message_at)}
             </p>
           </div>
@@ -191,8 +183,7 @@ export default function ConversationView({
           <button
             type="button"
             onClick={() => onUpdateThreadStatus(thread.id, "resolved")}
-            style={{ flexShrink: 0 }}
-            className="ml-auto self-start rounded-xl border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-3 py-1.5 text-[12px] font-semibold text-[var(--biz-text)] transition-colors hover:bg-[var(--biz-hover)]"
+            className="ml-auto self-start rounded border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-2.5 py-1 text-[11px] font-semibold text-[var(--biz-text)] transition-colors hover:border-[var(--biz-border-strong)] hover:bg-[var(--biz-hover)]"
           >
             Resolve
           </button>
@@ -205,8 +196,8 @@ export default function ConversationView({
         recommendation={recommendation}
       />
 
-      <div className="flex-1 overflow-y-auto bg-[var(--biz-bg)] px-5 py-4">
-        <div className="mx-auto flex max-w-3xl flex-col gap-4">
+      <div className="flex-1 overflow-y-auto bg-[var(--biz-bg)] px-3 py-3">
+        <div className="mx-auto flex max-w-3xl flex-col gap-2.5">
           {messages.map((message) => {
             const isOutbound = message.direction === "outbound";
             return (
@@ -215,21 +206,21 @@ export default function ConversationView({
                 className={`flex ${isOutbound ? "justify-end" : "justify-start"}`}
               >
                 <div
-                  className={`max-w-[82%] rounded-[22px] px-4 py-3 shadow-[0_4px_16px_rgba(0,0,0,0.4)] ${
+                  className={`max-w-[82%] rounded-md px-3 py-2 ${
                     isOutbound
                       ? "border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] text-[var(--biz-text)]"
                       : "border border-[var(--biz-border)] bg-[var(--biz-surface)] text-[var(--biz-text)]"
                   }`}
                 >
-                  <div className="mb-1.5 flex flex-wrap items-center gap-2 text-[10px]">
+                  <div className="mb-1 flex flex-wrap items-center gap-1.5 text-[10px]">
                     <span
-                      className={`font-semibold ${
+                      className={`font-semibold uppercase tracking-[0.08em] ${
                         isOutbound ? "text-[var(--biz-primary)]" : "text-[var(--biz-muted)]"
                       }`}
                     >
                       {isOutbound ? "You" : message.sender_username}
                     </span>
-                    <span className="text-[var(--biz-muted)]">
+                    <span className="biz-mono text-[var(--biz-faint)]">
                       {formatThreadTime(message.created_at)}
                     </span>
                   </div>
@@ -241,7 +232,7 @@ export default function ConversationView({
         </div>
       </div>
 
-      <div className="border-t border-[var(--biz-border)] bg-[var(--biz-surface)] px-5 py-3">
+      <div className="border-t border-[var(--biz-border)] bg-[var(--biz-surface)] px-3 py-2">
         <AIActionsPanel
           context={replyContext}
           recommendation={recommendation}
@@ -264,7 +255,7 @@ export default function ConversationView({
 
 function PlatformChip({ platform }: { platform: MessageThread["platform"] }) {
   return (
-    <span className="rounded-full border border-[var(--biz-border)] bg-[var(--biz-surface)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--biz-muted)]">
+    <span className="rounded-sm border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-1.5 py-px text-[10px] font-semibold uppercase tracking-[0.10em] text-[var(--biz-muted)]">
       {platform === "ebay" ? "eBay" : platform}
     </span>
   );
@@ -273,7 +264,7 @@ function PlatformChip({ platform }: { platform: MessageThread["platform"] }) {
 function StatusChip({ status }: { status: MessageThread["status"] }) {
   return (
     <span
-      className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${SALES_STATUS_STYLES[status]}`}
+      className={`rounded-sm border px-1.5 py-px text-[10px] font-semibold uppercase tracking-[0.08em] ${SALES_STATUS_STYLES[status]}`}
     >
       {SALES_STATUS_LABELS[status]}
     </span>

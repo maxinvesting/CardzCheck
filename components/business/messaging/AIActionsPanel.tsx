@@ -74,16 +74,16 @@ export default function AIActionsPanel({
   const canSend = Boolean(replyText.trim()) && !sendLoading;
 
   return (
-    <div className="rounded-[20px] border border-[var(--biz-border)] bg-[var(--biz-surface)] p-3 shadow-[0_10px_24px_rgba(0,0,0,0.4)]">
+    <div className="rounded-md border border-[var(--biz-border)] bg-[var(--biz-surface)] p-2.5">
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--biz-muted)]">
-          Suggested reply
+        <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--biz-muted)] font-mono-num">
+          Suggested action
         </span>
         <span className="text-[12px] font-semibold text-[var(--biz-primary)]">
           {recommendedMeta.label}
         </span>
         <span
-          className="min-w-0 flex-1 truncate text-[12px] text-[var(--biz-muted)]"
+          className="min-w-0 flex-1 truncate text-[11px] text-[var(--biz-muted)]"
           title={recommendation.reason}
         >
           {recommendation.reason}
@@ -91,19 +91,19 @@ export default function AIActionsPanel({
       </div>
 
       <div
-        className="mt-3 grid gap-2"
+        className="mt-2 grid gap-1.5"
         style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))" }}
       >
         {VISIBLE_ACTIONS.map((action) => {
           const isRecommended = action.id === recommendation.action;
           const isSelected = action.id === selectedAction;
           const baseClasses =
-            "min-w-0 truncate rounded-xl border px-2 py-2 text-[12px] font-semibold transition-colors focus:outline-none focus:ring-1 focus:ring-[var(--biz-primary)]";
+            "min-w-0 truncate rounded border px-2 py-1.5 text-[11px] font-semibold transition-colors focus:outline-none focus:ring-1 focus:ring-[var(--biz-focus)]";
           const styleClasses = isRecommended
             ? "border-[var(--biz-primary)] text-[var(--biz-primary)] bg-[var(--biz-primary-soft)] hover:bg-[var(--biz-primary-soft-strong)]"
             : isSelected
-              ? "border-[var(--biz-primary-border)] bg-[var(--biz-surface-soft)] text-[var(--biz-text)]"
-              : "border-[var(--biz-border)] bg-[var(--biz-surface-soft)] text-[var(--biz-muted)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]";
+              ? "border-[var(--biz-primary-border)] bg-[var(--biz-surface-soft)] text-[var(--biz-text-strong)]"
+              : "border-[var(--biz-border)] bg-[var(--biz-surface-soft)] text-[var(--biz-muted-strong)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]";
           return (
             <button
               key={action.id}
@@ -120,12 +120,12 @@ export default function AIActionsPanel({
       </div>
 
       {replyError ? (
-        <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-700">
+        <div className="mt-2 rounded border border-[var(--biz-danger-border)] bg-[var(--biz-danger-soft)] px-2 py-1.5 text-[11px] text-[var(--biz-danger)]">
           {replyError}
         </div>
       ) : null}
 
-      <div className="mt-3 rounded-[16px] border border-[var(--biz-border)] bg-[var(--biz-surface-soft)]">
+      <div className="mt-2 rounded border border-[var(--biz-border)] bg-[var(--biz-surface-soft)]">
         <textarea
           value={replyText}
           onChange={(event) => onReplyTextChange(event.target.value)}
@@ -136,17 +136,17 @@ export default function AIActionsPanel({
           }
           rows={3}
           style={{ resize: "none" }}
-          className="block w-full border-0 bg-transparent px-3.5 py-2.5 text-sm leading-relaxed text-[var(--biz-text)] placeholder-[var(--biz-muted)] focus:outline-none"
+          className="block w-full border-0 bg-transparent px-3 py-2 text-[13px] leading-relaxed text-[var(--biz-text)] placeholder-[var(--biz-muted)] focus:outline-none"
         />
-        <div className="flex items-center justify-between gap-3 border-t border-[var(--biz-border)] px-3.5 py-2">
-          <span className="min-w-0 truncate text-[11px] text-[var(--biz-muted)]">
+        <div className="flex items-center justify-between gap-3 border-t border-[var(--biz-border)] px-3 py-1.5">
+          <span className="min-w-0 truncate text-[10px] uppercase tracking-[0.12em] text-[var(--biz-muted)] font-mono-num">
             Send as seller via eBay
           </span>
           <button
             type="button"
             onClick={() => void onSend()}
             disabled={!canSend}
-            className="flex-shrink-0 rounded-xl bg-[var(--biz-primary)] px-4 py-2 text-[13px] font-semibold text-[var(--biz-primary-foreground)] shadow-[0_8px_18px_var(--biz-primary-border)] transition-colors hover:bg-[var(--biz-primary-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex-shrink-0 rounded bg-[var(--biz-primary)] px-3 py-1.5 text-[12px] font-semibold text-[var(--biz-primary-foreground)] transition-colors hover:bg-[var(--biz-primary-hover)] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {sendLoading ? "Sending..." : "Send"}
           </button>
@@ -154,7 +154,7 @@ export default function AIActionsPanel({
       </div>
 
       {sendError ? (
-        <p className="mt-2 text-[12px] text-red-600">{sendError}</p>
+        <p className="mt-1.5 text-[11px] text-[var(--biz-danger)]">{sendError}</p>
       ) : null}
 
       <p className="sr-only">Conversation stage: {context.stage}</p>
