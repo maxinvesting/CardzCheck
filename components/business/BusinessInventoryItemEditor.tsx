@@ -11,7 +11,7 @@ import { gradingCopy } from "@/copy/grading";
 import { formatEbayTitle, calculateEbayParityPrice } from "@/lib/ebay/parity-price";
 import type { EbayFeeRateKey } from "@/lib/ebay/parity-price";
 import EbayListingModal from "@/components/business/EbayListingModal";
-import GetCompsButton from "@/components/ui/GetCompsButton";
+import CompsMenuButton from "@/components/ui/CompsMenuButton";
 import { compsParamsFromTitle } from "@/lib/ebay/comps-url";
 import { normalizeCertWriteFields } from "@/lib/images/cert-image";
 
@@ -332,7 +332,7 @@ export default function BusinessInventoryItemEditor({
                 <span>List on eBay</span>
               </button>
             )}
-            <GetCompsButton
+            <CompsMenuButton
               params={
                 cardForGrade?.cardIdentity
                   ? {
@@ -422,90 +422,99 @@ export default function BusinessInventoryItemEditor({
 
         <div className="space-y-4">
           {field("Title", "title")}
-          <div className="grid grid-cols-2 gap-4">
-            {field("Quantity", "quantity", "number")}
-            {field("Status", "status", "select", STATUS_OPTIONS)}
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            {field("Channel", "channel", "select", CHANNEL_OPTIONS)}
-            {field("Acquisition Type", "acquisition_type", "select", ACQ_OPTIONS)}
-          </div>
-          {field("Acquisition Date", "acquisition_date", "date")}
-          <div className="grid grid-cols-2 gap-4">
-            {field("Cost Basis ($)", "cost_basis_total", "number")}
-            {field("Tax ($)", "tax", "number")}
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            {field("Shipping ($)", "shipping", "number")}
-            {field("Fees Paid ($)", "fees_paid", "number")}
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            {field("Condition", "condition_status", "select", ["raw", "graded"] as const)}
-            {field("Grading Co.", "grading_company")}
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            {field("Grade", "grade")}
-            {field("Cert #", "cert_number")}
-          </div>
-          {field("Storage", "location")}
-          <div className="grid grid-cols-2 gap-4">
-            {field("List Price ($)", "list_price", "number")}
-            <div>
-              <label className={labelClass}>Est. Market Value ($)</label>
-              <div className="flex gap-2">
-                <input
-                  type="number"
-                  step="0.01"
-                  value={form.current_market_value ?? ""}
-                  onChange={(e) => setForm({ ...form, current_market_value: e.target.value })}
-                  className={inputClass}
-                />
-                {(!form.current_market_value || form.current_market_value === "0" || form.current_market_value === "0.00") && (
-                  <button
-                    type="button"
-                    onClick={handleFetchCmv}
-                    disabled={cmvLoading || !item.title?.trim()}
-                    className={`shrink-0 px-3 py-2 disabled:opacity-50 text-sm rounded-lg font-medium ${dark ? "bg-gray-700 hover:bg-gray-600 text-white" : "bg-[#1C8C58] hover:bg-[#146B42] text-white"}`}
-                  >
-                    {cmvLoading ? "..." : "Get estimate"}
-                  </button>
-                )}
+          <div className="grid grid-cols-1 md:grid-cols-2 md:gap-x-6 gap-y-4">
+            {/* Left column — item state + acquisition */}
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                {field("Quantity", "quantity", "number")}
+                {field("Status", "status", "select", STATUS_OPTIONS)}
               </div>
+              <div className="grid grid-cols-2 gap-3">
+                {field("Channel", "channel", "select", CHANNEL_OPTIONS)}
+                {field("Acquisition Type", "acquisition_type", "select", ACQ_OPTIONS)}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {field("Acquisition Date", "acquisition_date", "date")}
+                {field("Storage", "location")}
+              </div>
+              {field("Notes", "notes", "textarea")}
             </div>
-          </div>
-          {(() => {
-            const listPriceCents = item.list_price_cents;
-            if (!listPriceCents || listPriceCents <= 0) return null;
-            const listPriceDollars = listPriceCents / 100;
-            const feeRateKey: EbayFeeRateKey =
-              typeof window !== "undefined"
-                ? ((window.localStorage.getItem("cardzcheck_ebay_fee_rate") as EbayFeeRateKey) || "standard")
-                : "standard";
-            const parityPrice = calculateEbayParityPrice(listPriceDollars, feeRateKey);
-            const feeLabel = feeRateKey === "top_rated_plus" ? "12% TRP" : "13% Std";
-            return (
-              <div className={`p-3 ${cardClass}`}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className={`text-[10px] uppercase tracking-wider font-medium ${dark ? "text-gray-400" : "text-[#6F7D74]"}`}>
-                      eBay Parity Price
-                    </p>
-                    <p className={`text-lg font-semibold ${dark ? "text-blue-400" : "text-[#146B42]"}`}>
-                      ${parityPrice.toFixed(2)}
+            {/* Right column — costs + grade + value */}
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                {field("Cost Basis ($)", "cost_basis_total", "number")}
+                {field("Tax ($)", "tax", "number")}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {field("Shipping ($)", "shipping", "number")}
+                {field("Fees Paid ($)", "fees_paid", "number")}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {field("Condition", "condition_status", "select", ["raw", "graded"] as const)}
+                {field("Grading Co.", "grading_company")}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {field("Grade", "grade")}
+                {field("Cert #", "cert_number")}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {field("List Price ($)", "list_price", "number")}
+                <div>
+                  <label className={labelClass}>Est. Market Value ($)</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={form.current_market_value ?? ""}
+                      onChange={(e) => setForm({ ...form, current_market_value: e.target.value })}
+                      className={inputClass}
+                    />
+                    {(!form.current_market_value || form.current_market_value === "0" || form.current_market_value === "0.00") && (
+                      <button
+                        type="button"
+                        onClick={handleFetchCmv}
+                        disabled={cmvLoading || !item.title?.trim()}
+                        className={`shrink-0 px-3 py-2 disabled:opacity-50 text-sm rounded-lg font-medium ${dark ? "bg-gray-700 hover:bg-gray-600 text-white" : "bg-[#1C8C58] hover:bg-[#146B42] text-white"}`}
+                      >
+                        {cmvLoading ? "..." : "Get estimate"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+              {(() => {
+                const listPriceCents = item.list_price_cents;
+                if (!listPriceCents || listPriceCents <= 0) return null;
+                const listPriceDollars = listPriceCents / 100;
+                const feeRateKey: EbayFeeRateKey =
+                  typeof window !== "undefined"
+                    ? ((window.localStorage.getItem("cardzcheck_ebay_fee_rate") as EbayFeeRateKey) || "standard")
+                    : "standard";
+                const parityPrice = calculateEbayParityPrice(listPriceDollars, feeRateKey);
+                const feeLabel = feeRateKey === "top_rated_plus" ? "12% TRP" : "13% Std";
+                return (
+                  <div className={`p-3 ${cardClass}`}>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className={`text-[10px] uppercase tracking-wider font-medium ${dark ? "text-gray-400" : "text-[#6F7D74]"}`}>
+                          eBay Parity Price
+                        </p>
+                        <p className={`text-lg font-semibold ${dark ? "text-blue-400" : "text-[#146B42]"}`}>
+                          ${parityPrice.toFixed(2)}
+                        </p>
+                      </div>
+                      <span className={`text-[10px] px-2 py-0.5 rounded ${dark ? "text-gray-500 bg-gray-800" : "text-[#6F7D74] bg-[#F6FAF7]"}`}>
+                        {feeLabel} fee
+                      </span>
+                    </div>
+                    <p className={`text-[10px] mt-1 ${dark ? "text-gray-500" : "text-[#6F7D74]"}`}>
+                      List at this price on eBay to net the same as your ${listPriceDollars.toFixed(2)} shop price after fees.
                     </p>
                   </div>
-                  <span className={`text-[10px] px-2 py-0.5 rounded ${dark ? "text-gray-500 bg-gray-800" : "text-[#6F7D74] bg-[#F6FAF7]"}`}>
-                    {feeLabel} fee
-                  </span>
-                </div>
-                <p className={`text-[10px] mt-1 ${dark ? "text-gray-500" : "text-[#6F7D74]"}`}>
-                  List at this price on eBay to net the same as your ${listPriceDollars.toFixed(2)} shop price after fees.
-                </p>
-              </div>
-            );
-          })()}
-
-          {field("Notes", "notes", "textarea")}
+                );
+              })()}
+            </div>
+          </div>
           <button
             onClick={handleSave}
             className={`w-full py-2.5 min-h-[44px] text-white font-medium rounded-lg transition-colors ${dark ? "bg-emerald-600 hover:bg-emerald-700" : "bg-[#1C8C58] hover:bg-[#146B42]"}`}

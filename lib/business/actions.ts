@@ -624,6 +624,8 @@ type SaleWriteInput = {
   cogs_cents?: number | null;
   notes?: string | null;
   external_order_id?: string | null;
+  /** When set, sells N of the linked inventory lot. Omit = full lot. */
+  quantity_sold?: number;
 };
 
 function getDbErrorMeta(error: unknown): {
@@ -871,13 +873,13 @@ async function getInventoryContextForSale(
     ownerUserId: string;
     inventoryItemId?: string | null;
   }
-): Promise<{ id: string; title: string | null; channel: string | null; cost_basis_total_cents: number | null } | null> {
+): Promise<{ id: string; title: string | null; channel: string | null; cost_basis_total_cents: number | null; quantity: number | null } | null> {
   const { businessAccountId, userId, ownerUserId, inventoryItemId } = args;
   if (!inventoryItemId) return null;
   const supabase = await createClient();
   const scopedLookup = await supabase
     .from(BUSINESS_TABLE)
-    .select("id, title, channel, cost_basis_total_cents")
+    .select("id, title, channel, cost_basis_total_cents, quantity")
     .eq("id", inventoryItemId)
     .eq("business_account_id", businessAccountId)
     .maybeSingle();
@@ -903,7 +905,7 @@ async function getInventoryContextForSale(
 
     let fallbackQuery = supabase
       .from(BUSINESS_TABLE)
-      .select("id, title, channel, cost_basis_total_cents")
+      .select("id, title, channel, cost_basis_total_cents, quantity")
       .eq("id", inventoryItemId)
       .eq("item_kind", BUSINESS_ITEM_KIND);
 
@@ -925,6 +927,7 @@ async function getInventoryContextForSale(
     title: data.title ?? null,
     channel: data.channel ?? null,
     cost_basis_total_cents: data.cost_basis_total_cents ?? 0,
+    quantity: typeof data.quantity === "number" ? data.quantity : null,
   };
 }
 
@@ -941,18 +944,57 @@ async function ensureCollectionItemMirrorForSale(
   // Nothing to do — business inventory lives in collection_items directly.
 }
 
-async function markInventoryItemSold(args: {
+async function applyInventoryQuantitySold(args: {
   supabase: Awaited<ReturnType<typeof createClient>>;
   inventoryItemId: string;
   businessAccountId: string;
   userId: string;
   ownerUserId: string;
+  /** Total qty currently on the lot. */
+  currentQuantity: number;
+  /** How many units this sale closes. If >= currentQuantity, the lot is marked sold. */
+  quantitySold: number;
+  /** Total cost basis of the lot in cents — used to pro-rate basis on partial sales. */
+  currentBasisCents: number | null;
 }): Promise<void> {
-  const { supabase, inventoryItemId, businessAccountId, userId, ownerUserId } = args;
+  const {
+    supabase,
+    inventoryItemId,
+    businessAccountId,
+    userId,
+    ownerUserId,
+    currentQuantity,
+    quantitySold,
+    currentBasisCents,
+  } = args;
+
+  const isPartial =
+    Number.isFinite(currentQuantity) &&
+    currentQuantity > 1 &&
+    quantitySold > 0 &&
+    quantitySold < currentQuantity;
+
+  let updatePayload: Record<string, unknown>;
+  if (isPartial) {
+    const remainingQty = Math.max(1, currentQuantity - quantitySold);
+    const basis =
+      typeof currentBasisCents === "number" && Number.isFinite(currentBasisCents)
+        ? Math.max(
+            0,
+            Math.round((currentBasisCents * remainingQty) / currentQuantity)
+          )
+        : null;
+    updatePayload = {
+      quantity: remainingQty,
+      ...(basis != null ? { cost_basis_total_cents: basis } : {}),
+    };
+  } else {
+    updatePayload = { status: "sold" };
+  }
 
   const scopedUpdate = await supabase
     .from(BUSINESS_TABLE)
-    .update({ status: "sold" })
+    .update(updatePayload)
     .eq("id", inventoryItemId)
     .eq("item_kind", BUSINESS_ITEM_KIND)
     .eq("business_account_id", businessAccountId)
@@ -978,7 +1020,7 @@ async function markInventoryItemSold(args: {
 
   let fallbackUpdate = supabase
     .from(BUSINESS_TABLE)
-    .update({ status: "sold" })
+    .update(updatePayload)
     .eq("id", inventoryItemId)
     .eq("item_kind", BUSINESS_ITEM_KIND);
 
@@ -999,7 +1041,7 @@ function buildComputedSalePayload(args: {
   businessAccountId: string;
   legacyBusinessOwnerId: string;
   base: SaleWriteInput;
-  inventoryContext: { id: string; channel: string | null; cost_basis_total_cents: number | null } | null;
+  inventoryContext: { id: string; channel: string | null; cost_basis_total_cents: number | null; quantity?: number | null } | null;
 }) {
   const { userId, businessAccountId, legacyBusinessOwnerId, base, inventoryContext } = args;
 
@@ -1316,14 +1358,19 @@ export async function createSale(
       created = data as BusinessSaleRow;
     }
 
-    // Mark the linked inventory row as sold if present.
-    if (insertPayload.inventory_item_id) {
-      await markInventoryItemSold({
+    // Mark the linked inventory row as sold (or decrement its quantity).
+    if (insertPayload.inventory_item_id && inventoryContext) {
+      const lotQty = inventoryContext.quantity ?? 1;
+      const requestedQty = Math.max(1, sale.quantity_sold ?? lotQty);
+      await applyInventoryQuantitySold({
         supabase,
         inventoryItemId: insertPayload.inventory_item_id,
         businessAccountId: context.businessAccountId,
         userId,
         ownerUserId: context.ownerUserId,
+        currentQuantity: lotQty,
+        quantitySold: Math.min(requestedQty, lotQty),
+        currentBasisCents: inventoryContext.cost_basis_total_cents,
       });
     }
 
