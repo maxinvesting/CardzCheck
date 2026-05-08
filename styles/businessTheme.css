@@ -30,28 +30,28 @@
   --biz-hover: #1A1F26;
   --biz-skeleton: #1A1F26;
 
-  /* Primary (driven by user appearance — usually green) */
-  --biz-primary: #1D9E75;
-  --biz-primary-hover: #17896A;
-  --biz-primary-soft: rgba(29, 158, 117, 0.10);
-  --biz-primary-soft-strong: rgba(29, 158, 117, 0.18);
-  --biz-primary-border: rgba(29, 158, 117, 0.32);
-  --biz-primary-foreground: #07100B;
+  /* Primary — neutral graphite/white accent (no green theme) */
+  --biz-primary: #F4F6F8;
+  --biz-primary-hover: #D4D7DC;
+  --biz-primary-soft: rgba(244, 246, 248, 0.06);
+  --biz-primary-soft-strong: rgba(244, 246, 248, 0.12);
+  --biz-primary-border: rgba(244, 246, 248, 0.22);
+  --biz-primary-foreground: #06080B;
 
-  /* Secondary / tertiary — appearance driven */
-  --biz-secondary: #15803D;
-  --biz-secondary-hover: #116730;
-  --biz-secondary-soft: rgba(21, 128, 61, 0.10);
-  --biz-secondary-soft-strong: rgba(21, 128, 61, 0.18);
-  --biz-secondary-border: rgba(21, 128, 61, 0.30);
-  --biz-secondary-foreground: #07100B;
+  /* Secondary / tertiary — neutral graphite */
+  --biz-secondary: #C7CCD3;
+  --biz-secondary-hover: #A5ACB6;
+  --biz-secondary-soft: rgba(199, 204, 211, 0.06);
+  --biz-secondary-soft-strong: rgba(199, 204, 211, 0.12);
+  --biz-secondary-border: rgba(199, 204, 211, 0.22);
+  --biz-secondary-foreground: #06080B;
 
-  --biz-tertiary: #0F766E;
-  --biz-tertiary-hover: #0C5E58;
-  --biz-tertiary-soft: rgba(15, 118, 110, 0.10);
-  --biz-tertiary-soft-strong: rgba(15, 118, 110, 0.18);
-  --biz-tertiary-border: rgba(15, 118, 110, 0.30);
-  --biz-tertiary-foreground: #07100B;
+  --biz-tertiary: #8A93A1;
+  --biz-tertiary-hover: #6F7886;
+  --biz-tertiary-soft: rgba(138, 147, 161, 0.06);
+  --biz-tertiary-soft-strong: rgba(138, 147, 161, 0.12);
+  --biz-tertiary-border: rgba(138, 147, 161, 0.22);
+  --biz-tertiary-foreground: #06080B;
 
   /* State signals (fixed — independent of appearance) */
   --biz-profit: #20B26B;
@@ -194,12 +194,12 @@
   border: 2px solid transparent;
 }
 
-/* Links */
+/* Links — neutral graphite, decoupled from primary token */
 .business-workspace-theme a {
-  color: var(--biz-link);
+  color: var(--biz-text);
 }
 .business-workspace-theme a:hover {
-  color: var(--biz-primary-hover);
+  color: var(--biz-text-strong);
 }
 
 /* Recolor leftover light-theme tailwind utilities to fit dark workspace */
@@ -214,14 +214,14 @@
 .business-workspace-theme .text-green-500,
 .business-workspace-theme .text-green-600,
 .business-workspace-theme .text-green-700 {
-  color: var(--biz-primary) !important;
+  color: var(--biz-text-strong) !important;
 }
 
 .business-workspace-theme .bg-blue-600,
 .business-workspace-theme .bg-emerald-600,
 .business-workspace-theme .bg-green-600 {
-  background-color: var(--biz-primary) !important;
-  color: var(--biz-primary-foreground) !important;
+  background-color: var(--biz-text-strong) !important;
+  color: #06080B !important;
 }
 
 .business-workspace-theme .hover\:bg-blue-700:hover,

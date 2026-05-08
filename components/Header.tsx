@@ -100,9 +100,11 @@ export default function Header() {
       <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
         {/* Logo */}
         <Link href={user ? "/dashboard" : "/"} className="flex-shrink-0">
-          <span className="text-xl md:text-2xl font-bold text-white tracking-tight">
-            CardzCheck
-          </span>
+          <img
+            src="/cardzcheck-logo.png"
+            alt="CardzCheck"
+            className="h-9 md:h-10 w-auto"
+          />
         </Link>
 
         {/* Search - Always visible for authenticated users */}

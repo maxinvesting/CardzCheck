@@ -227,7 +227,7 @@ function BUSINESS_NAV_ITEMS(): NavItem[] {
     { name: "News & Updates", href: "/business/news", icon: <NewsIcon /> },
     { name: "Compare Listings", href: "/business/comps", icon: <ChartIcon /> },
     { name: "Business Consultant", href: "/business/consultant", icon: <AnalystIcon /> },
-    { name: "Marketplace", href: "/marketplace", icon: <ShopIcon /> },
+    { name: "Marketplace", href: "/business/marketplace", icon: <ShopIcon /> },
     { name: "Help & FAQ", href: "/business/help", icon: <HelpIcon /> },
     { name: "Settings", href: "/business/settings", icon: <SettingsIcon /> },
   ];
@@ -354,7 +354,13 @@ export default function Sidebar() {
               >
                 CC
               </span>
-            ) : null}
+            ) : (
+              <img
+                src="/cardzcheck-logo.png"
+                alt=""
+                className="h-8 w-8 shrink-0 object-contain"
+              />
+            )}
             <span
               className={`truncate text-base font-semibold tracking-tight ${
                 isBusinessWorkspace ? "text-[var(--biz-text-strong)]" : "text-white"

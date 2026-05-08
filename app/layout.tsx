@@ -7,6 +7,16 @@ export const metadata: Metadata = {
   title: "CardzCheck — The Intelligence Platform for Sports Card Collectors and Businesses",
   description:
     "Grade probability, pricing estimates, collection tracking, and full business operations in one platform.",
+  icons: {
+    icon: "/cardzcheck-logo.png",
+    apple: "/cardzcheck-logo.png",
+  },
+  openGraph: {
+    title: "CardzCheck",
+    description:
+      "Grade probability, pricing estimates, collection tracking, and full business operations in one platform.",
+    images: ["/cardzcheck-logo.png"],
+  },
 };
 
 export const viewport: Viewport = {

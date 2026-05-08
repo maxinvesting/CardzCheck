@@ -63,8 +63,8 @@ function LoginForm() {
       <div className="relative z-10 mx-auto flex min-h-screen max-w-5xl items-center py-10">
         <div className="grid w-full gap-6 lg:grid-cols-[1.05fr_0.95fr]">
           <aside className="hidden rounded-2xl border border-gray-800 bg-gray-900/70 p-8 lg:block">
-            <Link href="/" className="inline-flex items-center text-2xl font-bold tracking-tight text-white">
-              CardzCheck
+            <Link href="/" className="inline-flex items-center">
+              <img src="/cardzcheck-logo.png" alt="CardzCheck" className="h-14 w-auto" />
             </Link>
             <h1 className="mt-6 text-3xl font-semibold leading-tight text-white">
               Back to your card desk.
@@ -93,8 +93,8 @@ function LoginForm() {
 
           <section className="w-full rounded-2xl border border-gray-800 bg-gray-900/85 p-6 shadow-2xl shadow-black/20 sm:p-8">
             <div className="text-center lg:hidden">
-              <Link href="/" className="inline-flex items-center text-2xl font-bold tracking-tight text-white">
-                CardzCheck
+              <Link href="/" className="inline-flex items-center">
+                <img src="/cardzcheck-logo.png" alt="CardzCheck" className="h-12 w-auto" />
               </Link>
             </div>
 

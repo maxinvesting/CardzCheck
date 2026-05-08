@@ -259,10 +259,17 @@ export default function Home() {
           <section className="mt-10 overflow-hidden rounded-2xl border border-cyan-500/30 bg-gradient-to-br from-cyan-950/60 via-gray-900/80 to-gray-900/80">
             <div className="flex flex-col gap-8 p-6 sm:p-8 lg:flex-row lg:items-center">
               <div className="flex-1">
-                <p className="text-xs font-semibold uppercase tracking-wider text-cyan-400">
-                  Subscriber Exclusive
-                </p>
-                <h2 className="mt-2 text-2xl font-semibold text-white sm:text-3xl">
+                <div className="mb-4 flex items-center gap-3">
+                  <img
+                    src="/cardzcheck-marketplace-logo.png"
+                    alt=""
+                    className="h-12 w-12 shrink-0 object-contain"
+                  />
+                  <p className="text-xs font-semibold uppercase tracking-wider text-cyan-400">
+                    Subscriber Exclusive
+                  </p>
+                </div>
+                <h2 className="text-2xl font-semibold text-white sm:text-3xl">
                   CardzCheck Deals
                 </h2>
                 <p className="mt-3 max-w-xl text-gray-300">
@@ -391,7 +398,7 @@ export default function Home() {
         <footer className="border-t border-gray-800 bg-[#0f1419]/80 py-8">
           <div className="mx-auto max-w-6xl px-4 text-center text-sm text-gray-400">
             <div className="mb-4 flex justify-center">
-              <span className="text-2xl font-bold tracking-tight text-white">CardzCheck</span>
+              <img src="/cardzcheck-logo.png" alt="CardzCheck" className="h-12 w-auto" />
             </div>
             <p>The intelligence platform for sports card collectors and businesses.</p>
             <div className="mt-4 flex flex-wrap justify-center gap-4">
