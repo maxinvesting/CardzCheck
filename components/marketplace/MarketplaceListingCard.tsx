@@ -13,16 +13,16 @@ export type MarketplaceListingCardProps = {
 };
 
 const PIPELINE_BADGE: Record<MarketplaceListingCardProps["pipeline"], string> = {
-  standard: "border-gray-700 text-gray-400",
-  elite: "border-purple-500 text-purple-300",
-  grails: "border-amber-500 text-amber-300",
+  standard: "border-gray-800 text-gray-500",
+  elite: "border-gray-600 text-gray-300",
+  grails: "border-white text-white",
 };
 
 export default function MarketplaceListingCard(props: MarketplaceListingCardProps) {
   return (
     <Link
       href={`/marketplace/listing/${props.id}`}
-      className="block rounded-xl border border-gray-800 bg-gray-900 p-4 hover:border-cyan-500 transition-colors"
+      className="block rounded-md border border-gray-900 bg-[#0a0a0a] p-4 hover:border-white transition-colors"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
@@ -43,7 +43,7 @@ export default function MarketplaceListingCard(props: MarketplaceListingCardProp
             ${(props.list_price_cents / 100).toLocaleString()}
           </div>
           {props.status === "price_reduced" && (
-            <div className="text-[10px] text-amber-400 mt-0.5">Price reduced</div>
+            <div className="text-[10px] text-gray-300 mt-0.5">Price reduced</div>
           )}
         </div>
         <div className="text-xs text-gray-400">

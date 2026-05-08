@@ -5,9 +5,9 @@ export const BUSINESS_APPEARANCE_UPDATED_EVENT =
   "cardzcheck:business-appearance-updated";
 
 export const DEFAULT_BUSINESS_APPEARANCE: BusinessAppearance = {
-  primaryColor: "#1D9E75",
-  secondaryColor: "#15803D",
-  tertiaryColor: "#0F766E",
+  primaryColor: "#F4F6F8",
+  secondaryColor: "#C7CCD3",
+  tertiaryColor: "#8A93A1",
 };
 
 const HEX_COLOR_RE = /^#([0-9a-fA-F]{6})$/;

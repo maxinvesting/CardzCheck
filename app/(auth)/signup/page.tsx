@@ -70,9 +70,7 @@ export default function SignupPage() {
       <div className="max-w-md w-full space-y-8 relative z-10">
         <div className="text-center">
           <Link href="/" className="flex justify-center">
-            <span className="text-3xl font-bold text-white tracking-tight">
-              CardzCheck
-            </span>
+            <img src="/cardzcheck-logo.png" alt="CardzCheck" className="h-16 w-auto" />
           </Link>
           <h2 className="mt-6 text-2xl font-semibold text-white">
             Create your account
