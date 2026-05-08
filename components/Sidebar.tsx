@@ -14,6 +14,12 @@ type NavItem = {
   badge?: string;
   isPro?: boolean;
   exact?: boolean;
+  isMarketplace?: boolean;
+};
+
+type NavSection = {
+  label: string;
+  items: NavItem[];
 };
 
 function HomeIcon() {
@@ -188,22 +194,6 @@ function AdminIcon() {
   );
 }
 
-function PERSONAL_NAV_ITEMS(): NavItem[] {
-  return [
-    { name: "Dashboard", href: "/dashboard", icon: <HomeIcon />, exact: true },
-    { name: "Collection", href: "/collection", icon: <CollectionIcon /> },
-    { name: "Grade Probability Engine", href: "/grade-hub", icon: <BadgeIcon />, badge: "dot" },
-    { name: "News & Updates", href: "/news", icon: <NewsIcon /> },
-    { name: "Bulk Mode", href: "/bulk", icon: <BulkIcon /> },
-    { name: "Watchlist", href: "/watchlist", icon: <EyeIcon />, isPro: true, badge: "Pro" },
-    { name: "Compare Listings", href: "/comps", icon: <ChartIcon /> },
-    { name: "CardzCheck Analyst", href: "/analyst", icon: <AnalystIcon />, isPro: true, badge: "Pro" },
-    { name: "Marketplace", href: "/marketplace", icon: <ShopIcon /> },
-    { name: "Help & FAQ", href: "/help", icon: <HelpIcon /> },
-    { name: "Settings", href: "/settings", icon: <SettingsIcon /> },
-  ];
-}
-
 function SalesIcon() {
   return (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -218,20 +208,57 @@ function SalesIcon() {
   );
 }
 
-function BUSINESS_NAV_ITEMS(): NavItem[] {
+function PERSONAL_NAV_ITEMS(): NavItem[] {
   return [
-    { name: "Dashboard", href: "/business", icon: <HomeIcon />, exact: true },
-    { name: "Ledger", href: "/business/ledger", icon: <LedgerIcon /> },
-    { name: "Sales", href: "/business/sales", icon: <SalesIcon /> },
-    { name: "Grade Probability Engine", href: "/business/grade-hub", icon: <BadgeIcon />, badge: "dot" },
-    { name: "News & Updates", href: "/business/news", icon: <NewsIcon /> },
-    { name: "Compare Listings", href: "/business/comps", icon: <ChartIcon /> },
-    { name: "Business Consultant", href: "/business/consultant", icon: <AnalystIcon /> },
-    { name: "Marketplace", href: "/marketplace", icon: <ShopIcon /> },
-    { name: "Help & FAQ", href: "/business/help", icon: <HelpIcon /> },
-    { name: "Settings", href: "/business/settings", icon: <SettingsIcon /> },
+    { name: "Dashboard", href: "/dashboard", icon: <HomeIcon />, exact: true },
+    { name: "Collection", href: "/collection", icon: <CollectionIcon /> },
+    { name: "Grade Probability Engine", href: "/grade-hub", icon: <BadgeIcon />, badge: "dot" },
+    { name: "News & Updates", href: "/news", icon: <NewsIcon /> },
+    { name: "Bulk Mode", href: "/bulk", icon: <BulkIcon /> },
+    { name: "Watchlist", href: "/watchlist", icon: <EyeIcon />, isPro: true, badge: "Pro" },
+    { name: "Compare Listings", href: "/comps", icon: <ChartIcon /> },
+    { name: "CardzCheck Analyst", href: "/analyst", icon: <AnalystIcon />, isPro: true, badge: "Pro" },
+    { name: "Marketplace", href: "/marketplace", icon: <ShopIcon />, isMarketplace: true },
+    { name: "Help & FAQ", href: "/help", icon: <HelpIcon /> },
+    { name: "Settings", href: "/settings", icon: <SettingsIcon /> },
   ];
 }
+
+function BUSINESS_NAV_SECTIONS(): NavSection[] {
+  return [
+    {
+      label: "Workspace",
+      items: [
+        { name: "Dashboard", href: "/business", icon: <HomeIcon />, exact: true },
+        { name: "Marketplace", href: "/marketplace", icon: <ShopIcon />, isMarketplace: true },
+        { name: "Ledger", href: "/business/ledger", icon: <LedgerIcon /> },
+        { name: "Sales", href: "/business/sales", icon: <SalesIcon /> },
+        { name: "Compare Listings", href: "/business/comps", icon: <ChartIcon /> },
+      ],
+    },
+    {
+      label: "Intelligence",
+      items: [
+        { name: "Grade Probability Engine", href: "/business/grade-hub", icon: <BadgeIcon />, badge: "dot" },
+        { name: "AI Insights", href: "/business/consultant", icon: <AnalystIcon /> },
+        { name: "News", href: "/business/news", icon: <NewsIcon /> },
+      ],
+    },
+    {
+      label: "System",
+      items: [
+        { name: "Help & FAQ", href: "/business/help", icon: <HelpIcon /> },
+        { name: "Settings", href: "/business/settings", icon: <SettingsIcon /> },
+      ],
+    },
+  ];
+}
+
+const ADMIN_NAV_ITEMS: NavItem[] = [
+  { name: "Admin", href: "/admin", icon: <AdminIcon />, badge: "Admin", exact: true },
+  { name: "Marketplace", href: "/admin/marketplace", icon: <ShopIcon />, badge: "Admin" },
+  { name: "News", href: "/admin/news", icon: <NewsIcon />, badge: "Admin" },
+];
 
 // Routes that are unambiguously personal-only (not in business nav)
 const PERSONAL_ONLY_PREFIXES = ["/dashboard", "/collection", "/watchlist", "/analyst", "/analytics"];
@@ -261,17 +288,8 @@ export default function Sidebar() {
   }, [pathname]);
 
   const isBusinessWorkspace = pathname.startsWith("/business") || pathname.startsWith("/admin");
-  const isBusinessRoute = pathname.startsWith("/business");
   const isAdminUser = user?.app_role === "admin" || user?.app_role === "owner";
   const hasPaidWorkspace = Boolean(user?.is_paid) || isBusinessWorkspace;
-  const baseNavItems = isBusinessWorkspace ? BUSINESS_NAV_ITEMS() : PERSONAL_NAV_ITEMS();
-  const navItems: NavItem[] = isAdminUser
-    ? [
-        ...baseNavItems,
-        { name: "Admin", href: "/admin", icon: <AdminIcon />, badge: "Admin" },
-      ]
-    : baseNavItems;
-  const businessSurfaceClass = "bg-[var(--biz-near-black)] border-[color:var(--biz-border)]";
 
   useEffect(() => {
     async function loadUser() {
@@ -300,13 +318,152 @@ export default function Sidebar() {
     return pathname === item.href || pathname.startsWith(`${item.href}/`);
   };
 
+  const renderNavItem = (item: NavItem, isAdmin = false) => {
+    const active = isActive(item);
+    const isProFeature = Boolean(item.isPro && user && !user.is_paid);
+
+    const baseClass = "flex items-center gap-3 px-3 py-[7px] rounded transition-all";
+
+    if (isBusinessWorkspace) {
+      let activeStyle: React.CSSProperties = {};
+      let inactiveClass = "text-[var(--biz-muted-strong)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]";
+
+      if (active) {
+        if (item.isMarketplace) {
+          activeStyle = {
+            background: "rgba(255,255,255,0.1)",
+            borderLeft: "2px solid rgba(255,255,255,0.55)",
+            paddingLeft: "13px",
+            boxShadow: "inset 0 0 12px rgba(255,255,255,0.04)",
+          };
+        } else if (isAdmin) {
+          activeStyle = {
+            borderLeft: "2px solid rgb(249 115 22)",
+            background: "rgba(249,115,22,0.1)",
+            paddingLeft: "13px",
+          };
+        } else {
+          activeStyle = {
+            background: "var(--biz-nav-active-bg)",
+            borderLeft: "2px solid var(--biz-nav-active-border)",
+            paddingLeft: "13px",
+          };
+        }
+      }
+
+      return (
+        <Link
+          key={item.href}
+          href={item.href}
+          onClick={() => setIsOpen(false)}
+          className={`${baseClass} ${active ? (item.isMarketplace ? "text-white" : isAdmin ? "text-orange-300" : "text-[var(--biz-text-strong)]") : inactiveClass}`}
+          style={active ? activeStyle : {}}
+        >
+          <span className="shrink-0 opacity-80">{item.icon}</span>
+          <span className="truncate text-[13px] font-medium tracking-tight">{item.name}</span>
+          {item.name === "AI Insights" && (
+            <svg
+              className="w-3.5 h-3.5 ml-1 shrink-0 opacity-50"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#a78bfa"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M12 2l2 7h7l-6 4.5 2.3 7L12 17l-5.3 3.5L9 13 3 8.5h7z" />
+            </svg>
+          )}
+          {item.badge && !isProFeature && (
+            item.badge === "dot" ? (
+              <span className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-white/40" />
+            ) : item.badge === "Admin" ? (
+              <span className="ml-auto px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] rounded-sm bg-orange-500/15 border border-orange-500/30 text-orange-300">
+                Admin
+              </span>
+            ) : (
+              <span
+                className="ml-auto rounded px-1.5 py-0.5 text-[10px] font-bold"
+                style={{
+                  background: "var(--biz-secondary-soft)",
+                  border: "1px solid var(--biz-secondary-border)",
+                  color: "var(--biz-secondary)",
+                }}
+              >
+                {item.badge}
+              </span>
+            )
+          )}
+          {isProFeature && (
+            <svg className="w-4 h-4 ml-auto" fill="currentColor" viewBox="0 0 20 20">
+              <path
+                fillRule="evenodd"
+                d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
+                clipRule="evenodd"
+              />
+            </svg>
+          )}
+        </Link>
+      );
+    }
+
+    // Personal workspace rendering
+    return (
+      <Link
+        key={item.href}
+        href={item.href}
+        onClick={() => setIsOpen(false)}
+        className={`${baseClass} ${
+          active
+            ? "bg-blue-600 text-white"
+            : "text-gray-400 hover:text-white hover:bg-gray-800"
+        }`}
+      >
+        <span className="shrink-0 opacity-90">{item.icon}</span>
+        <span className="truncate text-[13px] font-medium tracking-tight">{item.name}</span>
+        {item.badge && !isProFeature && (
+          item.badge === "dot" ? (
+            <span className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-white/40" />
+          ) : (
+            <span
+              className="ml-auto rounded px-1.5 py-0.5 text-[10px] font-bold"
+              style={{
+                background: "rgba(59,130,246,0.2)",
+                color: "#60a5fa",
+              }}
+            >
+              {item.badge}
+            </span>
+          )
+        )}
+        {isProFeature && (
+          <svg className="w-4 h-4 ml-auto" fill="currentColor" viewBox="0 0 20 20">
+            <path
+              fillRule="evenodd"
+              d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
+              clipRule="evenodd"
+            />
+          </svg>
+        )}
+      </Link>
+    );
+  };
+
+  const renderSectionLabel = (label: string, first = false) => (
+    <div className={`${first ? "pt-2" : "pt-4"} pb-1 px-3`}>
+      <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-[var(--biz-muted)] font-mono-num">
+        {label}
+      </p>
+    </div>
+  );
+
   return (
     <>
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={`lg:hidden fixed top-4 left-4 z-50 rounded-lg border p-2 transition-colors ${
           isBusinessWorkspace
-            ? `${businessSurfaceClass} text-[var(--biz-muted)] hover:text-[var(--biz-text)]`
+            ? "bg-[var(--biz-near-black)] border-[color:var(--biz-border)] text-[var(--biz-muted)] hover:text-[var(--biz-text)]"
             : "bg-gray-900 border-gray-800 text-gray-400 hover:text-white"
         }`}
       >
@@ -335,6 +492,7 @@ export default function Sidebar() {
           isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         } ${!isOpen ? "pointer-events-none lg:pointer-events-auto" : ""}`}
       >
+        {/* Logo / header */}
         <Link
           href={isBusinessWorkspace ? "/business" : "/dashboard"}
           className={`flex cursor-pointer items-center justify-between gap-3 border-b px-4 py-4 transition-opacity hover:opacity-90 ${
@@ -343,7 +501,7 @@ export default function Sidebar() {
           onClick={() => setIsOpen(false)}
         >
           <div className="flex items-center gap-2 min-w-0">
-            {isBusinessWorkspace ? (
+            {isBusinessWorkspace && (
               <span
                 className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm font-mono-num text-[11px] font-bold"
                 style={{
@@ -354,7 +512,7 @@ export default function Sidebar() {
               >
                 CC
               </span>
-            ) : null}
+            )}
             <span
               className={`truncate text-base font-semibold tracking-tight ${
                 isBusinessWorkspace ? "text-[var(--biz-text-strong)]" : "text-white"
@@ -377,146 +535,71 @@ export default function Sidebar() {
           )}
         </Link>
 
-        {isBusinessWorkspace ? (
-          <div className="border-b border-[color:var(--biz-border)] px-4 pt-3 pb-2">
-            <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-[var(--biz-muted)] font-mono-num">
-              Workspace
-            </p>
-          </div>
-        ) : null}
-
-        <nav className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
-          {navItems.map((item) => {
-            const isProFeature = Boolean(item.isPro && user && !user.is_paid);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setIsOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2 rounded transition-all ${
-                  isActive(item)
-                    ? item.href.includes("/marketplace")
-                      ? "bg-cyan-600 text-white"
-                      : isBusinessWorkspace
-                      ? "text-[var(--biz-text-strong)]"
-                      : "bg-blue-600 text-white"
-                    : isBusinessWorkspace
-                      ? "text-[var(--biz-muted-strong)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]"
-                      : "text-gray-400 hover:text-white hover:bg-gray-800"
-                }`}
-                style={
-                  isActive(item) && isBusinessWorkspace
-                    ? {
-                        background: isBusinessRoute
-                          ? "var(--biz-nav-active-bg)"
-                          : "rgba(255,255,255,0.06)",
-                        borderLeft: "2px solid var(--biz-nav-active-border)",
-                        paddingLeft: "13px",
-                      }
-                    : {}
-                }
-              >
-                <span className="shrink-0 opacity-90">{item.icon}</span>
-                <span className="truncate text-[13px] font-medium tracking-tight">{item.name}</span>
-                {/* AI sparkle for Business Consultant */}
-                {item.name === "Business Consultant" && isBusinessWorkspace && (
-                  <svg
-                    className="w-3.5 h-3.5 ml-1 shrink-0 opacity-60"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="#a78bfa"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M12 2l2 7h7l-6 4.5 2.3 7L12 17l-5.3 3.5L9 13 3 8.5h7z" />
-                  </svg>
-                )}
-                {item.badge && !isProFeature && (
-                  item.badge === "dot" ? (
-                    <span
-                      className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full opacity-70"
-                      style={{ backgroundColor: "#1D9E75" }}
-                    />
-                  ) : (
-                    <span
-                      className="ml-auto rounded px-1.5 py-0.5 text-[10px] font-bold"
-                      style={
-                        isBusinessWorkspace
-                          ? {
-                              background: isBusinessRoute
-                                ? "var(--biz-secondary-soft)"
-                                : "rgba(255,255,255,0.06)",
-                              border: isBusinessRoute
-                                ? "1px solid var(--biz-secondary-border)"
-                                : "1px solid rgba(255,255,255,0.1)",
-                              color: isBusinessRoute
-                                ? "var(--biz-secondary)"
-                                : "#64748b",
-                            }
-                          : {
-                              background: "rgba(59,130,246,0.2)",
-                              color: "#60a5fa",
-                            }
-                      }
-                    >
-                      {item.badge}
-                    </span>
-                  )
-                )}
-                {isProFeature && (
-                  <svg className="w-4 h-4 ml-auto" fill="currentColor" viewBox="0 0 20 20">
-                    <path
-                      fillRule="evenodd"
-                      d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                )}
-              </Link>
-            );
-          })}
-
-          {user && (user.app_role === "admin" || user.app_role === "owner") && (
+        {/* Navigation */}
+        <nav className="flex-1 overflow-y-auto px-2 py-1">
+          {isBusinessWorkspace ? (
             <>
-              <div className={`mt-3 pb-1 px-3 text-[9px] font-semibold uppercase tracking-[0.16em] font-mono-num ${
-                isBusinessWorkspace ? "text-[var(--biz-muted)]" : "text-gray-600"
-              }`}>
-                Admin
-              </div>
-              {[
-                { name: "Marketplace", href: "/admin/marketplace", icon: <ShopIcon /> },
-                { name: "News", href: "/admin/news", icon: <NewsIcon /> },
-              ].map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setIsOpen(false)}
-                  className={`flex items-center gap-3 px-3 py-2 rounded transition-colors ${
-                    pathname === item.href || pathname.startsWith(`${item.href}/`)
-                      ? isBusinessWorkspace
-                        ? "border-l-2 border-l-orange-500 bg-orange-500/10 text-orange-300"
-                        : "bg-orange-600 text-white"
-                      : isBusinessWorkspace
-                        ? "text-[var(--biz-muted-strong)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]"
-                        : "text-gray-400 hover:text-white hover:bg-gray-800"
-                  }`}
-                >
-                  <span className="shrink-0 opacity-90">{item.icon}</span>
-                  <span className="truncate text-[13px] font-medium tracking-tight">{item.name}</span>
-                  <span className={`ml-auto px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] rounded-sm ${
-                    isBusinessWorkspace
-                      ? "bg-orange-500/15 border border-orange-500/30 text-orange-300"
-                      : "bg-orange-500/20 text-orange-400"
-                  }`}>
-                    Admin
-                  </span>
-                </Link>
+              {BUSINESS_NAV_SECTIONS().map((section, sectionIdx) => (
+                <div key={section.label}>
+                  {renderSectionLabel(section.label, sectionIdx === 0)}
+                  <div className="space-y-0.5">
+                    {section.items.map((item) => renderNavItem(item))}
+                  </div>
+                </div>
               ))}
+
+              {isAdminUser && (
+                <div>
+                  {renderSectionLabel("Admin")}
+                  <div className="space-y-0.5">
+                    {ADMIN_NAV_ITEMS.map((item) => renderNavItem(item, true))}
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <div className="pt-2 space-y-0.5">
+                {PERSONAL_NAV_ITEMS().map((item) => renderNavItem(item))}
+                {isAdminUser && renderNavItem(
+                  { name: "Admin", href: "/admin", icon: <AdminIcon />, badge: "Admin" }
+                )}
+              </div>
+              {isAdminUser && (
+                <>
+                  <div className="mt-3 pb-1 px-3 text-[9px] font-semibold uppercase tracking-[0.16em] font-mono-num text-gray-600">
+                    Admin
+                  </div>
+                  <div className="space-y-0.5">
+                    {[
+                      { name: "Marketplace", href: "/admin/marketplace", icon: <ShopIcon /> },
+                      { name: "News", href: "/admin/news", icon: <NewsIcon /> },
+                    ].map((item) => (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={() => setIsOpen(false)}
+                        className={`flex items-center gap-3 px-3 py-[7px] rounded transition-colors ${
+                          pathname === item.href || pathname.startsWith(`${item.href}/`)
+                            ? "bg-orange-600 text-white"
+                            : "text-gray-400 hover:text-white hover:bg-gray-800"
+                        }`}
+                      >
+                        <span className="shrink-0 opacity-90">{item.icon}</span>
+                        <span className="truncate text-[13px] font-medium tracking-tight">{item.name}</span>
+                        <span className="ml-auto px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] rounded-sm bg-orange-500/20 text-orange-400">
+                          Admin
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                </>
+              )}
             </>
           )}
         </nav>
 
+        {/* Footer */}
         <div
           className={`space-y-3 border-t p-3 ${
             isBusinessWorkspace ? "border-[color:var(--biz-border)]" : "border-gray-800"
