@@ -2,33 +2,21 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
-import { getCurrentUserCached } from "@/lib/current-user-client";
 
 const MAIN_TABS = [
-  { name: "Home", href: "/dashboard", icon: HomeIcon },
-  { name: "Collection", href: "/collection", icon: CollectionIcon },
+  { name: "Dashboard", href: "/dashboard", icon: HomeIcon },
+  { name: "Ledger", href: "/collection", icon: CollectionIcon },
   { name: "Analytics", href: "/analytics", icon: ChartIcon },
   { name: "Marketplace", href: "/marketplace", icon: ShopIcon, cyan: true },
-  { name: "More", href: "#more", icon: MoreIcon },
+  { name: "Business", href: "/business", icon: BusinessIcon },
 ] as const;
-
-const MORE_LINKS = [
-  { name: "News & Updates", href: "/news" },
-  { name: "Watchlist", href: "/watchlist" },
-  { name: "Compare Listings", href: "/comps" },
-  { name: "Grade Engine", href: "/grade-hub" },
-  { name: "Bulk Mode", href: "/bulk" },
-  { name: "Analyst", href: "/analyst" },
-  { name: "Help & FAQ", href: "/help" },
-  { name: "Settings", href: "/settings" },
-];
 
 const TAB_BASE_PATHS = [
   "/dashboard",
   "/collection",
   "/analytics",
   "/marketplace",
+  "/business",
   "/admin/marketplace",
   "/watchlist",
   "/comps",
@@ -89,18 +77,16 @@ function MoreIcon({ className }: { className?: string }) {
   );
 }
 
+function BusinessIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0H5m14 0h2m-16 0H3m4-7h2m-2-4h2m-2 8h2m4-4h2m-2-4h2m-2 8h2" />
+    </svg>
+  );
+}
+
 export default function BottomTabBar() {
   const pathname = usePathname();
-  const [moreOpen, setMoreOpen] = useState(false);
-  const [isAdminUser, setIsAdminUser] = useState(false);
-
-  useEffect(() => {
-    getCurrentUserCached().then((user) => {
-      if (user?.app_role === "admin" || user?.app_role === "owner") {
-        setIsAdminUser(true);
-      }
-    });
-  }, []);
 
   if (!isTabRoute(pathname)) return null;
 
@@ -111,19 +97,7 @@ export default function BottomTabBar() {
         style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
       >
         {MAIN_TABS.map((tab) => {
-          if (tab.href === "#more") {
-            return (
-              <button
-                key={tab.name}
-                onClick={() => setMoreOpen(true)}
-                className="flex flex-col items-center justify-center py-2 px-3 text-gray-400 hover:text-white transition-colors"
-              >
-                <tab.icon className="w-6 h-6" />
-                <span className="text-[10px] mt-0.5">{tab.name}</span>
-              </button>
-            );
-          }
-          const active = pathname === tab.href || (tab.href === "/analytics" && pathname === "/dashboard");
+          const active = pathname === tab.href || pathname.startsWith(tab.href + "/");
           const Icon = tab.icon;
           return (
             <Link
@@ -143,48 +117,6 @@ export default function BottomTabBar() {
           );
         })}
       </nav>
-
-      {moreOpen && (
-        <>
-          <div
-            className="lg:hidden fixed inset-0 bg-black/50 z-[60]"
-            onClick={() => setMoreOpen(false)}
-            aria-hidden="true"
-          />
-          <div
-            className="lg:hidden fixed bottom-0 left-0 right-0 z-[70] bg-[#0f1419] border-t border-gray-800 rounded-t-2xl max-h-[70vh] overflow-y-auto"
-            style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
-          >
-            <div className="p-4 border-b border-gray-800">
-              <h3 className="text-lg font-semibold text-white">More</h3>
-            </div>
-            <ul className="p-4 space-y-2">
-              {MORE_LINKS.map((link) => (
-                <li key={link.href}>
-                  <Link
-                    href={link.href}
-                    onClick={() => setMoreOpen(false)}
-                    className="block px-4 py-3 rounded-lg text-white hover:bg-gray-800 transition-colors"
-                  >
-                    {link.name}
-                  </Link>
-                </li>
-              ))}
-              {isAdminUser && (
-                <li key="/admin">
-                  <Link
-                    href="/admin"
-                    onClick={() => setMoreOpen(false)}
-                    className="block px-4 py-3 rounded-lg text-cyan-400 hover:bg-gray-800 transition-colors font-medium"
-                  >
-                    Admin
-                  </Link>
-                </li>
-              )}
-            </ul>
-          </div>
-        </>
-      )}
     </>
   );
 }

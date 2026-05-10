@@ -14,6 +14,7 @@ type NavItem = {
   badge?: string;
   isPro?: boolean;
   exact?: boolean;
+  children?: NavItem[];
 };
 
 function HomeIcon() {
@@ -191,16 +192,36 @@ function AdminIcon() {
 function PERSONAL_NAV_ITEMS(): NavItem[] {
   return [
     { name: "Dashboard", href: "/dashboard", icon: <HomeIcon />, exact: true },
-    { name: "Collection", href: "/collection", icon: <CollectionIcon /> },
-    { name: "Grade Probability Engine", href: "/grade-hub", icon: <BadgeIcon />, badge: "dot" },
-    { name: "News & Updates", href: "/news", icon: <NewsIcon /> },
-    { name: "Bulk Mode", href: "/bulk", icon: <BulkIcon /> },
-    { name: "Watchlist", href: "/watchlist", icon: <EyeIcon />, isPro: true, badge: "Pro" },
-    { name: "Compare Listings", href: "/comps", icon: <ChartIcon /> },
-    { name: "CardzCheck Analyst", href: "/analyst", icon: <AnalystIcon />, isPro: true, badge: "Pro" },
+    {
+      name: "Ledger",
+      href: "/collection",
+      icon: <LedgerIcon />,
+      children: [
+        { name: "Collection", href: "/collection", icon: <CollectionIcon /> },
+        { name: "Bulk Mode", href: "/bulk", icon: <BulkIcon /> },
+        { name: "Grade Engine", href: "/grade-hub", icon: <BadgeIcon />, badge: "dot" },
+      ],
+    },
+    {
+      name: "Analytics",
+      href: "/analytics",
+      icon: <ChartIcon />,
+      children: [
+        { name: "Compare Listings", href: "/comps", icon: <ChartIcon /> },
+        { name: "Watchlist", href: "/watchlist", icon: <EyeIcon />, isPro: true, badge: "Pro" },
+        { name: "CardzCheck Analyst", href: "/analyst", icon: <AnalystIcon />, isPro: true, badge: "Pro" },
+      ],
+    },
     { name: "Marketplace", href: "/marketplace", icon: <ShopIcon /> },
-    { name: "Help & FAQ", href: "/help", icon: <HelpIcon /> },
-    { name: "Settings", href: "/settings", icon: <SettingsIcon /> },
+    {
+      name: "Business",
+      href: "/business",
+      icon: <SalesIcon />,
+      children: [
+        { name: "Help & FAQ", href: "/help", icon: <HelpIcon /> },
+        { name: "Settings", href: "/settings", icon: <SettingsIcon /> },
+      ],
+    },
   ];
 }
 
@@ -221,15 +242,35 @@ function SalesIcon() {
 function BUSINESS_NAV_ITEMS(): NavItem[] {
   return [
     { name: "Dashboard", href: "/business", icon: <HomeIcon />, exact: true },
-    { name: "Ledger", href: "/business/ledger", icon: <LedgerIcon /> },
-    { name: "Sales", href: "/business/sales", icon: <SalesIcon /> },
-    { name: "Grade Probability Engine", href: "/business/grade-hub", icon: <BadgeIcon />, badge: "dot" },
-    { name: "News & Updates", href: "/business/news", icon: <NewsIcon /> },
-    { name: "Compare Listings", href: "/business/comps", icon: <ChartIcon /> },
-    { name: "Business Consultant", href: "/business/consultant", icon: <AnalystIcon /> },
+    {
+      name: "Ledger",
+      href: "/business/ledger",
+      icon: <LedgerIcon />,
+      children: [
+        { name: "Inventory", href: "/business/ledger", icon: <LedgerIcon /> },
+        { name: "Sales", href: "/business/sales", icon: <SalesIcon /> },
+        { name: "Grade Engine", href: "/business/grade-hub", icon: <BadgeIcon />, badge: "dot" },
+      ],
+    },
+    {
+      name: "Analytics",
+      href: "/business/comps",
+      icon: <ChartIcon />,
+      children: [
+        { name: "Compare Listings", href: "/business/comps", icon: <ChartIcon /> },
+      ],
+    },
     { name: "Marketplace", href: "/marketplace", icon: <ShopIcon /> },
-    { name: "Help & FAQ", href: "/business/help", icon: <HelpIcon /> },
-    { name: "Settings", href: "/business/settings", icon: <SettingsIcon /> },
+    {
+      name: "Business",
+      href: "/business/consultant",
+      icon: <AnalystIcon />,
+      children: [
+        { name: "AI Insights", href: "/business/consultant", icon: <AnalystIcon /> },
+        { name: "Help & FAQ", href: "/business/help", icon: <HelpIcon /> },
+        { name: "Settings", href: "/business/settings", icon: <SettingsIcon /> },
+      ],
+    },
   ];
 }
 
@@ -298,6 +339,105 @@ export default function Sidebar() {
       return pathname === item.href;
     }
     return pathname === item.href || pathname.startsWith(`${item.href}/`);
+  };
+
+  const isGroupActive = (item: NavItem): boolean => {
+    if (isActive(item)) return true;
+    return Boolean(item.children?.some((child) => isActive(child)));
+  };
+
+  const renderNavLink = (item: NavItem, opts: { isChild?: boolean } = {}) => {
+    const { isChild = false } = opts;
+    const isProFeature = Boolean(item.isPro && user && !user.is_paid);
+    const active = isActive(item);
+    return (
+      <Link
+        key={item.href + item.name}
+        href={item.href}
+        onClick={() => setIsOpen(false)}
+        className={`flex items-center gap-3 ${isChild ? "px-3 py-1.5 text-[12px]" : "px-3 py-2 text-[13px]"} rounded transition-all ${
+          active
+            ? item.href.includes("/marketplace")
+              ? "bg-cyan-600 text-white"
+              : isBusinessWorkspace
+              ? "text-[var(--biz-text-strong)]"
+              : "bg-blue-600 text-white"
+            : isBusinessWorkspace
+              ? "text-[var(--biz-muted-strong)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]"
+              : "text-gray-400 hover:text-white hover:bg-gray-800"
+        }`}
+        style={
+          active && isBusinessWorkspace
+            ? {
+                background: isBusinessRoute
+                  ? "var(--biz-nav-active-bg)"
+                  : "rgba(255,255,255,0.06)",
+                borderLeft: "2px solid var(--biz-nav-active-border)",
+                paddingLeft: isChild ? "21px" : "13px",
+              }
+            : isChild
+              ? { paddingLeft: "23px" }
+              : {}
+        }
+      >
+        <span className={`shrink-0 opacity-90 ${isChild ? "scale-90" : ""}`}>{item.icon}</span>
+        <span className="truncate font-medium tracking-tight">{item.name}</span>
+        {item.name === "Business Consultant" && isBusinessWorkspace && (
+          <svg
+            className="w-3.5 h-3.5 ml-1 shrink-0 opacity-60"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#a78bfa"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M12 2l2 7h7l-6 4.5 2.3 7L12 17l-5.3 3.5L9 13 3 8.5h7z" />
+          </svg>
+        )}
+        {item.badge && !isProFeature && (
+          item.badge === "dot" ? (
+            <span
+              className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full opacity-70"
+              style={{ backgroundColor: "#1D9E75" }}
+            />
+          ) : (
+            <span
+              className="ml-auto rounded px-1.5 py-0.5 text-[10px] font-bold"
+              style={
+                isBusinessWorkspace
+                  ? {
+                      background: isBusinessRoute
+                        ? "var(--biz-secondary-soft)"
+                        : "rgba(255,255,255,0.06)",
+                      border: isBusinessRoute
+                        ? "1px solid var(--biz-secondary-border)"
+                        : "1px solid rgba(255,255,255,0.1)",
+                      color: isBusinessRoute
+                        ? "var(--biz-secondary)"
+                        : "#64748b",
+                    }
+                  : {
+                      background: "rgba(59,130,246,0.2)",
+                      color: "#60a5fa",
+                    }
+              }
+            >
+              {item.badge}
+            </span>
+          )
+        )}
+        {isProFeature && (
+          <svg className="w-4 h-4 ml-auto" fill="currentColor" viewBox="0 0 20 20">
+            <path
+              fillRule="evenodd"
+              d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
+              clipRule="evenodd"
+            />
+          </svg>
+        )}
+      </Link>
+    );
   };
 
   return (
@@ -387,93 +527,16 @@ export default function Sidebar() {
 
         <nav className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
           {navItems.map((item) => {
-            const isProFeature = Boolean(item.isPro && user && !user.is_paid);
+            const expanded = item.children ? isGroupActive(item) : false;
             return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setIsOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2 rounded transition-all ${
-                  isActive(item)
-                    ? item.href.includes("/marketplace")
-                      ? "bg-cyan-600 text-white"
-                      : isBusinessWorkspace
-                      ? "text-[var(--biz-text-strong)]"
-                      : "bg-blue-600 text-white"
-                    : isBusinessWorkspace
-                      ? "text-[var(--biz-muted-strong)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]"
-                      : "text-gray-400 hover:text-white hover:bg-gray-800"
-                }`}
-                style={
-                  isActive(item) && isBusinessWorkspace
-                    ? {
-                        background: isBusinessRoute
-                          ? "var(--biz-nav-active-bg)"
-                          : "rgba(255,255,255,0.06)",
-                        borderLeft: "2px solid var(--biz-nav-active-border)",
-                        paddingLeft: "13px",
-                      }
-                    : {}
-                }
-              >
-                <span className="shrink-0 opacity-90">{item.icon}</span>
-                <span className="truncate text-[13px] font-medium tracking-tight">{item.name}</span>
-                {/* AI sparkle for Business Consultant */}
-                {item.name === "Business Consultant" && isBusinessWorkspace && (
-                  <svg
-                    className="w-3.5 h-3.5 ml-1 shrink-0 opacity-60"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="#a78bfa"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M12 2l2 7h7l-6 4.5 2.3 7L12 17l-5.3 3.5L9 13 3 8.5h7z" />
-                  </svg>
+              <div key={item.href + item.name}>
+                {renderNavLink(item)}
+                {expanded && item.children && (
+                  <div className="mt-0.5 space-y-0.5">
+                    {item.children.map((child) => renderNavLink(child, { isChild: true }))}
+                  </div>
                 )}
-                {item.badge && !isProFeature && (
-                  item.badge === "dot" ? (
-                    <span
-                      className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full opacity-70"
-                      style={{ backgroundColor: "#1D9E75" }}
-                    />
-                  ) : (
-                    <span
-                      className="ml-auto rounded px-1.5 py-0.5 text-[10px] font-bold"
-                      style={
-                        isBusinessWorkspace
-                          ? {
-                              background: isBusinessRoute
-                                ? "var(--biz-secondary-soft)"
-                                : "rgba(255,255,255,0.06)",
-                              border: isBusinessRoute
-                                ? "1px solid var(--biz-secondary-border)"
-                                : "1px solid rgba(255,255,255,0.1)",
-                              color: isBusinessRoute
-                                ? "var(--biz-secondary)"
-                                : "#64748b",
-                            }
-                          : {
-                              background: "rgba(59,130,246,0.2)",
-                              color: "#60a5fa",
-                            }
-                      }
-                    >
-                      {item.badge}
-                    </span>
-                  )
-                )}
-                {isProFeature && (
-                  <svg className="w-4 h-4 ml-auto" fill="currentColor" viewBox="0 0 20 20">
-                    <path
-                      fillRule="evenodd"
-                      d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                )}
-              </Link>
+              </div>
             );
           })}
 
