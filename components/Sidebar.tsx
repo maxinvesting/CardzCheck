@@ -334,20 +334,17 @@ export default function Sidebar() {
     loadUser();
   }, []);
 
+  const matches = (href: string, exact = false): boolean => {
+    if (exact) return pathname === href;
+    return pathname === href || pathname.startsWith(`${href}/`);
+  };
+
   const isActive = (item: NavItem): boolean => {
-    if (item.exact) {
-      return pathname === item.href;
-    }
-    return pathname === item.href || pathname.startsWith(`${item.href}/`);
+    if (matches(item.href, item.exact)) return true;
+    return Boolean(item.children?.some((child) => matches(child.href, child.exact)));
   };
 
-  const isGroupActive = (item: NavItem): boolean => {
-    if (isActive(item)) return true;
-    return Boolean(item.children?.some((child) => isActive(child)));
-  };
-
-  const renderNavLink = (item: NavItem, opts: { isChild?: boolean } = {}) => {
-    const { isChild = false } = opts;
+  const renderNavLink = (item: NavItem) => {
     const isProFeature = Boolean(item.isPro && user && !user.is_paid);
     const active = isActive(item);
     return (
@@ -355,7 +352,7 @@ export default function Sidebar() {
         key={item.href + item.name}
         href={item.href}
         onClick={() => setIsOpen(false)}
-        className={`flex items-center gap-3 ${isChild ? "px-3 py-1.5 text-[12px]" : "px-3 py-2 text-[13px]"} rounded transition-all ${
+        className={`flex items-center gap-3 px-3 py-2 text-[13px] rounded transition-all ${
           active
             ? item.href.includes("/marketplace")
               ? "bg-cyan-600 text-white"
@@ -373,14 +370,12 @@ export default function Sidebar() {
                   ? "var(--biz-nav-active-bg)"
                   : "rgba(255,255,255,0.06)",
                 borderLeft: "2px solid var(--biz-nav-active-border)",
-                paddingLeft: isChild ? "21px" : "13px",
+                paddingLeft: "13px",
               }
-            : isChild
-              ? { paddingLeft: "23px" }
-              : {}
+            : {}
         }
       >
-        <span className={`shrink-0 opacity-90 ${isChild ? "scale-90" : ""}`}>{item.icon}</span>
+        <span className="shrink-0 opacity-90">{item.icon}</span>
         <span className="truncate font-medium tracking-tight">{item.name}</span>
         {item.name === "Business Consultant" && isBusinessWorkspace && (
           <svg
@@ -526,19 +521,7 @@ export default function Sidebar() {
         ) : null}
 
         <nav className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
-          {navItems.map((item) => {
-            const expanded = item.children ? isGroupActive(item) : false;
-            return (
-              <div key={item.href + item.name}>
-                {renderNavLink(item)}
-                {expanded && item.children && (
-                  <div className="mt-0.5 space-y-0.5">
-                    {item.children.map((child) => renderNavLink(child, { isChild: true }))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+          {navItems.map((item) => renderNavLink(item))}
 
           {user && (user.app_role === "admin" || user.app_role === "owner") && (
             <>

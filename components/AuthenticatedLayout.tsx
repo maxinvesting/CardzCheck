@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import Sidebar from "./Sidebar";
 import SportsCardBackground from "./SportsCardBackground";
 import BottomTabBar from "./BottomTabBar";
+import SectionTabs from "./SectionTabs";
 import {
   BUSINESS_APPEARANCE_UPDATED_EVENT,
   DEFAULT_BUSINESS_APPEARANCE,
@@ -106,6 +107,7 @@ export default function AuthenticatedLayout({
           isGradeWorkspace ? "" : "lg:ml-64"
         }`}
       >
+        {!isGradeWorkspace ? <SectionTabs /> : null}
         <div className="min-h-screen">{children}</div>
       </div>
       {!isGradeWorkspace ? <BottomTabBar /> : null}
