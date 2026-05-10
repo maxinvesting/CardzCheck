@@ -13,7 +13,7 @@ const SECTIONS: Section[] = [
     tabs: [
       { name: "Inventory", href: "/collection" },
       { name: "Bulk Mode", href: "/bulk" },
-      { name: "Grade Engine", href: "/grade-hub" },
+      { name: "Grading", href: "/grade-hub" },
     ],
   },
   // ── Personal Analytics ──
@@ -40,7 +40,7 @@ const SECTIONS: Section[] = [
     tabs: [
       { name: "Inventory", href: "/business/ledger" },
       { name: "Sales", href: "/business/sales" },
-      { name: "Grade Engine", href: "/business/grade-hub" },
+      { name: "Grading", href: "/business/grade-hub" },
     ],
   },
   // ── Business Analytics ──
