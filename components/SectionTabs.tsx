@@ -36,10 +36,11 @@ const SECTIONS: Section[] = [
   },
   // ── Business Ledger ──
   {
-    paths: ["/business/ledger", "/business/sales", "/business/grade-hub", "/business/grade-probability", "/business/grade-estimator", "/business/inventory"],
+    paths: ["/business/ledger", "/business/sales", "/business/sales-agent", "/business/grade-hub", "/business/grade-probability", "/business/grade-estimator", "/business/inventory"],
     tabs: [
       { name: "Inventory", href: "/business/ledger" },
       { name: "Sales", href: "/business/sales" },
+      { name: "Sales Agent", href: "/business/sales-agent" },
       { name: "Grading", href: "/business/grade-hub" },
     ],
   },

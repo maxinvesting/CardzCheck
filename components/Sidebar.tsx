@@ -249,6 +249,7 @@ function BUSINESS_NAV_ITEMS(): NavItem[] {
       children: [
         { name: "Inventory", href: "/business/ledger", icon: <LedgerIcon /> },
         { name: "Sales", href: "/business/sales", icon: <SalesIcon /> },
+        { name: "Sales Agent", href: "/business/sales-agent", icon: <SalesIcon /> },
         { name: "Grade Engine", href: "/business/grade-hub", icon: <BadgeIcon />, badge: "dot" },
       ],
     },

@@ -28,7 +28,7 @@ export default function BusinessSalesPage() {
       } = await supabase.auth.getUser();
 
       if (!user) {
-        router.push("/login?redirect=/business/sales");
+        router.push("/login?redirect=/business/sales-agent");
         return;
       }
 
@@ -48,7 +48,7 @@ export default function BusinessSalesPage() {
         return;
       }
       if (accessRes.status === 401) {
-        router.push("/login?redirect=/business/sales");
+        router.push("/login?redirect=/business/sales-agent");
         return;
       }
       setHasAccess(true);
@@ -57,7 +57,7 @@ export default function BusinessSalesPage() {
         cache: "no-store",
       });
       if (msgRes.status === 401) {
-        router.push("/login?redirect=/business/sales");
+        router.push("/login?redirect=/business/sales-agent");
         return;
       }
       if (msgRes.ok) {

@@ -12,6 +12,6 @@ describe("/business/messages page", () => {
 
     mod.default();
 
-    expect(redirectMock).toHaveBeenCalledWith("/business/sales");
+    expect(redirectMock).toHaveBeenCalledWith("/business/sales-agent");
   });
 });
