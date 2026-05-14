@@ -37,16 +37,50 @@ export default function AuthenticatedLayout({
     if (!isBusinessRoute || isGradeWorkspace || typeof window === "undefined") return;
 
     let isMounted = true;
+    const STORAGE_KEY = "cc:businessAppearance";
+    const TTL_MS = 5 * 60 * 1000;
+
+    // Hydrate from localStorage immediately to avoid a render with defaults.
+    try {
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const cached = JSON.parse(raw) as { at: number; data: unknown };
+        if (
+          cached &&
+          typeof cached.at === "number" &&
+          Date.now() - cached.at < TTL_MS &&
+          isBusinessAppearance(cached.data)
+        ) {
+          setAppearance(normalizeBusinessAppearance(cached.data));
+        }
+      }
+    } catch {
+      // Ignore malformed cache entries.
+    }
 
     const syncAppearance = async () => {
       try {
-        const response = await fetch("/api/business/appearance", {
-          cache: "no-store",
-        });
+        // Reuse a recent fetch if the cache is still warm.
+        const raw = window.localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const cached = JSON.parse(raw) as { at: number };
+          if (cached && Date.now() - cached.at < TTL_MS) return;
+        }
+
+        const response = await fetch("/api/business/appearance");
         if (!response.ok) return;
         const data = await response.json();
         if (!isMounted || !isBusinessAppearance(data)) return;
-        setAppearance(normalizeBusinessAppearance(data));
+        const normalized = normalizeBusinessAppearance(data);
+        setAppearance(normalized);
+        try {
+          window.localStorage.setItem(
+            STORAGE_KEY,
+            JSON.stringify({ at: Date.now(), data: normalized })
+          );
+        } catch {
+          // Quota exceeded; safe to ignore.
+        }
       } catch {
         // Keep defaults on background failures.
       }

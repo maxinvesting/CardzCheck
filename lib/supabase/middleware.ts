@@ -127,10 +127,42 @@ export async function updateSession(request: NextRequest) {
     return { response: supabaseResponse, userId: user.id };
   }
 
-  const hasBusinessTier = await hasBusinessWorkspaceAccess(
-    supabase as any,
-    user.id
-  );
+  // Cache the workspace check in a short-lived cookie keyed by user.id so we
+  // don't hit business_memberships on every navigation. The cookie is rotated
+  // on user change (key includes user.id) and expires within 60s — short
+  // enough that subscription changes propagate quickly.
+  const WORKSPACE_COOKIE = "cc_ws";
+  const WORKSPACE_TTL_SECONDS = 60;
+  const cachedRaw = request.cookies.get(WORKSPACE_COOKIE)?.value;
+  let hasBusinessTier: boolean | null = null;
+  if (cachedRaw) {
+    const [uid, flag, exp] = cachedRaw.split(":");
+    const expiresAt = Number(exp);
+    if (
+      uid === user.id &&
+      Number.isFinite(expiresAt) &&
+      expiresAt > Math.floor(Date.now() / 1000) &&
+      (flag === "1" || flag === "0")
+    ) {
+      hasBusinessTier = flag === "1";
+    }
+  }
+
+  if (hasBusinessTier === null) {
+    hasBusinessTier = await hasBusinessWorkspaceAccess(
+      supabase as any,
+      user.id
+    );
+    const expiresAt = Math.floor(Date.now() / 1000) + WORKSPACE_TTL_SECONDS;
+    supabaseResponse.cookies.set({
+      name: WORKSPACE_COOKIE,
+      value: `${user.id}:${hasBusinessTier ? "1" : "0"}:${expiresAt}`,
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: WORKSPACE_TTL_SECONDS,
+    });
+  }
 
   if (hasBusinessTier) {
     const redirectPath = findRedirect(pathname, PERSONAL_TO_BUSINESS_REDIRECTS);
