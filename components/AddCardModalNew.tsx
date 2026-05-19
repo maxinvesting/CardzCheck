@@ -47,9 +47,19 @@ type ModalMode =
   | "upload"
   | "manual"
   | "confirm"
+  | "graded_company"
   | "graded_cert"
   | "graded_manual"
   | "graded_confirm";
+
+type GradingCompany = "PSA" | "BGS" | "SGC" | "CGC";
+
+const GRADING_COMPANIES: { value: GradingCompany; label: string; description: string }[] = [
+  { value: "PSA", label: "PSA", description: "Auto-lookup by certification number" },
+  { value: "BGS", label: "BGS", description: "Beckett — manual entry" },
+  { value: "SGC", label: "SGC", description: "Sportscard Guaranty — manual entry" },
+  { value: "CGC", label: "CGC", description: "Certified Guaranty Company — manual entry" },
+];
 const MAX_IDENTIFY_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_FALLBACK_DATA_URL_BYTES = 350 * 1024;
 const GRADE_WITH_COMPANY_PATTERN = /^(PSA|BGS|SGC|CGC)\s*(\d+(?:\.\d+)?)$/i;
@@ -169,11 +179,14 @@ function buildCardIdentificationFromPsa(psa: PsaLookupResult): CardIdentificatio
   };
 }
 
-function normalizePsaManualGrade(rawGrade: string): string | undefined {
+function normalizeManualGrade(rawGrade: string, company: GradingCompany): string | undefined {
   const trimmed = rawGrade.trim();
   if (!trimmed) return undefined;
-  if (/^PSA\s+/i.test(trimmed)) return trimmed.replace(/^psa/i, "PSA");
-  if (/^\d+(?:\.\d+)?$/.test(trimmed)) return `PSA ${trimmed}`;
+  const companyPrefix = new RegExp(`^(PSA|BGS|SGC|CGC)\\s+`, "i");
+  if (companyPrefix.test(trimmed)) {
+    return trimmed.replace(/^[a-z]+/i, (m) => m.toUpperCase());
+  }
+  if (/^\d+(?:\.\d+)?$/.test(trimmed)) return `${company} ${trimmed}`;
   return trimmed;
 }
 
@@ -198,6 +211,7 @@ export default function AddCardModalNew({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [gradedCertInput, setGradedCertInput] = useState("");
+  const [gradedCompany, setGradedCompany] = useState<GradingCompany>("PSA");
   const {
     lookup: lookupPsaCert,
     lookupImmediate: lookupPsaCertImmediate,
@@ -263,6 +277,7 @@ export default function AddCardModalNew({
     setEditingYear(false);
     setYearDraft("");
     setGradedCertInput("");
+    setGradedCompany("PSA");
     setCollectionGradedCertDigits(null);
     clearPsa();
   }, [showKindStep, clearPsa]);
@@ -331,7 +346,7 @@ export default function AddCardModalNew({
 
     const parsedQuantity = Math.max(1, Number.parseInt(quantity, 10) || 1);
     const certDigits = gradedCertInput.replace(/\D/g, "");
-    const grade = normalizePsaManualGrade(gradedManualForm.grade);
+    const grade = normalizeManualGrade(gradedManualForm.grade, gradedCompany);
     const setName = gradedManualForm.set_name.trim();
     const cardNumber = gradedManualForm.card_number.trim();
     const parallelType = gradedManualForm.parallel_type.trim();
@@ -344,8 +359,8 @@ export default function AddCardModalNew({
         card_number: cardNumber || undefined,
         parallel_type: parallelType || undefined,
         grade,
-        grader: "PSA",
-        psa_cert_number: certDigits || undefined,
+        grader: gradedCompany,
+        psa_cert_number: gradedCompany === "PSA" && certDigits ? certDigits : undefined,
         quantity: parsedQuantity,
       });
       resetForm();
@@ -376,7 +391,7 @@ export default function AddCardModalNew({
         setName: setName ? "user" : "inferred",
         year: year ? "user" : "inferred",
       },
-      warnings: certDigits ? [`PSA cert ${certDigits} entered manually`] : [],
+      warnings: certDigits ? [`${gradedCompany} cert ${certDigits} entered manually`] : [],
       evidenceSummary: null,
     };
 
@@ -822,8 +837,9 @@ export default function AddCardModalNew({
             {mode === "upload" && "Upload Card Photo"}
             {mode === "manual" && "Enter Card Details"}
             {mode === "confirm" && "Confirm Card"}
+            {mode === "graded_company" && "Choose grading company"}
             {mode === "graded_cert" && "Add graded card (PSA)"}
-            {mode === "graded_manual" && "Enter graded card details"}
+            {mode === "graded_manual" && `Enter ${gradedCompany} card details`}
             {mode === "graded_confirm" && "Confirm graded card"}
           </h2>
           <button
@@ -874,8 +890,9 @@ export default function AddCardModalNew({
                 onClick={() => {
                   setError(null);
                   setGradedCertInput("");
+                  setGradedCompany("PSA");
                   clearPsa();
-                  setMode("graded_cert");
+                  setMode("graded_company");
                 }}
                 className="w-full p-4 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl hover:border-emerald-500 dark:hover:border-emerald-500 transition-colors group text-left"
               >
@@ -888,11 +905,70 @@ export default function AddCardModalNew({
                   <div>
                     <p className="font-medium text-gray-900 dark:text-white">Graded card</p>
                     <p className="text-sm text-gray-500 dark:text-gray-400">
-                      Enter a PSA certification number — we&apos;ll load the card details
+                      PSA, BGS, SGC, or CGC — pick the grading company next
                     </p>
                   </div>
                 </div>
               </button>
+            </div>
+          )}
+
+          {/* Graded: grading company picker */}
+          {mode === "graded_company" && (
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setError(null);
+                  setMode("kind");
+                }}
+                className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+              >
+                ← Back
+              </button>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Which company graded this card?
+              </p>
+              {GRADING_COMPANIES.map((company) => (
+                <button
+                  key={company.value}
+                  type="button"
+                  onClick={() => {
+                    setError(null);
+                    setGradedCompany(company.value);
+                    setGradedCertInput("");
+                    clearPsa();
+                    if (company.value === "PSA") {
+                      setMode("graded_cert");
+                    } else {
+                      setGradedManualForm({
+                        player_name: "",
+                        year: "",
+                        set_name: "",
+                        card_number: "",
+                        parallel_type: "",
+                        grade: "",
+                      });
+                      setMode("graded_manual");
+                    }
+                  }}
+                  className="w-full p-4 border border-gray-200 dark:border-gray-700 rounded-xl hover:border-emerald-500 dark:hover:border-emerald-500 hover:bg-emerald-50/30 dark:hover:bg-emerald-900/10 transition-colors text-left"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-gray-900 dark:text-white">{company.label}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                        {company.description}
+                      </p>
+                    </div>
+                    {company.value === "PSA" && (
+                      <span className="text-[10px] font-semibold uppercase tracking-wide px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                        Auto
+                      </span>
+                    )}
+                  </div>
+                </button>
+              ))}
             </div>
           )}
 
@@ -964,7 +1040,7 @@ export default function AddCardModalNew({
                 type="button"
                 onClick={() => {
                   setError(null);
-                  setMode("kind");
+                  setMode("graded_company");
                 }}
                 className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
               >
@@ -1031,31 +1107,43 @@ export default function AddCardModalNew({
             </div>
           )}
 
-          {/* Graded: manual entry fallback when PSA lookup is unavailable */}
+          {/* Graded: manual entry (BGS/SGC/CGC always; PSA fallback when lookup unavailable) */}
           {mode === "graded_manual" && (
             <div className="space-y-4">
               <button
                 type="button"
                 onClick={() => {
                   setError(null);
-                  setMode("graded_cert");
+                  setMode(gradedCompany === "PSA" ? "graded_cert" : "graded_company");
                 }}
                 className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
               >
                 ← Back
               </button>
               <div className="rounded-lg border border-amber-300/40 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
-                PSA lookup can enrich the card, but it is not required. Enter the slab details here and continue.
+                {gradedCompany === "PSA"
+                  ? "PSA lookup can enrich the card, but it is not required. Enter the slab details here and continue."
+                  : `${gradedCompany} cert lookup isn't supported yet — enter the slab details from the label below.`}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  PSA certification number
+                  {gradedCompany} certification number {gradedCompany === "PSA" ? "" : "(optional)"}
                 </label>
                 <input
                   type="text"
-                  value={currentGradedCertDigits}
-                  readOnly
-                  className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-500 dark:text-gray-400"
+                  value={gradedCompany === "PSA" ? currentGradedCertDigits : gradedCertInput}
+                  readOnly={gradedCompany === "PSA"}
+                  onChange={
+                    gradedCompany === "PSA"
+                      ? undefined
+                      : (e) => setGradedCertInput(e.target.value)
+                  }
+                  placeholder={gradedCompany === "PSA" ? undefined : "e.g., 1234567890"}
+                  className={
+                    gradedCompany === "PSA"
+                      ? "w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-500 dark:text-gray-400"
+                      : "w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  }
                 />
               </div>
               <div>
@@ -1097,7 +1185,7 @@ export default function AddCardModalNew({
                     onChange={(e) =>
                       setGradedManualForm((prev) => ({ ...prev, grade: e.target.value }))
                     }
-                    placeholder="e.g., 10"
+                    placeholder={gradedCompany === "BGS" ? "e.g., 9.5" : "e.g., 10"}
                     className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                   />
                 </div>
