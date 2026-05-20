@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import type { User } from "@/types";
 import PricingModal from "@/components/PricingModal";
-import { getCurrentUserCached } from "@/lib/current-user-client";
+import { clearCurrentUserCache, getCurrentUserCached } from "@/lib/current-user-client";
+import { createClient } from "@/lib/supabase/client";
 
 type NavItem = {
   name: string;
@@ -219,7 +220,6 @@ function PERSONAL_NAV_ITEMS(): NavItem[] {
       icon: <SalesIcon />,
       children: [
         { name: "Help & FAQ", href: "/help", icon: <HelpIcon /> },
-        { name: "Settings", href: "/settings", icon: <SettingsIcon /> },
       ],
     },
   ];
@@ -269,7 +269,6 @@ function BUSINESS_NAV_ITEMS(): NavItem[] {
       children: [
         { name: "AI Insights", href: "/business/consultant", icon: <AnalystIcon /> },
         { name: "Help & FAQ", href: "/business/help", icon: <HelpIcon /> },
-        { name: "Settings", href: "/business/settings", icon: <SettingsIcon /> },
       ],
     },
   ];
@@ -280,10 +279,13 @@ const PERSONAL_ONLY_PREFIXES = ["/dashboard", "/collection", "/watchlist", "/ana
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [remainingSearches, setRemainingSearches] = useState<number | null>(null);
   const [pricingOpen, setPricingOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const profileRef = useRef<HTMLDivElement>(null);
   const [businessMode, setBusinessMode] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("sidebar-mode") === "business";
@@ -334,6 +336,30 @@ export default function Sidebar() {
 
     loadUser();
   }, []);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+        setProfileOpen(false);
+      }
+    }
+    if (profileOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [profileOpen]);
+
+  const handleLogout = async () => {
+    setProfileOpen(false);
+    clearCurrentUserCache();
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push("/");
+    router.refresh();
+  };
+
+  const userInitial = user?.email?.[0]?.toUpperCase() ?? "?";
+  const settingsHref = isBusinessWorkspace ? "/business/settings" : "/settings";
 
   const matches = (href: string, exact = false): boolean => {
     if (exact) return pathname === href;
@@ -564,72 +590,157 @@ export default function Sidebar() {
           )}
         </nav>
 
-        <div
-          className={`space-y-3 border-t p-3 ${
-            isBusinessWorkspace ? "border-[color:var(--biz-border)]" : "border-gray-800"
-          }`}
-        >
-          {user && !hasPaidWorkspace && remainingSearches !== null && (
-            <div className={`rounded px-3 py-2 ${isBusinessWorkspace ? "border border-[var(--biz-border)] bg-[var(--biz-surface-soft)]" : "bg-gray-800"}`}>
-              <div className="mb-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-[var(--biz-muted)] font-mono-num">Free Plan</div>
-              <div className={`text-[12px] font-medium ${isBusinessWorkspace ? "text-[var(--biz-text)]" : "text-white"}`}>
-                {remainingSearches} / 3 searches remaining
+        {user && (
+          <div
+            className={`border-t px-3 py-2 ${
+              isBusinessWorkspace ? "border-[color:var(--biz-border)]" : "border-gray-800"
+            }`}
+          >
+            {!hasPaidWorkspace && remainingSearches !== null && (
+              <div className={`mb-2 text-[10px] font-medium tracking-tight ${isBusinessWorkspace ? "text-[var(--biz-muted)]" : "text-gray-500"}`}>
+                {remainingSearches} / 3 free searches left
               </div>
-            </div>
-          )}
+            )}
 
-          {user && (
-            <div className={`rounded px-3 py-2 ${isBusinessWorkspace ? "border border-[var(--biz-border)] bg-[var(--biz-surface-soft)]" : "bg-gray-800"}`}>
-              <div className="mb-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-[var(--biz-muted)] font-mono-num">Operator</div>
-              <div className={`truncate text-[12px] font-medium ${isBusinessWorkspace ? "text-[var(--biz-text-strong)]" : "text-white"}`}>
-                {user.email}
-              </div>
-              {hasPaidWorkspace && (
-                <div
-                  className={`mt-1.5 inline-flex items-center rounded-sm px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em] ${
+            <div className="flex items-center gap-2" ref={profileRef}>
+              <div className="relative flex-1 min-w-0">
+                <button
+                  type="button"
+                  onClick={() => setProfileOpen((v) => !v)}
+                  className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition-colors ${
                     isBusinessWorkspace
-                      ? "border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] text-[var(--biz-primary)]"
-                      : "bg-blue-600 text-white"
+                      ? "hover:bg-[var(--biz-hover)]"
+                      : "hover:bg-gray-800"
+                  }`}
+                  aria-haspopup="menu"
+                  aria-expanded={profileOpen}
+                >
+                  <span
+                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
+                      isBusinessWorkspace
+                        ? "border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] text-[var(--biz-primary)]"
+                        : "bg-blue-600 text-white"
+                    }`}
+                  >
+                    {userInitial}
+                  </span>
+                  <span className="flex-1 min-w-0">
+                    <span className={`block truncate text-[12px] font-medium ${isBusinessWorkspace ? "text-[var(--biz-text-strong)]" : "text-white"}`}>
+                      {user.email}
+                    </span>
+                    {hasPaidWorkspace && (
+                      <span className={`block text-[9px] font-semibold uppercase tracking-[0.14em] ${isBusinessWorkspace ? "text-[var(--biz-primary)]" : "text-blue-400"}`}>
+                        {isBusinessWorkspace ? "Workspace · Pro" : "Pro"}
+                      </span>
+                    )}
+                  </span>
+                </button>
+
+                {profileOpen && (
+                  <div
+                    role="menu"
+                    className={`absolute bottom-full left-0 right-0 mb-2 rounded-md border shadow-lg overflow-hidden z-50 ${
+                      isBusinessWorkspace
+                        ? "border-[color:var(--biz-border)] bg-[var(--biz-near-black)]"
+                        : "border-gray-700 bg-gray-900"
+                    }`}
+                  >
+                    <Link
+                      href="/account"
+                      onClick={() => { setProfileOpen(false); setIsOpen(false); }}
+                      className={`block px-3 py-2 text-[12px] transition-colors ${
+                        isBusinessWorkspace
+                          ? "text-[var(--biz-text)] hover:bg-[var(--biz-hover)]"
+                          : "text-gray-200 hover:bg-gray-800"
+                      }`}
+                    >
+                      Account
+                    </Link>
+                    {!hasPaidWorkspace && (
+                      <button
+                        type="button"
+                        onClick={() => { setProfileOpen(false); setIsOpen(false); setPricingOpen(true); }}
+                        className={`block w-full text-left px-3 py-2 text-[12px] font-semibold transition-colors ${
+                          isBusinessWorkspace
+                            ? "text-[var(--biz-primary)] hover:bg-[var(--biz-hover)]"
+                            : "text-blue-400 hover:bg-gray-800"
+                        }`}
+                      >
+                        Upgrade to Pro
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      className={`block w-full text-left px-3 py-2 text-[12px] transition-colors ${
+                        isBusinessWorkspace
+                          ? "text-[var(--biz-text)] hover:bg-[var(--biz-hover)]"
+                          : "text-gray-200 hover:bg-gray-800"
+                      }`}
+                    >
+                      Log out
+                    </button>
+                    <div
+                      className={`flex items-center justify-center gap-2 border-t px-3 py-1.5 text-[10px] ${
+                        isBusinessWorkspace
+                          ? "border-[color:var(--biz-border)] text-[var(--biz-muted)]"
+                          : "border-gray-800 text-gray-500"
+                      }`}
+                    >
+                      <Link
+                        href="/terms"
+                        onClick={() => { setProfileOpen(false); setIsOpen(false); }}
+                        className={`transition-colors ${isBusinessWorkspace ? "hover:text-[var(--biz-text)]" : "hover:text-gray-300"}`}
+                      >
+                        Terms
+                      </Link>
+                      <span>·</span>
+                      <Link
+                        href="/privacy"
+                        onClick={() => { setProfileOpen(false); setIsOpen(false); }}
+                        className={`transition-colors ${isBusinessWorkspace ? "hover:text-[var(--biz-text)]" : "hover:text-gray-300"}`}
+                      >
+                        Privacy
+                      </Link>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {!hasPaidWorkspace && (
+                <button
+                  type="button"
+                  onClick={() => { setIsOpen(false); setPricingOpen(true); }}
+                  className={`shrink-0 rounded px-2 py-1 text-[10px] font-bold uppercase tracking-[0.12em] transition-colors ${
+                    isBusinessWorkspace
+                      ? "cc-btn-primary"
+                      : "bg-blue-600 hover:bg-blue-700 text-white"
                   }`}
                 >
-                  {isBusinessWorkspace ? "Workspace · Pro" : "Pro Member"}
-                </div>
+                  Upgrade
+                </button>
               )}
+
+              <Link
+                href={settingsHref}
+                onClick={() => setIsOpen(false)}
+                aria-label="Settings"
+                title="Settings"
+                className={`shrink-0 flex h-8 w-8 items-center justify-center rounded transition-colors ${
+                  pathname === settingsHref || pathname.startsWith(`${settingsHref}/`)
+                    ? isBusinessWorkspace
+                      ? "bg-[var(--biz-hover)] text-[var(--biz-text-strong)]"
+                      : "bg-gray-800 text-white"
+                    : isBusinessWorkspace
+                      ? "text-[var(--biz-muted-strong)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]"
+                      : "text-gray-400 hover:bg-gray-800 hover:text-white"
+                }`}
+              >
+                <SettingsIcon />
+              </Link>
             </div>
-          )}
-
-          {user && !hasPaidWorkspace && (
-            <button
-              onClick={() => {
-                setIsOpen(false);
-                setPricingOpen(true);
-              }}
-              className={`w-full rounded px-3 py-2 text-center text-[13px] font-semibold transition-colors ${
-                isBusinessWorkspace ? "cc-btn-primary" : "bg-blue-600 hover:bg-blue-700 text-white"
-              }`}
-            >
-              Upgrade
-            </button>
-          )}
-
-          <div className={`flex items-center justify-center gap-3 pt-1 text-[11px] ${isBusinessWorkspace ? "text-[var(--biz-muted)]" : "text-gray-500"}`}>
-            <Link
-              href="/terms"
-              onClick={() => setIsOpen(false)}
-              className={`transition-colors ${isBusinessWorkspace ? "hover:text-[var(--biz-text)]" : "hover:text-gray-300"}`}
-            >
-              Terms
-            </Link>
-            <span>·</span>
-            <Link
-              href="/privacy"
-              onClick={() => setIsOpen(false)}
-              className={`transition-colors ${isBusinessWorkspace ? "hover:text-[var(--biz-text)]" : "hover:text-gray-300"}`}
-            >
-              Privacy
-            </Link>
           </div>
-        </div>
+        )}
       </div>
 
       <PricingModal isOpen={pricingOpen} onClose={() => setPricingOpen(false)} />
