@@ -8,21 +8,21 @@ import BusinessMigrationBanner from "@/components/business/BusinessMigrationBann
 import BusinessConsultantPanel from "@/components/business/BusinessConsultantPanel";
 import { createClient } from "@/lib/supabase/client";
 
-const shellClassName =
-  "relative min-h-screen overflow-hidden bg-[#080b11] text-slate-100";
+const shellClassName = "relative min-h-screen overflow-hidden bg-white text-gray-900";
 const contentClassName = "relative mx-auto max-w-[96rem] px-4 py-4 sm:px-5 lg:px-8";
+const shellBackdropClassName = "pointer-events-none absolute inset-0 bg-gray-50";
 
 function LoadingSkeleton() {
   return (
     <AuthenticatedLayout>
       <main className={shellClassName}>
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(52,211,153,0.16),transparent_34%),radial-gradient(circle_at_82%_16%,rgba(96,165,250,0.12),transparent_28%),linear-gradient(180deg,#080b11_0%,#0b0f16_42%,#080b11_100%)]" />
+        <div className={shellBackdropClassName} />
         <div className={contentClassName}>
           <div className="mx-auto max-w-4xl space-y-4 animate-pulse">
-            <div className="mx-auto h-6 w-32 rounded-full bg-white/10" />
-            <div className="mx-auto h-14 w-96 max-w-full rounded-full bg-white/10" />
-            <div className="mx-auto h-6 w-[42rem] max-w-full rounded-full bg-white/5" />
-            <div className="h-80 rounded-[32px] border border-white/10 bg-white/[0.04]" />
+            <div className="mx-auto h-6 w-32 rounded-full bg-gray-200" />
+            <div className="mx-auto h-14 w-96 max-w-full rounded-full bg-gray-200" />
+            <div className="mx-auto h-6 w-[42rem] max-w-full rounded-full bg-gray-100" />
+            <div className="h-80 rounded-2xl border border-gray-200 bg-gray-50" />
           </div>
         </div>
       </main>
@@ -83,13 +83,13 @@ function ConsultantPageContent() {
     return (
       <AuthenticatedLayout>
         <main className={shellClassName}>
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(52,211,153,0.16),transparent_34%),radial-gradient(circle_at_82%_16%,rgba(96,165,250,0.12),transparent_28%),linear-gradient(180deg,#080b11_0%,#0b0f16_42%,#080b11_100%)]" />
+          <div className={shellBackdropClassName} />
           <div className={contentClassName}>
             <div className="mx-auto max-w-4xl space-y-4 animate-pulse">
-              <div className="mx-auto h-6 w-32 rounded-full bg-white/10" />
-              <div className="mx-auto h-14 w-96 max-w-full rounded-full bg-white/10" />
-              <div className="mx-auto h-6 w-[42rem] max-w-full rounded-full bg-white/5" />
-              <div className="h-80 rounded-[32px] border border-white/10 bg-white/[0.04]" />
+              <div className="mx-auto h-6 w-32 rounded-full bg-gray-200" />
+              <div className="mx-auto h-14 w-96 max-w-full rounded-full bg-gray-200" />
+              <div className="mx-auto h-6 w-[42rem] max-w-full rounded-full bg-gray-100" />
+              <div className="h-80 rounded-2xl border border-gray-200 bg-gray-50" />
             </div>
           </div>
         </main>
@@ -101,7 +101,7 @@ function ConsultantPageContent() {
     return (
       <AuthenticatedLayout>
         <main className={shellClassName}>
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(52,211,153,0.16),transparent_34%),radial-gradient(circle_at_82%_16%,rgba(96,165,250,0.12),transparent_28%),linear-gradient(180deg,#080b11_0%,#0b0f16_42%,#080b11_100%)]" />
+          <div className={shellBackdropClassName} />
           <div className={contentClassName}>
             <div className="mx-auto max-w-4xl">
               <BusinessPaywall />
@@ -115,7 +115,7 @@ function ConsultantPageContent() {
   return (
     <AuthenticatedLayout>
       <main className={shellClassName}>
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(52,211,153,0.16),transparent_34%),radial-gradient(circle_at_82%_16%,rgba(96,165,250,0.12),transparent_28%),linear-gradient(180deg,#080b11_0%,#0b0f16_42%,#080b11_100%)]" />
+        <div className={shellBackdropClassName} />
         <div className={contentClassName}>
           {needsMigration ? (
             <div className="mx-auto max-w-4xl">

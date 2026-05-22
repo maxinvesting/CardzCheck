@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import type { User } from "@/types";
 import PricingModal from "@/components/PricingModal";
-import { getCurrentUserCached } from "@/lib/current-user-client";
+import { clearCurrentUserCache, getCurrentUserCached } from "@/lib/current-user-client";
+import { createClient } from "@/lib/supabase/client";
 
 type NavItem = {
   name: string;
@@ -14,6 +16,7 @@ type NavItem = {
   badge?: string;
   isPro?: boolean;
   exact?: boolean;
+  children?: NavItem[];
 };
 
 function HomeIcon() {
@@ -191,16 +194,35 @@ function AdminIcon() {
 function PERSONAL_NAV_ITEMS(): NavItem[] {
   return [
     { name: "Dashboard", href: "/dashboard", icon: <HomeIcon />, exact: true },
-    { name: "Collection", href: "/collection", icon: <CollectionIcon /> },
-    { name: "Grade Probability Engine", href: "/grade-hub", icon: <BadgeIcon />, badge: "dot" },
-    { name: "News & Updates", href: "/news", icon: <NewsIcon /> },
-    { name: "Bulk Mode", href: "/bulk", icon: <BulkIcon /> },
-    { name: "Watchlist", href: "/watchlist", icon: <EyeIcon />, isPro: true, badge: "Pro" },
-    { name: "Compare Listings", href: "/comps", icon: <ChartIcon /> },
-    { name: "CardzCheck Analyst", href: "/analyst", icon: <AnalystIcon />, isPro: true, badge: "Pro" },
+    {
+      name: "Ledger",
+      href: "/collection",
+      icon: <LedgerIcon />,
+      children: [
+        { name: "Collection", href: "/collection", icon: <CollectionIcon /> },
+        { name: "Bulk Mode", href: "/bulk", icon: <BulkIcon /> },
+      ],
+    },
+    {
+      name: "Analytics",
+      href: "/analytics",
+      icon: <ChartIcon />,
+      children: [
+        { name: "Compare Listings", href: "/comps", icon: <ChartIcon /> },
+        { name: "Watchlist", href: "/watchlist", icon: <EyeIcon />, isPro: true, badge: "Pro" },
+        { name: "CardzCheck Analyst", href: "/analyst", icon: <AnalystIcon />, isPro: true, badge: "Pro" },
+        { name: "Grade Engine", href: "/grade-hub", icon: <BadgeIcon />, badge: "dot" },
+      ],
+    },
     { name: "Marketplace", href: "/marketplace", icon: <ShopIcon /> },
-    { name: "Help & FAQ", href: "/help", icon: <HelpIcon /> },
-    { name: "Settings", href: "/settings", icon: <SettingsIcon /> },
+    {
+      name: "Business",
+      href: "/business",
+      icon: <SalesIcon />,
+      children: [
+        { name: "Help & FAQ", href: "/help", icon: <HelpIcon /> },
+      ],
+    },
   ];
 }
 
@@ -221,15 +243,35 @@ function SalesIcon() {
 function BUSINESS_NAV_ITEMS(): NavItem[] {
   return [
     { name: "Dashboard", href: "/business", icon: <HomeIcon />, exact: true },
-    { name: "Ledger", href: "/business/ledger", icon: <LedgerIcon /> },
-    { name: "Sales", href: "/business/sales", icon: <SalesIcon /> },
-    { name: "Grade Probability Engine", href: "/business/grade-hub", icon: <BadgeIcon />, badge: "dot" },
-    { name: "News & Updates", href: "/business/news", icon: <NewsIcon /> },
-    { name: "Compare Listings", href: "/business/comps", icon: <ChartIcon /> },
-    { name: "Business Consultant", href: "/business/consultant", icon: <AnalystIcon /> },
+    {
+      name: "Ledger",
+      href: "/business/ledger",
+      icon: <LedgerIcon />,
+      children: [
+        { name: "Inventory", href: "/business/ledger", icon: <LedgerIcon /> },
+        { name: "Sales", href: "/business/sales", icon: <SalesIcon /> },
+        { name: "Sales Agent", href: "/business/sales-agent", icon: <SalesIcon /> },
+      ],
+    },
+    {
+      name: "Analytics",
+      href: "/business/comps",
+      icon: <ChartIcon />,
+      children: [
+        { name: "Compare Listings", href: "/business/comps", icon: <ChartIcon /> },
+        { name: "Grade Engine", href: "/business/grade-hub", icon: <BadgeIcon />, badge: "dot" },
+      ],
+    },
     { name: "Marketplace", href: "/marketplace", icon: <ShopIcon /> },
-    { name: "Help & FAQ", href: "/business/help", icon: <HelpIcon /> },
-    { name: "Settings", href: "/business/settings", icon: <SettingsIcon /> },
+    {
+      name: "Business",
+      href: "/business/consultant",
+      icon: <AnalystIcon />,
+      children: [
+        { name: "Advisor", href: "/business/consultant", icon: <AnalystIcon /> },
+        { name: "Help & FAQ", href: "/business/help", icon: <HelpIcon /> },
+      ],
+    },
   ];
 }
 
@@ -238,10 +280,13 @@ const PERSONAL_ONLY_PREFIXES = ["/dashboard", "/collection", "/watchlist", "/ana
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [remainingSearches, setRemainingSearches] = useState<number | null>(null);
   const [pricingOpen, setPricingOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const profileRef = useRef<HTMLDivElement>(null);
   const [businessMode, setBusinessMode] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("sidebar-mode") === "business";
@@ -293,11 +338,125 @@ export default function Sidebar() {
     loadUser();
   }, []);
 
-  const isActive = (item: NavItem): boolean => {
-    if (item.exact) {
-      return pathname === item.href;
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+        setProfileOpen(false);
+      }
     }
-    return pathname === item.href || pathname.startsWith(`${item.href}/`);
+    if (profileOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [profileOpen]);
+
+  const handleLogout = async () => {
+    setProfileOpen(false);
+    clearCurrentUserCache();
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push("/");
+    router.refresh();
+  };
+
+  const userInitial = user?.email?.[0]?.toUpperCase() ?? "?";
+  const settingsHref = isBusinessWorkspace ? "/business/settings" : "/settings";
+
+  const matches = (href: string, exact = false): boolean => {
+    if (exact) return pathname === href;
+    return pathname === href || pathname.startsWith(`${href}/`);
+  };
+
+  const isActive = (item: NavItem): boolean => {
+    if (matches(item.href, item.exact)) return true;
+    return Boolean(item.children?.some((child) => matches(child.href, child.exact)));
+  };
+
+  const renderNavLink = (item: NavItem) => {
+    const isProFeature = Boolean(item.isPro && user && !user.is_paid);
+    const active = isActive(item);
+    return (
+      <Link
+        key={item.href + item.name}
+        href={item.href}
+        onClick={() => setIsOpen(false)}
+        className={`flex items-center gap-3 px-3 py-2 text-[13px] rounded transition-all ${
+          active
+            ? item.href.includes("/marketplace")
+              ? isBusinessWorkspace
+                ? "text-[var(--biz-text-strong)]"
+                : "bg-[color:var(--biz-surface-raised)] text-[color:var(--biz-text-strong)] border border-[color:var(--biz-border-strong)]"
+              : isBusinessWorkspace
+              ? "text-[var(--biz-text-strong)]"
+              : "bg-[color:var(--biz-surface-raised)] text-[color:var(--biz-text-strong)] border border-[color:var(--biz-border-strong)]"
+            : isBusinessWorkspace
+              ? "text-[var(--biz-muted-strong)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]"
+              : "text-[color:var(--biz-muted)] hover:text-[color:var(--biz-text)] hover:bg-[color:var(--biz-hover)]"
+        }`}
+        style={
+          active && isBusinessWorkspace
+            ? {
+                background: isBusinessRoute
+                  ? "var(--biz-nav-active-bg)"
+                  : "rgba(255,255,255,0.06)",
+                borderLeft: "2px solid var(--biz-nav-active-border)",
+                paddingLeft: "13px",
+              }
+            : {}
+        }
+      >
+        <span className="shrink-0 opacity-90">{item.icon}</span>
+        <span className="truncate font-medium tracking-tight">{item.name}</span>
+        {item.name === "Business Consultant" && isBusinessWorkspace && (
+          <svg
+            className="w-3.5 h-3.5 ml-1 shrink-0 opacity-60"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#a78bfa"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M12 2l2 7h7l-6 4.5 2.3 7L12 17l-5.3 3.5L9 13 3 8.5h7z" />
+          </svg>
+        )}
+        {item.badge && !isProFeature && (
+          item.badge === "dot" ? (
+            <span
+              className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-[color:var(--biz-text-strong)] opacity-50"
+            />
+          ) : (
+            <span
+              className="ml-auto rounded px-1.5 py-0.5 text-[10px] font-bold"
+              style={
+                isBusinessWorkspace
+                  ? {
+                      background: "rgba(255,255,255,0.05)",
+                      border: "1px solid rgba(255,255,255,0.12)",
+                      color: "var(--biz-muted-strong)",
+                    }
+                  : {
+                      background: "rgba(255,255,255,0.06)",
+                      border: "1px solid rgba(255,255,255,0.1)",
+                      color: "var(--biz-muted-strong, #a1a1a1)",
+                    }
+              }
+            >
+              {item.badge}
+            </span>
+          )
+        )}
+        {isProFeature && (
+          <svg className="w-4 h-4 ml-auto" fill="currentColor" viewBox="0 0 20 20">
+            <path
+              fillRule="evenodd"
+              d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
+              clipRule="evenodd"
+            />
+          </svg>
+        )}
+      </Link>
+    );
   };
 
   return (
@@ -307,7 +466,7 @@ export default function Sidebar() {
         className={`lg:hidden fixed top-4 left-4 z-50 rounded-lg border p-2 transition-colors ${
           isBusinessWorkspace
             ? `${businessSurfaceClass} text-[var(--biz-muted)] hover:text-[var(--biz-text)]`
-            : "bg-gray-900 border-gray-800 text-gray-400 hover:text-white"
+            : "bg-[color:var(--biz-surface)] border-[color:var(--biz-border)] text-[color:var(--biz-muted)] hover:text-[color:var(--biz-text)]"
         }`}
       >
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -330,7 +489,7 @@ export default function Sidebar() {
         className={`fixed top-0 left-0 z-40 flex h-full w-64 flex-col border-r transition-transform duration-300 ${
           isBusinessWorkspace
             ? "bg-[var(--biz-near-black)] border-[color:var(--biz-border)]"
-            : "bg-[#0f1419] border-gray-800"
+            : "bg-[color:var(--biz-near-black)] border-[color:var(--biz-border)]"
         } ${
           isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         } ${!isOpen ? "pointer-events-none lg:pointer-events-auto" : ""}`}
@@ -338,40 +497,29 @@ export default function Sidebar() {
         <Link
           href={isBusinessWorkspace ? "/business" : "/dashboard"}
           className={`flex cursor-pointer items-center justify-between gap-3 border-b px-4 py-4 transition-opacity hover:opacity-90 ${
-            isBusinessWorkspace ? "border-[color:var(--biz-border)]" : "border-gray-800"
+            isBusinessWorkspace ? "border-[color:var(--biz-border)]" : "border-[color:var(--biz-border)]"
           }`}
           onClick={() => setIsOpen(false)}
         >
-          <div className="flex items-center gap-2 min-w-0">
-            {isBusinessWorkspace ? (
-              <span
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm font-mono-num text-[11px] font-bold"
-                style={{
-                  background: "var(--biz-primary-soft-strong)",
-                  border: "1px solid var(--biz-primary-border)",
-                  color: "var(--biz-primary)",
-                }}
-              >
-                CC
-              </span>
-            ) : null}
+          <div className="flex items-center gap-2.5 min-w-0">
+            <Image
+              src="/cardzcheck-logo-main.png"
+              alt="CardzCheck"
+              width={132}
+              height={28}
+              className="h-7 w-auto max-w-[9.5rem] shrink-0 object-contain object-left"
+              priority
+            />
             <span
               className={`truncate text-base font-semibold tracking-tight ${
-                isBusinessWorkspace ? "text-[var(--biz-text-strong)]" : "text-white"
+                isBusinessWorkspace ? "text-[var(--biz-text-strong)]" : "text-[color:var(--biz-text-strong)]"
               }`}
             >
               CardzCheck
             </span>
           </div>
           {isBusinessWorkspace && (
-            <span
-              className="rounded-sm px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em]"
-              style={{
-                background: "var(--biz-primary-soft)",
-                border: "1px solid var(--biz-primary-border)",
-                color: "var(--biz-primary)",
-              }}
-            >
+            <span className="rounded-sm border border-[color:var(--biz-border-strong)] bg-[color:var(--biz-surface-soft)] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em] text-[color:var(--biz-muted-strong)]">
               Biz
             </span>
           )}
@@ -386,101 +534,12 @@ export default function Sidebar() {
         ) : null}
 
         <nav className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
-          {navItems.map((item) => {
-            const isProFeature = Boolean(item.isPro && user && !user.is_paid);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setIsOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2 rounded transition-all ${
-                  isActive(item)
-                    ? item.href.includes("/marketplace")
-                      ? "bg-cyan-600 text-white"
-                      : isBusinessWorkspace
-                      ? "text-[var(--biz-text-strong)]"
-                      : "bg-blue-600 text-white"
-                    : isBusinessWorkspace
-                      ? "text-[var(--biz-muted-strong)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]"
-                      : "text-gray-400 hover:text-white hover:bg-gray-800"
-                }`}
-                style={
-                  isActive(item) && isBusinessWorkspace
-                    ? {
-                        background: isBusinessRoute
-                          ? "var(--biz-nav-active-bg)"
-                          : "rgba(255,255,255,0.06)",
-                        borderLeft: "2px solid var(--biz-nav-active-border)",
-                        paddingLeft: "13px",
-                      }
-                    : {}
-                }
-              >
-                <span className="shrink-0 opacity-90">{item.icon}</span>
-                <span className="truncate text-[13px] font-medium tracking-tight">{item.name}</span>
-                {/* AI sparkle for Business Consultant */}
-                {item.name === "Business Consultant" && isBusinessWorkspace && (
-                  <svg
-                    className="w-3.5 h-3.5 ml-1 shrink-0 opacity-60"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="#a78bfa"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M12 2l2 7h7l-6 4.5 2.3 7L12 17l-5.3 3.5L9 13 3 8.5h7z" />
-                  </svg>
-                )}
-                {item.badge && !isProFeature && (
-                  item.badge === "dot" ? (
-                    <span
-                      className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full opacity-70"
-                      style={{ backgroundColor: "#1D9E75" }}
-                    />
-                  ) : (
-                    <span
-                      className="ml-auto rounded px-1.5 py-0.5 text-[10px] font-bold"
-                      style={
-                        isBusinessWorkspace
-                          ? {
-                              background: isBusinessRoute
-                                ? "var(--biz-secondary-soft)"
-                                : "rgba(255,255,255,0.06)",
-                              border: isBusinessRoute
-                                ? "1px solid var(--biz-secondary-border)"
-                                : "1px solid rgba(255,255,255,0.1)",
-                              color: isBusinessRoute
-                                ? "var(--biz-secondary)"
-                                : "#64748b",
-                            }
-                          : {
-                              background: "rgba(59,130,246,0.2)",
-                              color: "#60a5fa",
-                            }
-                      }
-                    >
-                      {item.badge}
-                    </span>
-                  )
-                )}
-                {isProFeature && (
-                  <svg className="w-4 h-4 ml-auto" fill="currentColor" viewBox="0 0 20 20">
-                    <path
-                      fillRule="evenodd"
-                      d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                )}
-              </Link>
-            );
-          })}
+          {navItems.map((item) => renderNavLink(item))}
 
           {user && (user.app_role === "admin" || user.app_role === "owner") && (
             <>
               <div className={`mt-3 pb-1 px-3 text-[9px] font-semibold uppercase tracking-[0.16em] font-mono-num ${
-                isBusinessWorkspace ? "text-[var(--biz-muted)]" : "text-gray-600"
+                isBusinessWorkspace ? "text-[var(--biz-muted)]" : "text-[color:var(--biz-faint)]"
               }`}>
                 Admin
               </div>
@@ -499,7 +558,7 @@ export default function Sidebar() {
                         : "bg-orange-600 text-white"
                       : isBusinessWorkspace
                         ? "text-[var(--biz-muted-strong)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]"
-                        : "text-gray-400 hover:text-white hover:bg-gray-800"
+                        : "text-[color:var(--biz-muted)] hover:text-[color:var(--biz-text)] hover:bg-[color:var(--biz-hover)]"
                   }`}
                 >
                   <span className="shrink-0 opacity-90">{item.icon}</span>
@@ -517,72 +576,122 @@ export default function Sidebar() {
           )}
         </nav>
 
-        <div
-          className={`space-y-3 border-t p-3 ${
-            isBusinessWorkspace ? "border-[color:var(--biz-border)]" : "border-gray-800"
-          }`}
-        >
-          {user && !hasPaidWorkspace && remainingSearches !== null && (
-            <div className={`rounded px-3 py-2 ${isBusinessWorkspace ? "border border-[var(--biz-border)] bg-[var(--biz-surface-soft)]" : "bg-gray-800"}`}>
-              <div className="mb-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-[var(--biz-muted)] font-mono-num">Free Plan</div>
-              <div className={`text-[12px] font-medium ${isBusinessWorkspace ? "text-[var(--biz-text)]" : "text-white"}`}>
-                {remainingSearches} / 3 searches remaining
-              </div>
-            </div>
-          )}
-
-          {user && (
-            <div className={`rounded px-3 py-2 ${isBusinessWorkspace ? "border border-[var(--biz-border)] bg-[var(--biz-surface-soft)]" : "bg-gray-800"}`}>
-              <div className="mb-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-[var(--biz-muted)] font-mono-num">Operator</div>
-              <div className={`truncate text-[12px] font-medium ${isBusinessWorkspace ? "text-[var(--biz-text-strong)]" : "text-white"}`}>
-                {user.email}
-              </div>
-              {hasPaidWorkspace && (
-                <div
-                  className={`mt-1.5 inline-flex items-center rounded-sm px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em] ${
-                    isBusinessWorkspace
-                      ? "border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] text-[var(--biz-primary)]"
-                      : "bg-blue-600 text-white"
-                  }`}
-                >
-                  {isBusinessWorkspace ? "Workspace · Pro" : "Pro Member"}
+        {user && (
+          <div
+            className={`space-y-3 border-t p-3 border-[color:var(--biz-border)]`}
+          >
+            {!hasPaidWorkspace && remainingSearches !== null && (
+              <div className={`rounded px-3 py-2 border border-[color:var(--biz-border)] bg-[color:var(--biz-surface-soft)]`}>
+                <div className="mb-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-[var(--biz-muted)] font-mono-num">Free Plan</div>
+                <div className={`text-[12px] font-medium text-[color:var(--biz-text)]`}>
+                  {remainingSearches} / 3 searches remaining
                 </div>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2" ref={profileRef}>
+              <div className="relative flex-1 min-w-0">
+                <button
+                  type="button"
+                  onClick={() => setProfileOpen((v) => !v)}
+                  className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition-colors hover:bg-[color:var(--biz-hover)]`}
+                  aria-haspopup="menu"
+                  aria-expanded={profileOpen}
+                >
+                  <span
+                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-bold border border-[color:var(--biz-primary-border)] bg-[color:var(--biz-primary-soft)] text-[color:var(--biz-primary)]`}
+                  >
+                    {userInitial}
+                  </span>
+                  <span className="flex-1 min-w-0">
+                    <span className={`block truncate text-[12px] font-medium text-[color:var(--biz-text-strong)]`}>
+                      {user.email}
+                    </span>
+                    {hasPaidWorkspace && (
+                      <span className={`block text-[9px] font-semibold uppercase tracking-[0.14em] text-[color:var(--biz-primary)]`}>
+                        {isBusinessWorkspace ? "Workspace · Pro" : "Pro"}
+                      </span>
+                    )}
+                  </span>
+                </button>
+
+                {profileOpen && (
+                  <div
+                    role="menu"
+                    className={`absolute bottom-full left-0 right-0 mb-2 rounded-md border shadow-lg overflow-hidden z-50 border-[color:var(--biz-border)] bg-[color:var(--biz-near-black)]`}
+                  >
+                    <Link
+                      href="/account"
+                      onClick={() => { setProfileOpen(false); setIsOpen(false); }}
+                      className={`block px-3 py-2 text-[12px] transition-colors text-[color:var(--biz-text)] hover:bg-[color:var(--biz-hover)]`}
+                    >
+                      Account
+                    </Link>
+                    {!hasPaidWorkspace && (
+                      <button
+                        type="button"
+                        onClick={() => { setProfileOpen(false); setIsOpen(false); setPricingOpen(true); }}
+                        className={`block w-full text-left px-3 py-2 text-[12px] font-semibold transition-colors text-[color:var(--biz-primary)] hover:bg-[color:var(--biz-hover)]`}
+                      >
+                        Upgrade to Pro
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      className={`block w-full text-left px-3 py-2 text-[12px] transition-colors text-[color:var(--biz-text)] hover:bg-[color:var(--biz-hover)]`}
+                    >
+                      Log out
+                    </button>
+                    <div
+                      className={`flex items-center justify-center gap-2 border-t px-3 py-1.5 text-[10px] border-[color:var(--biz-border)] text-[color:var(--biz-muted)]`}
+                    >
+                      <Link
+                        href="/terms"
+                        onClick={() => { setProfileOpen(false); setIsOpen(false); }}
+                        className={`transition-colors hover:text-[color:var(--biz-text)]`}
+                      >
+                        Terms
+                      </Link>
+                      <span>·</span>
+                      <Link
+                        href="/privacy"
+                        onClick={() => { setProfileOpen(false); setIsOpen(false); }}
+                        className={`transition-colors hover:text-[color:var(--biz-text)]`}
+                      >
+                        Privacy
+                      </Link>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {!hasPaidWorkspace && (
+                <button
+                  type="button"
+                  onClick={() => { setIsOpen(false); setPricingOpen(true); }}
+                  className={`shrink-0 rounded px-2 py-1 text-[10px] font-bold uppercase tracking-[0.12em] transition-colors cc-btn-primary`}
+                >
+                  Upgrade
+                </button>
               )}
+
+              <Link
+                href={settingsHref}
+                onClick={() => setIsOpen(false)}
+                aria-label="Settings"
+                title="Settings"
+                className={`shrink-0 flex h-8 w-8 items-center justify-center rounded transition-colors ${
+                  pathname === settingsHref || pathname.startsWith(`${settingsHref}/`)
+                    ? "bg-[color:var(--biz-hover)] text-[color:var(--biz-text-strong)]"
+                    : "text-[color:var(--biz-muted-strong)] hover:bg-[color:var(--biz-hover)] hover:text-[color:var(--biz-text)]"
+                }`}
+              >
+                <SettingsIcon />
+              </Link>
             </div>
-          )}
-
-          {user && !hasPaidWorkspace && (
-            <button
-              onClick={() => {
-                setIsOpen(false);
-                setPricingOpen(true);
-              }}
-              className={`w-full rounded px-3 py-2 text-center text-[13px] font-semibold transition-colors ${
-                isBusinessWorkspace ? "cc-btn-primary" : "bg-blue-600 hover:bg-blue-700 text-white"
-              }`}
-            >
-              Upgrade
-            </button>
-          )}
-
-          <div className={`flex items-center justify-center gap-3 pt-1 text-[11px] ${isBusinessWorkspace ? "text-[var(--biz-muted)]" : "text-gray-500"}`}>
-            <Link
-              href="/terms"
-              onClick={() => setIsOpen(false)}
-              className={`transition-colors ${isBusinessWorkspace ? "hover:text-[var(--biz-text)]" : "hover:text-gray-300"}`}
-            >
-              Terms
-            </Link>
-            <span>·</span>
-            <Link
-              href="/privacy"
-              onClick={() => setIsOpen(false)}
-              className={`transition-colors ${isBusinessWorkspace ? "hover:text-[var(--biz-text)]" : "hover:text-gray-300"}`}
-            >
-              Privacy
-            </Link>
           </div>
-        </div>
+        )}
       </div>
 
       <PricingModal isOpen={pricingOpen} onClose={() => setPricingOpen(false)} />

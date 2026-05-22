@@ -403,7 +403,7 @@ export default function BusinessDashboardView({
           {onDashboardVoiceCommand && (
             <MicButton
               label="Ask by Voice"
-              title="Ask the Business Consultant by voice"
+              title="Ask the Business Advisor by voice"
               size="sm"
               onResult={onDashboardVoiceCommand}
               className="cc-btn-secondary whitespace-nowrap rounded-lg text-xs font-medium"

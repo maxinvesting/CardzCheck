@@ -4,53 +4,43 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── Design tokens ──────────────────────────────────────────────────────────
-   Single source of truth for the Business UI visual language.
-   Calm, flat, professional — inspired by PSA/Beckett registry tools.
-   Light-mode values are placeholders; override when light mode is built.
-   ─────────────────────────────────────────────────────────────────────────── */
+/* Legacy Next.js defaults (light marketing pages) */
 :root {
-  /* Legacy Next.js defaults */
   --foreground: #171717;
   --background: #ffffff;
 
-  /* ── Business design tokens ─────────────────────────────────────────────
-     Dark intelligence platform aesthetic — deep navy base, gold accents,
-     emerald profit signals. JetBrains Mono for data, Sora for labels.
-     ─────────────────────────────────────────────────────────────────────── */
-  --biz-bg: #0a1628;
-  --biz-near-black: #060d1a;
-  --biz-surface: #101f36;
-  --biz-surface-card: rgba(255, 255, 255, 0.03);
-  --biz-border: rgba(255, 255, 255, 0.08);
-  --biz-border-subtle: rgba(255, 255, 255, 0.05);
-  --biz-text: #f8fafc;
-  --biz-muted: #64748b;
-  --biz-secondary: #94a3b8;
-  --biz-primary: #1D9E75;
-  --biz-primary-glow: rgba(29, 158, 117, 0.35);
-  --biz-gold: #f0b429;
-  --biz-gold-glow: rgba(240, 180, 41, 0.25);
-  --biz-warning: #f59e0b;
-  --biz-danger: #ef4444;
-  --biz-surface-soft: #0d1b2e;
-  --biz-hover: rgba(255, 255, 255, 0.04);
-  --biz-skeleton: rgba(255, 255, 255, 0.06);
-  --biz-radius: 12px;
-
-  /* ── Card profile page design tokens ───────────────────────────────────── */
-  --color-background-page: #F3F0EB;
+  /* Card profile (light) */
+  --color-background-page: #f3f0eb;
   --color-background-primary: #ffffff;
   --color-border-tertiary: rgba(0, 0, 0, 0.07);
   --border-radius-lg: 12px;
   --color-text-primary: #0f172a;
   --color-text-muted: #64748b;
   --color-text-subtle: #94a3b8;
-  --color-accent-green: #1D9E75;
-  --color-roi-bg: #E1F5EE;
-  --color-roi-text: #0F6E56;
+  --color-accent-green: #6f7a74;
+  --color-roi-bg: #eceeec;
+  --color-roi-text: #3d4540;
 
-  /* Backward-compatible aliases */
+  /* Mirror core business tokens for pages without .business-theme */
+  --biz-bg: #0a0a0a;
+  --biz-surface: #111111;
+  --biz-surface-card: rgba(255, 255, 255, 0.02);
+  --biz-border: #222222;
+  --biz-border-subtle: #1a1a1a;
+  --biz-text: #f3f3f3;
+  --biz-muted: #a1a1a1;
+  --biz-secondary: #a8a8a8;
+  --biz-primary: #e4e4e4;
+  --biz-primary-glow: rgba(255, 255, 255, 0.06);
+  --biz-gold: #b89f5c;
+  --biz-gold-glow: rgba(184, 159, 92, 0.08);
+  --biz-warning: #c9a227;
+  --biz-danger: #c45c5c;
+  --biz-surface-soft: #141414;
+  --biz-hover: #1a1a1a;
+  --biz-skeleton: rgba(255, 255, 255, 0.04);
+  --biz-radius: 12px;
+
   --app-bg: var(--biz-bg);
   --surface: var(--biz-surface);
   --surface-2: var(--biz-surface);
@@ -66,7 +56,6 @@
 }
 
 html {
-  /* Scale down on small phones and up on large monitors. */
   font-size: clamp(14px, 0.25vw + 13px, 18px);
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
@@ -82,7 +71,7 @@ html {
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 @layer utilities {
@@ -100,14 +89,15 @@ body {
   }
 
   .cc-btn-primary {
-    border: 1px solid transparent;
+    border: 1px solid rgba(255, 255, 255, 0.14);
     background: var(--biz-primary);
-    color: #ffffff;
-    transition: background-color 160ms ease, transform 160ms ease;
+    color: #0a0a0a;
+    transition: background-color 160ms ease, border-color 160ms ease;
   }
 
   .cc-btn-primary:hover {
-    background: #17896A;
+    background: #d6d6d6;
+    border-color: rgba(255, 255, 255, 0.2);
   }
 
   .cc-btn-secondary {
@@ -119,26 +109,33 @@ body {
 
   .cc-btn-secondary:hover {
     background: var(--biz-hover);
-    border-color: rgba(255, 255, 255, 0.12);
+    border-color: #2a2a2a;
   }
 }
 
-/* ── Business dashboard animations ─────────────────────────────────────── */
-
-/* Pulsing live indicator dot */
 @keyframes pulse-live {
-  0%, 100% { opacity: 1; box-shadow: 0 0 6px #1D9E75; }
-  50%       { opacity: 0.6; box-shadow: 0 0 12px #1D9E75, 0 0 20px rgba(29, 158, 117, 0.3); }
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12);
+  }
+  50% {
+    opacity: 0.55;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06);
+  }
 }
 
 .pulse-dot {
-  animation: pulse-live 2s ease-in-out infinite;
+  animation: pulse-live 2.2s ease-in-out infinite;
 }
 
-/* Signal card shimmer scan — feels "live" */
 @keyframes signal-shimmer {
-  0%   { transform: translateX(-120%); }
-  100% { transform: translateX(220%); }
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(220%);
+  }
 }
 
 .signal-card {
@@ -146,7 +143,7 @@ body {
 }
 
 .signal-card::after {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   left: -50%;
@@ -155,29 +152,26 @@ body {
   background: linear-gradient(
     90deg,
     transparent,
-    rgba(255, 255, 255, 0.025),
+    rgba(255, 255, 255, 0.02),
     transparent
   );
   animation: signal-shimmer 5s ease-in-out infinite;
   pointer-events: none;
 }
 
-/* Gold glow utility */
 .gold-glow {
-  box-shadow: 0 0 30px rgba(240, 180, 41, 0.12), 0 0 60px rgba(240, 180, 41, 0.05);
+  box-shadow: 0 0 24px rgba(255, 255, 255, 0.04);
 }
 
-/* Green profit glow */
 .green-glow {
-  text-shadow: 0 0 12px rgba(29, 158, 117, 0.5);
+  text-shadow: none;
 }
 
-/* Font utilities — Inter for all UI */
 .font-data {
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: "Inter", system-ui, sans-serif;
   font-variant-numeric: tabular-nums;
 }
 
 .font-ui {
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: "Inter", system-ui, sans-serif;
 }

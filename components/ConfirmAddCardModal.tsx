@@ -657,7 +657,7 @@ export default function ConfirmAddCardModal({
                 </p>
               )}
               {psaResult && !psaBannerDismissed && (
-                <div className="mt-2 flex items-start justify-between gap-2 px-3 py-2 rounded-lg border-l-4 border-[#1D9E75] bg-green-50 dark:bg-green-900/20">
+                <div className="mt-2 flex items-start justify-between gap-2 px-3 py-2 rounded-lg border-l-4 border-[color:var(--biz-border-strong)] bg-[color:var(--biz-surface-soft)] dark:bg-[color:var(--biz-surface-soft)]">
                   <p className="text-xs text-green-700 dark:text-green-400">
                     PSA cert verified — fields auto-populated
                   </p>

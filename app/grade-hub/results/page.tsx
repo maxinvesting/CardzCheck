@@ -4,7 +4,6 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Playfair_Display } from "next/font/google";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import GradeEstimatorValuePanel from "@/components/GradeEstimatorValuePanel";
 import GradeProbabilityPanel from "@/components/grading/GradeProbabilityPanel";
@@ -19,8 +18,6 @@ import {
 } from "@/lib/grading/gradeHubResultsSession";
 import { confidencePillClasses } from "@/theme/tokens";
 import type { GradeEstimatorHistoryRun } from "@/types";
-
-const playfair = Playfair_Display({ subsets: ["latin"], weight: ["400", "600"] });
 
 function formatGradeNumber(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, "");
@@ -208,7 +205,7 @@ function ResultsPageInner() {
             >
               Grade Hub
             </Link>
-            <h1 className={`${playfair.className} mt-3 text-3xl text-[var(--biz-text)]`}>
+            <h1 className="mt-3 text-3xl font-semibold tracking-normal text-[var(--biz-text)]">
               Scan Results
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[var(--biz-muted)]">
@@ -265,7 +262,7 @@ function ResultsPageInner() {
                     {session.quickFlags.map((flag) => (
                       <span
                         key={flag}
-                        className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700"
+                        className="rounded-full border border-[var(--biz-warning-border)] bg-[var(--biz-warning-soft)] px-3 py-1 text-xs font-medium text-[var(--biz-warning)]"
                       >
                         {flag}
                       </span>
@@ -364,7 +361,7 @@ function ResultsPageInner() {
             </section>
 
             {error ? (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+              <div className="rounded-lg border border-[var(--biz-warning-border)] bg-[var(--biz-warning-soft)] px-4 py-3 text-sm text-[var(--biz-warning)]">
                 {error}
               </div>
             ) : null}

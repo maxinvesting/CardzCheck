@@ -47,9 +47,19 @@ type ModalMode =
   | "upload"
   | "manual"
   | "confirm"
+  | "graded_company"
   | "graded_cert"
   | "graded_manual"
   | "graded_confirm";
+
+type GradingCompany = "PSA" | "BGS" | "SGC" | "CGC";
+
+const GRADING_COMPANIES: { value: GradingCompany; label: string; description: string }[] = [
+  { value: "PSA", label: "PSA", description: "Auto-lookup by certification number" },
+  { value: "BGS", label: "BGS", description: "Beckett — manual entry" },
+  { value: "SGC", label: "SGC", description: "Sportscard Guaranty — manual entry" },
+  { value: "CGC", label: "CGC", description: "Certified Guaranty Company — manual entry" },
+];
 const MAX_IDENTIFY_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_FALLBACK_DATA_URL_BYTES = 350 * 1024;
 const GRADE_WITH_COMPANY_PATTERN = /^(PSA|BGS|SGC|CGC)\s*(\d+(?:\.\d+)?)$/i;
@@ -169,11 +179,14 @@ function buildCardIdentificationFromPsa(psa: PsaLookupResult): CardIdentificatio
   };
 }
 
-function normalizePsaManualGrade(rawGrade: string): string | undefined {
+function normalizeManualGrade(rawGrade: string, company: GradingCompany): string | undefined {
   const trimmed = rawGrade.trim();
   if (!trimmed) return undefined;
-  if (/^PSA\s+/i.test(trimmed)) return trimmed.replace(/^psa/i, "PSA");
-  if (/^\d+(?:\.\d+)?$/.test(trimmed)) return `PSA ${trimmed}`;
+  const companyPrefix = new RegExp(`^(PSA|BGS|SGC|CGC)\\s+`, "i");
+  if (companyPrefix.test(trimmed)) {
+    return trimmed.replace(/^[a-z]+/i, (m) => m.toUpperCase());
+  }
+  if (/^\d+(?:\.\d+)?$/.test(trimmed)) return `${company} ${trimmed}`;
   return trimmed;
 }
 
@@ -198,6 +211,7 @@ export default function AddCardModalNew({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [gradedCertInput, setGradedCertInput] = useState("");
+  const [gradedCompany, setGradedCompany] = useState<GradingCompany>("PSA");
   const {
     lookup: lookupPsaCert,
     lookupImmediate: lookupPsaCertImmediate,
@@ -263,6 +277,7 @@ export default function AddCardModalNew({
     setEditingYear(false);
     setYearDraft("");
     setGradedCertInput("");
+    setGradedCompany("PSA");
     setCollectionGradedCertDigits(null);
     clearPsa();
   }, [showKindStep, clearPsa]);
@@ -331,7 +346,7 @@ export default function AddCardModalNew({
 
     const parsedQuantity = Math.max(1, Number.parseInt(quantity, 10) || 1);
     const certDigits = gradedCertInput.replace(/\D/g, "");
-    const grade = normalizePsaManualGrade(gradedManualForm.grade);
+    const grade = normalizeManualGrade(gradedManualForm.grade, gradedCompany);
     const setName = gradedManualForm.set_name.trim();
     const cardNumber = gradedManualForm.card_number.trim();
     const parallelType = gradedManualForm.parallel_type.trim();
@@ -344,8 +359,8 @@ export default function AddCardModalNew({
         card_number: cardNumber || undefined,
         parallel_type: parallelType || undefined,
         grade,
-        grader: "PSA",
-        psa_cert_number: certDigits || undefined,
+        grader: gradedCompany,
+        psa_cert_number: gradedCompany === "PSA" && certDigits ? certDigits : undefined,
         quantity: parsedQuantity,
       });
       resetForm();
@@ -376,7 +391,7 @@ export default function AddCardModalNew({
         setName: setName ? "user" : "inferred",
         year: year ? "user" : "inferred",
       },
-      warnings: certDigits ? [`PSA cert ${certDigits} entered manually`] : [],
+      warnings: certDigits ? [`${gradedCompany} cert ${certDigits} entered manually`] : [],
       evidenceSummary: null,
     };
 
@@ -795,21 +810,24 @@ export default function AddCardModalNew({
     : false;
   const currentGradedCertDigits = gradedCertInput.replace(/\D/g, "");
 
+  // Shared dark-theme classes
+  const inputCls = "w-full border border-[#343941] bg-[#090B0D] px-3 py-2.5 text-sm text-[#E6E8EB] placeholder:text-[#4F5863] outline-none focus:border-[#20B26B]";
+  const labelCls = "block text-xs font-medium text-[#77808C] mb-1";
+  const btnPrimary = "border border-[#20B26B] bg-[#20B26B] px-4 py-2.5 text-sm font-semibold text-[#07100B] hover:bg-[#33C47C] disabled:opacity-50 disabled:cursor-not-allowed transition-colors";
+  const btnSecondary = "border border-[#343941] px-4 py-2.5 text-sm font-medium text-[#B8C0CC] hover:text-[#E6E8EB] transition-colors";
+  const btnBack = "text-sm text-[#77808C] hover:text-[#E6E8EB] transition-colors";
+  const optionCardCls = "w-full border border-[#343941] bg-[#111315] p-4 text-left transition-colors hover:border-[#20B26B] hover:bg-[#15191D] group";
+
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-        onClick={handleClose}
-      />
+      <div className="absolute inset-0 bg-black/60" onClick={handleClose} />
 
-      {/* Modal */}
-      <div className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div className="relative border border-[#24282D] bg-[#0F1317] w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-800">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+        <div className="flex items-center justify-between border-b border-[#24282D] px-5 py-4">
+          <h2 className="text-sm font-semibold text-[#E6E8EB]">
             {mode === "kind" &&
               (modalTitle ??
                 (addMode === "watchlist"
@@ -822,50 +840,38 @@ export default function AddCardModalNew({
             {mode === "upload" && "Upload Card Photo"}
             {mode === "manual" && "Enter Card Details"}
             {mode === "confirm" && "Confirm Card"}
+            {mode === "graded_company" && "Choose grading company"}
             {mode === "graded_cert" && "Add graded card (PSA)"}
-            {mode === "graded_manual" && "Enter graded card details"}
+            {mode === "graded_manual" && `Enter ${gradedCompany} card details`}
             {mode === "graded_confirm" && "Confirm graded card"}
           </h2>
-          <button
-            onClick={handleClose}
-            className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+          <button onClick={handleClose} className="px-2 text-xl leading-none text-[#77808C] hover:text-[#E6E8EB]">
+            ×
           </button>
         </div>
 
-        <div className="p-6 space-y-5">
-          {/* Error Message */}
+        <div className="p-5 space-y-4">
+          {/* Error */}
           {error && (
-            <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-              <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+            <div className="border border-[#723030] bg-[#2A1111] px-3 py-2">
+              <p className="text-sm text-[#E05C5C]">{error}</p>
             </div>
           )}
 
-          {/* Raw vs graded (business inventory only) */}
+          {/* Raw vs graded */}
           {mode === "kind" && (
-            <div className="space-y-4">
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Is this card graded (slabbed) or raw?
-              </p>
-              <button
-                type="button"
-                onClick={() => setMode("select")}
-                className="w-full p-4 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl hover:border-blue-500 dark:hover:border-blue-500 transition-colors group text-left"
-              >
+            <div className="space-y-3">
+              <p className="text-xs text-[#77808C]">Is this card graded (slabbed) or raw?</p>
+              <button type="button" onClick={() => setMode("select")} className={optionCardCls}>
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center justify-center group-hover:bg-slate-200 dark:group-hover:bg-slate-700 transition-colors">
-                    <svg className="w-6 h-6 text-slate-600 dark:text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="w-10 h-10 border border-[#343941] bg-[#1E2227] flex items-center justify-center group-hover:border-[#20B26B] transition-colors">
+                    <svg className="w-5 h-5 text-[#77808C] group-hover:text-[#20B26B]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                     </svg>
                   </div>
                   <div>
-                    <p className="font-medium text-gray-900 dark:text-white">Raw card</p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      Upload a photo or find the card in the database
-                    </p>
+                    <p className="text-sm font-medium text-[#E6E8EB]">Raw card</p>
+                    <p className="text-xs text-[#77808C]">Upload a photo or find the card in the database</p>
                   </div>
                 </div>
               </button>
@@ -874,83 +880,115 @@ export default function AddCardModalNew({
                 onClick={() => {
                   setError(null);
                   setGradedCertInput("");
+                  setGradedCompany("PSA");
                   clearPsa();
-                  setMode("graded_cert");
+                  setMode("graded_company");
                 }}
-                className="w-full p-4 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl hover:border-emerald-500 dark:hover:border-emerald-500 transition-colors group text-left"
+                className={optionCardCls}
               >
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg flex items-center justify-center group-hover:bg-emerald-200 dark:group-hover:bg-emerald-800/30 transition-colors">
-                    <svg className="w-6 h-6 text-emerald-700 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="w-10 h-10 border border-[#1F5F45] bg-[#0E251B] flex items-center justify-center group-hover:bg-[#143624] transition-colors">
+                    <svg className="w-5 h-5 text-[#20B26B]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                     </svg>
                   </div>
                   <div>
-                    <p className="font-medium text-gray-900 dark:text-white">Graded card</p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      Enter a PSA certification number — we&apos;ll load the card details
-                    </p>
+                    <p className="text-sm font-medium text-[#E6E8EB]">Graded card</p>
+                    <p className="text-xs text-[#77808C]">PSA, BGS, SGC, or CGC — pick the grading company next</p>
                   </div>
                 </div>
               </button>
             </div>
           )}
 
+          {/* Graded: grading company picker */}
+          {mode === "graded_company" && (
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setError(null);
+                  setMode("kind");
+                }}
+                className={btnBack}
+              >
+                ← Back
+              </button>
+              <p className="text-xs text-[#77808C]">Which company graded this card?</p>
+              {GRADING_COMPANIES.map((company) => (
+                <button
+                  key={company.value}
+                  type="button"
+                  onClick={() => {
+                    setError(null);
+                    setGradedCompany(company.value);
+                    setGradedCertInput("");
+                    clearPsa();
+                    if (company.value === "PSA") {
+                      setMode("graded_cert");
+                    } else {
+                      setGradedManualForm({
+                        player_name: "",
+                        year: "",
+                        set_name: "",
+                        card_number: "",
+                        parallel_type: "",
+                        grade: "",
+                      });
+                      setMode("graded_manual");
+                    }
+                  }}
+                  className={optionCardCls}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium text-[#E6E8EB]">{company.label}</p>
+                      <p className="text-xs text-[#77808C] mt-0.5">{company.description}</p>
+                    </div>
+                    {company.value === "PSA" && (
+                      <span className="text-[10px] font-semibold uppercase tracking-wide px-2 py-1 border border-[#1F5F45] bg-[#0E251B] text-[#20B26B]">
+                        Auto
+                      </span>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Select Mode */}
           {mode === "select" && (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {showKindStep && (
-                <button
-                  type="button"
-                  onClick={() => setMode("kind")}
-                  className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
-                >
-                  ← Back
-                </button>
+                <button type="button" onClick={() => setMode("kind")} className={btnBack}>← Back</button>
               )}
-              <button
-                onClick={() => setMode("upload")}
-                className="w-full p-4 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl hover:border-blue-500 dark:hover:border-blue-500 transition-colors group"
-              >
+              <button onClick={() => setMode("upload")} className={optionCardCls}>
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center group-hover:bg-blue-200 dark:group-hover:bg-blue-800/30 transition-colors">
-                    <svg className="w-6 h-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="w-10 h-10 border border-[#1D3A60] bg-[#0A1929] flex items-center justify-center group-hover:bg-[#0E2240] transition-colors">
+                    <svg className="w-5 h-5 text-[#60A0DC]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
                   </div>
-                  <div className="text-left">
-                    <p className="font-medium text-gray-900 dark:text-white">Upload Card Photo</p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">AI identifies the card and estimates grade</p>
+                  <div>
+                    <p className="text-sm font-medium text-[#E6E8EB]">Upload Card Photo</p>
+                    <p className="text-xs text-[#77808C]">AI identifies the card and estimates grade</p>
                   </div>
                 </div>
               </button>
-
               <button
-                onClick={() => {
-                  if (hasCardPicker && onOpenSmartSearch) {
-                    onOpenSmartSearch();
-                    return;
-                  }
-                  setMode("manual");
-                }}
-                className="w-full p-4 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl hover:border-blue-500 dark:hover:border-blue-500 transition-colors group"
+                onClick={() => { if (hasCardPicker && onOpenSmartSearch) { onOpenSmartSearch(); return; } setMode("manual"); }}
+                className={optionCardCls}
               >
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center group-hover:bg-green-200 dark:group-hover:bg-green-800/30 transition-colors">
-                    <svg className="w-6 h-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="w-10 h-10 border border-[#343941] bg-[#1E2227] flex items-center justify-center group-hover:border-[#20B26B] transition-colors">
+                    <svg className="w-5 h-5 text-[#77808C] group-hover:text-[#20B26B]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                     </svg>
                   </div>
-                  <div className="text-left">
-                    <p className="font-medium text-gray-900 dark:text-white">
-                      {hasCardPicker ? "Find in Card Database" : "Enter Manually"}
-                    </p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      {hasCardPicker
-                        ? "Use structured filters to pick the exact card"
-                        : "Type the card details yourself"}
-                    </p>
+                  <div>
+                    <p className="text-sm font-medium text-[#E6E8EB]">{hasCardPicker ? "Find in Card Database" : "Enter Manually"}</p>
+                    <p className="text-xs text-[#77808C]">{hasCardPicker ? "Use structured filters to pick the exact card" : "Type the card details yourself"}</p>
                   </div>
                 </div>
               </button>
@@ -960,213 +998,116 @@ export default function AddCardModalNew({
           {/* Graded: PSA cert entry */}
           {mode === "graded_cert" && (
             <div className="space-y-4">
-              <button
-                type="button"
-                onClick={() => {
-                  setError(null);
-                  setMode("kind");
-                }}
-                className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
-              >
-                ← Back
-              </button>
+              <button type="button" onClick={() => { setError(null); setMode("graded_company"); }} className={btnBack}>← Back</button>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  PSA certification number
-                </label>
+                <label className={labelCls}>PSA certification number</label>
                 <input
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="off"
+                  type="text" inputMode="numeric" autoComplete="off"
                   value={gradedCertInput}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setGradedCertInput(val);
-                    if (psaResult || psaError) clearPsa();
-                    lookupPsaCert(val);
-                  }}
+                  onChange={(e) => { const val = e.target.value; setGradedCertInput(val); if (psaResult || psaError) clearPsa(); lookupPsaCert(val); }}
                   onBlur={(e) => lookupPsaCertImmediate(e.target.value)}
                   placeholder="e.g., 12345678"
-                  className="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className={inputCls}
                 />
                 {psaLoading && (
-                  <p className="mt-2 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                    <span className="inline-block h-3.5 w-3.5 rounded-full border border-gray-400 border-t-transparent animate-spin" />
+                  <p className="mt-2 flex items-center gap-2 text-xs text-[#77808C]">
+                    <span className="inline-block h-3.5 w-3.5 border border-[#343941] border-t-[#20B26B] rounded-full animate-spin" />
                     Looking up cert…
                   </p>
                 )}
-                {psaError && (
-                  <p className="mt-2 text-xs text-red-600 dark:text-red-400">{psaError}</p>
-                )}
+                {psaError && <p className="mt-2 text-xs text-[#E05C5C]">{psaError}</p>}
                 {psaResult && !psaLoading && (
-                  <p className="mt-2 text-xs text-emerald-600 dark:text-emerald-400">
-                    Cert found — review details on the next step
-                  </p>
+                  <p className="mt-2 text-xs text-[#20B26B]">Cert found — review details on the next step</p>
                 )}
               </div>
               <button
                 type="button"
-                onClick={() => {
-                  if (!psaResult?.player_name) {
-                    setError("Enter a valid PSA cert number and wait for verification.");
-                    return;
-                  }
-                  setError(null);
-                  setMode("graded_confirm");
-                }}
+                onClick={() => { if (!psaResult?.player_name) { setError("Enter a valid PSA cert number and wait for verification."); return; } setError(null); setMode("graded_confirm"); }}
                 disabled={!psaResult?.player_name || psaLoading}
-                className="w-full px-4 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                className={`w-full ${btnPrimary}`}
               >
                 Continue to confirm
               </button>
               {currentGradedCertDigits.length >= 5 && !psaLoading && (
-                <button
-                  type="button"
-                  onClick={openGradedManualEntry}
-                  className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors font-medium"
-                >
+                <button type="button" onClick={openGradedManualEntry} className={`w-full ${btnSecondary}`}>
                   Enter details manually
                 </button>
               )}
             </div>
           )}
 
-          {/* Graded: manual entry fallback when PSA lookup is unavailable */}
+          {/* Graded: manual entry (BGS/SGC/CGC always; PSA fallback when lookup unavailable) */}
           {mode === "graded_manual" && (
             <div className="space-y-4">
               <button
                 type="button"
-                onClick={() => {
-                  setError(null);
-                  setMode("graded_cert");
-                }}
-                className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+                onClick={() => { setError(null); setMode(gradedCompany === "PSA" ? "graded_cert" : "graded_company"); }}
+                className={btnBack}
               >
                 ← Back
               </button>
-              <div className="rounded-lg border border-amber-300/40 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
-                PSA lookup can enrich the card, but it is not required. Enter the slab details here and continue.
+              <div className="border border-[#5A4A1F] bg-[#251E0E] px-3 py-2 text-xs text-[#F0B429]">
+                {gradedCompany === "PSA"
+                  ? "PSA lookup can enrich the card, but it is not required. Enter the slab details here and continue."
+                  : `${gradedCompany} cert lookup isn't supported yet — enter the slab details from the label below.`}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  PSA certification number
+                <label className={labelCls}>
+                  {gradedCompany} certification number {gradedCompany === "PSA" ? "" : "(optional)"}
                 </label>
                 <input
                   type="text"
-                  value={currentGradedCertDigits}
-                  readOnly
-                  className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-500 dark:text-gray-400"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Player Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={gradedManualForm.player_name}
-                  onChange={(e) =>
-                    setGradedManualForm((prev) => ({ ...prev, player_name: e.target.value }))
+                  value={gradedCompany === "PSA" ? currentGradedCertDigits : gradedCertInput}
+                  readOnly={gradedCompany === "PSA"}
+                  onChange={
+                    gradedCompany === "PSA"
+                      ? undefined
+                      : (e) => setGradedCertInput(e.target.value)
                   }
-                  placeholder="e.g., Michael Jordan"
-                  className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  placeholder={gradedCompany === "PSA" ? undefined : "e.g., 1234567890"}
+                  className={gradedCompany === "PSA" ? `${inputCls} opacity-50` : inputCls}
                 />
               </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className={labelCls}>Player Name <span className="text-[#E05C5C]">*</span></label>
+                <input type="text" value={gradedManualForm.player_name} onChange={(e) => setGradedManualForm((prev) => ({ ...prev, player_name: e.target.value }))} placeholder="e.g., Michael Jordan" className={inputCls} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Year
-                  </label>
-                  <input
-                    type="text"
-                    value={gradedManualForm.year}
-                    onChange={(e) =>
-                      setGradedManualForm((prev) => ({ ...prev, year: e.target.value }))
-                    }
-                    placeholder="e.g., 1986"
-                    className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                  />
+                  <label className={labelCls}>Year</label>
+                  <input type="text" value={gradedManualForm.year} onChange={(e) => setGradedManualForm((prev) => ({ ...prev, year: e.target.value }))} placeholder="e.g., 1986" className={inputCls} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Grade
-                  </label>
+                  <label className={labelCls}>Grade</label>
                   <input
                     type="text"
                     value={gradedManualForm.grade}
-                    onChange={(e) =>
-                      setGradedManualForm((prev) => ({ ...prev, grade: e.target.value }))
-                    }
-                    placeholder="e.g., 10"
-                    className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    onChange={(e) => setGradedManualForm((prev) => ({ ...prev, grade: e.target.value }))}
+                    placeholder={gradedCompany === "BGS" ? "e.g., 9.5" : "e.g., 10"}
+                    className={inputCls}
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Set / Brand
-                </label>
-                <input
-                  type="text"
-                  value={gradedManualForm.set_name}
-                  onChange={(e) =>
-                    setGradedManualForm((prev) => ({ ...prev, set_name: e.target.value }))
-                  }
-                  placeholder="e.g., Topps Chrome"
-                  className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                />
+                <label className={labelCls}>Set / Brand</label>
+                <input type="text" value={gradedManualForm.set_name} onChange={(e) => setGradedManualForm((prev) => ({ ...prev, set_name: e.target.value }))} placeholder="e.g., Topps Chrome" className={inputCls} />
               </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Card #
-                  </label>
-                  <input
-                    type="text"
-                    value={gradedManualForm.card_number}
-                    onChange={(e) =>
-                      setGradedManualForm((prev) => ({ ...prev, card_number: e.target.value }))
-                    }
-                    placeholder="e.g., 57"
-                    className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                  />
+                  <label className={labelCls}>Card #</label>
+                  <input type="text" value={gradedManualForm.card_number} onChange={(e) => setGradedManualForm((prev) => ({ ...prev, card_number: e.target.value }))} placeholder="e.g., 57" className={inputCls} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Parallel / Variant
-                  </label>
-                  <input
-                    type="text"
-                    value={gradedManualForm.parallel_type}
-                    onChange={(e) =>
-                      setGradedManualForm((prev) => ({ ...prev, parallel_type: e.target.value }))
-                    }
-                    placeholder="Optional"
-                    className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                  />
+                  <label className={labelCls}>Parallel / Variant</label>
+                  <input type="text" value={gradedManualForm.parallel_type} onChange={(e) => setGradedManualForm((prev) => ({ ...prev, parallel_type: e.target.value }))} placeholder="Optional" className={inputCls} />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Quantity
-                </label>
-                <input
-                  type="number"
-                  min={1}
-                  step={1}
-                  value={quantity}
-                  onChange={(e) => setQuantity(e.target.value)}
-                  className="w-full max-w-40 px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                />
+                <label className={labelCls}>Quantity</label>
+                <input type="number" min={1} step={1} value={quantity} onChange={(e) => setQuantity(e.target.value)} className={`${inputCls} max-w-40`} />
               </div>
-              <button
-                type="button"
-                onClick={handleGradedManualSubmit}
-                className="w-full px-4 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium"
-              >
-                {addMode === "business"
-                  ? "Continue to inventory details"
-                  : "Set purchase info & add to collection"}
+              <button type="button" onClick={handleGradedManualSubmit} className={`w-full ${btnPrimary}`}>
+                {addMode === "business" ? "Continue to inventory details" : "Set purchase info & add to collection"}
               </button>
             </div>
           )}
@@ -1174,83 +1115,26 @@ export default function AddCardModalNew({
           {/* Graded: confirm PSA details */}
           {mode === "graded_confirm" && psaResult && (
             <div className="space-y-4">
-              <button
-                type="button"
-                onClick={() => setMode("graded_cert")}
-                className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
-              >
-                ← Back
-              </button>
-              <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 p-4 space-y-2 text-sm">
-                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  PSA registry
-                </p>
-                <p className="text-base font-semibold text-gray-900 dark:text-white">{psaResult.player_name}</p>
-                {psaResult.year && (
-                  <p className="text-gray-700 dark:text-gray-300">
-                    <span className="text-gray-500 dark:text-gray-400">Year:</span> {psaResult.year}
-                  </p>
-                )}
-                {psaResult.set_name && (
-                  <p className="text-gray-700 dark:text-gray-300">
-                    <span className="text-gray-500 dark:text-gray-400">Set:</span> {psaResult.set_name}
-                  </p>
-                )}
-                {psaResult.card_number && (
-                  <p className="text-gray-700 dark:text-gray-300">
-                    <span className="text-gray-500 dark:text-gray-400">Card #:</span> {psaResult.card_number}
-                  </p>
-                )}
-                {psaResult.parallel_type && (
-                  <p className="text-gray-700 dark:text-gray-300">
-                    <span className="text-gray-500 dark:text-gray-400">Parallel / variety:</span>{" "}
-                    {psaResult.parallel_type}
-                  </p>
-                )}
-                {psaResult.grade && (
-                  <p className="text-gray-700 dark:text-gray-300">
-                    <span className="text-gray-500 dark:text-gray-400">Grade:</span> {psaResult.grade}
-                  </p>
-                )}
-                <p className="text-gray-700 dark:text-gray-300">
-                  <span className="text-gray-500 dark:text-gray-400">Cert #:</span>{" "}
-                  {gradedCertInput.replace(/\D/g, "") || "—"}
-                </p>
+              <button type="button" onClick={() => setMode("graded_cert")} className={btnBack}>← Back</button>
+              <div className="border border-[#24282D] bg-[#090B0D] p-4 space-y-2 text-sm">
+                <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-[#77808C]">PSA registry</p>
+                <p className="text-sm font-semibold text-[#E6E8EB]">{psaResult.player_name}</p>
+                {psaResult.year && <p className="text-[#B8C0CC]"><span className="text-[#77808C]">Year:</span> {psaResult.year}</p>}
+                {psaResult.set_name && <p className="text-[#B8C0CC]"><span className="text-[#77808C]">Set:</span> {psaResult.set_name}</p>}
+                {psaResult.card_number && <p className="text-[#B8C0CC]"><span className="text-[#77808C]">Card #:</span> {psaResult.card_number}</p>}
+                {psaResult.parallel_type && <p className="text-[#B8C0CC]"><span className="text-[#77808C]">Parallel:</span> {psaResult.parallel_type}</p>}
+                {psaResult.grade && <p className="text-[#B8C0CC]"><span className="text-[#77808C]">Grade:</span> {psaResult.grade}</p>}
+                <p className="text-[#B8C0CC]"><span className="text-[#77808C]">Cert #:</span> {gradedCertInput.replace(/\D/g, "") || "—"}</p>
               </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Confirm this matches your slab. If anything looks wrong, go back and double-check the cert number.
-              </p>
+              <p className="text-xs text-[#77808C]">Confirm this matches your slab. If anything looks wrong, go back and double-check the cert number.</p>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Quantity</label>
-                <input
-                  type="number"
-                  min={1}
-                  step={1}
-                  value={quantity}
-                  onChange={(e) => setQuantity(e.target.value)}
-                  className="w-full max-w-40 px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                />
+                <label className={labelCls}>Quantity</label>
+                <input type="number" min={1} step={1} value={quantity} onChange={(e) => setQuantity(e.target.value)} className={`${inputCls} max-w-40`} />
               </div>
-              <div className="flex gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setMode("graded_cert")}
-                  className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors font-medium"
-                >
-                  Not the right card
-                </button>
-                <button
-                  type="button"
-                  onClick={
-                    addMode === "business"
-                      ? handleGradedInventoryConfirm
-                      : proceedGradedToCollectionConfirm
-                  }
-                  className="flex-1 px-4 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium"
-                >
-                  {addMode === "business"
-                    ? "Continue to inventory details"
-                    : "Set purchase info & add to collection"}
+              <div className="flex gap-2 border-t border-[#24282D] pt-4">
+                <button type="button" onClick={() => setMode("graded_cert")} className={`flex-1 ${btnSecondary}`}>Not the right card</button>
+                <button type="button" onClick={addMode === "business" ? handleGradedInventoryConfirm : proceedGradedToCollectionConfirm} className={`flex-1 ${btnPrimary}`}>
+                  {addMode === "business" ? "Continue to inventory details" : "Set purchase info & add"}
                 </button>
               </div>
             </div>
@@ -1260,60 +1144,32 @@ export default function AddCardModalNew({
           {mode === "upload" && (
             <div className="space-y-4">
               {loading ? (
-                <div className="flex flex-col items-center py-8">
-                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mb-4"></div>
-                  <p className="text-gray-400">Processing card...</p>
+                <div className="flex flex-col items-center py-8 gap-3">
+                  <span className="inline-block h-8 w-8 border border-[#343941] border-t-[#20B26B] rounded-full animate-spin" />
+                  <p className="text-sm text-[#77808C]">Processing card…</p>
                 </div>
               ) : previews.length > 0 ? (
                 <div className="flex flex-col items-center gap-3">
                   <div className="flex gap-3 flex-wrap justify-center">
                     {previews.map((preview, index) => (
-                      <img
-                        key={`${preview}-${index}`}
-                        src={preview}
-                        alt={`Card preview ${index + 1}`}
-                        className="h-32 w-24 object-cover rounded-lg shadow-md"
-                      />
+                      <img key={`${preview}-${index}`} src={preview} alt={`Card preview ${index + 1}`} className="h-32 w-24 object-cover border border-[#24282D]" />
                     ))}
                   </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {previews.length} photo{previews.length > 1 ? "s" : ""} selected
-                  </p>
+                  <p className="text-xs text-[#77808C]">{previews.length} photo{previews.length > 1 ? "s" : ""} selected</p>
                 </div>
               ) : (
                 <label className="block cursor-pointer">
-                  <div className="border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl p-8 text-center hover:border-blue-500 dark:hover:border-blue-500 transition-colors">
-                    <svg className="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="border border-dashed border-[#343941] p-8 text-center hover:border-[#20B26B] transition-colors">
+                    <svg className="w-10 h-10 text-[#4F5863] mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
-                    <p className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Drop your card photos here
-                    </p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      or click to select (front + back)
-                    </p>
+                    <p className="text-sm font-medium text-[#B8C0CC] mb-1">Drop your card photos here</p>
+                    <p className="text-xs text-[#77808C]">or click to select (front + back)</p>
                   </div>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    onChange={(e) => {
-                      const fileList = e.target.files;
-                      if (fileList && fileList.length > 0) {
-                        handleFiles(fileList);
-                      }
-                    }}
-                    className="hidden"
-                  />
+                  <input type="file" accept="image/*" multiple onChange={(e) => { const f = e.target.files; if (f && f.length > 0) handleFiles(f); }} className="hidden" />
                 </label>
               )}
-
-              <button
-                onClick={() => setMode("select")}
-                className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors font-medium"
-              >
-                Back
-              </button>
+              <button onClick={() => setMode("select")} className={`w-full ${btnSecondary}`}>Back</button>
             </div>
           )}
 
@@ -1321,220 +1177,91 @@ export default function AddCardModalNew({
           {mode === "manual" && (
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Player Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={manualForm.player_name}
-                  onChange={(e) => setManualForm({ ...manualForm, player_name: e.target.value })}
-                  placeholder="e.g., Michael Jordan"
-                  className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
+                <label className={labelCls}>Player Name <span className="text-[#E05C5C]">*</span></label>
+                <input type="text" value={manualForm.player_name} onChange={(e) => setManualForm({ ...manualForm, player_name: e.target.value })} placeholder="e.g., Michael Jordan" className={inputCls} />
               </div>
-
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Year
-                </label>
-                <input
-                  type="text"
-                  value={manualForm.year}
-                  onChange={(e) => setManualForm({ ...manualForm, year: e.target.value })}
-                  placeholder="e.g., 1986"
-                  className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
+                <label className={labelCls}>Year</label>
+                <input type="text" value={manualForm.year} onChange={(e) => setManualForm({ ...manualForm, year: e.target.value })} placeholder="e.g., 1986" className={inputCls} />
               </div>
-
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Set / Brand
-                </label>
-                <input
-                  type="text"
-                  value={manualForm.set_name}
-                  onChange={(e) => setManualForm({ ...manualForm, set_name: e.target.value })}
-                  placeholder="e.g., Fleer, Panini Prizm"
-                  className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
+                <label className={labelCls}>Set / Brand</label>
+                <input type="text" value={manualForm.set_name} onChange={(e) => setManualForm({ ...manualForm, set_name: e.target.value })} placeholder="e.g., Fleer, Panini Prizm" className={inputCls} />
               </div>
-
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Parallel / Variant
-                </label>
-                <input
-                  type="text"
-                  value={manualForm.parallel_type}
-                  onChange={(e) => setManualForm({ ...manualForm, parallel_type: e.target.value })}
-                  placeholder="e.g., Silver Prizm, Refractor"
-                  className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
+                <label className={labelCls}>Parallel / Variant</label>
+                <input type="text" value={manualForm.parallel_type} onChange={(e) => setManualForm({ ...manualForm, parallel_type: e.target.value })} placeholder="e.g., Silver Prizm, Refractor" className={inputCls} />
               </div>
-
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => setMode("select")}
-                  className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors font-medium"
-                >
-                  Back
-                </button>
-                <button
-                  onClick={handleManualSubmit}
-                  className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-                >
-                  Continue
-                </button>
+              <div className="flex gap-2 border-t border-[#24282D] pt-4">
+                <button onClick={() => setMode("select")} className={`flex-1 ${btnSecondary}`}>Back</button>
+                <button onClick={handleManualSubmit} className={`flex-1 ${btnPrimary}`}>Continue</button>
               </div>
             </div>
           )}
 
           {/* Confirm Mode */}
           {mode === "confirm" && identifiedCard && (
-            <div className="space-y-5">
-              {/* Card Preview */}
+            <div className="space-y-4">
               <div className="flex gap-4">
                 {collectionGradedCertDigits && !identifiedCard.imageUrl ? (
-                  <div className="flex-shrink-0 w-24 h-32 rounded-lg border border-emerald-500/50 bg-emerald-500/10 flex flex-col items-center justify-center p-2">
-                    <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
-                      PSA
-                    </span>
-                    <span className="text-xs text-center font-mono text-emerald-800 dark:text-emerald-200 mt-1 break-all">
-                      {collectionGradedCertDigits}
-                    </span>
+                  <div className="flex-shrink-0 w-20 h-28 border border-[#1F5F45] bg-[#0E251B] flex flex-col items-center justify-center p-2">
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-[#20B26B]">PSA</span>
+                    <span className="text-xs text-center font-mono text-[#20B26B] mt-1 break-all">{collectionGradedCertDigits}</span>
                   </div>
                 ) : null}
                 {identifiedCard.imageUrl && (
                   <div className="flex-shrink-0 space-y-2">
-                    <img
-                      src={identifiedCard.imageUrl}
-                      alt={identifiedCard.player_name}
-                      className="w-24 h-32 object-cover rounded-lg shadow-md bg-gray-200 dark:bg-gray-800"
-                    />
-                    {showingBestMatchInDatabase ? (
-                      <p className="text-[11px] text-amber-600 dark:text-amber-400">
-                        Best match in database
-                      </p>
-                    ) : null}
-                    {identifiedCard.imageUrls && identifiedCard.imageUrls.length > 1 ? (
-                      <div className="flex gap-2">
+                    <img src={identifiedCard.imageUrl} alt={identifiedCard.player_name} className="w-20 h-28 object-cover border border-[#24282D] bg-[#111315]" />
+                    {showingBestMatchInDatabase && <p className="text-[10px] text-[#F0B429]">Best match in database</p>}
+                    {identifiedCard.imageUrls && identifiedCard.imageUrls.length > 1 && (
+                      <div className="flex gap-1.5">
                         {identifiedCard.imageUrls.slice(1, 3).map((url, index) => (
-                          <img
-                            key={`${url}-${index}`}
-                            src={url}
-                            alt={`${identifiedCard.player_name} alt ${index + 1}`}
-                            className="w-10 h-14 object-cover rounded-md border border-gray-200 dark:border-gray-700"
-                          />
+                          <img key={`${url}-${index}`} src={url} alt={`${identifiedCard.player_name} alt ${index + 1}`} className="w-9 h-12 object-cover border border-[#24282D]" />
                         ))}
                       </div>
-                    ) : null}
+                    )}
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-white truncate">
-                    {identifiedCard.player_name}
-                  </h3>
-                  <div className="mt-1 space-y-0.5 text-sm text-gray-600 dark:text-gray-400">
-                    {showYear ? (
-                      <p>Year: {identifiedCard.year}</p>
-                    ) : yearNeedsConfirmation ? (
+                  <h3 className="text-sm font-bold text-[#E6E8EB] truncate">{identifiedCard.player_name}</h3>
+                  <div className="mt-1 space-y-0.5 text-xs text-[#B8C0CC]">
+                    {showYear ? <p>Year: {identifiedCard.year}</p> : yearNeedsConfirmation ? (
                       <div className="flex items-center gap-2">
                         <p>Year: Needs confirmation</p>
-                        <button
-                          type="button"
-                          onClick={() => setEditingYear(true)}
-                          className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400"
-                        >
-                          Edit
-                        </button>
+                        <button type="button" onClick={() => setEditingYear(true)} className="text-[#20B26B] hover:text-[#33C47C]">Edit</button>
                       </div>
                     ) : null}
-                    {editingYear ? (
+                    {editingYear && (
                       <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={yearDraft}
-                          onChange={(e) => setYearDraft(e.target.value)}
-                          placeholder="e.g., 2025"
-                          className="w-24 px-2 py-1 text-xs bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-gray-900 dark:text-white"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => applyYearOverride(yearDraft)}
-                          className="text-xs text-green-600 hover:text-green-700 dark:text-green-400"
-                        >
-                          Save
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingYear(false);
-                            setYearDraft(identifiedCard.year || "");
-                          }}
-                          className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400"
-                        >
-                          Cancel
-                        </button>
+                        <input type="text" value={yearDraft} onChange={(e) => setYearDraft(e.target.value)} placeholder="e.g., 2025" className="w-20 border border-[#343941] bg-[#090B0D] px-2 py-1 text-xs text-[#E6E8EB] outline-none focus:border-[#20B26B]" />
+                        <button type="button" onClick={() => applyYearOverride(yearDraft)} className="text-xs text-[#20B26B]">Save</button>
+                        <button type="button" onClick={() => { setEditingYear(false); setYearDraft(identifiedCard.year || ""); }} className="text-xs text-[#77808C]">Cancel</button>
                       </div>
-                    ) : null}
-                    {(() => {
-                      const { setLabel } = formatSetLabel(
-                        identifiedCard.cardIdentity,
-                        identifiedCard.set_name,
-                        identifiedCard.parallel_type
-                      );
-                      return setLabel ? <p>Set: {setLabel}</p> : null;
-                    })()}
-                    {identifiedCard.cardIdentity?.parallel &&
-                      identifiedCard.cardIdentity.parallel !== "Base" && (
-                        <p>Parallel: {identifiedCard.cardIdentity.parallel}</p>
-                      )}
+                    )}
+                    {(() => { const { setLabel } = formatSetLabel(identifiedCard.cardIdentity, identifiedCard.set_name, identifiedCard.parallel_type); return setLabel ? <p>Set: {setLabel}</p> : null; })()}
+                    {identifiedCard.cardIdentity?.parallel && identifiedCard.cardIdentity.parallel !== "Base" && <p>Parallel: {identifiedCard.cardIdentity.parallel}</p>}
                   </div>
                 </div>
               </div>
 
-              {identifiedCard.cardIdentity?.warnings?.includes("parse_error") ? (
-                <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
-                  <p className="text-xs text-amber-700 dark:text-amber-300">
-                    We couldn’t read all card details. Please confirm the year and set below.
-                  </p>
-                </div>
-              ) : null}
-
-              {addMode !== "watchlist" && (
-                <div className="pt-2 border-t border-gray-200 dark:border-gray-800">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Quantity
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={quantity}
-                    onChange={(e) => setQuantity(e.target.value)}
-                    className="w-full max-w-40 px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
+              {identifiedCard.cardIdentity?.warnings?.includes("parse_error") && (
+                <div className="border border-[#5A4A1F] bg-[#251E0E] px-3 py-2 text-xs text-[#F0B429]">
+                  We couldn’t read all card details. Please confirm the year and set below.
                 </div>
               )}
 
-              {/* Form Fields - Only show for collection mode */}
+              {addMode !== "watchlist" && (
+                <div className="border-t border-[#24282D] pt-4">
+                  <label className={labelCls}>Quantity</label>
+                  <input type="number" min="1" step="1" value={quantity} onChange={(e) => setQuantity(e.target.value)} className={`${inputCls} max-w-40`} />
+                </div>
+              )}
+
               {addMode === "collection" && (
-                <div className="space-y-4 pt-2 border-t border-gray-200 dark:border-gray-800">
+                <div className="space-y-4 border-t border-[#24282D] pt-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Acquisition Type
-                    </label>
-                    <select
-                      value={acquisitionType}
-                      onChange={(e) => {
-                        const nextType = e.target.value as AcquisitionType;
-                        setAcquisitionType(nextType);
-                        if (nextType === "pulled") {
-                          setPurchasePrice("");
-                        }
-                      }}
-                      className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
+                    <label className={labelCls}>Acquisition Type</label>
+                    <select value={acquisitionType} onChange={(e) => { const t = e.target.value as AcquisitionType; setAcquisitionType(t); if (t === "pulled") setPurchasePrice(""); }} className={inputCls}>
                       <option value="pulled">Pulled</option>
                       <option value="bought">Bought</option>
                       <option value="trade">Trade</option>
@@ -1542,91 +1269,40 @@ export default function AddCardModalNew({
                       <option value="unknown">Unknown</option>
                     </select>
                   </div>
-
                   {acquisitionType !== "pulled" && (
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Purchase Price
-                      </label>
+                      <label className={labelCls}>Purchase Price</label>
                       <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
-                        <input
-                          type="number"
-                          value={purchasePrice}
-                          onChange={(e) => setPurchasePrice(e.target.value)}
-                          placeholder="0.00"
-                          min="0"
-                          step="0.01"
-                          className="w-full pl-7 pr-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-[#77808C]">$</span>
+                        <input type="number" value={purchasePrice} onChange={(e) => setPurchasePrice(e.target.value)} placeholder="0.00" min="0" step="0.01" className={`${inputCls} pl-7`} />
                       </div>
                     </div>
                   )}
-
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Purchase Date (Optional)
-                    </label>
-                    <input
-                      type="date"
-                      value={purchaseDate}
-                      onChange={(e) => setPurchaseDate(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
+                    <label className={labelCls}>Purchase Date (Optional)</label>
+                    <input type="date" value={purchaseDate} onChange={(e) => setPurchaseDate(e.target.value)} className={inputCls} />
                   </div>
-
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Condition
-                    </label>
-                    <select
-                      value={condition}
-                      onChange={(e) => setCondition(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
+                    <label className={labelCls}>Condition</label>
+                    <select value={condition} onChange={(e) => setCondition(e.target.value)} className={inputCls}>
                       {CONDITION_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
+                        <option key={option.value} value={option.value}>{option.label}</option>
                       ))}
                     </select>
                   </div>
                 </div>
               )}
 
-              {/* Actions */}
-              <div className="flex gap-3 pt-2">
+              <div className="flex gap-2 border-t border-[#24282D] pt-4">
                 <button
-                  onClick={() => {
-                    if (addMode === "collection" && collectionGradedCertDigits) {
-                      setIdentifiedCard(null);
-                      setCollectionGradedCertDigits(null);
-                      setPreviews([]);
-                      setMode("graded_confirm");
-                      return;
-                    }
-                    setIdentifiedCard(null);
-                    setCollectionGradedCertDigits(null);
-                    setPreviews([]);
-                    setMode("select");
-                  }}
+                  onClick={() => { if (addMode === "collection" && collectionGradedCertDigits) { setIdentifiedCard(null); setCollectionGradedCertDigits(null); setPreviews([]); setMode("graded_confirm"); return; } setIdentifiedCard(null); setCollectionGradedCertDigits(null); setPreviews([]); setMode("select"); }}
                   disabled={loading}
-                  className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors font-medium disabled:opacity-50"
+                  className={`flex-1 ${btnSecondary}`}
                 >
                   Back
                 </button>
-                <button
-                  onClick={handleConfirm}
-                  disabled={loading}
-                  className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
-                >
-                  {loading
-                    ? "Adding..."
-                    : addMode === "watchlist"
-                    ? "Continue to Set Target Price"
-                    : addMode === "business"
-                    ? "Continue to Inventory Details"
-                    : "Add to Collection"}
+                <button onClick={handleConfirm} disabled={loading} className={`flex-1 ${btnPrimary}`}>
+                  {loading ? "Adding…" : addMode === "watchlist" ? "Continue to Set Target Price" : addMode === "business" ? "Continue to Inventory Details" : "Add to Collection"}
                 </button>
               </div>
             </div>

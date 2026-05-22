@@ -1,3 +1,4 @@
+const path = require("path");
 const { withSentryConfig } = require("@sentry/nextjs");
 
 const isProduction = process.env.NODE_ENV === "production";
@@ -39,6 +40,9 @@ const cspDirectives = [
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Pin the app directory as the workspace root when multiple lockfiles exist
+  // (e.g. package-lock.json in a parent folder) so tracing and dev assets resolve here.
+  outputFileTracingRoot: path.join(__dirname),
   serverExternalPackages: ["playwright"],
   images: {
     remotePatterns: [
@@ -51,6 +55,16 @@ const nextConfig = {
         hostname: 'i.ebayimg.com',
       },
     ],
+  },
+  webpack: (config, { dev }) => {
+    if (dev) {
+      // Slow first compiles after cache clears should not fail chunk loading.
+      config.output = {
+        ...config.output,
+        chunkLoadTimeout: 120000,
+      };
+    }
+    return config;
   },
   async headers() {
     const securityHeaders = [

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import Sidebar from "./Sidebar";
 import SportsCardBackground from "./SportsCardBackground";
-import BottomTabBar from "./BottomTabBar";
+import SectionTabs from "./SectionTabs";
 import {
   BUSINESS_APPEARANCE_UPDATED_EVENT,
   DEFAULT_BUSINESS_APPEARANCE,
@@ -20,11 +20,6 @@ export default function AuthenticatedLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const isGradeWorkspace =
-    pathname === "/grade-hub" ||
-    pathname === "/business/grade-hub" ||
-    pathname?.startsWith("/grade-hub/") ||
-    pathname?.startsWith("/business/grade-hub/");
   const isBusinessRoute = pathname?.startsWith("/business") ?? false;
   const isAdminRoute = pathname?.startsWith("/admin");
   const isBusinessShell = isBusinessRoute || isAdminRoute || pathname === "/dashboard";
@@ -33,7 +28,7 @@ export default function AuthenticatedLayout({
   );
 
   useEffect(() => {
-    if (!isBusinessRoute || isGradeWorkspace || typeof window === "undefined") return;
+    if (!isBusinessRoute || typeof window === "undefined") return;
 
     let isMounted = true;
 
@@ -72,43 +67,33 @@ export default function AuthenticatedLayout({
         handleAppearanceUpdate as EventListener
       );
     };
-  }, [isBusinessRoute, isGradeWorkspace]);
+  }, [isBusinessRoute]);
 
   const businessAppearanceStyle = useMemo(
     () =>
-      isBusinessRoute && !isGradeWorkspace
+      isBusinessRoute
         ? getBusinessAppearanceCssVariables(appearance)
         : undefined,
-    [appearance, isBusinessRoute, isGradeWorkspace]
+    [appearance, isBusinessRoute]
   );
 
   return (
     <div
-      className={`relative flex min-h-screen overflow-hidden ${
-        isGradeWorkspace
-          ? "bg-[#060606] text-[var(--biz-text)]"
-          : isBusinessShell
-          ? isBusinessRoute
-            ? "business-theme business-workspace-theme bg-[var(--biz-bg)] text-[var(--biz-text)]"
-            : "business-theme bg-[var(--biz-bg)] text-[var(--biz-text)]"
-          : "bg-[#0f1419]"
-      }`}
+      className={[
+        "relative flex min-h-screen overflow-hidden business-theme bg-[var(--biz-bg)] text-[var(--biz-text)]",
+        isBusinessRoute ? "business-workspace-theme" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
       style={businessAppearanceStyle}
     >
-      {!isBusinessShell && !isGradeWorkspace && (
-        <SportsCardBackground variant="default" />
-      )}
+      {!isBusinessShell && <SportsCardBackground variant="default" />}
 
-      {!isGradeWorkspace ? <Sidebar /> : null}
-      {/* Main content area with padding for sidebar and bottom tab */}
-      <div
-        className={`relative z-10 flex-1 min-w-0 pb-20 lg:pb-0 ${
-          isGradeWorkspace ? "" : "lg:ml-64"
-        }`}
-      >
+      <Sidebar />
+      <div className="relative z-10 flex-1 min-w-0 lg:ml-64">
+        <SectionTabs />
         <div className="min-h-screen">{children}</div>
       </div>
-      {!isGradeWorkspace ? <BottomTabBar /> : null}
     </div>
   );
 }

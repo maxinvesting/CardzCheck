@@ -65,7 +65,7 @@ function ColorField({
           value={value}
           onChange={(event) => onChange(normalizeDraftValue(event.target.value))}
           disabled={readOnly}
-          placeholder="#1D9E75"
+          placeholder="#E4E4E4"
           maxLength={7}
           className="min-w-0 flex-1 rounded-lg border border-[var(--biz-border)] bg-white px-3 py-2 text-sm text-[var(--biz-text)] placeholder:text-[var(--biz-muted)] focus:border-[var(--biz-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--biz-focus)] disabled:cursor-not-allowed disabled:bg-[var(--biz-surface-soft)]"
         />

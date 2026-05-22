@@ -42,6 +42,14 @@ interface CardSearchResult {
   card_number?: string | null;
   image_url?: string | null;
   user_image_url?: string | null;
+  title?: string | null;
+  source?: string | null;
+  confidence?: "Exact" | "Strong" | "Similar" | "Risky";
+  reason?: string | null;
+  reasonCodes?: string[];
+  rejectionReasons?: string[];
+  matchPass?: number;
+  groupKey?: string;
 }
 
 interface CardPickerProps {
@@ -90,6 +98,8 @@ export default function CardPicker({
   const [results, setResults] = useState<CardSearchResult[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
   const [relaxOptional, setRelaxOptional] = useState(false);
+  const [canRelaxResults, setCanRelaxResults] = useState(false);
+  const [externalLookupUnavailable, setExternalLookupUnavailable] = useState(false);
   const isDev = process.env.NODE_ENV !== "production";
   const initialKeyRef = useRef<string | null>(null);
 
@@ -145,6 +155,22 @@ export default function CardPicker({
     () => formatGraderGrade(grader || undefined, grade || undefined),
     [grader, grade]
   );
+  const hasExactResult = results.some((result) => result.confidence === "Exact");
+  const groupedResults = useMemo(() => {
+    const groups = new Map<string, CardSearchResult[]>();
+    for (const result of results) {
+      const key =
+        result.groupKey ||
+        [
+          result.variant?.trim() || "Unknown parallel",
+          formatGraderGrade(result.grader, result.grade) || "Any grade",
+        ].join(" / ");
+      const existing = groups.get(key) ?? [];
+      existing.push(result);
+      groups.set(key, existing);
+    }
+    return Array.from(groups.entries()).map(([key, cards]) => ({ key, cards }));
+  }, [results]);
 
   const logDebug = (...args: unknown[]) => {
     if (isDev) {
@@ -260,6 +286,8 @@ export default function CardPicker({
     setSearchError(null);
     setHasSearched(false);
     setRelaxOptional(false);
+    setCanRelaxResults(false);
+    setExternalLookupUnavailable(false);
   };
 
   const resolvedPlayer = selectedPlayer?.id ?? playerQuery.trim();
@@ -322,10 +350,22 @@ export default function CardPicker({
         throw new Error(data.error || "Card search failed");
       }
 
-      setResults((data.results || []) as CardSearchResult[]);
+      const nextResults = (data.results || []) as CardSearchResult[];
+      setResults(nextResults);
+      setCanRelaxResults(Boolean(data.canRelax));
+      setExternalLookupUnavailable(Boolean(data.externalLookupUnavailable));
+      logDebug("Search response", {
+        count: nextResults.length,
+        relaxed: data.relaxed,
+        canRelax: data.canRelax,
+        sources: data.sources,
+        diagnostics: data.diagnostics,
+      });
     } catch (err) {
       setSearchError(err instanceof Error ? err.message : "Search failed");
       setResults([]);
+      setCanRelaxResults(false);
+      setExternalLookupUnavailable(false);
     } finally {
       setLoading(false);
     }
@@ -333,12 +373,9 @@ export default function CardPicker({
 
   const handleSelect = (card: CardSearchResult) => {
     if (!card.player_name) return;
-    const selectedParallel = parallel.trim();
-    const selectedGrader = grader.trim();
-    const selectedGrade = grade.trim();
-    const resultParallel = card.variant?.trim() || selectedParallel;
-    const resultGrader = card.grader?.trim() || selectedGrader;
-    const resultGrade = card.grade?.trim() || selectedGrade;
+    const resultParallel = card.variant?.trim();
+    const resultGrader = card.grader?.trim();
+    const resultGrade = card.grade?.trim();
     onSelect({
       id: card.id,
       player_name: card.player_name,
@@ -604,20 +641,22 @@ export default function CardPicker({
       {hasSearched && !loading && !searchError && results.length === 0 && (
         <div className="p-4 bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-800 rounded-lg">
           <p className="text-sm font-medium text-gray-900 dark:text-white">
-            No exact match found.
+            No exact catalog match found.
           </p>
           <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-            You can relax filters or keep the details above and add the card manually.
+            {externalLookupUnavailable
+              ? "No catalog match found. External lookup unavailable."
+              : "Try one of these close matches or add manually."}
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            {hasOptionalFilters && !relaxOptional && (
+            {(canRelaxResults || (hasOptionalFilters && !relaxOptional)) && (
               <button
                 type="button"
                 onClick={() => handleSearch({ relax: true })}
                 disabled={loading}
                 className="inline-flex items-center rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300 dark:hover:bg-blue-900/30"
               >
-                Relax optional filters
+                Relax filters
               </button>
             )}
             {allowManualEntry && (
@@ -627,7 +666,7 @@ export default function CardPicker({
                 disabled={disabled}
                 className="inline-flex items-center rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 disabled:opacity-50 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300 dark:hover:bg-emerald-900/30"
               >
-                Add manually
+                Add manually anyway
               </button>
             )}
           </div>
@@ -635,28 +674,110 @@ export default function CardPicker({
       )}
 
       {results.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-            Results ({results.length})
-          </p>
-          <div className="space-y-2">
-            {results.map((card) => (
-              <button
-                key={card.id}
-                type="button"
-                onClick={() => handleSelect(card)}
-                disabled={disabled}
-                className="w-full text-left p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
-              >
-                <p className="text-sm font-medium text-gray-900 dark:text-white">
-                  {buildCardDisplayName(card)}
-                </p>
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  {[card.year, card.set_name, card.variant, formatGraderGrade(card.grader, card.grade)]
-                    .filter(Boolean)
-                    .join(" • ")}
-                </p>
-              </button>
+        <div className="space-y-3">
+          {!hasExactResult && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-900/20">
+              <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
+                No exact catalog match found.
+              </p>
+              <p className="mt-1 text-sm text-amber-800 dark:text-amber-300">
+                Try one of these close matches or add manually.
+              </p>
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              Candidates ({results.length})
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              {(canRelaxResults || (hasOptionalFilters && !relaxOptional)) && (
+                <button
+                  type="button"
+                  onClick={() => handleSearch({ relax: true })}
+                  disabled={loading}
+                  className="inline-flex items-center rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300 dark:hover:bg-blue-900/30"
+                >
+                  Relax filters
+                </button>
+              )}
+              {allowManualEntry && (
+                <button
+                  type="button"
+                  onClick={handleManualEntry}
+                  disabled={disabled}
+                  className="inline-flex items-center rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 disabled:opacity-50 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300 dark:hover:bg-emerald-900/30"
+                >
+                  Add manually
+                </button>
+              )}
+            </div>
+          </div>
+
+          {externalLookupUnavailable && (
+            <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600 dark:border-gray-800 dark:bg-gray-900/40 dark:text-gray-400">
+              No catalog match found. External lookup unavailable.
+            </p>
+          )}
+
+          <div className="space-y-3">
+            {groupedResults.map((group) => (
+              <div key={group.key} className="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
+                <div className="bg-gray-50 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-gray-800/60 dark:text-gray-400">
+                  {group.key}
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="min-w-[880px] w-full divide-y divide-gray-200 text-left text-xs dark:divide-gray-800">
+                    <thead className="bg-white dark:bg-gray-900">
+                      <tr className="text-gray-500 dark:text-gray-400">
+                        <th className="px-3 py-2 font-semibold">Year</th>
+                        <th className="px-3 py-2 font-semibold">Player</th>
+                        <th className="px-3 py-2 font-semibold">Set</th>
+                        <th className="px-3 py-2 font-semibold">Card #</th>
+                        <th className="px-3 py-2 font-semibold">Parallel</th>
+                        <th className="px-3 py-2 font-semibold">Grader</th>
+                        <th className="px-3 py-2 font-semibold">Grade</th>
+                        <th className="px-3 py-2 font-semibold">Confidence</th>
+                        <th className="px-3 py-2 font-semibold">Reason</th>
+                        <th className="px-3 py-2 font-semibold"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                      {group.cards.map((card) => (
+                        <tr key={card.id} className="align-top text-gray-700 dark:text-gray-300">
+                          <td className="px-3 py-2">{card.year || "-"}</td>
+                          <td className="px-3 py-2 font-medium text-gray-900 dark:text-white">
+                            {card.player_name || "-"}
+                          </td>
+                          <td className="px-3 py-2">{card.set_name || "-"}</td>
+                          <td className="px-3 py-2">{normalizeCardNumber(card.card_number) || "-"}</td>
+                          <td className="px-3 py-2">{card.variant || "-"}</td>
+                          <td className="px-3 py-2">{card.grader || "-"}</td>
+                          <td className="px-3 py-2">{card.grade || "-"}</td>
+                          <td className="px-3 py-2">
+                            <span className="inline-flex rounded-full border border-gray-200 px-2 py-0.5 font-semibold text-gray-700 dark:border-gray-700 dark:text-gray-300">
+                              {card.confidence || "Similar"}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 max-w-[220px]">
+                            <span>{card.reason || buildCardDisplayName(card)}</span>
+                          </td>
+                          <td className="px-3 py-2">
+                            <button
+                              type="button"
+                              onClick={() => handleSelect(card)}
+                              disabled={disabled}
+                              className="whitespace-nowrap rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+                            >
+                              Use this match
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             ))}
           </div>
         </div>

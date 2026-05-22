@@ -22,7 +22,7 @@ export default function MarketplaceListingCard(props: MarketplaceListingCardProp
   return (
     <Link
       href={`/marketplace/listing/${props.id}`}
-      className="block rounded-xl border border-gray-800 bg-gray-900 p-4 hover:border-cyan-500 transition-colors"
+      className="block rounded-xl border border-[color:var(--biz-border)] bg-[color:var(--biz-surface)] p-4 transition-colors hover:border-[color:var(--biz-border-strong)]"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">

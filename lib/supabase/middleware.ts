@@ -2,6 +2,10 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { isTestMode } from "@/lib/test-mode";
 import { hasBusinessWorkspaceAccess } from "@/lib/business/workspace-access";
+import {
+  getMissingSupabasePublicEnvMessage,
+  getSupabasePublicEnv,
+} from "@/lib/supabase/env";
 
 const PROTECTED_PATHS = [
   "/dashboard",
@@ -78,9 +82,17 @@ export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   let supabaseResponse = NextResponse.next({ request });
 
+  const supabasePublicEnv = getSupabasePublicEnv();
+  if (!supabasePublicEnv) {
+    if (process.env.NODE_ENV === "development") {
+      console.warn(`[middleware] ${getMissingSupabasePublicEnvMessage()}`);
+    }
+    return { response: supabaseResponse, userId: null };
+  }
+
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabasePublicEnv.url,
+    supabasePublicEnv.anonKey,
     {
       cookies: {
         getAll() {

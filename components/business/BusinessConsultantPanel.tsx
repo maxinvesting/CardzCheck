@@ -13,7 +13,10 @@ import { SpeakButton } from "@/components/ui/SpeakButton";
 import { appendSpeechTranscript } from "@/lib/speech";
 import type { BusinessConsultation } from "@/types";
 import type { BusinessConsultantReport } from "@/lib/business/consultant-report";
-import { parseBusinessConsultantReport } from "@/lib/business/consultant-report";
+import {
+  formatConsultantChatText,
+  parseBusinessConsultantReport,
+} from "@/lib/business/consultant-report";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -96,20 +99,23 @@ interface ChatMessage {
 // ─── Theme ───────────────────────────────────────────────────────────────────
 
 const CONSULTANT_THEME_STYLE: CSSProperties = {
-  ["--biz-text" as string]: "#f4f7fb",
-  ["--biz-muted" as string]: "rgba(226, 232, 240, 0.68)",
-  ["--biz-border" as string]: "rgba(148, 163, 184, 0.16)",
-  ["--biz-primary" as string]: "#63e6be",
-  ["--biz-warning" as string]: "#fbbf24",
-  ["--biz-surface" as string]: "rgba(255, 255, 255, 0.04)",
-  ["--biz-surface-soft" as string]: "rgba(15, 23, 42, 0.72)",
-  ["--surface" as string]: "rgba(255, 255, 255, 0.04)",
+  ["--biz-text" as string]: "#111111",
+  ["--biz-muted" as string]: "#6b7280",
+  ["--biz-border" as string]: "#e5e7eb",
+  ["--biz-border-strong" as string]: "#d1d5db",
+  ["--biz-primary" as string]: "#111111",
+  ["--biz-primary-hover" as string]: "#262626",
+  ["--biz-primary-foreground" as string]: "#ffffff",
+  ["--biz-warning" as string]: "#b45309",
+  ["--biz-surface" as string]: "#ffffff",
+  ["--biz-surface-soft" as string]: "#f9fafb",
+  ["--surface" as string]: "#ffffff",
 };
 
 const glassPanelClass =
-  "rounded-[20px] border border-white/10 bg-gradient-to-br from-white/[0.06] via-white/[0.04] to-white/[0.02] shadow-[0_16px_60px_rgba(0,0,0,0.36)] backdrop-blur-xl";
+  "rounded-2xl border border-gray-200 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.06)]";
 
-const panelClass = "rounded-[16px] border border-white/[0.08] bg-white/[0.02]";
+const panelClass = "rounded-xl border border-gray-200 bg-white";
 
 // ─── Utilities ───────────────────────────────────────────────────────────────
 
@@ -220,7 +226,7 @@ function ConsultantResponse({ text }: { text: string }) {
     if (headingMatch) {
       flushBullets();
       content.push(
-        <h3 key={`h-${key++}`} className="mt-5 text-base font-semibold tracking-tight text-white">
+        <h3 key={`h-${key++}`} className="mt-5 text-base font-semibold tracking-tight text-gray-900">
           {formatHeading(line)}
         </h3>
       );
@@ -240,14 +246,25 @@ function ConsultantResponse({ text }: { text: string }) {
   flushBullets();
 
   return (
-    <article className="rounded-[16px] border border-white/10 bg-white/[0.03] px-5 py-4">
+    <div className="text-[15px] leading-7 text-gray-800">
       {content.length > 0 ? (
         content
       ) : (
-        <p className="text-sm text-[var(--biz-muted)]">No analysis text returned.</p>
+        <p className="text-sm text-gray-500">No analysis text returned.</p>
       )}
-    </article>
+    </div>
   );
+}
+
+function ConsultantChatBubble({
+  report,
+  rawText,
+}: {
+  report: BusinessConsultantReport | null;
+  rawText: string;
+}) {
+  const displayText = formatConsultantChatText(report, rawText);
+  return <ConsultantResponse text={displayText} />;
 }
 
 function ConsultantReportView({
@@ -263,8 +280,8 @@ function ConsultantReportView({
 
   if (!report && !trimmed) {
     return (
-      <div className="rounded-[16px] border border-dashed border-white/10 bg-white/[0.02] px-5 py-8 text-center">
-        <p className="text-sm text-[var(--biz-muted)]">
+      <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-5 py-8 text-center">
+        <p className="text-sm text-gray-500">
           Run an analysis to see a structured report based on your inventory and sales data.
         </p>
       </div>
@@ -292,23 +309,23 @@ function ConsultantReportView({
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="text-base font-semibold tracking-tight text-[var(--biz-text)]">
-            {report.report_title || "Business Consultant Report"}
+            {report.report_title || "Advisor Report"}
           </h3>
           <p className="mt-0.5 text-xs text-[var(--biz-muted)]">
             {formatReportTimestamp(report.timestamp)}
           </p>
         </div>
         <div className="flex flex-wrap gap-2 text-[11px]">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[var(--biz-muted)]">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-[var(--biz-muted)]">
             <span className="h-1.5 w-1.5 rounded-full bg-[var(--biz-primary)]" />
             Inventory {report.data_coverage.inventory_count.toLocaleString()}
           </span>
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[var(--biz-muted)]">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-[var(--biz-muted)]">
             <span className="h-1.5 w-1.5 rounded-full bg-[var(--biz-primary)]" />
             Sales {report.data_coverage.sales_count.toLocaleString()}
           </span>
           {report.data_coverage.missing.length > 0 && (
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-1 text-amber-100">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-amber-800">
               Missing: {report.data_coverage.missing.join(", ")}
             </span>
           )}
@@ -316,10 +333,10 @@ function ConsultantReportView({
       </header>
 
       {isAnswerMode && report.answer && (
-        <div className="rounded-[16px] border border-white/10 bg-white/[0.03] px-5 py-4 space-y-3">
+        <div className="rounded-[16px] border border-gray-200 bg-gray-50 px-5 py-4 space-y-3">
           <p className="whitespace-pre-line text-sm leading-7 text-[var(--biz-text)]">{report.answer}</p>
           {report.key_points.length > 0 && (
-            <ul className="space-y-1.5 border-t border-white/10 pt-3">
+            <ul className="space-y-1.5 border-t border-gray-200 pt-3">
               {report.key_points.map((point, idx) => (
                 <li key={idx} className="flex gap-2.5 text-sm leading-6 text-[var(--biz-muted)]">
                   <span className="mt-0.5 shrink-0 text-[var(--biz-primary)]">—</span>
@@ -336,7 +353,7 @@ function ConsultantReportView({
           {report.kpis.map((kpi) => (
             <div
               key={kpi.label}
-              className="rounded-[16px] border border-white/10 bg-white/[0.03] px-4 py-3"
+              className="rounded-[16px] border border-gray-200 bg-gray-50 px-4 py-3"
             >
               <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--biz-muted)]">
                 {kpi.label}
@@ -357,14 +374,14 @@ function ConsultantReportView({
           <h4 className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--biz-muted)]">
             High-Risk Positions
           </h4>
-          <div className="overflow-hidden rounded-[16px] border border-white/10 bg-slate-950/40">
-            <div className="grid grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.9fr)] gap-x-3 border-b border-white/10 px-4 py-2 text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--biz-muted)]">
+          <div className="overflow-hidden rounded-[16px] border border-gray-200 bg-gray-50">
+            <div className="grid grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.9fr)] gap-x-3 border-b border-gray-200 px-4 py-2 text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--biz-muted)]">
               <span>Item</span>
               <span className="text-right">Cost</span>
               <span className="text-right">CMV</span>
               <span className="text-right">Delta</span>
             </div>
-            <div className="divide-y divide-white/10 text-sm">
+            <div className="divide-y divide-gray-200 text-sm">
               {report.high_risk_positions.map((pos) => (
                 <div
                   key={`${pos.item}-${pos.reason}`}
@@ -382,7 +399,7 @@ function ConsultantReportView({
                   <div className="text-right tabular-nums text-[var(--biz-text)]">
                     {pos.cmv.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                   </div>
-                  <div className="text-right tabular-nums text-amber-200">
+                  <div className="text-right tabular-nums text-amber-700">
                     {pos.delta_pct.toFixed(1)}%
                   </div>
                 </div>
@@ -401,7 +418,7 @@ function ConsultantReportView({
             {report.recommended_actions.map((act, idx) => (
               <li
                 key={`${act.action}-${idx}`}
-                className="rounded-[16px] border border-white/10 bg-white/[0.03] px-4 py-3"
+                className="rounded-[16px] border border-gray-200 bg-gray-50 px-4 py-3"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -410,7 +427,7 @@ function ConsultantReportView({
                       <p className="mt-1 text-sm leading-6 text-[var(--biz-muted)]">{act.impact}</p>
                     )}
                   </div>
-                  <span className="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-[var(--biz-muted)]">
+                  <span className="shrink-0 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-[var(--biz-muted)]">
                     {act.effort}
                   </span>
                 </div>
@@ -429,7 +446,7 @@ function ConsultantReportView({
             {report.notes.map((note, idx) => (
               <li
                 key={idx}
-                className="rounded-[16px] border border-white/10 bg-white/[0.03] px-4 py-3"
+                className="rounded-[16px] border border-gray-200 bg-gray-50 px-4 py-3"
               >
                 {note}
               </li>
@@ -642,17 +659,14 @@ export default function BusinessConsultantPanel({ initialPrompt }: { initialProm
     <div className="relative z-10" style={CONSULTANT_THEME_STYLE}>
 
       {/* ── TOP BAR ─────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between pb-3 mb-4 border-b border-white/[0.08]">
+      <div className="flex items-center justify-between pb-3 mb-4 border-b border-gray-200">
         <div className="flex items-center gap-3 min-w-0">
-          <h1 className="text-sm font-semibold text-white tracking-tight">Business Consultant</h1>
-          <span className="hidden sm:inline text-slate-700">·</span>
-          <span className="hidden sm:inline text-xs text-slate-500 truncate">
+          <h1 className="text-base font-semibold text-gray-900 tracking-tight">Business Advisor</h1>
+          <span className="hidden sm:inline text-gray-300">·</span>
+          <span className="hidden sm:inline text-sm text-gray-500 truncate">
             Pricing · Inventory · Grading · Liquidity
           </span>
         </div>
-        <span className="shrink-0 text-[10px] font-medium uppercase tracking-[0.16em] border border-emerald-300/20 bg-emerald-300/[0.05] text-emerald-300/70 px-2.5 py-1 rounded-full">
-          Operator Mode
-        </span>
       </div>
 
       {/* ── WORKSPACE GRID ──────────────────────────────────────────────── */}
@@ -663,17 +677,17 @@ export default function BusinessConsultantPanel({ initialPrompt }: { initialProm
 
           {/* Business context */}
           <div className={`${panelClass} p-3`}>
-            <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-slate-500 mb-2.5">
+            <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-gray-500 mb-2.5">
               Business Context
             </p>
             <div className="space-y-px">
               {CONTEXT_STATS_PLACEHOLDER.map(({ label, value }) => (
                 <div
                   key={label}
-                  className="flex items-center justify-between rounded-lg px-2 py-1.5 hover:bg-white/[0.03] transition-colors"
+                  className="flex items-center justify-between rounded-lg px-2 py-1.5 hover:bg-gray-50 transition-colors"
                 >
-                  <span className="text-xs text-slate-500">{label}</span>
-                  <span className="text-xs font-medium text-slate-400 tabular-nums">{value}</span>
+                  <span className="text-xs text-gray-500">{label}</span>
+                  <span className="text-xs font-medium text-gray-600 tabular-nums">{value}</span>
                 </div>
               ))}
             </div>
@@ -682,21 +696,21 @@ export default function BusinessConsultantPanel({ initialPrompt }: { initialProm
           {/* Recent analyses */}
           <div className={`${panelClass} p-3 flex-1`}>
             <div className="flex items-center justify-between mb-2.5">
-              <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-slate-500">
+              <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-gray-500">
                 Recent Analyses
               </p>
               <button
                 type="button"
                 onClick={() => void loadConsultations()}
                 disabled={historyLoading || isWorking}
-                className="text-[11px] text-slate-600 hover:text-slate-300 transition disabled:opacity-50"
+                className="text-[11px] text-gray-500 hover:text-gray-700 transition disabled:opacity-50"
                 title="Refresh history"
               >
                 {historyLoading ? "·" : "↻"}
               </button>
             </div>
             {historyLoading ? (
-              <p className="px-2 text-xs text-slate-600">Loading...</p>
+              <p className="px-2 text-xs text-gray-500">Loading...</p>
             ) : consultations.length > 0 ? (
               <div className="space-y-0.5">
                 {consultations.slice(0, 10).map((c) => {
@@ -710,20 +724,20 @@ export default function BusinessConsultantPanel({ initialPrompt }: { initialProm
                       disabled={isWorking}
                       className={`w-full rounded-[10px] px-2 py-1.5 text-left transition ${
                         c.id === activeConsultationId
-                          ? "bg-emerald-300/10 text-emerald-200"
-                          : "text-slate-400 hover:bg-white/[0.04] hover:text-slate-200"
+                          ? "bg-gray-100 text-[color:var(--biz-text)]"
+                          : "text-gray-600 hover:bg-gray-50 hover:text-gray-800"
                       } disabled:cursor-not-allowed disabled:opacity-50`}
                     >
                       <p className="text-xs truncate leading-5">{c.title}</p>
                       <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className="text-[10px] text-slate-600">
+                        <span className="text-[10px] text-gray-500">
                           {formatHistoryTime(c.updated_at)}
                         </span>
                         {invItems && (
-                          <span className="text-[10px] text-slate-700">Inv {invItems}</span>
+                          <span className="text-[10px] text-gray-400">Inv {invItems}</span>
                         )}
                         {salesCount && (
-                          <span className="text-[10px] text-slate-700">· {salesCount} sales</span>
+                          <span className="text-[10px] text-gray-400">· {salesCount} sales</span>
                         )}
                       </div>
                     </button>
@@ -731,7 +745,7 @@ export default function BusinessConsultantPanel({ initialPrompt }: { initialProm
                 })}
               </div>
             ) : (
-              <p className="px-2 text-xs text-slate-600">No prior analyses</p>
+              <p className="px-2 text-xs text-gray-500">No prior analyses</p>
             )}
           </div>
         </aside>
@@ -742,7 +756,7 @@ export default function BusinessConsultantPanel({ initialPrompt }: { initialProm
           style={{ height: "calc(100vh - 13rem)", minHeight: "520px" }}
         >
           {/* Template chips */}
-          <div className="shrink-0 flex gap-1.5 overflow-x-auto px-4 pt-3.5 pb-3 border-b border-white/[0.06]">
+          <div className="shrink-0 flex gap-1.5 overflow-x-auto px-4 pt-3.5 pb-3 border-b border-gray-100">
             {TEMPLATES.map((template) => {
               const isActive = selectedTemplateId === template.id;
               return (
@@ -757,8 +771,8 @@ export default function BusinessConsultantPanel({ initialPrompt }: { initialProm
                   disabled={isWorking}
                   className={`shrink-0 rounded-full border px-3 py-1 text-[11px] font-medium transition ${
                     isActive
-                      ? "border-emerald-300/30 bg-emerald-300/10 text-emerald-200"
-                      : "border-white/10 bg-transparent text-slate-500 hover:text-slate-200 hover:bg-white/[0.05]"
+                      ? "border-gray-300 bg-gray-100 text-[color:var(--biz-text)]"
+                      : "border-gray-200 bg-transparent text-gray-500 hover:text-gray-800 hover:bg-gray-100"
                   } disabled:cursor-not-allowed disabled:opacity-60`}
                 >
                   {template.label}
@@ -773,15 +787,12 @@ export default function BusinessConsultantPanel({ initialPrompt }: { initialProm
             {/* Empty state */}
             {messages.length === 0 && !isWorking && (
               <div className="flex flex-col items-center justify-center h-full gap-5 text-center">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full border border-emerald-300/20 bg-emerald-300/10 text-sm font-bold text-emerald-200">
-                  BC
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-slate-200">
-                    CardzCheck Business Consultant
+<div>
+                  <p className="text-sm font-semibold text-gray-900">
+                    CardzCheck Business Advisor
                   </p>
-                  <p className="mt-1.5 text-xs text-slate-500 max-w-xs leading-5">
-                    Ask anything about your card business — pricing, grading candidates, inventory strategy, liquidity, or risk.
+                  <p className="mt-1.5 text-sm text-gray-500 max-w-xs leading-6">
+                    Ask about pricing, grading, inventory, liquidity, or anything else in your card business.
                   </p>
                 </div>
                 <div className="flex flex-wrap justify-center gap-1.5 max-w-sm">
@@ -793,7 +804,7 @@ export default function BusinessConsultantPanel({ initialPrompt }: { initialProm
                         setPrompt(q);
                         textareaRef.current?.focus();
                       }}
-                      className="rounded-full border border-white/[0.07] bg-transparent px-3 py-1.5 text-[11px] text-slate-500 transition hover:text-slate-200 hover:border-white/15 hover:bg-white/[0.04]"
+                      className="rounded-full border border-gray-200 bg-transparent px-3 py-1.5 text-[11px] text-gray-500 transition hover:text-gray-800 hover:border-gray-300 hover:bg-gray-50"
                     >
                       {q}
                     </button>
@@ -807,8 +818,8 @@ export default function BusinessConsultantPanel({ initialPrompt }: { initialProm
               if (msg.role === "user") {
                 return (
                   <div key={msg.id} className="flex justify-end">
-                    <div className="max-w-[80%] rounded-[18px] rounded-br-[6px] border border-emerald-300/15 bg-emerald-300/[0.07] px-4 py-3">
-                      <p className="text-sm leading-6 text-emerald-50">{msg.content}</p>
+                    <div className="max-w-[80%] rounded-2xl rounded-br-md border border-gray-900 bg-gray-900 px-4 py-3">
+                      <p className="text-sm leading-6 text-white">{msg.content}</p>
                     </div>
                   </div>
                 );
@@ -819,26 +830,27 @@ export default function BusinessConsultantPanel({ initialPrompt }: { initialProm
                 <div key={msg.id} className="space-y-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-emerald-300/20 bg-emerald-300/10 text-[9px] font-bold text-emerald-200">
-                        BC
-                      </div>
-                      <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-slate-500">
-                        Business Consultant
-                      </span>
+<span className="text-xs font-medium text-gray-500">Advisor</span>
                     </div>
                     {msg.content && (
                       <SpeakButton
                         text={buildSpeakableText(msg)}
                         size="sm"
-                        className="bg-white/[0.05] text-slate-400 hover:bg-white/[0.1]"
+                        className="bg-gray-100 text-gray-600 hover:bg-gray-200"
                       />
                     )}
                   </div>
-                  <ConsultantReportView
-                    report={msg.report}
-                    rawText={msg.content}
-                    forceFullReport={viewMode === "report"}
-                  />
+                  {viewMode === "chat" ? (
+                    <div className="max-w-[92%] rounded-2xl rounded-tl-md border border-gray-200 bg-gray-50 px-4 py-3">
+                      <ConsultantChatBubble report={msg.report} rawText={msg.content} />
+                    </div>
+                  ) : (
+                    <ConsultantReportView
+                      report={msg.report}
+                      rawText={msg.content}
+                      forceFullReport
+                    />
+                  )}
                 </div>
               );
             })}
@@ -847,14 +859,11 @@ export default function BusinessConsultantPanel({ initialPrompt }: { initialProm
             {isWorking && (
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
-                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-emerald-300/20 bg-emerald-300/10 text-[9px] font-bold text-emerald-200">
-                    BC
-                  </div>
-                  <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-slate-500">
-                    Business Consultant
+<span className="text-xs font-medium text-gray-500">
+                    Advisor
                   </span>
                 </div>
-                <div className="flex items-center gap-3 rounded-[16px] border border-white/10 bg-white/[0.03] px-4 py-3">
+                <div className="flex items-center gap-3 rounded-[16px] border border-gray-200 bg-gray-50 px-4 py-3">
                   <span
                     className={`h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--biz-primary)] ${
                       reducedMotion ? "" : "animate-pulse motion-reduce:animate-none"
@@ -870,12 +879,12 @@ export default function BusinessConsultantPanel({ initialPrompt }: { initialProm
 
             {/* Notices */}
             {historyNotice && (
-              <div className="rounded-[14px] border border-amber-300/20 bg-amber-300/[0.07] px-4 py-2.5 text-xs text-amber-100">
+              <div className="rounded-[14px] border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-800">
                 {historyNotice}
               </div>
             )}
             {error && phase === "idle" && (
-              <div className="rounded-[14px] border border-red-400/20 bg-red-400/[0.07] px-4 py-3 text-sm text-red-200">
+              <div className="rounded-[14px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                 {error}
               </div>
             )}
@@ -884,14 +893,14 @@ export default function BusinessConsultantPanel({ initialPrompt }: { initialProm
           </div>
 
           {/* Input area */}
-          <div className="shrink-0 border-t border-white/[0.06] px-3 pb-3 pt-2.5">
+          <div className="shrink-0 border-t border-gray-100 px-3 pb-3 pt-2.5">
 
             {/* Constraints panel */}
             {advancedOpen && (
-              <div className="rounded-[14px] border border-white/10 bg-white/[0.02] mb-2.5 px-3 py-3">
+              <div className="rounded-[14px] border border-gray-200 bg-gray-50 mb-2.5 px-3 py-3">
                 <label
                   htmlFor="consultant-constraints-input"
-                  className="text-[10px] font-medium uppercase tracking-[0.2em] text-slate-500"
+                  className="text-[10px] font-medium uppercase tracking-[0.2em] text-gray-500"
                 >
                   Constraints / Goals
                 </label>
@@ -902,12 +911,12 @@ export default function BusinessConsultantPanel({ initialPrompt }: { initialProm
                   rows={2}
                   disabled={isWorking}
                   placeholder="e.g. Need cash in 21 days, avoid selling grails, max 20 packages/week."
-                  className="mt-2 w-full resize-none bg-transparent text-sm leading-6 text-slate-100 placeholder:text-slate-600 focus:outline-none disabled:opacity-70"
+                  className="mt-2 w-full resize-none bg-transparent text-sm leading-6 text-gray-900 placeholder:text-gray-500 focus:outline-none disabled:opacity-70"
                 />
               </div>
             )}
 
-            <div className="rounded-[14px] border border-white/10 bg-[#040812]/80">
+            <div className="rounded-[14px] border border-gray-200 bg-white">
               <textarea
                 ref={textareaRef}
                 value={prompt}
@@ -928,7 +937,7 @@ export default function BusinessConsultantPanel({ initialPrompt }: { initialProm
                 id="consultant-prompt-input"
                 aria-label="Business question"
                 autoComplete="off"
-                className="w-full resize-none border-0 bg-transparent px-4 pt-3 pb-2 text-sm leading-6 text-slate-100 placeholder:text-slate-600 focus:outline-none disabled:opacity-70"
+                className="w-full resize-none border-0 bg-transparent px-4 pt-3 pb-2 text-sm leading-6 text-gray-900 placeholder:text-gray-500 focus:outline-none disabled:opacity-70"
               />
               <div className="flex items-center justify-between gap-2 px-3 pb-3">
                 <div className="flex items-center gap-2 flex-wrap">
@@ -940,25 +949,25 @@ export default function BusinessConsultantPanel({ initialPrompt }: { initialProm
                       textareaRef.current?.focus();
                     }}
                     size="sm"
-                    className="bg-white/[0.05] text-slate-400 hover:bg-white/[0.1] hover:text-slate-200"
+                    className="bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800"
                   />
                   <button
                     type="button"
                     onClick={() => setAdvancedOpen((prev) => !prev)}
                     disabled={isWorking}
-                    className="rounded-full border border-white/10 bg-transparent px-2.5 py-1 text-[11px] text-slate-500 transition hover:bg-white/[0.06] hover:text-slate-200 disabled:opacity-60"
+                    className="rounded-full border border-gray-200 bg-transparent px-2.5 py-1 text-[11px] text-gray-500 transition hover:bg-gray-100 hover:text-gray-800 disabled:opacity-60"
                   >
                     {advancedOpen ? "Hide" : "Constraints"}
                   </button>
                   {/* View mode toggle */}
-                  <div className="flex items-center rounded-full border border-white/10 bg-white/[0.03] p-0.5">
+                  <div className="flex items-center rounded-full border border-gray-200 bg-gray-50 p-0.5">
                     <button
                       type="button"
                       onClick={() => setViewMode("chat")}
                       className={`rounded-full px-2.5 py-0.5 text-[11px] transition ${
                         viewMode === "chat"
-                          ? "bg-white/[0.1] text-slate-200"
-                          : "text-slate-600 hover:text-slate-400"
+                          ? "bg-gray-200 text-gray-800"
+                          : "text-gray-500 hover:text-gray-600"
                       }`}
                     >
                       Chat
@@ -968,20 +977,20 @@ export default function BusinessConsultantPanel({ initialPrompt }: { initialProm
                       onClick={() => setViewMode("report")}
                       className={`rounded-full px-2.5 py-0.5 text-[11px] transition ${
                         viewMode === "report"
-                          ? "bg-emerald-300/15 text-emerald-200"
-                          : "text-slate-600 hover:text-slate-400"
+                          ? "bg-gray-100 text-[color:var(--biz-text)]"
+                          : "text-gray-500 hover:text-gray-600"
                       }`}
                     >
                       Report
                     </button>
                   </div>
-                  <span className="hidden md:inline text-[11px] text-slate-700">⌘↵</span>
+                  <span className="hidden md:inline text-[11px] text-gray-400">⌘↵</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => void handleRunConsultation()}
                   disabled={isWorking || !prompt.trim()}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-full bg-emerald-400 px-4 text-xs font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[color:var(--biz-border-strong)] bg-[color:var(--biz-primary)] px-4 text-xs font-semibold text-[color:var(--biz-primary-foreground)] transition hover:bg-[color:var(--biz-primary-hover)] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isWorking ? "Working..." : "Send"}
                 </button>
@@ -1001,7 +1010,7 @@ export default function BusinessConsultantPanel({ initialPrompt }: { initialProm
                     textareaRef.current?.focus();
                   }}
                   disabled={isWorking}
-                  className="rounded-full border border-white/[0.07] bg-transparent px-2.5 py-1 text-[11px] text-slate-600 transition hover:text-slate-200 hover:border-white/15 hover:bg-white/[0.04] disabled:opacity-40"
+                  className="rounded-full border border-gray-200 bg-transparent px-2.5 py-1 text-[11px] text-gray-500 transition hover:text-gray-800 hover:border-gray-300 hover:bg-gray-50 disabled:opacity-40"
                 >
                   {q}
                 </button>
@@ -1015,7 +1024,7 @@ export default function BusinessConsultantPanel({ initialPrompt }: { initialProm
 
           {/* Suggested actions */}
           <div className={`${panelClass} p-3`}>
-            <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-slate-500 mb-2.5">
+            <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-gray-500 mb-2.5">
               Suggested Actions
             </p>
             <div className="space-y-1">
@@ -1025,12 +1034,12 @@ export default function BusinessConsultantPanel({ initialPrompt }: { initialProm
                   type="button"
                   disabled
                   title="Coming soon"
-                  className="w-full flex items-center gap-2.5 rounded-[10px] border border-white/[0.05] bg-transparent px-2.5 py-2 text-left opacity-35 cursor-not-allowed"
+                  className="w-full flex items-center gap-2.5 rounded-[10px] border border-gray-200 bg-transparent px-2.5 py-2 text-left opacity-35 cursor-not-allowed"
                 >
-                  <span className="text-xs text-slate-500 w-4 text-center shrink-0">
+                  <span className="text-xs text-gray-500 w-4 text-center shrink-0">
                     {action.icon}
                   </span>
-                  <span className="text-xs text-slate-400">{action.label}</span>
+                  <span className="text-xs text-gray-600">{action.label}</span>
                 </button>
               ))}
             </div>
@@ -1038,7 +1047,7 @@ export default function BusinessConsultantPanel({ initialPrompt }: { initialProm
 
           {/* Business signals — from latest report */}
           <div className={`${panelClass} p-3`}>
-            <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-slate-500 mb-2.5">
+            <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-gray-500 mb-2.5">
               Business Signals
             </p>
             {latestReport && latestReport.kpis.length > 0 ? (
@@ -1046,43 +1055,43 @@ export default function BusinessConsultantPanel({ initialPrompt }: { initialProm
                 {latestReport.kpis.slice(0, 5).map((kpi) => (
                   <div
                     key={kpi.label}
-                    className="flex items-center justify-between rounded-lg px-2 py-1.5 hover:bg-white/[0.03] transition-colors"
+                    className="flex items-center justify-between rounded-lg px-2 py-1.5 hover:bg-gray-50 transition-colors"
                   >
-                    <span className="text-xs text-slate-500 truncate pr-1">{kpi.label}</span>
-                    <span className="text-xs font-medium text-slate-300 tabular-nums shrink-0">
+                    <span className="text-xs text-gray-500 truncate pr-1">{kpi.label}</span>
+                    <span className="text-xs font-medium text-gray-700 tabular-nums shrink-0">
                       {kpi.value}
                     </span>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="px-2 text-xs text-slate-600">Run an analysis to populate signals.</p>
+              <p className="px-2 text-xs text-gray-500">Run an analysis to populate signals.</p>
             )}
           </div>
 
           {/* Session coverage */}
           {latestReport && (
             <div className={`${panelClass} p-3`}>
-              <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-slate-500 mb-2.5">
+              <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-gray-500 mb-2.5">
                 Session Coverage
               </p>
               <div className="space-y-px">
                 <div className="flex items-center justify-between rounded-lg px-2 py-1.5">
-                  <span className="text-xs text-slate-500">Inventory</span>
-                  <span className="text-xs font-medium text-slate-300 tabular-nums">
+                  <span className="text-xs text-gray-500">Inventory</span>
+                  <span className="text-xs font-medium text-gray-700 tabular-nums">
                     {latestReport.data_coverage.inventory_count.toLocaleString()}
                   </span>
                 </div>
                 <div className="flex items-center justify-between rounded-lg px-2 py-1.5">
-                  <span className="text-xs text-slate-500">Sales refs</span>
-                  <span className="text-xs font-medium text-slate-300 tabular-nums">
+                  <span className="text-xs text-gray-500">Sales refs</span>
+                  <span className="text-xs font-medium text-gray-700 tabular-nums">
                     {latestReport.data_coverage.sales_count.toLocaleString()}
                   </span>
                 </div>
               </div>
               {latestReport.data_coverage.missing.length > 0 && (
-                <div className="mt-2 rounded-[10px] border border-amber-300/15 bg-amber-300/[0.05] px-2.5 py-1.5">
-                  <p className="text-[10px] text-amber-200/60">
+                <div className="mt-2 rounded-[10px] border border-amber-200 bg-amber-50 px-2.5 py-1.5">
+                  <p className="text-[10px] text-amber-700/60">
                     Missing: {latestReport.data_coverage.missing.join(", ")}
                   </p>
                 </div>
@@ -1096,14 +1105,14 @@ export default function BusinessConsultantPanel({ initialPrompt }: { initialProm
       <div className="mt-4 lg:hidden">
         <div className={`${panelClass} p-3`}>
           <div className="flex items-center justify-between mb-2.5">
-            <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-slate-500">
+            <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-gray-500">
               Recent Analyses
             </p>
             <button
               type="button"
               onClick={() => void loadConsultations()}
               disabled={historyLoading || isWorking}
-              className="text-[11px] text-slate-600 hover:text-slate-300 transition disabled:opacity-50"
+              className="text-[11px] text-gray-500 hover:text-gray-700 transition disabled:opacity-50"
             >
               {historyLoading ? "Loading..." : "Refresh"}
             </button>
@@ -1118,19 +1127,19 @@ export default function BusinessConsultantPanel({ initialPrompt }: { initialProm
                   disabled={isWorking}
                   className={`min-w-[180px] rounded-[12px] border px-3 py-2 text-left transition ${
                     c.id === activeConsultationId
-                      ? "border-emerald-300/25 bg-emerald-300/10"
-                      : "border-white/10 bg-white/[0.02] hover:bg-white/[0.06]"
+                      ? "border-gray-300 bg-gray-100"
+                      : "border-gray-200 bg-gray-50 hover:bg-gray-100"
                   } disabled:opacity-50`}
                 >
-                  <p className="text-xs font-medium text-slate-200 truncate">{c.title}</p>
-                  <p className="text-[10px] text-slate-600 mt-0.5">
+                  <p className="text-xs font-medium text-gray-800 truncate">{c.title}</p>
+                  <p className="text-[10px] text-gray-500 mt-0.5">
                     {formatHistoryTime(c.updated_at)}
                   </p>
                 </button>
               ))}
             </div>
           ) : !historyLoading ? (
-            <p className="text-xs text-slate-600">No prior analyses</p>
+            <p className="text-xs text-gray-500">No prior analyses</p>
           ) : null}
         </div>
       </div>

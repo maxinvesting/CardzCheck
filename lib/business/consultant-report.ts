@@ -190,7 +190,7 @@ export function parseBusinessConsultantReport(
 
   const report: BusinessConsultantReport = {
     response_mode: responseMode,
-    report_title: coerceString(parsed.report_title, "Business Consultant Report"),
+    report_title: coerceString(parsed.report_title, "Advisor Report"),
     timestamp: coerceString(parsed.timestamp, new Date().toISOString()),
     data_coverage: {
       inventory_count: coerceNumber(dataCoverageRaw.inventory_count, 0),
@@ -222,5 +222,88 @@ export function parseBusinessConsultantReport(
   };
 
   return { report, rawText };
+}
+
+/** Plain-language text for chat UI — never surfaces raw JSON. */
+export function formatConsultantChatText(
+  report: BusinessConsultantReport | null,
+  rawText: string
+): string {
+  if (report) {
+    if (report.response_mode === "answer" && report.answer?.trim()) {
+      const parts = [report.answer.trim()];
+      if (report.key_points.length > 0) {
+        parts.push("", ...report.key_points.map((p) => `• ${p}`));
+      }
+      if (report.recommended_actions.length > 0) {
+        parts.push("", "**Next steps**");
+        for (const act of report.recommended_actions.slice(0, 5)) {
+          parts.push(`• ${act.action}${act.impact ? ` — ${act.impact}` : ""}`);
+        }
+      }
+      if (report.notes.length > 0) {
+        parts.push("", ...report.notes.map((n) => `• ${n}`));
+      }
+      return parts.join("\n");
+    }
+
+    const parts: string[] = [];
+    const title = report.report_title?.trim();
+    if (title && !/^business consultant report$/i.test(title)) {
+      parts.push(`**${title}**`, "");
+    }
+
+    if (report.kpis.length > 0) {
+      for (const kpi of report.kpis.slice(0, 6)) {
+        parts.push(`• **${kpi.label}:** ${kpi.value}${kpi.hint ? ` (${kpi.hint})` : ""}`);
+      }
+      parts.push("");
+    }
+
+    if (report.high_risk_positions.length > 0) {
+      parts.push("**Positions to watch**");
+      for (const pos of report.high_risk_positions.slice(0, 5)) {
+        parts.push(
+          `• ${pos.item} — cost ${pos.cost_basis.toLocaleString()}, CMV ${pos.cmv.toLocaleString()} (${pos.delta_pct.toFixed(1)}% gap)${pos.reason ? `. ${pos.reason}` : ""}`
+        );
+      }
+      parts.push("");
+    }
+
+    if (report.recommended_actions.length > 0) {
+      parts.push("**Recommended actions**");
+      for (const act of report.recommended_actions.slice(0, 6)) {
+        parts.push(`• ${act.action}${act.impact ? ` — ${act.impact}` : ""}`);
+      }
+      parts.push("");
+    }
+
+    if (report.notes.length > 0) {
+      for (const note of report.notes) {
+        parts.push(`• ${note}`);
+      }
+    }
+
+    const body = parts.join("\n").trim();
+    if (body) return body;
+  }
+
+  const trimmed = rawText.trim();
+  if (!trimmed) return "No response was returned. Please try again.";
+
+  const answerMatch = trimmed.match(/"answer"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+  if (answerMatch?.[1]) {
+    try {
+      return JSON.parse(`"${answerMatch[1]}"`) as string;
+    } catch {
+      return answerMatch[1].replace(/\\n/g, "\n").replace(/\\"/g, '"');
+    }
+  }
+
+  if (trimmed.startsWith("{") || trimmed.startsWith("```")) {
+    return "I had trouble formatting that reply. Try asking again, or switch to Report view for a structured breakdown.";
+  }
+
+  return trimmed;
 }
 

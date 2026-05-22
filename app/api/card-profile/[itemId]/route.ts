@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { normalizeHttpUrl } from "@/lib/collection-images";
 import { requireBusinessContext } from "@/lib/business/context";
-import { buildCertPageUrl, getItemCertGrader, getItemCertNumber } from "@/lib/images/cert-image";
+import { getInventoryItem } from "@/lib/business/actions";
 import { resolveTrustedCardImageForItem } from "@/lib/images/resolver";
 
 const UUID_REGEX =
@@ -53,12 +53,7 @@ function isGradeOnlyLabel(value: string | null | undefined): boolean {
 }
 
 function hasAnyImage(item: ImageFields | null | undefined): boolean {
-  return Boolean(
-    firstImageUrl(
-      item?.user_image_url,
-      item?.image_url
-    )
-  );
+  return Boolean(firstImageUrl(item?.user_image_url, item?.image_url));
 }
 
 function hasWeakSearchIdentity(item: ImageFields | null | undefined): boolean {
@@ -88,7 +83,12 @@ function mergeImageFields(
       linked?.image_source ??
       (firstImageUrl(base.user_image_url, linked?.user_image_url) ? "user" : "none"),
     psa_cert_number:
-      firstTextValue(base.psa_cert_number, linked?.psa_cert_number, base.cert_number, linked?.cert_number) ?? null,
+      firstTextValue(
+        base.psa_cert_number,
+        linked?.psa_cert_number,
+        base.cert_number,
+        linked?.cert_number
+      ) ?? null,
   };
 }
 
@@ -110,12 +110,164 @@ function mergeIdentityFields(base: ImageFields, linked: ImageFields | null): Ima
   };
 }
 
+function formatProfileError(err: unknown): { message: string; status: number } {
+  const status = (err as { status?: number })?.status;
+  if (status === 401 || status === 403 || status === 404) {
+    return {
+      message: err instanceof Error ? err.message : "Request failed",
+      status,
+    };
+  }
+
+  const message = err instanceof Error ? err.message : String(err);
+  const details = String((err as { details?: string })?.details ?? "");
+  const combined = `${message} ${details}`.toLowerCase();
+
+  if (
+    combined.includes("fetch failed") ||
+    combined.includes("connecttimeout") ||
+    combined.includes("econnrefused") ||
+    combined.includes("enotfound") ||
+    combined.includes("network")
+  ) {
+    return {
+      message: "Could not reach the database. Check your connection and try again.",
+      status: 503,
+    };
+  }
+
+  return {
+    message: message.trim() || "Failed to load card profile",
+    status: status ?? 500,
+  };
+}
+
+async function loadBusinessSales(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  inventoryItemId: string,
+  businessAccountId: string
+): Promise<unknown[]> {
+  try {
+    const salesRes = await supabase
+      .from("business_sales")
+      .select("*")
+      .eq("inventory_item_id", inventoryItemId)
+      .eq("business_account_id", businessAccountId)
+      .eq("is_deleted", false)
+      .order("sold_at", { ascending: false });
+    if (salesRes.error) {
+      console.warn("[card-profile] sales query failed:", salesRes.error.message ?? salesRes.error);
+      return [];
+    }
+    return salesRes.data ?? [];
+  } catch (err) {
+    console.warn("[card-profile] sales query failed:", err);
+    return [];
+  }
+}
+
 async function getAuthUserId() {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   return user?.id ?? null;
+}
+
+async function loadLegacyBusinessItem(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  itemId: string,
+  businessAccountId: string
+): Promise<Record<string, unknown> | null> {
+  const { data: itemById, error: itemByIdErr } = isUuid(itemId)
+    ? await supabase
+        .from("business_inventory_items")
+        .select("*")
+        .eq("id", itemId)
+        .eq("business_account_id", businessAccountId)
+        .maybeSingle()
+    : { data: null, error: null };
+
+  if (itemByIdErr && itemByIdErr.code !== "PGRST116") throw itemByIdErr;
+
+  let item = itemById as Record<string, unknown> | null;
+  if (!item) {
+    const { data: itemByCardIdRows, error: itemByCardIdErr } = await supabase
+      .from("business_inventory_items")
+      .select("*")
+      .eq("card_id", itemId)
+      .eq("business_account_id", businessAccountId)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (itemByCardIdErr) throw itemByCardIdErr;
+    item = Array.isArray(itemByCardIdRows)
+      ? ((itemByCardIdRows[0] as Record<string, unknown> | undefined) ?? null)
+      : null;
+  }
+
+  if (!item) return null;
+
+  let hydratedItem: Record<string, unknown> = item;
+  const baseItem = item as ImageFields;
+  const needsImageHydration = !hasAnyImage(baseItem);
+  const needsIdentityHydration = hasWeakSearchIdentity(baseItem);
+
+  if (needsImageHydration || needsIdentityHydration) {
+    const cardSelect =
+      "id,title,player_name,year,set_name,parallel_type,insert,grading_company,cert_number,psa_cert_number,image_url,image_source,user_image_url,cert_image_status,cert_image_last_error";
+    let linkedCard: ImageFields | null = null;
+
+    if (isUuid(baseItem.card_id)) {
+      const { data } = await supabase
+        .from("collection_items")
+        .select(cardSelect)
+        .eq("id", baseItem.card_id)
+        .eq("user_id", userId)
+        .maybeSingle();
+      linkedCard = (data as ImageFields | null) ?? null;
+    }
+
+    if (!linkedCard && baseItem.title?.trim()) {
+      const { data: titleMatchedRows, error: titleMatchError } = await supabase
+        .from("collection_items")
+        .select(cardSelect)
+        .eq("user_id", userId)
+        .eq("title", baseItem.title.trim())
+        .order("created_at", { ascending: false })
+        .limit(1);
+      if (titleMatchError) throw titleMatchError;
+      linkedCard = Array.isArray(titleMatchedRows)
+        ? ((titleMatchedRows[0] as ImageFields | undefined) ?? null)
+        : null;
+    }
+
+    hydratedItem = {
+      ...item,
+      ...(needsImageHydration ? mergeImageFields(baseItem, linkedCard, null) : {}),
+      ...(needsIdentityHydration ? mergeIdentityFields(baseItem, linkedCard) : {}),
+    };
+  }
+
+  const resolvedImage = await resolveTrustedCardImageForItem({
+    supabase,
+    item: hydratedItem as ImageFields,
+    itemId: isUuid(String((hydratedItem as { card_id?: string }).card_id ?? ""))
+      ? String((hydratedItem as { card_id?: string }).card_id)
+      : String(item.id),
+    userId,
+  });
+
+  return {
+    ...hydratedItem,
+    trusted_image: resolvedImage.trustedImage,
+    image_source: resolvedImage.imageSource,
+    image_url: resolvedImage.imageUrl,
+    psa_cert_number: resolvedImage.psaCertNumber,
+    card_images: resolvedImage.cardImages,
+    primary_image: resolvedImage.primaryImage,
+  };
 }
 
 /**
@@ -137,142 +289,52 @@ export async function GET(
     const { itemId } = await params;
     const from = request.nextUrl.searchParams.get("from") || "collection";
 
-    const supabase = await createClient();
-
     if (from === "business") {
+      if (!isUuid(itemId)) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
+
+      // Primary path: same loader as /api/business/inventory (fewer round-trips).
+      const inventoryItem = await getInventoryItem(userId, itemId);
+      if (inventoryItem) {
+        const sales = await loadBusinessSales(
+          await createClient(),
+          inventoryItem.id,
+          inventoryItem.business_account_id
+        );
+        return NextResponse.json({
+          item: inventoryItem,
+          sales,
+          mode: "business",
+        });
+      }
+
       const context = await requireBusinessContext(userId);
-
-      // Business inventory now lives in collection_items with item_kind='inventory'.
-      const { data: unifiedItemById, error: unifiedItemByIdErr } = isUuid(itemId)
-        ? await supabase
-            .from("collection_items")
-            .select("*")
-            .eq("id", itemId)
-            .eq("user_id", userId)
-            .eq("item_kind", "inventory")
-            .maybeSingle()
-        : { data: null, error: null };
-
-      if (unifiedItemByIdErr && unifiedItemByIdErr.code !== "PGRST116") {
-        throw unifiedItemByIdErr;
-      }
-
-      let item = unifiedItemById;
-      if (!item) {
-        // Legacy fallback: older rows or links may still resolve through
-        // business_inventory_items / card_id.
-        const { data: itemById, error: itemByIdErr } = isUuid(itemId)
-          ? await supabase
-              .from("business_inventory_items")
-              .select("*")
-              .eq("id", itemId)
-              .eq("business_account_id", context.businessAccountId)
-              .maybeSingle()
-          : { data: null, error: null };
-
-        if (itemByIdErr && itemByIdErr.code !== "PGRST116") throw itemByIdErr;
-
-        item = itemById;
-        if (!item) {
-          const { data: itemByCardIdRows, error: itemByCardIdErr } = await supabase
-            .from("business_inventory_items")
-            .select("*")
-            .eq("card_id", itemId)
-            .eq("business_account_id", context.businessAccountId)
-            .order("created_at", { ascending: false })
-            .limit(1);
-
-          if (itemByCardIdErr) throw itemByCardIdErr;
-          item = Array.isArray(itemByCardIdRows) ? itemByCardIdRows[0] ?? null : null;
-        }
-      }
-
-      if (!item) return NextResponse.json({ error: "Not found" }, { status: 404 });
-
-      let hydratedItem: Record<string, unknown> = item as Record<string, unknown>;
-      const baseItem = item as ImageFields;
-
-      // Business rows can miss image fields and/or searchable identity fields.
-      // Enrich from linked collection card data when either is weak.
-      const needsImageHydration = !hasAnyImage(baseItem);
-      const needsIdentityHydration = hasWeakSearchIdentity(baseItem);
-      if (needsImageHydration || needsIdentityHydration) {
-        const cardSelect =
-          "id,title,player_name,year,set_name,parallel_type,insert,grading_company,cert_number,psa_cert_number,image_url,image_source,user_image_url,cert_image_status,cert_image_last_error";
-        let linkedCard: ImageFields | null = null;
-
-        if (isUuid(baseItem.card_id)) {
-          const { data } = await supabase
-            .from("collection_items")
-            .select(cardSelect)
-            .eq("id", baseItem.card_id)
-            .eq("user_id", userId)
-            .maybeSingle();
-          linkedCard = (data as ImageFields | null) ?? null;
-        }
-
-        if (!linkedCard && baseItem.title?.trim()) {
-          const { data: titleMatchedRows, error: titleMatchError } = await supabase
-            .from("collection_items")
-            .select(cardSelect)
-            .eq("user_id", userId)
-            .eq("title", baseItem.title.trim())
-            .order("created_at", { ascending: false })
-            .limit(1);
-          if (titleMatchError) throw titleMatchError;
-          linkedCard = Array.isArray(titleMatchedRows)
-            ? ((titleMatchedRows[0] as ImageFields | undefined) ?? null)
-            : null;
-        }
-
-        const linkedCardImageUrl = null;
-
-        hydratedItem = {
-          ...item,
-          ...(needsImageHydration
-            ? mergeImageFields(baseItem, linkedCard, linkedCardImageUrl)
-            : {}),
-          ...(needsIdentityHydration
-            ? mergeIdentityFields(baseItem, linkedCard)
-            : {}),
-        };
-      }
-
-      const resolvedImage = await resolveTrustedCardImageForItem({
+      const supabase = await createClient();
+      const legacyItem = await loadLegacyBusinessItem(
         supabase,
-        item: hydratedItem as ImageFields,
-        itemId: isUuid(String((hydratedItem as { card_id?: string }).card_id ?? ""))
-          ? String((hydratedItem as { card_id?: string }).card_id)
-          : item.id,
         userId,
-      });
+        itemId,
+        context.businessAccountId
+      );
+      if (!legacyItem) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
 
-      // Load sales for this item (use business_id to match RLS; order by sold_at)
-      let sales: unknown[] = [];
-      const salesRes = await supabase
-        .from("business_sales")
-        .select("*")
-        .eq("inventory_item_id", item.id)
-        .eq("business_account_id", context.businessAccountId)
-        .eq("is_deleted", false)
-        .order("sold_at", { ascending: false });
-      if (!salesRes.error) sales = salesRes.data ?? [];
-      // If sales query errors (e.g. schema/RLS), still return profile with empty sales
+      const sales = await loadBusinessSales(
+        supabase,
+        String(legacyItem.id),
+        context.businessAccountId
+      );
 
       return NextResponse.json({
-        item: {
-          ...hydratedItem,
-          trusted_image: resolvedImage.trustedImage,
-          image_source: resolvedImage.imageSource,
-          image_url: resolvedImage.imageUrl,
-          psa_cert_number: resolvedImage.psaCertNumber,
-          card_images: resolvedImage.cardImages,
-          primary_image: resolvedImage.primaryImage,
-        },
+        item: legacyItem,
         sales,
         mode: "business",
       });
     }
+
+    const supabase = await createClient();
 
     // Load from collection_items (personal)
     if (!isUuid(itemId)) {
@@ -310,12 +372,9 @@ export async function GET(
       sales: [],
       mode: "collection",
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Card profile GET error:", err);
-    const status = err?.status ?? 500;
-    return NextResponse.json(
-      { error: err?.message || "Failed to load card profile" },
-      { status }
-    );
+    const { message, status } = formatProfileError(err);
+    return NextResponse.json({ error: message }, { status });
   }
 }

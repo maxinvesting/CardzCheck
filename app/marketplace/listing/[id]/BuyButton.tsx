@@ -38,7 +38,7 @@ export default function BuyButton({
     return (
       <a
         href={`/login?next=/marketplace/listing/${listingId}`}
-        className="inline-block px-4 py-2 rounded bg-cyan-700 hover:bg-cyan-600 text-sm"
+        className="inline-block px-4 py-2 rounded border border-gray-700 bg-gray-900 text-sm text-gray-100 hover:bg-gray-800"
       >
         Sign in to buy
       </a>
@@ -55,7 +55,7 @@ export default function BuyButton({
       <button
         onClick={buy}
         disabled={busy}
-        className="px-4 py-2 rounded bg-cyan-700 hover:bg-cyan-600 disabled:opacity-50 text-sm"
+        className="px-4 py-2 rounded border border-gray-700 bg-gray-900 text-sm text-gray-100 hover:bg-gray-800 disabled:opacity-50"
       >
         {busy ? "Redirecting…" : "Buy now"}
       </button>

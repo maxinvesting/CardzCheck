@@ -1,115 +1,104 @@
 /* ─────────────────────────────────────────────────────────────────────────
-   Business Workspace — Dark Institutional Trading Desk Theme
-   Charcoal/slate base with a controlled accent (driven by user primary).
-   Supports operational state colors:
-     · primary/profit  = green (driven by appearance setting)
-     · watch / pending = amber
-     · urgent          = red
-     · automation / AI = violet
+   CardzCheck — Matte operator terminal (Bloomberg-adjacent, luxury minimal)
+   Central tokens: :root defaults; .business-theme applies canvas typography.
+   Semantic accents: profit / positive only; navigation is typographic + line.
    ───────────────────────────────────────────────────────────────────────── */
 
-.business-theme {
+:root {
   /* Surfaces */
-  --biz-bg: #0A0D11;
-  --biz-near-black: #06080B;
-  --biz-surface: #10141A;
-  --biz-surface-soft: #161B22;
-  --biz-surface-raised: #1A1F27;
-  --biz-border: #1F252D;
-  --biz-border-strong: #2A323C;
-  --biz-border-subtle: #161A20;
+  --biz-bg: #0a0a0a;
+  --biz-near-black: #080808;
+  --biz-surface: #111111;
+  --biz-surface-soft: #141414;
+  --biz-surface-raised: #151515;
+  --biz-border: #222222;
+  --biz-border-strong: #2a2a2a;
+  --biz-border-subtle: #1a1a1a;
 
-  /* Text */
-  --biz-text: #E6E8EB;
-  --biz-text-strong: #F4F6F8;
-  --biz-muted: #7A8595;
-  --biz-muted-strong: #99A2B0;
-  --biz-faint: #5A6473;
+  /* Typography */
+  --biz-text: #f3f3f3;
+  --biz-text-strong: #f7f7f7;
+  --biz-muted: #a1a1a1;
+  --biz-muted-strong: #b5b5b5;
+  --biz-faint: #6f6f6f;
 
-  /* Interactive states */
-  --biz-hover: #1A1F26;
-  --biz-skeleton: #1A1F26;
+  /* Interactive */
+  --biz-hover: #1a1a1a;
+  --biz-skeleton: #161616;
 
-  /* Primary (driven by user appearance — usually green) */
-  --biz-primary: #1D9E75;
-  --biz-primary-hover: #17896A;
-  --biz-primary-soft: rgba(29, 158, 117, 0.10);
-  --biz-primary-soft-strong: rgba(29, 158, 117, 0.18);
-  --biz-primary-border: rgba(29, 158, 117, 0.32);
-  --biz-primary-foreground: #07100B;
+  /* Primary chrome (buttons, key controls) — neutral by default */
+  --biz-primary: #e4e4e4;
+  --biz-primary-hover: #d6d6d6;
+  --biz-primary-soft: rgba(255, 255, 255, 0.06);
+  --biz-primary-soft-strong: rgba(255, 255, 255, 0.1);
+  --biz-primary-border: rgba(255, 255, 255, 0.16);
+  --biz-primary-foreground: #0a0a0a;
 
-  /* Secondary / tertiary — appearance driven */
-  --biz-secondary: #15803D;
-  --biz-secondary-hover: #116730;
-  --biz-secondary-soft: rgba(21, 128, 61, 0.10);
-  --biz-secondary-soft-strong: rgba(21, 128, 61, 0.18);
-  --biz-secondary-border: rgba(21, 128, 61, 0.30);
-  --biz-secondary-foreground: #07100B;
+  --biz-secondary: #a8a8a8;
+  --biz-secondary-hover: #989898;
+  --biz-secondary-soft: rgba(255, 255, 255, 0.05);
+  --biz-secondary-soft-strong: rgba(255, 255, 255, 0.08);
+  --biz-secondary-border: rgba(255, 255, 255, 0.12);
+  --biz-secondary-foreground: #0a0a0a;
 
-  --biz-tertiary: #0F766E;
-  --biz-tertiary-hover: #0C5E58;
-  --biz-tertiary-soft: rgba(15, 118, 110, 0.10);
-  --biz-tertiary-soft-strong: rgba(15, 118, 110, 0.18);
-  --biz-tertiary-border: rgba(15, 118, 110, 0.30);
-  --biz-tertiary-foreground: #07100B;
+  --biz-tertiary: #787878;
+  --biz-tertiary-hover: #6a6a6a;
+  --biz-tertiary-soft: rgba(255, 255, 255, 0.04);
+  --biz-tertiary-soft-strong: rgba(255, 255, 255, 0.07);
+  --biz-tertiary-border: rgba(255, 255, 255, 0.1);
+  --biz-tertiary-foreground: #f3f3f3;
 
-  /* State signals (fixed — independent of appearance) */
-  --biz-profit: #20B26B;
-  --biz-profit-soft: rgba(32, 178, 107, 0.12);
-  --biz-success-soft: rgba(32, 178, 107, 0.10);
-  --biz-warning: #F0B429;
-  --biz-warning-soft: rgba(240, 180, 41, 0.12);
-  --biz-warning-border: rgba(240, 180, 41, 0.30);
-  --biz-danger: #E05C5C;
-  --biz-danger-soft: rgba(224, 92, 92, 0.12);
-  --biz-danger-border: rgba(224, 92, 92, 0.30);
-  --biz-automation: #8B5CF6;
-  --biz-automation-soft: rgba(139, 92, 246, 0.12);
-  --biz-automation-border: rgba(139, 92, 246, 0.30);
-  --biz-info: #60A5FA;
-  --biz-info-soft: rgba(96, 165, 250, 0.12);
-  --biz-info-border: rgba(96, 165, 250, 0.30);
+  /* Fixed signals (do not read as “brand green”) */
+  --biz-profit: #9baca3;
+  --biz-profit-soft: rgba(155, 172, 163, 0.14);
+  --biz-success-soft: rgba(155, 172, 163, 0.1);
+  --biz-warning: #c9a227;
+  --biz-warning-soft: rgba(201, 162, 39, 0.12);
+  --biz-warning-border: rgba(201, 162, 39, 0.28);
+  --biz-danger: #c45c5c;
+  --biz-danger-soft: rgba(196, 92, 92, 0.12);
+  --biz-danger-border: rgba(196, 92, 92, 0.28);
+  --biz-automation: #8b8fa3;
+  --biz-automation-soft: rgba(139, 143, 163, 0.12);
+  --biz-automation-border: rgba(139, 143, 163, 0.28);
+  --biz-info: #8e96a3;
+  --biz-info-soft: rgba(142, 150, 163, 0.1);
+  --biz-info-border: rgba(142, 150, 163, 0.22);
 
-  /* Misc */
-  --biz-link: var(--biz-primary);
-  --biz-focus: rgba(29, 158, 117, 0.30);
-  --biz-nav-active-bg: rgba(29, 158, 117, 0.10);
-  --biz-nav-active-border: var(--biz-primary);
-  --biz-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
-  --biz-shadow-md: 0 12px 28px rgba(0, 0, 0, 0.45);
+  --biz-link: #c8c8c8;
+  --biz-focus: rgba(255, 255, 255, 0.18);
+  --biz-nav-active-bg: rgba(255, 255, 255, 0.05);
+  --biz-nav-active-border: rgba(243, 243, 243, 0.32);
+  --biz-shadow-sm: 0 1px 0 rgba(0, 0, 0, 0.4);
+  --biz-shadow-md: 0 16px 40px rgba(0, 0, 0, 0.55);
 
-  /* Signal tag colors (legacy) */
   --tag-opportunity-bg: var(--biz-primary-soft-strong);
-  --tag-opportunity-text: var(--biz-primary);
+  --tag-opportunity-text: var(--biz-text-strong);
   --tag-trend-bg: var(--biz-info-soft);
   --tag-trend-text: var(--biz-info);
   --tag-alert-bg: var(--biz-danger-soft);
   --tag-alert-text: var(--biz-danger);
 
-  /* Backward compatible aliases */
   --app-bg: var(--biz-bg);
   --surface: var(--biz-surface);
   --surface-2: var(--biz-surface-soft);
   --border: var(--biz-border);
   --text: var(--biz-text);
   --muted: var(--biz-muted);
-  --accent: var(--biz-primary);
+  --accent: var(--biz-text-strong);
   --warning: var(--biz-warning);
+}
 
+.business-theme {
   background: var(--biz-bg);
   color: var(--biz-text);
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
 }
 
-/* Workspace overlay applied on /business pages */
+/* Optional depth on /business only — no chroma glow */
 .business-workspace-theme {
-  background-image:
-    radial-gradient(60rem 30rem at -10% -10%, rgba(29, 158, 117, 0.06), transparent 60%),
-    radial-gradient(50rem 28rem at 110% 0%, rgba(96, 165, 250, 0.04), transparent 60%),
-    linear-gradient(180deg, #0A0D11 0%, #090C10 100%);
+  background-image: linear-gradient(180deg, #0b0b0b 0%, #0a0a0a 55%, #090909 100%);
 }
-
-/* ── Component primitives ─────────────────────────────────────────────── */
 
 .business-theme .cc-surface {
   background: var(--biz-surface);
@@ -119,21 +108,22 @@
 }
 
 .business-theme .cc-btn-primary {
-  border: 1px solid transparent;
+  border: 1px solid var(--biz-primary-border);
   background: var(--biz-primary);
   color: var(--biz-primary-foreground);
   border-radius: 6px;
   font-weight: 600;
-  transition: background-color 140ms ease;
+  transition: background-color 140ms ease, border-color 140ms ease;
 }
 
 .business-theme .cc-btn-primary:hover {
   background: var(--biz-primary-hover);
+  border-color: rgba(255, 255, 255, 0.22);
 }
 
 .business-theme .cc-btn-secondary {
   border: 1px solid var(--biz-border);
-  background: var(--biz-surface);
+  background: transparent;
   color: var(--biz-text);
   border-radius: 6px;
   transition: background-color 140ms ease, border-color 140ms ease;
@@ -155,10 +145,9 @@
   background: var(--biz-hover);
 }
 
-/* Terminal-style monospace numerals */
 .business-theme .biz-mono,
 .business-theme .font-mono-num {
-  font-family: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, SFMono-Regular,
+  font-family: "JetBrains Mono", "IBM Plex Mono", ui-monospace, SFMono-Regular,
     SF Mono, Menlo, Consolas, monospace;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
@@ -170,11 +159,10 @@
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--biz-muted);
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas,
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas,
     monospace;
 }
 
-/* Soft scrollbars to fit dark theme */
 .business-theme ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -183,104 +171,119 @@
   background: transparent;
 }
 .business-theme ::-webkit-scrollbar-thumb {
-  background: #232932;
+  background: #2a2a2a;
   border-radius: 6px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 .business-theme ::-webkit-scrollbar-thumb:hover {
-  background: #303843;
+  background: #333333;
   background-clip: padding-box;
   border: 2px solid transparent;
 }
 
-/* Links */
-.business-workspace-theme a {
+.business-theme a {
   color: var(--biz-link);
 }
-.business-workspace-theme a:hover {
-  color: var(--biz-primary-hover);
+.business-theme a:hover {
+  color: var(--biz-text-strong);
 }
 
-/* Recolor leftover light-theme tailwind utilities to fit dark workspace */
-.business-workspace-theme .text-blue-700,
-.business-workspace-theme .text-blue-600,
-.business-workspace-theme .text-blue-500,
-.business-workspace-theme .text-blue-400,
-.business-workspace-theme .text-emerald-700,
-.business-workspace-theme .text-emerald-600,
-.business-workspace-theme .text-emerald-500,
-.business-workspace-theme .text-emerald-400,
-.business-workspace-theme .text-green-500,
-.business-workspace-theme .text-green-600,
-.business-workspace-theme .text-green-700 {
-  color: var(--biz-primary) !important;
+/* Legacy Tailwind utility recolor — any surface using .business-theme */
+.business-theme .text-blue-700,
+.business-theme .text-blue-600,
+.business-theme .text-blue-500,
+.business-theme .text-blue-400,
+.business-theme .text-emerald-700,
+.business-theme .text-emerald-600,
+.business-theme .text-emerald-500,
+.business-theme .text-emerald-400,
+.business-theme .text-green-500,
+.business-theme .text-green-600,
+.business-theme .text-green-700,
+.business-theme .text-cyan-500,
+.business-theme .text-cyan-400,
+.business-theme .text-cyan-300 {
+  color: var(--biz-text) !important;
 }
 
-.business-workspace-theme .bg-blue-600,
-.business-workspace-theme .bg-emerald-600,
-.business-workspace-theme .bg-green-600 {
-  background-color: var(--biz-primary) !important;
-  color: var(--biz-primary-foreground) !important;
+.business-theme .text-green-300,
+.business-theme .text-green-400 {
+  color: var(--biz-profit) !important;
 }
 
-.business-workspace-theme .hover\:bg-blue-700:hover,
-.business-workspace-theme .hover\:bg-blue-500:hover,
-.business-workspace-theme .hover\:bg-blue-400:hover,
-.business-workspace-theme .hover\:bg-emerald-700:hover,
-.business-workspace-theme .hover\:bg-emerald-500:hover,
-.business-workspace-theme .hover\:bg-green-700:hover,
-.business-workspace-theme .hover\:bg-green-500:hover {
-  background-color: var(--biz-primary-hover) !important;
+.business-theme .bg-blue-600,
+.business-theme .bg-emerald-600,
+.business-theme .bg-green-600,
+.business-theme .bg-cyan-600,
+.business-theme .bg-cyan-700 {
+  background-color: var(--biz-surface-raised) !important;
+  color: var(--biz-text-strong) !important;
+  border: 1px solid var(--biz-border-strong) !important;
 }
 
-.business-workspace-theme .bg-blue-100,
-.business-workspace-theme .bg-blue-50,
-.business-workspace-theme .bg-emerald-100,
-.business-workspace-theme .bg-emerald-50,
-.business-workspace-theme .bg-green-100,
-.business-workspace-theme .bg-green-50 {
+.business-theme .hover\:bg-blue-700:hover,
+.business-theme .hover\:bg-blue-500:hover,
+.business-theme .hover\:bg-blue-400:hover,
+.business-theme .hover\:bg-emerald-700:hover,
+.business-theme .hover\:bg-emerald-500:hover,
+.business-theme .hover\:bg-green-700:hover,
+.business-theme .hover\:bg-green-500:hover,
+.business-theme .hover\:bg-cyan-600:hover,
+.business-theme .hover\:bg-cyan-500:hover {
+  background-color: var(--biz-hover) !important;
+}
+
+.business-theme .bg-blue-100,
+.business-theme .bg-blue-50,
+.business-theme .bg-emerald-100,
+.business-theme .bg-emerald-50,
+.business-theme .bg-green-100,
+.business-theme .bg-green-50 {
   background-color: var(--biz-primary-soft) !important;
 }
 
-.business-workspace-theme .border-blue-500,
-.business-workspace-theme .border-blue-200,
-.business-workspace-theme .border-emerald-500,
-.business-workspace-theme .border-emerald-200,
-.business-workspace-theme .border-green-500,
-.business-workspace-theme .border-green-200 {
-  border-color: var(--biz-primary-border) !important;
+.business-theme .border-blue-500,
+.business-theme .border-blue-200,
+.business-theme .border-emerald-500,
+.business-theme .border-emerald-200,
+.business-theme .border-green-500,
+.business-theme .border-green-200,
+.business-theme .border-cyan-500,
+.business-theme .border-cyan-700 {
+  border-color: var(--biz-border-strong) !important;
 }
 
-.business-workspace-theme .focus\:ring-blue-500:focus,
-.business-workspace-theme .focus\:ring-emerald-500:focus,
-.business-workspace-theme .focus\:ring-green-500:focus {
+.business-theme .focus\:ring-blue-500:focus,
+.business-theme .focus\:ring-emerald-500:focus,
+.business-theme .focus\:ring-green-500:focus {
   --tw-ring-color: var(--biz-focus) !important;
 }
 
-/* Force ledger summary panels to fall in line with new tokens */
-.business-workspace-theme .ledger-pnl-pos { color: var(--biz-profit); }
-.business-workspace-theme .ledger-pnl-neg { color: var(--biz-danger); }
+.business-theme .ledger-pnl-pos {
+  color: var(--biz-profit);
+}
+.business-theme .ledger-pnl-neg {
+  color: var(--biz-danger);
+}
 
-/* Sales terminal — already dark; tighten tokens to match */
 .sales-mono-theme {
-  --biz-bg: #06080B;
-  --biz-surface: #0D1116;
-  --biz-surface-soft: #11161D;
-  --biz-surface-raised: #161B23;
-  --biz-border: #1F252D;
-  --biz-border-strong: #2A323C;
-  --biz-border-subtle: #181C22;
-  --biz-text: #E6E8EB;
-  --biz-text-strong: #F4F6F8;
-  --biz-muted: #7A8595;
-  --biz-muted-strong: #99A2B0;
-  --biz-faint: #5A6473;
-  --biz-hover: #161B22;
-  --biz-skeleton: #181D24;
-
+  --biz-bg: #0a0a0a;
+  --biz-surface: #111111;
+  --biz-surface-soft: #141414;
+  --biz-surface-raised: #151515;
+  --biz-border: #222222;
+  --biz-border-strong: #2a2a2a;
+  --biz-border-subtle: #1a1a1a;
+  --biz-text: #f3f3f3;
+  --biz-text-strong: #f7f7f7;
+  --biz-muted: #a1a1a1;
+  --biz-muted-strong: #b5b5b5;
+  --biz-faint: #6f6f6f;
+  --biz-hover: #1a1a1a;
+  --biz-skeleton: #161616;
   --biz-focus: rgba(255, 255, 255, 0.18);
-  --biz-link: #C8D0DA;
+  --biz-link: #c8c8c8;
   background-image: none;
   background: var(--biz-bg);
 }

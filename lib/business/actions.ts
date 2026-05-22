@@ -558,7 +558,12 @@ export async function updateItemKind(
 export async function bulkUpdateInventory(
   userId: string,
   itemIds: string[],
-  updates: { status?: string; location?: string }
+  updates: {
+    status?: string;
+    location?: string;
+    channel?: string | null;
+    list_price_cents?: number | null;
+  }
 ): Promise<void> {
   const context = await requireBusinessAccess(userId);
   const supabase = await createClient();
@@ -566,6 +571,8 @@ export async function bulkUpdateInventory(
   const payload: Record<string, unknown> = {};
   if (updates.status !== undefined) payload.status = updates.status;
   if (updates.location !== undefined) payload.location = updates.location;
+  if (updates.channel !== undefined) payload.channel = updates.channel;
+  if (updates.list_price_cents !== undefined) payload.list_price_cents = updates.list_price_cents;
 
   const { error } = await supabase
     .from(BUSINESS_TABLE)

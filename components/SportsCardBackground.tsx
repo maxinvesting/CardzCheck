@@ -9,25 +9,24 @@ export default function SportsCardBackground({
 }: SportsCardBackgroundProps) {
   const opacity = {
     default: {
-      lines: "opacity-[0.06]",
-      cards: "opacity-40",
-      shimmer: "opacity-[0.08]",
+      lines: "opacity-[0.05]",
+      cards: "opacity-[0.18]",
+      shimmer: "opacity-[0.04]",
     },
     subtle: {
-      lines: "opacity-[0.04]",
-      cards: "opacity-30",
-      shimmer: "opacity-[0.05]",
+      lines: "opacity-[0.03]",
+      cards: "opacity-[0.12]",
+      shimmer: "opacity-[0.03]",
     },
     hero: {
-      lines: "opacity-[0.08]",
-      cards: "opacity-50",
-      shimmer: "opacity-[0.10]",
+      lines: "opacity-[0.06]",
+      cards: "opacity-[0.22]",
+      shimmer: "opacity-[0.05]",
     },
   }[variant];
 
   return (
     <div className="absolute inset-0 pointer-events-none overflow-hidden">
-      {/* Diagonal lines like card texture / refractor pattern */}
       <div
         className={`absolute inset-0 ${opacity.lines}`}
         style={{
@@ -35,12 +34,11 @@ export default function SportsCardBackground({
             45deg,
             transparent,
             transparent 8px,
-            rgba(139, 92, 246, 0.7) 8px,
-            rgba(139, 92, 246, 0.7) 9px
+            rgba(255, 255, 255, 0.06) 8px,
+            rgba(255, 255, 255, 0.06) 9px
           )`,
         }}
       />
-      {/* Secondary cross-hatch pattern */}
       <div
         className={`absolute inset-0 ${opacity.lines}`}
         style={{
@@ -48,74 +46,67 @@ export default function SportsCardBackground({
             -45deg,
             transparent,
             transparent 12px,
-            rgba(59, 130, 246, 0.5) 12px,
-            rgba(59, 130, 246, 0.5) 13px
+            rgba(255, 255, 255, 0.04) 12px,
+            rgba(255, 255, 255, 0.04) 13px
           )`,
         }}
       />
 
-      {/* Corner card shapes - stacked cards effect */}
       <div
-        className={`absolute -top-20 -right-20 w-64 h-80 border-2 border-purple-500/40 rounded-2xl rotate-12 ${opacity.cards}`}
-        style={{ boxShadow: "0 0 40px rgba(139, 92, 246, 0.15)" }}
+        className={`absolute -top-20 -right-20 w-64 h-80 border border-white/[0.08] rounded-2xl rotate-12 ${opacity.cards}`}
       />
       <div
-        className={`absolute -top-16 -right-16 w-56 h-72 border-2 border-purple-500/30 rounded-2xl rotate-12 ${opacity.cards}`}
+        className={`absolute -top-16 -right-16 w-56 h-72 border border-white/[0.06] rounded-2xl rotate-12 ${opacity.cards}`}
       />
       <div
-        className={`absolute -top-12 -right-12 w-48 h-64 border border-purple-400/20 rounded-2xl rotate-12 ${opacity.cards}`}
+        className={`absolute -top-12 -right-12 w-48 h-64 border border-white/[0.05] rounded-2xl rotate-12 ${opacity.cards}`}
       />
 
-      {/* Bottom left cards */}
       <div
-        className={`absolute -bottom-24 -left-16 w-52 h-68 border-2 border-blue-500/40 rounded-2xl -rotate-12 ${opacity.cards}`}
-        style={{ boxShadow: "0 0 40px rgba(59, 130, 246, 0.15)" }}
+        className={`absolute -bottom-24 -left-16 w-52 h-68 border border-white/[0.07] rounded-2xl -rotate-12 ${opacity.cards}`}
       />
       <div
-        className={`absolute -bottom-20 -left-12 w-44 h-60 border-2 border-blue-500/30 rounded-2xl -rotate-12 ${opacity.cards}`}
+        className={`absolute -bottom-20 -left-12 w-44 h-60 border border-white/[0.05] rounded-2xl -rotate-12 ${opacity.cards}`}
       />
 
-      {/* Additional floating cards */}
       <div
-        className={`absolute top-1/3 -left-10 w-40 h-56 border border-purple-400/25 rounded-xl rotate-6 ${opacity.cards}`}
+        className={`absolute top-1/3 -left-10 w-40 h-56 border border-white/[0.05] rounded-xl rotate-6 ${opacity.cards}`}
       />
       <div
-        className={`absolute bottom-1/4 -right-8 w-36 h-48 border border-blue-400/25 rounded-xl -rotate-6 ${opacity.cards}`}
+        className={`absolute bottom-1/4 -right-8 w-36 h-48 border border-white/[0.05] rounded-xl -rotate-6 ${opacity.cards}`}
       />
 
-      {/* Holographic shimmer effects */}
       <div
         className={`absolute top-1/4 right-0 w-96 h-96 ${opacity.shimmer}`}
         style={{
-          background: `radial-gradient(ellipse at center, rgba(139, 92, 246, 0.5) 0%, transparent 70%)`,
+          background: `radial-gradient(ellipse at center, rgba(255, 255, 255, 0.06) 0%, transparent 70%)`,
         }}
       />
       <div
         className={`absolute bottom-1/4 left-0 w-80 h-80 ${opacity.shimmer}`}
         style={{
-          background: `radial-gradient(ellipse at center, rgba(59, 130, 246, 0.5) 0%, transparent 70%)`,
+          background: `radial-gradient(ellipse at center, rgba(255, 255, 255, 0.05) 0%, transparent 70%)`,
         }}
       />
       <div
         className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] ${opacity.shimmer}`}
         style={{
-          background: `radial-gradient(ellipse at center, rgba(168, 85, 247, 0.3) 0%, transparent 60%)`,
+          background: `radial-gradient(ellipse at center, rgba(255, 255, 255, 0.04) 0%, transparent 60%)`,
         }}
       />
 
-      {/* Additional accent for hero variant */}
       {variant === "hero" && (
         <>
           <div
-            className="absolute top-0 left-1/4 w-px h-full opacity-10"
+            className="absolute top-0 left-1/4 w-px h-full opacity-[0.06]"
             style={{
-              background: `linear-gradient(to bottom, transparent, rgba(139, 92, 246, 0.5) 30%, rgba(139, 92, 246, 0.5) 70%, transparent)`,
+              background: `linear-gradient(to bottom, transparent, rgba(255, 255, 255, 0.12) 30%, rgba(255, 255, 255, 0.12) 70%, transparent)`,
             }}
           />
           <div
-            className="absolute top-0 right-1/4 w-px h-full opacity-10"
+            className="absolute top-0 right-1/4 w-px h-full opacity-[0.06]"
             style={{
-              background: `linear-gradient(to bottom, transparent, rgba(59, 130, 246, 0.5) 30%, rgba(59, 130, 246, 0.5) 70%, transparent)`,
+              background: `linear-gradient(to bottom, transparent, rgba(255, 255, 255, 0.12) 30%, rgba(255, 255, 255, 0.12) 70%, transparent)`,
             }}
           />
         </>

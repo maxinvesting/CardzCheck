@@ -232,7 +232,7 @@ export default function InventoryScrollView({
         <div className="rounded-lg border border-[var(--biz-border)] bg-white px-3 mb-3">
           <MetaRow label="Cost" value={cost || "—"} />
           <MetaRow label="List Price" value={listPrice || "Not listed"} valueClass={listPrice ? "text-[var(--biz-text)]" : "text-[var(--biz-muted)] italic font-normal"} />
-          <MetaRow label="Est. Market Value" value={cmv || "—"} valueClass={cmv ? (underwater ? "text-red-600" : "text-emerald-700") : "text-[var(--biz-muted)]"} />
+          <MetaRow label="Est. Market Value" value={cmv || "—"} valueClass={cmv ? (underwater ? "text-red-600" : "ledger-pnl-pos") : "text-[var(--biz-muted)]"} />
           <MetaRow
             label="Days Held"
             value={days !== null ? `${days}d` : "—"}
@@ -264,7 +264,7 @@ export default function InventoryScrollView({
             <button
               type="button"
               onClick={() => onMarkSold?.(item)}
-              className="flex-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700 hover:bg-emerald-100 transition-colors"
+              className="flex-1 rounded-lg border border-[color:var(--biz-border-strong)] bg-[color:var(--biz-surface-soft)] px-3 py-2 text-xs font-medium text-[color:var(--biz-text-strong)] transition-colors hover:bg-[color:var(--biz-hover)]"
             >
               Mark Sold
             </button>
