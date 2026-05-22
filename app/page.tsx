@@ -88,20 +88,20 @@ export default function Home() {
 
   if (checkingAuth) {
     return (
-      <div className="min-h-screen bg-[#0f1419] flex items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600" />
+      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-white/30" />
       </div>
     );
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#0f1419]">
+    <div className="relative min-h-screen overflow-hidden bg-[#0a0a0a]">
       <SportsCardBackground variant="hero" />
       <div className="relative z-10">
         <Header />
         <main className="mx-auto max-w-6xl px-4 pb-16 pt-10 sm:pt-14">
           <section className="rounded-2xl border border-gray-800 bg-gray-900/75 p-6 backdrop-blur-sm sm:p-10">
-            <p className="inline-flex items-center rounded-full border border-blue-500/40 bg-blue-500/10 px-3 py-1 text-xs font-medium uppercase tracking-wide text-blue-300">
+            <p className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-medium uppercase tracking-wide text-gray-400">
               COLLECTORS · FLIPPERS · DEALERS
             </p>
 
@@ -117,7 +117,7 @@ export default function Home() {
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Link
                 href="/signup"
-                className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-6 py-3 text-base font-semibold text-white transition-colors hover:bg-blue-700"
+                className="inline-flex items-center justify-center rounded-lg border border-white/15 bg-white px-6 py-3 text-base font-semibold text-black transition-colors hover:bg-gray-200"
               >
                 Start Free
               </Link>
@@ -153,7 +153,7 @@ export default function Home() {
 
           <section className="mt-10 grid gap-4 md:grid-cols-2">
             <article className="rounded-xl border border-gray-800 bg-gray-900/70 p-6">
-              <p className="text-xs uppercase tracking-wide text-blue-300">Collector Mode</p>
+              <p className="text-xs uppercase tracking-wide text-gray-500">Collector Mode</p>
               <h2 className="mt-2 text-2xl font-semibold text-white">Know what your cards are doing.</h2>
               <p className="mt-3 text-sm text-gray-400">
                 Track cost basis, current value, and movement over time. Focus your collection on
@@ -162,7 +162,7 @@ export default function Home() {
             </article>
 
             <article className="rounded-xl border border-gray-800 bg-gray-900/70 p-6">
-              <p className="text-xs uppercase tracking-wide text-emerald-300">Business Mode</p>
+              <p className="text-xs uppercase tracking-wide text-gray-500">Business Mode</p>
               <h2 className="mt-2 text-2xl font-semibold text-white">Run inventory like a real desk.</h2>
               <p className="mt-3 text-sm text-gray-400">
                 Manage inventory, sales, and pricing with your team in one workspace built for card operations.
@@ -256,10 +256,10 @@ export default function Home() {
           </section>
 
           {/* CardzCheck Deals spotlight */}
-          <section className="mt-10 overflow-hidden rounded-2xl border border-cyan-500/30 bg-gradient-to-br from-cyan-950/60 via-gray-900/80 to-gray-900/80">
+          <section className="mt-10 overflow-hidden rounded-2xl border border-gray-800 bg-gradient-to-br from-gray-950/80 via-gray-900/80 to-gray-900/80">
             <div className="flex flex-col gap-8 p-6 sm:p-8 lg:flex-row lg:items-center">
               <div className="flex-1">
-                <p className="text-xs font-semibold uppercase tracking-wider text-cyan-400">
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
                   Subscriber Exclusive
                 </p>
                 <h2 className="mt-2 text-2xl font-semibold text-white sm:text-3xl">
@@ -267,7 +267,7 @@ export default function Home() {
                 </h2>
                 <p className="mt-3 max-w-xl text-gray-300">
                   Every paid subscriber gets access to our curated storefront — CardzCheck inventory
-                  priced at least <span className="font-semibold text-cyan-300">13.5% below our eBay storefront</span>.
+                  priced at least <span className="font-semibold text-gray-200">13.5% below our eBay storefront</span>.
                   Some deals also come in below market comps. Not a peer-to-peer marketplace.
                   Sold directly by CardzCheck.
                 </p>
@@ -279,14 +279,14 @@ export default function Home() {
                     "Every 5th purchase (15, 20, 25…) earns a milestone discount",
                   ].map((point) => (
                     <li key={point} className="flex items-start gap-2">
-                      <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-cyan-400" />
+                      <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-gray-500" />
                       <span>{point}</span>
                     </li>
                   ))}
                 </ul>
                 <Link
                   href="/marketplace"
-                  className="mt-6 inline-flex items-center gap-2 rounded-lg bg-cyan-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-cyan-500"
+                  className="mt-6 inline-flex items-center gap-2 rounded-lg border border-white/15 bg-white px-5 py-2.5 text-sm font-semibold text-black transition-colors hover:bg-gray-200"
                 >
                   Browse marketplace
                   <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -295,8 +295,8 @@ export default function Home() {
                 </Link>
               </div>
               <div className="shrink-0 lg:w-64">
-                <div className="rounded-xl border border-cyan-500/20 bg-cyan-950/40 p-5">
-                  <p className="text-xs uppercase tracking-wide text-cyan-400">Pricing vs. our eBay</p>
+                <div className="rounded-xl border border-gray-800 bg-gray-950/50 p-5">
+                  <p className="text-xs uppercase tracking-wide text-gray-500">Pricing vs. our eBay</p>
                   <div className="mt-3 space-y-3">
                     {[
                       { label: "Our eBay storefront", value: "$179", muted: true },
@@ -307,7 +307,7 @@ export default function Home() {
                         <span className={`text-sm ${muted ? "text-gray-500 line-through" : "text-gray-300"}`}>
                           {label}
                         </span>
-                        <span className={`text-sm font-semibold tabular-nums ${highlight ? "text-white" : green ? "text-cyan-300" : "text-gray-500"}`}>
+                        <span className={`text-sm font-semibold tabular-nums ${highlight ? "text-white" : green ? "text-[#9baca3]" : "text-gray-500"}`}>
                           {value}
                         </span>
                       </div>
@@ -345,12 +345,12 @@ export default function Home() {
                 </Link>
               </article>
 
-              <article className="rounded-xl border border-blue-500/50 bg-blue-500/10 p-6">
-                <p className="text-xs font-semibold uppercase tracking-wide text-blue-200">Most Popular</p>
+              <article className="rounded-xl border border-gray-700 bg-gray-950/50 p-6">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Most Popular</p>
                 <h3 className="mt-2 text-lg font-semibold text-white">Pro</h3>
                 <p className="mt-4 text-3xl font-bold text-white">{formatPrice(PRO_MONTHLY_PRICE)}/mo</p>
-                <p className="text-sm text-blue-200">or {formatPrice(PRO_ANNUAL_PRICE)}/year (save {formatPrice(ANNUAL_SAVINGS)})</p>
-                <ul className="mt-5 space-y-2 text-sm text-blue-100">
+                <p className="text-sm text-gray-400">or {formatPrice(PRO_ANNUAL_PRICE)}/year (save {formatPrice(ANNUAL_SAVINGS)})</p>
+                <ul className="mt-5 space-y-2 text-sm text-gray-300">
                   <li>Unlimited card searches</li>
                   <li>Full collection tracking</li>
                   <li>Analyst AI + Grade Probability Engine</li>
@@ -358,20 +358,20 @@ export default function Home() {
                 </ul>
                 <Link
                   href="/signup"
-                  className="mt-6 inline-flex w-full items-center justify-center rounded-lg bg-blue-600 px-4 py-2.5 font-semibold text-white transition-colors hover:bg-blue-700"
+                  className="mt-6 inline-flex w-full items-center justify-center rounded-lg border border-white/15 bg-white px-4 py-2.5 font-semibold text-black transition-colors hover:bg-gray-200"
                 >
                   Start Pro
                 </Link>
               </article>
 
-              <article className="rounded-xl border border-emerald-500/50 bg-emerald-500/10 p-6">
-                <p className="text-xs font-semibold uppercase tracking-wide text-emerald-200">For Card Teams</p>
+              <article className="rounded-xl border border-gray-700 bg-gray-950/40 p-6">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">For Card Teams</p>
                 <h3 className="mt-2 text-lg font-semibold text-white">Business</h3>
                 <p className="mt-4 text-3xl font-bold text-white">{formatPrice(BUSINESS_MONTHLY_PRICE)}/mo</p>
-                <p className="text-sm text-emerald-200">
+                <p className="text-sm text-gray-400">
                   Includes {BUSINESS_INCLUDED_SEATS} user · Add team members for {formatPrice(BUSINESS_ADDITIONAL_SEAT_MONTHLY_PRICE)}/month each
                 </p>
-                <ul className="mt-5 space-y-2 text-sm text-emerald-100">
+                <ul className="mt-5 space-y-2 text-sm text-gray-300">
                   <li>Everything in Pro</li>
                   <li>Shared inventory, sales, and ledger workflows</li>
                   <li>Role-based team access and seat controls</li>
@@ -379,7 +379,7 @@ export default function Home() {
                 </ul>
                 <Link
                   href="/signup"
-                  className="mt-6 inline-flex w-full items-center justify-center rounded-lg bg-emerald-600 px-4 py-2.5 font-semibold text-white transition-colors hover:bg-emerald-700"
+                  className="mt-6 inline-flex w-full items-center justify-center rounded-lg border border-white/12 bg-gray-900 px-4 py-2.5 font-semibold text-gray-100 transition-colors hover:bg-gray-800"
                 >
                   Start Business
                 </Link>
@@ -388,7 +388,7 @@ export default function Home() {
           </section>
         </main>
 
-        <footer className="border-t border-gray-800 bg-[#0f1419]/80 py-8">
+        <footer className="border-t border-gray-800 bg-[#0a0a0a]/90 py-8">
           <div className="mx-auto max-w-6xl px-4 text-center text-sm text-gray-400">
             <div className="mb-4 flex justify-center">
               <span className="text-2xl font-bold tracking-tight text-white">CardzCheck</span>

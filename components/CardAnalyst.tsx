@@ -367,7 +367,7 @@ export default function CardAnalyst({
 
   return (
     <div
-      className={`flex flex-col bg-[#0f1419] relative overflow-hidden ${
+      className={`flex flex-col bg-[color:var(--biz-bg)] relative overflow-hidden ${
         compact ? "h-[400px]" : "h-full"
       }`}
     >
@@ -380,8 +380,8 @@ export default function CardAnalyst({
             className="fixed inset-0 bg-black/50 z-20"
             onClick={() => setShowThreadList(false)}
           />
-          <div className="absolute left-0 top-0 bottom-0 w-72 bg-[#0f1419] border-r border-gray-800 z-30 flex flex-col">
-            <div className="p-4 border-b border-gray-800 flex items-center justify-between">
+          <div className="absolute left-0 top-0 bottom-0 w-72 bg-[color:var(--biz-bg)] border-r border-[color:var(--biz-border)] z-30 flex flex-col">
+            <div className="p-4 border-b border-[color:var(--biz-border)] flex items-center justify-between">
               <h3 className="font-medium text-white">Chat History</h3>
               <button
                 onClick={() => setShowThreadList(false)}
@@ -451,7 +451,7 @@ export default function CardAnalyst({
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-800 relative z-10 bg-[#0f1419]/80 backdrop-blur-sm">
+      <div className="flex items-center justify-between p-4 border-b border-[color:var(--biz-border)] relative z-10 bg-[color:var(--biz-bg)]/80 backdrop-blur-sm">
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowThreadList(true)}
@@ -625,7 +625,7 @@ export default function CardAnalyst({
 
       {/* Card Context Badge */}
       {cardLabel && (
-        <div className="px-4 py-2 border-t border-gray-800 relative z-10 bg-[#0f1419]/80">
+        <div className="px-4 py-2 border-t border-[color:var(--biz-border)] relative z-10 bg-[color:var(--biz-bg)]/80">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-800 rounded-lg">
             <svg
               className="w-4 h-4 text-gray-400"
@@ -650,7 +650,7 @@ export default function CardAnalyst({
       {/* Input Area */}
       <form
         onSubmit={handleSubmit}
-        className="p-4 border-t border-gray-800 relative z-10 bg-[#0f1419]/90 backdrop-blur-sm"
+        className="p-4 border-t border-[color:var(--biz-border)] relative z-10 bg-[color:var(--biz-bg)]/90 backdrop-blur-sm"
       >
         <div className="flex gap-2">
           <MicButton onResult={(text) => setInput((prev) => appendSpeechTranscript(prev, text))} />

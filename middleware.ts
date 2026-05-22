@@ -157,11 +157,12 @@ export const config = {
   matcher: [
     /*
      * Match all request paths except:
-     * - _next/static  (static files)
-     * - _next/image   (image optimization)
+     * - _next/static     (JS/CSS chunks, HMR client in webpack dev)
+     * - _next/image      (image optimization)
+     * - _next/webpack-hmr (frequent dev polls — must not run auth/session work)
      * - favicon.ico
      * - public files  (*.svg, *.png, *.jpg, etc.)
      */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|_next/webpack-hmr|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

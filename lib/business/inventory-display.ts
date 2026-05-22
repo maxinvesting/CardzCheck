@@ -35,7 +35,7 @@ export function getDaysHeld(acquisitionDate: string | null | undefined): number 
 
 export function getDaysHeldColor(days: number | null): string {
   if (days === null) return "text-[var(--biz-muted)]";
-  if (days < 30) return "text-[var(--biz-primary)]";
+  if (days < 30) return "text-[var(--biz-text-strong)]";
   if (days <= 60) return "text-amber-700";
   return "text-red-600";
 }
@@ -86,9 +86,9 @@ export function buildDisplayTitle(item: BusinessInventoryItem): string {
 export function statusColor(status: string): string {
   switch (status) {
     case "sold":
-      return "border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] text-[var(--biz-primary)]";
+      return "border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] text-[var(--biz-muted-strong)]";
     case "listed":
-      return "border border-[var(--biz-secondary-border)] bg-[var(--biz-secondary-soft)] text-[var(--biz-secondary)]";
+      return "border border-[var(--biz-border-strong)] bg-[var(--biz-surface-raised)] text-[var(--biz-text-strong)]";
     case "pending_sale": return "border border-amber-200 bg-amber-50 text-amber-700";
     case "returned": return "border border-red-200 bg-red-50 text-red-700";
     case "traded": return "border border-amber-200 bg-amber-50 text-amber-700";
@@ -123,13 +123,13 @@ export function gradeBadgeColor(item: BusinessInventoryItem): string {
   }
   const grade = parseFloat(item.grade || "0");
   if (grade >= 10) {
-    return "border border-[var(--biz-tertiary-border)] bg-[var(--biz-tertiary)] text-[var(--biz-tertiary-foreground)]";
+    return "border border-[var(--biz-border-strong)] bg-[var(--biz-surface-raised)] text-[var(--biz-text-strong)]";
   }
   if (grade >= 9) {
-    return "border border-[var(--biz-primary-border)] bg-[var(--biz-primary)] text-[var(--biz-primary-foreground)]";
+    return "border border-[var(--biz-border-strong)] bg-[var(--biz-surface-soft)] text-[var(--biz-text-strong)]";
   }
   if (grade >= 8) {
-    return "border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] text-[var(--biz-primary)]";
+    return "border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] text-[var(--biz-muted-strong)]";
   }
   if (grade >= 7) return "bg-amber-100 text-amber-800";
   return "bg-[var(--biz-surface-soft)] text-[var(--biz-muted)]";
@@ -222,7 +222,7 @@ export function formatMarginPct(pct: number): string {
 export function getMarginColor(netCents: number): string {
   if (netCents < 0) return "text-red-600";
   if (netCents < 500) return "text-amber-700";
-  return "text-[var(--biz-primary)]";
+  return "text-[color:var(--biz-profit)]";
 }
 
 // ── Aging buckets ────────────────────────────────────────────────────────────

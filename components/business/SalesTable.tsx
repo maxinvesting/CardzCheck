@@ -29,6 +29,15 @@ interface Props {
 
 const CHANNEL_OPTIONS = ["", "ebay", "whatnot", "instagram", "show", "local", "other"] as const;
 
+const inputClass =
+  "mt-1 w-full border border-[color:var(--biz-border)] bg-[color:var(--biz-near-black)] px-3 py-2 text-xs text-[color:var(--biz-text)] placeholder:text-[color:var(--biz-muted)] focus:outline-none focus:ring-1 focus:ring-[color:var(--biz-focus)]";
+
+const thClass =
+  "px-3 py-2 text-[10px] font-medium uppercase tracking-[0.1em] text-[color:var(--biz-muted)] border-b border-[color:var(--biz-border)]";
+
+const tdClass =
+  "px-3 py-2 align-middle text-[13px] leading-snug text-[color:var(--biz-text)] border-b border-[color:var(--biz-border-subtle)]";
+
 export default function SalesTable({
   sales,
   loading,
@@ -66,7 +75,7 @@ export default function SalesTable({
   return (
     <div>
       <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-5">
-        <label className="text-[11px] text-[var(--biz-muted)]">
+        <label className="text-[11px] uppercase tracking-[0.08em] text-[color:var(--biz-muted)]">
           From
           <input
             type="date"
@@ -74,10 +83,10 @@ export default function SalesTable({
             onChange={(event) =>
               onFiltersChange({ ...filters, from: event.target.value })
             }
-            className="mt-1 w-full rounded border border-[var(--biz-border)] bg-white px-3 py-2 text-xs text-[var(--biz-text)]"
+            className={inputClass}
           />
         </label>
-        <label className="text-[11px] text-[var(--biz-muted)]">
+        <label className="text-[11px] uppercase tracking-[0.08em] text-[color:var(--biz-muted)]">
           To
           <input
             type="date"
@@ -85,17 +94,17 @@ export default function SalesTable({
             onChange={(event) =>
               onFiltersChange({ ...filters, to: event.target.value })
             }
-            className="mt-1 w-full rounded border border-[var(--biz-border)] bg-white px-3 py-2 text-xs text-[var(--biz-text)]"
+            className={inputClass}
           />
         </label>
-        <label className="text-[11px] text-[var(--biz-muted)]">
+        <label className="text-[11px] uppercase tracking-[0.08em] text-[color:var(--biz-muted)]">
           Channel
           <select
             value={filters.channel}
             onChange={(event) =>
               onFiltersChange({ ...filters, channel: event.target.value })
             }
-            className="mt-1 w-full rounded border border-[var(--biz-border)] bg-white px-3 py-2 text-xs text-[var(--biz-text)]"
+            className={inputClass}
           >
             {CHANNEL_OPTIONS.map((option) => (
               <option key={option || "all"} value={option}>
@@ -104,7 +113,7 @@ export default function SalesTable({
             ))}
           </select>
         </label>
-        <label className="sm:col-span-2 text-[11px] text-[var(--biz-muted)]">
+        <label className="sm:col-span-2 text-[11px] uppercase tracking-[0.08em] text-[color:var(--biz-muted)]">
           Search
           <input
             type="text"
@@ -113,74 +122,87 @@ export default function SalesTable({
               onFiltersChange({ ...filters, search: event.target.value })
             }
             placeholder="Search notes/order id"
-            className="mt-1 w-full rounded border border-[var(--biz-border)] bg-white px-3 py-2 text-xs text-[var(--biz-text)] placeholder:text-[var(--biz-muted)]"
+            className={inputClass}
           />
         </label>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-[var(--biz-border)] bg-white">
-        <table className="w-full text-left text-xs text-[var(--biz-text)]">
-          <thead className="sticky top-0 z-10 border-b border-[var(--biz-border)] bg-[#F9FAFB]">
+      <div className="overflow-x-auto border border-[color:var(--biz-border)] bg-[color:var(--biz-surface)]">
+        <table className="w-full min-w-[1100px] border-collapse text-left text-xs font-data">
+          <thead className="bg-[color:var(--biz-near-black)]">
             <tr>
-              <th className="px-3 py-2 text-[11px] font-semibold uppercase tracking-normal text-[var(--biz-muted)]">Sold</th>
-              <th className="border-l border-[var(--biz-border)] px-3 py-2 text-[11px] font-semibold uppercase tracking-normal text-[var(--biz-muted)]">Title</th>
-              <th className="border-l border-[var(--biz-border)] px-3 py-2 text-[11px] font-semibold uppercase tracking-normal text-[var(--biz-muted)]">Channel</th>
-              <th className="border-l border-[var(--biz-border)] px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-normal text-[var(--biz-muted)]">Gross</th>
-              <th className="border-l border-[var(--biz-border)] px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-normal text-[var(--biz-muted)]">Fees</th>
-              <th className="border-l border-[var(--biz-border)] px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-normal text-[var(--biz-muted)]">Net</th>
-              <th className="border-l border-[var(--biz-border)] px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-normal text-[var(--biz-muted)]">COGS</th>
-              <th className="border-l border-[var(--biz-border)] px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-normal text-[var(--biz-muted)]">Profit</th>
-              <th className="border-l border-[var(--biz-border)] px-3 py-2 text-[11px] font-semibold uppercase tracking-normal text-[var(--biz-muted)]">Actions</th>
+              <th className={thClass}>Sold</th>
+              <th className={thClass}>Title</th>
+              <th className={thClass}>Channel</th>
+              <th className={`${thClass} text-right`}>Gross</th>
+              <th className={`${thClass} text-right`}>Fees</th>
+              <th className={`${thClass} text-right`}>Net</th>
+              <th className={`${thClass} text-right`}>COGS</th>
+              <th className={`${thClass} text-right`}>Profit</th>
+              <th className={thClass}>Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[var(--biz-border)]">
+          <tbody>
             {loading && (
               <tr>
-                <td colSpan={9} className="px-3 py-6 text-center text-[var(--biz-muted)]">
+                <td
+                  colSpan={9}
+                  className="px-3 py-6 text-center text-[color:var(--biz-muted)]"
+                >
                   Loading sales...
                 </td>
               </tr>
             )}
             {!loading && rows.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-3 py-6 text-center text-[var(--biz-muted)]">
+                <td
+                  colSpan={9}
+                  className="px-3 py-6 text-center text-[color:var(--biz-muted)]"
+                >
                   No sales found for this range.
                 </td>
               </tr>
             )}
             {!loading &&
               rows.map((sale) => (
-                <tr key={sale.id} className="hover:bg-[#F3F4F6]">
-                  <td className="px-3 py-2 text-[var(--biz-text)]">
+                <tr
+                  key={sale.id}
+                  className="transition-colors hover:bg-[color:var(--biz-hover)]"
+                >
+                  <td className={`${tdClass} tabular-nums text-[color:var(--biz-muted)]`}>
                     {new Date(sale.sold_at).toISOString().slice(0, 10)}
                   </td>
-                  <td className="border-l border-[var(--biz-border)] px-3 py-2 text-[var(--biz-text)]">{sale.title}</td>
-                  <td className="border-l border-[var(--biz-border)] px-3 py-2 text-[var(--biz-text)]">{sale.channel}</td>
-                  <td className="border-l border-[var(--biz-border)] px-3 py-2 text-right tabular-nums text-[var(--biz-text)]">
+                  <td className={`${tdClass} text-[color:var(--biz-text-strong)]`}>
+                    {sale.title}
+                  </td>
+                  <td className={`${tdClass} text-[color:var(--biz-muted)]`}>
+                    {sale.channel}
+                  </td>
+                  <td className={`${tdClass} text-right tabular-nums`}>
                     {formatMoney(sale.gross)}
                   </td>
-                  <td className="border-l border-[var(--biz-border)] px-3 py-2 text-right tabular-nums text-[var(--biz-text)]">
+                  <td className={`${tdClass} text-right tabular-nums text-[color:var(--biz-muted)]`}>
                     {formatMoney(sale.totalFees)}
                   </td>
-                  <td className="border-l border-[var(--biz-border)] px-3 py-2 text-right tabular-nums text-[var(--biz-text)]">
+                  <td className={`${tdClass} text-right tabular-nums`}>
                     {formatMoney(sale.net_payout_cents)}
                   </td>
-                  <td className="border-l border-[var(--biz-border)] px-3 py-2 text-right tabular-nums text-[var(--biz-text)]">
+                  <td className={`${tdClass} text-right tabular-nums text-[color:var(--biz-muted)]`}>
                     {formatMoney(sale.cogs_cents)}
                   </td>
                   <td
-                    className={`border-l border-[var(--biz-border)] px-3 py-2 text-right tabular-nums font-medium ${
-                      sale.profit_cents >= 0 ? "text-emerald-700" : "text-red-600"
+                    className={`${tdClass} text-right tabular-nums font-medium ${
+                      sale.profit_cents >= 0 ? "ledger-pnl-pos" : "ledger-pnl-neg"
                     }`}
                   >
                     {formatMoney(sale.profit_cents)}
                   </td>
-                  <td className="border-l border-[var(--biz-border)] px-3 py-2">
+                  <td className={tdClass}>
                     <div className="flex items-center gap-1">
                       <button
                         type="button"
                         onClick={() => setEditingSale(sale)}
-                        className="cc-btn-secondary rounded px-2 py-1 text-[10px] font-medium"
+                        className="border border-[color:var(--biz-border-strong)] bg-[color:var(--biz-surface-soft)] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.04em] text-[color:var(--biz-text-strong)] transition-colors hover:bg-[color:var(--biz-hover)] focus:outline-none focus:ring-1 focus:ring-[color:var(--biz-focus)]"
                       >
                         Edit
                       </button>
@@ -193,12 +215,12 @@ export default function SalesTable({
                             await onDeleteSale(sale.id);
                           } catch {
                             // Toast is handled by the parent.
-                        } finally {
-                          setDeletingId(null);
-                        }
+                          } finally {
+                            setDeletingId(null);
+                          }
                         }}
                         disabled={deletingId === sale.id}
-                        className="rounded border border-red-200 bg-red-50 px-2 py-1 text-[10px] font-medium text-red-700 hover:bg-red-100 disabled:opacity-60"
+                        className="border border-[color:var(--biz-border)] bg-[color:var(--biz-near-black)] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.04em] text-[color:var(--biz-danger)] transition-colors hover:border-[color:var(--biz-danger)] focus:outline-none focus:ring-1 focus:ring-[color:var(--biz-focus)] disabled:opacity-60"
                       >
                         {deletingId === sale.id ? "..." : "Delete"}
                       </button>
@@ -210,7 +232,7 @@ export default function SalesTable({
         </table>
       </div>
 
-      <div className="mt-2 flex items-center justify-between text-[11px] text-[var(--biz-muted)]">
+      <div className="mt-2 flex items-center justify-between text-[11px] text-[color:var(--biz-muted)]">
         <span>
           Showing {(page - 1) * pageSize + (rows.length > 0 ? 1 : 0)}-
           {(page - 1) * pageSize + rows.length} of {total}
@@ -220,7 +242,7 @@ export default function SalesTable({
             type="button"
             onClick={() => onPageChange(page - 1)}
             disabled={page <= 1}
-            className="cc-btn-secondary rounded px-2 py-1 text-xs disabled:opacity-50"
+            className="border border-[color:var(--biz-border)] bg-[color:var(--biz-near-black)] px-2 py-1 text-xs uppercase tracking-[0.04em] text-[color:var(--biz-text)] transition-colors hover:border-[color:var(--biz-border-strong)] disabled:opacity-40"
           >
             Prev
           </button>
@@ -231,7 +253,7 @@ export default function SalesTable({
             type="button"
             onClick={() => onPageChange(page + 1)}
             disabled={page >= totalPages}
-            className="cc-btn-secondary rounded px-2 py-1 text-xs disabled:opacity-50"
+            className="border border-[color:var(--biz-border)] bg-[color:var(--biz-near-black)] px-2 py-1 text-xs uppercase tracking-[0.04em] text-[color:var(--biz-text)] transition-colors hover:border-[color:var(--biz-border-strong)] disabled:opacity-40"
           >
             Next
           </button>

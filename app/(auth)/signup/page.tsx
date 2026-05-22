@@ -65,7 +65,7 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0f1419] px-4 relative overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center bg-[#0a0a0a] px-4 relative overflow-hidden">
       <SportsCardBackground variant="default" />
       <div className="max-w-md w-full space-y-8 relative z-10">
         <div className="text-center">

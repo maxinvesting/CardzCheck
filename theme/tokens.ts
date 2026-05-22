@@ -1,34 +1,56 @@
 /**
- * Design tokens for Grade Probability Engine UI and export template.
- *
- * Dark, premium, minimal — consistent across the web UI and the
- * html2canvas export.  Tailwind class helpers (tw.*) are for component
- * usage; raw values (raw.*) are for inline styles inside the export
- * onclone callback where Tailwind classes don't apply.
+ * CardzCheck theme — operator shell palette + grade-probability export tokens.
+ * Runtime shell colors: `styles/businessTheme.css` (`:root` / `.business-theme`).
  */
 
+/** Matte shell — documentation + TS reference */
+export const CC_THEME = {
+  bg: {
+    primary: "#0A0A0A",
+    surface: "#111111",
+    elevated: "#151515",
+    rowHover: "#1A1A1A",
+  },
+  text: {
+    primary: "#F3F3F3",
+    secondary: "#A1A1A1",
+    muted: "#6F6F6F",
+  },
+  border: "#222222",
+  accentPositive: "#9BACA3",
+  accentPositiveSoft: "rgba(155, 172, 163, 0.14)",
+  chrome: {
+    primary: "#E4E4E4",
+    secondary: "#A8A8A8",
+    tertiary: "#787878",
+  },
+} as const;
+
+/**
+ * Grade Probability Engine UI + html2canvas export template.
+ * `tw.*` = Tailwind helpers; `raw.*` = inline styles in export onclone.
+ */
 export const preTokens = {
-  // ── Tailwind class helpers ──────────────────────────────────────────
   tw: {
     bg: {
-      page:    "bg-[#07111d]",
-      surface: "bg-[#0c1a2e]",
-      raised:  "bg-[#0f1f35]",
-      inset:   "bg-[#091529]",
+      page: "bg-[#0a0a0a]",
+      surface: "bg-[#111111]",
+      raised: "bg-[#151515]",
+      inset: "bg-[#0d0d0d]",
     },
     border: {
-      subtle:  "border border-white/[0.06]",
-      default: "border border-white/[0.10]",
-      strong:  "border border-white/[0.16]",
-      accent:  "border border-blue-500/30",
+      subtle: "border border-white/[0.06]",
+      default: "border border-white/[0.08]",
+      strong: "border border-white/[0.12]",
+      accent: "border border-white/[0.14]",
     },
     text: {
-      primary:   "text-[#e2eaf3]",
-      secondary: "text-[#7a91a8]",
-      muted:     "text-[#3a5068]",
-      accent:    "text-blue-400",
-      success:   "text-emerald-400",
-      warning:   "text-amber-400",
+      primary: "text-[#f3f3f3]",
+      secondary: "text-[#a1a1a1]",
+      muted: "text-[#6f6f6f]",
+      accent: "text-[#c8c8c8]",
+      success: "text-[#9baca3]",
+      warning: "text-amber-500/90",
     },
     radius: {
       sm: "rounded",
@@ -39,39 +61,34 @@ export const preTokens = {
     label: "text-[10px] uppercase tracking-widest font-medium",
   },
 
-  // ── Raw CSS values (for inline styles in export template) ──────────
   raw: {
-    bgPage:    "#07111d",
-    bgSurface: "#0c1a2e",
-    bgRaised:  "#0f1f35",
-    bgInset:   "#091529",
+    bgPage: "#0a0a0a",
+    bgSurface: "#111111",
+    bgRaised: "#151515",
+    bgInset: "#0d0d0d",
 
-    borderSubtle:  "rgba(255,255,255,0.06)",
-    borderDefault: "rgba(255,255,255,0.10)",
-    borderStrong:  "rgba(255,255,255,0.16)",
+    borderSubtle: "rgba(255,255,255,0.06)",
+    borderDefault: "rgba(255,255,255,0.08)",
+    borderStrong: "rgba(255,255,255,0.12)",
 
-    textPrimary:   "#e2eaf3",
-    textSecondary: "#7a91a8",
-    textMuted:     "#3a5068",
+    textPrimary: "#f3f3f3",
+    textSecondary: "#a1a1a1",
+    textMuted: "#6f6f6f",
 
-    accentBlue:    "#3b82f6",
-    accentEmerald: "#10b981",
-    accentAmber:   "#f59e0b",
+    accentBlue: "#8e96a3",
+    accentEmerald: "#9baca3",
+    accentAmber: "#c9a227",
 
-    barBlue:    "#2563eb",
-    barEmerald: "#059669",
+    barBlue: "#6b7280",
+    barEmerald: "#7a8a82",
   },
 } as const;
 
 export type PreTokens = typeof preTokens;
 
-/**
- * Confidence level → Tailwind pill classes (bg + text + border).
- * Single authoritative source so web UI and any future export share the
- * same style.
- */
+/** Confidence level → pill classes (shared UI + export) */
 export const confidencePillClasses: Record<string, string> = {
-  high:   "bg-emerald-500/10 text-emerald-300 border border-emerald-500/20",
-  medium: "bg-blue-500/10 text-blue-300 border border-blue-500/20",
-  low:    "bg-amber-500/10 text-amber-300 border border-amber-500/20",
+  high: "bg-white/[0.06] text-[#d4d4d4] border border-white/[0.12]",
+  medium: "bg-white/[0.05] text-[#a1a1a1] border border-white/[0.1]",
+  low: "bg-amber-500/10 text-amber-200/90 border border-amber-500/20",
 };

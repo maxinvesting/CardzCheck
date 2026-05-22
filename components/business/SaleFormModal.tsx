@@ -80,10 +80,10 @@ function toDateInput(value: string | null | undefined): string {
   return dt.toISOString().slice(0, 10);
 }
 
-// Field styles — white/green standard
+// Field styles — dark business theme
 const fieldCls =
-  "mt-1 w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500";
-const labelCls = "block text-xs font-medium text-gray-500";
+  "mt-1 w-full border border-[#343941] bg-[#090B0D] px-3 py-2 text-sm text-[#E6E8EB] placeholder:text-[#4F5863] outline-none focus:border-[#20B26B]";
+const labelCls = "block text-xs font-medium text-[#77808C]";
 
 export default function SaleFormModal({
   isOpen,
@@ -232,19 +232,17 @@ export default function SaleFormModal({
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className="w-full max-w-xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+      <div className="w-full max-w-xl overflow-hidden border border-[#24282D] bg-[#0F1317] shadow-2xl">
 
         {/* ── Header ────────────────────────────────────────────────────── */}
-        <div className="flex items-start justify-between bg-[#0B1829] px-5 py-4">
-          <h2 className="text-sm font-bold leading-snug text-white pr-4">{title}</h2>
+        <div className="flex items-start justify-between border-b border-[#24282D] px-5 py-4">
+          <h2 className="text-sm font-semibold leading-snug text-[#E6E8EB] pr-4">{title}</h2>
           <button
             type="button"
             onClick={onClose}
-            className="mt-0.5 shrink-0 rounded p-1 text-white/40 hover:bg-white/10 hover:text-white transition-colors"
+            className="px-2 text-xl leading-none text-[#77808C] hover:text-[#E6E8EB]"
           >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            ×
           </button>
         </div>
 
@@ -329,7 +327,7 @@ export default function SaleFormModal({
 
           {/* ── eBay info strip ────────────────────────────────────────── */}
           {channel === "ebay" && (
-            <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+            <div className="border border-[#1D3A60] bg-[#0A1929] px-3 py-2 text-xs text-[#60A0DC]">
               <p>
                 <span className="font-semibold">Platform fees</span> estimated at{" "}
                 <span className="font-bold">13.5%</span> of sale + shipping. Override the field above if you know the exact amount.
@@ -338,26 +336,26 @@ export default function SaleFormModal({
           )}
 
           {/* ── Estimated net payout ───────────────────────────────────── */}
-          <label className="inline-flex items-center gap-2 text-xs font-medium text-gray-600">
+          <label className="inline-flex items-center gap-2 text-xs font-medium text-[#77808C]">
             <input
               type="checkbox"
               checked={autoCalcNetPayout}
               onChange={(e) => setAutoCalcNetPayout(e.target.checked)}
-              className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+              className="border-[#343941] bg-[#090B0D] text-[#20B26B] focus:ring-[#20B26B]"
             />
             Auto-calculate net payout
           </label>
 
           {autoCalcNetPayout ? (
-            <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3">
+            <div className="flex items-center justify-between border border-[#1F5F45] bg-[#0E251B] px-4 py-3">
               <div>
-                <p className="text-xs font-medium text-emerald-700">Estimated net payout</p>
-                <p className="text-[11px] text-emerald-500 mt-0.5">
+                <p className="text-xs font-medium text-[#20B26B]">Estimated net payout</p>
+                <p className="text-[11px] text-[#20B26B]/60 mt-0.5">
                   Sale + shipping − fees − shipping cost
                   {channel === "ebay" && !platformFees.trim() && " (13.5% eBay fee assumed)"}
                 </p>
               </div>
-              <p className="text-xl font-bold text-emerald-600">
+              <p className="text-xl font-bold text-[#20B26B]">
                 {formatMoney(computedNetPayoutCents)}
               </p>
             </div>
@@ -377,20 +375,20 @@ export default function SaleFormModal({
 
           {/* ── eBay Standard Envelope (only for eBay + price ≤ $20) ────── */}
           {showEse && (
-            <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 space-y-2">
+            <div className="border border-[#24282D] bg-[#090B0D] px-3 py-2.5 space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-xs font-semibold text-gray-700">
+                <p className="text-xs font-semibold text-[#B8C0CC]">
                   eBay Standard Envelope
-                  <span className="ml-1.5 font-normal text-gray-400">
+                  <span className="ml-1.5 font-normal text-[#77808C]">
                     (under ${ESE_MAX_ITEM_VALUE.toFixed(0)} items)
                   </span>
                 </p>
-                <label className="flex items-center gap-1.5 text-[11px] text-gray-500">
+                <label className="flex items-center gap-1.5 text-[11px] text-[#77808C]">
                   Weight
                   <select
                     value={eseWeightOz}
                     onChange={(e) => setEseWeightOz(Number(e.target.value) as 1 | 2 | 3)}
-                    className="rounded border border-gray-200 bg-white px-1.5 py-0.5 text-[11px] text-gray-700"
+                    className="border border-[#343941] bg-[#090B0D] px-1.5 py-0.5 text-[11px] text-[#E6E8EB] outline-none"
                   >
                     <option value={1}>1 oz</option>
                     <option value={2}>2 oz</option>
@@ -402,26 +400,26 @@ export default function SaleFormModal({
               {eseEstimate && (
                 <div className="grid grid-cols-3 gap-2 text-[11px]">
                   <div>
-                    <div className="text-gray-400">eBay fees</div>
-                    <div className="font-semibold text-gray-700">
+                    <div className="text-[#77808C]">eBay fees</div>
+                    <div className="font-semibold text-[#B8C0CC]">
                       ${eseEstimate.totalEbayFees.toFixed(2)}
-                      <span className="text-gray-400 font-normal ml-1">
+                      <span className="text-[#77808C] font-normal ml-1">
                         ({(eseEstimate.fvfRate * 100).toFixed(1)}% + ${eseEstimate.perOrderFee.toFixed(2)})
                       </span>
                     </div>
                   </div>
                   <div>
-                    <div className="text-gray-400">Shipping + pkg</div>
-                    <div className="font-semibold text-gray-700">
+                    <div className="text-[#77808C]">Shipping + pkg</div>
+                    <div className="font-semibold text-[#B8C0CC]">
                       ${eseEstimate.shippingCost.toFixed(2)}
-                      <span className="text-gray-400 font-normal ml-1">+ ${eseEstimate.packagingTotal.toFixed(2)}</span>
+                      <span className="text-[#77808C] font-normal ml-1">+ ${eseEstimate.packagingTotal.toFixed(2)}</span>
                     </div>
                   </div>
                   <div>
-                    <div className="text-gray-400">Net profit (pre-COGS)</div>
-                    <div className={`font-bold ${eseEstimate.isLoss ? "text-red-500" : "text-emerald-600"}`}>
+                    <div className="text-[#77808C]">Net profit (pre-COGS)</div>
+                    <div className={`font-bold ${eseEstimate.isLoss ? "text-[#E05C5C]" : "text-[#20B26B]"}`}>
                       ${eseEstimate.netProfit.toFixed(2)}
-                      <span className="text-gray-400 font-normal ml-1">({eseEstimate.netMarginPct.toFixed(1)}%)</span>
+                      <span className="text-[#77808C] font-normal ml-1">({eseEstimate.netMarginPct.toFixed(1)}%)</span>
                     </div>
                   </div>
                 </div>
@@ -431,13 +429,13 @@ export default function SaleFormModal({
 
           {/* ── Whatnot helper ─────────────────────────────────────────── */}
           {channel === "whatnot" && (
-            <div className="rounded-lg border border-purple-100 bg-purple-50 px-3 py-2.5 text-xs">
-              <p className="font-semibold text-purple-700 mb-1.5">Recording a Whatnot sale</p>
-              <ol className="list-decimal list-inside space-y-1 text-gray-500">
-                <li>Find the order in <span className="font-medium text-gray-700">Whatnot Seller Dashboard → Orders</span></li>
-                <li><span className="font-medium text-gray-700">Sold Price</span> — the hammer price the buyer paid</li>
-                <li><span className="font-medium text-gray-700">Platform Fees</span> — Whatnot seller fee (~9.5%) + 2.9% payment processing; see "Fee Breakdown"</li>
-                <li><span className="font-medium text-gray-700">External Order ID</span> — paste the Whatnot order number to prevent duplicates</li>
+            <div className="border border-[#3A2A5A] bg-[#1A0F2A] px-3 py-2.5 text-xs">
+              <p className="font-semibold text-[#C09AF0] mb-1.5">Recording a Whatnot sale</p>
+              <ol className="list-decimal list-inside space-y-1 text-[#77808C]">
+                <li>Find the order in <span className="font-medium text-[#B8C0CC]">Whatnot Seller Dashboard → Orders</span></li>
+                <li><span className="font-medium text-[#B8C0CC]">Sold Price</span> — the hammer price the buyer paid</li>
+                <li><span className="font-medium text-[#B8C0CC]">Platform Fees</span> — Whatnot seller fee (~9.5%) + 2.9% payment processing; see "Fee Breakdown"</li>
+                <li><span className="font-medium text-[#B8C0CC]">External Order ID</span> — paste the Whatnot order number to prevent duplicates</li>
               </ol>
             </div>
           )}
@@ -488,18 +486,18 @@ export default function SaleFormModal({
           </div>
 
           {/* ── Actions ───────────────────────────────────────────────── */}
-          <div className="flex items-center justify-end gap-2 border-t border-gray-100 pt-4">
+          <div className="flex items-center justify-end gap-2 border-t border-[#24282D] pt-4">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+              className="border border-[#343941] px-4 py-2 text-sm font-medium text-[#B8C0CC] hover:text-[#E6E8EB] transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={submitting || !soldPrice.trim()}
-              className="rounded-lg bg-emerald-600 px-5 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+              className="border border-[#20B26B] bg-[#20B26B] px-5 py-2 text-sm font-bold text-[#07100B] hover:bg-[#33C47C] disabled:opacity-50 transition-colors"
             >
               {submitting ? "Saving…" : submitLabel}
             </button>

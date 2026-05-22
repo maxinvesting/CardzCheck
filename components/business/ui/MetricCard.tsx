@@ -5,7 +5,7 @@ import type { StatusTone } from "./StatusPill";
 
 const TONE_VALUE: Record<StatusTone, string> = {
   neutral: "text-[var(--biz-text-strong)]",
-  primary: "text-[var(--biz-primary)]",
+  primary: "text-[var(--biz-text-strong)]",
   profit: "text-[var(--biz-profit)]",
   warning: "text-[var(--biz-warning)]",
   danger: "text-[var(--biz-danger)]",

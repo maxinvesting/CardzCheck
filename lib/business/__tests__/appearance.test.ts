@@ -66,20 +66,20 @@ describe("business appearance helpers", () => {
     });
   });
 
-  it("derives semantic business CSS variables from the palette", () => {
+  it("derives workspace CSS variables from the neutral default palette (ignores saved palette)", () => {
     const vars = getBusinessAppearanceCssVariables({
       primaryColor: "#336699",
       secondaryColor: "#22AA44",
       tertiaryColor: "#8844CC",
     });
 
-    expect(vars["--biz-primary"]).toBe("#336699");
-    expect(vars["--biz-primary-hover"]).toBe("#2D5A87");
-    expect(vars["--biz-primary-soft"]).toBe("rgba(51, 102, 153, 0.100)");
-    expect(vars["--biz-link"]).toBe("#336699");
-    expect(vars["--biz-focus"]).toBe("rgba(51, 102, 153, 0.220)");
-    expect(vars["--biz-secondary"]).toBe("#22AA44");
-    expect(vars["--biz-tertiary"]).toBe("#8844CC");
-    expect(vars["--biz-primary-foreground"]).toBe("#FFFFFF");
+    expect(vars["--biz-primary"]).toBe(DEFAULT_BUSINESS_APPEARANCE.primaryColor);
+    expect(vars["--biz-primary-hover"]).toBe("#C9C9C9");
+    expect(vars["--biz-primary-soft"]).toBe("rgba(228, 228, 228, 0.100)");
+    expect(vars["--biz-link"]).toBe("#C8C8C8");
+    expect(vars["--biz-focus"]).toBe("rgba(255, 255, 255, 0.18)");
+    expect(vars["--biz-secondary"]).toBe(DEFAULT_BUSINESS_APPEARANCE.secondaryColor);
+    expect(vars["--biz-tertiary"]).toBe(DEFAULT_BUSINESS_APPEARANCE.tertiaryColor);
+    expect(vars["--biz-primary-foreground"]).toBe("#0F172A");
   });
 });

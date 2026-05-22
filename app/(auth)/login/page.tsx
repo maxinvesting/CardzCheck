@@ -58,7 +58,7 @@ function LoginForm() {
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#0f1419] px-4">
+    <div className="relative min-h-screen overflow-hidden bg-[#0a0a0a] px-4">
       <SportsCardBackground variant="subtle" />
       <div className="relative z-10 mx-auto flex min-h-screen max-w-5xl items-center py-10">
         <div className="grid w-full gap-6 lg:grid-cols-[1.05fr_0.95fr]">
@@ -178,7 +178,7 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex items-center justify-center bg-[#0f1419]">
+        <div className="min-h-screen flex items-center justify-center bg-[#0a0a0a]">
           <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600" />
         </div>
       }

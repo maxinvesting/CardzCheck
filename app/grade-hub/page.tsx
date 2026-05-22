@@ -2,8 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import Link from "next/link";
-import { Playfair_Display } from "next/font/google";
 import { useAuth } from "@/contexts/AuthContext";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import {
@@ -13,19 +11,6 @@ import {
 } from "@/lib/grading/gradeEstimatorHistoryCache";
 import type { GradeEstimatorHistoryRun, GradeEstimate } from "@/types";
 
-const playfair = Playfair_Display({ subsets: ["latin"], weight: ["400", "600"] });
-
-// ── Design tokens ─────────────────────────────────────────────────────────────
-const BG      = "#FFFFFF";
-const SURFACE = "#F7F7F7";
-const RED     = "#B91C1C";
-const RED_DIM = "rgba(185,28,28,0.12)";
-const TEXT    = "#111111";
-const MUTED   = "#888888";
-const BORDER  = "#E5E5E5";
-const RED_BORDER = "rgba(185,28,28,0.25)";
-
-// ── Types ─────────────────────────────────────────────────────────────────────
 type CreditStatus = {
   tier: "free" | "pro" | "business";
   unlimited: boolean;
@@ -36,7 +21,6 @@ type CreditStatus = {
 type ScanMode = "scan" | "mock";
 type PageView = "home" | "history";
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 function formatTimeAgo(dateStr: string): string {
   const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
   if (seconds < 60)     return "just now";
@@ -71,58 +55,39 @@ function formatTimeUntil(iso: string | null): string {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
-// ── About modal ───────────────────────────────────────────────────────────────
 function AboutModal({ onClose }: { onClose: () => void }) {
   return (
     <div
       role="dialog"
       aria-modal="true"
       onClick={onClose}
-      style={{
-        position: "fixed", inset: 0,
-        background: "rgba(0,0,0,0.35)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        zIndex: 50, padding: 24,
-      }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        style={{
-          background: BG,
-          border: `1px solid ${BORDER}`,
-          borderTop: `3px solid ${RED}`,
-          borderRadius: 2,
-          padding: "32px",
-          maxWidth: 460,
-          width: "100%",
-        }}
+        className="w-full max-w-[460px] rounded-md border border-[#24282D] bg-[#0F1317] p-8"
       >
-        <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: "2px", color: RED, textTransform: "uppercase", marginBottom: 12 }}>
+        <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#77808C]">
           About
         </p>
-        <h2 className={playfair.className} style={{ fontSize: 20, color: TEXT, marginBottom: 16, lineHeight: 1.3 }}>
+        <h2 className="mb-4 text-[18px] font-semibold leading-tight text-[#E6E8EB]">
           Grade Probability Engine
         </h2>
-        <p style={{ fontSize: 13, color: MUTED, lineHeight: 1.65, marginBottom: 12 }}>
+        <p className="mb-3 text-[13px] leading-relaxed text-[#B8C0CC]">
           Uses Claude AI with vision to analyze card photos and return calibrated probability
           distributions for PSA, BGS, CGC, SGC, and Tag Rater.
         </p>
-        <p style={{ fontSize: 13, color: MUTED, lineHeight: 1.65, marginBottom: 24 }}>
+        <p className="mb-6 text-[13px] leading-relaxed text-[#B8C0CC]">
           Upload front, back, and close-up photos. The engine scores centering, corners, edges,
           and surface — then combines them into grade probabilities and a recommended action.
         </p>
-        <p style={{ fontSize: 11, color: MUTED, marginBottom: 24, paddingTop: 12, borderTop: `1px solid ${BORDER}` }}>
+        <p className="mb-6 border-t border-[#24282D] pt-3 text-[11px] text-[#77808C]">
           Results are predictions, not guarantees. Actual grades may vary.
         </p>
         <button
           type="button"
           onClick={onClose}
-          style={{
-            fontSize: 10, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase",
-            color: RED, background: "none",
-            border: `1px solid ${RED_BORDER}`,
-            borderRadius: 2, padding: "8px 20px", cursor: "pointer",
-          }}
+          className="rounded border border-[#343941] px-4 py-2 text-[11px] font-medium text-[#B8C0CC] transition-colors hover:border-[#5A626E] hover:text-[#E6E8EB]"
         >
           Close
         </button>
@@ -131,7 +96,6 @@ function AboutModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-// ── Main ──────────────────────────────────────────────────────────────────────
 export default function GradeHubPage() {
   const { authUser, loading: authLoading } = useAuth();
   const router   = useRouter();
@@ -225,87 +189,39 @@ export default function GradeHubPage() {
 
   return (
     <AuthenticatedLayout>
-      <div style={{ minHeight: "100vh", background: BG, color: TEXT }}>
+      <div className="min-h-screen bg-[#090B0D] text-[#E6E8EB]">
 
-        {/* ── Nav ──────────────────────────────────────────────────────── */}
-        <nav style={{
-          background: BG,
-          borderBottom: `1px solid ${BORDER}`,
-          display: "flex",
-          alignItems: "stretch",
-          padding: "0 32px",
-        }}>
-          <div style={{ flex: 1, display: "flex", alignItems: "stretch" }}>
-            {/* Exit back to dashboard */}
-            <Link
-              href={pathname?.startsWith("/business") ? "/business" : "/"}
-              style={{
-                display: "flex", alignItems: "center", gap: 5,
-                fontSize: 10, fontWeight: 700, letterSpacing: "0.8px", textTransform: "uppercase",
-                color: MUTED, textDecoration: "none",
-                padding: "0 20px 0 0",
-                marginRight: 20,
-                borderRight: `1px solid ${BORDER}`,
-                alignSelf: "stretch",
-              }}
-            >
-              <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
-              </svg>
-              Exit
-            </Link>
-            <div style={{
-              display: "flex", alignItems: "center",
-              paddingRight: 24, marginRight: 8,
-              borderRight: `1px solid ${BORDER}`,
-            }}>
-              <span className={playfair.className} style={{ fontSize: 14, fontWeight: 600, color: TEXT }}>
-                Grade Probability Engine
-              </span>
+        {/* Page header */}
+        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#24282D] px-4 py-3">
+          <div>
+            <div className="text-[10px] font-medium uppercase tracking-[0.12em] text-[#77808C]">
+              Analytics
             </div>
-
-            {(["home", "history"] as PageView[]).map((v) => (
+            <h1 className="mt-0.5 flex items-center gap-3 text-[18px] font-semibold tracking-normal text-[#E6E8EB]">
+              Grading
               <button
-                key={v}
                 type="button"
-                onClick={() => setView(v)}
-                style={{
-                  padding: "0 18px",
-                  fontSize: 10, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase",
-                  color: view === v ? RED : MUTED,
-                  background: "none", border: "none",
-                  borderBottom: `2px solid ${view === v ? RED : "transparent"}`,
-                  marginBottom: -1, cursor: "pointer",
-                }}
+                onClick={() => setAboutOpen(true)}
+                className="text-[10px] font-medium uppercase tracking-[0.12em] text-[#77808C] hover:text-[#B8C0CC]"
               >
-                {v}
+                About
               </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => setAboutOpen(true)}
-              style={{
-                padding: "0 18px",
-                fontSize: 10, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase",
-                color: MUTED, background: "none", border: "none",
-                borderBottom: "2px solid transparent", marginBottom: -1, cursor: "pointer",
-              }}
-            >
-              About
-            </button>
+            </h1>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 0" }}>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setView(view === "history" ? "home" : "history")}
+              className="border border-[#343941] px-3 py-1.5 text-[12px] font-medium text-[#B8C0CC] transition-colors hover:border-[#5A626E] hover:text-[#E6E8EB]"
+            >
+              {view === "history" ? "← Home" : "History"}
+            </button>
             {isBusiness && (
               <button
                 type="button"
                 onClick={() => router.push(`${scanPath}?slots=3&mode=scan`)}
-                style={{
-                  fontSize: 10, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase",
-                  color: MUTED, background: "none",
-                  border: `1px solid ${BORDER}`, borderRadius: 2,
-                  padding: "6px 14px", cursor: "pointer",
-                }}
+                className="border border-[#343941] px-3 py-1.5 text-[12px] font-medium text-[#B8C0CC] transition-colors hover:border-[#5A626E] hover:text-[#E6E8EB]"
               >
                 Batch Scan
               </button>
@@ -313,42 +229,24 @@ export default function GradeHubPage() {
             <button
               type="button"
               onClick={() => router.push(`${scanPath}?slots=1&mode=scan`)}
-              style={{
-                fontSize: 10, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase",
-                color: "#fff", background: RED,
-                border: "none", borderRadius: 2,
-                padding: "7px 16px", cursor: "pointer",
-              }}
+              className="border border-[#20B26B] bg-[#20B26B] px-3 py-1.5 text-[12px] font-semibold text-[#07100B] transition-colors hover:bg-[#33C47C]"
             >
               + New Scan
             </button>
           </div>
-        </nav>
+        </header>
 
-        {/* ════════════════════════════════════════════════════
-            HOME
-        ════════════════════════════════════════════════════ */}
+        {/* HOME */}
         {view === "home" && (
-          <div style={{ maxWidth: 800, margin: "0 auto", padding: "40px 32px 64px" }}>
+          <div className="mx-auto max-w-[800px] px-8 py-10">
 
-            {/* Section label */}
-            <p style={{
-              fontSize: 9, fontWeight: 700, letterSpacing: "2px",
-              color: RED, textTransform: "uppercase", marginBottom: 24,
-            }}>
+            <p className="mb-6 text-[10px] font-medium uppercase tracking-[0.16em] text-[#77808C]">
               New Analysis
             </p>
 
-            {/* Mode + CTA card */}
-            <div style={{
-              background: BG,
-              border: `1px solid ${BORDER}`,
-              borderTop: `3px solid ${RED}`,
-              borderRadius: 2,
-              marginBottom: 40,
-            }}>
+            <div className="mb-10 border border-[#24282D] bg-[#0F1317]">
               {/* Mode toggle */}
-              <div style={{ display: "flex", borderBottom: `1px solid ${BORDER}` }}>
+              <div className="flex border-b border-[#24282D]">
                 {([
                   { key: "scan" as ScanMode, label: "Scan" },
                   { key: "mock" as ScanMode, label: "Mock Submission" },
@@ -357,24 +255,19 @@ export default function GradeHubPage() {
                     key={item.key}
                     type="button"
                     onClick={() => setMode(item.key)}
-                    style={{
-                      padding: "12px 24px",
-                      fontSize: 11, fontWeight: 700, letterSpacing: "0.5px",
-                      color: mode === item.key ? RED : MUTED,
-                      background: mode === item.key ? RED_DIM : "none",
-                      border: "none",
-                      borderRight: i === 0 ? `1px solid ${BORDER}` : "none",
-                      cursor: "pointer",
-                    }}
+                    className={`px-6 py-3 text-[11px] font-semibold uppercase tracking-[0.08em] transition-colors ${
+                      mode === item.key
+                        ? "border-b-2 border-[#E6E8EB] text-[#E6E8EB] -mb-px"
+                        : "text-[#77808C] hover:text-[#B8C0CC]"
+                    } ${i === 0 ? "border-r border-[#24282D]" : ""}`}
                   >
                     {item.label}
                   </button>
                 ))}
               </div>
 
-              {/* Description + action */}
-              <div style={{ padding: "20px 24px", display: "flex", alignItems: "center", gap: 24 }}>
-                <p style={{ flex: 1, fontSize: 12, color: MUTED, lineHeight: 1.6 }}>
+              <div className="flex items-center gap-6 px-6 py-5">
+                <p className="flex-1 text-[12px] leading-relaxed text-[#B8C0CC]">
                   {mode === "scan"
                     ? "Upload card photos — the engine scores centering, corners, edges, and surface and returns calibrated probability bands for PSA, BGS, CGC, SGC, and Tag Rater."
                     : "Simulate a full grading submission. Get ROI analysis, break-even grade, and profit scenarios before sending cards."}
@@ -383,24 +276,14 @@ export default function GradeHubPage() {
                   type="button"
                   onClick={handleBeginAnalysis}
                   disabled={creditsLoading}
-                  style={{
-                    flexShrink: 0,
-                    padding: "10px 28px",
-                    fontSize: 11, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase",
-                    color: "#fff", background: RED,
-                    border: "none", borderRadius: 2,
-                    cursor: creditsLoading ? "not-allowed" : "pointer",
-                    opacity: creditsLoading ? 0.6 : 1,
-                    whiteSpace: "nowrap",
-                  }}
+                  className="flex-shrink-0 whitespace-nowrap border border-[#20B26B] bg-[#20B26B] px-7 py-2.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#07100B] transition-colors hover:bg-[#33C47C] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {creditsLoading ? "Loading…" : "Begin Analysis"}
                 </button>
               </div>
 
-              {/* Credit status footer */}
-              <div style={{ padding: "10px 24px", borderTop: `1px solid ${BORDER}`, background: SURFACE }}>
-                <p style={{ fontSize: 10, color: MUTED }}>
+              <div className="border-t border-[#24282D] bg-[#0B0D0F] px-6 py-2.5">
+                <p className="text-[10px] text-[#77808C]">
                   {creditsLoading
                     ? "Checking access…"
                     : !credits
@@ -413,7 +296,7 @@ export default function GradeHubPage() {
                   {!creditsLoading && !canScan && credits && (
                     <span
                       onClick={() => router.push(pathname?.startsWith("/business") ? "/business/settings" : "/settings")}
-                      style={{ color: RED, cursor: "pointer", marginLeft: 12 }}
+                      className="ml-3 cursor-pointer text-[#20B26B] hover:text-[#33C47C]"
                     >
                       Upgrade →
                     </span>
@@ -424,88 +307,78 @@ export default function GradeHubPage() {
 
             {/* Recent Scans */}
             <div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: "2px", color: MUTED, textTransform: "uppercase" }}>
+              <div className="mb-3 flex items-center justify-between">
+                <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-[#77808C]">
                   Recent Scans
                 </p>
                 <button
                   type="button"
                   onClick={() => setView("history")}
-                  style={{ fontSize: 10, color: RED, background: "none", border: "none", cursor: "pointer" }}
+                  className="text-[10px] text-[#B8C0CC] hover:text-[#E6E8EB]"
                 >
                   View all →
                 </button>
               </div>
 
-              <div style={{ border: `1px solid ${BORDER}`, borderRadius: 2, overflow: "hidden" }}>
-                {/* Header */}
-                <div style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 100px 80px 90px 32px",
-                  gap: 8, padding: "8px 16px",
-                  background: SURFACE, borderBottom: `1px solid ${BORDER}`,
-                }}>
+              <div className="overflow-hidden border border-[#24282D]">
+                <div
+                  className="grid gap-2 border-b border-[#24282D] bg-[#0B0D0F] px-4 py-2"
+                  style={{ gridTemplateColumns: "1fr 100px 80px 90px 32px" }}
+                >
                   {["Card", "Predicted", "Confidence", "Date", ""].map((col, i) => (
-                    <span key={i} style={{ fontSize: 9, fontWeight: 700, letterSpacing: "1px", color: MUTED, textTransform: "uppercase" }}>
+                    <span key={i} className="text-[9px] font-semibold uppercase tracking-[0.12em] text-[#77808C]">
                       {col}
                     </span>
                   ))}
                 </div>
 
-                {/* Loading skeletons */}
                 {historyLoading && recentRuns.length === 0 ? (
                   [1, 2, 3].map((i) => (
-                    <div key={i} style={{
-                      display: "grid", gridTemplateColumns: "1fr 100px 80px 90px 32px",
-                      gap: 8, padding: "13px 16px",
-                      borderBottom: i < 3 ? `1px solid ${BORDER}` : "none",
-                    }}>
+                    <div
+                      key={i}
+                      className={`grid gap-2 px-4 py-3 ${i < 3 ? "border-b border-[#24282D]" : ""}`}
+                      style={{ gridTemplateColumns: "1fr 100px 80px 90px 32px" }}
+                    >
                       {[65, 50, 40, 50, 0].map((w, j) => w > 0 ? (
-                        <div key={j} style={{ height: 10, borderRadius: 2, background: SURFACE, width: `${w}%` }} />
+                        <div key={j} className="h-2.5 rounded-sm bg-[#161616]" style={{ width: `${w}%` }} />
                       ) : <span key={j} />)}
                     </div>
                   ))
                 ) : recentRuns.length === 0 ? (
-                  <div style={{ padding: "32px 16px", textAlign: "center" }}>
-                    <p style={{ fontSize: 12, color: MUTED }}>No scans yet. Run your first analysis.</p>
+                  <div className="px-4 py-8 text-center">
+                    <p className="text-[12px] text-[#77808C]">No scans yet. Run your first analysis.</p>
                   </div>
                 ) : (
                   recentRuns.map((run, i) => {
                     const confidence = run.estimate.grade_probabilities?.confidence;
-                    const confColor = confidence === "high" ? "#16a34a" : confidence === "medium" ? "#ca8a04" : MUTED;
+                    const confColor = confidence === "high" ? "text-[#20B26B]" : confidence === "medium" ? "text-[#C9A227]" : "text-[#77808C]";
                     return (
                       <div
                         key={run.id}
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "1fr 100px 80px 90px 32px",
-                          gap: 8, padding: "12px 16px", alignItems: "center",
-                          borderBottom: i < recentRuns.length - 1 ? `1px solid ${BORDER}` : "none",
-                        }}
-                        onMouseEnter={(e) => (e.currentTarget.style.background = SURFACE)}
-                        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                        className={`grid items-center gap-2 px-4 py-3 transition-colors hover:bg-[#13171B] ${i < recentRuns.length - 1 ? "border-b border-[#24282D]" : ""}`}
+                        style={{ gridTemplateColumns: "1fr 100px 80px 90px 32px" }}
                       >
-                        <div style={{ minWidth: 0 }}>
-                          <p style={{ fontSize: 12, color: TEXT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        <div className="min-w-0">
+                          <p className="truncate text-[12px] text-[#E6E8EB]">
                             {run.card.player_name || "Unknown card"}
                           </p>
                           {(run.card.year || run.card.set_name) && (
-                            <p style={{ fontSize: 10, color: MUTED, marginTop: 2 }}>
+                            <p className="mt-0.5 text-[10px] text-[#77808C]">
                               {[run.card.year, run.card.set_name].filter(Boolean).join(" · ")}
                             </p>
                           )}
                         </div>
-                        <p style={{ fontFamily: "monospace", fontSize: 11, color: TEXT, fontWeight: 600 }}>
+                        <p className="font-mono text-[11px] font-semibold text-[#E6E8EB]">
                           {formatGradeRange(run.estimate)}
                         </p>
-                        <p style={{ fontSize: 10, color: confColor, textTransform: "capitalize" }}>
+                        <p className={`text-[10px] capitalize ${confColor}`}>
                           {confidence ?? "—"}
                         </p>
-                        <p style={{ fontSize: 10, color: MUTED }}>{formatTimeAgo(run.created_at)}</p>
+                        <p className="text-[10px] text-[#77808C]">{formatTimeAgo(run.created_at)}</p>
                         <button
                           type="button"
                           onClick={(e) => void handleDeleteRun(run.id, e)}
-                          style={{ background: "none", border: "none", color: MUTED, cursor: "pointer", padding: 4, borderRadius: 2, display: "flex", alignItems: "center", justifyContent: "center" }}
+                          className="flex items-center justify-center rounded p-1 text-[#77808C] transition-colors hover:text-[#dc2626]"
                           title="Delete"
                         >
                           <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -522,26 +395,21 @@ export default function GradeHubPage() {
           </div>
         )}
 
-        {/* ════════════════════════════════════════════════════
-            HISTORY
-        ════════════════════════════════════════════════════ */}
+        {/* HISTORY */}
         {view === "history" && (
-          <div style={{ maxWidth: 960, margin: "0 auto", padding: "40px 32px 64px" }}>
+          <div className="mx-auto max-w-[960px] px-8 py-10">
 
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
-              <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: "2px", color: RED, textTransform: "uppercase" }}>
+            <div className="mb-6 flex items-center justify-between">
+              <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-[#77808C]">
                 Analysis History
               </p>
-              <p style={{ fontSize: 10, color: MUTED }}>{historyRuns.length} scan{historyRuns.length !== 1 ? "s" : ""}</p>
+              <p className="text-[10px] text-[#77808C]">
+                {historyRuns.length} scan{historyRuns.length !== 1 ? "s" : ""}
+              </p>
             </div>
 
-            {/* Sort bar */}
-            <div style={{
-              display: "flex", alignItems: "center", gap: 6, marginBottom: 12,
-              padding: "8px 16px",
-              background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 2,
-            }}>
-              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "1px", color: MUTED, textTransform: "uppercase", marginRight: 8 }}>Sort</span>
+            <div className="mb-3 flex items-center gap-1.5 border border-[#24282D] bg-[#0B0D0F] px-4 py-2">
+              <span className="mr-2 text-[9px] font-semibold uppercase tracking-[0.12em] text-[#77808C]">Sort</span>
               {([
                 { col: "date" as const, label: "Date" },
                 { col: "confidence" as const, label: "Confidence" },
@@ -550,29 +418,24 @@ export default function GradeHubPage() {
                   key={col}
                   type="button"
                   onClick={() => toggleSort(col)}
-                  style={{
-                    fontSize: 10, fontWeight: 700, letterSpacing: "0.5px",
-                    color: sortBy === col ? RED : MUTED,
-                    background: sortBy === col ? RED_DIM : "none",
-                    border: `1px solid ${sortBy === col ? RED_BORDER : "transparent"}`,
-                    borderRadius: 2, padding: "4px 10px", cursor: "pointer",
-                  }}
+                  className={`border px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.06em] transition-colors ${
+                    sortBy === col
+                      ? "border-[#5A626E] bg-[#13171B] text-[#E6E8EB]"
+                      : "border-transparent text-[#77808C] hover:text-[#B8C0CC]"
+                  }`}
                 >
                   {label} {sortBy === col ? (sortDir === "desc" ? "↓" : "↑") : ""}
                 </button>
               ))}
             </div>
 
-            {/* Table */}
-            <div style={{ border: `1px solid ${BORDER}`, borderRadius: 2, overflow: "hidden" }}>
-              <div style={{
-                display: "grid",
-                gridTemplateColumns: "100px 1fr 110px 90px 32px",
-                gap: 8, padding: "9px 16px",
-                background: SURFACE, borderBottom: `1px solid ${BORDER}`,
-              }}>
+            <div className="overflow-hidden border border-[#24282D]">
+              <div
+                className="grid gap-2 border-b border-[#24282D] bg-[#0B0D0F] px-4 py-2"
+                style={{ gridTemplateColumns: "100px 1fr 110px 90px 32px" }}
+              >
                 {["Date", "Card", "Predicted", "Confidence", ""].map((col, i) => (
-                  <span key={i} style={{ fontSize: 9, fontWeight: 700, letterSpacing: "1px", color: MUTED, textTransform: "uppercase" }}>
+                  <span key={i} className="text-[9px] font-semibold uppercase tracking-[0.12em] text-[#77808C]">
                     {col}
                   </span>
                 ))}
@@ -580,28 +443,23 @@ export default function GradeHubPage() {
 
               {historyLoading ? (
                 [1, 2, 3, 4, 5].map((i) => (
-                  <div key={i} style={{
-                    display: "grid", gridTemplateColumns: "100px 1fr 110px 90px 32px",
-                    gap: 8, padding: "13px 16px",
-                    borderBottom: `1px solid ${BORDER}`,
-                  }}>
+                  <div
+                    key={i}
+                    className="grid gap-2 border-b border-[#24282D] px-4 py-3"
+                    style={{ gridTemplateColumns: "100px 1fr 110px 90px 32px" }}
+                  >
                     {[50, 65, 40, 40, 0].map((w, j) => w > 0 ? (
-                      <div key={j} style={{ height: 10, borderRadius: 2, background: SURFACE, width: `${w}%` }} />
+                      <div key={j} className="h-2.5 rounded-sm bg-[#161616]" style={{ width: `${w}%` }} />
                     ) : <span key={j} />)}
                   </div>
                 ))
               ) : sortedHistory.length === 0 ? (
-                <div style={{ padding: "48px 24px", textAlign: "center" }}>
-                  <p style={{ fontSize: 13, color: MUTED, marginBottom: 16 }}>No analyses yet. Run your first scan.</p>
+                <div className="px-6 py-12 text-center">
+                  <p className="mb-4 text-[13px] text-[#77808C]">No analyses yet. Run your first scan.</p>
                   <button
                     type="button"
                     onClick={() => setView("home")}
-                    style={{
-                      fontSize: 10, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase",
-                      color: RED, background: "none",
-                      border: `1px solid ${RED_BORDER}`, borderRadius: 2,
-                      padding: "8px 20px", cursor: "pointer",
-                    }}
+                    className="border border-[#343941] px-5 py-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#B8C0CC] transition-colors hover:border-[#5A626E] hover:text-[#E6E8EB]"
                   >
                     Go to Home →
                   </button>
@@ -610,49 +468,44 @@ export default function GradeHubPage() {
                 sortedHistory.map((run, i) => {
                   const isExpanded = expandedRow === run.id;
                   const confidence = run.estimate.grade_probabilities?.confidence;
-                  const confColor  = confidence === "high" ? "#16a34a" : confidence === "medium" ? "#ca8a04" : MUTED;
+                  const confColor  = confidence === "high" ? "text-[#20B26B]" : confidence === "medium" ? "text-[#C9A227]" : "text-[#77808C]";
                   const est        = run.estimate;
 
                   return (
-                    <div key={run.id} style={{ borderBottom: i < sortedHistory.length - 1 ? `1px solid ${BORDER}` : "none" }}>
+                    <div key={run.id} className={i < sortedHistory.length - 1 ? "border-b border-[#24282D]" : ""}>
                       <div
                         role="button"
                         tabIndex={0}
                         onClick={() => setExpandedRow(isExpanded ? null : run.id)}
                         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setExpandedRow(isExpanded ? null : run.id); } }}
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "100px 1fr 110px 90px 32px",
-                          gap: 8, padding: "13px 16px", alignItems: "center",
-                          cursor: "pointer",
-                          background: isExpanded ? SURFACE : "transparent",
-                        }}
-                        onMouseEnter={(e) => { if (!isExpanded) e.currentTarget.style.background = SURFACE; }}
-                        onMouseLeave={(e) => { if (!isExpanded) e.currentTarget.style.background = isExpanded ? SURFACE : "transparent"; }}
+                        className={`grid cursor-pointer items-center gap-2 px-4 py-3 transition-colors ${
+                          isExpanded ? "bg-[#13171B]" : "hover:bg-[#13171B]"
+                        }`}
+                        style={{ gridTemplateColumns: "100px 1fr 110px 90px 32px" }}
                       >
-                        <p style={{ fontSize: 10, color: MUTED, fontFamily: "monospace" }}>
+                        <p className="font-mono text-[10px] text-[#77808C]">
                           {formatFullDate(run.created_at)}
                         </p>
-                        <div style={{ minWidth: 0 }}>
-                          <p style={{ fontSize: 12, color: TEXT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        <div className="min-w-0">
+                          <p className="truncate text-[12px] text-[#E6E8EB]">
                             {run.card.player_name || "Unknown card"}
                           </p>
                           {(run.card.year || run.card.set_name) && (
-                            <p style={{ fontSize: 10, color: MUTED, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            <p className="mt-0.5 truncate text-[10px] text-[#77808C]">
                               {[run.card.year, run.card.set_name, run.card.parallel_type].filter(Boolean).join(" · ")}
                             </p>
                           )}
                         </div>
-                        <p style={{ fontFamily: "monospace", fontSize: 11, color: TEXT, fontWeight: 600 }}>
+                        <p className="font-mono text-[11px] font-semibold text-[#E6E8EB]">
                           {formatGradeRange(run.estimate)}
                         </p>
-                        <p style={{ fontSize: 10, color: confColor, textTransform: "capitalize" }}>
+                        <p className={`text-[10px] capitalize ${confColor}`}>
                           {confidence ?? "—"}
                         </p>
                         <button
                           type="button"
                           onClick={(e) => void handleDeleteRun(run.id, e)}
-                          style={{ background: "none", border: "none", color: MUTED, cursor: "pointer", padding: 4, borderRadius: 2, display: "flex", alignItems: "center", justifyContent: "center" }}
+                          className="flex items-center justify-center rounded p-1 text-[#77808C] transition-colors hover:text-[#dc2626]"
                           title="Delete"
                         >
                           <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -663,12 +516,12 @@ export default function GradeHubPage() {
                       </div>
 
                       {isExpanded && (
-                        <div style={{ padding: "16px 16px 20px", background: SURFACE, borderTop: `1px solid ${BORDER}` }}>
-                          <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: "1.5px", color: RED, textTransform: "uppercase", marginBottom: 12 }}>
+                        <div className="border-t border-[#24282D] bg-[#0B0D0F] px-4 pb-5 pt-4">
+                          <p className="mb-3 text-[9px] font-semibold uppercase tracking-[0.16em] text-[#77808C]">
                             AI Reasoning
                           </p>
                           {(est.centering || est.corners || est.edges || est.surface) && (
-                            <div style={{ display: "flex", gap: 32, marginBottom: 12 }}>
+                            <div className="mb-3 flex gap-8">
                               {[
                                 { label: "Centering", val: est.centering },
                                 { label: "Corners",   val: est.corners },
@@ -676,13 +529,13 @@ export default function GradeHubPage() {
                                 { label: "Surface",   val: est.surface },
                               ].map(({ label, val }) => val ? (
                                 <div key={label}>
-                                  <p style={{ fontSize: 9, color: MUTED, textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 3 }}>{label}</p>
-                                  <p style={{ fontFamily: "monospace", fontSize: 13, color: TEXT, fontWeight: 600 }}>{val}</p>
+                                  <p className="mb-1 text-[9px] uppercase tracking-[0.08em] text-[#77808C]">{label}</p>
+                                  <p className="font-mono text-[13px] font-semibold text-[#E6E8EB]">{val}</p>
                                 </div>
                               ) : null)}
                             </div>
                           )}
-                          <p style={{ fontSize: 12, color: MUTED, lineHeight: 1.6, maxWidth: 600 }}>
+                          <p className="max-w-[600px] text-[12px] leading-relaxed text-[#B8C0CC]">
                             {est.grade_notes || "No detailed notes for this scan."}
                           </p>
                         </div>

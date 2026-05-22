@@ -9,21 +9,21 @@ type Section = { paths: string[]; tabs: SubTab[] };
 const SECTIONS: Section[] = [
   // ── Personal Ledger ──
   {
-    paths: ["/collection", "/bulk", "/grade-hub", "/grade-probability", "/grade-estimator"],
+    paths: ["/collection", "/bulk"],
     tabs: [
       { name: "Inventory", href: "/collection" },
       { name: "Bulk Mode", href: "/bulk" },
-      { name: "Grading", href: "/grade-hub" },
     ],
   },
   // ── Personal Analytics ──
   {
-    paths: ["/analytics", "/comps", "/watchlist", "/analyst"],
+    paths: ["/analytics", "/comps", "/watchlist", "/analyst", "/grade-hub", "/grade-probability", "/grade-estimator"],
     tabs: [
       { name: "Overview", href: "/analytics" },
       { name: "Compare Listings", href: "/comps" },
       { name: "Watchlist", href: "/watchlist", badge: "Pro" },
       { name: "Analyst", href: "/analyst", badge: "Pro" },
+      { name: "Grading", href: "/grade-hub" },
     ],
   },
   // ── Personal Business gateway ──
@@ -36,26 +36,26 @@ const SECTIONS: Section[] = [
   },
   // ── Business Ledger ──
   {
-    paths: ["/business/ledger", "/business/sales", "/business/sales-agent", "/business/grade-hub", "/business/grade-probability", "/business/grade-estimator", "/business/inventory"],
+    paths: ["/business/ledger", "/business/sales", "/business/sales-agent", "/business/inventory"],
     tabs: [
       { name: "Inventory", href: "/business/ledger" },
       { name: "Sales", href: "/business/sales" },
       { name: "Sales Agent", href: "/business/sales-agent" },
-      { name: "Grading", href: "/business/grade-hub" },
     ],
   },
   // ── Business Analytics ──
   {
-    paths: ["/business/comps"],
+    paths: ["/business/comps", "/business/grade-hub", "/business/grade-probability", "/business/grade-estimator"],
     tabs: [
       { name: "Compare Listings", href: "/business/comps" },
+      { name: "Grading", href: "/business/grade-hub" },
     ],
   },
   // ── Business "Business" tab ──
   {
     paths: ["/business/consultant", "/business/help", "/business/settings", "/business/insights", "/business/analyst", "/business/messages"],
     tabs: [
-      { name: "AI Insights", href: "/business/consultant" },
+      { name: "Advisor", href: "/business/consultant" },
       { name: "Help & FAQ", href: "/business/help" },
       { name: "Settings", href: "/business/settings" },
     ],
@@ -81,16 +81,8 @@ export default function SectionTabs() {
   const section = findSection(pathname);
   if (!section || section.tabs.length < 2) return null;
 
-  const isBusinessRoute = pathname.startsWith("/business");
-
   return (
-    <div
-      className={`sticky top-0 z-20 w-full border-b backdrop-blur ${
-        isBusinessRoute
-          ? "border-[color:var(--biz-border)] bg-[var(--biz-bg)]/85"
-          : "border-gray-800 bg-[#0f1419]/85"
-      }`}
-    >
+    <div className="sticky top-0 z-20 w-full border-b border-[color:var(--biz-border)] bg-[color:var(--biz-bg)]/90 backdrop-blur">
       <nav
         className="flex gap-1 overflow-x-auto px-4 sm:px-6 lg:px-8"
         aria-label="Section navigation"
@@ -103,27 +95,21 @@ export default function SectionTabs() {
               href={tab.href}
               className={`relative whitespace-nowrap px-3 py-3 text-[13px] font-medium tracking-tight transition-colors ${
                 active
-                  ? isBusinessRoute
-                    ? "text-[var(--biz-text-strong)]"
-                    : "text-white"
-                  : isBusinessRoute
-                  ? "text-[var(--biz-muted)] hover:text-[var(--biz-text)]"
-                  : "text-gray-400 hover:text-white"
+                  ? "text-[color:var(--biz-text-strong)]"
+                  : "text-[color:var(--biz-muted)] hover:text-[color:var(--biz-text)]"
               }`}
             >
               <span className="flex items-center gap-1.5">
                 {tab.name}
                 {tab.badge && (
-                  <span className="rounded bg-blue-500/20 px-1 py-0.5 text-[9px] font-bold text-blue-300">
+                  <span className="rounded border border-[color:var(--biz-border-strong)] bg-[color:var(--biz-surface-soft)] px-1 py-0.5 text-[9px] font-bold text-[color:var(--biz-muted-strong)]">
                     {tab.badge}
                   </span>
                 )}
               </span>
               {active && (
                 <span
-                  className={`absolute bottom-0 left-2 right-2 h-[2px] rounded-t ${
-                    isBusinessRoute ? "bg-[var(--biz-primary)]" : "bg-blue-500"
-                  }`}
+                  className="absolute bottom-0 left-2 right-2 h-px rounded-t bg-[color:var(--biz-text-strong)] opacity-80"
                 />
               )}
             </Link>

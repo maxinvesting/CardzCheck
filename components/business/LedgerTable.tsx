@@ -45,14 +45,14 @@ function formatDays(days: number | null): string {
 }
 
 function signedClassName(value: number | null): string {
-  if (value == null) return "text-[#77808C]";
-  if (value > 0) return "text-[#20B26B]";
-  if (value < 0) return "text-[#E05C5C]";
-  return "text-[#B8C0CC]";
+  if (value == null) return "text-[color:var(--biz-faint)]";
+  if (value > 0) return "text-[color:var(--biz-profit)]";
+  if (value < 0) return "text-[color:var(--biz-danger)]";
+  return "text-[color:var(--biz-muted)]";
 }
 
 function neutralMoneyClassName(value: number | null): string {
-  return value == null ? "text-[#77808C]" : "text-[#E6E8EB]";
+  return value == null ? "text-[color:var(--biz-faint)]" : "text-[color:var(--biz-text)]";
 }
 
 function stopRowClick(event: React.MouseEvent<HTMLElement>) {
@@ -73,7 +73,7 @@ function HeaderCell({
   return (
     <th
       scope="col"
-      className={`sticky top-0 z-10 border-b border-[#24282D] bg-[#0B0D0F] px-2.5 py-2 text-[10px] font-medium uppercase tracking-[0.08em] text-[#77808C] ${alignClass} ${className}`}
+      className={`sticky top-0 z-10 border-b border-[color:var(--biz-border)] bg-[color:var(--biz-near-black)] px-3 py-2.5 text-[10px] font-medium uppercase tracking-[0.1em] text-[color:var(--biz-muted)] ${alignClass} ${className}`}
     >
       {children}
     </th>
@@ -93,7 +93,7 @@ function Cell({
     align === "right" ? "text-right" : align === "center" ? "text-center" : "text-left";
   return (
     <td
-      className={`border-b border-[#1E2227] px-2.5 py-1.5 align-middle text-[12px] ${alignClass} ${className}`}
+      className={`border-b border-[color:var(--biz-border-subtle)] px-3 py-2 align-middle text-[13px] leading-snug ${alignClass} ${className}`}
     >
       {children}
     </td>
@@ -107,14 +107,14 @@ export default function LedgerTable({
 }: LedgerTableProps) {
   if (rows.length === 0) {
     return (
-      <div className="border border-[#24282D] bg-[#0B0D0F] px-4 py-10 text-center text-sm text-[#77808C]">
+      <div className="border border-[color:var(--biz-border)] bg-[color:var(--biz-surface)] px-4 py-10 text-center text-sm text-[color:var(--biz-muted)]">
         No active inventory.
       </div>
     );
   }
 
   return (
-    <div className="overflow-hidden border border-[#24282D] bg-[#0B0D0F]">
+    <div className="overflow-hidden border border-[color:var(--biz-border)] bg-[color:var(--biz-surface)]">
       <div className="max-h-[calc(100vh-190px)] min-h-[360px] overflow-auto">
         <table className="w-full min-w-[1300px] border-collapse font-data">
           <thead>
@@ -164,8 +164,8 @@ export default function LedgerTable({
                       onRowClick?.(row);
                     }
                   }}
-                  className={`group cursor-pointer outline-none transition-colors hover:bg-[#15191D] focus:bg-[#15191D] ${
-                    selected ? "bg-[#132019]" : ""
+                  className={`group cursor-pointer outline-none transition-colors hover:bg-[color:var(--biz-hover)] focus:bg-[color:var(--biz-hover)] ${
+                    selected ? "bg-[color:var(--biz-surface-soft)]" : ""
                   }`}
                 >
                   <Cell className="max-w-[360px]">
@@ -173,20 +173,20 @@ export default function LedgerTable({
                       <Link
                         href={`/card/${row.id}?from=business`}
                         onClick={stopRowClick}
-                        className="block truncate font-medium text-[#E6E8EB] underline-offset-2 transition-colors hover:text-[#20B26B] hover:underline focus:text-[#20B26B] focus:underline focus:outline-none"
+                        className="block truncate font-medium text-[color:var(--biz-text-strong)] underline-offset-2 transition-colors hover:text-[color:var(--biz-text)] hover:underline focus:underline focus:outline-none"
                         aria-label={`Open profile for ${row.cardLabel}`}
                       >
                         {row.cardLabel}
                       </Link>
                       {row.cardMeta && (
-                        <div className="mt-0.5 truncate text-[10px] text-[#77808C]">
+                        <div className="mt-0.5 truncate text-[10px] text-[color:var(--biz-muted)]">
                           {row.cardMeta}
                         </div>
                       )}
                     </div>
                   </Cell>
                   <Cell>
-                    <span className="text-[#B8C0CC]">{row.gradeLabel}</span>
+                    <span className="text-[color:var(--biz-muted)]">{row.gradeLabel}</span>
                   </Cell>
                   <Cell align="right" className="tabular-nums text-[#E6E8EB]">
                     {formatMoney(row.costBasisCents)}
@@ -197,7 +197,7 @@ export default function LedgerTable({
                   >
                     <div>{formatMoney(row.estimatedValueCents)}</div>
                     {row.estimatedValueSource === "fallback" && (
-                      <div className="text-[9px] uppercase tracking-[0.08em] text-[#77808C]">
+                      <div className="text-[9px] uppercase tracking-[0.08em] text-[color:var(--biz-muted)]">
                         Fallback
                       </div>
                     )}
@@ -220,15 +220,15 @@ export default function LedgerTable({
                   <Cell align="right" className={`tabular-nums ${signedClassName(row.pnlCents)}`}>
                     {formatMoney(row.pnlCents)}
                   </Cell>
-                  <Cell align="right" className="tabular-nums text-[#B8C0CC]">
+                  <Cell align="right" className="tabular-nums text-[color:var(--biz-muted)]">
                     {formatDays(row.daysHeld)}
                   </Cell>
                   <Cell align="center">
                     <span
                       className={`inline-flex min-w-[68px] justify-center border px-2 py-0.5 text-[10px] font-medium ${
                         row.status === "Listed"
-                          ? "border-[#1F5F45] bg-[#0E251B] text-[#20B26B]"
-                          : "border-[#343941] bg-[#111315] text-[#8D96A3]"
+                          ? "border-[color:var(--biz-border-strong)] bg-[color:var(--biz-surface-soft)] text-[color:var(--biz-text-strong)]"
+                          : "border-[color:var(--biz-border)] bg-[color:var(--biz-near-black)] text-[color:var(--biz-muted)]"
                       }`}
                       >
                         {row.status}
@@ -242,7 +242,7 @@ export default function LedgerTable({
                           event.stopPropagation();
                           onRowClick?.(row);
                         }}
-                        className="border border-[#1F5F45] bg-[#0E251B] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.04em] text-[#20B26B] transition-colors hover:bg-[#143624] focus:outline-none focus:ring-1 focus:ring-[#20B26B]"
+                        className="border border-[color:var(--biz-border-strong)] bg-[color:var(--biz-surface-soft)] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.04em] text-[color:var(--biz-text-strong)] transition-colors hover:bg-[color:var(--biz-hover)] focus:outline-none focus:ring-1 focus:ring-[color:var(--biz-focus)]"
                         aria-label={`Edit ${row.cardLabel}`}
                       >
                         Edit
@@ -250,7 +250,7 @@ export default function LedgerTable({
                       <Link
                         href={`/card/${row.id}?from=business`}
                         onClick={stopRowClick}
-                        className="border border-[#343941] bg-[#111315] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.04em] text-[#B8C0CC] transition-colors hover:border-[#5A626E] hover:text-[#E6E8EB] focus:outline-none focus:ring-1 focus:ring-[#77808C]"
+                        className="border border-[color:var(--biz-border)] bg-[color:var(--biz-near-black)] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.04em] text-[color:var(--biz-muted)] transition-colors hover:border-[color:var(--biz-border-strong)] hover:text-[color:var(--biz-text)] focus:outline-none focus:ring-1 focus:ring-[color:var(--biz-focus)]"
                         aria-label={`Open profile for ${row.cardLabel}`}
                       >
                         Profile

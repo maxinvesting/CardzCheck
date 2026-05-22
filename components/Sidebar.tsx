@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { User } from "@/types";
@@ -199,7 +200,6 @@ function PERSONAL_NAV_ITEMS(): NavItem[] {
       children: [
         { name: "Collection", href: "/collection", icon: <CollectionIcon /> },
         { name: "Bulk Mode", href: "/bulk", icon: <BulkIcon /> },
-        { name: "Grade Engine", href: "/grade-hub", icon: <BadgeIcon />, badge: "dot" },
       ],
     },
     {
@@ -210,6 +210,7 @@ function PERSONAL_NAV_ITEMS(): NavItem[] {
         { name: "Compare Listings", href: "/comps", icon: <ChartIcon /> },
         { name: "Watchlist", href: "/watchlist", icon: <EyeIcon />, isPro: true, badge: "Pro" },
         { name: "CardzCheck Analyst", href: "/analyst", icon: <AnalystIcon />, isPro: true, badge: "Pro" },
+        { name: "Grade Engine", href: "/grade-hub", icon: <BadgeIcon />, badge: "dot" },
       ],
     },
     { name: "Marketplace", href: "/marketplace", icon: <ShopIcon /> },
@@ -250,7 +251,6 @@ function BUSINESS_NAV_ITEMS(): NavItem[] {
         { name: "Inventory", href: "/business/ledger", icon: <LedgerIcon /> },
         { name: "Sales", href: "/business/sales", icon: <SalesIcon /> },
         { name: "Sales Agent", href: "/business/sales-agent", icon: <SalesIcon /> },
-        { name: "Grade Engine", href: "/business/grade-hub", icon: <BadgeIcon />, badge: "dot" },
       ],
     },
     {
@@ -259,6 +259,7 @@ function BUSINESS_NAV_ITEMS(): NavItem[] {
       icon: <ChartIcon />,
       children: [
         { name: "Compare Listings", href: "/business/comps", icon: <ChartIcon /> },
+        { name: "Grade Engine", href: "/business/grade-hub", icon: <BadgeIcon />, badge: "dot" },
       ],
     },
     { name: "Marketplace", href: "/marketplace", icon: <ShopIcon /> },
@@ -267,7 +268,7 @@ function BUSINESS_NAV_ITEMS(): NavItem[] {
       href: "/business/consultant",
       icon: <AnalystIcon />,
       children: [
-        { name: "AI Insights", href: "/business/consultant", icon: <AnalystIcon /> },
+        { name: "Advisor", href: "/business/consultant", icon: <AnalystIcon /> },
         { name: "Help & FAQ", href: "/business/help", icon: <HelpIcon /> },
         { name: "Settings", href: "/business/settings", icon: <SettingsIcon /> },
       ],
@@ -356,13 +357,15 @@ export default function Sidebar() {
         className={`flex items-center gap-3 px-3 py-2 text-[13px] rounded transition-all ${
           active
             ? item.href.includes("/marketplace")
-              ? "bg-cyan-600 text-white"
+              ? isBusinessWorkspace
+                ? "text-[var(--biz-text-strong)]"
+                : "bg-[color:var(--biz-surface-raised)] text-[color:var(--biz-text-strong)] border border-[color:var(--biz-border-strong)]"
               : isBusinessWorkspace
               ? "text-[var(--biz-text-strong)]"
-              : "bg-blue-600 text-white"
+              : "bg-[color:var(--biz-surface-raised)] text-[color:var(--biz-text-strong)] border border-[color:var(--biz-border-strong)]"
             : isBusinessWorkspace
               ? "text-[var(--biz-muted-strong)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]"
-              : "text-gray-400 hover:text-white hover:bg-gray-800"
+              : "text-[color:var(--biz-muted)] hover:text-[color:var(--biz-text)] hover:bg-[color:var(--biz-hover)]"
         }`}
         style={
           active && isBusinessWorkspace
@@ -394,8 +397,7 @@ export default function Sidebar() {
         {item.badge && !isProFeature && (
           item.badge === "dot" ? (
             <span
-              className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full opacity-70"
-              style={{ backgroundColor: "#1D9E75" }}
+              className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-[color:var(--biz-text-strong)] opacity-50"
             />
           ) : (
             <span
@@ -403,19 +405,14 @@ export default function Sidebar() {
               style={
                 isBusinessWorkspace
                   ? {
-                      background: isBusinessRoute
-                        ? "var(--biz-secondary-soft)"
-                        : "rgba(255,255,255,0.06)",
-                      border: isBusinessRoute
-                        ? "1px solid var(--biz-secondary-border)"
-                        : "1px solid rgba(255,255,255,0.1)",
-                      color: isBusinessRoute
-                        ? "var(--biz-secondary)"
-                        : "#64748b",
+                      background: "rgba(255,255,255,0.05)",
+                      border: "1px solid rgba(255,255,255,0.12)",
+                      color: "var(--biz-muted-strong)",
                     }
                   : {
-                      background: "rgba(59,130,246,0.2)",
-                      color: "#60a5fa",
+                      background: "rgba(255,255,255,0.06)",
+                      border: "1px solid rgba(255,255,255,0.1)",
+                      color: "var(--biz-muted-strong, #a1a1a1)",
                     }
               }
             >
@@ -443,7 +440,7 @@ export default function Sidebar() {
         className={`lg:hidden fixed top-4 left-4 z-50 rounded-lg border p-2 transition-colors ${
           isBusinessWorkspace
             ? `${businessSurfaceClass} text-[var(--biz-muted)] hover:text-[var(--biz-text)]`
-            : "bg-gray-900 border-gray-800 text-gray-400 hover:text-white"
+            : "bg-[color:var(--biz-surface)] border-[color:var(--biz-border)] text-[color:var(--biz-muted)] hover:text-[color:var(--biz-text)]"
         }`}
       >
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -466,7 +463,7 @@ export default function Sidebar() {
         className={`fixed top-0 left-0 z-40 flex h-full w-64 flex-col border-r transition-transform duration-300 ${
           isBusinessWorkspace
             ? "bg-[var(--biz-near-black)] border-[color:var(--biz-border)]"
-            : "bg-[#0f1419] border-gray-800"
+            : "bg-[color:var(--biz-near-black)] border-[color:var(--biz-border)]"
         } ${
           isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         } ${!isOpen ? "pointer-events-none lg:pointer-events-auto" : ""}`}
@@ -474,40 +471,29 @@ export default function Sidebar() {
         <Link
           href={isBusinessWorkspace ? "/business" : "/dashboard"}
           className={`flex cursor-pointer items-center justify-between gap-3 border-b px-4 py-4 transition-opacity hover:opacity-90 ${
-            isBusinessWorkspace ? "border-[color:var(--biz-border)]" : "border-gray-800"
+            isBusinessWorkspace ? "border-[color:var(--biz-border)]" : "border-[color:var(--biz-border)]"
           }`}
           onClick={() => setIsOpen(false)}
         >
-          <div className="flex items-center gap-2 min-w-0">
-            {isBusinessWorkspace ? (
-              <span
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm font-mono-num text-[11px] font-bold"
-                style={{
-                  background: "var(--biz-primary-soft-strong)",
-                  border: "1px solid var(--biz-primary-border)",
-                  color: "var(--biz-primary)",
-                }}
-              >
-                CC
-              </span>
-            ) : null}
+          <div className="flex items-center gap-2.5 min-w-0">
+            <Image
+              src="/cardzcheck-logo-main.png"
+              alt="CardzCheck"
+              width={132}
+              height={28}
+              className="h-7 w-auto max-w-[9.5rem] shrink-0 object-contain object-left"
+              priority
+            />
             <span
               className={`truncate text-base font-semibold tracking-tight ${
-                isBusinessWorkspace ? "text-[var(--biz-text-strong)]" : "text-white"
+                isBusinessWorkspace ? "text-[var(--biz-text-strong)]" : "text-[color:var(--biz-text-strong)]"
               }`}
             >
               CardzCheck
             </span>
           </div>
           {isBusinessWorkspace && (
-            <span
-              className="rounded-sm px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em]"
-              style={{
-                background: "var(--biz-primary-soft)",
-                border: "1px solid var(--biz-primary-border)",
-                color: "var(--biz-primary)",
-              }}
-            >
+            <span className="rounded-sm border border-[color:var(--biz-border-strong)] bg-[color:var(--biz-surface-soft)] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em] text-[color:var(--biz-muted-strong)]">
               Biz
             </span>
           )}
@@ -527,7 +513,7 @@ export default function Sidebar() {
           {user && (user.app_role === "admin" || user.app_role === "owner") && (
             <>
               <div className={`mt-3 pb-1 px-3 text-[9px] font-semibold uppercase tracking-[0.16em] font-mono-num ${
-                isBusinessWorkspace ? "text-[var(--biz-muted)]" : "text-gray-600"
+                isBusinessWorkspace ? "text-[var(--biz-muted)]" : "text-[color:var(--biz-faint)]"
               }`}>
                 Admin
               </div>
@@ -546,7 +532,7 @@ export default function Sidebar() {
                         : "bg-orange-600 text-white"
                       : isBusinessWorkspace
                         ? "text-[var(--biz-muted-strong)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]"
-                        : "text-gray-400 hover:text-white hover:bg-gray-800"
+                        : "text-[color:var(--biz-muted)] hover:text-[color:var(--biz-text)] hover:bg-[color:var(--biz-hover)]"
                   }`}
                 >
                   <span className="shrink-0 opacity-90">{item.icon}</span>
@@ -566,30 +552,30 @@ export default function Sidebar() {
 
         <div
           className={`space-y-3 border-t p-3 ${
-            isBusinessWorkspace ? "border-[color:var(--biz-border)]" : "border-gray-800"
+            isBusinessWorkspace ? "border-[color:var(--biz-border)]" : "border-[color:var(--biz-border)]"
           }`}
         >
           {user && !hasPaidWorkspace && remainingSearches !== null && (
-            <div className={`rounded px-3 py-2 ${isBusinessWorkspace ? "border border-[var(--biz-border)] bg-[var(--biz-surface-soft)]" : "bg-gray-800"}`}>
+            <div className={`rounded px-3 py-2 ${isBusinessWorkspace ? "border border-[var(--biz-border)] bg-[var(--biz-surface-soft)]" : "border border-[color:var(--biz-border)] bg-[color:var(--biz-surface-soft)]"}`}>
               <div className="mb-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-[var(--biz-muted)] font-mono-num">Free Plan</div>
-              <div className={`text-[12px] font-medium ${isBusinessWorkspace ? "text-[var(--biz-text)]" : "text-white"}`}>
+              <div className={`text-[12px] font-medium ${isBusinessWorkspace ? "text-[var(--biz-text)]" : "text-[color:var(--biz-text)]"}`}>
                 {remainingSearches} / 3 searches remaining
               </div>
             </div>
           )}
 
           {user && (
-            <div className={`rounded px-3 py-2 ${isBusinessWorkspace ? "border border-[var(--biz-border)] bg-[var(--biz-surface-soft)]" : "bg-gray-800"}`}>
-              <div className="mb-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-[var(--biz-muted)] font-mono-num">Operator</div>
-              <div className={`truncate text-[12px] font-medium ${isBusinessWorkspace ? "text-[var(--biz-text-strong)]" : "text-white"}`}>
+            <div className={`rounded px-3 py-2 ${isBusinessWorkspace ? "border border-[var(--biz-border)] bg-[var(--biz-surface-soft)]" : "border border-[color:var(--biz-border)] bg-[color:var(--biz-surface-soft)]"}`}>
+              <div className="mb-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-[var(--biz-muted)] ">Account</div>
+              <div className={`truncate text-[12px] font-medium ${isBusinessWorkspace ? "text-[var(--biz-text-strong)]" : "text-[color:var(--biz-text-strong)]"}`}>
                 {user.email}
               </div>
               {hasPaidWorkspace && (
                 <div
                   className={`mt-1.5 inline-flex items-center rounded-sm px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em] ${
                     isBusinessWorkspace
-                      ? "border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] text-[var(--biz-primary)]"
-                      : "bg-blue-600 text-white"
+                      ? "border border-[color:var(--biz-border-strong)] bg-[color:var(--biz-surface-soft)] text-[color:var(--biz-muted-strong)]"
+                      : "border border-[color:var(--biz-border-strong)] bg-[color:var(--biz-surface-raised)] text-[color:var(--biz-text-strong)]"
                   }`}
                 >
                   {isBusinessWorkspace ? "Workspace · Pro" : "Pro Member"}
@@ -605,18 +591,18 @@ export default function Sidebar() {
                 setPricingOpen(true);
               }}
               className={`w-full rounded px-3 py-2 text-center text-[13px] font-semibold transition-colors ${
-                isBusinessWorkspace ? "cc-btn-primary" : "bg-blue-600 hover:bg-blue-700 text-white"
+                isBusinessWorkspace ? "cc-btn-primary" : "cc-btn-primary"
               }`}
             >
               Upgrade
             </button>
           )}
 
-          <div className={`flex items-center justify-center gap-3 pt-1 text-[11px] ${isBusinessWorkspace ? "text-[var(--biz-muted)]" : "text-gray-500"}`}>
+          <div className={`flex items-center justify-center gap-3 pt-1 text-[11px] ${isBusinessWorkspace ? "text-[var(--biz-muted)]" : "text-[color:var(--biz-muted)]"}`}>
             <Link
               href="/terms"
               onClick={() => setIsOpen(false)}
-              className={`transition-colors ${isBusinessWorkspace ? "hover:text-[var(--biz-text)]" : "hover:text-gray-300"}`}
+              className={`transition-colors ${isBusinessWorkspace ? "hover:text-[var(--biz-text)]" : "hover:text-[color:var(--biz-text)]"}`}
             >
               Terms
             </Link>
@@ -624,7 +610,7 @@ export default function Sidebar() {
             <Link
               href="/privacy"
               onClick={() => setIsOpen(false)}
-              className={`transition-colors ${isBusinessWorkspace ? "hover:text-[var(--biz-text)]" : "hover:text-gray-300"}`}
+              className={`transition-colors ${isBusinessWorkspace ? "hover:text-[var(--biz-text)]" : "hover:text-[color:var(--biz-text)]"}`}
             >
               Privacy
             </Link>

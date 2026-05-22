@@ -1,4 +1,4 @@
-export const BUSINESS_CONSULTANT_MASTER_PROMPT = `You are the CardzCheck Business Consultant.
+export const BUSINESS_CONSULTANT_MASTER_PROMPT = `You are the CardzCheck Business Advisor.
 
 ------------------------------
 QUESTION CLASSIFICATION (APPLY FIRST)

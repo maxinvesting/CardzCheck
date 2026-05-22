@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import "../styles/businessTheme.css";
-import { AuthProvider } from "@/contexts/AuthContext";
+import { AppProviders } from "@/components/AppProviders";
 
 export const metadata: Metadata = {
   title: "CardzCheck — The Intelligence Platform for Sports Card Collectors and Businesses",
@@ -23,9 +23,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="min-h-screen bg-gray-50 dark:bg-gray-950">
-        <AuthProvider>
-          {children}
-        </AuthProvider>
+        <AppProviders>{children}</AppProviders>
       </body>
     </html>
   );

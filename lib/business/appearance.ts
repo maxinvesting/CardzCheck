@@ -5,9 +5,9 @@ export const BUSINESS_APPEARANCE_UPDATED_EVENT =
   "cardzcheck:business-appearance-updated";
 
 export const DEFAULT_BUSINESS_APPEARANCE: BusinessAppearance = {
-  primaryColor: "#1D9E75",
-  secondaryColor: "#15803D",
-  tertiaryColor: "#0F766E",
+  primaryColor: "#E4E4E4",
+  secondaryColor: "#A8A8A8",
+  tertiaryColor: "#787878",
 };
 
 const HEX_COLOR_RE = /^#([0-9a-fA-F]{6})$/;
@@ -150,10 +150,14 @@ export function businessAppearanceToRow(appearance: BusinessAppearance) {
   };
 }
 
+/**
+ * Workspace shell always uses the neutral default palette for CSS variables so
+ * the operator UI stays monochrome (saved appearance colors are not applied to chrome).
+ */
 export function getBusinessAppearanceCssVariables(
-  appearance: BusinessAppearance
+  _appearance: BusinessAppearance
 ): BusinessAppearanceCssVariables {
-  const normalized = normalizeBusinessAppearance(appearance);
+  const normalized = normalizeBusinessAppearance(DEFAULT_BUSINESS_APPEARANCE);
 
   return {
     "--biz-primary": normalized.primaryColor,
@@ -174,13 +178,14 @@ export function getBusinessAppearanceCssVariables(
     "--biz-tertiary-soft-strong": toAlpha(normalized.tertiaryColor, 0.15),
     "--biz-tertiary-border": toAlpha(normalized.tertiaryColor, 0.25),
     "--biz-tertiary-foreground": getReadableTextColor(normalized.tertiaryColor),
-    "--biz-link": normalized.primaryColor,
-    "--biz-focus": toAlpha(normalized.primaryColor, 0.22),
-    "--biz-nav-active-bg": toAlpha(normalized.primaryColor, 0.1),
-    "--biz-nav-active-border": normalized.primaryColor,
-    "--biz-profit": normalized.primaryColor,
-    "--biz-profit-soft": toAlpha(normalized.primaryColor, 0.1),
-    "--biz-success-soft": toAlpha(normalized.secondaryColor, 0.1),
+    /* Monochrome operator shell — links / profit / focus stay restrained */
+    "--biz-link": "#C8C8C8",
+    "--biz-focus": "rgba(255, 255, 255, 0.18)",
+    "--biz-nav-active-bg": "rgba(255, 255, 255, 0.05)",
+    "--biz-nav-active-border": "rgba(243, 243, 243, 0.32)",
+    "--biz-profit": "#9BACA3",
+    "--biz-profit-soft": "rgba(155, 172, 163, 0.14)",
+    "--biz-success-soft": "rgba(155, 172, 163, 0.1)",
   };
 }
 

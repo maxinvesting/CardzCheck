@@ -49,7 +49,12 @@ export async function loadCardImagesForItem(
     query = query.eq("user_id", userId);
   }
 
-  const { data } = await query;
+  const { data, error } = await query;
+  if (error) {
+    console.warn("[images] card_images query failed:", error.message ?? error);
+    return [];
+  }
+
   const images = ((data ?? []) as CardImage[]).map((image) => ({
     ...image,
     url: resolveStoredImagePath(

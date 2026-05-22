@@ -5,7 +5,6 @@ import { usePathname, useSearchParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
-import { Playfair_Display } from "next/font/google";
 import { useAuth } from "@/contexts/AuthContext";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import GradeEstimatorValuePanel from "@/components/GradeEstimatorValuePanel";
@@ -25,18 +24,6 @@ import { persistGradeEstimatorHistoryRun } from "@/lib/grading/persistHistoryRun
 import { appendSpeechTranscript } from "@/lib/speech";
 import type { GradeEstimatorHistoryRun } from "@/types";
 
-const playfair = Playfair_Display({ subsets: ["latin"], weight: ["400", "600"] });
-
-// ── Design tokens ─────────────────────────────────────────────────────────────
-const BG      = "#FFFFFF";
-const SURFACE = "#F7F7F7";
-const CARD_BG = "#FAFAFA";
-const RED     = "#B91C1C";
-const TEXT    = "#111111";
-const MUTED   = "#888888";
-const BORDER  = "#E5E5E5";
-
-// ── Tier slot limits ──────────────────────────────────────────────────────────
 const TIER_MAX_SLOTS: Record<string, number> = {
   free: 1,
   pro: 1,
@@ -88,15 +75,13 @@ function buildCardMeta(run: GradeEstimatorHistoryRun): string {
     .join(" · ");
 }
 
-/** Light-background confidence pills (scan page theme) */
 const SCAN_CONFIDENCE_CLASS: Record<string, string> = {
-  high: "rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-800",
+  high: "rounded-full border border-[#20B26B]/40 bg-[#20B26B]/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#20B26B]",
   medium:
-    "rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-800",
-  low: "rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900",
+    "rounded-full border border-[#C9A227]/40 bg-[#C9A227]/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#C9A227]",
+  low: "rounded-full border border-[#dc2626]/40 bg-[#dc2626]/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#dc2626]",
 };
 
-// ── Progress step indicator ───────────────────────────────────────────────────
 const STEP_LABELS: Record<WizardStep, string> = {
   1: "Card Details",
   2: "Card Upload",
@@ -106,60 +91,45 @@ const STEP_LABELS: Record<WizardStep, string> = {
 
 function StepIndicator({ current }: { current: WizardStep }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 0 }}>
+    <div className="flex items-center">
       {([1, 2, 3, 4] as WizardStep[]).map((step, i) => {
         const done    = current > step;
         const active  = current === step;
         return (
-          <div key={step} style={{ display: "flex", alignItems: "center" }}>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 5 }}>
-              {/* Circle */}
-              <div style={{
-                width: 24, height: 24,
-                borderRadius: "50%",
-                border: `1px solid ${done || active ? RED : BORDER}`,
-                background: done ? RED : active ? CARD_BG : "transparent",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                flexShrink: 0,
-              }}>
+          <div key={step} className="flex items-center">
+            <div className="flex flex-col items-center gap-1.5">
+              <div
+                className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border ${
+                  done
+                    ? "border-[#20B26B] bg-[#20B26B]"
+                    : active
+                      ? "border-[#E6E8EB] bg-[#13171B]"
+                      : "border-[#24282D] bg-transparent"
+                }`}
+              >
                 {done ? (
-                  <svg width="10" height="10" fill="none" stroke={BG} viewBox="0 0 24 24">
+                  <svg width="10" height="10" fill="none" stroke="#07100B" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                   </svg>
                 ) : (
-                  <span style={{
-                    fontFamily: "monospace",
-                    fontSize: 10,
-                    fontWeight: 700,
-                    color: active ? RED : MUTED,
-                  }}>
+                  <span className={`font-mono text-[10px] font-semibold ${active ? "text-[#E6E8EB]" : "text-[#77808C]"}`}>
                     {step}
                   </span>
                 )}
               </div>
-              {/* Label */}
-              <span style={{
-                fontSize: 9,
-                fontWeight: 700,
-                letterSpacing: "0.8px",
-                textTransform: "uppercase",
-                color: active ? RED : done ? TEXT : MUTED,
-                whiteSpace: "nowrap",
-              }}>
+              <span
+                className={`whitespace-nowrap text-[9px] font-semibold uppercase tracking-[0.08em] ${
+                  active ? "text-[#E6E8EB]" : done ? "text-[#B8C0CC]" : "text-[#77808C]"
+                }`}
+              >
                 {STEP_LABELS[step]}
               </span>
             </div>
 
-            {/* Connector line */}
             {i < 3 && (
-              <div style={{
-                width: 48,
-                height: 1,
-                background: done ? RED : BORDER,
-                margin: "0 4px",
-                marginBottom: 20,
-                flexShrink: 0,
-              }} />
+              <div
+                className={`mx-1 mb-5 h-px w-12 shrink-0 ${done ? "bg-[#20B26B]" : "bg-[#24282D]"}`}
+              />
             )}
           </div>
         );
@@ -168,16 +138,14 @@ function StepIndicator({ current }: { current: WizardStep }) {
   );
 }
 
-// ── Status dot (multi-slot) ───────────────────────────────────────────────────
 function StatusDot({ state }: { state: SlotState }) {
-  if (state === "done")      return <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#22c55e", display: "inline-block", boxShadow: "0 0 6px rgba(34,197,94,0.7)" }} />;
-  if (state === "analyzing") return <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#3b82f6", display: "inline-block", boxShadow: "0 0 6px rgba(59,130,246,0.7)", animation: "pulse 1s ease-in-out infinite" }} />;
-  if (state === "error")     return <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#ef4444", display: "inline-block" }} />;
-  if (state === "ready")     return <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#f59e0b", display: "inline-block" }} />;
-  return <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#333", display: "inline-block" }} />;
+  if (state === "done")      return <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#20B26B", display: "inline-block", boxShadow: "0 0 6px rgba(32,178,107,0.7)" }} />;
+  if (state === "analyzing") return <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#8e96a3", display: "inline-block", boxShadow: "0 0 6px rgba(142,150,163,0.7)", animation: "pulse 1s ease-in-out infinite" }} />;
+  if (state === "error")     return <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#dc2626", display: "inline-block" }} />;
+  if (state === "ready")     return <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#C9A227", display: "inline-block" }} />;
+  return <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#343941", display: "inline-block" }} />;
 }
 
-// ── Main inner component ──────────────────────────────────────────────────────
 function ScanPageInner() {
   const pathname     = usePathname();
   const searchParams = useSearchParams();
@@ -189,20 +157,16 @@ function ScanPageInner() {
 
   const gradeHubBasePath = pathname?.startsWith("/business") ? "/business/grade-hub" : "/grade-hub";
 
-  // ── Wizard state ────────────────────────────────────────────────────────────
   const rawMode          = searchParams.get("mode");
   const [mode]           = useState<ScanMode>(rawMode === "mock" ? "mock" : "scan");
   const [wizardStep, setWizardStep] = useState<WizardStep>(1);
 
-  // Step 1 — Card identity via a single free-form title
   const [cardTitle,      setCardTitle]      = useState("");
   const [gradingCompany, setGradingCompany] = useState<GradingCompany>("PSA");
 
-  // Step 3 — Notes & context
   const [notes,      setNotes]      = useState("");
   const [quickFlags, setQuickFlags] = useState<string[]>([]);
 
-  // Step 4 — Slot states for multi-card
   const [slotStates, setSlotStates] = useState<SlotState[]>(
     Array.from({ length: TIER_MAX_SLOTS.business }, () => "idle" as SlotState)
   );
@@ -214,7 +178,6 @@ function ScanPageInner() {
     createdAt: string;
   } | null>(null);
 
-  // ── Tier ────────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!authLoading && !authUser) router.replace("/login");
   }, [authUser, authLoading, router]);
@@ -286,7 +249,6 @@ function ScanPageInner() {
     [activeSlots, completedRuns]
   );
 
-  /** Plan: local “results visible” gate — all slots done and history runs persisted per slot */
   const inlineResultsVisible = useMemo(
     () =>
       mode === "scan" &&
@@ -307,7 +269,6 @@ function ScanPageInner() {
   const wideScanLayout =
     wizardStep === 4 || (wizardStep === 2 && activeSlots > 1);
 
-  // ── Combined notes for pre-fill ─────────────────────────────────────────────
   const buildNotes = useCallback((): string => {
     const flagText = quickFlags.length > 0
       ? `Flagged concerns: ${quickFlags.join(", ")}.${notes.trim() ? " " : ""}`
@@ -362,14 +323,10 @@ function ScanPageInner() {
     wizardStep,
   ]);
 
-  // When user moves from step 3 → 4, advance wizard
   const handleStep3Continue = useCallback(() => {
     setWizardStep(4);
   }, []);
 
-  // ── Derived slot step for progress indicator ────────────────────────────────
-  // While in wizard steps 1-3, show step 1/2/3.
-  // Step 4 = slot analysis (maps to "Run Analysis")
   const effectiveStep: WizardStep =
     wizardStep < 4
       ? wizardStep
@@ -379,93 +336,60 @@ function ScanPageInner() {
           ? 4
           : 4;
 
-  // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <AuthenticatedLayout>
-      <div style={{ minHeight: "100vh", background: BG, color: TEXT }}>
+      <div className="min-h-screen bg-[#090B0D] text-[#E6E8EB]">
 
-        {/* ── Top nav ────────────────────────────────────────────────────── */}
-        <nav style={{
-          background: SURFACE,
-          borderBottom: `1px solid ${BORDER}`,
-          display: "flex",
-          alignItems: "stretch",
-          padding: "0 24px",
-        }}>
-          <div style={{ flex: 1, display: "flex", alignItems: "stretch" }}>
+        {/* Header */}
+        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#24282D] px-4 py-3">
+          <div className="flex items-center gap-4">
             <Link
               href={gradeHubBasePath}
-              style={{
-                display: "flex", alignItems: "center", gap: 6,
-                fontSize: 10, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase",
-                color: MUTED, textDecoration: "none",
-                padding: "13px 20px 13px 0",
-                borderBottom: "2px solid transparent",
-              }}
+              className="text-[10px] font-medium uppercase tracking-[0.12em] text-[#77808C] hover:text-[#B8C0CC]"
             >
-              <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
-              </svg>
-              Grade Hub
+              ← Grading
             </Link>
-            <div style={{
-              display: "flex", alignItems: "center", gap: 10,
-              fontSize: 10, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase",
-              color: TEXT,
-              padding: "13px 20px",
-              borderBottom: `2px solid ${RED}`,
-              marginBottom: -1,
-            }}>
-              <span>{mode === "mock" ? "Mock Submission" : "Scan Session"}</span>
-              {wizardStep === 4 && (
-                <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                  {visible.map((s, i) => <StatusDot key={i} state={s} />)}
-                </div>
-              )}
-              {anyAnalyzing && (
-                <span style={{ fontSize: 9, color: RED, fontWeight: 600 }}>Analyzing…</span>
-              )}
-              {allDone && activeSlots > 0 && wizardStep === 4 && (
-                <span style={{ fontSize: 9, color: "#6ee7b7", fontWeight: 600 }}>
-                  {doneCount === 1 ? "Complete" : `${doneCount}/${activeSlots} complete`}
-                </span>
-              )}
-            </div>
-
-            {/* Mode badge */}
-            <div style={{
-              display: "flex", alignItems: "center",
-              marginLeft: 12,
-              padding: "4px 10px",
-              background: CARD_BG,
-              border: `1px solid ${BORDER}`,
-              borderRadius: 3,
-              alignSelf: "center",
-            }}>
-              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "1.2px", textTransform: "uppercase", color: RED }}>
-                {mode === "mock" ? "MOCK" : "SCAN"}
-              </span>
+            <div>
+              <div className="text-[10px] font-medium uppercase tracking-[0.12em] text-[#77808C]">
+                {mode === "mock" ? "Mock Submission" : "Scan Session"}
+              </div>
+              <h1 className="mt-0.5 flex items-center gap-3 text-[18px] font-semibold tracking-normal text-[#E6E8EB]">
+                {mode === "mock"
+                  ? "Mock Submission"
+                  : wizardStep < 4
+                    ? "New Scan Session"
+                    : activeSlots === 1 ? "Analyze Card" : `Analyze ${activeSlots} Cards`}
+                {wizardStep === 4 && (
+                  <span className="flex items-center gap-1">
+                    {visible.map((s, i) => <StatusDot key={i} state={s} />)}
+                  </span>
+                )}
+                {anyAnalyzing && (
+                  <span className="text-[10px] font-medium text-[#8e96a3]">Analyzing…</span>
+                )}
+                {allDone && activeSlots > 0 && wizardStep === 4 && (
+                  <span className="text-[10px] font-medium text-[#20B26B]">
+                    {doneCount === 1 ? "Complete" : `${doneCount}/${activeSlots} complete`}
+                  </span>
+                )}
+              </h1>
             </div>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0" }}>
-            {/* Slot selector for business */}
+          <div className="flex items-center gap-2">
             {wizardStep === 4 && maxSlots > 1 && (
-              <div style={{ display: "flex", alignItems: "center", gap: 4, marginRight: 8 }}>
-                <span style={{ fontSize: 9, color: MUTED, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px" }}>Cards</span>
+              <div className="mr-2 flex items-center gap-1">
+                <span className="mr-1 text-[9px] font-semibold uppercase tracking-[0.08em] text-[#77808C]">Cards</span>
                 {Array.from({ length: maxSlots }, (_, idx) => idx + 1).map((n) => (
                   <button
                     key={n}
                     type="button"
                     onClick={() => setActiveSlots(n)}
-                    style={{
-                      width: 26, height: 26, borderRadius: 3,
-                      fontSize: 10, fontWeight: 700,
-                      border: `1px solid ${activeSlots === n ? RED : BORDER}`,
-                      background: activeSlots === n ? CARD_BG : "transparent",
-                      color: activeSlots === n ? RED : MUTED,
-                      cursor: "pointer",
-                    }}
+                    className={`h-7 w-7 border text-[10px] font-semibold transition-colors ${
+                      activeSlots === n
+                        ? "border-[#5A626E] bg-[#13171B] text-[#E6E8EB]"
+                        : "border-[#24282D] text-[#77808C] hover:border-[#343941] hover:text-[#B8C0CC]"
+                    }`}
                   >
                     {n}
                   </button>
@@ -475,49 +399,30 @@ function ScanPageInner() {
             <button
               type="button"
               onClick={() => router.push(gradeHubBasePath)}
-              style={{
-                fontSize: 10, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase",
-                color: "#fff", background: RED,
-                border: "none", borderRadius: 4,
-                padding: "6px 16px", cursor: "pointer",
-              }}
+              className="border border-[#20B26B] bg-[#20B26B] px-3 py-1.5 text-[12px] font-semibold text-[#07100B] transition-colors hover:bg-[#33C47C]"
             >
-              New Scan
+              + New Scan
             </button>
           </div>
-        </nav>
+        </header>
 
-        {/* ── Body ───────────────────────────────────────────────────────── */}
-        <div style={{ maxWidth: mode === "mock" ? 860 : wideScanLayout ? 1200 : 680, margin: "0 auto", padding: "40px 24px 64px" }}>
+        {/* Body */}
+        <div
+          className="mx-auto px-6 pb-16 pt-10"
+          style={{ maxWidth: mode === "mock" ? 860 : wideScanLayout ? 1200 : 680 }}
+        >
 
-          {/* Page header */}
-          <div style={{ marginBottom: mode === "mock" ? 24 : 32 }}>
-            <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: "2.5px", color: RED, textTransform: "uppercase", marginBottom: 10 }}>
-              Grade Probability Engine
-            </p>
-            <h1 className={playfair.className} style={{ fontSize: 24, color: TEXT, lineHeight: 1.25, marginBottom: mode === "mock" ? 0 : 20 }}>
-              {mode === "mock"
-                ? "Mock Submission"
-                : wizardStep < 4
-                  ? "New scan session."
-                  : activeSlots === 1 ? "Analyze your card." : `Analyze ${activeSlots} cards.`}
-            </h1>
-          </div>
-
-          {/* ── MOCK SUBMISSION FLOW ─────────────────────────────────────── */}
           {mode === "mock" && (
             <MockSubmissionFlow tier={tier} tierLoaded={tierLoaded} />
           )}
 
-          {/* ── SCAN WIZARD ─────────────────────────────────────────────── */}
           {mode === "scan" && (
             <>
-            {/* 4-step progress indicator */}
-            <div style={{ marginBottom: 32 }}>
+            <div className="mb-8">
               <StepIndicator current={effectiveStep} />
             </div>
 
-          {/* ── Step 1: Card Details ──────────────────────────────────────── */}
+          {/* Step 1: Card Details */}
           {wizardStep === 1 && (
             <motion.div
               initial={{ opacity: 0, y: 8 }}
@@ -525,28 +430,23 @@ function ScanPageInner() {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
             >
-              <div style={{
-                background: CARD_BG,
-                border: `1px solid ${BORDER}`,
-                borderRadius: 4,
-                overflow: "hidden",
-              }}>
-                <div style={{ padding: "20px 24px", borderBottom: `1px solid ${BORDER}` }}>
-                  <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "1.5px", color: MUTED, textTransform: "uppercase" }}>
+              <div className="overflow-hidden border border-[#24282D] bg-[#0F1317]">
+                <div className="border-b border-[#24282D] px-6 py-4">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#77808C]">
                     Step 1 — Card Details
                   </p>
                 </div>
 
-                <div style={{ padding: "24px" }}>
-                  <div style={{ marginBottom: 16 }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 8 }}>
-                      <label style={{ display: "block", fontSize: 9, fontWeight: 700, letterSpacing: "1.5px", color: RED, textTransform: "uppercase" }}>
+                <div className="p-6">
+                  <div className="mb-4">
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <label className="text-[9px] font-semibold uppercase tracking-[0.16em] text-[#B8C0CC]">
                         Card Title
                       </label>
                       <MicButton
                         size="sm"
                         onResult={(text) => setCardTitle((prev) => appendSpeechTranscript(prev, text))}
-                        className="h-7 w-7 rounded border border-gray-200 bg-white text-gray-500 hover:bg-gray-50"
+                        className="h-7 w-7 rounded border border-[#24282D] bg-[#13171B] text-[#77808C] hover:border-[#343941] hover:text-[#B8C0CC]"
                       />
                     </div>
                     <input
@@ -554,44 +454,28 @@ function ScanPageInner() {
                       value={cardTitle}
                       onChange={(e) => setCardTitle(e.target.value)}
                       placeholder="e.g. 2023 Prizm Victor Wembanyama Silver #136"
-                      style={{
-                        display: "block", width: "100%", boxSizing: "border-box",
-                        padding: "10px 12px",
-                        fontSize: 13, color: TEXT,
-                        background: SURFACE,
-                        border: `1px solid ${BORDER}`,
-                        borderRadius: 4,
-                        outline: "none",
-                      }}
-                      onFocus={(e) => (e.target.style.borderColor = RED)}
-                      onBlur={(e) => (e.target.style.borderColor = BORDER)}
+                      className="block w-full rounded border border-[#24282D] bg-[#0B0D0F] px-3 py-2.5 text-[13px] text-[#E6E8EB] outline-none transition-colors placeholder:text-[#5A626E] focus:border-[#5A626E]"
                     />
-                    <p style={{ fontSize: 11, color: MUTED, marginTop: 8, lineHeight: 1.5 }}>
+                    <p className="mt-2 text-[11px] leading-relaxed text-[#77808C]">
                       Enter the full card name once. The engine will parse year, set, player, parallel, and card number from the title when possible.
                     </p>
                   </div>
 
-                  {/* Grading company */}
-                  <div style={{ marginBottom: 28 }}>
-                    <label style={{ display: "block", fontSize: 9, fontWeight: 700, letterSpacing: "1.5px", color: RED, textTransform: "uppercase", marginBottom: 10 }}>
+                  <div className="mb-7">
+                    <label className="mb-2.5 block text-[9px] font-semibold uppercase tracking-[0.16em] text-[#B8C0CC]">
                       Target Grading Company
                     </label>
-                    <div style={{ display: "flex", gap: 8 }}>
+                    <div className="flex gap-2">
                       {(["PSA", "BGS", "SGC"] as GradingCompany[]).map((co) => (
                         <button
                           key={co}
                           type="button"
                           onClick={() => setGradingCompany(co)}
-                          style={{
-                            padding: "8px 20px",
-                            fontSize: 11, fontWeight: 700, letterSpacing: "1px",
-                            textTransform: "uppercase",
-                            color: gradingCompany === co ? BG : MUTED,
-                            background: gradingCompany === co ? RED : "transparent",
-                            border: `1px solid ${gradingCompany === co ? RED : BORDER}`,
-                            borderRadius: 4,
-                            cursor: "pointer",
-                          }}
+                          className={`rounded border px-5 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] transition-colors ${
+                            gradingCompany === co
+                              ? "border-[#5A626E] bg-[#13171B] text-[#E6E8EB]"
+                              : "border-[#24282D] bg-transparent text-[#77808C] hover:border-[#343941] hover:text-[#B8C0CC]"
+                          }`}
                         >
                           {co}
                         </button>
@@ -599,38 +483,30 @@ function ScanPageInner() {
                     </div>
                   </div>
 
-                  {/* Next button */}
                   <button
                     type="button"
                     onClick={() => setWizardStep(2)}
-                    style={{
-                      display: "block", width: "100%",
-                      padding: "12px",
-                      fontSize: 11, fontWeight: 700, letterSpacing: "1.5px", textTransform: "uppercase",
-                      color: "#fff", background: RED,
-                      border: "none", borderRadius: 4, cursor: "pointer",
-                    }}
+                    className="block w-full rounded border border-[#20B26B] bg-[#20B26B] py-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#07100B] transition-colors hover:bg-[#33C47C]"
                   >
                     Continue to Card Upload →
                   </button>
                 </div>
               </div>
 
-              {/* Tips */}
-              <div style={{ marginTop: 24, padding: "16px 20px", background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 4 }}>
-                <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: "1.5px", color: MUTED, textTransform: "uppercase", marginBottom: 12 }}>
+              <div className="mt-6 rounded border border-[#24282D] bg-[#0B0D0F] px-5 py-4">
+                <p className="mb-3 text-[9px] font-semibold uppercase tracking-[0.16em] text-[#77808C]">
                   Tips for best results
                 </p>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div className="grid grid-cols-2 gap-2.5">
                   {[
                     { n: "01", tip: "Use flat, even lighting — avoid glare, shadows, or direct flash." },
                     { n: "02", tip: "Always include both front and back for the most accurate analysis." },
                     { n: "03", tip: "Add close-ups of corners, edges, and surface to boost confidence." },
                     { n: "04", tip: "Fill the frame and keep the card sharp — blur reduces accuracy." },
                   ].map(({ n, tip }) => (
-                    <div key={n} style={{ display: "flex", gap: 10 }}>
-                      <span style={{ fontFamily: "monospace", fontSize: 10, fontWeight: 700, color: RED, flexShrink: 0, paddingTop: 1 }}>{n}</span>
-                      <p style={{ fontSize: 11, lineHeight: 1.5, color: MUTED, margin: 0 }}>{tip}</p>
+                    <div key={n} className="flex gap-2.5">
+                      <span className="shrink-0 pt-0.5 font-mono text-[10px] font-semibold text-[#B8C0CC]">{n}</span>
+                      <p className="m-0 text-[11px] leading-relaxed text-[#77808C]">{tip}</p>
                     </div>
                   ))}
                 </div>
@@ -638,68 +514,45 @@ function ScanPageInner() {
             </motion.div>
           )}
 
-          {/* ── Steps 2–4: upload + analysis (slots stay mounted through step 3 so uploads persist) ─ */}
+          {/* Steps 2-4: upload + analysis */}
           {wizardStep >= 2 && wizardStep <= 4 && (
             <div style={{ display: wizardStep === 3 ? "none" : "block" }}>
               <motion.div
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.2 }}
-                style={{
-                  background: wizardStep === 2 ? CARD_BG : "transparent",
-                  border: wizardStep === 2 ? `1px solid ${BORDER}` : "none",
-                  borderRadius: wizardStep === 2 ? 4 : 0,
-                  overflow: "hidden",
-                  marginBottom: wizardStep === 2 ? 16 : 0,
-                }}
+                className={`overflow-hidden ${
+                  wizardStep === 2 ? "mb-4 rounded border border-[#24282D] bg-[#0F1317]" : ""
+                }`}
               >
                 {wizardStep === 2 && (
                   <>
-                    <div style={{
-                      display: "flex", alignItems: "center", justifyContent: "space-between",
-                      padding: "20px 24px",
-                      borderBottom: `1px solid ${BORDER}`,
-                    }}>
-                      <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "1.5px", color: MUTED, textTransform: "uppercase" }}>
+                    <div className="flex items-center justify-between border-b border-[#24282D] px-6 py-4">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#77808C]">
                         Step 2 — Card Upload
                       </p>
-                      <p style={{ fontSize: 10, color: MUTED }}>Up to 10 images · front, back + close-ups</p>
+                      <p className="text-[10px] text-[#77808C]">Up to 10 images · front, back + close-ups</p>
                     </div>
-                    <div style={{ padding: "24px 24px 0" }}>
+                    <div className="px-6 pt-6">
                       {trimmedCardTitle && (
-                        <div style={{
-                          padding: "10px 14px", marginBottom: 20,
-                          background: SURFACE,
-                          border: `1px solid ${BORDER}`,
-                          borderRadius: 4,
-                          display: "flex", alignItems: "center", gap: 12,
-                        }}>
-                          <div style={{
-                            width: 6, height: 6, borderRadius: "50%",
-                            background: RED, flexShrink: 0,
-                          }} />
-                          <div style={{ minWidth: 0 }}>
-                            <p style={{ fontSize: 12, color: TEXT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        <div className="mb-5 flex items-center gap-3 rounded border border-[#24282D] bg-[#0B0D0F] px-3.5 py-2.5">
+                          <div className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#20B26B]" />
+                          <div className="min-w-0">
+                            <p className="truncate text-[12px] text-[#E6E8EB]">
                               {trimmedCardTitle}
                             </p>
                             {cardIdentitySubline && (
-                              <p style={{ fontSize: 10, color: MUTED, marginTop: 2 }}>
+                              <p className="mt-0.5 text-[10px] text-[#77808C]">
                                 {cardIdentitySubline}
                               </p>
                             )}
                           </div>
-                          <span style={{
-                            fontSize: 9, fontWeight: 700, letterSpacing: "1px",
-                            color: RED, background: CARD_BG,
-                            border: `1px solid ${BORDER}`,
-                            borderRadius: 3, padding: "3px 8px",
-                            textTransform: "uppercase", marginLeft: "auto",
-                          }}>
+                          <span className="ml-auto rounded border border-[#24282D] bg-[#13171B] px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-[#B8C0CC]">
                             {gradingCompany}
                           </span>
                         </div>
                       )}
-                      <p style={{ fontSize: 12, color: MUTED, marginBottom: 16, lineHeight: 1.6 }}>
+                      <p className="mb-4 text-[12px] leading-relaxed text-[#77808C]">
                         Add photos or scans below. You can tag close-ups (corners, edges, surface) before identification runs. Analysis starts in the final step after notes.
                       </p>
                     </div>
@@ -707,46 +560,26 @@ function ScanPageInner() {
                 )}
 
                 {wizardStep === 4 && (
-                  <div style={{
-                    padding: "14px 20px", marginBottom: 20,
-                    background: SURFACE,
-                    border: `1px solid ${BORDER}`,
-                    borderRadius: 4,
-                    display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap",
-                  }}>
-                    <div style={{ flex: 1, minWidth: 180 }}>
-                      <p style={{ fontSize: 12, color: TEXT, fontWeight: 600 }}>
+                  <div className="mb-5 flex flex-wrap items-center gap-4 rounded border border-[#24282D] bg-[#0B0D0F] px-5 py-3.5">
+                    <div className="min-w-[180px] flex-1">
+                      <p className="text-[12px] font-semibold text-[#E6E8EB]">
                         {cardIdentityHeadline}
                       </p>
                       {cardIdentitySubline && (
-                        <p style={{ fontSize: 10, color: MUTED, marginTop: 2 }}>
+                        <p className="mt-0.5 text-[10px] text-[#77808C]">
                           {cardIdentitySubline}
                         </p>
                       )}
                     </div>
-                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                      <span style={{
-                        fontSize: 9, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase",
-                        color: RED, background: CARD_BG,
-                        border: `1px solid ${BORDER}`, borderRadius: 3, padding: "3px 8px",
-                      }}>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded border border-[#24282D] bg-[#13171B] px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-[#B8C0CC]">
                         {gradingCompany}
                       </span>
-                      <span style={{
-                        fontSize: 9, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase",
-                        color: RED,
-                        background: CARD_BG,
-                        border: `1px solid ${BORDER}`,
-                        borderRadius: 3, padding: "3px 8px",
-                      }}>
+                      <span className="rounded border border-[#24282D] bg-[#13171B] px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-[#B8C0CC]">
                         SCAN
                       </span>
                       {(notes.trim() || quickFlags.length > 0) && (
-                        <span style={{
-                          fontSize: 9, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase",
-                          color: MUTED, background: CARD_BG,
-                          border: `1px solid ${BORDER}`, borderRadius: 3, padding: "3px 8px",
-                        }}>
+                        <span className="rounded border border-[#24282D] bg-[#13171B] px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-[#77808C]">
                           Notes added
                         </span>
                       )}
@@ -754,11 +587,7 @@ function ScanPageInner() {
                     <button
                       type="button"
                       onClick={() => setWizardStep(1)}
-                      style={{
-                        fontSize: 10, color: MUTED, background: "none",
-                        border: "none", cursor: "pointer", textDecoration: "underline",
-                        textUnderlineOffset: 2,
-                      }}
+                      className="cursor-pointer text-[10px] text-[#77808C] underline underline-offset-2 hover:text-[#B8C0CC]"
                     >
                       Edit
                     </button>
@@ -766,14 +595,13 @@ function ScanPageInner() {
                 )}
 
                 {!tierLoaded ? (
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "48px 0" }}>
-                    <div style={{ textAlign: "center" }}>
-                      <div style={{
-                        width: 24, height: 24, borderRadius: "50%",
-                        border: `2px solid ${RED}`, borderTopColor: "transparent",
-                        margin: "0 auto 12px", animation: "spin 0.8s linear infinite",
-                      }} />
-                      <p style={{ fontSize: 12, color: MUTED }}>Initializing session…</p>
+                  <div className="flex items-center justify-center py-12">
+                    <div className="text-center">
+                      <div
+                        className="mx-auto mb-3 h-6 w-6 rounded-full border-2 border-[#5A626E] border-t-transparent"
+                        style={{ animation: "spin 0.8s linear infinite" }}
+                      />
+                      <p className="text-[12px] text-[#77808C]">Initializing session…</p>
                     </div>
                   </div>
                 ) : (
@@ -812,97 +640,39 @@ function ScanPageInner() {
             </div>
           )}
 
-          {/* ── Step 4: full results in scan theme (no redirect) ─ */}
+          {/* Step 4 results */}
           {inlineResultsVisible && (
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.25 }}
-                style={{ marginTop: 28 }}
+                className="mt-7"
               >
-                <p
-                  style={{
-                    fontSize: 9,
-                    fontWeight: 700,
-                    letterSpacing: "2.5px",
-                    color: RED,
-                    textTransform: "uppercase",
-                    marginBottom: 10,
-                  }}
-                >
+                <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#77808C]">
                   Scan results
                 </p>
-                <h2
-                  className={playfair.className}
-                  style={{ fontSize: 22, color: TEXT, lineHeight: 1.25, marginBottom: 8 }}
-                >
+                <h2 className="mb-2 text-[22px] font-semibold leading-tight text-[#E6E8EB]">
                   Grade probability &amp; value
                 </h2>
-                <p style={{ fontSize: 12, color: MUTED, lineHeight: 1.55, marginBottom: 20, maxWidth: 560 }}>
+                <p className="mb-5 max-w-[560px] text-[12px] leading-relaxed text-[#77808C]">
                   Full grade probability output and grading value guidance for this session — same data as the
                   standalone results page, without leaving your scan.
                 </p>
 
-                <div
-                  style={{
-                    background: CARD_BG,
-                    border: `1px solid ${BORDER}`,
-                    borderRadius: 4,
-                    padding: "20px 24px",
-                    marginBottom: 20,
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      alignItems: "baseline",
-                      justifyContent: "space-between",
-                      gap: 12,
-                      marginBottom: 12,
-                    }}
-                  >
-                    <p
-                      style={{
-                        fontSize: 10,
-                        fontWeight: 700,
-                        letterSpacing: "1.5px",
-                        color: MUTED,
-                        textTransform: "uppercase",
-                        margin: 0,
-                      }}
-                    >
+                <div className="mb-5 rounded border border-[#24282D] bg-[#0F1317] px-6 py-5">
+                  <div className="mb-3 flex flex-wrap items-baseline justify-between gap-3">
+                    <p className="m-0 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#77808C]">
                       Session summary
                     </p>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-                      <span
-                        style={{
-                          fontSize: 10,
-                          fontWeight: 600,
-                          color: TEXT,
-                          background: SURFACE,
-                          border: `1px solid ${BORDER}`,
-                          borderRadius: 3,
-                          padding: "4px 10px",
-                        }}
-                      >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded border border-[#24282D] bg-[#0B0D0F] px-2.5 py-1 text-[10px] font-semibold text-[#E6E8EB]">
                         {activeSlots} card{activeSlots === 1 ? "" : "s"}
                       </span>
-                      <span
-                        style={{
-                          fontSize: 10,
-                          fontWeight: 600,
-                          color: TEXT,
-                          background: SURFACE,
-                          border: `1px solid ${BORDER}`,
-                          borderRadius: 3,
-                          padding: "4px 10px",
-                        }}
-                      >
+                      <span className="rounded border border-[#24282D] bg-[#0B0D0F] px-2.5 py-1 text-[10px] font-semibold text-[#E6E8EB]">
                         Target grader: {gradingCompany}
                       </span>
                       {(savedResultsSession?.createdAt || orderedCompletedRuns[0]?.created_at) ? (
-                        <span style={{ fontSize: 10, color: MUTED }}>
+                        <span className="text-[10px] text-[#77808C]">
                           {formatSessionDate(
                             savedResultsSession?.createdAt ?? orderedCompletedRuns[0]!.created_at
                           )}
@@ -911,29 +681,21 @@ function ScanPageInner() {
                     </div>
                   </div>
                   {trimmedCardTitle ? (
-                    <p style={{ fontSize: 14, fontWeight: 600, color: TEXT, margin: "0 0 8px" }}>
+                    <p className="mb-2 text-[14px] font-semibold text-[#E6E8EB]">
                       {trimmedCardTitle}
                     </p>
                   ) : null}
                   {notes.trim() ? (
-                    <p style={{ fontSize: 12, color: MUTED, lineHeight: 1.5, margin: 0 }}>
+                    <p className="m-0 text-[12px] leading-relaxed text-[#77808C]">
                       {notes.trim()}
                     </p>
                   ) : null}
                   {quickFlags.length > 0 ? (
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+                    <div className="mt-3 flex flex-wrap gap-2">
                       {quickFlags.map((flag) => (
                         <span
                           key={flag}
-                          style={{
-                            fontSize: 10,
-                            fontWeight: 600,
-                            color: "#92400e",
-                            background: "#fffbeb",
-                            border: "1px solid #fde68a",
-                            borderRadius: 3,
-                            padding: "4px 10px",
-                          }}
+                          className="rounded border border-[#C9A227]/40 bg-[#C9A227]/10 px-2.5 py-1 text-[10px] font-semibold text-[#C9A227]"
                         >
                           {flag}
                         </span>
@@ -944,12 +706,8 @@ function ScanPageInner() {
 
                 {orderedCompletedRuns.length > 1 ? (
                   <section
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
-                      gap: 12,
-                      marginBottom: 24,
-                    }}
+                    className="mb-6 grid gap-3"
+                    style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}
                   >
                     {orderedCompletedRuns.map((run, index) => {
                       const imageUrl =
@@ -965,16 +723,7 @@ function ScanPageInner() {
                         <a
                           key={run.id}
                           href={`#scan-result-${index + 1}`}
-                          style={{
-                            display: "flex",
-                            gap: 14,
-                            padding: 14,
-                            background: CARD_BG,
-                            border: `1px solid ${BORDER}`,
-                            borderRadius: 4,
-                            textDecoration: "none",
-                            color: "inherit",
-                          }}
+                          className="flex gap-3.5 rounded border border-[#24282D] bg-[#0F1317] p-3.5 text-[#E6E8EB] no-underline transition-colors hover:border-[#343941]"
                         >
                           {imageUrl ? (
                             <Image
@@ -983,79 +732,25 @@ function ScanPageInner() {
                               width={64}
                               height={96}
                               unoptimized
-                              style={{
-                                height: 96,
-                                width: 64,
-                                objectFit: "cover",
-                                borderRadius: 4,
-                                border: `1px solid ${BORDER}`,
-                                flexShrink: 0,
-                              }}
+                              className="h-24 w-16 shrink-0 rounded border border-[#24282D] object-cover"
                             />
                           ) : (
-                            <div
-                              style={{
-                                height: 96,
-                                width: 64,
-                                borderRadius: 4,
-                                border: `1px solid ${BORDER}`,
-                                background: SURFACE,
-                                flexShrink: 0,
-                              }}
-                            />
+                            <div className="h-24 w-16 shrink-0 rounded border border-[#24282D] bg-[#0B0D0F]" />
                           )}
-                          <div style={{ minWidth: 0, flex: 1 }}>
-                            <p
-                              style={{
-                                fontSize: 10,
-                                fontWeight: 700,
-                                letterSpacing: "1.2px",
-                                color: MUTED,
-                                textTransform: "uppercase",
-                                margin: 0,
-                              }}
-                            >
+                          <div className="min-w-0 flex-1">
+                            <p className="m-0 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#77808C]">
                               Result {index + 1}
                             </p>
-                            <p
-                              style={{
-                                fontSize: 14,
-                                fontWeight: 600,
-                                color: TEXT,
-                                margin: "6px 0 0",
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                                whiteSpace: "nowrap",
-                              }}
-                            >
+                            <p className="mt-1.5 truncate text-[14px] font-semibold text-[#E6E8EB]">
                               {run.card.player_name || trimmedCardTitle || "Card"}
                             </p>
                             {buildCardMeta(run) ? (
-                              <p
-                                style={{
-                                  fontSize: 11,
-                                  color: MUTED,
-                                  margin: "4px 0 0",
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
-                                  whiteSpace: "nowrap",
-                                }}
-                              >
+                              <p className="mt-1 truncate text-[11px] text-[#77808C]">
                                 {buildCardMeta(run)}
                               </p>
                             ) : null}
-                            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
-                              <span
-                                style={{
-                                  fontSize: 10,
-                                  fontWeight: 600,
-                                  color: TEXT,
-                                  background: SURFACE,
-                                  border: `1px solid ${BORDER}`,
-                                  borderRadius: 3,
-                                  padding: "3px 8px",
-                                }}
-                              >
+                            <div className="mt-2.5 flex flex-wrap gap-1.5">
+                              <span className="rounded border border-[#24282D] bg-[#0B0D0F] px-2 py-0.5 text-[10px] font-semibold text-[#E6E8EB]">
                                 {formatEstimateRange(run)}
                               </span>
                               {confidence && confidenceClass ? (
@@ -1069,7 +764,7 @@ function ScanPageInner() {
                   </section>
                 ) : null}
 
-                <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+                <div className="flex flex-col gap-7">
                   {orderedCompletedRuns.map((run, index) => {
                     const galleryUrls =
                       run.card.imageUrls && run.card.imageUrls.length > 0
@@ -1083,43 +778,21 @@ function ScanPageInner() {
                       : null;
 
                     return (
-                      <section key={run.id} id={`scan-result-${index + 1}`} style={{ scrollMarginTop: 96 }}>
-                        <div
-                          style={{
-                            background: CARD_BG,
-                            border: `1px solid ${BORDER}`,
-                            borderRadius: 4,
-                            padding: "20px 24px",
-                            marginBottom: 12,
-                          }}
-                        >
-                          <div
-                            style={{
-                              display: "flex",
-                              flexDirection: "row",
-                              flexWrap: "wrap",
-                              gap: 20,
-                              alignItems: "flex-start",
-                            }}
-                          >
+                      <section key={run.id} id={`scan-result-${index + 1}`} className="scroll-mt-24">
+                        <div className="mb-3 rounded border border-[#24282D] bg-[#0F1317] px-6 py-5">
+                          <div className="flex flex-row flex-wrap items-start gap-5">
                             {imageUrl ? (
-                              <div style={{ flexShrink: 0 }}>
+                              <div className="shrink-0">
                                 <Image
                                   src={imageUrl}
                                   alt={run.card.player_name || `Result ${index + 1}`}
                                   width={128}
                                   height={176}
                                   unoptimized
-                                  style={{
-                                    height: 176,
-                                    width: 128,
-                                    objectFit: "cover",
-                                    borderRadius: 8,
-                                    border: `1px solid ${BORDER}`,
-                                  }}
+                                  className="h-44 w-32 rounded-lg border border-[#24282D] object-cover"
                                 />
                                 {galleryUrls.length > 1 ? (
-                                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
+                                  <div className="mt-2.5 flex flex-wrap gap-2">
                                     {galleryUrls.slice(1, 5).map((url, imageIndex) => (
                                       <Image
                                         key={`${url}-${imageIndex}`}
@@ -1128,13 +801,7 @@ function ScanPageInner() {
                                         width={40}
                                         height={56}
                                         unoptimized
-                                        style={{
-                                          height: 56,
-                                          width: 40,
-                                          objectFit: "cover",
-                                          borderRadius: 4,
-                                          border: `1px solid ${BORDER}`,
-                                        }}
+                                        className="h-14 w-10 rounded border border-[#24282D] object-cover"
                                       />
                                     ))}
                                   </div>
@@ -1142,120 +809,52 @@ function ScanPageInner() {
                               </div>
                             ) : null}
 
-                            <div style={{ minWidth: 0, flex: 1 }}>
-                              <div
-                                style={{
-                                  display: "flex",
-                                  flexWrap: "wrap",
-                                  justifyContent: "space-between",
-                                  gap: 12,
-                                  alignItems: "flex-start",
-                                }}
-                              >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-start justify-between gap-3">
                                 <div>
-                                  <p
-                                    style={{
-                                      fontSize: 10,
-                                      fontWeight: 700,
-                                      letterSpacing: "1.2px",
-                                      color: MUTED,
-                                      textTransform: "uppercase",
-                                      margin: 0,
-                                    }}
-                                  >
+                                  <p className="m-0 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#77808C]">
                                     Result {index + 1}
                                   </p>
-                                  <p
-                                    className={playfair.className}
-                                    style={{
-                                      fontSize: 22,
-                                      fontWeight: 600,
-                                      color: TEXT,
-                                      margin: "8px 0 0",
-                                      lineHeight: 1.2,
-                                    }}
-                                  >
+                                  <p className="mt-2 text-[22px] font-semibold leading-tight text-[#E6E8EB]">
                                     {run.card.player_name || trimmedCardTitle || "Card"}
                                   </p>
                                   {buildCardMeta(run) ? (
-                                    <p style={{ fontSize: 12, color: MUTED, margin: "8px 0 0" }}>
+                                    <p className="mt-2 text-[12px] text-[#77808C]">
                                       {buildCardMeta(run)}
                                     </p>
                                   ) : null}
                                 </div>
-                                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-                                  <span
-                                    style={{
-                                      fontSize: 10,
-                                      fontWeight: 600,
-                                      color: TEXT,
-                                      background: SURFACE,
-                                      border: `1px solid ${BORDER}`,
-                                      borderRadius: 3,
-                                      padding: "5px 10px",
-                                    }}
-                                  >
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="rounded border border-[#24282D] bg-[#0B0D0F] px-2.5 py-1 text-[10px] font-semibold text-[#E6E8EB]">
                                     {formatEstimateRange(run)}
                                   </span>
                                   {confidence && confidenceClass ? (
                                     <span className={confidenceClass}>{confidence}</span>
                                   ) : null}
-                                  <span style={{ fontSize: 11, color: MUTED }}>
+                                  <span className="text-[11px] text-[#77808C]">
                                     Saved {formatSessionDate(run.created_at)}
                                   </span>
                                 </div>
                               </div>
 
-                              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 14 }}>
+                              <div className="mt-3.5 flex flex-wrap gap-2">
                                 {run.card.year ? (
-                                  <span
-                                    style={{
-                                      fontSize: 10,
-                                      color: TEXT,
-                                      border: `1px solid ${BORDER}`,
-                                      borderRadius: 3,
-                                      padding: "4px 10px",
-                                    }}
-                                  >
+                                  <span className="rounded border border-[#24282D] px-2.5 py-1 text-[10px] text-[#B8C0CC]">
                                     Year {run.card.year}
                                   </span>
                                 ) : null}
                                 {run.card.set_name ? (
-                                  <span
-                                    style={{
-                                      fontSize: 10,
-                                      color: TEXT,
-                                      border: `1px solid ${BORDER}`,
-                                      borderRadius: 3,
-                                      padding: "4px 10px",
-                                    }}
-                                  >
+                                  <span className="rounded border border-[#24282D] px-2.5 py-1 text-[10px] text-[#B8C0CC]">
                                     {run.card.set_name}
                                   </span>
                                 ) : null}
                                 {run.card.parallel_type ? (
-                                  <span
-                                    style={{
-                                      fontSize: 10,
-                                      color: TEXT,
-                                      border: `1px solid ${BORDER}`,
-                                      borderRadius: 3,
-                                      padding: "4px 10px",
-                                    }}
-                                  >
+                                  <span className="rounded border border-[#24282D] px-2.5 py-1 text-[10px] text-[#B8C0CC]">
                                     {run.card.parallel_type}
                                   </span>
                                 ) : null}
                                 {run.card.card_number ? (
-                                  <span
-                                    style={{
-                                      fontSize: 10,
-                                      color: TEXT,
-                                      border: `1px solid ${BORDER}`,
-                                      borderRadius: 3,
-                                      padding: "4px 10px",
-                                    }}
-                                  >
+                                  <span className="rounded border border-[#24282D] px-2.5 py-1 text-[10px] text-[#B8C0CC]">
                                     #{run.card.card_number}
                                   </span>
                                 ) : null}
@@ -1293,38 +892,25 @@ function ScanPageInner() {
             )}
 
           {wizardStep === 2 && (
-            <div style={{ display: "flex", gap: 10 }}>
+            <div className="flex gap-2.5">
               <button
                 type="button"
                 onClick={() => setWizardStep(1)}
-                style={{
-                  flex: "0 0 auto",
-                  padding: "12px 20px",
-                  fontSize: 11, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase",
-                  color: MUTED, background: "none",
-                  border: `1px solid ${BORDER}`,
-                  borderRadius: 4, cursor: "pointer",
-                }}
+                className="shrink-0 rounded border border-[#24282D] bg-transparent px-5 py-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#77808C] transition-colors hover:border-[#343941] hover:text-[#B8C0CC]"
               >
                 ← Back
               </button>
               <button
                 type="button"
                 onClick={() => setWizardStep(3)}
-                style={{
-                  flex: 1,
-                  padding: "12px",
-                  fontSize: 11, fontWeight: 700, letterSpacing: "1.5px", textTransform: "uppercase",
-                  color: "#fff", background: RED,
-                  border: "none", borderRadius: 4, cursor: "pointer",
-                }}
+                className="flex-1 rounded border border-[#20B26B] bg-[#20B26B] py-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#07100B] transition-colors hover:bg-[#33C47C]"
               >
                 Continue to Notes →
               </button>
             </div>
           )}
 
-          {/* ── Step 3: Notes & Context ──────────────────────────────────── */}
+          {/* Step 3 */}
           {wizardStep === 3 && (
             <motion.div
               initial={{ opacity: 0, y: 8 }}
@@ -1332,31 +918,24 @@ function ScanPageInner() {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
             >
-              <div style={{
-                background: CARD_BG,
-                border: `1px solid ${BORDER}`,
-                borderRadius: 4,
-                overflow: "hidden",
-                marginBottom: 16,
-              }}>
-                <div style={{ padding: "20px 24px", borderBottom: `1px solid ${BORDER}` }}>
-                  <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "1.5px", color: MUTED, textTransform: "uppercase" }}>
+              <div className="mb-4 overflow-hidden rounded border border-[#24282D] bg-[#0F1317]">
+                <div className="border-b border-[#24282D] px-6 py-4">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#77808C]">
                     Step 3 — Notes &amp; Context
                   </p>
                 </div>
 
-                <div style={{ padding: "24px" }}>
-                  {/* Notes textarea */}
-                  <div style={{ marginBottom: 20 }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 10 }}>
-                      <label style={{ display: "block", fontSize: 9, fontWeight: 700, letterSpacing: "1.5px", color: RED, textTransform: "uppercase" }}>
+                <div className="p-6">
+                  <div className="mb-5">
+                    <div className="mb-2.5 flex items-center justify-between gap-3">
+                      <label className="block text-[9px] font-semibold uppercase tracking-[0.16em] text-[#B8C0CC]">
                         Notes for the Model
-                        <span style={{ fontWeight: 400, color: MUTED, marginLeft: 8 }}>(optional)</span>
+                        <span className="ml-2 font-normal text-[#77808C]">(optional)</span>
                       </label>
                       <MicButton
                         size="sm"
                         onResult={(text) => setNotes((prev) => appendSpeechTranscript(prev, text, "newline"))}
-                        className="h-7 w-7 rounded border border-gray-200 bg-white text-gray-500 hover:bg-gray-50"
+                        className="h-7 w-7 rounded border border-[#24282D] bg-[#13171B] text-[#77808C] hover:border-[#343941] hover:text-[#B8C0CC]"
                       />
                     </div>
                     <textarea
@@ -1365,56 +944,38 @@ function ScanPageInner() {
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
                       placeholder="e.g. Possible surface scratch near the top edge, centering looks slightly left heavy…"
-                      style={{
-                        display: "block", width: "100%", boxSizing: "border-box",
-                        padding: "10px 12px",
-                        fontSize: 13, color: TEXT, lineHeight: 1.5,
-                        background: SURFACE,
-                        border: `1px solid ${BORDER}`,
-                        borderRadius: 4,
-                        outline: "none",
-                        resize: "vertical",
-                        minHeight: 96,
-                      }}
-                      onFocus={(e) => (e.target.style.borderColor = RED)}
-                      onBlur={(e) => (e.target.style.borderColor = BORDER)}
+                      className="block min-h-[96px] w-full resize-y rounded border border-[#24282D] bg-[#0B0D0F] px-3 py-2.5 text-[13px] leading-relaxed text-[#E6E8EB] outline-none transition-colors placeholder:text-[#5A626E] focus:border-[#5A626E]"
                     />
-                    <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
-                      <span style={{ fontSize: 10, color: notes.length > 360 ? "#ef4444" : MUTED }}>
+                    <div className="mt-1 flex justify-end">
+                      <span className={`text-[10px] ${notes.length > 360 ? "text-[#dc2626]" : "text-[#77808C]"}`}>
                         {notes.length}/400
                       </span>
                     </div>
                   </div>
 
-                  {/* Quick-flag checkboxes */}
                   <div>
-                    <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: "1.5px", color: RED, textTransform: "uppercase", marginBottom: 10 }}>
+                    <p className="mb-2.5 text-[9px] font-semibold uppercase tracking-[0.16em] text-[#B8C0CC]">
                       Quick Flags
                     </p>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                    <div className="grid grid-cols-2 gap-2">
                       {QUICK_FLAGS.map((flag) => {
                         const checked = quickFlags.includes(flag);
                         return (
                           <label
                             key={flag}
-                            style={{
-                              display: "flex", alignItems: "center", gap: 10,
-                              padding: "10px 14px",
-                              background: checked ? "rgba(185,28,28,0.08)" : SURFACE,
-                              border: `1px solid ${checked ? RED : BORDER}`,
-                              borderRadius: 4,
-                              cursor: "pointer",
-                              userSelect: "none",
-                            }}
+                            className={`flex cursor-pointer select-none items-center gap-2.5 rounded border px-3.5 py-2.5 transition-colors ${
+                              checked
+                                ? "border-[#5A626E] bg-[#13171B]"
+                                : "border-[#24282D] bg-[#0B0D0F] hover:border-[#343941]"
+                            }`}
                           >
-                            <div style={{
-                              width: 14, height: 14, borderRadius: 3, flexShrink: 0,
-                              border: `1px solid ${checked ? RED : MUTED}`,
-                              background: checked ? RED : "transparent",
-                              display: "flex", alignItems: "center", justifyContent: "center",
-                            }}>
+                            <div
+                              className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-sm border ${
+                                checked ? "border-[#20B26B] bg-[#20B26B]" : "border-[#5A626E] bg-transparent"
+                              }`}
+                            >
                               {checked && (
-                                <svg width="8" height="8" fill="none" stroke={BG} viewBox="0 0 24 24">
+                                <svg width="8" height="8" fill="none" stroke="#07100B" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3.5} d="M5 13l4 4L19 7" />
                                 </svg>
                               )}
@@ -1427,9 +988,9 @@ function ScanPageInner() {
                                   checked ? prev.filter((f) => f !== flag) : [...prev, flag]
                                 )
                               }
-                              style={{ display: "none" }}
+                              className="hidden"
                             />
-                            <span style={{ fontSize: 12, color: checked ? TEXT : MUTED }}>{flag}</span>
+                            <span className={`text-[12px] ${checked ? "text-[#E6E8EB]" : "text-[#B8C0CC]"}`}>{flag}</span>
                           </label>
                         );
                       })}
@@ -1438,31 +999,18 @@ function ScanPageInner() {
                 </div>
               </div>
 
-              <div style={{ display: "flex", gap: 10 }}>
+              <div className="flex gap-2.5">
                 <button
                   type="button"
                   onClick={() => setWizardStep(2)}
-                  style={{
-                    flex: "0 0 auto",
-                    padding: "12px 20px",
-                    fontSize: 11, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase",
-                    color: MUTED, background: "none",
-                    border: `1px solid ${BORDER}`,
-                    borderRadius: 4, cursor: "pointer",
-                  }}
+                  className="shrink-0 rounded border border-[#24282D] bg-transparent px-5 py-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#77808C] transition-colors hover:border-[#343941] hover:text-[#B8C0CC]"
                 >
                   ← Back
                 </button>
                 <button
                   type="button"
                   onClick={handleStep3Continue}
-                  style={{
-                    flex: 1,
-                    padding: "12px",
-                    fontSize: 11, fontWeight: 700, letterSpacing: "1.5px", textTransform: "uppercase",
-                    color: "#fff", background: RED,
-                    border: "none", borderRadius: 4, cursor: "pointer",
-                  }}
+                  className="flex-1 rounded border border-[#20B26B] bg-[#20B26B] py-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#07100B] transition-colors hover:bg-[#33C47C]"
                 >
                   Continue to Analysis →
                 </button>
@@ -1470,29 +1018,17 @@ function ScanPageInner() {
             </motion.div>
           )}
 
-          {/* ── Step 4: post-session actions (upload + analysis UI lives in shared block above) ─ */}
+          {/* Step 4 actions */}
           {wizardStep === 4 && tierLoaded && allDone && (
             <motion.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                justifyContent: "center",
-                gap: 12,
-                marginTop: 24,
-              }}
+              className="mt-6 flex flex-wrap justify-center gap-3"
             >
               <Link
                 href={gradeHubBasePath}
-                style={{
-                  fontSize: 11, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase",
-                  borderRadius: 4,
-                  border: `1px solid ${BORDER}`,
-                  color: MUTED, background: SURFACE,
-                  padding: "10px 20px", textDecoration: "none",
-                }}
+                className="rounded border border-[#24282D] bg-[#0B0D0F] px-5 py-2.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#B8C0CC] no-underline transition-colors hover:border-[#343941] hover:text-[#E6E8EB]"
               >
                 Back to Hub
               </Link>
@@ -1501,15 +1037,7 @@ function ScanPageInner() {
                   href={`${gradeHubBasePath}/results?session=${encodeURIComponent(
                     savedResultsSession.id
                   )}&jobs=${encodeURIComponent(savedResultsSession.jobsParam)}`}
-                  style={{
-                    fontSize: 11, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase",
-                    borderRadius: 4,
-                    border: `1px solid ${BORDER}`,
-                    color: TEXT,
-                    background: BG,
-                    padding: "10px 20px",
-                    textDecoration: "none",
-                  }}
+                  className="rounded border border-[#343941] bg-[#13171B] px-5 py-2.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#E6E8EB] no-underline transition-colors hover:border-[#5A626E]"
                 >
                   Open standalone results
                 </Link>
@@ -1517,26 +1045,19 @@ function ScanPageInner() {
               <button
                 type="button"
                 onClick={() => router.push(gradeHubBasePath)}
-                style={{
-                  fontSize: 11, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase",
-                  borderRadius: 4, border: "none",
-                  color: "#fff", background: RED,
-                  padding: "10px 20px", cursor: "pointer",
-                }}
+                className="rounded border border-[#20B26B] bg-[#20B26B] px-5 py-2.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#07100B] transition-colors hover:bg-[#33C47C]"
               >
                 New Session
               </button>
             </motion.div>
           )}
 
-          {/* Close scan wizard fragment */}
           </>
           )}
 
         </div>
       </div>
 
-      {/* CSS animations */}
       <style jsx global>{`
         @keyframes spin {
           to { transform: rotate(360deg); }
@@ -1550,22 +1071,17 @@ function ScanPageInner() {
   );
 }
 
-// ── Suspense wrapper ──────────────────────────────────────────────────────────
 export default function GradeHubScanPage() {
   return (
     <Suspense
       fallback={
-        <div style={{
-          display: "flex", alignItems: "center", justifyContent: "center",
-          minHeight: "100vh", background: BG,
-        }}>
-          <div style={{ textAlign: "center" }}>
-            <div style={{
-              width: 24, height: 24, borderRadius: "50%",
-              border: "2px solid #B91C1C", borderTopColor: "transparent",
-              margin: "0 auto 12px", animation: "spin 0.8s linear infinite",
-            }} />
-            <p style={{ fontSize: 12, color: "#888888" }}>Loading…</p>
+        <div className="flex min-h-screen items-center justify-center bg-[#090B0D]">
+          <div className="text-center">
+            <div
+              className="mx-auto mb-3 h-6 w-6 rounded-full border-2 border-[#5A626E] border-t-transparent"
+              style={{ animation: "spin 0.8s linear infinite" }}
+            />
+            <p className="text-[12px] text-[#77808C]">Loading…</p>
           </div>
         </div>
       }
