@@ -10,6 +10,7 @@ import ActivityFeed from "@/components/dashboard/ActivityFeed";
 import { Surface } from "@/components/ui/Surface";
 import { MicButton } from "@/components/ui/MicButton";
 import AddCardModalNew from "@/components/AddCardModalNew";
+import BulkCertImportModal from "@/components/business/BulkCertImportModal";
 import PaywallModal from "@/components/PaywallModal";
 import { createClient } from "@/lib/supabase/client";
 import type { User, CollectionItem } from "@/types";
@@ -21,6 +22,7 @@ export default function DashboardPage() {
   const [collectionItems, setCollectionItems] = useState<CollectionItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showBulkCertModal, setShowBulkCertModal] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
   const [toast, setToast] = useState<{
     type: "success" | "error";
@@ -183,7 +185,14 @@ export default function DashboardPage() {
               <CompactTopPerformers items={collectionItems} loading={loading} />
               <ActivityFeed recentCards={collectionItems.slice(0, 5)} />
             </div>
-            <CompactQuickActions onAddCard={() => setShowAddModal(true)} />
+            <CompactQuickActions
+              onAddCard={() => setShowAddModal(true)}
+              onBulkCert={
+                user?.subscription?.tier === "business"
+                  ? () => setShowBulkCertModal(true)
+                  : undefined
+              }
+            />
           </div>
         </section>
 
@@ -207,6 +216,21 @@ export default function DashboardPage() {
             }
           }}
           onLimitReached={() => setShowPaywall(true)}
+        />
+
+        {/* Bulk Cert Import Modal */}
+        <BulkCertImportModal
+          isOpen={showBulkCertModal}
+          onClose={() => setShowBulkCertModal(false)}
+          onSuccess={(count) => {
+            if (count > 0) {
+              setToast({
+                type: "success",
+                message: `Added ${count} card${count === 1 ? "" : "s"} to the ledger.`,
+              });
+              refreshCollection();
+            }
+          }}
         />
 
         {/* Paywall Modal */}

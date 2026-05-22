@@ -203,3 +203,126 @@ export function parsePsaCertHtml(
 
   return mapped;
 }
+
+// ---------------------------------------------------------------------------
+// Shared server-side lookup helper (used by bulk-cert + future callers).
+// The single-cert route at app/api/psa/lookup intentionally has its own copy.
+// ---------------------------------------------------------------------------
+
+export type PsaLookupOutcome =
+  | { status: "found"; mapped: PsaMappedResult }
+  | { status: "not_found" }
+  | { status: "invalid"; reason: string }
+  | { status: "error"; reason: string };
+
+export function normalizeCertInput(raw: string): string {
+  return raw.trim().replace(/\D/g, "");
+}
+
+async function fetchPsaPublicCertPage(certDigits: string): Promise<PsaMappedResult | null> {
+  const urls = [
+    `https://www.psacard.com/cert/${encodeURIComponent(certDigits)}/psa`,
+    `https://www.psacard.com/cert/${encodeURIComponent(certDigits)}`,
+  ];
+
+  for (const url of urls) {
+    try {
+      const response = await fetch(url, {
+        headers: {
+          Accept: "text/html,application/xhtml+xml",
+          "Accept-Language": "en-US,en;q=0.9",
+          "User-Agent": "Mozilla/5.0 (compatible; CardzCheck PSA Lookup)",
+        },
+        cache: "no-store",
+        redirect: "follow",
+        signal: AbortSignal.timeout(8000),
+      });
+
+      if (!response.ok) continue;
+      const html = await response.text();
+      const parsed = parsePsaCertHtml(html, certDigits);
+      if (parsed?.player_name || parsed?.set_name || parsed?.card_number) {
+        return parsed;
+      }
+    } catch {
+      // Best-effort fallback.
+    }
+  }
+
+  return null;
+}
+
+export async function lookupPsaCert(rawCert: string): Promise<PsaLookupOutcome> {
+  const certDigits = normalizeCertInput(rawCert);
+  if (certDigits.length < 5) {
+    return { status: "invalid", reason: "certNumber is too short" };
+  }
+
+  const token = (process.env.PSA_ACCESS_TOKEN ?? process.env.PSA_API_TOKEN)?.trim();
+  if (!token) {
+    const fallback = await fetchPsaPublicCertPage(certDigits);
+    if (fallback) return { status: "found", mapped: fallback };
+    return { status: "error", reason: "PSA lookup unavailable right now" };
+  }
+
+  let psaData: unknown = null;
+  try {
+    const res = await fetch(
+      `https://api.psacard.com/publicapi/cert/GetByCertNumber/${encodeURIComponent(certDigits)}`,
+      {
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        cache: "no-store",
+        signal: AbortSignal.timeout(8000),
+      }
+    );
+
+    if (res.status === 404 || res.status === 204) {
+      return { status: "not_found" };
+    }
+
+    psaData = await res.json().catch(() => null);
+
+    if (!res.ok) {
+      const fallback = await fetchPsaPublicCertPage(certDigits);
+      if (fallback) return { status: "found", mapped: fallback };
+      return {
+        status: "error",
+        reason: getPsaServerMessage(psaData) ?? `PSA API error ${res.status}`,
+      };
+    }
+  } catch (err) {
+    const fallback = await fetchPsaPublicCertPage(certDigits);
+    if (fallback) return { status: "found", mapped: fallback };
+    return {
+      status: "error",
+      reason: err instanceof Error ? err.message : "PSA fetch failed",
+    };
+  }
+
+  if (isPsaInvalidRequestPayload(psaData)) {
+    return { status: "invalid", reason: getPsaServerMessage(psaData) ?? "Invalid cert" };
+  }
+  if (isPsaNotFoundPayload(psaData)) {
+    return { status: "not_found" };
+  }
+
+  const cert = findPsaCertObject(psaData);
+  if (!cert) {
+    const fallback = await fetchPsaPublicCertPage(certDigits);
+    if (fallback) return { status: "found", mapped: fallback };
+    return {
+      status: "error",
+      reason: getPsaServerMessage(psaData) ?? "PSA response missing cert payload",
+    };
+  }
+
+  const mapped = mapPsaCert(cert);
+  if (!mapped.player_name && !mapped.set_name && !mapped.card_number) {
+    return { status: "not_found" };
+  }
+
+  return { status: "found", mapped };
+}

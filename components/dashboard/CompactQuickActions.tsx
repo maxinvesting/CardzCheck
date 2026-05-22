@@ -4,9 +4,10 @@ import Link from "next/link";
 
 interface CompactQuickActionsProps {
   onAddCard?: () => void;
+  onBulkCert?: () => void;
 }
 
-export default function CompactQuickActions({ onAddCard }: CompactQuickActionsProps) {
+export default function CompactQuickActions({ onAddCard, onBulkCert }: CompactQuickActionsProps) {
   return (
     <section className="rounded-xl border border-[color:var(--biz-border,#e5e7eb)] bg-[color:var(--biz-surface,#ffffff)] p-4">
       <h2 className="mb-3 text-sm font-semibold text-[color:var(--biz-text,#111827)]">
@@ -25,6 +26,20 @@ export default function CompactQuickActions({ onAddCard }: CompactQuickActionsPr
           </svg>
           <span>Add card</span>
         </button>
+
+        {/* Bulk add by cert */}
+        {onBulkCert ? (
+          <button
+            type="button"
+            onClick={onBulkCert}
+            className="inline-flex items-center justify-center gap-2 rounded-lg border border-[color:var(--biz-border,#e5e7eb)] bg-[color:var(--biz-surface-soft,#f9fafb)] px-3 py-2 text-xs font-medium text-[color:var(--biz-text,#111827)] transition-colors hover:bg-[color:var(--biz-hover,#f3f4f6)]"
+          >
+            <svg className="h-4 w-4 text-[color:var(--biz-muted,#6b7280)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" />
+            </svg>
+            <span>Bulk add by cert</span>
+          </button>
+        ) : null}
 
         {/* Run Search */}
         <Link
