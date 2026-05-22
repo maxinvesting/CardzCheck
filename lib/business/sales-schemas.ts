@@ -64,6 +64,8 @@ const saleWriteFields = {
   cogs_cents: optionalCentsSchema,
   notes: z.string().trim().max(2000).optional().nullable(),
   external_order_id: z.string().trim().max(120).optional().nullable(),
+  /** When set, sells N of the linked inventory lot. Omitting it = full lot (legacy behavior). */
+  quantity_sold: z.number().int().min(1).max(10000).optional(),
 } satisfies z.ZodRawShape;
 
 export const listSalesQuerySchema = z.object({

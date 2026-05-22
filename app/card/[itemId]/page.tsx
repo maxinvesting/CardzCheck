@@ -826,11 +826,11 @@ export default function CardProfilePage() {
     return (
       <div
         className="min-h-screen flex items-center justify-center"
-        style={{ background: "#F6FAF7", fontFamily: "'Sora', sans-serif" }}
+        style={{ background: "#090B0D", fontFamily: "'Sora', sans-serif" }}
       >
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-2 border-gray-300 border-t-gray-700 rounded-full animate-spin" />
-          <p className="text-sm text-gray-500">Loading card…</p>
+          <div className="w-8 h-8 border-2 border-[#343941] border-t-[#20B26B] rounded-full animate-spin" />
+          <p className="text-sm text-[#77808C]">Loading card…</p>
         </div>
       </div>
     );
@@ -840,14 +840,14 @@ export default function CardProfilePage() {
     return (
       <div
         className="min-h-screen flex items-center justify-center px-4"
-        style={{ background: "#F6FAF7", fontFamily: "'Sora', sans-serif" }}
+        style={{ background: "#090B0D", fontFamily: "'Sora', sans-serif" }}
       >
-        <div className="bg-white rounded-2xl p-10 text-center shadow-sm max-w-sm w-full">
-          <p className="text-lg font-semibold text-gray-800 mb-2">{error || "Item not found"}</p>
+        <div className="bg-[#0F1317] border border-[#24282D] rounded-2xl p-10 text-center shadow-2xl max-w-sm w-full">
+          <p className="text-lg font-semibold text-[#E6E8EB] mb-2">{error || "Item not found"}</p>
           <button
             onClick={() => router.push(isBusinessMode ? "/business" : "/collection")}
-            className="mt-4 px-6 py-2.5 text-white rounded-xl text-sm font-medium hover:bg-gray-800 transition-colors"
-            style={{ background: "#146B42" }}
+            className="mt-4 px-6 py-2.5 text-[#07100B] rounded-xl text-sm font-medium hover:bg-[#33C47C] transition-colors"
+            style={{ background: "#20B26B" }}
           >
             {isBusinessMode ? "Back to Inventory" : "Back to Collection"}
           </button>
@@ -880,21 +880,22 @@ export default function CardProfilePage() {
     isBusinessMode && item ? (item as unknown as BusinessInventoryItem) : null;
 
   const palette = {
-    appBg: "#F6FAF7",
-    panelBg: "#FFFFFF",
-    subtleGreen: "#EAF6EE",
-    border: "#DCE9E1",
-    text: "#101A14",
-    muted: "#6F7D74",
-    accent: "#1C8C58",
-    accentDark: "#146B42",
+    appBg: "#090B0D",
+    panelBg: "#0F1317",
+    subtleGreen: "#0E251B",
+    border: "#24282D",
+    text: "#E6E8EB",
+    muted: "#77808C",
+    accent: "#20B26B",
+    accentDark: "#1F5F45",
   };
 
   return (
     <div
       className="min-h-screen"
       style={{
-        background: `radial-gradient(circle at 10% 0%, ${palette.subtleGreen} 0%, ${palette.appBg} 45%, #FFFFFF 100%)`,
+        background: palette.appBg,
+        color: palette.text,
         fontFamily: "'Sora', sans-serif",
       }}
     >
@@ -904,7 +905,7 @@ export default function CardProfilePage() {
           <button
             onClick={() => router.push(isBusinessMode ? "/business" : "/collection")}
             className="flex items-center gap-1.5 text-sm transition-colors px-3 py-1.5 rounded-full border"
-            style={{ color: palette.muted, borderColor: palette.border, background: "#FFFFFFCC" }}
+            style={{ color: palette.muted, borderColor: palette.border, background: "#0F1317CC" }}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -928,7 +929,7 @@ export default function CardProfilePage() {
             className="shrink-0 flex flex-col"
             style={{
               width: 380,
-              background: "linear-gradient(180deg, #F7FCF9 0%, #F1F8F4 100%)",
+              background: "#0B0D0F",
               borderRight: `1px solid ${palette.border}`,
             }}
           >
@@ -956,9 +957,9 @@ export default function CardProfilePage() {
                   <TrustedCardImageFrame
                     image={trustedImageForFrame}
                     alt={title}
-                    className="w-full rounded-[8px] bg-white"
+                    className="w-full rounded-[8px] bg-[#1A1E24]"
                     imageClassName="transition-transform duration-200 hover:scale-[1.02]"
-                    fallbackClassName="bg-[#F4F1EC]"
+                    fallbackClassName="bg-[#1A1E24] text-[#77808C]"
                     allowUploadCta={!imageUrl}
                     ctaLabel="Add image"
                     onCtaClick={openImageModal}
@@ -981,7 +982,7 @@ export default function CardProfilePage() {
                   rel="noopener noreferrer"
                   title="View Cert"
                   className="flex items-center justify-center w-10 h-10 rounded-xl text-gray-500 hover:text-gray-800 hover:border-gray-400 transition-colors"
-                  style={{ border: "1.5px solid #DDDBD6", background: "transparent" }}
+                  style={{ border: "1.5px solid #343941", background: "transparent" }}
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
@@ -991,7 +992,7 @@ export default function CardProfilePage() {
                 <div
                   title="No cert number"
                   className="flex items-center justify-center w-10 h-10 rounded-xl text-gray-300"
-                  style={{ border: "1.5px solid #E9E7E2", background: "transparent" }}
+                  style={{ border: "1.5px solid #2A2E33", background: "transparent" }}
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
@@ -1004,7 +1005,7 @@ export default function CardProfilePage() {
                 onClick={openImageModal}
                 title="Upload image"
                 className="flex items-center justify-center w-10 h-10 rounded-xl text-gray-500 hover:text-gray-800 hover:border-gray-400 transition-colors"
-                style={{ border: "1.5px solid #DDDBD6", background: "transparent" }}
+                style={{ border: "1.5px solid #343941", background: "transparent" }}
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -1017,7 +1018,7 @@ export default function CardProfilePage() {
                 disabled={!imageUrl}
                 title="View fullscreen"
                 className="flex items-center justify-center w-10 h-10 rounded-xl text-gray-500 hover:text-gray-800 hover:border-gray-400 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                style={{ border: "1.5px solid #DDDBD6", background: "transparent" }}
+                style={{ border: "1.5px solid #343941", background: "transparent" }}
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
@@ -1028,7 +1029,7 @@ export default function CardProfilePage() {
               <div className="px-6 pb-4">
                 <div
                   className="rounded-xl px-3 py-2 text-sm font-medium"
-                  style={{ background: "#E8F5EE", color: palette.accentDark, border: `1px solid ${palette.border}` }}
+                  style={{ background: "#0E251B", color: palette.accent, border: `1px solid ${palette.border}` }}
                 >
                   Resolving cert image...
                 </div>
@@ -1055,7 +1056,7 @@ export default function CardProfilePage() {
 
               {/* 3. Price section */}
               <div className="grid grid-cols-2 gap-3 mb-4">
-                <div style={{ border: `1px solid ${palette.border}`, borderRadius: 14, padding: "14px 16px", background: "#FBFEFC" }}>
+                <div style={{ border: `1px solid ${palette.border}`, borderRadius: 14, padding: "14px 16px", background: "#0B0D0F" }}>
                   <p className="uppercase tracking-widest mb-2" style={{ fontSize: 9, color: palette.muted, fontWeight: 600 }}>
                     Market Estimate
                   </p>
@@ -1064,10 +1065,10 @@ export default function CardProfilePage() {
                       {fmtCents(marketValue)}
                     </p>
                   ) : (
-                    <p style={{ fontSize: 26, fontWeight: 700, color: "#C0BDBA", lineHeight: 1 }}>—</p>
+                    <p style={{ fontSize: 26, fontWeight: 700, color: "#4F5863", lineHeight: 1 }}>—</p>
                   )}
                 </div>
-                <div style={{ border: `1px solid ${palette.border}`, borderRadius: 14, padding: "14px 16px", background: "#FBFEFC" }}>
+                <div style={{ border: `1px solid ${palette.border}`, borderRadius: 14, padding: "14px 16px", background: "#0B0D0F" }}>
                   <p className="uppercase tracking-widest mb-2" style={{ fontSize: 9, color: palette.muted, fontWeight: 600 }}>
                     eBay Comps
                   </p>
@@ -1076,7 +1077,7 @@ export default function CardProfilePage() {
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1 font-bold hover:underline"
-                    style={{ fontSize: 16, color: palette.accentDark }}
+                    style={{ fontSize: 16, color: palette.accent }}
                   >
                     View Sold
                     <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1090,8 +1091,8 @@ export default function CardProfilePage() {
               <div className="flex items-center gap-2 mb-6">
                 <button
                   onClick={() => setActiveTab("shop")}
-                  className="flex-1 flex items-center justify-center py-3 text-white font-semibold text-sm transition-colors"
-                  style={{ background: palette.accentDark, borderRadius: 12, border: "none", cursor: "pointer" }}
+                  className="flex-1 flex items-center justify-center py-3 font-semibold text-sm transition-colors"
+                  style={{ background: palette.accent, color: "#07100B", borderRadius: 12, border: "none", cursor: "pointer" }}
                 >
                   View Comps
                 </button>
@@ -1099,7 +1100,7 @@ export default function CardProfilePage() {
                   <button
                     onClick={openInventoryEditor}
                     className="inline-flex items-center justify-center h-[46px] px-4 text-sm font-semibold text-white transition-colors"
-                    style={{ background: "#1C8C58", borderRadius: 12 }}
+                    style={{ background: palette.accent, color: "#07100B", borderRadius: 12 }}
                   >
                     Edit Inventory
                   </button>
@@ -1110,13 +1111,13 @@ export default function CardProfilePage() {
                     title="Voice actions for this card"
                     onResult={(text) => void handleCardVoiceCommand(text)}
                     onError={(message) => setToast({ type: "error", message })}
-                    className="h-[46px] rounded-xl border border-[#DCE9E1] bg-white text-[#2A312D] hover:bg-gray-50"
+                    className="h-[46px] rounded-xl border border-[#343941] bg-[#0F1317] text-[#E6E8EB] hover:bg-[#1A1E24]"
                   />
                 )}
                 <div className="relative" ref={overflowRef}>
                   <button
                     onClick={() => setShowOverflow((v) => !v)}
-                    className="flex items-center gap-1.5 text-sm font-semibold transition-colors hover:bg-gray-50"
+                    className="flex items-center gap-1.5 text-sm font-semibold transition-colors hover:bg-[#1A1E24]"
                     style={{
                       height: 46,
                       paddingLeft: 14,
@@ -1124,7 +1125,7 @@ export default function CardProfilePage() {
                       borderRadius: 12,
                       border: `1.5px solid ${palette.border}`,
                       color: palette.text,
-                      background: "#FFFFFF",
+                      background: palette.panelBg,
                       whiteSpace: "nowrap",
                     }}
                   >
@@ -1137,10 +1138,10 @@ export default function CardProfilePage() {
                     <div
                       className="absolute right-0 top-12 z-30 py-1 min-w-[160px]"
                       style={{
-                        background: "#fff",
+                        background: palette.panelBg,
                         borderRadius: 12,
                         border: `1px solid ${palette.border}`,
-                        boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+                        boxShadow: "0 8px 24px rgba(0,0,0,0.45)",
                       }}
                     >
                       {isBusinessMode ? (
@@ -1149,7 +1150,7 @@ export default function CardProfilePage() {
                             setShowOverflow(false);
                             openInventoryEditor();
                           }}
-                          className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors"
+                          className="w-full text-left px-4 py-2.5 text-sm hover:bg-[#1A1E24] transition-colors"
                           style={{ color: palette.text }}
                         >
                           Edit Inventory
@@ -1158,7 +1159,7 @@ export default function CardProfilePage() {
                         <Link
                           href={`/cards/${item.id}`}
                           onClick={() => setShowOverflow(false)}
-                          className="block w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors"
+                          className="block w-full text-left px-4 py-2.5 text-sm hover:bg-[#1A1E24] transition-colors"
                           style={{ color: palette.text }}
                         >
                           Edit
@@ -1167,7 +1168,7 @@ export default function CardProfilePage() {
                       {isBusinessMode && item.status !== "sold" && (
                         <button
                           onClick={() => { setShowOverflow(false); setShowSoldModal(true); }}
-                          className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors"
+                          className="w-full text-left px-4 py-2.5 text-sm hover:bg-[#1A1E24] transition-colors"
                           style={{ color: palette.text }}
                         >
                           Mark Sold
@@ -1179,8 +1180,8 @@ export default function CardProfilePage() {
                             setShowOverflow(false);
                             void handleDeleteBusinessInventoryItem();
                           }}
-                          className="w-full text-left px-4 py-2.5 text-sm transition-colors hover:bg-red-50"
-                          style={{ color: "#B42318" }}
+                          className="w-full text-left px-4 py-2.5 text-sm transition-colors hover:bg-[#2A1111]"
+                          style={{ color: "#E05C5C" }}
                         >
                           Delete card
                         </button>
@@ -1211,7 +1212,7 @@ export default function CardProfilePage() {
                       rel="noopener noreferrer"
                       style={{
                         fontFamily: "'JetBrains Mono', monospace",
-                        color: "#2563EB",
+                        color: "#60A5FA",
                         textDecoration: "underline",
                         fontWeight: 600,
                         fontSize: 13,
@@ -1227,7 +1228,7 @@ export default function CardProfilePage() {
                 {/* Grade */}
                 <DataCell label="Grade">
                   {displayGrade ? (
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, color: "#0F0E0D", fontSize: 13 }}>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, color: palette.text, fontSize: 13 }}>
                       {displayGrade}
                     </span>
                   ) : (
@@ -1238,7 +1239,7 @@ export default function CardProfilePage() {
                 {/* My Cost */}
                 <DataCell label="My Cost">
                   {costCents != null ? (
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, color: "#0F0E0D", fontSize: 13 }}>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, color: palette.text, fontSize: 13 }}>
                       {fmtCents(costCents)}
                     </span>
                   ) : (
@@ -1249,7 +1250,7 @@ export default function CardProfilePage() {
                 {/* Date Acquired */}
                 <DataCell label="Date Acquired">
                   {item.acquisition_date || item.purchase_date ? (
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, color: "#0F0E0D", fontSize: 13 }}>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, color: palette.text, fontSize: 13 }}>
                       {fmtDate(item.acquisition_date ?? item.purchase_date)}
                     </span>
                   ) : (
@@ -1260,7 +1261,7 @@ export default function CardProfilePage() {
                 {/* My Value */}
                 <DataCell label="My Value">
                   {item.list_price_cents != null ? (
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, color: "#0F0E0D", fontSize: 13 }}>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, color: palette.text, fontSize: 13 }}>
                       {fmtCents(item.list_price_cents)}
                     </span>
                   ) : (
@@ -1273,7 +1274,7 @@ export default function CardProfilePage() {
                   {item.channel ? (
                     <span
                       className="capitalize"
-                      style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, color: "#0F0E0D", fontSize: 13 }}
+                      style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, color: palette.text, fontSize: 13 }}
                     >
                       {item.channel}
                     </span>
@@ -1304,7 +1305,7 @@ export default function CardProfilePage() {
                     {activeTab === tab.id && (
                       <span
                         className="absolute top-0 left-0 right-0"
-                        style={{ height: 2, background: palette.accentDark, borderRadius: "0 0 2px 2px" }}
+                        style={{ height: 2, background: palette.accent, borderRadius: "0 0 2px 2px" }}
                       />
                     )}
                   </button>
@@ -1329,23 +1330,23 @@ export default function CardProfilePage() {
                   </div>
 
                   {item.notes && (
-                    <div className="mt-4 p-3 rounded-xl" style={{ background: "#F8FCFA", border: "1px solid #DCE9E1" }}>
-                      <p className="text-xs uppercase tracking-widest text-gray-400 mb-1">Notes</p>
-                      <p className="text-sm text-gray-700">{item.notes}</p>
+                    <div className="mt-4 p-3 rounded-xl" style={{ background: "#0B0D0F", border: `1px solid ${palette.border}` }}>
+                      <p className="text-xs uppercase tracking-widest text-[#77808C] mb-1">Notes</p>
+                      <p className="text-sm text-[#B8C0CC]">{item.notes}</p>
                     </div>
                   )}
 
                   {isBusinessMode && takeHome.length > 0 && (
-                    <div className="mt-4 p-3 rounded-xl" style={{ background: "#F8FCFA", border: "1px solid #DCE9E1" }}>
-                      <p className="text-xs uppercase tracking-widest text-gray-400 mb-2">Est. Take-Home at List Price</p>
+                    <div className="mt-4 p-3 rounded-xl" style={{ background: "#0B0D0F", border: "1px solid #24282D" }}>
+                      <p className="text-xs uppercase tracking-widest text-[#77808C] mb-2">Est. Take-Home at List Price</p>
                       <div className="space-y-1">
                         {takeHome.map((th) => (
                           <div key={th.channel} className="flex justify-between text-sm">
-                            <span className="text-gray-500 capitalize">
+                            <span className="text-[#B8C0CC] capitalize">
                               {th.channel}{" "}
-                              <span className="text-gray-400 text-xs">({(th.feeRate * 100).toFixed(1)}%)</span>
+                              <span className="text-[#77808C] text-xs">({(th.feeRate * 100).toFixed(1)}%)</span>
                             </span>
-                            <span className="font-medium" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                            <span className="font-medium text-[#E6E8EB]" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
                               {fmtCents(th.netCents)}
                             </span>
                           </div>
@@ -1367,7 +1368,7 @@ export default function CardProfilePage() {
                     >
                       Marketplace Comps
                     </p>
-                    <p className="text-sm max-w-md" style={{ color: "#9D9A97" }}>
+                    <p className="text-sm max-w-md" style={{ color: palette.muted }}>
                       Search this card across every major platform — sold comps, active listings, and price guides.
                     </p>
                   </div>
@@ -1379,11 +1380,11 @@ export default function CardProfilePage() {
                         href={marketplace.href}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="group flex items-center justify-between gap-3 p-4 transition-colors hover:bg-[#F8FCFA]"
+                        className="group flex items-center justify-between gap-3 p-4 transition-colors hover:bg-[#1A1E24]"
                         style={{
                           border: `1px solid ${palette.border}`,
                           borderRadius: 16,
-                          background: "#FFFFFF",
+                          background: "#0B0D0F",
                         }}
                       >
                         <div className="min-w-0">
@@ -1397,7 +1398,7 @@ export default function CardProfilePage() {
                         <svg
                           className="w-4 h-4 shrink-0 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
                           fill="none"
-                          stroke={palette.accentDark}
+                          stroke={palette.accent}
                           viewBox="0 0 24 24"
                         >
                           <path
@@ -1447,12 +1448,12 @@ export default function CardProfilePage() {
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
           style={{ background: "rgba(0,0,0,0.5)" }}
         >
-          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
-            <h3 className="text-lg font-bold mb-4 text-gray-900">
+          <div className="bg-[#0F1317] border border-[#24282D] rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+            <h3 className="text-lg font-bold mb-4 text-[#E6E8EB]">
               {isBusinessMode ? "Update List Price" : "Set Price"}
             </h3>
             <div className="mb-4">
-              <label className="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wide">
+              <label className="block text-xs font-medium text-[#77808C] mb-1.5 uppercase tracking-wide">
                 Price ($)
               </label>
               <input
@@ -1463,23 +1464,23 @@ export default function CardProfilePage() {
                 onChange={(e) => setNewPrice(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") handleUpdatePrice(); }}
                 autoFocus
-                className="w-full px-3 py-2.5 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900"
-                style={{ border: "1.5px solid #E4E2DE", fontFamily: "'JetBrains Mono', monospace" }}
+                className="w-full px-3 py-2.5 rounded-xl bg-[#090B0D] text-[#E6E8EB] focus:outline-none focus:ring-2 focus:ring-[#20B26B]"
+                style={{ border: "1.5px solid #343941", fontFamily: "'JetBrains Mono', monospace" }}
               />
             </div>
             <div className="flex gap-2">
               <button
                 onClick={() => setShowPriceModal(false)}
-                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
-                style={{ border: "1.5px solid #E4E2DE", color: "#6B6864" }}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-[#1A1E24] transition-colors"
+                style={{ border: "1.5px solid #343941", color: "#B8C0CC" }}
               >
                 Cancel
               </button>
               <button
                 onClick={handleUpdatePrice}
                 disabled={updatingPrice}
-                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:bg-gray-800 transition-colors"
-                style={{ background: "#111", borderRadius: 11 }}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-[#07100B] disabled:opacity-50 hover:bg-[#33C47C] transition-colors"
+                style={{ background: "#20B26B", borderRadius: 11 }}
               >
                 {updatingPrice ? "Saving…" : "Save"}
               </button>
@@ -1494,11 +1495,11 @@ export default function CardProfilePage() {
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
           style={{ background: "rgba(0,0,0,0.5)" }}
         >
-          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
-            <h3 className="text-lg font-bold mb-4 text-gray-900">Mark Sold</h3>
+          <div className="bg-[#0F1317] border border-[#24282D] rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+            <h3 className="text-lg font-bold mb-4 text-[#E6E8EB]">Mark Sold</h3>
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wide">
+                <label className="block text-xs font-medium text-[#77808C] mb-1.5 uppercase tracking-wide">
                   Sold Price ($) *
                 </label>
                 <input
@@ -1508,19 +1509,19 @@ export default function CardProfilePage() {
                   value={soldForm.sale_price}
                   onChange={(e) => setSoldForm((f) => ({ ...f, sale_price: e.target.value }))}
                   autoFocus
-                  className="w-full px-3 py-2.5 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900"
-                  style={{ border: "1.5px solid #E4E2DE", fontFamily: "'JetBrains Mono', monospace" }}
+                  className="w-full px-3 py-2.5 rounded-xl bg-[#090B0D] text-[#E6E8EB] focus:outline-none focus:ring-2 focus:ring-[#20B26B]"
+                  style={{ border: "1.5px solid #343941", fontFamily: "'JetBrains Mono', monospace" }}
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wide">
+                <label className="block text-xs font-medium text-[#77808C] mb-1.5 uppercase tracking-wide">
                   Channel
                 </label>
                 <select
                   value={soldForm.channel}
                   onChange={(e) => setSoldForm((f) => ({ ...f, channel: e.target.value }))}
-                  className="w-full px-3 py-2.5 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900"
-                  style={{ border: "1.5px solid #E4E2DE" }}
+                  className="w-full px-3 py-2.5 rounded-xl bg-[#090B0D] text-[#E6E8EB] focus:outline-none focus:ring-2 focus:ring-[#20B26B]"
+                  style={{ border: "1.5px solid #343941" }}
                 >
                   <option value="ebay">eBay</option>
                   <option value="whatnot">Whatnot</option>
@@ -1531,31 +1532,31 @@ export default function CardProfilePage() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wide">
+                <label className="block text-xs font-medium text-[#77808C] mb-1.5 uppercase tracking-wide">
                   Sold Date
                 </label>
                 <input
                   type="date"
                   value={soldForm.sale_date}
                   onChange={(e) => setSoldForm((f) => ({ ...f, sale_date: e.target.value }))}
-                  className="w-full px-3 py-2.5 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900"
-                  style={{ border: "1.5px solid #E4E2DE" }}
+                  className="w-full px-3 py-2.5 rounded-xl bg-[#090B0D] text-[#E6E8EB] focus:outline-none focus:ring-2 focus:ring-[#20B26B]"
+                  style={{ border: "1.5px solid #343941" }}
                 />
               </div>
             </div>
             <div className="flex gap-2 mt-5">
               <button
                 onClick={() => setShowSoldModal(false)}
-                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
-                style={{ border: "1.5px solid #E4E2DE", color: "#6B6864" }}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-[#1A1E24] transition-colors"
+                style={{ border: "1.5px solid #343941", color: "#B8C0CC" }}
               >
                 Cancel
               </button>
               <button
                 onClick={handleMarkSold}
                 disabled={recordingSale || !soldForm.sale_price}
-                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:bg-gray-800 transition-colors"
-                style={{ background: "#111", borderRadius: 11 }}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-[#07100B] disabled:opacity-50 hover:bg-[#33C47C] transition-colors"
+                style={{ background: "#20B26B", borderRadius: 11 }}
               >
                 {recordingSale ? "Recording…" : "Record Sale"}
               </button>
@@ -1566,9 +1567,9 @@ export default function CardProfilePage() {
 
       {pendingVoiceDelete && item && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-gray-900 shadow-2xl">
+          <div className="w-full max-w-sm rounded-2xl bg-[#0F1317] border border-[#24282D] p-6 text-[#E6E8EB] shadow-2xl">
             <h3 className="text-lg font-bold">Delete this card?</h3>
-            <p className="mt-2 text-sm leading-6 text-gray-600">
+            <p className="mt-2 text-sm leading-6 text-[#B8C0CC]">
               {displayTitle(item)} will be removed from business inventory. This cannot be undone.
             </p>
             <div className="mt-5 flex flex-wrap items-center gap-2">
@@ -1578,7 +1579,7 @@ export default function CardProfilePage() {
                   setPendingVoiceDelete(false);
                   setToast({ type: "success", message: "Voice delete canceled" });
                 }}
-                className="flex-1 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50"
+                className="flex-1 rounded-xl border border-[#343941] px-4 py-2.5 text-sm font-medium text-[#B8C0CC] transition-colors hover:bg-[#1A1E24]"
               >
                 Cancel
               </button>
@@ -1588,7 +1589,7 @@ export default function CardProfilePage() {
                   setPendingVoiceDelete(false);
                   void performDeleteBusinessInventoryItem();
                 }}
-                className="flex-1 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-700"
+                className="flex-1 rounded-xl bg-red-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-800"
               >
                 Confirm Delete
               </button>
@@ -1598,7 +1599,7 @@ export default function CardProfilePage() {
                 size="sm"
                 onResult={(text) => void handleCardVoiceCommand(text)}
                 onError={(message) => setToast({ type: "error", message })}
-                className="w-full justify-center bg-gray-100 text-gray-700 hover:bg-gray-200"
+                className="w-full justify-center bg-[#1A1E24] text-[#B8C0CC] hover:bg-[#22262C]"
               />
             </div>
           </div>
@@ -1614,9 +1615,9 @@ export default function CardProfilePage() {
           <div
             className="relative z-10 w-full max-w-[960px] overflow-hidden rounded-2xl"
             style={{
-              background: "#FFFFFF",
-              border: "1px solid #DCE9E1",
-              boxShadow: "0 12px 40px rgba(16, 40, 26, 0.16)",
+              background: "#0F1317",
+              border: "1px solid #24282D",
+              boxShadow: "0 12px 40px rgba(0, 0, 0, 0.6)",
               maxHeight: "92vh",
             }}
           >
@@ -1625,7 +1626,7 @@ export default function CardProfilePage() {
                 item={businessItemForEditor}
                 onSave={handleSaveBusinessInventoryItem}
                 onClose={() => setShowInventoryEditorModal(false)}
-                tone="light"
+                tone="dark"
                 showOpenProfileLink={false}
                 showGradeProbabilitySection={false}
               />
@@ -1769,11 +1770,11 @@ function DataCell({ label, children }: { label: string; children: React.ReactNod
   return (
     <div
       className="flex flex-col gap-1.5 p-3 rounded-[11px]"
-      style={{ background: "#FBFEFC", border: "1px solid #DCE9E1" }}
+      style={{ background: "#0B0D0F", border: "1px solid #24282D" }}
     >
       <span
         className="uppercase tracking-widest"
-        style={{ fontSize: 9, color: "#6F7D74", fontWeight: 600 }}
+        style={{ fontSize: 9, color: "#77808C", fontWeight: 600 }}
       >
         {label}
       </span>
@@ -1784,7 +1785,7 @@ function DataCell({ label, children }: { label: string; children: React.ReactNod
 
 function EmptyCell() {
   return (
-    <span style={{ color: "#C0BDBA", fontWeight: 400, fontSize: 20, lineHeight: 1 }}>+</span>
+    <span style={{ color: "#4F5863", fontWeight: 400, fontSize: 20, lineHeight: 1 }}>+</span>
   );
 }
 
@@ -1793,10 +1794,10 @@ function FactRow({ label, value }: { label: string; value: string | null | undef
   return (
     <div
       className="flex justify-between items-center py-1.5"
-      style={{ borderBottom: "1px solid #ECF4EF" }}
+      style={{ borderBottom: "1px solid #24282D" }}
     >
-      <span className="text-xs font-medium" style={{ color: "#6F7D74" }}>{label}</span>
-      <span className="text-xs font-medium capitalize" style={{ color: "#101A14" }}>{value}</span>
+      <span className="text-xs font-medium" style={{ color: "#77808C" }}>{label}</span>
+      <span className="text-xs font-medium capitalize" style={{ color: "#E6E8EB" }}>{value}</span>
     </div>
   );
 }
