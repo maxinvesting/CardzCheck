@@ -14,7 +14,12 @@ export async function PATCH(request: NextRequest) {
     const body = await request.json();
     const { ids, updates } = body as {
       ids: string[];
-      updates: { status?: string; location?: string };
+      updates: {
+        status?: string;
+        location?: string;
+        channel?: string | null;
+        list_price_cents?: number | null;
+      };
     };
 
     if (!ids?.length || !updates)

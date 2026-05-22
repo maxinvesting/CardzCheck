@@ -7,11 +7,15 @@ import BusinessPaywall from "@/components/business/BusinessPaywall";
 import BusinessMigrationBanner from "@/components/business/BusinessMigrationBanner";
 import BusinessInventoryItemEditor from "@/components/business/BusinessInventoryItemEditor";
 import EbayListingModal from "@/components/business/EbayListingModal";
-import LedgerTable from "@/components/business/LedgerTable";
+import LedgerTable, { type LedgerInlineEditPayload } from "@/components/business/LedgerTable";
+import LedgerBulkActionsBar, {
+  type LedgerBulkAction,
+} from "@/components/business/LedgerBulkActionsBar";
 import SaleFormModal from "@/components/business/SaleFormModal";
 import TradeFormModal, { type TradeFormPayload } from "@/components/business/TradeFormModal";
 import AddCardToInventoryModal from "@/components/business/AddCardToInventoryModal";
 import type { PendingInventoryCard } from "@/components/business/AddCardToInventoryModal";
+import BulkCertImportModal from "@/components/business/BulkCertImportModal";
 import AddCardModalNew from "@/components/AddCardModalNew";
 import CardPickerModal from "@/components/CardPickerModal";
 import type { CardPickerSelection } from "@/components/CardPicker";
@@ -117,6 +121,9 @@ export default function LedgerPage() {
   const [tradeItem, setTradeItem] = useState<BusinessInventoryItem | null>(null);
   const [listItem, setListItem] = useState<BusinessInventoryItem | null>(null);
   const [showAddCardModal, setShowAddCardModal] = useState(false);
+  const [showBulkCertModal, setShowBulkCertModal] = useState(false);
+  const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(() => new Set());
+  const [isBulkWorking, setIsBulkWorking] = useState(false);
   const [showCardPicker, setShowCardPicker] = useState(false);
   const [showAddCardToInventory, setShowAddCardToInventory] = useState(false);
   const [pendingInventoryCard, setPendingInventoryCard] =
@@ -218,6 +225,97 @@ export default function LedgerPage() {
   const handleLedgerRowClick = useCallback((row: LedgerTableRow) => {
     setSelectedLedgerItemId(row.id);
   }, []);
+
+  const handleToggleRow = useCallback((rowId: string) => {
+    setSelectedRowIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(rowId)) next.delete(rowId);
+      else next.add(rowId);
+      return next;
+    });
+  }, []);
+
+  const handleToggleAll = useCallback(
+    (allSelected: boolean) => {
+      if (allSelected) {
+        setSelectedRowIds(new Set());
+      } else {
+        setSelectedRowIds(new Set(ledgerRows.map((r) => r.id)));
+      }
+    },
+    [ledgerRows]
+  );
+
+  const clearSelection = useCallback(() => setSelectedRowIds(new Set()), []);
+
+  const handleInlineEdit = useCallback(
+    async ({ rowId, field, value }: LedgerInlineEditPayload) => {
+      try {
+        const res = await fetch("/api/business/inventory", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: rowId, [field]: value }),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(data?.error || "Failed to save");
+        const updated = data as BusinessInventoryItem;
+        setItems((prev) => prev.map((item) => (item.id === rowId ? updated : item)));
+      } catch (error) {
+        setToast({
+          type: "error",
+          message: error instanceof Error ? error.message : "Failed to save",
+        });
+      }
+    },
+    []
+  );
+
+  const handleBulkAction = useCallback(
+    async (action: LedgerBulkAction) => {
+      const ids = Array.from(selectedRowIds);
+      if (ids.length === 0) return;
+      setIsBulkWorking(true);
+      try {
+        if (action.type === "delete") {
+          const params = new URLSearchParams({ ids: ids.join(",") });
+          const res = await fetch(`/api/business/inventory?${params.toString()}`, {
+            method: "DELETE",
+          });
+          if (!res.ok) {
+            const data = await res.json().catch(() => null);
+            throw new Error(data?.error || "Failed to delete");
+          }
+          setItems((prev) => prev.filter((item) => !selectedRowIds.has(item.id)));
+          setSelectedRowIds(new Set());
+          setToast({ type: "success", message: `Deleted ${ids.length} item(s)` });
+        } else {
+          const updates: Record<string, unknown> = {};
+          if (action.type === "status") updates.status = action.value;
+          if (action.type === "channel") updates.channel = action.value;
+          if (action.type === "list_price_cents") updates.list_price_cents = action.value;
+          const res = await fetch("/api/business/inventory/bulk", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ids, updates }),
+          });
+          if (!res.ok) {
+            const data = await res.json().catch(() => null);
+            throw new Error(data?.error || "Failed to update");
+          }
+          setToast({ type: "success", message: `Updated ${ids.length} item(s)` });
+          await loadInventory();
+        }
+      } catch (error) {
+        setToast({
+          type: "error",
+          message: error instanceof Error ? error.message : "Bulk action failed",
+        });
+      } finally {
+        setIsBulkWorking(false);
+      }
+    },
+    [loadInventory, selectedRowIds]
+  );
 
   const handleSaveItem = useCallback(
     async (id: string, updates: Partial<BusinessInventoryItem>) => {
@@ -393,6 +491,13 @@ export default function LedgerPage() {
               </a>
               <button
                 type="button"
+                onClick={() => setShowBulkCertModal(true)}
+                className="border border-[#343941] px-3 py-1.5 text-[12px] font-medium text-[#B8C0CC] transition-colors hover:border-[#5A626E] hover:text-[#E6E8EB]"
+              >
+                Bulk add by cert
+              </button>
+              <button
+                type="button"
                 onClick={() => setShowAddCardModal(true)}
                 className="border border-[#20B26B] bg-[#20B26B] px-3 py-1.5 text-[12px] font-semibold text-[#07100B] transition-colors hover:bg-[#33C47C]"
               >
@@ -413,11 +518,21 @@ export default function LedgerPage() {
               />
             </div>
           ) : (
-            <section className="min-w-0 flex-1 px-4 py-4">
+            <section className="min-w-0 flex-1 space-y-2 px-4 py-4">
+              <LedgerBulkActionsBar
+                selectedCount={selectedRowIds.size}
+                isWorking={isBulkWorking}
+                onClear={clearSelection}
+                onApply={handleBulkAction}
+              />
               <LedgerTable
                 rows={ledgerRows}
                 selectedRowId={selectedLedgerItemId}
                 onRowClick={handleLedgerRowClick}
+                selectedRowIds={selectedRowIds}
+                onToggleRow={handleToggleRow}
+                onToggleAll={handleToggleAll}
+                onInlineEdit={handleInlineEdit}
               />
             </section>
           )}
@@ -498,6 +613,20 @@ export default function LedgerPage() {
             </aside>
           </>
         )}
+
+        <BulkCertImportModal
+          isOpen={showBulkCertModal}
+          onClose={() => setShowBulkCertModal(false)}
+          onSuccess={(count) => {
+            if (count > 0) {
+              setToast({
+                type: "success",
+                message: `Added ${count} card${count === 1 ? "" : "s"} to inventory`,
+              });
+              void loadInventory();
+            }
+          }}
+        />
 
         <AddCardModalNew
           isOpen={showAddCardModal}
