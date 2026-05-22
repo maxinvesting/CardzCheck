@@ -83,16 +83,19 @@ function HeaderCell({
   children,
   align = "left",
   className = "",
+  title,
 }: {
   children: React.ReactNode;
   align?: "left" | "right" | "center";
   className?: string;
+  title?: string;
 }) {
   const alignClass =
     align === "right" ? "text-right" : align === "center" ? "text-center" : "text-left";
   return (
     <th
       scope="col"
+      title={title}
       className={`sticky top-0 z-10 border-b border-[color:var(--biz-border)] bg-[color:var(--biz-near-black)] px-2 py-2 text-[10px] font-medium uppercase tracking-[0.08em] text-[color:var(--biz-muted)] ${alignClass} ${className}`}
     >
       {children}
