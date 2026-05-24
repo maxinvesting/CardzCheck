@@ -1,147 +1,190 @@
 "use client";
 
-import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
-import { LIMITS } from "@/types";
-import { PRO_MONTHLY_PRICE, formatPrice } from "@/lib/pricing";
 
 interface PaywallModalProps {
   isOpen: boolean;
   onClose: () => void;
-  type: "search" | "collection";
+  /**
+   * Why the modal is showing. The copy adapts so the user immediately knows
+   * which gate they hit and what tier unlocks it.
+   */
+  type:
+    | "search"
+    | "collection"
+    | "analyst"
+    | "bulk_cert"
+    | "multi_card_scan"
+    | "marketplace_sell";
 }
+
+interface CopyEntry {
+  title: string;
+  subtitle: string;
+  recommendedTier: "business" | "business_pro";
+}
+
+const COPY: Record<PaywallModalProps["type"], CopyEntry> = {
+  search: {
+    title: "Unlock unlimited searches",
+    subtitle: "You've reached the search limit on the Free tier.",
+    recommendedTier: "business",
+  },
+  collection: {
+    title: "Expand your inventory",
+    subtitle:
+      "Free accounts are capped at 10 cards. Upgrade to add the rest of your inventory.",
+    recommendedTier: "business",
+  },
+  analyst: {
+    title: "Unlock the CardzCheck Analyst",
+    subtitle:
+      "Free accounts don't include AI analyst messages. Business gets 3 per week, Business Pro is unlimited.",
+    recommendedTier: "business_pro",
+  },
+  bulk_cert: {
+    title: "Bulk PSA cert import is a Pro feature",
+    subtitle: "Paste hundreds of cert numbers at once with Business Pro.",
+    recommendedTier: "business_pro",
+  },
+  multi_card_scan: {
+    title: "Multi-card grading is a Pro feature",
+    subtitle:
+      "Scan up to 10 cards in a single grading session on Business Pro.",
+    recommendedTier: "business_pro",
+  },
+  marketplace_sell: {
+    title: "Lower marketplace fees with a subscription",
+    subtitle:
+      "Free sellers pay 8–15% in platform fees. Business cuts that in half; Business Pro is just 1–5%.",
+    recommendedTier: "business_pro",
+  },
+};
+
+const TIER_LABEL = {
+  business: "CardzCheck Business",
+  business_pro: "CardzCheck Business Pro",
+};
 
 export default function PaywallModal({ isOpen, onClose, type }: PaywallModalProps) {
   const router = useRouter();
-  const [loading, setLoading] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleUpgrade = async () => {
-    setLoading(true);
+  const copy = COPY[type];
 
-    // Check if user is logged in
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      router.push("/login?redirect=/comps");
-      return;
-    }
-
-    // Create checkout session
-    try {
-      const response = await fetch("/api/checkout", {
-        method: "POST",
-      });
-
-      const data = await response.json();
-
-      if (data.url) {
-        window.location.href = data.url;
-      } else {
-        console.error("No checkout URL returned");
-        setLoading(false);
-      }
-    } catch (error) {
-      console.error("Checkout error:", error);
-      setLoading(false);
-    }
+  const handleContact = () => {
+    // Stripe products / pricing pages are still in flight. Until they ship,
+    // route interested users to the contact form so we can hand-hold them
+    // through the upgrade.
+    router.push("/contact?intent=upgrade");
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-900 rounded-2xl max-w-md w-full overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="w-full max-w-md overflow-hidden rounded-xl border border-[#24282D] bg-[#0F1317] text-[#E6E8EB] shadow-2xl">
         {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-8 text-center">
-          <div className="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg
-              className="w-8 h-8 text-white"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
-              />
-            </svg>
+        <div className="border-b border-[#24282D] bg-[#0B0D0F] px-6 py-5">
+          <div className="text-[10px] font-medium uppercase tracking-[0.12em] text-[#77808C]">
+            Upgrade required
           </div>
-          <h2 className="text-2xl font-bold text-white">
-            {type === "search" ? "Unlock Unlimited Searches" : "Expand Your Collection"}
+          <h2 className="mt-1 text-lg font-semibold text-[#E6E8EB]">
+            {copy.title}
           </h2>
-          <p className="text-blue-100 mt-2">
-            {type === "search"
-              ? `You've used your ${LIMITS.FREE_SEARCHES} free searches`
-              : `Your collection has reached the ${LIMITS.FREE_COLLECTION} card limit`}
+          <p className="mt-1 text-[12px] text-[#B8C0CC]">{copy.subtitle}</p>
+        </div>
+
+        {/* Plans */}
+        <div className="grid grid-cols-2 gap-3 p-5">
+          <PlanCard
+            name="Business"
+            recommended={copy.recommendedTier === "business"}
+            bullets={[
+              "Unlimited inventory items",
+              "3 analyst messages / week",
+              "Single-card grading scans",
+              "Marketplace fees: 4 / 5 / 8%",
+            ]}
+            cta="Coming soon"
+          />
+          <PlanCard
+            name="Business Pro"
+            recommended={copy.recommendedTier === "business_pro"}
+            bullets={[
+              "Everything in Business",
+              "Unlimited analyst messages",
+              "Bulk PSA cert import",
+              "Multi-card grading scans",
+              "Marketplace fees: 1 / 2 / 5%",
+            ]}
+            cta="Coming soon"
+          />
+        </div>
+
+        {/* Footer */}
+        <div className="border-t border-[#24282D] bg-[#0B0D0F] px-6 py-4">
+          <p className="text-[11px] text-[#77808C]">
+            Stripe checkout is being finalized. In the meantime, reach out and
+            we'll set you up manually.
           </p>
-        </div>
-
-        {/* Body */}
-        <div className="p-6">
-          <div className="text-center mb-6">
-            <p className="text-4xl font-bold text-gray-900 dark:text-white">
-              {formatPrice(PRO_MONTHLY_PRICE)}
-            </p>
-            <p className="text-gray-500 dark:text-gray-400">monthly subscription</p>
-          </div>
-
-          <ul className="space-y-3 mb-6">
-            <li className="flex items-center gap-3 text-gray-700 dark:text-gray-300">
-              <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              Unlimited card searches
-            </li>
-            <li className="flex items-center gap-3 text-gray-700 dark:text-gray-300">
-              <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              Unlimited collection tracking
-            </li>
-            <li className="flex items-center gap-3 text-gray-700 dark:text-gray-300">
-              <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              AI card photo identification
-            </li>
-            <li className="flex items-center gap-3 text-gray-700 dark:text-gray-300">
-              <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              Real-time eBay sold prices
-            </li>
-            <li className="flex items-center gap-3 text-gray-700 dark:text-gray-300">
-              <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              Collection value tracking
-            </li>
-          </ul>
-
-          <div className="text-center text-sm text-gray-500 dark:text-gray-400 mb-6">
-            <p>Cancel anytime from your billing settings.</p>
-          </div>
-
-          <div className="space-y-3">
+          <div className="mt-3 flex gap-2">
             <button
-              onClick={handleUpgrade}
-              disabled={loading}
-              className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              type="button"
+              onClick={handleContact}
+              className="flex-1 border border-[#20B26B] bg-[#20B26B] px-3 py-2 text-[12px] font-semibold text-[#07100B] hover:bg-[#33C47C]"
             >
-              {loading ? "Loading..." : "Upgrade Now"}
+              Contact us about {TIER_LABEL[copy.recommendedTier]}
             </button>
             <button
+              type="button"
               onClick={onClose}
-              className="w-full py-3 px-4 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+              className="border border-[#343941] px-3 py-2 text-[12px] font-medium text-[#B8C0CC] hover:border-[#5A626E] hover:text-[#E6E8EB]"
             >
-              Maybe later
+              Not now
             </button>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function PlanCard({
+  name,
+  bullets,
+  cta,
+  recommended,
+}: {
+  name: string;
+  bullets: string[];
+  cta: string;
+  recommended: boolean;
+}) {
+  return (
+    <div
+      className={`flex flex-col border p-3 text-[12px] ${
+        recommended
+          ? "border-[#20B26B] bg-[#0B1A12]"
+          : "border-[#24282D] bg-[#0B0D0F]"
+      }`}
+    >
+      <div className="flex items-center justify-between">
+        <div className="text-[13px] font-semibold text-[#E6E8EB]">{name}</div>
+        {recommended ? (
+          <span className="border border-[#20B26B] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[#20B26B]">
+            Recommended
+          </span>
+        ) : null}
+      </div>
+      <ul className="mt-2 flex-1 space-y-1 text-[#B8C0CC]">
+        {bullets.map((b) => (
+          <li key={b} className="leading-snug">
+            · {b}
+          </li>
+        ))}
+      </ul>
+      <div className="mt-3 border border-[#343941] px-2 py-1 text-center text-[10px] uppercase tracking-wide text-[#77808C]">
+        {cta}
       </div>
     </div>
   );

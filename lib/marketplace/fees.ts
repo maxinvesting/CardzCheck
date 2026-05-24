@@ -4,11 +4,27 @@ export type Pipeline = "standard" | "elite" | "grails";
 
 export const STRONG_COMPS_THRESHOLD = 5;
 
-export const FEE_RATES: Record<Exclude<FeeTier, "negotiated">, number> = {
-  one_pct: 0.01,
-  two_pct: 0.02,
-  five_pct: 0.05,
-};
+/**
+ * Subscription-tier-based fee schedules. The card-listing logic picks one
+ * of the three slot keys (one_pct / two_pct / five_pct) based on grade +
+ * comps depth; the seller's tier picks the actual rate.
+ *
+ * Headline "1% / 2% / 5%" copy applies to Business Pro. Business pays
+ * +3 points across the board. Free pays the highest fees as an upsell.
+ */
+export const FEE_RATES_BY_TIER = {
+  business_pro: { one_pct: 0.01, two_pct: 0.02, five_pct: 0.05 },
+  business: { one_pct: 0.04, two_pct: 0.05, five_pct: 0.08 },
+  free: { one_pct: 0.08, two_pct: 0.12, five_pct: 0.15 },
+} as const;
+
+export type FeeTierKey = "business_pro" | "business" | "free";
+
+/** Legacy export: defaults to Business Pro rates for any caller that hasn't
+ *  yet been updated to pass a seller tier. New callers should use
+ *  FEE_RATES_BY_TIER[sellerTier] instead. */
+export const FEE_RATES: Record<Exclude<FeeTier, "negotiated">, number> =
+  FEE_RATES_BY_TIER.business_pro;
 
 export type FeeTierInput = {
   mode: ListingMode;
@@ -40,13 +56,19 @@ export function resolveFeeTier(input: FeeTierInput): FeeTier {
 }
 
 /**
- * Compute the platform fee for a completed sale. For 'negotiated' the caller
- * must supply a manually agreed feeAmountCents; this function just clamps it.
+ * Compute the platform fee for a completed sale.
+ *
+ * sellerTier picks the schedule (Business Pro / Business / Free). Omit it for
+ * legacy callers — they default to Business Pro rates (the headline 1/2/5).
+ *
+ * 'negotiated' is admin-set and ignores sellerTier (the negotiated amount is
+ * the final number).
  */
 export function calculateFee(
   salePriceCents: number,
   feeTier: FeeTier,
-  negotiatedFeeCents?: number
+  negotiatedFeeCents?: number,
+  sellerTier: FeeTierKey = "business_pro"
 ): { fee_amount_cents: number } {
   if (!Number.isFinite(salePriceCents) || salePriceCents < 0) {
     throw new Error("invalid sale price");
@@ -61,7 +83,7 @@ export function calculateFee(
     }
     return { fee_amount_cents: Math.round(negotiatedFeeCents) };
   }
-  const rate = FEE_RATES[feeTier];
+  const rate = FEE_RATES_BY_TIER[sellerTier][feeTier];
   return { fee_amount_cents: Math.round(salePriceCents * rate) };
 }
 

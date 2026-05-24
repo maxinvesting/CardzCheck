@@ -34,17 +34,23 @@ import type {
 // ---------------------------------------------------------------------------
 
 /**
- * Collapse legacy tier values to the new two-tier model.
- * Anything that isn't explicitly "business_pro" becomes "business".
+ * Collapse legacy tier values to the three-tier model:
+ *   - "free"         — default for new signups; strict caps.
+ *   - "business"     — paid base; mid caps.
+ *   - "business_pro" — paid top; unlimited.
+ *
+ * Legacy "pro" rows map to "business" (we collapsed Pro into Business
+ * in PR C1).
  */
 export function effectiveTier(raw: SubscriptionTier | null | undefined): EffectiveTier {
-  return raw === "business_pro" ? "business_pro" : "business";
+  if (raw === "business_pro") return "business_pro";
+  if (raw === "business" || raw === "pro") return "business";
+  return "free";
 }
 
 /**
  * Per-tier feature gates. Single source of truth so UI and API paths agree.
- * If a future feature gets its own bullet on the value-prop list, add it here
- * rather than copy/pasting `tier === "business_pro"` checks across components.
+ * Add new gates here rather than copy/pasting tier strings across components.
  */
 export interface TierGates {
   tier: EffectiveTier;
@@ -54,8 +60,25 @@ export interface TierGates {
   canMultiCardScan: boolean;
   /** Max simultaneous grading scan slots. */
   maxGradeScanSlots: number;
-  /** Rolling 7-day analyst message cap. 0 = unlimited. */
-  analystWeeklyLimit: number;
+  /**
+   * Rolling 7-day analyst message cap.
+   *   null     = unlimited (Business Pro)
+   *   0        = blocked entirely (Free — first message paywalls)
+   *   positive = max messages per 7-day window (Business: 3)
+   */
+  analystWeeklyLimit: number | null;
+  /** Cap on total inventory items. null = unlimited. */
+  inventoryItemCap: number | null;
+  /** Can list cards for sale on the marketplace. */
+  canSellOnMarketplace: boolean;
+  /**
+   * Marketplace fee rates by listing tier. The marketplace already has
+   * "self-serve / full-service-low / full-service-high" tiers driven by
+   * card grade + comps depth; this adds a subscription multiplier on top.
+   * Values are decimals (0.05 = 5%). Use the matching key in
+   * lib/marketplace/fees.ts.
+   */
+  marketplaceFees: { one_pct: number; two_pct: number; five_pct: number };
 }
 
 export function tierGates(tier: EffectiveTier): TierGates {
@@ -65,16 +88,38 @@ export function tierGates(tier: EffectiveTier): TierGates {
       canBulkAddByCert: true,
       canMultiCardScan: true,
       maxGradeScanSlots: 10,
-      analystWeeklyLimit: 0,
+      analystWeeklyLimit: null,
+      inventoryItemCap: null,
+      canSellOnMarketplace: true,
+      // Pro keeps the headline 1% / 2% / 5% rates.
+      marketplaceFees: { one_pct: 0.01, two_pct: 0.02, five_pct: 0.05 },
     };
   }
-  // Business (default) — restricted.
+  if (tier === "business") {
+    return {
+      tier,
+      canBulkAddByCert: false,
+      canMultiCardScan: false,
+      maxGradeScanSlots: 1,
+      analystWeeklyLimit: 3,
+      inventoryItemCap: null,
+      canSellOnMarketplace: true,
+      // Business pays 3 points more across the board.
+      marketplaceFees: { one_pct: 0.04, two_pct: 0.05, five_pct: 0.08 },
+    };
+  }
+  // free
   return {
     tier,
     canBulkAddByCert: false,
     canMultiCardScan: false,
     maxGradeScanSlots: 1,
-    analystWeeklyLimit: 3,
+    // Free hits the paywall on first analyst message.
+    analystWeeklyLimit: 0,
+    inventoryItemCap: 10,
+    // Free can list but at top-tier fees.
+    canSellOnMarketplace: true,
+    marketplaceFees: { one_pct: 0.08, two_pct: 0.12, five_pct: 0.15 },
   };
 }
 
@@ -97,15 +142,21 @@ export async function getTierGates(userId: string): Promise<TierGates> {
 /**
  * Atomic: try to consume one analyst message for this user this week.
  * Returns true if allowed (and the counter was incremented), false if the
- * weekly cap is exhausted. Always returns true for unlimited tiers.
+ * weekly cap is exhausted.
+ *
+ *   weeklyLimit === null → unlimited (Business Pro). Always returns true.
+ *   weeklyLimit === 0    → blocked (Free). Always returns false.
+ *   weeklyLimit > 0      → enforce rolling-week cap via the RPC.
+ *
  * Backed by the `consume_weekly_analyst_message` RPC.
  */
 export async function consumeWeeklyAnalystMessage(
   userId: string,
-  weeklyLimit: number
+  weeklyLimit: number | null
 ): Promise<boolean> {
   if (isTestMode()) return true;
-  if (weeklyLimit <= 0) return true;
+  if (weeklyLimit === null) return true;
+  if (weeklyLimit <= 0) return false;
   const supabase = await createServiceClient();
   const { data, error } = await supabase.rpc("consume_weekly_analyst_message", {
     p_user_id: userId,

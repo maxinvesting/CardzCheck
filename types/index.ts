@@ -33,7 +33,7 @@ export interface User {
  * "free" / "pro" are legacy enum values kept for backward-compat with old
  * rows; lib/access.ts maps them to "business" on read via effectiveTier().
  */
-export type EffectiveTier = "business" | "business_pro";
+export type EffectiveTier = "free" | "business" | "business_pro";
 export type SubscriptionTier = "free" | "pro" | "business" | "business_pro";
 
 export interface Subscription {

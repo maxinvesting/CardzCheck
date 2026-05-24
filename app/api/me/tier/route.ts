@@ -27,6 +27,9 @@ export async function GET() {
       canMultiCardScan: gates.canMultiCardScan,
       maxGradeScanSlots: gates.maxGradeScanSlots,
       analystWeeklyLimit: gates.analystWeeklyLimit,
+      inventoryItemCap: gates.inventoryItemCap,
+      canSellOnMarketplace: gates.canSellOnMarketplace,
+      marketplaceFees: gates.marketplaceFees,
     },
     analyst,
   });

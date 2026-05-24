@@ -3,11 +3,16 @@
 import { useEffect, useState } from "react";
 
 export interface TierGates {
-  tier: "business" | "business_pro";
+  tier: "free" | "business" | "business_pro";
   canBulkAddByCert: boolean;
   canMultiCardScan: boolean;
   maxGradeScanSlots: number;
-  analystWeeklyLimit: number;
+  /** null = unlimited, 0 = blocked (paywall), positive = weekly cap */
+  analystWeeklyLimit: number | null;
+  /** null = unlimited */
+  inventoryItemCap: number | null;
+  canSellOnMarketplace: boolean;
+  marketplaceFees: { one_pct: number; two_pct: number; five_pct: number };
 }
 
 export interface WeeklyAnalystUsage {

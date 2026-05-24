@@ -4,7 +4,10 @@ import {
   calculateFee,
   resolveFeeTier,
   type FeeTier,
+  type FeeTierKey,
 } from "@/lib/marketplace/fees";
+import { effectiveTier } from "@/lib/access";
+import type { SubscriptionTier } from "@/types";
 
 /**
  * Server-only helper: load a listing + its card, derive the live fee tier
@@ -26,7 +29,7 @@ export async function resolveLiveFee(
   const { data: listing, error } = await service
     .from("listings")
     .select(
-      "id, mode, pipeline, fee_tier, marketplace_cards!inner(player, year, title, grade, parallel)"
+      "id, mode, pipeline, fee_tier, seller_id, marketplace_cards!inner(player, year, title, grade, parallel)"
     )
     .eq("id", listingId)
     .single<{
@@ -34,6 +37,7 @@ export async function resolveLiveFee(
       mode: "self_serve" | "full_service";
       pipeline: "standard" | "elite" | "grails";
       fee_tier: FeeTier;
+      seller_id: string | null;
       marketplace_cards: {
         player: string;
         year: number;
@@ -72,10 +76,27 @@ export async function resolveLiveFee(
     sold_comps_count: soldCount,
   });
 
+  // Resolve the seller's subscription tier so the fee schedule reflects
+  // their plan (Free 8/12/15, Business 4/5/8, Pro 1/2/5). Defaults to
+  // business_pro if seller can't be resolved — most conservative for the
+  // platform (we charge the lowest rate, never overcharge).
+  let sellerTier: FeeTierKey = "business_pro";
+  if (listing.seller_id) {
+    const { data: sub } = await service
+      .from("subscriptions")
+      .select("tier")
+      .eq("user_id", listing.seller_id)
+      .maybeSingle();
+    sellerTier = effectiveTier(
+      (sub?.tier ?? null) as SubscriptionTier | null
+    ) as FeeTierKey;
+  }
+
   const { fee_amount_cents } = calculateFee(
     salePriceCents,
     tier,
-    negotiatedFeeCents
+    negotiatedFeeCents,
+    sellerTier
   );
 
   return {

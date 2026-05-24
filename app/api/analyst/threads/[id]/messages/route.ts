@@ -116,15 +116,19 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const allowed = await consumeWeeklyAnalystMessage(user.id, gates.analystWeeklyLimit);
     if (!allowed) {
       const usage = await getWeeklyAnalystUsage(user.id);
+      const message =
+        gates.tier === "free"
+          ? "CardzCheck Analyst is a paid feature. Upgrade to Business for 3 messages per week, or Business Pro for unlimited."
+          : `You've used all ${gates.analystWeeklyLimit} analyst messages for this week. Upgrade to Business Pro for unlimited.`;
       return NextResponse.json(
         {
           ok: false,
           error: "limit_reached",
-          message: `You've used all ${gates.analystWeeklyLimit} analyst messages for this week. Upgrade to Business Pro for unlimited messages.`,
+          message,
           used: usage.messagesUsed,
           limit: gates.analystWeeklyLimit,
           resetsAt: usage.resetsAt,
-          code: "WEEKLY_LIMIT_REACHED",
+          code: gates.tier === "free" ? "UPGRADE_REQUIRED" : "WEEKLY_LIMIT_REACHED",
           upgradeRequired: true,
         },
         { status: 403 }
