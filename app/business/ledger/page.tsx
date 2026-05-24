@@ -17,6 +17,7 @@ import AddCardToInventoryModal from "@/components/business/AddCardToInventoryMod
 import type { PendingInventoryCard } from "@/components/business/AddCardToInventoryModal";
 import BulkCertImportModal from "@/components/business/BulkCertImportModal";
 import CardProfileDrawer from "@/components/business/CardProfileDrawer";
+import { useTierGates } from "@/hooks/useTierGates";
 import AddCardModalNew from "@/components/AddCardModalNew";
 import CardPickerModal from "@/components/CardPickerModal";
 import type { CardPickerSelection } from "@/components/CardPicker";
@@ -124,6 +125,7 @@ export default function LedgerPage() {
   const [showAddCardModal, setShowAddCardModal] = useState(false);
   const [showBulkCertModal, setShowBulkCertModal] = useState(false);
   const [profileItemId, setProfileItemId] = useState<string | null>(null);
+  const { gates } = useTierGates();
   const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(() => new Set());
   const [isBulkWorking, setIsBulkWorking] = useState(false);
   const [showCardPicker, setShowCardPicker] = useState(false);
@@ -491,13 +493,15 @@ export default function LedgerPage() {
               >
                 Export
               </a>
-              <button
-                type="button"
-                onClick={() => setShowBulkCertModal(true)}
-                className="border border-[#343941] px-3 py-1.5 text-[12px] font-medium text-[#B8C0CC] transition-colors hover:border-[#5A626E] hover:text-[#E6E8EB]"
-              >
-                Bulk add by cert
-              </button>
+              {gates?.canBulkAddByCert ? (
+                <button
+                  type="button"
+                  onClick={() => setShowBulkCertModal(true)}
+                  className="border border-[#343941] px-3 py-1.5 text-[12px] font-medium text-[#B8C0CC] transition-colors hover:border-[#5A626E] hover:text-[#E6E8EB]"
+                >
+                  Bulk add by cert
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => setShowAddCardModal(true)}

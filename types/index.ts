@@ -21,11 +21,25 @@ export interface User {
   usage?: Usage; // New usage tracking record
 }
 
-// Subscription record for tier management
+/**
+ * Subscription record.
+ *
+ * Two-tier model (post-PR C1):
+ *   - "business"     — default tier; restricted features (no bulk cert,
+ *                       single-card grading scans, 3 analyst msgs/week,
+ *                       higher marketplace fees).
+ *   - "business_pro" — full access; no message cap; reduced fees.
+ *
+ * "free" / "pro" are legacy enum values kept for backward-compat with old
+ * rows; lib/access.ts maps them to "business" on read via effectiveTier().
+ */
+export type EffectiveTier = "business" | "business_pro";
+export type SubscriptionTier = "free" | "pro" | "business" | "business_pro";
+
 export interface Subscription {
   id: string;
   user_id: string;
-  tier: "free" | "pro" | "business";
+  tier: SubscriptionTier;
   stripe_customer_id: string | null;
   stripe_subscription_id: string | null;
   activation_paid: boolean;
@@ -33,6 +47,9 @@ export interface Subscription {
   status: "active" | "past_due" | "canceled" | "unpaid";
   created_at: string;
   updated_at: string;
+  /** Rolling-7d analyst-message window start. */
+  analyst_week_start?: string | null;
+  analyst_messages_this_week?: number | null;
 }
 
 export type BusinessRole = "owner" | "manager" | "employee";

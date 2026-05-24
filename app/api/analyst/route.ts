@@ -3,8 +3,11 @@ import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { isTestMode } from "@/lib/test-mode";
 import { logDebug } from "@/lib/logging";
-
-const ANALYST_QUERY_LIMIT = 100;
+import {
+  consumeWeeklyAnalystMessage,
+  getTierGates,
+  getWeeklyAnalystUsage,
+} from "@/lib/access";
 
 interface CardContext {
   playerName?: string;
@@ -54,10 +57,10 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Get user record to check limits and get name for personalization
+      // Read name only — limits are enforced by the tier gate below.
       const { data: userData, error: userError } = await supabase
         .from("users")
-        .select("is_paid, analyst_queries_used, name")
+        .select("name")
         .eq("id", user.id)
         .single();
 
@@ -69,37 +72,27 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Free users get 0 analyst queries, paid users get 100
-      const limit = userData?.is_paid ? ANALYST_QUERY_LIMIT : 0;
-      const used = userData?.analyst_queries_used || 0;
-
-      if (!userData?.is_paid) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error: "upgrade_required",
-            message: "CardzCheck Analyst is a Pro feature. Upgrade to access card analysis.",
-            code: "UPGRADE_REQUIRED",
-          },
-          { status: 403 }
-        );
-      }
-
-      if (used >= limit) {
+      // Tier-based weekly cap. business = 3/wk, business_pro = unlimited.
+      // Atomic: increments on success; refuses if the cap is hit.
+      const gates = await getTierGates(user.id);
+      const allowed = await consumeWeeklyAnalystMessage(user.id, gates.analystWeeklyLimit);
+      if (!allowed) {
+        const usage = await getWeeklyAnalystUsage(user.id);
         return NextResponse.json(
           {
             ok: false,
             error: "limit_reached",
-            message: `You've used all ${ANALYST_QUERY_LIMIT} analyst queries. Contact support for more.`,
-            used,
-            limit,
-            code: "LIMIT_REACHED",
+            message: `You've used all ${gates.analystWeeklyLimit} analyst messages for this week. Upgrade to Business Pro for unlimited messages.`,
+            used: usage.messagesUsed,
+            limit: gates.analystWeeklyLimit,
+            resetsAt: usage.resetsAt,
+            code: "WEEKLY_LIMIT_REACHED",
+            upgradeRequired: true,
           },
           { status: 403 }
         );
       }
 
-      // Increment usage after successful response (done below)
       // Store user info for later
       (request as unknown as { userId: string; userName: string | null }).userId = user.id;
       (request as unknown as { userId: string; userName: string | null }).userName = userData?.name || null;
@@ -224,29 +217,10 @@ No specific card selected. Answer general trading card market questions.`;
 
     logDebug("✅ Analyst response received", { length: responseText.length });
 
-    // Increment usage count after successful response
-    if (!isTestMode()) {
-      const supabase = await createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (user) {
-        // Get current count and increment
-        const { data: userData } = await supabase
-          .from("users")
-          .select("analyst_queries_used")
-          .eq("id", user.id)
-          .single();
-
-        const currentUsed = userData?.analyst_queries_used || 0;
-
-        await supabase
-          .from("users")
-          .update({ analyst_queries_used: currentUsed + 1 })
-          .eq("id", user.id);
-      }
-    }
+    // Weekly counter already incremented atomically by
+    // consumeWeeklyAnalystMessage() at the top of the handler. Legacy lifetime
+    // counter (users.analyst_queries_used) is no longer the source of truth
+    // and will be retired in a follow-up cleanup.
 
     return NextResponse.json({
       ok: true,

@@ -24,10 +24,13 @@ import { persistGradeEstimatorHistoryRun } from "@/lib/grading/persistHistoryRun
 import { appendSpeechTranscript } from "@/lib/speech";
 import type { GradeEstimatorHistoryRun } from "@/types";
 
+// Two-tier model: only business_pro gets multi-slot sessions.
+// Legacy values stay mapped for safety against unmigrated rows.
 const TIER_MAX_SLOTS: Record<string, number> = {
   free: 1,
   pro: 1,
-  business: 10,
+  business: 1,
+  business_pro: 10,
 };
 
 type WizardStep = 1 | 2 | 3 | 4;

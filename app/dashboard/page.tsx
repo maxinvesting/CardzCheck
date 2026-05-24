@@ -11,6 +11,7 @@ import { Surface } from "@/components/ui/Surface";
 import { MicButton } from "@/components/ui/MicButton";
 import AddCardModalNew from "@/components/AddCardModalNew";
 import BulkCertImportModal from "@/components/business/BulkCertImportModal";
+import { useTierGates } from "@/hooks/useTierGates";
 import PaywallModal from "@/components/PaywallModal";
 import { createClient } from "@/lib/supabase/client";
 import type { User, CollectionItem } from "@/types";
@@ -23,6 +24,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showBulkCertModal, setShowBulkCertModal] = useState(false);
+  const { gates } = useTierGates();
   const [showPaywall, setShowPaywall] = useState(false);
   const [toast, setToast] = useState<{
     type: "success" | "error";
@@ -188,7 +190,7 @@ export default function DashboardPage() {
             <CompactQuickActions
               onAddCard={() => setShowAddModal(true)}
               onBulkCert={
-                user?.subscription?.tier === "business"
+                gates?.canBulkAddByCert
                   ? () => setShowBulkCertModal(true)
                   : undefined
               }
