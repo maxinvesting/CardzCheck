@@ -24,6 +24,8 @@ interface LedgerTableProps {
   onToggleRow?: (rowId: string) => void;
   onToggleAll?: (allSelected: boolean) => void;
   onInlineEdit?: (payload: LedgerInlineEditPayload) => Promise<void> | void;
+  /** When provided, "Profile" opens a drawer instead of routing. */
+  onOpenProfile?: (row: LedgerTableRow) => void;
 }
 
 const STATUS_OPTIONS = ["unlisted", "listed", "pending_sale", "sold", "returned", "traded"] as const;
@@ -261,6 +263,7 @@ export default function LedgerTable({
   onToggleRow,
   onToggleAll,
   onInlineEdit,
+  onOpenProfile,
 }: LedgerTableProps) {
   const selectable = Boolean(selectedRowIds && onToggleRow);
   const allSelected =
@@ -368,14 +371,28 @@ export default function LedgerTable({
                   ) : null}
                   <Cell className="max-w-[260px]">
                     <div className="min-w-0">
-                      <Link
-                        href={`/card/${row.id}?from=business`}
-                        onClick={stopRowClick}
-                        className="block truncate font-medium text-[color:var(--biz-text-strong)] underline-offset-2 transition-colors hover:text-[color:var(--biz-text)] hover:underline focus:underline focus:outline-none"
-                        aria-label={`Open profile for ${row.cardLabel}`}
-                      >
-                        {row.cardLabel}
-                      </Link>
+                      {onOpenProfile ? (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onOpenProfile(row);
+                          }}
+                          className="block w-full truncate text-left font-medium text-[color:var(--biz-text-strong)] underline-offset-2 transition-colors hover:text-[color:var(--biz-text)] hover:underline focus:underline focus:outline-none"
+                          aria-label={`Open profile for ${row.cardLabel}`}
+                        >
+                          {row.cardLabel}
+                        </button>
+                      ) : (
+                        <Link
+                          href={`/card/${row.id}?from=business`}
+                          onClick={stopRowClick}
+                          className="block truncate font-medium text-[color:var(--biz-text-strong)] underline-offset-2 transition-colors hover:text-[color:var(--biz-text)] hover:underline focus:underline focus:outline-none"
+                          aria-label={`Open profile for ${row.cardLabel}`}
+                        >
+                          {row.cardLabel}
+                        </Link>
+                      )}
                       {row.cardMeta && (
                         <div className="mt-0.5 truncate text-[10px] text-[color:var(--biz-muted)]">
                           {row.cardMeta}
@@ -486,14 +503,28 @@ export default function LedgerTable({
                       >
                         Edit
                       </button>
-                      <Link
-                        href={`/card/${row.id}?from=business`}
-                        onClick={stopRowClick}
-                        className="border border-[color:var(--biz-border)] bg-[color:var(--biz-near-black)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.04em] text-[color:var(--biz-muted)] transition-colors hover:border-[color:var(--biz-border-strong)] hover:text-[color:var(--biz-text)] focus:outline-none focus:ring-1 focus:ring-[color:var(--biz-focus)]"
-                        aria-label={`Open profile for ${row.cardLabel}`}
-                      >
-                        Profile
-                      </Link>
+                      {onOpenProfile ? (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onOpenProfile(row);
+                          }}
+                          className="border border-[color:var(--biz-border)] bg-[color:var(--biz-near-black)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.04em] text-[color:var(--biz-muted)] transition-colors hover:border-[color:var(--biz-border-strong)] hover:text-[color:var(--biz-text)] focus:outline-none focus:ring-1 focus:ring-[color:var(--biz-focus)]"
+                          aria-label={`Open profile for ${row.cardLabel}`}
+                        >
+                          Profile
+                        </button>
+                      ) : (
+                        <Link
+                          href={`/card/${row.id}?from=business`}
+                          onClick={stopRowClick}
+                          className="border border-[color:var(--biz-border)] bg-[color:var(--biz-near-black)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.04em] text-[color:var(--biz-muted)] transition-colors hover:border-[color:var(--biz-border-strong)] hover:text-[color:var(--biz-text)] focus:outline-none focus:ring-1 focus:ring-[color:var(--biz-focus)]"
+                          aria-label={`Open profile for ${row.cardLabel}`}
+                        >
+                          Profile
+                        </Link>
+                      )}
                     </div>
                   </Cell>
                 </tr>

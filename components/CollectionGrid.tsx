@@ -13,6 +13,8 @@ interface CollectionGridProps {
   items: CollectionItem[];
   onDelete: (id: string) => void;
   onRefresh: () => void;
+  /** When provided, clicking a card opens this callback instead of navigating to /card/[id]. */
+  onOpenProfile?: (item: CollectionItem) => void;
 }
 
 function formatDate(dateStr: string | null): string {
@@ -27,9 +29,10 @@ function formatDate(dateStr: string | null): string {
 interface CardItemProps {
   item: CollectionItem;
   onDelete: () => void;
+  onOpenProfile?: (item: CollectionItem) => void;
 }
 
-function CardItem({ item, onDelete }: CardItemProps) {
+function CardItem({ item, onDelete, onOpenProfile }: CardItemProps) {
   const router = useRouter();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -53,6 +56,10 @@ function CardItem({ item, onDelete }: CardItemProps) {
     });
   }
   const handleCardClick = () => {
+    if (onOpenProfile) {
+      onOpenProfile(item);
+      return;
+    }
     router.push(`/card/${item.id}?from=collection`);
   };
 
@@ -224,7 +231,7 @@ function CardItem({ item, onDelete }: CardItemProps) {
   );
 }
 
-export default function CollectionGrid({ items, onDelete, onRefresh }: CollectionGridProps) {
+export default function CollectionGrid({ items, onDelete, onRefresh, onOpenProfile }: CollectionGridProps) {
   if (items.length === 0) {
     return (
       <div className="text-center py-12">
@@ -260,6 +267,7 @@ export default function CollectionGrid({ items, onDelete, onRefresh }: Collectio
             key={item.id}
             item={item}
             onDelete={() => onDelete(item.id)}
+            onOpenProfile={onOpenProfile}
           />
         ))}
       </div>

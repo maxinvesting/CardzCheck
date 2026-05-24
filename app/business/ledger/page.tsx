@@ -16,6 +16,7 @@ import TradeFormModal, { type TradeFormPayload } from "@/components/business/Tra
 import AddCardToInventoryModal from "@/components/business/AddCardToInventoryModal";
 import type { PendingInventoryCard } from "@/components/business/AddCardToInventoryModal";
 import BulkCertImportModal from "@/components/business/BulkCertImportModal";
+import CardProfileDrawer from "@/components/business/CardProfileDrawer";
 import AddCardModalNew from "@/components/AddCardModalNew";
 import CardPickerModal from "@/components/CardPickerModal";
 import type { CardPickerSelection } from "@/components/CardPicker";
@@ -122,6 +123,7 @@ export default function LedgerPage() {
   const [listItem, setListItem] = useState<BusinessInventoryItem | null>(null);
   const [showAddCardModal, setShowAddCardModal] = useState(false);
   const [showBulkCertModal, setShowBulkCertModal] = useState(false);
+  const [profileItemId, setProfileItemId] = useState<string | null>(null);
   const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(() => new Set());
   const [isBulkWorking, setIsBulkWorking] = useState(false);
   const [showCardPicker, setShowCardPicker] = useState(false);
@@ -533,6 +535,7 @@ export default function LedgerPage() {
                 onToggleRow={handleToggleRow}
                 onToggleAll={handleToggleAll}
                 onInlineEdit={handleInlineEdit}
+                onOpenProfile={(row) => setProfileItemId(row.id)}
               />
             </section>
           )}
@@ -613,6 +616,28 @@ export default function LedgerPage() {
             </aside>
           </>
         )}
+
+        <CardProfileDrawer
+          isOpen={profileItemId != null}
+          itemId={profileItemId}
+          item={
+            profileItemId ? items.find((it) => it.id === profileItemId) ?? null : null
+          }
+          mode="business"
+          onClose={() => setProfileItemId(null)}
+          onEdit={(it) => {
+            setProfileItemId(null);
+            setSelectedLedgerItemId(it.id);
+          }}
+          onMarkSold={(it) => {
+            setProfileItemId(null);
+            setMarkSoldItem(it);
+          }}
+          onList={(it) => {
+            setProfileItemId(null);
+            setListItem(it);
+          }}
+        />
 
         <BulkCertImportModal
           isOpen={showBulkCertModal}
