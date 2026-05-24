@@ -220,8 +220,8 @@ export default function BulkCertImportModal({ isOpen, onClose, onSuccess }: Bulk
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-2 sm:items-center sm:p-4">
+      <div className="flex max-h-[calc(100vh-1rem)] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl sm:max-h-[90vh]">
         <header className="flex items-center justify-between border-b px-5 py-3">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">Bulk add by PSA cert</h2>
