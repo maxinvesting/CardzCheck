@@ -7,14 +7,10 @@ interface GradeVerdictCardProps {
 }
 
 const RECOMMENDATION_CLASSES: Record<GradeVerdict["recommendation"], string> = {
-  Grade:
-    "border-emerald-200 bg-emerald-50 text-emerald-700",
-  Borderline:
-    "border-amber-200 bg-amber-50 text-amber-700",
-  "Sell Raw":
-    "border-slate-200 bg-slate-100 text-slate-700",
-  "Rescan Needed":
-    "border-rose-200 bg-rose-50 text-rose-700",
+  Grade: "border-emerald-500/40 bg-emerald-900/30 text-emerald-300",
+  Borderline: "border-amber-500/40 bg-amber-900/30 text-amber-200",
+  "Sell Raw": "border-zinc-600/50 bg-zinc-800/60 text-zinc-300",
+  "Rescan Needed": "border-rose-500/40 bg-rose-900/30 text-rose-200",
 };
 
 function VerdictField({ label, value }: { label: string; value: string }) {

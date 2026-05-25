@@ -47,7 +47,7 @@ function StatusIcon({ status }: { status: string }) {
   }
   if (status === "error") {
     return (
-      <svg className="h-4 w-4 text-amber-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <svg className="h-4 w-4 text-amber-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
       </svg>
     );
@@ -122,7 +122,7 @@ export default function GradeEstimateProgressPanel({
                 </div>
               </div>
               {entry.status === "error" && entry.error ? (
-                <div className="pl-6 text-xs text-amber-700">
+                <div className="pl-6 text-xs text-amber-300">
                   {entry.error}
                 </div>
               ) : null}
@@ -132,7 +132,7 @@ export default function GradeEstimateProgressPanel({
       </div>
 
       {errorMessage ? (
-        <div className={`mt-4 text-xs ${flat ? "border-l border-amber-500/35 pl-3 text-amber-200" : "rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-700"}`}>
+        <div className={`mt-4 text-xs ${flat ? "border-l border-amber-500/35 pl-3 text-amber-200" : "rounded-lg border border-amber-500/40 bg-amber-900/30 px-3 py-2 text-amber-300"}`}>
           {errorMessage}
         </div>
       ) : null}
