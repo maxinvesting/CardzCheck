@@ -38,7 +38,7 @@ export default function BuyButton({
     return (
       <a
         href={`/login?next=/marketplace/listing/${listingId}`}
-        className="inline-block px-4 py-2 rounded border border-gray-700 bg-gray-900 text-sm text-gray-100 hover:bg-gray-800"
+        className="inline-flex w-full items-center justify-center border border-[#343941] bg-[#0B0D0F] px-3 py-2 text-[12px] font-semibold text-[#B8C0CC] hover:border-[#5A626E] hover:text-[#E6E8EB]"
       >
         Sign in to buy
       </a>
@@ -46,7 +46,9 @@ export default function BuyButton({
   }
   if (isOwnListing) {
     return (
-      <span className="text-xs text-gray-500">This is your listing.</span>
+      <span className="block text-[11px] text-[#77808C]">
+        This is your listing.
+      </span>
     );
   }
 
@@ -55,12 +57,12 @@ export default function BuyButton({
       <button
         onClick={buy}
         disabled={busy}
-        className="px-4 py-2 rounded border border-gray-700 bg-gray-900 text-sm text-gray-100 hover:bg-gray-800 disabled:opacity-50"
+        className="inline-flex w-full items-center justify-center border border-[#20B26B] bg-[#20B26B] px-3 py-2 text-[12px] font-semibold text-[#07100B] hover:bg-[#33C47C] disabled:opacity-50"
       >
         {busy ? "Redirecting…" : "Buy now"}
       </button>
       {error && (
-        <div className="text-xs text-red-400">
+        <div className="text-[11px] text-red-300">
           {error === "elite_fee_not_set"
             ? "This elite listing isn't available for purchase yet (admin needs to set the fee)."
             : error}

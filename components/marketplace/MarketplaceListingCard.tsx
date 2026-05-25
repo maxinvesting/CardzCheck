@@ -13,9 +13,9 @@ export type MarketplaceListingCardProps = {
 };
 
 const PIPELINE_BADGE: Record<MarketplaceListingCardProps["pipeline"], string> = {
-  standard: "border-gray-700 text-gray-400",
-  elite: "border-purple-500 text-purple-300",
-  grails: "border-amber-500 text-amber-300",
+  standard: "border-[#343941] text-[#B8C0CC]",
+  elite: "border-purple-500/40 text-purple-300",
+  grails: "border-amber-500/40 text-amber-300",
 };
 
 export default function MarketplaceListingCard(props: MarketplaceListingCardProps) {
