@@ -39,7 +39,7 @@ const SECTIONS: Section[] = [
     paths: ["/business/ledger", "/business/sales", "/business/sales-agent", "/business/inventory"],
     tabs: [
       { name: "Inventory", href: "/business/ledger" },
-      { name: "Sales", href: "/business/sales" },
+      { name: "Sales & Trades", href: "/business/sales" },
       { name: "Sales Agent", href: "/business/sales-agent" },
     ],
   },
