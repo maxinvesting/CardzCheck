@@ -13,7 +13,6 @@ import LedgerBulkActionsBar, {
 } from "@/components/business/LedgerBulkActionsBar";
 import SaleFormModal from "@/components/business/SaleFormModal";
 import TradeFormModal, { type TradeFormPayload } from "@/components/business/TradeFormModal";
-import SalesTradesView from "@/components/business/SalesTradesView";
 import AddCardToInventoryModal from "@/components/business/AddCardToInventoryModal";
 import type { PendingInventoryCard } from "@/components/business/AddCardToInventoryModal";
 import BulkCertImportModal from "@/components/business/BulkCertImportModal";
@@ -123,8 +122,6 @@ export default function LedgerPage() {
   const [markSoldItem, setMarkSoldItem] = useState<BusinessInventoryItem | null>(null);
   const [tradeItem, setTradeItem] = useState<BusinessInventoryItem | null>(null);
   const [showStandaloneTrade, setShowStandaloneTrade] = useState(false);
-  const [activeTab, setActiveTab] = useState<"inventory" | "sales">("inventory");
-  const [salesRefreshKey, setSalesRefreshKey] = useState(0);
   const [listItem, setListItem] = useState<BusinessInventoryItem | null>(null);
   const [showAddCardModal, setShowAddCardModal] = useState(false);
   const [showBulkCertModal, setShowBulkCertModal] = useState(false);
@@ -380,7 +377,6 @@ export default function LedgerPage() {
             if (selectedLedgerItemId === inventoryId) setSelectedLedgerItemId(null);
           }
         }
-        setSalesRefreshKey((k) => k + 1);
         setToast({ type: "success", message: "Sale recorded" });
         setMarkSoldItem(null);
       } catch (error) {
@@ -417,7 +413,6 @@ export default function LedgerPage() {
         }
         setTradeItem(null);
         setShowStandaloneTrade(false);
-        setSalesRefreshKey((k) => k + 1);
         // Reload inventory to surface any new incoming cards added by the trade.
         void loadInventory();
         setToast({ type: "success", message: "Trade recorded" });
@@ -542,33 +537,6 @@ export default function LedgerPage() {
 
           <LedgerSummaryStrip summary={ledgerSummary} />
 
-          {!needsMigration && (
-            <div className="flex items-center gap-1 border-b border-[#24282D] px-4">
-              <button
-                type="button"
-                onClick={() => setActiveTab("inventory")}
-                className={`border-b-2 px-3 py-2 text-xs font-medium transition-colors ${
-                  activeTab === "inventory"
-                    ? "border-[#20B26B] text-[#20B26B]"
-                    : "border-transparent text-[#77808C] hover:text-[#E6E8EB]"
-                }`}
-              >
-                Inventory
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab("sales")}
-                className={`border-b-2 px-3 py-2 text-xs font-medium transition-colors ${
-                  activeTab === "sales"
-                    ? "border-[#20B26B] text-[#20B26B]"
-                    : "border-transparent text-[#77808C] hover:text-[#E6E8EB]"
-                }`}
-              >
-                Sales &amp; Trades
-              </button>
-            </div>
-          )}
-
           {needsMigration ? (
             <div className="px-4 py-4">
               <BusinessMigrationBanner
@@ -578,7 +546,7 @@ export default function LedgerPage() {
                 }}
               />
             </div>
-          ) : activeTab === "inventory" ? (
+          ) : (
             <section className="min-w-0 flex-1 px-4 py-4">
               <LedgerTable
                 rows={ledgerRows}
@@ -590,10 +558,6 @@ export default function LedgerPage() {
                 onInlineEdit={handleInlineEdit}
                 onOpenProfile={(row) => setProfileItemId(row.id)}
               />
-            </section>
-          ) : (
-            <section className="min-w-0 flex-1 px-4 py-4">
-              <SalesTradesView key={salesRefreshKey} />
             </section>
           )}
         </div>

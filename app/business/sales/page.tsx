@@ -168,7 +168,7 @@ export default function BusinessSalesHistoryPage() {
                 Inventory
               </div>
               <h1 className="mt-0.5 text-[18px] font-semibold tracking-normal text-[#E6E8EB]">
-                Sales
+                Sales &amp; Trades
               </h1>
             </div>
             <a
