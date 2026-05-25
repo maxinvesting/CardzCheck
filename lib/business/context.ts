@@ -232,6 +232,44 @@ export async function getBusinessContextForUser(
   return toContext({ membership, account, seats });
 }
 
+/**
+ * Synthesize a single-seat "personal" workspace context for a user who has no
+ * `business_memberships` row. Returned by the permissive
+ * `requireBusinessAccess()` in lib/business/actions.ts so Free / unattached
+ * users can still use inventory routes. Tier-based caps gate the rest.
+ *
+ * businessAccountId === userId so collection_items writes land on a stable
+ * partition (single-seat workspace identified by the user's UUID).
+ */
+export function buildPersonalContext(userId: string): BusinessContext {
+  const seats: BusinessSeatSummary = {
+    seatsIncluded: 1,
+    seatQuantity: 1,
+    purchasedSeats: 0,
+    activeMembers: 1,
+    pendingInvites: 0,
+    usedSeats: 1,
+    reservedSeats: 1,
+    availableSeats: 0,
+  };
+  return {
+    businessAccountId: userId,
+    membershipId: userId,
+    role: "owner",
+    ownerUserId: userId,
+    accountName: null,
+    // Personal contexts don't have a Stripe subscription; tier gates handle
+    // billing-style restrictions instead of subscription status checks.
+    subscriptionStatus: "active",
+    currentPeriodEnd: null,
+    stripeCustomerId: null,
+    stripeSubscriptionId: null,
+    stripeSubscriptionItemId: null,
+    seats,
+    permissions: buildPermissions("owner"),
+  };
+}
+
 export async function requireBusinessContext(userId: string): Promise<BusinessContext> {
   const context = await getBusinessContextForUser(userId);
   if (!context) {

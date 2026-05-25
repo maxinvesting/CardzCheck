@@ -191,40 +191,10 @@ function AdminIcon() {
   );
 }
 
-function PERSONAL_NAV_ITEMS(): NavItem[] {
-  return [
-    { name: "Dashboard", href: "/dashboard", icon: <HomeIcon />, exact: true },
-    {
-      name: "Ledger",
-      href: "/collection",
-      icon: <LedgerIcon />,
-      children: [
-        { name: "Collection", href: "/collection", icon: <CollectionIcon /> },
-        { name: "Bulk Mode", href: "/bulk", icon: <BulkIcon /> },
-      ],
-    },
-    {
-      name: "Analytics",
-      href: "/analytics",
-      icon: <ChartIcon />,
-      children: [
-        { name: "Compare Listings", href: "/comps", icon: <ChartIcon /> },
-        { name: "Watchlist", href: "/watchlist", icon: <EyeIcon />, isPro: true, badge: "Pro" },
-        { name: "CardzCheck Analyst", href: "/analyst", icon: <AnalystIcon />, isPro: true, badge: "Pro" },
-        { name: "Grade Engine", href: "/grade-hub", icon: <BadgeIcon />, badge: "dot" },
-      ],
-    },
-    { name: "Marketplace", href: "/marketplace", icon: <ShopIcon /> },
-    {
-      name: "Business",
-      href: "/business",
-      icon: <SalesIcon />,
-      children: [
-        { name: "Help & FAQ", href: "/help", icon: <HelpIcon /> },
-      ],
-    },
-  ];
-}
+// Personal vs. business mode has been retired (PR C2b). Every logged-in
+// user — Free, Business, or Business Pro — uses the same /business/*
+// surfaces; tier gates handle feature differences. PERSONAL_NAV_ITEMS
+// previously held the personal-mode array and has been removed.
 
 function SalesIcon() {
   return (
@@ -275,9 +245,6 @@ function BUSINESS_NAV_ITEMS(): NavItem[] {
   ];
 }
 
-// Routes that are unambiguously personal-only (not in business nav)
-const PERSONAL_ONLY_PREFIXES = ["/dashboard", "/collection", "/watchlist", "/analyst", "/analytics"];
-
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
@@ -287,29 +254,16 @@ export default function Sidebar() {
   const [pricingOpen, setPricingOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
-  const [businessMode, setBusinessMode] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("sidebar-mode") === "business";
-    }
-    return false;
-  });
 
-  useEffect(() => {
-    if (pathname.startsWith("/business")) {
-      setBusinessMode(true);
-      localStorage.setItem("sidebar-mode", "business");
-    } else if (PERSONAL_ONLY_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
-      setBusinessMode(false);
-      localStorage.setItem("sidebar-mode", "personal");
-    }
-    // Shared routes (/marketplace, /help, /grade-hub, /bulk, /news, /settings) — keep current mode
-  }, [pathname]);
-
-  const isBusinessWorkspace = pathname.startsWith("/business") || pathname.startsWith("/admin");
-  const isBusinessRoute = pathname.startsWith("/business");
+  // Single nav for all logged-in users post PR C2b. The legacy
+  // `isBusinessWorkspace` flag is kept (always true now) because many
+  // styling branches below still reference it — collapsing those is a
+  // separate pass.
   const isAdminUser = user?.app_role === "admin" || user?.app_role === "owner";
-  const hasPaidWorkspace = Boolean(user?.is_paid) || isBusinessWorkspace;
-  const baseNavItems = isBusinessWorkspace ? BUSINESS_NAV_ITEMS() : PERSONAL_NAV_ITEMS();
+  const isBusinessRoute = pathname.startsWith("/business");
+  const isBusinessWorkspace = true;
+  const hasPaidWorkspace = true;
+  const baseNavItems = BUSINESS_NAV_ITEMS();
   const navItems: NavItem[] = isAdminUser
     ? [
         ...baseNavItems,

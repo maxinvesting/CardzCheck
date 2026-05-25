@@ -67,6 +67,11 @@ export async function POST(request: NextRequest) {
     const item = await createInventoryItem(userId, body);
     return NextResponse.json(item, { status: 201 });
   } catch (err: any) {
+    if (err?.status === 402)
+      return NextResponse.json(
+        { error: err.message, upgradeRequired: true },
+        { status: 402 }
+      );
     if (err?.status === 403)
       return NextResponse.json({ error: err.message }, { status: 403 });
     if (err?.code === "PGRST205") {

@@ -1,7 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import {
+  buildPersonalContext,
+  getBusinessContextForUser,
   hasRole,
-  requireBusinessContext,
+  isBusinessSubscriptionActive,
   type BusinessContext,
   type BusinessRole,
 } from "@/lib/business/context";
@@ -73,12 +75,36 @@ type BusinessInventoryRow = {
 };
 
 /**
- * Require Business access, throwing a structured error if not.
+ * Resolve the calling user's effective workspace context.
+ *
+ * Three-tier model: any logged-in user can manage their own inventory, even
+ * without a team workspace. If the user has an active `business_memberships`
+ * row, that real workspace is returned. Otherwise we synthesize a single-seat
+ * "personal" context using the user's own UUID as both the businessAccountId
+ * and ownerUserId.
+ *
+ * Tier-based caps (10-item Free limit etc.) run on top of this — they live in
+ * lib/access.ts, not here.
+ *
+ * Distinct from `requireBusinessContext()` (strict workspace check, still used
+ * for team-management routes — invites, seat purchases, branding, etc.).
  */
 export async function requireBusinessAccess(
   userId: string
 ): Promise<BusinessContext> {
-  return requireBusinessContext(userId);
+  try {
+    const real = await getBusinessContextForUser(userId);
+    if (
+      real &&
+      isBusinessSubscriptionActive(real.subscriptionStatus, real.currentPeriodEnd)
+    ) {
+      return real;
+    }
+  } catch {
+    // Schema missing or query failed — fall through to personal context so
+    // the user can still use the app.
+  }
+  return buildPersonalContext(userId);
 }
 
 function requireRole(
@@ -450,6 +476,27 @@ export async function createInventoryItem(
 ): Promise<BusinessInventoryItem> {
   const context = await requireBusinessAccess(userId);
   const supabase = await createClient();
+
+  // Tier-based inventory cap (Free = 10 items; Business / Business Pro = ∞).
+  // Imported lazily to avoid pulling lib/access into every consumer of
+  // lib/business/actions during type resolution.
+  const { getTierGates } = await import("@/lib/access");
+  const gates = await getTierGates(userId);
+  if (gates.inventoryItemCap != null) {
+    const { count } = await supabase
+      .from(BUSINESS_TABLE)
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("item_kind", BUSINESS_ITEM_KIND);
+    if ((count ?? 0) >= gates.inventoryItemCap) {
+      const err = new Error(
+        `Free plan limit reached (${gates.inventoryItemCap} cards). Upgrade to Business for unlimited inventory.`
+      );
+      (err as { status?: number; upgradeRequired?: boolean }).status = 402;
+      (err as { upgradeRequired?: boolean }).upgradeRequired = true;
+      throw err;
+    }
+  }
 
   const { data, error } = await supabase
     .from(BUSINESS_TABLE)
