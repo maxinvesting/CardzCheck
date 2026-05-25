@@ -252,14 +252,37 @@ async function fetchPsaPublicCertPage(certDigits: string): Promise<PsaMappedResu
   return null;
 }
 
+/**
+ * Read the PSA token from env. Env var names are case-sensitive in Node, but
+ * Vercel's UI is lax about casing — so accept any common spelling to avoid the
+ * silent-failure footgun where a lowercase var leaves the token effectively
+ * unset and we fall through to the unauthenticated web-page path (which has a
+ * 100/day anonymous quota and 429s fast).
+ */
+export function readPsaToken(): string | null {
+  const candidates = [
+    process.env.PSA_ACCESS_TOKEN,
+    process.env.PSA_API_TOKEN,
+    process.env.psa_access_token,
+    process.env.psa_api_token,
+  ];
+  for (const value of candidates) {
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+  return null;
+}
+
 export async function lookupPsaCert(rawCert: string): Promise<PsaLookupOutcome> {
   const certDigits = normalizeCertInput(rawCert);
   if (certDigits.length < 5) {
     return { status: "invalid", reason: "certNumber is too short" };
   }
 
-  const token = (process.env.PSA_ACCESS_TOKEN ?? process.env.PSA_API_TOKEN)?.trim();
+  const token = readPsaToken();
   if (!token) {
+    console.error("[psa/lookup] No PSA token in env (checked PSA_ACCESS_TOKEN / PSA_API_TOKEN, any casing)");
     const fallback = await fetchPsaPublicCertPage(certDigits);
     if (fallback) return { status: "found", mapped: fallback };
     return { status: "error", reason: "PSA lookup unavailable right now" };

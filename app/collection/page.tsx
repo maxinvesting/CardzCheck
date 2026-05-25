@@ -3,6 +3,7 @@
 import { useRef, useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import CollectionGrid from "@/components/CollectionGrid";
+import CardProfileDrawer from "@/components/business/CardProfileDrawer";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import PaywallModal from "@/components/PaywallModal";
 import AddCardModalNew from "@/components/AddCardModalNew";
@@ -52,6 +53,7 @@ export default function CollectionPage() {
   const [cardPickerLoading, setCardPickerLoading] = useState(false);
   const [toast, setToast] = useState<{type: 'success' | 'error', message: string} | null>(null);
   const [filterQuery, setFilterQuery] = useState("");
+  const [profileItemId, setProfileItemId] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<"newest" | "oldest" | "player_az" | "player_za" | "paid_high" | "paid_low">("newest");
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -923,8 +925,17 @@ export default function CollectionPage() {
             items={visibleItems}
             onDelete={handleDelete}
             onRefresh={refreshCollection}
+            onOpenProfile={(it) => setProfileItemId(it.id)}
           />
         )}
+
+        <CardProfileDrawer
+          isOpen={profileItemId != null}
+          itemId={profileItemId}
+          item={profileItemId ? items.find((it) => it.id === profileItemId) ?? null : null}
+          mode="collection"
+          onClose={() => setProfileItemId(null)}
+        />
 
         {/* Paywall Modal */}
         <PaywallModal

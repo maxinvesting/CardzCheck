@@ -12,10 +12,11 @@ import {
 import type { GradeEstimatorHistoryRun, GradeEstimate } from "@/types";
 
 type CreditStatus = {
-  tier: "free" | "pro" | "business";
+  tier: "free" | "pro" | "business" | "business_pro";
   unlimited: boolean;
   remaining: number | null;
   nextGrantAt: string | null;
+  maxCardsPerSession?: number;
 };
 
 type ScanMode = "scan" | "mock";
@@ -166,7 +167,9 @@ export default function GradeHubPage() {
     await fetch(`/api/grade-estimator/history?id=${encodeURIComponent(runId)}`, { method: "DELETE" }).catch(() => {});
   }, []);
 
-  const isBusiness = credits?.tier === "business";
+  // Multi-card "Batch Scan" is Pro-only post-PR C1.
+  const isBusinessPro =
+    credits?.tier === "business_pro" || (credits?.maxCardsPerSession ?? 0) > 1;
   const isUnlimited = credits?.unlimited === true;
   const remaining  = credits?.remaining ?? 0;
   const canScan    = !creditsLoading && credits !== null && (isUnlimited || remaining > 0);
@@ -217,7 +220,7 @@ export default function GradeHubPage() {
             >
               {view === "history" ? "← Home" : "History"}
             </button>
-            {isBusiness && (
+            {isBusinessPro && (
               <button
                 type="button"
                 onClick={() => router.push(`${scanPath}?slots=3&mode=scan`)}
@@ -288,8 +291,8 @@ export default function GradeHubPage() {
                     ? "Checking access…"
                     : !credits
                       ? "Unable to load scan balance"
-                      : isBusiness
-                        ? "Business plan · unlimited scans · up to 3 cards per batch"
+                      : isBusinessPro
+                        ? "Business Pro · unlimited scans · up to 3 cards per batch"
                         : isUnlimited
                           ? "Unlimited scans"
                           : `${remaining} scan${remaining !== 1 ? "s" : ""} remaining${credits.nextGrantAt ? ` · +1 in ${formatTimeUntil(credits.nextGrantAt)}` : ""}`}

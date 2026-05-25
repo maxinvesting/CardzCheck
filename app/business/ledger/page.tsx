@@ -17,6 +17,8 @@ import SalesTradesView from "@/components/business/SalesTradesView";
 import AddCardToInventoryModal from "@/components/business/AddCardToInventoryModal";
 import type { PendingInventoryCard } from "@/components/business/AddCardToInventoryModal";
 import BulkCertImportModal from "@/components/business/BulkCertImportModal";
+import CardProfileDrawer from "@/components/business/CardProfileDrawer";
+import { useTierGates } from "@/hooks/useTierGates";
 import AddCardModalNew from "@/components/AddCardModalNew";
 import CardPickerModal from "@/components/CardPickerModal";
 import type { CardPickerSelection } from "@/components/CardPicker";
@@ -126,6 +128,8 @@ export default function LedgerPage() {
   const [listItem, setListItem] = useState<BusinessInventoryItem | null>(null);
   const [showAddCardModal, setShowAddCardModal] = useState(false);
   const [showBulkCertModal, setShowBulkCertModal] = useState(false);
+  const [profileItemId, setProfileItemId] = useState<string | null>(null);
+  const { gates } = useTierGates();
   const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(() => new Set());
   const [isBulkWorking, setIsBulkWorking] = useState(false);
   const [showCardPicker, setShowCardPicker] = useState(false);
@@ -517,13 +521,15 @@ export default function LedgerPage() {
               >
                 Export
               </a>
-              <button
-                type="button"
-                onClick={() => setShowStandaloneTrade(true)}
-                className="border border-[#5A4A1F] bg-[#251E0E] px-3 py-1.5 text-[12px] font-semibold text-[#F0B429] transition-colors hover:bg-[#33290F]"
-              >
-                Record trade
-              </button>
+              {gates?.canBulkAddByCert ? (
+                <button
+                  type="button"
+                  onClick={() => setShowBulkCertModal(true)}
+                  className="border border-[#343941] px-3 py-1.5 text-[12px] font-medium text-[#B8C0CC] transition-colors hover:border-[#5A626E] hover:text-[#E6E8EB]"
+                >
+                  Bulk add by cert
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => setShowAddCardModal(true)}
@@ -582,6 +588,7 @@ export default function LedgerPage() {
                 onToggleRow={handleToggleRow}
                 onToggleAll={handleToggleAll}
                 onInlineEdit={handleInlineEdit}
+                onOpenProfile={(row) => setProfileItemId(row.id)}
               />
             </section>
           ) : (
@@ -666,6 +673,28 @@ export default function LedgerPage() {
             </aside>
           </>
         )}
+
+        <CardProfileDrawer
+          isOpen={profileItemId != null}
+          itemId={profileItemId}
+          item={
+            profileItemId ? items.find((it) => it.id === profileItemId) ?? null : null
+          }
+          mode="business"
+          onClose={() => setProfileItemId(null)}
+          onEdit={(it) => {
+            setProfileItemId(null);
+            setSelectedLedgerItemId(it.id);
+          }}
+          onMarkSold={(it) => {
+            setProfileItemId(null);
+            setMarkSoldItem(it);
+          }}
+          onList={(it) => {
+            setProfileItemId(null);
+            setListItem(it);
+          }}
+        />
 
         <BulkCertImportModal
           isOpen={showBulkCertModal}

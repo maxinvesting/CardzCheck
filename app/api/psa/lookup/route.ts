@@ -7,6 +7,7 @@ import {
   isPsaNotFoundPayload,
   mapPsaCert,
   parsePsaCertHtml,
+  readPsaToken,
 } from "@/lib/psa/lookup";
 
 async function lookupPsaViaPublicCertPage(certDigits: string) {
@@ -70,14 +71,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "certNumber is too short" }, { status: 400 });
   }
 
-  const token = (process.env.PSA_ACCESS_TOKEN ?? process.env.PSA_API_TOKEN)?.trim();
+  const token = readPsaToken();
   if (!token) {
     const fallback = await lookupPsaViaPublicCertPage(certDigits);
     if (fallback) {
       return NextResponse.json({ found: true, ...fallback });
     }
 
-    console.error("[psa/lookup] PSA_ACCESS_TOKEN (or PSA_API_TOKEN) not configured");
+    console.error("[psa/lookup] No PSA token in env (checked PSA_ACCESS_TOKEN / PSA_API_TOKEN, any casing)");
     return NextResponse.json(
       { error: "PSA lookup unavailable right now", found: false },
       { status: 503 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { lookupPsaCert, normalizeCertInput, PsaMappedResult } from "@/lib/psa/lookup";
+import { getTierGates } from "@/lib/access";
 
 const MAX_CERTS_PER_CALL = 100;
 const CONCURRENCY = 5;
@@ -25,6 +26,17 @@ export async function POST(request: NextRequest) {
 
   if (authError || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const gates = await getTierGates(user.id);
+  if (!gates.canBulkAddByCert) {
+    return NextResponse.json(
+      {
+        error: "Bulk PSA cert import requires Business Pro.",
+        upgradeRequired: true,
+      },
+      { status: 403 }
+    );
   }
 
   let body: { certs?: unknown };

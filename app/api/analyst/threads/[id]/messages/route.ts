@@ -7,7 +7,11 @@ import { getUserContextForAI } from "@/lib/ai/getUserContextForAI";
 import { buildAnalystPrompt } from "@/lib/ai/buildAnalystPrompt";
 import { logDebug } from "@/lib/logging";
 
-const ANALYST_QUERY_LIMIT = 100;
+import {
+  consumeWeeklyAnalystMessage,
+  getTierGates,
+  getWeeklyAnalystUsage,
+} from "@/lib/access";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -92,10 +96,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
       );
     }
 
-    // Get user data for limit checking and personalization
+    // Get user name only — tier gate handles limits.
     const { data: userData, error: userError } = await supabase
       .from("users")
-      .select("is_paid, analyst_queries_used, name")
+      .select("name")
       .eq("id", user.id)
       .single();
 
@@ -107,28 +111,25 @@ export async function POST(request: NextRequest, context: RouteContext) {
       );
     }
 
-    if (!userData?.is_paid) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "upgrade_required",
-          message: "Analyst is a Pro feature. Upgrade to access AI analysis.",
-          code: "UPGRADE_REQUIRED",
-        },
-        { status: 403 }
-      );
-    }
-
-    const used = userData?.analyst_queries_used || 0;
-    if (used >= ANALYST_QUERY_LIMIT) {
+    // Tier-based weekly cap (3/week for business, unlimited for business_pro).
+    const gates = await getTierGates(user.id);
+    const allowed = await consumeWeeklyAnalystMessage(user.id, gates.analystWeeklyLimit);
+    if (!allowed) {
+      const usage = await getWeeklyAnalystUsage(user.id);
+      const message =
+        gates.tier === "free"
+          ? "CardzCheck Analyst is a paid feature. Upgrade to Business for 3 messages per week, or Business Pro for unlimited."
+          : `You've used all ${gates.analystWeeklyLimit} analyst messages for this week. Upgrade to Business Pro for unlimited.`;
       return NextResponse.json(
         {
           ok: false,
           error: "limit_reached",
-          message: `You've used all ${ANALYST_QUERY_LIMIT} analyst queries. Contact support for more.`,
-          used,
-          limit: ANALYST_QUERY_LIMIT,
-          code: "LIMIT_REACHED",
+          message,
+          used: usage.messagesUsed,
+          limit: gates.analystWeeklyLimit,
+          resetsAt: usage.resetsAt,
+          code: gates.tier === "free" ? "UPGRADE_REQUIRED" : "WEEKLY_LIMIT_REACHED",
+          upgradeRequired: true,
         },
         { status: 403 }
       );
@@ -277,10 +278,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
             .eq("id", threadId);
         }
 
-        await supabase
-          .from("users")
-          .update({ analyst_queries_used: used + 1 })
-          .eq("id", user.id);
+        // Weekly counter incremented atomically up-front via
+        // consumeWeeklyAnalystMessage(); no further bookkeeping needed.
       } catch (analysisError) {
         console.error("Analyst background analysis failed:", analysisError);
       }

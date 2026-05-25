@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getScanCreditStatus } from "@/lib/grading/scanCredits";
-import { checkProAccess } from "@/lib/access";
+import { checkProAccess, getTierGates } from "@/lib/access";
 import {
   checkGradeTokenBudget,
   getTierMonthlyBudgetCents,
@@ -18,7 +18,11 @@ export async function GET() {
   }
 
   const proAccess = await checkProAccess(user.id);
-  const maxCardsPerSession = proAccess.tier === "business" ? 10 : 1;
+  // New two-tier gate: only business_pro gets multi-slot sessions.
+  // Legacy `business` rows have been migrated to `business_pro`; legacy `pro`
+  // rows have been migrated to `business` and therefore drop back to 1 slot.
+  const gates = await getTierGates(user.id);
+  const maxCardsPerSession = gates.maxGradeScanSlots;
   const maxPhotosPerCard = 10;
 
   if (proAccess.hasAccess) {

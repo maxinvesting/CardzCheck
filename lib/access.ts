@@ -21,7 +21,175 @@ import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { isTestMode } from "@/lib/test-mode";
 import { getScanCreditStatus } from "@/lib/grading/scanCredits";
 import { hasBusinessWorkspaceAccess } from "@/lib/business/workspace-access";
-import type { Subscription, Usage } from "@/types";
+import type {
+  EffectiveTier,
+  Subscription,
+  SubscriptionTier,
+  Usage,
+} from "@/types";
+
+// ---------------------------------------------------------------------------
+// Two-tier model (post-PR C1). Legacy "free" / "pro" enum values still exist
+// in the database during the transition and are mapped to "business" here.
+// ---------------------------------------------------------------------------
+
+/**
+ * Collapse legacy tier values to the three-tier model:
+ *   - "free"         — default for new signups; strict caps.
+ *   - "business"     — paid base; mid caps.
+ *   - "business_pro" — paid top; unlimited.
+ *
+ * Legacy "pro" rows map to "business" (we collapsed Pro into Business
+ * in PR C1).
+ */
+export function effectiveTier(raw: SubscriptionTier | null | undefined): EffectiveTier {
+  if (raw === "business_pro") return "business_pro";
+  if (raw === "business" || raw === "pro") return "business";
+  return "free";
+}
+
+/**
+ * Per-tier feature gates. Single source of truth so UI and API paths agree.
+ * Add new gates here rather than copy/pasting tier strings across components.
+ */
+export interface TierGates {
+  tier: EffectiveTier;
+  /** Bulk PSA cert import + paste-many flows. */
+  canBulkAddByCert: boolean;
+  /** Multi-card grading scan sessions (>1 slot). */
+  canMultiCardScan: boolean;
+  /** Max simultaneous grading scan slots. */
+  maxGradeScanSlots: number;
+  /**
+   * Rolling 7-day analyst message cap.
+   *   null     = unlimited (Business Pro)
+   *   0        = blocked entirely (Free — first message paywalls)
+   *   positive = max messages per 7-day window (Business: 3)
+   */
+  analystWeeklyLimit: number | null;
+  /** Cap on total inventory items. null = unlimited. */
+  inventoryItemCap: number | null;
+  /** Can list cards for sale on the marketplace. */
+  canSellOnMarketplace: boolean;
+  /**
+   * Marketplace fee rates by listing tier. The marketplace already has
+   * "self-serve / full-service-low / full-service-high" tiers driven by
+   * card grade + comps depth; this adds a subscription multiplier on top.
+   * Values are decimals (0.05 = 5%). Use the matching key in
+   * lib/marketplace/fees.ts.
+   */
+  marketplaceFees: { one_pct: number; two_pct: number; five_pct: number };
+}
+
+export function tierGates(tier: EffectiveTier): TierGates {
+  if (tier === "business_pro") {
+    return {
+      tier,
+      canBulkAddByCert: true,
+      canMultiCardScan: true,
+      maxGradeScanSlots: 10,
+      analystWeeklyLimit: null,
+      inventoryItemCap: null,
+      canSellOnMarketplace: true,
+      // Pro keeps the headline 1% / 2% / 5% rates.
+      marketplaceFees: { one_pct: 0.01, two_pct: 0.02, five_pct: 0.05 },
+    };
+  }
+  if (tier === "business") {
+    return {
+      tier,
+      canBulkAddByCert: false,
+      canMultiCardScan: false,
+      maxGradeScanSlots: 1,
+      analystWeeklyLimit: 3,
+      inventoryItemCap: null,
+      canSellOnMarketplace: true,
+      // Business pays 3 points more across the board.
+      marketplaceFees: { one_pct: 0.04, two_pct: 0.05, five_pct: 0.08 },
+    };
+  }
+  // free
+  return {
+    tier,
+    canBulkAddByCert: false,
+    canMultiCardScan: false,
+    maxGradeScanSlots: 1,
+    // Free hits the paywall on first analyst message.
+    analystWeeklyLimit: 0,
+    inventoryItemCap: 10,
+    // Free can list but at top-tier fees.
+    canSellOnMarketplace: true,
+    marketplaceFees: { one_pct: 0.08, two_pct: 0.12, five_pct: 0.15 },
+  };
+}
+
+/**
+ * Server-side helper: look up the caller's effective tier + gates in one go.
+ * Falls back to "business" (the more restrictive tier) if no subscription
+ * row exists yet — safer than assuming Pro.
+ */
+export async function getTierGates(userId: string): Promise<TierGates> {
+  if (isTestMode()) return tierGates("business_pro");
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("subscriptions")
+    .select("tier")
+    .eq("user_id", userId)
+    .maybeSingle();
+  return tierGates(effectiveTier((data?.tier ?? null) as SubscriptionTier | null));
+}
+
+/**
+ * Atomic: try to consume one analyst message for this user this week.
+ * Returns true if allowed (and the counter was incremented), false if the
+ * weekly cap is exhausted.
+ *
+ *   weeklyLimit === null → unlimited (Business Pro). Always returns true.
+ *   weeklyLimit === 0    → blocked (Free). Always returns false.
+ *   weeklyLimit > 0      → enforce rolling-week cap via the RPC.
+ *
+ * Backed by the `consume_weekly_analyst_message` RPC.
+ */
+export async function consumeWeeklyAnalystMessage(
+  userId: string,
+  weeklyLimit: number | null
+): Promise<boolean> {
+  if (isTestMode()) return true;
+  if (weeklyLimit === null) return true;
+  if (weeklyLimit <= 0) return false;
+  const supabase = await createServiceClient();
+  const { data, error } = await supabase.rpc("consume_weekly_analyst_message", {
+    p_user_id: userId,
+    p_weekly_limit: weeklyLimit,
+  });
+  if (error) {
+    console.error("[access] consume_weekly_analyst_message failed:", error);
+    // Fail closed — refuse the message rather than allow free use on a DB error.
+    return false;
+  }
+  return Boolean(data);
+}
+
+export interface WeeklyAnalystUsage {
+  messagesUsed: number;
+  weekStart: string | null;
+  resetsAt: string | null;
+}
+
+export async function getWeeklyAnalystUsage(
+  userId: string
+): Promise<WeeklyAnalystUsage> {
+  if (isTestMode()) return { messagesUsed: 0, weekStart: null, resetsAt: null };
+  const supabase = await createClient();
+  const { data } = await supabase
+    .rpc("get_weekly_analyst_usage", { p_user_id: userId })
+    .single();
+  return {
+    messagesUsed: (data as any)?.messages_used ?? 0,
+    weekStart: (data as any)?.week_start ?? null,
+    resetsAt: (data as any)?.resets_at ?? null,
+  };
+}
 
 export interface AccessCheck {
   hasAccess: boolean;
@@ -30,7 +198,7 @@ export interface AccessCheck {
   isActivated: boolean;
   subscriptionStatus: string | null;
   periodEnd: string | null;
-  tier: "free" | "pro" | "business";
+  tier: SubscriptionTier;
 }
 
 export interface UsageCheck {
