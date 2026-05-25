@@ -29,28 +29,51 @@ export async function POST(request: Request) {
       );
     }
 
+    // Post PR C2b tier names:
+    //   - "business"      → CardzCheck Business (base paid)
+    //   - "business_pro"  → CardzCheck Business Pro (top paid)
+    // Legacy "pro" is accepted and mapped to "business" for backward compat
+    // with any clients still posting the old tier name; legacy "business" is
+    // now "business_pro" since we renamed the top tier.
     let billing: "monthly" | "annual" = "monthly";
-    let tier: "pro" | "business" = "pro";
+    let tier: "business" | "business_pro" = "business";
     let seatQuantity = 1;
     try {
       const body = await request.json();
       if (body?.billing === "annual") billing = "annual";
-      if (body?.tier === "business") tier = "business";
+      const raw = String(body?.tier ?? "").trim().toLowerCase();
+      if (raw === "business_pro" || raw === "business") {
+        tier = raw as "business" | "business_pro";
+      } else if (raw === "pro") {
+        // legacy alias → Business base
+        tier = "business";
+      }
       if (Number.isFinite(Number(body?.seat_quantity))) {
         seatQuantity = Math.max(1, Math.trunc(Number(body.seat_quantity)));
       }
     } catch {
-      // Body may be empty for legacy callers — default to monthly pro
+      // Body may be empty for legacy callers — default to Business base.
     }
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
-    if (tier === "business") {
-      const businessPriceConfigured = process.env.STRIPE_BUSINESS_MONTHLY_PRICE_ID?.trim();
-      if (!businessPriceConfigured) {
-        console.error("Checkout: No Business Stripe price IDs configured");
+    if (tier === "business_pro") {
+      // TODO(stripe): Once the Business Pro product is created in Stripe,
+      // populate STRIPE_BUSINESS_PRO_MONTHLY_PRICE_ID (and optional
+      // STRIPE_BUSINESS_PRO_ANNUAL_PRICE_ID). Until then, accept the
+      // legacy STRIPE_BUSINESS_MONTHLY_PRICE_ID as a fallback so we can
+      // ship the code without waiting on Stripe setup.
+      const proPriceConfigured =
+        process.env.STRIPE_BUSINESS_PRO_MONTHLY_PRICE_ID?.trim() ||
+        process.env.STRIPE_BUSINESS_MONTHLY_PRICE_ID?.trim();
+      if (!proPriceConfigured) {
+        console.error("Checkout: No Business Pro Stripe price IDs configured");
         return NextResponse.json(
-          { error: "Business checkout is not configured. Please try again later." },
+          {
+            error:
+              "Business Pro checkout is not yet configured. Contact support to upgrade.",
+            upgradeRequired: true,
+          },
           { status: 503 }
         );
       }
@@ -60,20 +83,27 @@ export async function POST(request: Request) {
         user.email,
         `${appUrl}/business?success=true`,
         `${appUrl}/business?canceled=true`,
-        "monthly",
+        billing,
         seatQuantity
       );
       return NextResponse.json({ url: session.url });
     }
 
-    // Pro checkout
-    const hasSubscriptionPrices =
-      process.env.STRIPE_ACTIVATION_PRICE_ID?.trim() ||
-      process.env.STRIPE_SUBSCRIPTION_PRICE_ID?.trim();
-    if (!hasSubscriptionPrices && !process.env.NEXT_PUBLIC_STRIPE_PRICE_ID?.trim()) {
-      console.error("Checkout: No Stripe price IDs configured");
+    // Business (base) checkout. While Stripe products are still being set up,
+    // STRIPE_BUSINESS_BASIC_PRICE_ID is the new variable; we fall back to the
+    // legacy STRIPE_SUBSCRIPTION_PRICE_ID so existing prices keep working.
+    const businessBasicConfigured =
+      process.env.STRIPE_BUSINESS_BASIC_PRICE_ID?.trim() ||
+      process.env.STRIPE_SUBSCRIPTION_PRICE_ID?.trim() ||
+      process.env.STRIPE_ACTIVATION_PRICE_ID?.trim();
+    if (!businessBasicConfigured) {
+      console.error("Checkout: No Business Stripe price IDs configured");
       return NextResponse.json(
-        { error: "Checkout is not configured. Please try again later." },
+        {
+          error:
+            "Business checkout is not yet configured. Contact support to upgrade.",
+          upgradeRequired: true,
+        },
         { status: 503 }
       );
     }
@@ -82,7 +112,7 @@ export async function POST(request: Request) {
       user.id,
       user.email,
       `${appUrl}/account?success=true`,
-      `${appUrl}/comps?canceled=true`,
+      `${appUrl}/business?canceled=true`,
       billing
     );
 

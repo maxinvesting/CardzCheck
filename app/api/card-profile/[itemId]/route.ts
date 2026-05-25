@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { normalizeHttpUrl } from "@/lib/collection-images";
-import { requireBusinessContext } from "@/lib/business/context";
+import { requireBusinessAccess } from "@/lib/business/actions";
 import { getInventoryItem } from "@/lib/business/actions";
 import { resolveTrustedCardImageForItem } from "@/lib/images/resolver";
 
@@ -309,7 +309,7 @@ export async function GET(
         });
       }
 
-      const context = await requireBusinessContext(userId);
+      const context = await requireBusinessAccess(userId);
       const supabase = await createClient();
       const legacyItem = await loadLegacyBusinessItem(
         supabase,
