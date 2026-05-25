@@ -23,6 +23,7 @@ type SaleFormPayload = {
   cogs_cents: number | null;
   notes: string | null;
   external_order_id: string | null;
+  quantity_sold?: number;
 };
 
 interface Props {
@@ -39,6 +40,10 @@ interface Props {
   showCogsField?: boolean;
   /** Optional eBay store tier used for the ESE fee calculator when channel = "ebay". */
   storeTier?: StoreTier;
+  /** Quantity available in inventory (lot size). When > 1, the form lets the user sell a partial quantity. */
+  inventoryQuantity?: number;
+  /** Total cost basis of the lot in cents — used to auto-prorate COGS for partial sales. */
+  inventoryCostBasisCents?: number | null;
 }
 
 const CHANNEL_OPTIONS = [
@@ -94,6 +99,8 @@ export default function SaleFormModal({
   onSubmit,
   showCogsField = true,
   storeTier = "none",
+  inventoryQuantity = 1,
+  inventoryCostBasisCents = null,
 }: Props) {
   const [channel, setChannel] = useState<
     "ebay" | "whatnot" | "instagram" | "show" | "local" | "other"
@@ -112,6 +119,8 @@ export default function SaleFormModal({
   const [eseWeightOz, setEseWeightOz] = useState<1 | 2 | 3>(1);
   /** Captured when the modal opens so submit always sends the link even if defaults change. */
   const [linkedInventoryItemId, setLinkedInventoryItemId] = useState<string | null>(null);
+  const [quantitySold, setQuantitySold] = useState<string>("1");
+  const [autoCogsByQuantity, setAutoCogsByQuantity] = useState<boolean>(true);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -142,6 +151,8 @@ export default function SaleFormModal({
     setLinkedInventoryItemId(
       typeof invId === "string" && invId.trim() ? invId.trim() : null
     );
+    setQuantitySold("1");
+    setAutoCogsByQuantity(true);
   }, [defaults, isOpen]);
 
   // ── eBay: auto-estimate 13.5% platform fee ─────────────────────────────
@@ -179,6 +190,26 @@ export default function SaleFormModal({
     soldPriceNum > 0 &&
     soldPriceNum <= ESE_MAX_ITEM_VALUE;
 
+  // ── Quantity sold + proportional COGS auto-fill ─────────────────────────
+  const maxQuantity = Math.max(1, Math.floor(inventoryQuantity));
+  const parsedQuantity = useMemo(() => {
+    const n = Number.parseInt(quantitySold, 10);
+    if (!Number.isFinite(n) || n < 1) return 1;
+    return Math.min(n, maxQuantity);
+  }, [quantitySold, maxQuantity]);
+  const isPartialSale = parsedQuantity < maxQuantity;
+
+  // When auto-COGS is on and we have a linked inventory item with a basis,
+  // pro-rate COGS as basis * (qty_sold / qty_total).
+  useEffect(() => {
+    if (!autoCogsByQuantity) return;
+    if (inventoryCostBasisCents == null || maxQuantity < 1) return;
+    const proRated = Math.round(
+      (inventoryCostBasisCents * parsedQuantity) / maxQuantity
+    );
+    setCogs(centsToInput(proRated));
+  }, [autoCogsByQuantity, inventoryCostBasisCents, maxQuantity, parsedQuantity]);
+
   const eseEstimate: EseProfitBreakdown | null = useMemo(() => {
     if (!showEse) return null;
     try {
@@ -214,6 +245,7 @@ export default function SaleFormModal({
         : defaults?.cogs_cents ?? null,
       notes: notes.trim() ? notes.trim() : null,
       external_order_id: externalOrderId.trim() ? externalOrderId.trim() : null,
+      quantity_sold: maxQuantity > 1 ? parsedQuantity : undefined,
     };
 
     setSubmitting(true);
@@ -247,6 +279,46 @@ export default function SaleFormModal({
         </div>
 
         <form onSubmit={submit} className="space-y-4 px-5 py-5">
+
+          {maxQuantity > 1 && (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <label className="flex-1 min-w-[140px]">
+                  <span className={labelCls}>
+                    Quantity sold
+                    <span className="ml-1 text-emerald-700 font-semibold">
+                      / {maxQuantity} on hand
+                    </span>
+                  </span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={maxQuantity}
+                    step={1}
+                    value={quantitySold}
+                    onChange={(e) => setQuantitySold(e.target.value)}
+                    className={fieldCls}
+                  />
+                </label>
+                {inventoryCostBasisCents != null && inventoryCostBasisCents > 0 && (
+                  <label className="inline-flex items-center gap-2 text-xs font-medium text-gray-600 pb-2">
+                    <input
+                      type="checkbox"
+                      checked={autoCogsByQuantity}
+                      onChange={(e) => setAutoCogsByQuantity(e.target.checked)}
+                      className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    Pro-rate COGS by quantity
+                  </label>
+                )}
+              </div>
+              <p className="mt-1.5 text-[11px] text-emerald-700">
+                {isPartialSale
+                  ? `Selling ${parsedQuantity} of ${maxQuantity}. Remaining ${maxQuantity - parsedQuantity} will stay in inventory.`
+                  : `Selling all ${maxQuantity}. The lot will be marked sold.`}
+              </p>
+            </div>
+          )}
 
           {/* ── Row 1: Price · Channel · Date ─────────────────────────── */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">

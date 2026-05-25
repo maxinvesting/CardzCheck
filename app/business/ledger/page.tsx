@@ -13,6 +13,7 @@ import LedgerBulkActionsBar, {
 } from "@/components/business/LedgerBulkActionsBar";
 import SaleFormModal from "@/components/business/SaleFormModal";
 import TradeFormModal, { type TradeFormPayload } from "@/components/business/TradeFormModal";
+import SalesTradesView from "@/components/business/SalesTradesView";
 import AddCardToInventoryModal from "@/components/business/AddCardToInventoryModal";
 import type { PendingInventoryCard } from "@/components/business/AddCardToInventoryModal";
 import BulkCertImportModal from "@/components/business/BulkCertImportModal";
@@ -121,6 +122,9 @@ export default function LedgerPage() {
   const [selectedLedgerItemId, setSelectedLedgerItemId] = useState<string | null>(null);
   const [markSoldItem, setMarkSoldItem] = useState<BusinessInventoryItem | null>(null);
   const [tradeItem, setTradeItem] = useState<BusinessInventoryItem | null>(null);
+  const [showStandaloneTrade, setShowStandaloneTrade] = useState(false);
+  const [activeTab, setActiveTab] = useState<"inventory" | "sales">("inventory");
+  const [salesRefreshKey, setSalesRefreshKey] = useState(0);
   const [listItem, setListItem] = useState<BusinessInventoryItem | null>(null);
   const [showAddCardModal, setShowAddCardModal] = useState(false);
   const [showBulkCertModal, setShowBulkCertModal] = useState(false);
@@ -349,6 +353,8 @@ export default function LedgerPage() {
   const handleCreateSale = useCallback(
     async (sale: Record<string, unknown>) => {
       const inventoryId = (sale.inventory_item_id as string | null) || null;
+      const quantitySold =
+        typeof sale.quantity_sold === "number" ? (sale.quantity_sold as number) : null;
       try {
         const res = await fetch("/api/business/sales", {
           method: "POST",
@@ -360,9 +366,21 @@ export default function LedgerPage() {
         if (!res.ok) throw new Error(data?.error || "Failed to record sale");
 
         if (inventoryId) {
-          setItems((prev) => prev.filter((item) => item.id !== inventoryId));
-          if (selectedLedgerItemId === inventoryId) setSelectedLedgerItemId(null);
+          // Determine if this was a partial sale based on the source row's quantity.
+          const sourceItem = items.find((it) => it.id === inventoryId);
+          const lotQty = sourceItem?.quantity ?? 1;
+          const isPartial =
+            quantitySold != null && quantitySold > 0 && quantitySold < lotQty;
+
+          if (isPartial) {
+            // Refresh inventory so the row reflects the new quantity / pro-rated basis.
+            void loadInventory();
+          } else {
+            setItems((prev) => prev.filter((item) => item.id !== inventoryId));
+            if (selectedLedgerItemId === inventoryId) setSelectedLedgerItemId(null);
+          }
         }
+        setSalesRefreshKey((k) => k + 1);
         setToast({ type: "success", message: "Sale recorded" });
         setMarkSoldItem(null);
       } catch (error) {
@@ -372,7 +390,7 @@ export default function LedgerPage() {
         });
       }
     },
-    [selectedLedgerItemId]
+    [items, loadInventory, selectedLedgerItemId]
   );
 
   const handleCreateTrade = useCallback(
@@ -387,11 +405,21 @@ export default function LedgerPage() {
         const data = await res.json().catch(() => null);
         if (!res.ok) throw new Error(data?.error || "Failed to record trade");
 
-        setItems((prev) => prev.filter((item) => item.id !== payload.inventory_item_id));
-        if (selectedLedgerItemId === payload.inventory_item_id) {
-          setSelectedLedgerItemId(null);
+        const outgoingIds = new Set<string>();
+        for (const o of payload.outgoing ?? []) outgoingIds.add(o.inventory_item_id);
+        if (payload.inventory_item_id) outgoingIds.add(payload.inventory_item_id);
+
+        if (outgoingIds.size > 0) {
+          setItems((prev) => prev.filter((item) => !outgoingIds.has(item.id)));
+          if (selectedLedgerItemId && outgoingIds.has(selectedLedgerItemId)) {
+            setSelectedLedgerItemId(null);
+          }
         }
         setTradeItem(null);
+        setShowStandaloneTrade(false);
+        setSalesRefreshKey((k) => k + 1);
+        // Reload inventory to surface any new incoming cards added by the trade.
+        void loadInventory();
         setToast({ type: "success", message: "Trade recorded" });
       } catch (error) {
         setToast({
@@ -400,7 +428,7 @@ export default function LedgerPage() {
         });
       }
     },
-    [selectedLedgerItemId]
+    [loadInventory, selectedLedgerItemId]
   );
 
   const handleListSuccess = useCallback(
@@ -514,6 +542,33 @@ export default function LedgerPage() {
 
           <LedgerSummaryStrip summary={ledgerSummary} />
 
+          {!needsMigration && (
+            <div className="flex items-center gap-1 border-b border-[#24282D] px-4">
+              <button
+                type="button"
+                onClick={() => setActiveTab("inventory")}
+                className={`border-b-2 px-3 py-2 text-xs font-medium transition-colors ${
+                  activeTab === "inventory"
+                    ? "border-[#20B26B] text-[#20B26B]"
+                    : "border-transparent text-[#77808C] hover:text-[#E6E8EB]"
+                }`}
+              >
+                Inventory
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("sales")}
+                className={`border-b-2 px-3 py-2 text-xs font-medium transition-colors ${
+                  activeTab === "sales"
+                    ? "border-[#20B26B] text-[#20B26B]"
+                    : "border-transparent text-[#77808C] hover:text-[#E6E8EB]"
+                }`}
+              >
+                Sales &amp; Trades
+              </button>
+            </div>
+          )}
+
           {needsMigration ? (
             <div className="px-4 py-4">
               <BusinessMigrationBanner
@@ -523,14 +578,8 @@ export default function LedgerPage() {
                 }}
               />
             </div>
-          ) : (
-            <section className="min-w-0 flex-1 space-y-2 px-4 py-4">
-              <LedgerBulkActionsBar
-                selectedCount={selectedRowIds.size}
-                isWorking={isBulkWorking}
-                onClear={clearSelection}
-                onApply={handleBulkAction}
-              />
+          ) : activeTab === "inventory" ? (
+            <section className="min-w-0 flex-1 px-4 py-4">
               <LedgerTable
                 rows={ledgerRows}
                 selectedRowId={selectedLedgerItemId}
@@ -542,6 +591,10 @@ export default function LedgerPage() {
                 onOpenProfile={(row) => setProfileItemId(row.id)}
               />
             </section>
+          ) : (
+            <section className="min-w-0 flex-1 px-4 py-4">
+              <SalesTradesView key={salesRefreshKey} />
+            </section>
           )}
         </div>
 
@@ -551,7 +604,7 @@ export default function LedgerPage() {
               className="fixed inset-0 z-40 bg-black/50"
               onClick={() => setSelectedLedgerItemId(null)}
             />
-            <aside className="fixed right-0 top-0 z-50 h-full w-full max-w-xl overflow-y-auto border-l border-[#24282D] bg-[#0F1317] shadow-2xl">
+            <aside className="fixed right-0 top-0 z-50 h-full w-full max-w-3xl overflow-y-auto border-l border-[#24282D] bg-[#0F1317] shadow-2xl">
               <div className="sticky top-0 z-10 border-b border-[#24282D] bg-[#0B0D0F]/95 px-4 py-3 backdrop-blur">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -704,6 +757,8 @@ export default function LedgerPage() {
                 }
               : undefined
           }
+          inventoryQuantity={markSoldItem?.quantity ?? 1}
+          inventoryCostBasisCents={markSoldItem?.cost_basis_total_cents ?? null}
           onClose={() => setMarkSoldItem(null)}
           onSubmit={async (payload) => {
             await handleCreateSale(payload as unknown as Record<string, unknown>);
@@ -714,7 +769,15 @@ export default function LedgerPage() {
         <TradeFormModal
           isOpen={Boolean(tradeItem)}
           item={tradeItem}
+          availableItems={activeInventoryItems}
           onClose={() => setTradeItem(null)}
+          onSubmit={handleCreateTrade}
+        />
+
+        <TradeFormModal
+          isOpen={showStandaloneTrade}
+          availableItems={activeInventoryItems}
+          onClose={() => setShowStandaloneTrade(false)}
           onSubmit={handleCreateTrade}
         />
 
