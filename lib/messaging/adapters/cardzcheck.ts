@@ -12,7 +12,7 @@
  * a participant (buyer or seller) can read/write only their own threads.
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import type {
   Message,
   MessageThread,
@@ -209,7 +209,12 @@ async function attachCounterpartyEmails(
   viewerId: string
 ): Promise<ThreadRow[]> {
   if (rows.length === 0) return rows;
-  const supabase = await createClient();
+  // public.users has RLS that only lets a user read their own row, so we
+  // need the service client to fetch the counterparty's email. The viewer
+  // has already been authorized to see THIS thread (RLS on marketplace_threads),
+  // so leaking the counterparty's display name here is intentional and
+  // necessary for the messaging UI.
+  const supabase = await createServiceClient();
   const otherIds = Array.from(
     new Set(
       rows.map((r) => (r.seller_id === viewerId ? r.buyer_id : r.seller_id))
@@ -288,7 +293,9 @@ export async function getCardzcheckMessages(
   if (!msgs || !thread) return [];
 
   const t = thread as { buyer_id: string; seller_id: string };
-  const { data: profiles } = await supabase
+  // Use service client to read counterparty profile (see attachCounterpartyEmails).
+  const service = await createServiceClient();
+  const { data: profiles } = await service
     .from("users")
     .select("id, email")
     .in("id", [t.buyer_id, t.seller_id]);
