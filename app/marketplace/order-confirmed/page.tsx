@@ -1,5 +1,7 @@
 import Link from "next/link";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
+import { createServiceClient } from "@/lib/supabase/server";
+import MessageSellerCTA from "./MessageSellerCTA";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +11,17 @@ export default async function OrderConfirmedPage({
   searchParams: Promise<{ session_id?: string }>;
 }) {
   const { session_id } = await searchParams;
+
+  let transactionId: string | null = null;
+  if (session_id) {
+    const service = await createServiceClient();
+    const { data: tx } = await service
+      .from("transactions")
+      .select("id")
+      .eq("stripe_session_id", session_id)
+      .maybeSingle();
+    transactionId = (tx as { id?: string } | null)?.id ?? null;
+  }
 
   return (
     <AuthenticatedLayout>
@@ -26,6 +39,9 @@ export default async function OrderConfirmedPage({
               Session: {session_id}
             </p>
           )}
+          {transactionId ? (
+            <MessageSellerCTA transactionId={transactionId} />
+          ) : null}
           <div className="flex gap-2 justify-center pt-2">
             <Link
               href="/marketplace"

@@ -22,6 +22,16 @@ import {
   getEbayMessages,
   sendEbayMessage,
 } from "./adapters/ebay";
+import {
+  getCardzcheckThreads,
+  getCardzcheckThread,
+  getCardzcheckMessages,
+  sendCardzcheckMessage,
+  isCardzcheckThreadId,
+} from "./adapters/cardzcheck";
+import type { MessagePlatform } from "./types";
+
+export type PlatformFilter = MessagePlatform | "all";
 import { computeNegotiationAnalysis } from "./mock-data";
 import {
   buildFallbackMarketplaceReply,
@@ -317,11 +327,29 @@ async function enrichThreads(
 
 // ─── Thread queries ──────────────────────────────────────────────────────────
 
+async function loadThreadsForPlatform(
+  userId: string,
+  platform: PlatformFilter
+): Promise<MessageThread[]> {
+  if (platform === "ebay") return await getEbayThreads(userId);
+  if (platform === "cardzcheck") return await getCardzcheckThreads(userId);
+  // "all" or any unknown — fan out to both
+  const [ebay, cc] = await Promise.all([
+    getEbayThreads(userId).catch(() => []),
+    getCardzcheckThreads(userId).catch(() => []),
+  ]);
+  return [...ebay, ...cc];
+}
+
 export async function getMessagingStats(
-  userId: string
+  userId: string,
+  platform: PlatformFilter = "all"
 ): Promise<MessagingStats> {
   try {
-    const threads = await enrichThreads(userId, await getEbayThreads(userId));
+    const threads = await enrichThreads(
+      userId,
+      await loadThreadsForPlatform(userId, platform)
+    );
     return buildStatsFromThreads(threads);
   } catch {
     return {
@@ -336,10 +364,14 @@ export async function getMessagingStats(
 
 export async function getThreads(
   userId: string,
-  filter: ThreadFilter = "all"
+  filter: ThreadFilter = "all",
+  platform: PlatformFilter = "all"
 ): Promise<MessageThread[]> {
   try {
-    const threads = await enrichThreads(userId, await getEbayThreads(userId));
+    const threads = await enrichThreads(
+      userId,
+      await loadThreadsForPlatform(userId, platform)
+    );
     return applyThreadFilter(threads, filter);
   } catch {
     return [];
@@ -348,10 +380,14 @@ export async function getThreads(
 
 export async function getMessagingOverview(
   userId: string,
-  filter: ThreadFilter = "all"
+  filter: ThreadFilter = "all",
+  platform: PlatformFilter = "all"
 ): Promise<{ stats: MessagingStats; threads: MessageThread[] }> {
   try {
-    const allThreads = await enrichThreads(userId, await getEbayThreads(userId));
+    const allThreads = await enrichThreads(
+      userId,
+      await loadThreadsForPlatform(userId, platform)
+    );
     const stats = buildStatsFromThreads(allThreads);
     const threads = applyThreadFilter(allThreads, filter);
     return { stats, threads };
@@ -361,12 +397,22 @@ export async function getMessagingOverview(
   }
 }
 
+async function loadBaseThread(
+  userId: string,
+  threadId: string
+): Promise<MessageThread | null> {
+  if (isCardzcheckThreadId(threadId)) {
+    return await getCardzcheckThread(userId, threadId);
+  }
+  return await getEbayThread(userId, threadId);
+}
+
 export async function getThread(
   userId: string,
   threadId: string
 ): Promise<MessageThread | null> {
   try {
-    const thread = await getEbayThread(userId, threadId);
+    const thread = await loadBaseThread(userId, threadId);
     if (!thread) return null;
 
     const listingContextById = await loadThreadListingContextMap(userId, [thread]);
@@ -386,6 +432,9 @@ export async function getMessages(
   threadId: string
 ): Promise<Message[]> {
   try {
+    if (isCardzcheckThreadId(threadId)) {
+      return await getCardzcheckMessages(userId, threadId);
+    }
     return await getEbayMessages(userId, threadId);
   } catch {
     return [];
@@ -397,6 +446,9 @@ export async function sendMessage(
   threadId: string,
   body: string
 ): Promise<Message> {
+  if (isCardzcheckThreadId(threadId)) {
+    return sendCardzcheckMessage(userId, threadId, body);
+  }
   return sendEbayMessage(userId, threadId, body);
 }
 
@@ -448,7 +500,7 @@ export async function generateAIReply(
   sellerNote?: string
 ): Promise<MarketplaceReplyDraftResult> {
   const messages = await getMessages(userId, threadId);
-  const baseThread = await getEbayThread(userId, threadId);
+  const baseThread = await loadBaseThread(userId, threadId);
 
   if (!baseThread) {
     return {

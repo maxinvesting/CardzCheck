@@ -6,7 +6,12 @@
 
 // ─── Core enums ──────────────────────────────────────────────────────────────
 
-export type MessagePlatform = "ebay" | "whatnot" | "website" | "other";
+export type MessagePlatform =
+  | "ebay"
+  | "cardzcheck"
+  | "whatnot"
+  | "website"
+  | "other";
 
 export type ThreadStatus =
   | "open"

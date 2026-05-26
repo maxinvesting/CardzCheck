@@ -175,6 +175,19 @@ export default function ConversationView({
                 {thread.item_title}
               </p>
             ) : null}
+            {thread.platform === "cardzcheck" &&
+            (thread.inventory_item_id || thread.listing_price_cents) ? (
+              <p className="mt-1 flex flex-wrap items-center gap-2 text-[10px] biz-mono uppercase tracking-[0.10em] text-[var(--biz-muted)]">
+                {thread.inventory_item_id ? (
+                  <span className="rounded-sm border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-1.5 py-px text-[var(--biz-text)]">
+                    Order #{thread.inventory_item_id.slice(0, 8)}
+                  </span>
+                ) : null}
+                {thread.listing_price_cents != null ? (
+                  <span>${(thread.listing_price_cents / 100).toFixed(2)}</span>
+                ) : null}
+              </p>
+            ) : null}
             <p className="mt-0.5 text-[10px] text-[var(--biz-muted)] biz-mono uppercase tracking-[0.10em]">
               Updated {formatThreadTime(thread.last_message_at)}
             </p>
@@ -247,6 +260,7 @@ export default function ConversationView({
           sendError={sendError}
           selectedAction={selectedAction}
           onSelectAction={setSelectedAction}
+          platform={thread.platform}
         />
       </div>
     </div>

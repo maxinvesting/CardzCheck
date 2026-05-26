@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import StatusPill from "@/components/business/ui/StatusPill";
 import type { BriefingObservations } from "@/lib/messaging/briefing";
 
@@ -63,24 +64,43 @@ export default function AgentBriefing({
   greetingName,
 }: Props) {
   const lines = buildOperationalLines(observations);
+  const [expanded, setExpanded] = useState(false);
+  const headline = lines[0] ?? "Queue is clean.";
 
   return (
     <section className="rounded-md border border-[var(--biz-border)] bg-[var(--biz-surface)]">
-      <header className="flex items-center justify-between gap-3 border-b border-[var(--biz-border)] px-3 py-2">
-        <div className="flex items-center gap-2">
+      <header className="flex items-center justify-between gap-3 px-3 py-1.5">
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+        >
           <span
-            className="h-1.5 w-1.5 rounded-full"
+            className="h-1.5 w-1.5 shrink-0 rounded-full"
             style={{ background: "var(--biz-automation)" }}
             aria-hidden
           />
-          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--biz-muted)] font-mono-num">
-            Agent briefing
+          <p className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--biz-muted)] font-mono-num">
+            Briefing
           </p>
           <StatusPill tone={source === "ai" ? "automation" : "muted"}>
-            {source === "ai" ? "AI summary" : "Live snapshot"}
+            {source === "ai" ? "AI" : "Live"}
           </StatusPill>
-        </div>
-        <div className="flex items-center gap-2">
+          {!expanded ? (
+            <span className="truncate text-[12px] text-[var(--biz-text)]">
+              {loading ? "Loading…" : headline}
+            </span>
+          ) : null}
+          <svg
+            className={`h-3 w-3 shrink-0 text-[var(--biz-muted)] transition-transform ${expanded ? "rotate-180" : ""}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        <div className="flex shrink-0 items-center gap-2">
           <span className="hidden text-[10px] uppercase tracking-[0.14em] text-[var(--biz-muted)] sm:inline">
             {greetingName}
           </span>
@@ -88,33 +108,35 @@ export default function AgentBriefing({
             type="button"
             onClick={onRefresh}
             disabled={refreshing}
-            className="rounded border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-2 py-1 text-[11px] font-semibold text-[var(--biz-text)] transition-colors hover:border-[var(--biz-border-strong)] hover:bg-[var(--biz-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--biz-text)] transition-colors hover:border-[var(--biz-border-strong)] hover:bg-[var(--biz-hover)] disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {refreshing ? "Refreshing…" : "Refresh feed"}
+            {refreshing ? "Refreshing…" : "Refresh"}
           </button>
         </div>
       </header>
 
-      <div className="px-3 py-3">
-        {loading ? (
-          <div className="space-y-1.5">
-            <div className="h-3 w-3/4 animate-pulse rounded bg-[var(--biz-skeleton)]" />
-            <div className="h-3 w-1/2 animate-pulse rounded bg-[var(--biz-skeleton)]" />
-          </div>
-        ) : (
-          <ul className="space-y-1.5 text-[13px] leading-relaxed text-[var(--biz-text)]">
-            {lines.map((line, idx) => (
-              <li key={idx} className="flex items-start gap-2">
-                <span
-                  className="mt-1 inline-block h-1 w-1 shrink-0 rounded-full bg-[var(--biz-muted)]"
-                  aria-hidden
-                />
-                <span>{line}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      {expanded ? (
+        <div className="border-t border-[var(--biz-border)] px-3 py-2">
+          {loading ? (
+            <div className="space-y-1.5">
+              <div className="h-3 w-3/4 animate-pulse rounded bg-[var(--biz-skeleton)]" />
+              <div className="h-3 w-1/2 animate-pulse rounded bg-[var(--biz-skeleton)]" />
+            </div>
+          ) : (
+            <ul className="space-y-1 text-[12px] leading-relaxed text-[var(--biz-text)]">
+              {lines.map((line, idx) => (
+                <li key={idx} className="flex items-start gap-2">
+                  <span
+                    className="mt-1 inline-block h-1 w-1 shrink-0 rounded-full bg-[var(--biz-muted)]"
+                    aria-hidden
+                  />
+                  <span>{line}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ) : null}
     </section>
   );
 }

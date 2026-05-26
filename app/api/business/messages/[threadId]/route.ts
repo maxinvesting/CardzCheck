@@ -8,6 +8,7 @@ import {
   sendMessage,
 } from "@/lib/messaging/service";
 import { getEbayRawDebug } from "@/lib/messaging/adapters/ebay";
+import { isCardzcheckThreadId } from "@/lib/messaging/adapters/cardzcheck";
 
 export async function GET(
   _req: NextRequest,
@@ -40,7 +41,10 @@ export async function GET(
   }
 
   if (debug) {
-    const raw = await getEbayRawDebug(user.id, threadId);
+    // Debug payload only applies to eBay threads.
+    const raw = isCardzcheckThreadId(threadId)
+      ? { note: "CardzCheck threads have no external raw payload." }
+      : await getEbayRawDebug(user.id, threadId);
     return NextResponse.json({ thread, raw });
   }
 

@@ -9,6 +9,7 @@ import {
   type MarketplaceReplyGenerationContext,
   type MarketplaceReplyRecommendation,
 } from "@/lib/messaging/reply-drafts";
+import type { MessagePlatform } from "@/lib/messaging/types";
 
 const VISIBLE_ACTION_IDS: MarketplaceReplyAction[] = [
   "smart_reply",
@@ -39,6 +40,7 @@ interface Props {
   sendError: string | null;
   selectedAction: MarketplaceReplyAction;
   onSelectAction: (action: MarketplaceReplyAction) => void;
+  platform?: MessagePlatform;
 }
 
 export default function AIActionsPanel({
@@ -55,6 +57,7 @@ export default function AIActionsPanel({
   sendError,
   selectedAction,
   onSelectAction,
+  platform,
 }: Props) {
   useEffect(() => {
     if (draftResult && draftResult.action === selectedAction) {
@@ -74,12 +77,37 @@ export default function AIActionsPanel({
   const canSend = Boolean(replyText.trim()) && !sendLoading;
 
   return (
-    <div className="rounded-md border border-[var(--biz-border)] bg-[var(--biz-surface)] p-2.5">
-      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--biz-muted)] font-mono-num">
-          Suggested action
+    <div
+      className="rounded-lg border p-3"
+      style={{
+        borderColor: "var(--biz-primary-border)",
+        background: "var(--biz-surface-soft)",
+      }}
+    >
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span
+          className="inline-flex h-4 w-4 items-center justify-center rounded-full"
+          style={{ background: "var(--biz-automation)" }}
+          aria-hidden
+        >
+          <svg
+            className="h-2.5 w-2.5 text-[var(--biz-primary-foreground)]"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2.5}
+              d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"
+            />
+          </svg>
         </span>
-        <span className="text-[12px] font-semibold text-[var(--biz-primary)]">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--biz-automation)] font-mono-num">
+          Agent suggests
+        </span>
+        <span className="text-[13px] font-semibold text-[var(--biz-primary)]">
           {recommendedMeta.label}
         </span>
         <span
@@ -140,7 +168,11 @@ export default function AIActionsPanel({
         />
         <div className="flex items-center justify-between gap-3 border-t border-[var(--biz-border)] px-3 py-1.5">
           <span className="min-w-0 truncate text-[10px] uppercase tracking-[0.12em] text-[var(--biz-muted)] font-mono-num">
-            Send as seller via eBay
+            {platform === "cardzcheck"
+              ? "Send via CardzCheck"
+              : platform === "ebay"
+                ? "Send as seller via eBay"
+                : "Send reply"}
           </span>
           <button
             type="button"

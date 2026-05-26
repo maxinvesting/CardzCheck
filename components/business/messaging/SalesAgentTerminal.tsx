@@ -7,7 +7,6 @@ import {
   useMemo,
   useDeferredValue,
 } from "react";
-import { formatPrice } from "@/lib/pricing";
 import type {
   MessageThread,
   Message,
@@ -19,17 +18,12 @@ import type {
   MarketplaceReplyAction,
 } from "@/lib/messaging/reply-drafts";
 import {
-  buildSalesDealDeskSnapshot,
   buildPriorityRationale,
   isClosedSalesThread,
   isStaleSalesThread,
 } from "./salesDealDesk";
-import { buildBriefingObservations } from "@/lib/messaging/briefing";
 import ConversationView from "./ConversationView";
 import ConversationRow from "./ConversationRow";
-import AgentBriefing from "./AgentBriefing";
-import PriorityRationalePanel from "./PriorityRationalePanel";
-import MetricCard from "@/components/business/ui/MetricCard";
 import StatusPill from "@/components/business/ui/StatusPill";
 
 interface Props {
@@ -62,6 +56,13 @@ const FILTERS: { key: TerminalFilter; label: string }[] = [
   { key: "stale", label: "Stale" },
   { key: "awaiting_buyer", label: "Awaiting buyer" },
   { key: "resolved", label: "Resolved" },
+];
+
+type PlatformTab = "ebay" | "cardzcheck";
+
+const PLATFORM_TABS: { key: PlatformTab; label: string }[] = [
+  { key: "ebay", label: "eBay" },
+  { key: "cardzcheck", label: "CardzCheck" },
 ];
 
 function applyTerminalFilter(
@@ -109,8 +110,11 @@ export default function SalesAgentTerminal({
   businessName,
   initialSyncRetriedAfterEmpty = false,
 }: Props) {
-  const [stats, setStats] = useState<MessagingStats>(initialStats);
+  void initialStats;
+  void businessName;
+  const [, setStats] = useState<MessagingStats>(initialStats);
   const [allThreads, setAllThreads] = useState<MessageThread[]>(initialThreads);
+  const [platformTab, setPlatformTab] = useState<PlatformTab>("ebay");
   const [filter, setFilter] = useState<TerminalFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(
@@ -131,25 +135,29 @@ export default function SalesAgentTerminal({
   const [syncRetriedAfterEmpty, setSyncRetriedAfterEmpty] = useState(
     initialSyncRetriedAfterEmpty
   );
-  const [briefingSource, setBriefingSource] = useState<"ai" | "fallback">("fallback");
   const [briefingLoading, setBriefingLoading] = useState(false);
 
   const deferredQuery = useDeferredValue(searchQuery);
   const now = Date.now();
 
-  const observations = useMemo(
-    () => buildBriefingObservations(allThreads),
-    [allThreads]
+  const platformThreads = useMemo(
+    () => allThreads.filter((t) => t.platform === platformTab),
+    [allThreads, platformTab]
   );
 
-  const desk = useMemo(
-    () => buildSalesDealDeskSnapshot(allThreads, now),
-    [allThreads, now]
-  );
+  const platformCounts = useMemo(() => {
+    let ebay = 0;
+    let cc = 0;
+    for (const t of allThreads) {
+      if (t.platform === "ebay") ebay++;
+      else if (t.platform === "cardzcheck") cc++;
+    }
+    return { ebay, cardzcheck: cc };
+  }, [allThreads]);
 
   const visibleThreads = useMemo(() => {
     const query = deferredQuery.trim().toLowerCase();
-    let next = allThreads.filter((thread) =>
+    let next = platformThreads.filter((thread) =>
       applyTerminalFilter(thread, filter, now)
     );
     if (query) {
@@ -171,18 +179,18 @@ export default function SalesAgentTerminal({
       );
     });
     return next;
-  }, [allThreads, filter, deferredQuery, now]);
+  }, [platformThreads, filter, deferredQuery, now]);
 
   const filterCounts = useMemo(() => {
     const counts: Record<TerminalFilter, number> = {
-      all: allThreads.length,
+      all: platformThreads.length,
       needs_action: 0,
       offers: 0,
       stale: 0,
       awaiting_buyer: 0,
       resolved: 0,
     };
-    for (const thread of allThreads) {
+    for (const thread of platformThreads) {
       if (applyTerminalFilter(thread, "needs_action", now)) counts.needs_action++;
       if (applyTerminalFilter(thread, "offers", now)) counts.offers++;
       if (applyTerminalFilter(thread, "stale", now)) counts.stale++;
@@ -190,27 +198,19 @@ export default function SalesAgentTerminal({
       if (applyTerminalFilter(thread, "resolved", now)) counts.resolved++;
     }
     return counts;
-  }, [allThreads, now]);
+  }, [platformThreads, now]);
 
   const selectedThreadMeta = useMemo(
     () => allThreads.find((t) => t.id === selectedId) ?? null,
     [allThreads, selectedId]
   );
 
-  const totalActionableValueCents = useMemo(() => {
-    return desk.activeOfferThreads.reduce(
-      (sum, t) => sum + (t.offer_amount_cents ?? 0),
-      0
-    );
-  }, [desk.activeOfferThreads]);
-
   const fetchBriefing = useCallback(async () => {
     setBriefingLoading(true);
     try {
       const res = await fetch(`/api/business/sales/briefing`, { cache: "no-store" });
       if (!res.ok) return;
-      const data = (await res.json()) as { source?: "ai" | "fallback" };
-      if (data?.source) setBriefingSource(data.source);
+      await res.json();
     } catch {
       // ignore
     } finally {
@@ -242,7 +242,7 @@ export default function SalesAgentTerminal({
 
   const loadAllThreads = useCallback(async () => {
     try {
-      const res = await fetch(`/api/business/messages?filter=all`, {
+      const res = await fetch(`/api/business/messages?filter=all&platform=all`, {
         cache: "no-store",
       });
       if (!res.ok) return null;
@@ -378,123 +378,151 @@ export default function SalesAgentTerminal({
     fetchBriefing();
   }, [fetchBriefing]);
 
-  const greetingName = businessName?.trim() || "Operator";
+  // On initial mount fetch ALL platforms so the tabs show real counts.
+  useEffect(() => {
+    void refreshThreadList();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const actionableValueDisplay =
-    totalActionableValueCents > 0
-      ? formatPrice(totalActionableValueCents / 100)
-      : "Value unavailable";
+  // When the platform tab changes, re-anchor the selection to the first
+  // thread in the newly-visible queue.
+  useEffect(() => {
+    const stillInTab = allThreads.find(
+      (t) => t.id === selectedId && t.platform === platformTab
+    );
+    if (stillInTab) return;
+    const first = allThreads.find((t) => t.platform === platformTab);
+    if (first) {
+      setSelectedId(first.id);
+      loadThread(first.id);
+    } else {
+      setSelectedId(null);
+      setSelectedThread(null);
+      setMessages([]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [platformTab]);
 
   return (
-    <div className="flex h-full flex-col gap-3 overflow-hidden px-3 py-3">
-      {/* Header */}
-      <header className="flex shrink-0 flex-wrap items-end justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--biz-muted)] font-mono-num">
-            Sales Agent
-          </p>
-          <h1 className="mt-1 text-[20px] font-semibold tracking-tight text-[var(--biz-text-strong)] sm:text-[22px]">
-            Sales Agent Terminal
-          </h1>
-          <p className="mt-1 max-w-2xl text-[12px] leading-relaxed text-[var(--biz-muted)]">
-            Prioritize buyer conversations, revive stale deals, and move inventory faster.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {syncRetriedAfterEmpty ? (
-            <StatusPill tone="warning">Sync retried automatically</StatusPill>
-          ) : null}
-          <a
-            href="/business/ledger?tab=sales"
-            className="rounded border border-[var(--biz-border)] bg-[var(--biz-surface)] px-3 py-1.5 text-[12px] font-semibold text-[var(--biz-text)] transition-colors hover:border-[var(--biz-border-strong)] hover:bg-[var(--biz-hover)]"
+    <div
+      className="flex h-full flex-col overflow-hidden bg-[var(--biz-bg)]"
+      style={{
+        // Strip color from all biz-* tokens used inside the terminal
+        ["--biz-primary" as string]: "#ffffff",
+        ["--biz-primary-hover" as string]: "#e6e6e6",
+        ["--biz-primary-soft" as string]: "rgba(255,255,255,0.06)",
+        ["--biz-primary-soft-strong" as string]: "rgba(255,255,255,0.12)",
+        ["--biz-primary-border" as string]: "rgba(255,255,255,0.20)",
+        ["--biz-primary-foreground" as string]: "#000000",
+        ["--biz-automation" as string]: "#cfcfcf",
+        ["--biz-automation-soft" as string]: "rgba(255,255,255,0.06)",
+        ["--biz-automation-border" as string]: "rgba(255,255,255,0.18)",
+        ["--biz-warning" as string]: "#d6d6d6",
+        ["--biz-warning-soft" as string]: "rgba(255,255,255,0.06)",
+        ["--biz-warning-border" as string]: "rgba(255,255,255,0.16)",
+        ["--biz-danger" as string]: "#e8e8e8",
+        ["--biz-danger-soft" as string]: "rgba(255,255,255,0.08)",
+        ["--biz-danger-border" as string]: "rgba(255,255,255,0.20)",
+        ["--biz-profit" as string]: "#ffffff",
+        ["--biz-profit-soft" as string]: "rgba(255,255,255,0.06)",
+        ["--biz-info" as string]: "#c8c8c8",
+        ["--biz-info-soft" as string]: "rgba(255,255,255,0.05)",
+        ["--biz-info-border" as string]: "rgba(255,255,255,0.16)",
+        ["--biz-gold" as string]: "#ffffff",
+        ["--biz-gold-glow" as string]: "rgba(255,255,255,0.05)",
+        ["--biz-focus" as string]: "rgba(255,255,255,0.25)",
+      } as Record<string, string>}
+    >
+      {/* Slim top bar — filter pills + search + refresh */}
+      <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--biz-border)] bg-[var(--biz-surface)] px-3 py-2">
+        <div className="flex items-center gap-2">
+          <span
+            className="inline-flex h-5 w-5 items-center justify-center rounded-full"
+            style={{ background: "var(--biz-automation-soft, rgba(110,180,255,0.12))" }}
+            aria-hidden
           >
-            Open ledger sales
-          </a>
+            <span
+              className="h-1.5 w-1.5 rounded-full"
+              style={{ background: "var(--biz-automation)" }}
+            />
+          </span>
+          <h1 className="text-[13px] font-semibold tracking-tight text-[var(--biz-text-strong)]">
+            Sales Agent
+          </h1>
+          {syncRetriedAfterEmpty ? (
+            <StatusPill tone="warning">Sync retried</StatusPill>
+          ) : null}
         </div>
-      </header>
 
-      {/* Top stat row */}
-      <div className="grid shrink-0 grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
-        <MetricCard
-          label="Open conversations"
-          value={observations.openConversations.toString()}
-          hint="active in queue"
-        />
-        <MetricCard
-          label="Awaiting your reply"
-          value={observations.needsReply.toString()}
-          tone={observations.needsReply > 0 ? "warning" : "neutral"}
-          hint="buyer is waiting"
-        />
-        <MetricCard
-          label="Open offers"
-          value={observations.openOffers.toString()}
-          tone={observations.openOffers > 0 ? "primary" : "neutral"}
-          hint="negotiation active"
-        />
-        <MetricCard
-          label="Quiet over 72h"
-          value={observations.quietLong.toString()}
-          tone={observations.quietLong > 0 ? "danger" : "neutral"}
-          hint="at risk of going cold"
-        />
-        <MetricCard
-          label="Action value"
-          value={actionableValueDisplay}
-          tone={totalActionableValueCents > 0 ? "profit" : "muted"}
-          hint={
-            totalActionableValueCents > 0
-              ? "sum of open offers"
-              : "no open offers tracked"
-          }
-        />
-      </div>
-
-      {/* Briefing */}
-      <div className="shrink-0">
-        <AgentBriefing
-          observations={observations}
-          source={briefingSource}
-          loading={briefingLoading}
-          onRefresh={refreshThreadList}
-          refreshing={listRefreshing || briefingLoading}
-          greetingName={greetingName}
-        />
-      </div>
-
-      {/* Filter / search bar */}
-      <div className="shrink-0 rounded-md border border-[var(--biz-border)] bg-[var(--biz-surface)] px-2 py-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex flex-wrap items-center gap-1">
-            {FILTERS.map((tab) => {
-              const isActive = filter === tab.key;
-              const count = filterCounts[tab.key];
-              return (
-                <button
-                  key={tab.key}
-                  type="button"
-                  onClick={() => setFilter(tab.key)}
-                  className={`flex items-center gap-1.5 rounded px-2 py-1 text-[11px] font-semibold transition-colors ${
+        {/* Platform tabs */}
+        <div
+          className="flex items-center gap-0.5 rounded border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] p-0.5"
+          role="tablist"
+          aria-label="Messaging platform"
+        >
+          {PLATFORM_TABS.map((tab) => {
+            const isActive = platformTab === tab.key;
+            const count = platformCounts[tab.key];
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => setPlatformTab(tab.key)}
+                className={`flex items-center gap-1.5 rounded px-2 py-0.5 text-[11px] font-semibold transition-colors ${
+                  isActive
+                    ? "bg-[var(--biz-primary)] text-[var(--biz-primary-foreground)]"
+                    : "text-[var(--biz-muted-strong)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]"
+                }`}
+              >
+                <span>{tab.label}</span>
+                <span
+                  className={`biz-mono text-[10px] tabular-nums ${
                     isActive
-                      ? "bg-[var(--biz-primary)] text-[var(--biz-primary-foreground)]"
-                      : "text-[var(--biz-muted-strong)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]"
+                      ? "text-[var(--biz-primary-foreground)]/80"
+                      : "text-[var(--biz-faint)]"
                   }`}
                 >
-                  <span>{tab.label}</span>
-                  <span
-                    className={`biz-mono text-[10px] tabular-nums ${
-                      isActive
-                        ? "text-[var(--biz-primary-foreground)]/80"
-                        : "text-[var(--biz-faint)]"
-                    }`}
-                  >
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-          <div className="relative ml-auto min-w-[180px] flex-1 sm:max-w-[280px]">
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-1">
+          {FILTERS.map((tab) => {
+            const isActive = filter === tab.key;
+            const count = filterCounts[tab.key];
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setFilter(tab.key)}
+                className={`flex items-center gap-1.5 rounded px-2 py-1 text-[11px] font-semibold transition-colors ${
+                  isActive
+                    ? "bg-[var(--biz-primary)] text-[var(--biz-primary-foreground)]"
+                    : "text-[var(--biz-muted-strong)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]"
+                }`}
+              >
+                <span>{tab.label}</span>
+                <span
+                  className={`biz-mono text-[10px] tabular-nums ${
+                    isActive
+                      ? "text-[var(--biz-primary-foreground)]/80"
+                      : "text-[var(--biz-faint)]"
+                  }`}
+                >
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="relative ml-auto flex items-center gap-2">
+          <div className="relative w-[220px]">
             <svg
               className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--biz-muted)]"
               fill="none"
@@ -511,19 +539,34 @@ export default function SalesAgentTerminal({
             <input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search buyer, card, or message"
-              className="w-full rounded border border-[var(--biz-border)] bg-[var(--biz-bg)] py-1.5 pl-7 pr-2 text-[12px] text-[var(--biz-text)] placeholder-[var(--biz-muted)] focus:border-[var(--biz-primary-border)] focus:outline-none focus:ring-1 focus:ring-[var(--biz-focus)]"
+              placeholder="Search"
+              className="w-full rounded border border-[var(--biz-border)] bg-[var(--biz-bg)] py-1 pl-7 pr-2 text-[12px] text-[var(--biz-text)] placeholder-[var(--biz-muted)] focus:border-[var(--biz-primary-border)] focus:outline-none focus:ring-1 focus:ring-[var(--biz-focus)]"
             />
           </div>
+          <button
+            type="button"
+            onClick={refreshThreadList}
+            disabled={listRefreshing || briefingLoading}
+            className="rounded border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-2 py-1 text-[11px] font-semibold text-[var(--biz-text)] transition-colors hover:border-[var(--biz-border-strong)] hover:bg-[var(--biz-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+            title="Refresh feed"
+          >
+            {listRefreshing || briefingLoading ? "…" : "Refresh"}
+          </button>
+          <a
+            href="/business/ledger?tab=sales"
+            className="text-[11px] font-medium text-[var(--biz-muted)] hover:text-[var(--biz-text)]"
+          >
+            Ledger →
+          </a>
         </div>
-      </div>
+      </header>
 
-      {/* Main terminal layout */}
-      <div className="flex min-h-0 flex-1 overflow-hidden rounded-md border border-[var(--biz-border)] bg-[var(--biz-bg)]">
+      {/* Main two-pane layout: queue | conversation+agent */}
+      <div className="flex min-h-0 flex-1 overflow-hidden">
         <div className="flex h-full w-full">
           {/* Queue column */}
           <div
-            className={`h-full w-full border-r border-[var(--biz-border)] bg-[var(--biz-surface)] lg:w-[340px] lg:block ${
+            className={`h-full w-full border-r border-[var(--biz-border)] bg-[var(--biz-surface)] lg:w-[320px] lg:block ${
               mobileShowThread ? "hidden" : "block"
             }`}
           >
@@ -589,92 +632,42 @@ export default function SalesAgentTerminal({
                 </div>
               </div>
             ) : selectedThread ? (
-              <div className="flex h-full">
-                <div className="flex h-full min-w-0 flex-1 flex-col">
-                  <div className="border-b border-[var(--biz-border)] px-3 py-2 lg:hidden">
-                    <button
-                      type="button"
-                      onClick={() => setMobileShowThread(false)}
-                      className="flex items-center gap-1 text-[11px] font-medium text-[var(--biz-primary)]"
+              <div className="flex h-full min-w-0 flex-1 flex-col">
+                <div className="border-b border-[var(--biz-border)] px-3 py-2 lg:hidden">
+                  <button
+                    type="button"
+                    onClick={() => setMobileShowThread(false)}
+                    className="flex items-center gap-1 text-[11px] font-medium text-[var(--biz-primary)]"
+                  >
+                    <svg
+                      className="h-3.5 w-3.5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
                     >
-                      <svg
-                        className="h-3.5 w-3.5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M15 19l-7-7 7-7"
-                        />
-                      </svg>
-                      Back to queue
-                    </button>
-                  </div>
-                  <ConversationView
-                    thread={selectedThreadMeta ?? selectedThread}
-                    messages={messages}
-                    negotiation={negotiation}
-                    onGenerateReply={handleGenerateReply}
-                    draftResult={draftResult}
-                    replyLoading={replyLoading}
-                    replyError={replyError}
-                    onSendMessage={handleSendMessage}
-                    sendLoading={sendLoading}
-                    sendError={sendError}
-                    onUpdateThreadStatus={handleUpdateThreadStatus}
-                  />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M15 19l-7-7 7-7"
+                      />
+                    </svg>
+                    Back to queue
+                  </button>
                 </div>
-                <aside className="hidden h-full w-[280px] shrink-0 overflow-y-auto border-l border-[var(--biz-border)] bg-[var(--biz-surface)] xl:block">
-                  <div className="space-y-3 px-3 py-3">
-                    <PriorityRationalePanel
-                      thread={selectedThreadMeta ?? selectedThread}
-                    />
-                    <div className="rounded-md border border-[var(--biz-border)] bg-[var(--biz-surface-soft)]">
-                      <div className="border-b border-[var(--biz-border)] px-3 py-2">
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--biz-muted)] font-mono-num">
-                          Queue context
-                        </p>
-                      </div>
-                      <dl className="grid grid-cols-2 gap-x-2 gap-y-2 px-3 py-2 text-[11px]">
-                        <DataRow
-                          label="In queue"
-                          value={observations.openConversations.toString()}
-                        />
-                        <DataRow
-                          label="Needs you"
-                          value={observations.needsReply.toString()}
-                          tone={observations.needsReply > 0 ? "warning" : "neutral"}
-                        />
-                        <DataRow
-                          label="Open offers"
-                          value={observations.openOffers.toString()}
-                          tone={observations.openOffers > 0 ? "primary" : "neutral"}
-                        />
-                        <DataRow
-                          label="Stale 72h+"
-                          value={observations.quietLong.toString()}
-                          tone={observations.quietLong > 0 ? "danger" : "neutral"}
-                        />
-                      </dl>
-                    </div>
-                    <div className="rounded-md border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-3 py-2 text-[11px] text-[var(--biz-muted)]">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--biz-muted)] font-mono-num">
-                        Cadence
-                      </p>
-                      <p className="mt-1">
-                        Median response:{" "}
-                        <span className="biz-mono text-[var(--biz-text)]">
-                          {stats.avg_response_time_hours != null
-                            ? `${stats.avg_response_time_hours.toFixed(1)}h`
-                            : "—"}
-                        </span>
-                      </p>
-                    </div>
-                  </div>
-                </aside>
+                <ConversationView
+                  thread={selectedThreadMeta ?? selectedThread}
+                  messages={messages}
+                  negotiation={negotiation}
+                  onGenerateReply={handleGenerateReply}
+                  draftResult={draftResult}
+                  replyLoading={replyLoading}
+                  replyError={replyError}
+                  onSendMessage={handleSendMessage}
+                  sendLoading={sendLoading}
+                  sendError={sendError}
+                  onUpdateThreadStatus={handleUpdateThreadStatus}
+                />
               </div>
             ) : (
               <div className="flex h-full items-center justify-center bg-[var(--biz-bg)] px-6">
@@ -710,29 +703,3 @@ export default function SalesAgentTerminal({
   );
 }
 
-function DataRow({
-  label,
-  value,
-  tone = "neutral",
-}: {
-  label: string;
-  value: string;
-  tone?: "neutral" | "warning" | "primary" | "danger";
-}) {
-  const valueClass =
-    tone === "warning"
-      ? "text-[var(--biz-warning)]"
-      : tone === "primary"
-        ? "text-[var(--biz-primary)]"
-        : tone === "danger"
-          ? "text-[var(--biz-danger)]"
-          : "text-[var(--biz-text)]";
-  return (
-    <>
-      <dt className="text-[var(--biz-muted)]">{label}</dt>
-      <dd className={`biz-mono text-right text-[12px] font-semibold ${valueClass}`}>
-        {value}
-      </dd>
-    </>
-  );
-}

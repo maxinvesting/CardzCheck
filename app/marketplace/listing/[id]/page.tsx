@@ -3,6 +3,7 @@ import Link from "next/link";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import BuyButton from "./BuyButton";
+import MessageSellerButton from "./MessageSellerButton";
 
 export const dynamic = "force-dynamic";
 
@@ -215,8 +216,13 @@ export default async function ListingDetailPage({
                 you pay.
               </div>
 
-              <div className="px-5 py-4">
+              <div className="space-y-2 px-5 py-4">
                 <BuyButton
+                  listingId={listing.id}
+                  isLoggedIn={!!user}
+                  isOwnListing={!!user && user.id === listing.seller_id}
+                />
+                <MessageSellerButton
                   listingId={listing.id}
                   isLoggedIn={!!user}
                   isOwnListing={!!user && user.id === listing.seller_id}

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireBusinessOwnerContext } from "@/lib/business/context";
 import {
   getMessagingOverview,
+  type PlatformFilter,
 } from "@/lib/messaging/service";
 import { clearEbayMessagingCache, isEbayConnected } from "@/lib/messaging/adapters/ebay";
 import type { ThreadFilter } from "@/lib/messaging/types";
@@ -15,6 +16,8 @@ const VALID_FILTERS: ThreadFilter[] = [
   "resolved",
   "archived",
 ];
+
+const VALID_PLATFORMS: PlatformFilter[] = ["all", "ebay", "cardzcheck"];
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
@@ -40,16 +43,22 @@ export async function GET(req: NextRequest) {
   if (!VALID_FILTERS.includes(filter)) {
     return NextResponse.json({ error: "Invalid filter" }, { status: 400 });
   }
+  const platform = (searchParams.get("platform") ?? "all") as PlatformFilter;
+  if (!VALID_PLATFORMS.includes(platform)) {
+    return NextResponse.json({ error: "Invalid platform" }, { status: 400 });
+  }
 
   let [overview, ebayConnected] = await Promise.all([
-    getMessagingOverview(user.id, filter),
+    getMessagingOverview(user.id, filter, platform),
     isEbayConnected(user.id),
   ]);
 
   let retriedAfterEmpty = false;
-  if (ebayConnected && overview.stats.total_threads === 0 && overview.threads.length === 0) {
+  // Only retry the eBay cache when the eBay platform could have produced rows.
+  const ebayCouldContribute = platform === "all" || platform === "ebay";
+  if (ebayCouldContribute && ebayConnected && overview.stats.total_threads === 0 && overview.threads.length === 0) {
     clearEbayMessagingCache(user.id);
-    overview = await getMessagingOverview(user.id, filter);
+    overview = await getMessagingOverview(user.id, filter, platform);
     retriedAfterEmpty = true;
     console.info("[dbg:messages_api] retried_after_empty", {
       filter,
