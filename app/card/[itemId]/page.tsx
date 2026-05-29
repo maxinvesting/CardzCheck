@@ -394,6 +394,21 @@ export default function CardProfilePage() {
         title: item.title ?? title,
       })
     : buildEbaySoldUrl({ title: "sports trading card" });
+  const compareListingsUrl = useMemo(() => {
+    if (!item) return "/business/comps";
+    const params = new URLSearchParams();
+    if (item.player_name) params.set("player", item.player_name);
+    if (item.year) params.set("year", String(item.year));
+    if (item.set_name) params.set("set", item.set_name);
+    if (item.parallel_type) params.set("parallel_type", item.parallel_type);
+    if (item.card_number) params.set("card_number", String(item.card_number));
+    const grader = item.grading_company?.trim();
+    const grade = item.grade != null ? String(item.grade).trim() : "";
+    if (grader && grade) params.set("grade", `${grader} ${grade}`);
+    else if (grade) params.set("grade", grade);
+    const qs = params.toString();
+    return qs ? `/business/comps?${qs}` : "/business/comps";
+  }, [item]);
   const marketplaceLinks = useMemo(() => {
     const params = item
       ? {
@@ -1106,6 +1121,19 @@ export default function CardProfilePage() {
                     Edit Inventory
                   </button>
                 )}
+                <Link
+                  href={compareListingsUrl}
+                  className="inline-flex items-center justify-center h-[46px] px-4 text-sm font-semibold transition-colors hover:bg-[#1A1E24]"
+                  style={{
+                    borderRadius: 12,
+                    border: `1.5px solid ${palette.border}`,
+                    color: palette.text,
+                    background: palette.panelBg,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Compare Listings
+                </Link>
                 {isBusinessMode && (
                   <MicButton
                     label="Voice Actions"
