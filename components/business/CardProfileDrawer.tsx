@@ -105,6 +105,21 @@ function metaLine(item: ProfileLikeItem): string {
     .join(" · ");
 }
 
+function buildCompareListingsUrl(item: ProfileLikeItem): string {
+  const params = new URLSearchParams();
+  if (item.player_name) params.set("player", item.player_name);
+  if (item.year != null) params.set("year", String(item.year));
+  if (item.set_name) params.set("set", item.set_name);
+  if (item.parallel_type) params.set("parallel_type", item.parallel_type);
+  if (item.card_number) params.set("card_number", String(item.card_number));
+  const grader = item.grading_company?.trim();
+  const grade = item.grade != null ? String(item.grade).trim() : "";
+  if (grader && grade) params.set("grade", `${grader} ${grade}`);
+  else if (grade) params.set("grade", grade);
+  const qs = params.toString();
+  return qs ? `/business/comps?${qs}` : "/business/comps";
+}
+
 function pickEstimatedCents(item: ProfileLikeItem): number | null {
   if (typeof item.last_known_price_cents === "number") return item.last_known_price_cents;
   if (typeof item.estimated_cmv === "number") return Math.round(item.estimated_cmv * 100);
@@ -186,6 +201,15 @@ export default function CardProfileDrawer({
     return cmv - cost;
   }, [item]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const image: TrustedCardImage | null | undefined =
@@ -197,28 +221,33 @@ export default function CardProfileDrawer({
         : null);
 
   return (
-    <>
-      <div className="fixed inset-0 z-40 bg-black/60" onClick={onClose} />
-      <aside
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
         role="dialog"
         aria-label="Card profile"
-        className="fixed right-0 top-0 z-50 flex h-full w-full max-w-xl flex-col overflow-hidden border-l border-[#24282D] bg-[#0F1317] text-[#E6E8EB] shadow-2xl"
+        aria-modal="true"
+        className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#111827] text-[#E6E8EB] shadow-2xl"
       >
         {/* Header */}
-        <header className="sticky top-0 z-10 flex items-center justify-between border-b border-[#24282D] bg-[#0B0D0F]/95 px-4 py-3 backdrop-blur">
+        <header className="flex items-center justify-between border-b border-gray-800 px-6 py-4">
           <div className="min-w-0">
-            <div className="text-[10px] font-medium uppercase tracking-[0.12em] text-[#77808C]">
+            <div className="text-[10px] font-medium uppercase tracking-[0.12em] text-gray-500">
               Card profile
             </div>
-            <h2 className="mt-0.5 truncate text-sm font-semibold text-[#E6E8EB]">
+            <h2 className="mt-0.5 truncate text-lg font-bold text-white">
               {item?.player_name ?? (loading ? "Loading…" : "Card")}
             </h2>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
             {item ? (
               <Link
                 href={`/card/${item.id}?from=${mode}`}
-                className="border border-[#343941] px-2 py-1 text-[11px] font-medium text-[#B8C0CC] hover:border-[#5A626E] hover:text-[#E6E8EB]"
+                className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-1.5 text-xs font-medium text-gray-300 transition-colors hover:bg-gray-700 hover:text-white"
                 title="Open full profile in a new tab"
                 target="_blank"
                 rel="noopener noreferrer"
@@ -229,10 +258,10 @@ export default function CardProfileDrawer({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-md p-1 text-[#77808C] hover:bg-[#1E2227] hover:text-[#E6E8EB]"
+              className="text-gray-500 hover:text-gray-300"
               aria-label="Close"
             >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
@@ -242,7 +271,7 @@ export default function CardProfileDrawer({
         {/* Body */}
         <div className="flex-1 overflow-y-auto">
           {error ? (
-            <div className="m-3 rounded-md border border-red-800/50 bg-red-950/40 p-3 text-xs text-red-200">
+            <div className="m-4 rounded-lg border border-red-800 bg-red-900/30 p-3 text-xs text-red-300">
               {error}
             </div>
           ) : null}
@@ -250,8 +279,8 @@ export default function CardProfileDrawer({
           {item ? (
             <>
               {/* Hero: image + summary */}
-              <section className="flex gap-3 border-b border-[#24282D] p-4">
-                <div className="h-44 w-32 flex-shrink-0 overflow-hidden border border-[#24282D] bg-[#0B0D0F]">
+              <section className="flex gap-4 border-b border-gray-800 p-6">
+                <div className="h-48 w-36 flex-shrink-0 overflow-hidden rounded-lg border border-gray-800 bg-gray-900">
                   <CardImage
                     image={image}
                     alt={item.player_name ?? "Card"}
@@ -261,20 +290,20 @@ export default function CardProfileDrawer({
                   />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-[11px] uppercase tracking-wide text-[#77808C]">
+                  <div className="text-[11px] uppercase tracking-wide text-gray-500">
                     {gradeLabel(item)}
                     {item.cert_number || item.psa_cert_number ? (
-                      <span className="ml-2 text-[#5A626E]">
+                      <span className="ml-2 text-gray-600">
                         Cert {item.cert_number ?? item.psa_cert_number}
                       </span>
                     ) : null}
                   </div>
-                  <div className="mt-1 text-[15px] font-semibold leading-tight text-[#E6E8EB]">
+                  <div className="mt-1 text-base font-semibold leading-tight text-white">
                     {item.player_name ?? "—"}
                   </div>
-                  <div className="mt-0.5 text-[11px] text-[#B8C0CC]">{metaLine(item) || "—"}</div>
+                  <div className="mt-0.5 text-xs text-gray-400">{metaLine(item) || "—"}</div>
 
-                  <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px]">
+                  <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
                     <Stat label="Cost basis" value={fmtCents(item.cost_basis_total_cents)} />
                     <Stat
                       label="CMV"
@@ -321,12 +350,19 @@ export default function CardProfileDrawer({
               </section>
 
               {/* Actions */}
-              <section className="flex flex-wrap gap-1.5 border-b border-[#24282D] px-4 py-3">
+              <section className="flex flex-wrap gap-2 border-b border-gray-800 px-6 py-4">
                 {onEdit ? (
                   <ActionButton onClick={() => onEdit(item as BusinessInventoryItem)} primary>
                     Edit
                   </ActionButton>
                 ) : null}
+                <Link
+                  href={buildCompareListingsUrl(item)}
+                  onClick={onClose}
+                  className="inline-flex items-center rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm font-medium text-gray-100 transition hover:bg-gray-800"
+                >
+                  Compare Listings
+                </Link>
                 {onMarkSold && item.status !== "sold" ? (
                   <ActionButton onClick={() => onMarkSold(item as BusinessInventoryItem)}>
                     Mark sold
@@ -358,33 +394,33 @@ export default function CardProfileDrawer({
 
               {/* Comps across platforms */}
               {marketplaceLinks.length > 0 ? (
-                <section className="border-b border-[#24282D] px-4 py-3">
+                <section className="border-b border-gray-800 px-6 py-4">
                   <div className="flex items-baseline justify-between">
-                    <div className="text-[10px] font-semibold uppercase tracking-wide text-[#77808C]">
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">
                       Comps across platforms
                     </div>
-                    <div className="text-[10px] text-[#5A626E]">Opens in new tab</div>
+                    <div className="text-[10px] text-gray-600">Opens in new tab</div>
                   </div>
-                  <div className="mt-2 grid grid-cols-2 gap-1.5">
+                  <div className="mt-2 grid grid-cols-2 gap-2">
                     {marketplaceLinks.map((link) => (
                       <a
                         key={link.id}
                         href={link.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="group flex items-center justify-between gap-2 border border-[#24282D] bg-[#0B0D0F] px-2.5 py-1.5 hover:border-[#5A626E] hover:bg-[#13171B]"
+                        className="group flex items-center justify-between gap-2 rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 transition-colors hover:border-gray-700 hover:bg-gray-800"
                         style={{ borderLeft: `2px solid ${link.accentColor}` }}
                       >
                         <div className="min-w-0">
-                          <div className="truncate text-[12px] font-semibold text-[#E6E8EB]">
+                          <div className="truncate text-xs font-semibold text-white">
                             {link.name}
                           </div>
-                          <div className="truncate text-[10px] text-[#77808C]">
+                          <div className="truncate text-[10px] text-gray-500">
                             {link.tagline}
                           </div>
                         </div>
                         <span
-                          className="shrink-0 border border-[#24282D] px-1 py-[1px] text-[8px] font-semibold tracking-wide text-[#77808C] group-hover:text-[#B8C0CC]"
+                          className="shrink-0 rounded border border-gray-700 px-1.5 py-0.5 text-[8px] font-semibold tracking-wide text-gray-500 group-hover:text-gray-300"
                         >
                           {MARKETPLACE_TYPE_LABELS[link.type]}
                         </span>
@@ -396,11 +432,11 @@ export default function CardProfileDrawer({
 
               {/* Notes */}
               {item.notes ? (
-                <section className="border-b border-[#24282D] px-4 py-3">
-                  <div className="text-[10px] font-semibold uppercase tracking-wide text-[#77808C]">
+                <section className="border-b border-gray-800 px-6 py-4">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">
                     Notes
                   </div>
-                  <p className="mt-1 whitespace-pre-wrap text-[12px] text-[#B8C0CC]">
+                  <p className="mt-1 whitespace-pre-wrap text-xs text-gray-400">
                     {item.notes}
                   </p>
                 </section>
@@ -408,34 +444,34 @@ export default function CardProfileDrawer({
 
               {/* Sales */}
               {sales.length > 0 ? (
-                <section className="border-b border-[#24282D] px-4 py-3">
-                  <div className="text-[10px] font-semibold uppercase tracking-wide text-[#77808C]">
+                <section className="border-b border-gray-800 px-6 py-4">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">
                     Recent sales ({sales.length})
                   </div>
-                  <ul className="mt-2 divide-y divide-[#24282D]">
+                  <ul className="mt-2 divide-y divide-gray-800">
                     {sales.slice(0, 5).map((sale, idx) => (
                       <li
                         key={sale.id ?? idx}
-                        className="flex items-center justify-between py-1.5 text-[11px]"
+                        className="flex items-center justify-between py-2 text-xs"
                       >
-                        <div className="text-[#B8C0CC]">
+                        <div className="text-gray-400">
                           {fmtDate(sale.sold_at ?? sale.sale_date)}
                           {sale.channel ? (
-                            <span className="ml-2 text-[#77808C]">· {sale.channel}</span>
+                            <span className="ml-2 text-gray-500">· {sale.channel}</span>
                           ) : null}
                         </div>
                         <div className="text-right tabular-nums">
-                          <div className="text-[#E6E8EB]">
+                          <div className="text-white">
                             {fmtCents(sale.sold_price_cents ?? sale.sale_price_cents)}
                           </div>
                           {sale.profit_cents != null ? (
                             <div
                               className={
                                 sale.profit_cents > 0
-                                  ? "text-[#20B26B]"
+                                  ? "text-emerald-400"
                                   : sale.profit_cents < 0
-                                    ? "text-[#E05C5C]"
-                                    : "text-[#77808C]"
+                                    ? "text-red-400"
+                                    : "text-gray-500"
                               }
                             >
                               {fmtCents(sale.profit_cents)}
@@ -449,7 +485,7 @@ export default function CardProfileDrawer({
               ) : null}
 
               {/* Metadata footer */}
-              <section className="px-4 py-3 text-[10px] text-[#5A626E]">
+              <section className="px-6 py-4 text-[10px] text-gray-600">
                 {item.acquisition_date ? (
                   <div>Acquired {fmtDate(item.acquisition_date)}</div>
                 ) : null}
@@ -458,13 +494,13 @@ export default function CardProfileDrawer({
               </section>
             </>
           ) : loading ? (
-            <div className="flex items-center justify-center p-10 text-[12px] text-[#77808C]">
+            <div className="flex items-center justify-center p-10 text-xs text-gray-500">
               Loading card…
             </div>
           ) : null}
         </div>
-      </aside>
-    </>
+      </div>
+    </div>
   );
 }
 
@@ -479,13 +515,13 @@ function Stat({
 }) {
   const valueClass =
     tone === "positive"
-      ? "text-[#20B26B]"
+      ? "text-emerald-400"
       : tone === "negative"
-        ? "text-[#E05C5C]"
-        : "text-[#E6E8EB]";
+        ? "text-red-400"
+        : "text-white";
   return (
     <div className="flex items-center justify-between gap-2">
-      <dt className="text-[#77808C]">{label}</dt>
+      <dt className="text-gray-500">{label}</dt>
       <dd className={`tabular-nums ${valueClass}`}>{value}</dd>
     </div>
   );
@@ -542,7 +578,7 @@ function EditablePriceStat({
 
   return (
     <div className="flex items-center justify-between gap-2">
-      <dt className="text-[#77808C]">{label}</dt>
+      <dt className="text-gray-500">{label}</dt>
       <dd className="tabular-nums">
         {editing ? (
           <input
@@ -561,7 +597,7 @@ function EditablePriceStat({
                 setEditing(false);
               }
             }}
-            className="w-20 border border-[#343941] bg-[#0B0D0F] px-1 py-0.5 text-right text-[11px] text-[#E6E8EB] focus:border-[#5A626E] focus:outline-none"
+            className="w-20 rounded-md border border-gray-700 bg-gray-800 px-2 py-0.5 text-right text-xs text-white focus:border-emerald-500 focus:outline-none"
             disabled={saving}
           />
         ) : (
@@ -569,7 +605,7 @@ function EditablePriceStat({
             type="button"
             onClick={startEdit}
             disabled={disabled}
-            className={`text-[#E6E8EB] ${disabled ? "" : "cursor-pointer hover:text-[#20B26B]"}`}
+            className={`text-white ${disabled ? "" : "cursor-pointer hover:text-emerald-400"}`}
             title={disabled ? undefined : "Click to edit"}
           >
             {fmtCents(cents)}
@@ -591,13 +627,14 @@ function ActionButton({
   primary?: boolean;
   tone?: "danger";
 }) {
-  let className = "border px-2.5 py-1 text-[11px] font-medium transition-colors ";
+  let className =
+    "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ";
   if (primary) {
-    className += "border-[#20B26B] bg-[#20B26B] text-[#07100B] hover:bg-[#33C47C]";
+    className += "bg-emerald-600 text-white hover:bg-emerald-700";
   } else if (tone === "danger") {
-    className += "border-[#5C2228] bg-[#1A0F11] text-[#E05C5C] hover:bg-[#2A1518]";
+    className += "border border-red-800 bg-red-900/30 text-red-300 hover:bg-red-900/50";
   } else {
-    className += "border-[#343941] text-[#B8C0CC] hover:border-[#5A626E] hover:text-[#E6E8EB]";
+    className += "border border-gray-700 bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white";
   }
   return (
     <button type="button" onClick={onClick} className={className}>

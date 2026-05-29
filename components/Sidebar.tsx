@@ -223,15 +223,7 @@ function BUSINESS_NAV_ITEMS(): NavItem[] {
         { name: "Sales Agent", href: "/business/sales-agent", icon: <SalesIcon /> },
       ],
     },
-    {
-      name: "Analytics",
-      href: "/business/comps",
-      icon: <ChartIcon />,
-      children: [
-        { name: "Compare Listings", href: "/business/comps", icon: <ChartIcon /> },
-        { name: "Grade Engine", href: "/business/grade-hub", icon: <BadgeIcon />, badge: "dot" },
-      ],
-    },
+    { name: "Grade Engine", href: "/business/grade-hub", icon: <BadgeIcon />, badge: "dot" },
     { name: "Marketplace", href: "/marketplace", icon: <ShopIcon /> },
     {
       name: "Business",
@@ -472,11 +464,6 @@ export default function Sidebar() {
               CardzCheck
             </span>
           </div>
-          {isBusinessWorkspace && (
-            <span className="rounded-sm border border-[color:var(--biz-border-strong)] bg-[color:var(--biz-surface-soft)] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em] text-[color:var(--biz-muted-strong)]">
-              Biz
-            </span>
-          )}
         </Link>
 
         {isBusinessWorkspace ? (
