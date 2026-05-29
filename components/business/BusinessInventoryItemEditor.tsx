@@ -33,7 +33,7 @@ interface Props {
 }
 
 const STATUS_OPTIONS = ["unlisted", "listed", "pending_sale", "sold", "returned", "traded"] as const;
-const CHANNEL_OPTIONS = ["ebay", "whatnot", "instagram", "show", "local", "other"] as const;
+const CHANNEL_OPTIONS = ["ebay", "whatnot", "instagram", "show", "local", "other", "veriswap"] as const;
 const ACQ_OPTIONS = ["buy", "trade", "rip", "consignment", "other"] as const;
 
 function getDaysHeld(acquisitionDate: string | null | undefined): number | null {

@@ -33,6 +33,7 @@ const SALES_CHANNELS: VoiceSalesChannel[] = [
   "show",
   "local",
   "other",
+  "veriswap",
 ];
 
 function coerceSalesChannel(value: string | null | undefined): VoiceSalesChannel {

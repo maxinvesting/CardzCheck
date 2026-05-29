@@ -4,7 +4,8 @@ export type VoiceSalesChannel =
   | "instagram"
   | "show"
   | "local"
-  | "other";
+  | "other"
+  | "veriswap";
 
 export type InventoryVoiceCommand =
   | {
@@ -179,6 +180,7 @@ export function parseVoiceSalesChannel(transcript: string): VoiceSalesChannel | 
   if (/\binstagram\b|\big\b/.test(normalized)) return "instagram";
   if (/\b(card\s+)?show\b/.test(normalized)) return "show";
   if (/\blocal\b|\bin person\b|\bcash\b/.test(normalized)) return "local";
+  if (/\bveriswap\b/.test(normalized)) return "veriswap";
   if (/\bother\b/.test(normalized)) return "other";
   return null;
 }

@@ -101,6 +101,7 @@ const CHANNEL_LABELS: Record<string, string> = {
   show: "Show",
   local: "Local",
   other: "Other",
+  veriswap: "Veriswap",
 };
 
 const secondaryActionClass =

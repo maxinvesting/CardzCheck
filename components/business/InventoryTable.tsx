@@ -111,7 +111,7 @@ interface Props {
 
 const STATUS_OPTIONS = ["unlisted", "listed", "pending_sale", "sold", "returned"] as const;
 const ACTIVE_STATUS_OPTIONS = ["unlisted", "listed", "pending_sale"] as const;
-const CHANNEL_OPTIONS = ["ebay", "whatnot", "instagram", "show", "local", "other"] as const;
+const CHANNEL_OPTIONS = ["ebay", "whatnot", "instagram", "show", "local", "other", "veriswap"] as const;
 const CONDITION_OPTIONS = ["raw", "graded"] as const;
 const VIRTUALIZE_THRESHOLD = 200;
 

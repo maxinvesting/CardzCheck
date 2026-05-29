@@ -166,6 +166,7 @@ const SALES_CHANNELS: VoiceSalesChannel[] = [
   "show",
   "local",
   "other",
+  "veriswap",
 ];
 
 function coerceSalesChannel(value: string | null | undefined): VoiceSalesChannel {
@@ -1529,6 +1530,7 @@ export default function CardProfilePage() {
                   <option value="show">Show</option>
                   <option value="local">Local</option>
                   <option value="other">Other</option>
+                  <option value="veriswap">Veriswap</option>
                 </select>
               </div>
               <div>

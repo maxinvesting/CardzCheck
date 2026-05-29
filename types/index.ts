@@ -171,7 +171,7 @@ export interface BusinessInventoryItem {
   cert_image_status?: CertImageStatus | null;
   cert_image_last_error?: string | null;
   location: string | null;
-  channel: "ebay" | "whatnot" | "instagram" | "show" | "local" | "other";
+  channel: "ebay" | "whatnot" | "instagram" | "show" | "local" | "other" | "veriswap";
   status: "unlisted" | "listed" | "pending_sale" | "sold" | "returned" | "traded";
   list_price_cents: number | null;
   current_market_value_cents: number | null;
@@ -207,7 +207,7 @@ export interface BusinessSale {
   business_id: string;
   business_account_id: string;
   inventory_item_id: string | null;
-  channel: "ebay" | "whatnot" | "instagram" | "show" | "local" | "other";
+  channel: "ebay" | "whatnot" | "instagram" | "show" | "local" | "other" | "veriswap";
   sold_at: string;
   sold_price_cents: number;
   platform_fees_cents: number;
@@ -306,7 +306,7 @@ export interface CollectionItem {
   shipping_cents?: number | null;
   fees_paid_cents?: number | null;
   condition_status?: "raw" | "graded" | null;
-  channel?: "ebay" | "whatnot" | "instagram" | "show" | "local" | "other" | null;
+  channel?: "ebay" | "whatnot" | "instagram" | "show" | "local" | "other" | "veriswap" | null;
   status?: "unlisted" | "listed" | "pending_sale" | "sold" | "returned" | "traded" | null;
   list_price_cents?: number | null;
   current_market_value_cents?: number | null;
