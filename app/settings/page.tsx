@@ -477,7 +477,7 @@ function SettingsContent() {
   const businessSectionClass =
     "rounded-2xl border border-[var(--biz-border)] bg-[var(--biz-surface)] p-6 shadow-[var(--biz-shadow-sm)]";
   const businessInputClass =
-    "w-full rounded-lg border border-[var(--biz-border)] bg-white px-4 py-2 text-[var(--biz-text)] placeholder:text-[var(--biz-muted)] focus:border-[var(--biz-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--biz-focus)]";
+    "w-full rounded-lg border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-4 py-2 text-[var(--biz-text)] placeholder:text-[var(--biz-muted)] focus:border-[var(--biz-primary-border)] focus:outline-none focus:ring-2 focus:ring-[var(--biz-focus)]";
   const businessPrimaryButtonClass =
     "rounded-lg px-4 py-2 font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 bg-[var(--biz-primary)] text-[var(--biz-primary-foreground)] hover:bg-[var(--biz-primary-hover)]";
   const businessSecondaryButtonClass =
@@ -662,7 +662,7 @@ function SettingsContent() {
                       className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium border transition-colors disabled:opacity-50 ${
                         ebayFeeRate === "standard"
                           ? "border-[var(--biz-primary)] bg-[var(--biz-primary)] text-[var(--biz-primary-foreground)]"
-                          : "border-[var(--biz-border)] bg-white text-[var(--biz-text)] hover:bg-[var(--biz-hover)]"
+                          : "border-[var(--biz-border)] bg-[var(--biz-surface-soft)] text-[var(--biz-text)] hover:bg-[var(--biz-hover)]"
                       }`}
                     >
                       Standard — 13%
@@ -673,7 +673,7 @@ function SettingsContent() {
                       className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium border transition-colors disabled:opacity-50 ${
                         ebayFeeRate === "top_rated_plus"
                           ? "border-[var(--biz-primary)] bg-[var(--biz-primary)] text-[var(--biz-primary-foreground)]"
-                          : "border-[var(--biz-border)] bg-white text-[var(--biz-text)] hover:bg-[var(--biz-hover)]"
+                          : "border-[var(--biz-border)] bg-[var(--biz-surface-soft)] text-[var(--biz-text)] hover:bg-[var(--biz-hover)]"
                       }`}
                     >
                       Top Rated Plus — 12%
