@@ -240,14 +240,14 @@ const QUICK_LINKS = [
 function AccordionItem({ q, a }: { q: string; a: string }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="border-b border-gray-100 dark:border-gray-800 last:border-0">
+    <div className="border-b border-[var(--biz-border)] last:border-0">
       <button
         onClick={() => setOpen(!open)}
         className="w-full flex items-start justify-between gap-4 py-4 text-left"
       >
-        <span className="text-sm font-medium text-gray-900 dark:text-white">{q}</span>
+        <span className="text-sm font-medium text-[var(--biz-text)]">{q}</span>
         <svg
-          className={`w-4 h-4 flex-shrink-0 mt-0.5 text-gray-400 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+          className={`w-4 h-4 flex-shrink-0 mt-0.5 text-[var(--biz-muted)] transition-transform duration-200 ${open ? "rotate-180" : ""}`}
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -256,20 +256,17 @@ function AccordionItem({ q, a }: { q: string; a: string }) {
         </svg>
       </button>
       {open && (
-        <p className="pb-4 text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{a}</p>
+        <p className="pb-4 text-sm text-[var(--biz-muted)] leading-relaxed">{a}</p>
       )}
     </div>
   );
 }
 
-const colorMap: Record<string, string> = {
-  blue:    "bg-blue-50 dark:bg-blue-900/20 border-blue-100 dark:border-blue-800/50 text-blue-600 dark:text-blue-400",
-  purple:  "bg-purple-50 dark:bg-purple-900/20 border-purple-100 dark:border-purple-800/50 text-purple-600 dark:text-purple-400",
-  emerald: "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-100 dark:border-emerald-800/50 text-emerald-600 dark:text-emerald-400",
-  amber:   "bg-amber-50 dark:bg-amber-900/20 border-amber-100 dark:border-amber-800/50 text-amber-600 dark:text-amber-400",
-  rose:    "bg-rose-50 dark:bg-rose-900/20 border-rose-100 dark:border-rose-800/50 text-rose-600 dark:text-rose-400",
-  cyan:    "bg-cyan-50 dark:bg-cyan-900/20 border-cyan-100 dark:border-cyan-800/50 text-cyan-600 dark:text-cyan-400",
-};
+// Unified subtle card styling so quick links match the stark biz aesthetic
+// instead of competing saturated colors. We keep the color key on each link
+// for future variants but render them all with biz surface tokens.
+const QUICK_LINK_CLASS =
+  "bg-[var(--biz-surface)] border-[var(--biz-border)] text-[var(--biz-text)] hover:bg-[var(--biz-hover)]";
 
 export default function HelpPage() {
   const [search, setSearch] = useState("");
@@ -289,10 +286,10 @@ export default function HelpPage() {
       <main className="max-w-3xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+          <h1 className="text-2xl font-bold text-[var(--biz-text)] mb-2">
             Help &amp; FAQ
           </h1>
-          <p className="text-gray-500 dark:text-gray-400">
+          <p className="text-[var(--biz-muted)]">
             Everything you need to know about CardzCheck — from searching cards to running your business.
           </p>
         </div>
@@ -300,7 +297,7 @@ export default function HelpPage() {
         {/* Search */}
         <div className="relative mb-8">
           <svg
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
+            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--biz-muted)]"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -312,12 +309,12 @@ export default function HelpPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search help articles…"
-            className="w-full pl-10 pr-4 py-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full pl-10 pr-4 py-3 bg-[var(--biz-surface-soft)] border border-[var(--biz-border)] rounded-xl text-[var(--biz-text)] placeholder-[var(--biz-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--biz-focus)] focus:border-[var(--biz-primary-border)]"
           />
           {search && (
             <button
               onClick={() => setSearch("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--biz-muted)] hover:text-[var(--biz-text)]"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -329,7 +326,7 @@ export default function HelpPage() {
         {/* Quick Links (hidden while searching) */}
         {!search && (
           <div className="mb-8">
-            <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">
+            <h2 className="text-sm font-semibold text-[var(--biz-muted)] uppercase tracking-wide mb-3">
               Jump to a feature
             </h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -337,10 +334,10 @@ export default function HelpPage() {
                 <Link
                   key={link.href}
                   href={link.href}
-                  className={`flex flex-col gap-1 p-4 rounded-xl border transition-opacity hover:opacity-80 ${colorMap[link.color]}`}
+                  className={`flex flex-col gap-1 p-4 rounded-xl border transition-colors ${QUICK_LINK_CLASS}`}
                 >
                   <span className="text-sm font-semibold">{link.label}</span>
-                  <span className="text-xs opacity-75">{link.desc}</span>
+                  <span className="text-xs text-[var(--biz-muted)]">{link.desc}</span>
                 </Link>
               ))}
             </div>
@@ -349,13 +346,13 @@ export default function HelpPage() {
 
         {/* FAQ Sections */}
         {filteredSections.length === 0 ? (
-          <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+          <div className="text-center py-12 text-[var(--biz-muted)]">
             <svg className="w-10 h-10 mx-auto mb-3 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <p className="font-medium">No results for &ldquo;{search}&rdquo;</p>
             <p className="text-sm mt-1">Try different keywords or browse the sections below.</p>
-            <button onClick={() => setSearch("")} className="mt-3 text-blue-500 hover:text-blue-400 text-sm font-medium">
+            <button onClick={() => setSearch("")} className="mt-3 text-[var(--biz-text)] hover:opacity-80 text-sm font-medium underline">
               Clear search
             </button>
           </div>
@@ -365,11 +362,11 @@ export default function HelpPage() {
               <div
                 key={section.id}
                 id={section.id}
-                className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6"
+                className="bg-[var(--biz-surface)] border border-[var(--biz-border)] rounded-xl p-6"
               >
                 <div className="flex items-center gap-2 mb-4">
-                  <span className="text-blue-500 dark:text-blue-400">{section.icon}</span>
-                  <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+                  <span className="text-[var(--biz-text)]">{section.icon}</span>
+                  <h2 className="text-base font-semibold text-[var(--biz-text)]">
                     {section.title}
                   </h2>
                 </div>
@@ -384,17 +381,17 @@ export default function HelpPage() {
         )}
 
         {/* Contact / Support */}
-        <div className="mt-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6">
-          <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-2">
+        <div className="mt-6 bg-[var(--biz-surface)] border border-[var(--biz-border)] rounded-xl p-6">
+          <h2 className="text-base font-semibold text-[var(--biz-text)] mb-2">
             Still need help?
           </h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+          <p className="text-sm text-[var(--biz-muted)] mb-4">
             Can&apos;t find what you&apos;re looking for? Our team is happy to help with any questions not covered here.
           </p>
           <div className="flex flex-col sm:flex-row gap-3">
             <a
               href="mailto:support@cardzcheck.com"
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[var(--biz-primary)] hover:bg-[var(--biz-primary-hover)] text-[var(--biz-primary-foreground)] text-sm font-medium rounded-lg transition-colors"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
@@ -404,13 +401,13 @@ export default function HelpPage() {
             <div className="flex gap-3">
               <Link
                 href="/terms"
-                className="inline-flex items-center justify-center px-4 py-2.5 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                className="inline-flex items-center justify-center px-4 py-2.5 border border-[var(--biz-border)] text-[var(--biz-text)] text-sm font-medium rounded-lg hover:bg-[var(--biz-hover)] transition-colors"
               >
                 Terms of Service
               </Link>
               <Link
                 href="/privacy"
-                className="inline-flex items-center justify-center px-4 py-2.5 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                className="inline-flex items-center justify-center px-4 py-2.5 border border-[var(--biz-border)] text-[var(--biz-text)] text-sm font-medium rounded-lg hover:bg-[var(--biz-hover)] transition-colors"
               >
                 Privacy Policy
               </Link>
