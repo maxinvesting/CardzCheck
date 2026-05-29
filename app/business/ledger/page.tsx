@@ -527,6 +527,13 @@ export default function LedgerPage() {
               ) : null}
               <button
                 type="button"
+                onClick={() => setShowStandaloneTrade(true)}
+                className="border border-[#343941] px-3 py-1.5 text-[12px] font-medium text-[#B8C0CC] transition-colors hover:border-[#5A626E] hover:text-[#E6E8EB]"
+              >
+                Trade
+              </button>
+              <button
+                type="button"
                 onClick={() => setShowAddCardModal(true)}
                 className="border border-[#20B26B] bg-[#20B26B] px-3 py-1.5 text-[12px] font-semibold text-[#07100B] transition-colors hover:bg-[#33C47C]"
               >
@@ -548,6 +555,16 @@ export default function LedgerPage() {
             </div>
           ) : (
             <section className="min-w-0 flex-1 px-4 py-4">
+              {selectedRowIds.size > 0 && (
+                <div className="mb-3">
+                  <LedgerBulkActionsBar
+                    selectedCount={selectedRowIds.size}
+                    isWorking={isBulkWorking}
+                    onClear={clearSelection}
+                    onApply={handleBulkAction}
+                  />
+                </div>
+              )}
               <LedgerTable
                 rows={ledgerRows}
                 selectedRowId={selectedLedgerItemId}

@@ -5,6 +5,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useDeferredValue,
 } from "react";
 import type {
@@ -17,6 +18,7 @@ import type {
   MarketplaceReplyDraftResult,
   MarketplaceReplyAction,
 } from "@/lib/messaging/reply-drafts";
+import { classifyThreadFromPreview } from "@/lib/messaging/reply-drafts";
 import {
   buildPriorityRationale,
   isClosedSalesThread,
@@ -24,6 +26,7 @@ import {
 } from "./salesDealDesk";
 import ConversationView from "./ConversationView";
 import ConversationRow from "./ConversationRow";
+import BatchReviewModal from "./BatchReviewModal";
 import StatusPill from "@/components/business/ui/StatusPill";
 
 interface Props {
@@ -41,21 +44,12 @@ interface ThreadCollectionResponse {
   };
 }
 
-type TerminalFilter =
-  | "all"
-  | "needs_action"
-  | "offers"
-  | "stale"
-  | "awaiting_buyer"
-  | "resolved";
+type TerminalFilter = "needs_you" | "waiting" | "all";
 
 const FILTERS: { key: TerminalFilter; label: string }[] = [
+  { key: "needs_you", label: "Needs you" },
+  { key: "waiting", label: "Waiting" },
   { key: "all", label: "All" },
-  { key: "needs_action", label: "Needs action" },
-  { key: "offers", label: "Offers" },
-  { key: "stale", label: "Stale" },
-  { key: "awaiting_buyer", label: "Awaiting buyer" },
-  { key: "resolved", label: "Resolved" },
 ];
 
 type PlatformTab = "ebay" | "cardzcheck";
@@ -68,22 +62,21 @@ const PLATFORM_TABS: { key: PlatformTab; label: string }[] = [
 function applyTerminalFilter(
   thread: MessageThread,
   filter: TerminalFilter,
-  now: number
+  now: number,
+  autoResolvedIds: Set<string>
 ): boolean {
+  const isAutoResolved = autoResolvedIds.has(thread.id);
   switch (filter) {
-    case "needs_action":
-      return thread.status === "needs_response" || thread.unread_count > 0;
-    case "offers":
+    case "needs_you":
+      if (isAutoResolved) return false;
       return (
-        thread.category === "offer" ||
-        typeof thread.offer_amount_cents === "number"
+        thread.status === "needs_response" ||
+        thread.unread_count > 0 ||
+        (isStaleSalesThread(thread, now) && !isClosedSalesThread(thread))
       );
-    case "stale":
-      return isStaleSalesThread(thread, now) && !isClosedSalesThread(thread);
-    case "awaiting_buyer":
+    case "waiting":
+      if (isAutoResolved) return false;
       return thread.status === "awaiting_buyer";
-    case "resolved":
-      return thread.status === "resolved" || thread.status === "archived";
     case "all":
     default:
       return true;
@@ -104,6 +97,15 @@ function priorityRank(thread: MessageThread, now: number): number {
   }
 }
 
+function dollarImpactCents(thread: MessageThread): number {
+  return (
+    thread.offer_amount_cents ??
+    thread.suggested_counter_cents ??
+    thread.listing_price_cents ??
+    0
+  );
+}
+
 export default function SalesAgentTerminal({
   initialStats,
   initialThreads,
@@ -115,7 +117,7 @@ export default function SalesAgentTerminal({
   const [, setStats] = useState<MessagingStats>(initialStats);
   const [allThreads, setAllThreads] = useState<MessageThread[]>(initialThreads);
   const [platformTab, setPlatformTab] = useState<PlatformTab>("ebay");
-  const [filter, setFilter] = useState<TerminalFilter>("all");
+  const [filter, setFilter] = useState<TerminalFilter>("needs_you");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(
     initialThreads[0]?.id ?? null
@@ -136,14 +138,61 @@ export default function SalesAgentTerminal({
     initialSyncRetriedAfterEmpty
   );
   const [briefingLoading, setBriefingLoading] = useState(false);
+  const [draftCache, setDraftCache] = useState<
+    Map<string, MarketplaceReplyDraftResult>
+  >(() => new Map());
+  const [prewarming, setPrewarming] = useState<Set<string>>(() => new Set());
+  const [activity, setActivity] = useState<
+    Array<{ id: string; kind: "drafted" | "resolved" | "archived"; label: string; at: number }>
+  >([]);
+  const [batchOpen, setBatchOpen] = useState(false);
 
   const deferredQuery = useDeferredValue(searchQuery);
-  const now = Date.now();
+  const [now, setNow] = useState<number>(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(id);
+  }, []);
+
+  const pushActivity = useCallback(
+    (entry: { id: string; kind: "drafted" | "resolved" | "archived"; label: string }) => {
+      setActivity((prev) => {
+        if (prev.some((e) => e.id === entry.id && e.kind === entry.kind)) return prev;
+        const next = [{ ...entry, at: Date.now() }, ...prev];
+        return next.slice(0, 8);
+      });
+    },
+    []
+  );
 
   const platformThreads = useMemo(
     () => allThreads.filter((t) => t.platform === platformTab),
     [allThreads, platformTab]
   );
+
+  const autoResolvedMap = useMemo(() => {
+    const map = new Map<string, { label: string; reason: "buyer_thanks" | "seller_quiet" }>();
+    for (const t of allThreads) {
+      const cls = classifyThreadFromPreview(t, now);
+      if (cls.resolvable && cls.label && cls.reason) {
+        map.set(t.id, { label: cls.label, reason: cls.reason });
+      }
+    }
+    return map;
+  }, [allThreads, now]);
+
+  const autoResolvedIds = useMemo(
+    () => new Set(autoResolvedMap.keys()),
+    [autoResolvedMap]
+  );
+
+  const agentClearedCount = useMemo(() => {
+    let n = 0;
+    for (const t of allThreads) {
+      if (autoResolvedIds.has(t.id) && t.platform === platformTab) n++;
+    }
+    return n;
+  }, [allThreads, autoResolvedIds, platformTab]);
 
   const platformCounts = useMemo(() => {
     let ebay = 0;
@@ -155,10 +204,20 @@ export default function SalesAgentTerminal({
     return { ebay, cardzcheck: cc };
   }, [allThreads]);
 
+  const needsYouThreads = useMemo(() => {
+    return platformThreads
+      .filter((t) => applyTerminalFilter(t, "needs_you", now, autoResolvedIds))
+      .sort((a, b) => {
+        const rankDiff = priorityRank(a, now) - priorityRank(b, now);
+        if (rankDiff !== 0) return rankDiff;
+        return dollarImpactCents(b) - dollarImpactCents(a);
+      });
+  }, [platformThreads, autoResolvedIds, now]);
+
   const visibleThreads = useMemo(() => {
     const query = deferredQuery.trim().toLowerCase();
     let next = platformThreads.filter((thread) =>
-      applyTerminalFilter(thread, filter, now)
+      applyTerminalFilter(thread, filter, now, autoResolvedIds)
     );
     if (query) {
       next = next.filter((thread) => {
@@ -173,6 +232,8 @@ export default function SalesAgentTerminal({
     next.sort((a, b) => {
       const rankDiff = priorityRank(a, now) - priorityRank(b, now);
       if (rankDiff !== 0) return rankDiff;
+      const moneyDiff = dollarImpactCents(b) - dollarImpactCents(a);
+      if (moneyDiff !== 0) return moneyDiff;
       return (
         new Date(b.last_message_at).getTime() -
         new Date(a.last_message_at).getTime()
@@ -183,22 +244,18 @@ export default function SalesAgentTerminal({
 
   const filterCounts = useMemo(() => {
     const counts: Record<TerminalFilter, number> = {
+      needs_you: 0,
+      waiting: 0,
       all: platformThreads.length,
-      needs_action: 0,
-      offers: 0,
-      stale: 0,
-      awaiting_buyer: 0,
-      resolved: 0,
     };
     for (const thread of platformThreads) {
-      if (applyTerminalFilter(thread, "needs_action", now)) counts.needs_action++;
-      if (applyTerminalFilter(thread, "offers", now)) counts.offers++;
-      if (applyTerminalFilter(thread, "stale", now)) counts.stale++;
-      if (applyTerminalFilter(thread, "awaiting_buyer", now)) counts.awaiting_buyer++;
-      if (applyTerminalFilter(thread, "resolved", now)) counts.resolved++;
+      if (applyTerminalFilter(thread, "needs_you", now, autoResolvedIds))
+        counts.needs_you++;
+      if (applyTerminalFilter(thread, "waiting", now, autoResolvedIds))
+        counts.waiting++;
     }
     return counts;
-  }, [platformThreads, now]);
+  }, [platformThreads, now, autoResolvedIds]);
 
   const selectedThreadMeta = useMemo(
     () => allThreads.find((t) => t.id === selectedId) ?? null,
@@ -218,27 +275,37 @@ export default function SalesAgentTerminal({
     }
   }, []);
 
-  const loadThread = useCallback(async (threadId: string) => {
-    setThreadLoading(true);
-    setDraftResult(null);
-    setReplyError(null);
-    setSendError(null);
-    try {
-      const res = await fetch(`/api/business/messages/${threadId}`, {
-        cache: "no-store",
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setSelectedThread(data.thread);
-        setMessages(data.messages);
-        setNegotiation(data.negotiation);
+  const draftCacheRef = useRef(draftCache);
+  useEffect(() => {
+    draftCacheRef.current = draftCache;
+  }, [draftCache]);
+
+  const loadThread = useCallback(
+    async (threadId: string) => {
+      setThreadLoading(true);
+      setReplyError(null);
+      setSendError(null);
+      // Use any cached pre-warmed draft so the composer is filled immediately.
+      const cached = draftCacheRef.current.get(threadId);
+      setDraftResult(cached ?? null);
+      try {
+        const res = await fetch(`/api/business/messages/${threadId}`, {
+          cache: "no-store",
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setSelectedThread(data.thread);
+          setMessages(data.messages);
+          setNegotiation(data.negotiation);
+        }
+      } catch {
+        // ignore
+      } finally {
+        setThreadLoading(false);
       }
-    } catch {
-      // ignore
-    } finally {
-      setThreadLoading(false);
-    }
-  }, []);
+    },
+    []
+  );
 
   const loadAllThreads = useCallback(async () => {
     try {
@@ -319,6 +386,11 @@ export default function SalesAgentTerminal({
         }
         const data = (await res.json()) as MarketplaceReplyDraftResult;
         setDraftResult(data);
+        setDraftCache((prev) => {
+          const next = new Map(prev);
+          next.set(selectedId, data);
+          return next;
+        });
       } catch {
         setReplyError("Unable to draft right now. Please try again.");
       } finally {
@@ -326,6 +398,47 @@ export default function SalesAgentTerminal({
       }
     },
     [selectedId]
+  );
+
+  const handleSendMessageById = useCallback(
+    async (threadId: string, body: string) => {
+      try {
+        const res = await fetch(`/api/business/messages/${threadId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ body }),
+        });
+        if (!res.ok) return false;
+        const data = await res.json();
+        const sent = data.message as Message;
+        applyThreadUpdate((t) =>
+          t.id === threadId
+            ? {
+                ...t,
+                last_message_preview: sent.body,
+                last_message_at: sent.created_at,
+                unread_count: 0,
+                status: "awaiting_buyer",
+              }
+            : t
+        );
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [applyThreadUpdate]
+  );
+
+  const handleCacheDraft = useCallback(
+    (threadId: string, draft: MarketplaceReplyDraftResult) => {
+      setDraftCache((prev) => {
+        const next = new Map(prev);
+        next.set(threadId, draft);
+        return next;
+      });
+    },
+    []
   );
 
   const handleSendMessage = useCallback(
@@ -377,6 +490,79 @@ export default function SalesAgentTerminal({
   useEffect(() => {
     fetchBriefing();
   }, [fetchBriefing]);
+
+  // Emit activity entries when threads are auto-resolved by the agent.
+  useEffect(() => {
+    for (const [threadId, info] of autoResolvedMap) {
+      const thread = allThreads.find((t) => t.id === threadId);
+      if (!thread) continue;
+      const buyer = thread.buyer_display_name ?? thread.buyer_username;
+      pushActivity({
+        id: threadId,
+        kind: info.reason === "buyer_thanks" ? "resolved" : "archived",
+        label:
+          info.reason === "buyer_thanks"
+            ? `Resolved ${buyer} · acknowledged`
+            : `Archived ${buyer} · stale 7d+`,
+      });
+    }
+  }, [autoResolvedMap, allThreads, pushActivity]);
+
+  // Pre-warm drafts for the top Needs-you threads so opening them feels instant.
+  useEffect(() => {
+    const targets = needsYouThreads
+      .filter((t) => t.platform === platformTab)
+      .slice(0, 5)
+      .filter((t) => !draftCache.has(t.id) && !prewarming.has(t.id));
+    if (targets.length === 0) return;
+
+    setPrewarming((prev) => {
+      const next = new Set(prev);
+      for (const t of targets) next.add(t.id);
+      return next;
+    });
+
+    let cancelled = false;
+    (async () => {
+      for (const t of targets) {
+        if (cancelled) return;
+        try {
+          const res = await fetch(`/api/business/messages/${t.id}/ai-reply`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "smart_reply" }),
+          });
+          if (!res.ok) continue;
+          const data = (await res.json()) as MarketplaceReplyDraftResult;
+          if (cancelled) return;
+          setDraftCache((prev) => {
+            const next = new Map(prev);
+            next.set(t.id, data);
+            return next;
+          });
+          const buyer = t.buyer_display_name ?? t.buyer_username;
+          pushActivity({
+            id: `draft-${t.id}`,
+            kind: "drafted",
+            label: `Drafted reply · ${buyer}`,
+          });
+        } catch {
+          // ignore individual failures
+        } finally {
+          setPrewarming((prev) => {
+            const next = new Set(prev);
+            next.delete(t.id);
+            return next;
+          });
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [needsYouThreads, platformTab]);
 
   // On initial mount fetch ALL platforms so the tabs show real counts.
   useEffect(() => {
@@ -433,7 +619,7 @@ export default function SalesAgentTerminal({
         ["--biz-focus" as string]: "rgba(255,255,255,0.25)",
       } as Record<string, string>}
     >
-      {/* Slim top bar — filter pills + search + refresh */}
+      {/* Slim top bar — segmented filter + platform toggle + search */}
       <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--biz-border)] bg-[var(--biz-surface)] px-3 py-2">
         <div className="flex items-center gap-2">
           <span
@@ -452,25 +638,33 @@ export default function SalesAgentTerminal({
           {syncRetriedAfterEmpty ? (
             <StatusPill tone="warning">Sync retried</StatusPill>
           ) : null}
+          {agentClearedCount > 0 ? (
+            <span
+              className="rounded-full border border-[var(--biz-automation-border)] bg-[var(--biz-automation-soft)] px-2 py-px text-[10px] font-semibold text-[var(--biz-automation)]"
+              title="Threads the agent has cleared from your queue."
+            >
+              Agent cleared {agentClearedCount}
+            </span>
+          ) : null}
         </div>
 
-        {/* Platform tabs */}
+        {/* Primary 3-segment filter */}
         <div
           className="flex items-center gap-0.5 rounded border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] p-0.5"
           role="tablist"
-          aria-label="Messaging platform"
+          aria-label="Queue filter"
         >
-          {PLATFORM_TABS.map((tab) => {
-            const isActive = platformTab === tab.key;
-            const count = platformCounts[tab.key];
+          {FILTERS.map((tab) => {
+            const isActive = filter === tab.key;
+            const count = filterCounts[tab.key];
             return (
               <button
                 key={tab.key}
                 type="button"
                 role="tab"
                 aria-selected={isActive}
-                onClick={() => setPlatformTab(tab.key)}
-                className={`flex items-center gap-1.5 rounded px-2 py-0.5 text-[11px] font-semibold transition-colors ${
+                onClick={() => setFilter(tab.key)}
+                className={`flex items-center gap-1.5 rounded px-2.5 py-1 text-[11px] font-semibold transition-colors ${
                   isActive
                     ? "bg-[var(--biz-primary)] text-[var(--biz-primary-foreground)]"
                     : "text-[var(--biz-muted-strong)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]"
@@ -491,24 +685,32 @@ export default function SalesAgentTerminal({
           })}
         </div>
 
-        <div className="flex flex-wrap items-center gap-1">
-          {FILTERS.map((tab) => {
-            const isActive = filter === tab.key;
-            const count = filterCounts[tab.key];
+        {/* Compact platform toggle */}
+        <div
+          className="flex items-center gap-0.5 rounded border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] p-0.5"
+          role="tablist"
+          aria-label="Messaging platform"
+        >
+          {PLATFORM_TABS.map((tab) => {
+            const isActive = platformTab === tab.key;
+            const count = platformCounts[tab.key];
             return (
               <button
                 key={tab.key}
                 type="button"
-                onClick={() => setFilter(tab.key)}
-                className={`flex items-center gap-1.5 rounded px-2 py-1 text-[11px] font-semibold transition-colors ${
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => setPlatformTab(tab.key)}
+                title={`${tab.label} (${count})`}
+                className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] transition-colors ${
                   isActive
                     ? "bg-[var(--biz-primary)] text-[var(--biz-primary-foreground)]"
                     : "text-[var(--biz-muted-strong)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]"
                 }`}
               >
-                <span>{tab.label}</span>
+                <span>{tab.key === "ebay" ? "eBay" : "CC"}</span>
                 <span
-                  className={`biz-mono text-[10px] tabular-nums ${
+                  className={`biz-mono text-[9px] tabular-nums ${
                     isActive
                       ? "text-[var(--biz-primary-foreground)]/80"
                       : "text-[var(--biz-faint)]"
@@ -543,6 +745,16 @@ export default function SalesAgentTerminal({
               className="w-full rounded border border-[var(--biz-border)] bg-[var(--biz-bg)] py-1 pl-7 pr-2 text-[12px] text-[var(--biz-text)] placeholder-[var(--biz-muted)] focus:border-[var(--biz-primary-border)] focus:outline-none focus:ring-1 focus:ring-[var(--biz-focus)]"
             />
           </div>
+          {needsYouThreads.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => setBatchOpen(true)}
+              className="rounded bg-[var(--biz-primary)] px-2.5 py-1 text-[11px] font-semibold text-[var(--biz-primary-foreground)] transition-colors hover:bg-[var(--biz-primary-hover)]"
+              title="Review queue with keyboard shortcuts"
+            >
+              Review {needsYouThreads.length}
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={refreshThreadList}
@@ -561,6 +773,37 @@ export default function SalesAgentTerminal({
         </div>
       </header>
 
+      {/* Agent activity ticker */}
+      {activity.length > 0 ? (
+        <div className="flex shrink-0 items-center gap-2 overflow-hidden border-b border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-3 py-1">
+          <span className="biz-mono shrink-0 text-[9px] uppercase tracking-[0.14em] text-[var(--biz-automation)]">
+            Agent activity
+          </span>
+          <div className="flex min-w-0 flex-1 items-center gap-3 overflow-x-auto whitespace-nowrap">
+            {activity.map((entry) => (
+              <span
+                key={`${entry.kind}-${entry.id}`}
+                className="flex items-center gap-1 text-[11px] text-[var(--biz-muted-strong)]"
+              >
+                <span
+                  aria-hidden
+                  className="h-1.5 w-1.5 shrink-0 rounded-full"
+                  style={{
+                    background:
+                      entry.kind === "drafted"
+                        ? "var(--biz-automation)"
+                        : entry.kind === "resolved"
+                          ? "var(--biz-profit, #4ade80)"
+                          : "var(--biz-muted)",
+                  }}
+                />
+                {entry.label}
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       {/* Main two-pane layout: queue | conversation+agent */}
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <div className="flex h-full w-full">
@@ -575,9 +818,6 @@ export default function SalesAgentTerminal({
                 <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--biz-muted)] font-mono-num">
                   Queue · {visibleThreads.length}
                 </p>
-                <span className="biz-mono text-[10px] text-[var(--biz-faint)]">
-                  Sorted by priority
-                </span>
               </div>
               <div className="flex-1 overflow-y-auto">
                 {visibleThreads.length === 0 ? (
@@ -591,6 +831,7 @@ export default function SalesAgentTerminal({
                       thread={thread}
                       selected={thread.id === selectedId}
                       onSelect={handleSelectThread}
+                      autoResolvedLabel={autoResolvedMap.get(thread.id)?.label ?? null}
                     />
                   ))
                 )}
@@ -699,6 +940,17 @@ export default function SalesAgentTerminal({
           </div>
         </div>
       </div>
+
+      {batchOpen ? (
+        <BatchReviewModal
+          threads={needsYouThreads}
+          draftCache={draftCache}
+          onCacheDraft={handleCacheDraft}
+          onSend={handleSendMessageById}
+          onResolve={(id) => handleUpdateThreadStatus(id, "resolved")}
+          onClose={() => setBatchOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }

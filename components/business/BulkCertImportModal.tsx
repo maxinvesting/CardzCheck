@@ -220,22 +220,29 @@ export default function BulkCertImportModal({ isOpen, onClose, onSuccess }: Bulk
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-2 sm:items-center sm:p-4">
-      <div className="flex max-h-[calc(100vh-1rem)] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl sm:max-h-[90vh]">
-        <header className="flex items-center justify-between border-b px-5 py-3">
+    <div
+      className="fixed inset-0 z-[9999] flex items-start justify-center overflow-y-auto bg-black/60 p-2 backdrop-blur-sm sm:items-center sm:p-4"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) handleClose();
+      }}
+    >
+      <div className={`flex max-h-[calc(100vh-1rem)] w-full ${rows.length === 0 ? "max-w-lg" : "max-w-4xl"} flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-black shadow-2xl sm:max-h-[90vh]`}>
+        <header className="flex items-center justify-between border-b border-white/10 px-5 py-3">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">Bulk add by PSA cert</h2>
-            <p className="text-xs text-gray-500">
+            <h2 className="text-lg font-bold text-white">Bulk add by PSA cert</h2>
+            <p className="text-xs text-gray-400">
               Paste cert numbers (one per line). We look them up against PSA and let you review before adding to the ledger.
             </p>
           </div>
           <button
             type="button"
             onClick={handleClose}
-            className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            className="rounded-md p-1 text-gray-500 hover:bg-gray-800 hover:text-gray-300"
             aria-label="Close"
           >
-            ×
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
           </button>
         </header>
 
@@ -244,13 +251,13 @@ export default function BulkCertImportModal({ isOpen, onClose, onSuccess }: Bulk
             <div className="space-y-4">
               <div>
                 <div className="mb-1 flex items-center justify-between">
-                  <label className="block text-xs font-semibold text-gray-700">
+                  <label className="block text-xs font-semibold text-gray-300">
                     PSA cert numbers
                   </label>
                   <button
                     type="button"
                     onClick={() => setShowScanner(true)}
-                    className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-2 py-1 text-[11px] font-medium text-gray-700 hover:bg-gray-50"
+                    className="inline-flex items-center gap-1 rounded-md border border-white/15 bg-neutral-900 px-2 py-1 text-[11px] font-medium text-gray-200 hover:bg-gray-700"
                   >
                     <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7V5a2 2 0 012-2h2M4 17v2a2 2 0 002 2h2m8-18h2a2 2 0 012 2v2m-4 14h2a2 2 0 002-2v-2M7 7h2v10H7zM12 7h1v10h-1zM15 7h2v10h-2z" />
@@ -263,16 +270,16 @@ export default function BulkCertImportModal({ isOpen, onClose, onSuccess }: Bulk
                   onChange={(e) => setPasted(e.target.value)}
                   rows={8}
                   placeholder="12345678&#10;87654321&#10;..."
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  className="w-full rounded-md border border-white/15 bg-neutral-950 px-3 py-2 font-mono text-sm text-gray-100 placeholder-gray-600 focus:border-white focus:outline-none focus:ring-1 focus:ring-white"
                 />
                 <p className="mt-1 text-[11px] text-gray-500">
                   One per line. Commas/spaces also accepted. Up to 100 per batch.
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-gray-700">
+                  <label className="mb-1 block text-xs font-semibold text-gray-300">
                     Default cost basis ($)
                   </label>
                   <input
@@ -281,17 +288,17 @@ export default function BulkCertImportModal({ isOpen, onClose, onSuccess }: Bulk
                     step="0.01"
                     value={defaultCostBasis}
                     onChange={(e) => setDefaultCostBasis(e.target.value)}
-                    className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    className="w-full rounded-md border border-white/15 bg-neutral-950 px-2 py-1.5 text-sm text-gray-100 focus:border-white focus:outline-none focus:ring-1 focus:ring-white"
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-gray-700">
+                  <label className="mb-1 block text-xs font-semibold text-gray-300">
                     Default channel
                   </label>
                   <select
                     value={defaultChannel}
                     onChange={(e) => setDefaultChannel(e.target.value)}
-                    className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    className="w-full rounded-md border border-white/15 bg-neutral-950 px-2 py-1.5 text-sm text-gray-100 focus:border-white focus:outline-none focus:ring-1 focus:ring-white"
                   >
                     {CHANNEL_OPTIONS.map((c) => (
                       <option key={c} value={c}>
@@ -301,13 +308,13 @@ export default function BulkCertImportModal({ isOpen, onClose, onSuccess }: Bulk
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-gray-700">
+                  <label className="mb-1 block text-xs font-semibold text-gray-300">
                     Acquisition type
                   </label>
                   <select
                     value={defaultAcquisitionType}
                     onChange={(e) => setDefaultAcquisitionType(e.target.value)}
-                    className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    className="w-full rounded-md border border-white/15 bg-neutral-950 px-2 py-1.5 text-sm text-gray-100 focus:border-white focus:outline-none focus:ring-1 focus:ring-white"
                   >
                     <option value="bought">bought</option>
                     <option value="pulled">pulled</option>
@@ -317,14 +324,14 @@ export default function BulkCertImportModal({ isOpen, onClose, onSuccess }: Bulk
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-gray-700">
+                  <label className="mb-1 block text-xs font-semibold text-gray-300">
                     Acquisition date
                   </label>
                   <input
                     type="date"
                     value={defaultAcquisitionDate}
                     onChange={(e) => setDefaultAcquisitionDate(e.target.value)}
-                    className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    className="w-full rounded-md border border-white/15 bg-neutral-950 px-2 py-1.5 text-sm text-gray-100 focus:border-white focus:outline-none focus:ring-1 focus:ring-white"
                   />
                 </div>
               </div>
@@ -332,7 +339,7 @@ export default function BulkCertImportModal({ isOpen, onClose, onSuccess }: Bulk
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full text-xs">
-                <thead className="bg-gray-50 text-left text-[11px] uppercase tracking-wide text-gray-500">
+                <thead className="bg-neutral-950 text-left text-[11px] uppercase tracking-wide text-gray-400">
                   <tr>
                     <th className="px-2 py-2">Cert</th>
                     <th className="px-2 py-2">Status</th>
@@ -345,30 +352,30 @@ export default function BulkCertImportModal({ isOpen, onClose, onSuccess }: Bulk
                     <th className="px-2 py-2"></th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-gray-800">
                   {rows.map((row, idx) => (
                     <tr key={`${row.cert}-${idx}`} className="align-top">
-                      <td className="px-2 py-2 font-mono text-xs text-gray-700">{row.cert}</td>
+                      <td className="px-2 py-2 font-mono text-xs text-gray-200">{row.cert}</td>
                       <td className="px-2 py-2">
                         <StatusChip status={row.status} reason={row.reason} />
                       </td>
-                      <td className="px-2 py-2 text-gray-700">
+                      <td className="px-2 py-2 text-gray-200">
                         {row.mapped ? (
                           <div className="leading-tight">
-                            <div className="font-medium text-gray-900">
+                            <div className="font-medium text-white">
                               {row.mapped.player_name ?? "—"}
                             </div>
-                            <div className="text-[11px] text-gray-500">
+                            <div className="text-[11px] text-gray-400">
                               {[row.mapped.year, row.mapped.set_name, row.mapped.card_number ? `#${row.mapped.card_number}` : null, row.mapped.parallel_type]
                                 .filter(Boolean)
                                 .join(" · ")}
                             </div>
                           </div>
                         ) : (
-                          <span className="text-gray-400">—</span>
+                          <span className="text-gray-500">—</span>
                         )}
                       </td>
-                      <td className="px-2 py-2 text-gray-700">{row.mapped?.grade ?? "—"}</td>
+                      <td className="px-2 py-2 text-gray-200">{row.mapped?.grade ?? "—"}</td>
                       <td className="px-2 py-2">
                         <input
                           type="number"
@@ -377,7 +384,7 @@ export default function BulkCertImportModal({ isOpen, onClose, onSuccess }: Bulk
                           onChange={(e) =>
                             updateRow(idx, { quantity: Math.max(1, Number(e.target.value) || 1) })
                           }
-                          className="w-16 rounded border border-gray-300 px-1.5 py-1 text-xs"
+                          className="w-16 rounded border border-white/15 bg-neutral-950 px-1.5 py-1 text-xs text-gray-100 disabled:opacity-50"
                           disabled={row.status !== "found"}
                         />
                       </td>
@@ -388,7 +395,7 @@ export default function BulkCertImportModal({ isOpen, onClose, onSuccess }: Bulk
                           step="0.01"
                           value={row.cost_basis_dollars}
                           onChange={(e) => updateRow(idx, { cost_basis_dollars: e.target.value })}
-                          className="w-20 rounded border border-gray-300 px-1.5 py-1 text-xs"
+                          className="w-20 rounded border border-white/15 bg-neutral-950 px-1.5 py-1 text-xs text-gray-100 disabled:opacity-50"
                           disabled={row.status !== "found"}
                         />
                       </td>
@@ -396,7 +403,7 @@ export default function BulkCertImportModal({ isOpen, onClose, onSuccess }: Bulk
                         <select
                           value={row.channel}
                           onChange={(e) => updateRow(idx, { channel: e.target.value })}
-                          className="rounded border border-gray-300 px-1.5 py-1 text-xs"
+                          className="rounded border border-white/15 bg-neutral-950 px-1.5 py-1 text-xs text-gray-100 disabled:opacity-50"
                           disabled={row.status !== "found"}
                         >
                           {CHANNEL_OPTIONS.map((c) => (
@@ -410,7 +417,7 @@ export default function BulkCertImportModal({ isOpen, onClose, onSuccess }: Bulk
                         <select
                           value={row.inv_status}
                           onChange={(e) => updateRow(idx, { inv_status: e.target.value })}
-                          className="rounded border border-gray-300 px-1.5 py-1 text-xs"
+                          className="rounded border border-white/15 bg-neutral-950 px-1.5 py-1 text-xs text-gray-100 disabled:opacity-50"
                           disabled={row.status !== "found"}
                         >
                           {STATUS_OPTIONS.map((s) => (
@@ -426,7 +433,7 @@ export default function BulkCertImportModal({ isOpen, onClose, onSuccess }: Bulk
                             <button
                               type="button"
                               onClick={() => retryRow(idx)}
-                              className="rounded border border-gray-300 px-2 py-0.5 text-[11px] text-gray-700 hover:bg-gray-50"
+                              className="rounded border border-white/15 bg-neutral-900 px-2 py-0.5 text-[11px] text-gray-200 hover:bg-gray-700"
                             >
                               Retry
                             </button>
@@ -434,7 +441,7 @@ export default function BulkCertImportModal({ isOpen, onClose, onSuccess }: Bulk
                           <button
                             type="button"
                             onClick={() => removeRow(idx)}
-                            className="rounded border border-gray-300 px-2 py-0.5 text-[11px] text-gray-700 hover:bg-gray-50"
+                            className="rounded border border-white/15 bg-neutral-900 px-2 py-0.5 text-[11px] text-gray-200 hover:bg-gray-700"
                           >
                             Remove
                           </button>
@@ -448,21 +455,21 @@ export default function BulkCertImportModal({ isOpen, onClose, onSuccess }: Bulk
           )}
 
           {errorMessage ? (
-            <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+            <div className="mt-3 rounded-md border border-red-700/60 bg-red-900/20 px-3 py-2 text-xs text-red-300">
               {errorMessage}
             </div>
           ) : null}
 
           {summary ? (
-            <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+            <div className="mt-3 rounded-md border border-emerald-700/60 bg-emerald-900/20 px-3 py-2 text-xs text-emerald-300">
               Added {summary.added} card{summary.added === 1 ? "" : "s"} to the ledger
               {summary.failed > 0 ? `, ${summary.failed} failed` : ""}.
             </div>
           ) : null}
         </div>
 
-        <footer className="flex items-center justify-between gap-2 border-t bg-gray-50 px-5 py-3">
-          <div className="text-xs text-gray-500">
+        <footer className="flex items-center justify-between gap-2 border-t border-white/10 bg-neutral-950 px-5 py-3">
+          <div className="text-xs text-gray-400">
             {rows.length > 0 ? `${foundCount} of ${rows.length} ready` : null}
           </div>
           <div className="flex gap-2">
@@ -470,7 +477,7 @@ export default function BulkCertImportModal({ isOpen, onClose, onSuccess }: Bulk
               type="button"
               onClick={handleClose}
               disabled={isLookingUp || isSubmitting}
-              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              className="rounded-md border border-white/15 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-gray-200 hover:bg-gray-700 disabled:opacity-50"
             >
               Close
             </button>
@@ -479,7 +486,7 @@ export default function BulkCertImportModal({ isOpen, onClose, onSuccess }: Bulk
                 type="button"
                 onClick={runLookup}
                 disabled={isLookingUp || pasted.trim().length === 0}
-                className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                className="rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-black hover:bg-gray-200 disabled:opacity-50"
               >
                 {isLookingUp ? "Looking up…" : "Look up"}
               </button>
@@ -489,7 +496,7 @@ export default function BulkCertImportModal({ isOpen, onClose, onSuccess }: Bulk
                   type="button"
                   onClick={resetAll}
                   disabled={isLookingUp || isSubmitting}
-                  className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  className="rounded-md border border-white/15 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-gray-200 hover:bg-gray-700 disabled:opacity-50"
                 >
                   Start over
                 </button>
@@ -497,7 +504,7 @@ export default function BulkCertImportModal({ isOpen, onClose, onSuccess }: Bulk
                   type="button"
                   onClick={submit}
                   disabled={isSubmitting || foundCount === 0}
-                  className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                  className="rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-black hover:bg-gray-200 disabled:opacity-50"
                 >
                   {isSubmitting
                     ? "Adding…"
@@ -520,11 +527,11 @@ export default function BulkCertImportModal({ isOpen, onClose, onSuccess }: Bulk
 
 function StatusChip({ status, reason }: { status: RowStatus; reason?: string }) {
   const styles: Record<RowStatus, string> = {
-    pending: "bg-gray-100 text-gray-700",
-    found: "bg-emerald-100 text-emerald-800",
-    not_found: "bg-amber-100 text-amber-800",
-    invalid: "bg-amber-100 text-amber-800",
-    error: "bg-red-100 text-red-800",
+    pending: "bg-gray-800 text-gray-300",
+    found: "bg-white text-black border border-white",
+    not_found: "bg-amber-900/30 text-amber-300 border border-amber-700/50",
+    invalid: "bg-amber-900/30 text-amber-300 border border-amber-700/50",
+    error: "bg-red-900/30 text-red-300 border border-red-700/50",
   };
   const label: Record<RowStatus, string> = {
     pending: "Pending",

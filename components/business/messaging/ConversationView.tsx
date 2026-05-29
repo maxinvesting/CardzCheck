@@ -135,6 +135,18 @@ export default function ConversationView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [thread.id]);
 
+  // Auto-draft the recommended reply when the thread opens (or when messages
+  // load and there's no draft yet). Makes the agent actually act on arrival.
+  useEffect(() => {
+    if (replyLoading) return;
+    if (draftResult) return;
+    if (replyText.trim()) return;
+    if (messages.length === 0) return;
+    if (thread.status === "resolved" || thread.status === "archived") return;
+    onGenerateReply(recommendation.action);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [thread.id, messages.length]);
+
   async function handleSend() {
     const body = replyText.trim();
     if (!body || sendLoading) return;

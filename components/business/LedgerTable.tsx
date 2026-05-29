@@ -286,7 +286,7 @@ export default function LedgerTable({
 
   return (
     <div className="overflow-hidden border border-[color:var(--biz-border)] bg-[color:var(--biz-surface)]">
-      <div className="max-h-[calc(100vh-190px)] min-h-[360px] overflow-auto">
+      <div className="max-h-[calc(100vh-190px)] overflow-auto">
         <table className="w-full border-collapse font-data text-[12px]">
           <thead>
             <tr>

@@ -115,6 +115,14 @@ export function buildMarketplaceLinks(p: CardSearchParams): MarketplaceLink[] {
       accentColor: "#DC2626",
     },
     {
+      id: "fanatics-collect",
+      name: "Fanatics Collect",
+      tagline: "Weekly & premier auctions",
+      type: "auction",
+      url: `https://www.fanaticscollect.com/search?query=${q}`,
+      accentColor: "#0F2A5F",
+    },
+    {
       id: "alt",
       name: "Alt",
       tagline: "Fractional & direct sales",

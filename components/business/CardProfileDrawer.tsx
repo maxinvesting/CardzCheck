@@ -3,6 +3,12 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { CardImage } from "@/components/CardImage";
+import TargetsSection from "@/components/business/TargetsSection";
+import {
+  buildMarketplaceLinks,
+  MARKETPLACE_TYPE_LABELS,
+  type MarketplaceLink,
+} from "@/lib/comps/marketplace-urls";
 import type { BusinessInventoryItem, TrustedCardImage } from "@/types";
 
 interface ProfileLikeItem {
@@ -160,6 +166,18 @@ export default function CardProfileDrawer({
     };
   }, [isOpen, itemId, initialItem, mode]);
 
+  const marketplaceLinks = useMemo<MarketplaceLink[]>(() => {
+    if (!item?.player_name) return [];
+    return buildMarketplaceLinks({
+      playerName: item.player_name,
+      year: item.year != null ? String(item.year) : null,
+      setName: item.set_name ?? null,
+      grade: item.grade != null ? String(item.grade) : null,
+      gradingCompany: item.grading_company ?? null,
+      parallelType: item.parallel_type ?? null,
+    });
+  }, [item]);
+
   const pnlCents = useMemo(() => {
     if (!item) return null;
     const cmv = pickEstimatedCents(item);
@@ -262,7 +280,27 @@ export default function CardProfileDrawer({
                       label="CMV"
                       value={fmtCents(pickEstimatedCents(item))}
                     />
-                    <Stat label="Your price" value={fmtCents(item.list_price_cents)} />
+                    <EditablePriceStat
+                      label="Your price"
+                      cents={item.list_price_cents ?? null}
+                      disabled={mode !== "business"}
+                      onSave={async (next) => {
+                        if (!item) return;
+                        const res = await fetch("/api/business/inventory", {
+                          method: "PATCH",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ id: item.id, list_price_cents: next }),
+                        });
+                        if (!res.ok) {
+                          const data = await res.json().catch(() => null);
+                          throw new Error(data?.error || "Failed to save");
+                        }
+                        const updated = await res.json();
+                        setItem((prev) =>
+                          prev ? { ...prev, list_price_cents: updated.list_price_cents } : prev
+                        );
+                      }}
+                    />
                     <Stat
                       label="Est. P&L"
                       value={fmtCents(pnlCents)}
@@ -299,12 +337,6 @@ export default function CardProfileDrawer({
                     List on eBay
                   </ActionButton>
                 ) : null}
-                <Link
-                  href={`/comps?player=${encodeURIComponent(item.player_name ?? "")}&year=${encodeURIComponent(String(item.year ?? ""))}`}
-                  className="border border-[#343941] px-2.5 py-1 text-[11px] font-medium text-[#B8C0CC] hover:border-[#5A626E] hover:text-[#E6E8EB]"
-                >
-                  View comps
-                </Link>
                 {onDelete ? (
                   <ActionButton
                     onClick={() => onDelete(item as BusinessInventoryItem)}
@@ -314,6 +346,53 @@ export default function CardProfileDrawer({
                   </ActionButton>
                 ) : null}
               </section>
+
+              {/* Targets & plans */}
+              {mode === "business" ? (
+                <TargetsSection
+                  inventoryItemId={item.id}
+                  cmvCents={pickEstimatedCents(item)}
+                  listPriceCents={item.list_price_cents ?? null}
+                />
+              ) : null}
+
+              {/* Comps across platforms */}
+              {marketplaceLinks.length > 0 ? (
+                <section className="border-b border-[#24282D] px-4 py-3">
+                  <div className="flex items-baseline justify-between">
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-[#77808C]">
+                      Comps across platforms
+                    </div>
+                    <div className="text-[10px] text-[#5A626E]">Opens in new tab</div>
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-1.5">
+                    {marketplaceLinks.map((link) => (
+                      <a
+                        key={link.id}
+                        href={link.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group flex items-center justify-between gap-2 border border-[#24282D] bg-[#0B0D0F] px-2.5 py-1.5 hover:border-[#5A626E] hover:bg-[#13171B]"
+                        style={{ borderLeft: `2px solid ${link.accentColor}` }}
+                      >
+                        <div className="min-w-0">
+                          <div className="truncate text-[12px] font-semibold text-[#E6E8EB]">
+                            {link.name}
+                          </div>
+                          <div className="truncate text-[10px] text-[#77808C]">
+                            {link.tagline}
+                          </div>
+                        </div>
+                        <span
+                          className="shrink-0 border border-[#24282D] px-1 py-[1px] text-[8px] font-semibold tracking-wide text-[#77808C] group-hover:text-[#B8C0CC]"
+                        >
+                          {MARKETPLACE_TYPE_LABELS[link.type]}
+                        </span>
+                      </a>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
 
               {/* Notes */}
               {item.notes ? (
@@ -408,6 +487,95 @@ function Stat({
     <div className="flex items-center justify-between gap-2">
       <dt className="text-[#77808C]">{label}</dt>
       <dd className={`tabular-nums ${valueClass}`}>{value}</dd>
+    </div>
+  );
+}
+
+function EditablePriceStat({
+  label,
+  cents,
+  onSave,
+  disabled = false,
+}: {
+  label: string;
+  cents: number | null;
+  onSave: (nextCents: number | null) => Promise<void>;
+  disabled?: boolean;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  function startEdit() {
+    if (disabled || saving) return;
+    setDraft(cents == null ? "" : (cents / 100).toFixed(2));
+    setEditing(true);
+  }
+
+  async function commit() {
+    const trimmed = draft.trim();
+    let nextCents: number | null;
+    if (trimmed === "") {
+      nextCents = null;
+    } else {
+      const num = Number(trimmed);
+      if (!Number.isFinite(num) || num < 0) {
+        setEditing(false);
+        return;
+      }
+      nextCents = Math.round(num * 100);
+    }
+    if (nextCents === cents) {
+      setEditing(false);
+      return;
+    }
+    setSaving(true);
+    try {
+      await onSave(nextCents);
+    } catch {
+      // Surface failure by re-entering edit mode would lose the value; just exit.
+    } finally {
+      setSaving(false);
+      setEditing(false);
+    }
+  }
+
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <dt className="text-[#77808C]">{label}</dt>
+      <dd className="tabular-nums">
+        {editing ? (
+          <input
+            autoFocus
+            type="number"
+            step="0.01"
+            min={0}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void commit();
+              } else if (e.key === "Escape") {
+                setEditing(false);
+              }
+            }}
+            className="w-20 border border-[#343941] bg-[#0B0D0F] px-1 py-0.5 text-right text-[11px] text-[#E6E8EB] focus:border-[#5A626E] focus:outline-none"
+            disabled={saving}
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={startEdit}
+            disabled={disabled}
+            className={`text-[#E6E8EB] ${disabled ? "" : "cursor-pointer hover:text-[#20B26B]"}`}
+            title={disabled ? undefined : "Click to edit"}
+          >
+            {fmtCents(cents)}
+          </button>
+        )}
+      </dd>
     </div>
   );
 }
