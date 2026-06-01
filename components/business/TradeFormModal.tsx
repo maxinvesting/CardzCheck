@@ -348,7 +348,19 @@ export default function TradeFormModal({
             </button>
           </div>
 
-          <form onSubmit={submit} className="space-y-5 px-5 py-5">
+          <form
+            onSubmit={submit}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter") return;
+              const target = event.target as HTMLElement | null;
+              if (!target) return;
+              const tag = target.tagName;
+              if (tag === "TEXTAREA") return;
+              if (tag === "BUTTON" && (target as HTMLButtonElement).type === "submit") return;
+              event.preventDefault();
+            }}
+            className="space-y-5 px-5 py-5"
+          >
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <label>
                 <span className={labelClass}>Trade date</span>

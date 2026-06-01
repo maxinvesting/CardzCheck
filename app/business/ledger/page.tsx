@@ -136,6 +136,8 @@ export default function LedgerPage() {
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(
     null
   );
+  const [lastTradeId, setLastTradeId] = useState<string | null>(null);
+  const [undoingTrade, setUndoingTrade] = useState(false);
 
   const activeInventoryItems = useMemo(
     () =>
@@ -226,6 +228,49 @@ export default function LedgerPage() {
     const timer = window.setTimeout(() => setToast(null), 3000);
     return () => window.clearTimeout(timer);
   }, [toast]);
+
+  const loadLastTrade = useCallback(async () => {
+    try {
+      const res = await fetch("/api/business/trades", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = await res.json();
+      const trades = Array.isArray(data?.trades) ? data.trades : [];
+      setLastTradeId(trades[0]?.id ?? null);
+    } catch {
+      // non-fatal
+    }
+  }, []);
+
+  useEffect(() => {
+    if (hasAccess) void loadLastTrade();
+  }, [hasAccess, loadLastTrade]);
+
+  const handleUndoLastTrade = useCallback(async () => {
+    if (!lastTradeId || undoingTrade) return;
+    const confirmed = window.confirm(
+      "Undo the most recent trade? Outgoing cards will be restored to inventory and any incoming cards will be removed."
+    );
+    if (!confirmed) return;
+    setUndoingTrade(true);
+    try {
+      const res = await fetch(`/api/business/trades/${lastTradeId}`, {
+        method: "DELETE",
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || "Failed to undo trade");
+      setToast({ type: "success", message: "Last trade undone" });
+      setLastTradeId(null);
+      await loadInventory();
+      await loadLastTrade();
+    } catch (error) {
+      setToast({
+        type: "error",
+        message: error instanceof Error ? error.message : "Failed to undo trade",
+      });
+    } finally {
+      setUndoingTrade(false);
+    }
+  }, [lastTradeId, loadInventory, loadLastTrade, undoingTrade]);
 
   const handleLedgerRowClick = useCallback((row: LedgerTableRow) => {
     setSelectedLedgerItemId(row.id);
@@ -401,6 +446,8 @@ export default function LedgerPage() {
         const data = await res.json().catch(() => null);
         if (!res.ok) throw new Error(data?.error || "Failed to record trade");
 
+        if (data?.trade?.id) setLastTradeId(data.trade.id as string);
+
         const outgoingIds = new Set<string>();
         for (const o of payload.outgoing ?? []) outgoingIds.add(o.inventory_item_id);
         if (payload.inventory_item_id) outgoingIds.add(payload.inventory_item_id);
@@ -525,6 +572,19 @@ export default function LedgerPage() {
                   Bulk add by cert
                 </button>
               ) : null}
+              <button
+                type="button"
+                onClick={handleUndoLastTrade}
+                disabled={!lastTradeId || undoingTrade}
+                title={
+                  lastTradeId
+                    ? "Undo the most recent trade"
+                    : "No recent trade to undo"
+                }
+                className="border border-[#5A4A1F] bg-[#251E0E] px-3 py-1.5 text-[12px] font-semibold text-[#F0B429] transition-colors hover:bg-[#33290F] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {undoingTrade ? "Undoing…" : "Undo last trade"}
+              </button>
               <button
                 type="button"
                 onClick={() => setShowStandaloneTrade(true)}
