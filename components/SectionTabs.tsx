@@ -45,9 +45,9 @@ const SECTIONS: Section[] = [
   },
   // ── Business Analytics ──
   {
-    paths: ["/business/comps", "/business/grade-hub", "/business/grade-probability", "/business/grade-estimator"],
+    paths: ["/business/financials", "/business/grade-hub", "/business/grade-probability", "/business/grade-estimator"],
     tabs: [
-      { name: "Compare Listings", href: "/business/comps" },
+      { name: "Financials", href: "/business/financials" },
       { name: "Grading", href: "/business/grade-hub" },
     ],
   },

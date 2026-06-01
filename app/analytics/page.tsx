@@ -5,6 +5,12 @@ import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 
 const TOOLS = [
   {
+    name: "Financials",
+    href: "/business/financials",
+    description: "P&L, margin, inventory aging, and channel breakdown — synced with your ledger.",
+    badge: "Business",
+  },
+  {
     name: "Compare Listings",
     href: "/comps",
     description: "Live eBay sold comps and active listings — get a CMV for any card.",
