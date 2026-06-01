@@ -3,8 +3,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import type { BusinessInventoryItem } from "@/types";
-import CardPickerModal from "@/components/CardPickerModal";
-import type { CardPickerSelection } from "@/components/CardPicker";
 
 export type TradeOutgoingPayload = {
   inventory_item_id: string;
@@ -80,42 +78,52 @@ interface OutgoingRow {
 interface IncomingRow {
   id: string;
   card_id: string | null;
-  title: string;
-  player_name: string | null;
-  year: string | null;
-  set_name: string | null;
-  parallel_type: string | null;
-  card_number: string | null;
-  grade: string | null;
-  grading_company: string | null;
+  player_name: string;
+  year: string;
+  set_name: string;
+  parallel_type: string;
+  card_number: string;
+  grade: string;
+  grading_company: string;
+  cert_number: string;
   image_url: string | null;
   fairValue: string;
   costBasis: string;
+  lookupBusy: boolean;
+  lookupError: string | null;
 }
 
-function buildIncomingFromSelection(card: CardPickerSelection): IncomingRow {
-  const titleParts = [
-    card.year,
-    card.set_name,
-    card.player_name,
-    card.variant,
-    card.card_number ? `#${card.card_number}` : null,
-  ].filter((s): s is string => Boolean(s && String(s).trim()));
+function blankIncoming(): IncomingRow {
   return {
     id: `in-${Math.random().toString(36).slice(2, 10)}`,
-    card_id: card.id ?? null,
-    title: titleParts.join(" ").trim() || (card.player_name ?? "New card"),
-    player_name: card.player_name ?? null,
-    year: card.year ?? null,
-    set_name: card.set_name ?? null,
-    parallel_type: card.variant ?? null,
-    card_number: card.card_number ?? null,
-    grade: card.grade ?? null,
-    grading_company: card.grader ?? null,
-    image_url: card.user_image_url ?? card.image_url ?? null,
+    card_id: null,
+    player_name: "",
+    year: "",
+    set_name: "",
+    parallel_type: "",
+    card_number: "",
+    grade: "",
+    grading_company: "",
+    cert_number: "",
+    image_url: null,
     fairValue: "",
     costBasis: "",
+    lookupBusy: false,
+    lookupError: null,
   };
+}
+
+function buildIncomingTitle(row: IncomingRow): string {
+  const parts = [
+    row.year,
+    row.set_name,
+    row.player_name,
+    row.parallel_type,
+    row.card_number ? `#${row.card_number}` : null,
+  ]
+    .map((v) => (v ? String(v).trim() : ""))
+    .filter(Boolean);
+  return parts.join(" ").trim() || row.player_name.trim() || "Trade-in card";
 }
 
 export default function TradeFormModal({
@@ -132,7 +140,6 @@ export default function TradeFormModal({
   const [notes, setNotes] = useState("");
   const [outgoing, setOutgoing] = useState<OutgoingRow[]>([]);
   const [incoming, setIncoming] = useState<IncomingRow[]>([]);
-  const [showPicker, setShowPicker] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -245,9 +252,55 @@ export default function TradeFormModal({
     setIncoming((prev) => prev.filter((r) => r.id !== id));
   }
 
-  function handleCardPicked(card: CardPickerSelection) {
-    setIncoming((prev) => [...prev, buildIncomingFromSelection(card)]);
-    setShowPicker(false);
+  function addIncomingRow() {
+    setIncoming((prev) => [...prev, blankIncoming()]);
+  }
+
+  async function lookupIncomingCert(id: string) {
+    const row = incoming.find((r) => r.id === id);
+    if (!row) return;
+    const cert = row.cert_number.trim();
+    if (!cert) {
+      updateIncoming(id, { lookupError: "Enter a PSA cert number first" });
+      return;
+    }
+    updateIncoming(id, { lookupBusy: true, lookupError: null });
+    try {
+      const res = await fetch("/api/psa/lookup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ certNumber: cert }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.found) {
+        const msg = data?.error || "Cert not found";
+        updateIncoming(id, { lookupBusy: false, lookupError: msg });
+        return;
+      }
+      setIncoming((prev) =>
+        prev.map((r) =>
+          r.id === id
+            ? {
+                ...r,
+                player_name: data.player_name ?? r.player_name,
+                year: data.year ?? r.year,
+                set_name: data.set_name ?? r.set_name,
+                card_number: data.card_number ?? r.card_number,
+                parallel_type: data.parallel_type ?? r.parallel_type,
+                grade: data.grade ?? r.grade,
+                grading_company: data.grading_company ?? r.grading_company ?? "PSA",
+                lookupBusy: false,
+                lookupError: null,
+              }
+            : r
+        )
+      );
+    } catch (err) {
+      updateIncoming(id, {
+        lookupBusy: false,
+        lookupError: err instanceof Error ? err.message : "Lookup failed",
+      });
+    }
   }
 
   async function submit(event: FormEvent) {
@@ -280,24 +333,40 @@ export default function TradeFormModal({
       seenOut.add(o.inventory_item_id);
     }
 
-    const cleanIncoming: TradeIncomingPayload[] = incoming.map((row) => {
+    const cleanIncoming: TradeIncomingPayload[] = [];
+    for (const row of incoming) {
+      const hasAnyField =
+        row.player_name.trim() ||
+        row.set_name.trim() ||
+        row.year.trim() ||
+        row.card_number.trim() ||
+        row.fairValue.trim();
+      if (!hasAnyField) continue; // skip completely-empty rows
+      if (!row.player_name.trim() && !row.set_name.trim()) {
+        setError("Each incoming card needs a player name or set.");
+        return;
+      }
       const fair = inputToCents(row.fairValue);
+      if (fair <= 0) {
+        setError("Enter an estimated value for every incoming card.");
+        return;
+      }
       const basis = inputToCents(row.costBasis) || fair;
-      return {
+      cleanIncoming.push({
         card_id: row.card_id,
-        title: row.title.trim() || row.player_name || "Trade-in card",
-        player_name: row.player_name,
-        year: row.year,
-        set_name: row.set_name,
-        parallel_type: row.parallel_type,
-        card_number: row.card_number,
-        grade: row.grade,
-        grading_company: row.grading_company,
+        title: buildIncomingTitle(row),
+        player_name: row.player_name.trim() || null,
+        year: row.year.trim() || null,
+        set_name: row.set_name.trim() || null,
+        parallel_type: row.parallel_type.trim() || null,
+        card_number: row.card_number.trim() || null,
+        grade: row.grade.trim() || null,
+        grading_company: row.grading_company.trim() || null,
         fair_value_cents: fair,
         allocated_cost_basis_cents: basis,
         image_url: row.image_url,
-      };
-    });
+      });
+    }
 
     setSubmitting(true);
     try {
@@ -462,7 +531,7 @@ export default function TradeFormModal({
                   </div>
                   <button
                     type="button"
-                    onClick={() => setShowPicker(true)}
+                    onClick={addIncomingRow}
                     className="border border-[#343941] px-2 py-1 text-[11px] text-[#B8C0CC] hover:text-[#E6E8EB] hover:border-[#5A626E]"
                   >
                     + Add card
@@ -471,18 +540,15 @@ export default function TradeFormModal({
                 <div className="divide-y divide-[#24282D]">
                   {incoming.length === 0 && (
                     <div className="px-3 py-4 text-xs text-[#77808C]">
-                      Use the picker to identify cards you are receiving. Cash-only trades are fine — leave this empty.
+                      Add cards you are receiving — look up by PSA cert # or enter manually. Cash-only trades are fine — leave this empty.
                     </div>
                   )}
-                  {incoming.map((row) => (
-                    <div key={row.id} className="space-y-2 px-3 py-3">
-                      <div className="flex items-start gap-2">
-                        <input
-                          type="text"
-                          value={row.title}
-                          onChange={(e) => updateIncoming(row.id, { title: e.target.value })}
-                          className={`${inputClass} flex-1`}
-                        />
+                  {incoming.map((row, idx) => (
+                    <div key={row.id} className="space-y-3 px-3 py-3">
+                      <div className="flex items-center justify-between">
+                        <div className="text-[10px] font-semibold uppercase tracking-wider text-[#77808C]">
+                          Card {idx + 1}
+                        </div>
                         <button
                           type="button"
                           onClick={() => removeIncoming(row.id)}
@@ -492,15 +558,125 @@ export default function TradeFormModal({
                           x
                         </button>
                       </div>
+
+                      {/* PSA cert lookup */}
+                      <div className="flex items-end gap-2">
+                        <label className="flex-1">
+                          <span className={labelClass}>PSA cert # (optional)</span>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            value={row.cert_number}
+                            onChange={(e) =>
+                              updateIncoming(row.id, { cert_number: e.target.value })
+                            }
+                            placeholder="e.g. 12345678"
+                            className={`mt-1 ${inputClass} placeholder:text-[#4F5863]`}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => void lookupIncomingCert(row.id)}
+                          disabled={row.lookupBusy || !row.cert_number.trim()}
+                          className="border border-[#343941] px-3 py-2 text-[11px] font-semibold text-[#B8C0CC] hover:text-[#E6E8EB] hover:border-[#5A626E] disabled:opacity-50"
+                        >
+                          {row.lookupBusy ? "Looking up…" : "Look up"}
+                        </button>
+                      </div>
+                      {row.lookupError && (
+                        <div className="text-[11px] text-[#E05C5C]">{row.lookupError}</div>
+                      )}
+
+                      {/* Manual card fields */}
                       <div className="grid grid-cols-2 gap-3">
                         <label>
-                          <span className={labelClass}>Fair value ($)</span>
+                          <span className={labelClass}>Player</span>
+                          <input
+                            type="text"
+                            value={row.player_name}
+                            onChange={(e) =>
+                              updateIncoming(row.id, { player_name: e.target.value })
+                            }
+                            className={`mt-1 ${inputClass}`}
+                          />
+                        </label>
+                        <label>
+                          <span className={labelClass}>Year</span>
+                          <input
+                            type="text"
+                            value={row.year}
+                            onChange={(e) => updateIncoming(row.id, { year: e.target.value })}
+                            className={`mt-1 ${inputClass}`}
+                          />
+                        </label>
+                        <label className="col-span-2">
+                          <span className={labelClass}>Set</span>
+                          <input
+                            type="text"
+                            value={row.set_name}
+                            onChange={(e) =>
+                              updateIncoming(row.id, { set_name: e.target.value })
+                            }
+                            className={`mt-1 ${inputClass}`}
+                          />
+                        </label>
+                        <label>
+                          <span className={labelClass}>Card #</span>
+                          <input
+                            type="text"
+                            value={row.card_number}
+                            onChange={(e) =>
+                              updateIncoming(row.id, { card_number: e.target.value })
+                            }
+                            className={`mt-1 ${inputClass}`}
+                          />
+                        </label>
+                        <label>
+                          <span className={labelClass}>Parallel / variant</span>
+                          <input
+                            type="text"
+                            value={row.parallel_type}
+                            onChange={(e) =>
+                              updateIncoming(row.id, { parallel_type: e.target.value })
+                            }
+                            className={`mt-1 ${inputClass}`}
+                          />
+                        </label>
+                        <label>
+                          <span className={labelClass}>Grader</span>
+                          <input
+                            type="text"
+                            value={row.grading_company}
+                            onChange={(e) =>
+                              updateIncoming(row.id, { grading_company: e.target.value })
+                            }
+                            placeholder="PSA, BGS, SGC…"
+                            className={`mt-1 ${inputClass} placeholder:text-[#4F5863]`}
+                          />
+                        </label>
+                        <label>
+                          <span className={labelClass}>Grade</span>
+                          <input
+                            type="text"
+                            value={row.grade}
+                            onChange={(e) => updateIncoming(row.id, { grade: e.target.value })}
+                            className={`mt-1 ${inputClass}`}
+                          />
+                        </label>
+                      </div>
+
+                      {/* Values */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <label>
+                          <span className={labelClass}>Estimated value ($)</span>
                           <input
                             type="number"
                             min="0"
                             step="0.01"
                             value={row.fairValue}
-                            onChange={(e) => updateIncoming(row.id, { fairValue: e.target.value })}
+                            onChange={(e) =>
+                              updateIncoming(row.id, { fairValue: e.target.value })
+                            }
                             className={`mt-1 ${inputClass}`}
                           />
                         </label>
@@ -511,8 +687,11 @@ export default function TradeFormModal({
                             min="0"
                             step="0.01"
                             value={row.costBasis}
-                            onChange={(e) => updateIncoming(row.id, { costBasis: e.target.value })}
-                            className={`mt-1 ${inputClass}`}
+                            onChange={(e) =>
+                              updateIncoming(row.id, { costBasis: e.target.value })
+                            }
+                            placeholder="Defaults to estimated value"
+                            className={`mt-1 ${inputClass} placeholder:text-[#4F5863]`}
                           />
                         </label>
                       </div>
@@ -608,13 +787,6 @@ export default function TradeFormModal({
         </div>
       </div>
 
-      <CardPickerModal
-        isOpen={showPicker}
-        title="Add card from trade-in"
-        mode="collection"
-        onClose={() => setShowPicker(false)}
-        onSelect={handleCardPicked}
-      />
     </>,
     document.body
   );
