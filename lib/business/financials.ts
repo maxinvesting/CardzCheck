@@ -109,16 +109,6 @@ export type StaleAlert = {
   avg_age_days: number | null;
 };
 
-export type DealerScore = {
-  total: number; // 0-100
-  components: {
-    margin: number;        // 0-25
-    turn: number;          // 0-25
-    stale: number;         // 0-25
-    sell_through: number;  // 0-25
-  };
-};
-
 export type FinancialsSummary = {
   snapshot: Snapshot;
   velocity: Velocity;
@@ -140,7 +130,6 @@ export type FinancialsSummary = {
   };
   winners: CardPerformance[];
   losers: CardPerformance[];
-  dealer_score: DealerScore;
 };
 
 function toInt(value: unknown): number {
@@ -429,48 +418,6 @@ function buildWinnersLosers(rows: SaleRowWithCard[]): {
   return { winners, losers };
 }
 
-function clamp(n: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, n));
-}
-
-function buildDealerScore({
-  marginPct,
-  turn,
-  staleCostBasis,
-  totalCostBasis,
-  sellThroughPct,
-}: {
-  marginPct: number | null;
-  turn: number | null;
-  staleCostBasis: number;
-  totalCostBasis: number;
-  sellThroughPct: number | null;
-}): DealerScore {
-  // Margin: 0% → 0, 40% → 25 (cap).
-  const marginScore = marginPct == null ? 0 : clamp((marginPct / 40) * 25, 0, 25);
-
-  // Turn: 0 → 0, 6x → 25 (cap). 4x ≈ 16.6.
-  const turnScore = turn == null ? 0 : clamp((turn / 6) * 25, 0, 25);
-
-  // Stale: lower stale% is better. 0% → 25, 50%+ → 0.
-  const stalePct = totalCostBasis > 0 ? staleCostBasis / totalCostBasis : 0;
-  const staleScore = clamp(25 * (1 - Math.min(1, stalePct / 0.5)), 0, 25);
-
-  // Sell-through: 0% → 0, 60%+ → 25.
-  const sellScore =
-    sellThroughPct == null ? 0 : clamp((sellThroughPct / 60) * 25, 0, 25);
-
-  return {
-    total: Math.round(marginScore + turnScore + staleScore + sellScore),
-    components: {
-      margin: Math.round(marginScore),
-      turn: Math.round(turnScore),
-      stale: Math.round(staleScore),
-      sell_through: Math.round(sellScore),
-    },
-  };
-}
-
 export async function getFinancialsSummary(
   userId: string
 ): Promise<FinancialsSummary> {
@@ -572,22 +519,6 @@ export async function getFinancialsSummary(
 
   const { winners, losers } = buildWinnersLosers(saleRowsWithCard);
 
-  // Use TTM aggregate for the dealer-score margin signal so a quiet month
-  // doesn't tank the score.
-  const ttmAgg = aggregatePeriod(
-    saleRows,
-    new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000),
-    now
-  );
-
-  const dealer_score = buildDealerScore({
-    marginPct: ttmAgg.margin_pct,
-    turn: velocity.turn_rate_annualized,
-    staleCostBasis: inv.stale.cost_basis_cents,
-    totalCostBasis: inv.snapshot.cost_basis_cents,
-    sellThroughPct: velocity.sell_through_pct,
-  });
-
   return {
     snapshot: inv.snapshot,
     velocity,
@@ -604,6 +535,5 @@ export async function getFinancialsSummary(
     },
     winners,
     losers,
-    dealer_score,
   };
 }

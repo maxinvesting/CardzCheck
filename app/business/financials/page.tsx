@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Area,
-  AreaChart,
+  Bar,
   CartesianGrid,
   Cell,
+  ComposedChart,
   Line,
   Pie,
   PieChart,
@@ -15,7 +16,6 @@ import {
   Tooltip,
   XAxis,
   YAxis,
-  ComposedChart,
 } from "recharts";
 import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import BusinessPaywall from "@/components/business/BusinessPaywall";
@@ -24,7 +24,6 @@ import type {
   AgingBucket,
   CardPerformance,
   ChannelBreakdown,
-  DealerScore,
   FinancialsSummary,
   MonthBucket,
   PeriodTotals,
@@ -34,7 +33,8 @@ import type {
 } from "@/lib/business/financials";
 
 type PeriodKey = "last_30d" | "mtd" | "ytd";
-type SeriesKey = "revenue" | "profit" | "margin";
+type SeriesKey = "revenue" | "profit" | "margin" | "sales";
+type RangeKey = "6m" | "12m";
 
 const MONEY = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -61,6 +61,7 @@ const SERIES_COLORS: Record<SeriesKey, string> = {
   revenue: "#3B82F6",
   profit: "#20B26B",
   margin: "#F0B429",
+  sales: "#A855F7",
 };
 
 function fmtMoney(cents: number | null | undefined): string {
@@ -99,13 +100,6 @@ function pnlClass(cents: number): string {
   return "text-[#B8C0CC]";
 }
 
-function deltaClass(value: number | null): string {
-  if (value == null) return "text-[#77808C]";
-  if (value > 0) return "text-[#20B26B]";
-  if (value < 0) return "text-[#E05C5C]";
-  return "text-[#77808C]";
-}
-
 function formatMonth(key: string): string {
   const [y, m] = key.split("-");
   const d = new Date(Number(y), Number(m) - 1, 1);
@@ -126,9 +120,7 @@ function SectionHeading({
   compact?: boolean;
 }) {
   return (
-    <div
-      className={`flex items-center justify-between gap-3 ${compact ? "mb-2" : "mb-2"}`}
-    >
+    <div className="mb-2 flex items-center justify-between gap-3">
       <div className="min-w-0">
         {eyebrow ? (
           <div className="text-[9px] font-medium uppercase tracking-[0.12em] text-[#77808C]">
@@ -169,48 +161,18 @@ function MetricCell({
           ? "text-[#E05C5C]"
           : "text-[#77808C]";
   return (
-    <div className={`px-3 py-2 ${align === "right" ? "text-right" : ""}`}>
+    <div className={`px-3 py-1.5 ${align === "right" ? "text-right" : ""}`}>
       <div className="text-[9px] font-medium uppercase tracking-[0.08em] text-[#77808C]">
         {label}
       </div>
       <div
-        className={`mt-0.5 font-data text-[16px] font-semibold tabular-nums leading-tight ${valueClass ?? "text-[#E6E8EB]"}`}
+        className={`mt-0.5 font-data text-[15px] font-semibold tabular-nums leading-tight ${valueClass ?? "text-[#E6E8EB]"}`}
       >
         {value}
       </div>
       {sub ? (
         <div className={`mt-0.5 text-[10px] tabular-nums ${subTone}`}>
           {sub.text}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function StatTile({
-  label,
-  value,
-  sub,
-  valueClass,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  valueClass?: string;
-}) {
-  return (
-    <div className="border border-[#24282D] bg-[#0B0D0F] px-3 py-2">
-      <div className="text-[9px] font-medium uppercase tracking-[0.08em] text-[#77808C]">
-        {label}
-      </div>
-      <div
-        className={`mt-0.5 font-data text-[16px] font-semibold tabular-nums leading-tight ${valueClass ?? "text-[#E6E8EB]"}`}
-      >
-        {value}
-      </div>
-      {sub ? (
-        <div className="mt-0.5 text-[10px] tabular-nums text-[#77808C]">
-          {sub}
         </div>
       ) : null}
     </div>
@@ -243,7 +205,7 @@ function SnapshotAndVelocity({
 
   return (
     <section>
-      <div className="grid grid-cols-2 divide-x divide-y divide-[#24282D] border border-[#24282D] bg-[#0B0D0F] md:grid-cols-4 md:divide-y-0 xl:grid-cols-8">
+      <div className="grid grid-cols-2 divide-x divide-y divide-[#24282D] border border-[#24282D] bg-[#0B0D0F] sm:grid-cols-4 sm:divide-y-0 xl:grid-cols-8">
         <MetricCell
           label="Inventory value"
           value={fmtMoney(snapshot.inventory_value_cents)}
@@ -297,17 +259,21 @@ function SnapshotAndVelocity({
   );
 }
 
-function PnlOverview({
+function PnlSection({
   totals,
+  monthly,
   period,
   setPeriod,
 }: {
   totals: FinancialsSummary["totals"];
+  monthly: MonthBucket[];
   period: PeriodKey;
   setPeriod: (p: PeriodKey) => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const current: PeriodTotals = totals[period];
-  const compareTo: PeriodTotals = period === "last_30d" ? totals.prev_30d : current;
+  const compareTo: PeriodTotals =
+    period === "last_30d" ? totals.prev_30d : current;
   const showDelta = period === "last_30d";
 
   const revenueDelta = showDelta
@@ -327,33 +293,49 @@ function PnlOverview({
     { key: "ytd", label: "YTD" },
   ];
 
-  return (
-    <section>
-      <SectionHeading
-        eyebrow="Profit & Loss"
-        title="Am I making money?"
-        compact
-        right={
-          <div className="flex border border-[#24282D]">
-            {periodOpts.map((opt) => (
-              <button
-                key={opt.key}
-                type="button"
-                onClick={() => setPeriod(opt.key)}
-                className={`px-3 py-1.5 text-[11px] font-semibold transition-colors ${
-                  period === opt.key
-                    ? "bg-[#20B26B] text-[#07100B]"
-                    : "text-[#B8C0CC] hover:text-[#E6E8EB]"
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        }
-      />
+  const chartData = useMemo(
+    () =>
+      monthly.map((m) => ({
+        month: formatMonth(m.month),
+        revenue: m.revenue_cents / 100,
+        profit: m.profit_cents / 100,
+        margin:
+          m.revenue_cents > 0 ? (m.profit_cents / m.revenue_cents) * 100 : 0,
+        sales: m.sales_count,
+      })),
+    [monthly]
+  );
+  const hasChart = monthly.some((m) => m.sales_count > 0);
 
-      <div className="grid grid-cols-2 divide-x divide-y divide-[#24282D] border border-[#24282D] bg-[#0B0D0F] md:grid-cols-7 md:divide-y-0">
+  return (
+    <section className="border border-[#24282D] bg-[#0B0D0F]">
+      <div className="border-b border-[#24282D] px-3 pt-2.5">
+        <SectionHeading
+          eyebrow="Profit & Loss"
+          title="Am I making money?"
+          compact
+          right={
+            <div className="flex border border-[#24282D]">
+              {periodOpts.map((opt) => (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => setPeriod(opt.key)}
+                  className={`px-3 py-1.5 text-[11px] font-semibold transition-colors ${
+                    period === opt.key
+                      ? "bg-[#20B26B] text-[#07100B]"
+                      : "text-[#B8C0CC] hover:text-[#E6E8EB]"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          }
+        />
+      </div>
+
+      <div className="grid grid-cols-2 divide-x divide-y divide-[#24282D] border-b border-[#24282D] sm:grid-cols-4 sm:divide-y-0 lg:grid-cols-7">
         <MetricCell
           label="Net profit"
           value={fmtMoney(current.profit_cents)}
@@ -413,183 +395,324 @@ function PnlOverview({
           value={fmtMoney(current.shipping_cost_cents)}
         />
       </div>
+
+      {/* Compact trend preview */}
+      <div className="px-3 py-2.5">
+        <div className="mb-1.5 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] font-medium uppercase tracking-[0.1em] text-[#77808C]">
+              Trend · 12 mo
+            </span>
+            <div className="hidden items-center gap-2.5 sm:flex">
+              <LegendDot color={SERIES_COLORS.revenue} label="Revenue" />
+              <LegendDot color={SERIES_COLORS.profit} label="Profit" />
+              <LegendDot color={SERIES_COLORS.margin} label="Margin %" />
+            </div>
+          </div>
+          {hasChart ? (
+            <button
+              type="button"
+              onClick={() => setExpanded(true)}
+              className="inline-flex items-center gap-1 border border-[#343941] bg-[#111315] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-[#B8C0CC] transition-colors hover:border-[#5A626E] hover:text-[#E6E8EB]"
+            >
+              Expand analytics ↗
+            </button>
+          ) : null}
+        </div>
+        {hasChart ? (
+          <div className="h-[120px] w-full">
+            <TrendChart
+              data={chartData}
+              active={{ revenue: true, profit: true, margin: true, sales: false }}
+              compact
+            />
+          </div>
+        ) : (
+          <EmptyState
+            message="No sales in the last 12 months yet. Record a sale from the ledger to see your trend here."
+            height={120}
+          />
+        )}
+      </div>
+
+      {expanded ? (
+        <AnalyticsModal data={chartData} onClose={() => setExpanded(false)} />
+      ) : null}
     </section>
   );
 }
 
-function PnlChart({ monthly }: { monthly: MonthBucket[] }) {
-  const [series, setSeries] = useState<Record<SeriesKey, boolean>>({
+function LegendDot({ color, label }: { color: string; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1 text-[10px] text-[#77808C]">
+      <span
+        className="inline-block h-1.5 w-1.5 rounded-full"
+        style={{ backgroundColor: color }}
+      />
+      {label}
+    </span>
+  );
+}
+
+type TrendDatum = {
+  month: string;
+  revenue: number;
+  profit: number;
+  margin: number;
+  sales: number;
+};
+
+function TrendChart({
+  data,
+  active,
+  compact = false,
+}: {
+  data: TrendDatum[];
+  active: Record<SeriesKey, boolean>;
+  compact?: boolean;
+}) {
+  const fontSize = compact ? 10 : 12;
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <ComposedChart
+        data={data}
+        margin={{ top: 8, right: 8, left: 0, bottom: compact ? 0 : 8 }}
+      >
+        <defs>
+          <linearGradient id="revFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={SERIES_COLORS.revenue} stopOpacity={0.35} />
+            <stop offset="100%" stopColor={SERIES_COLORS.revenue} stopOpacity={0} />
+          </linearGradient>
+          <linearGradient id="profitFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={SERIES_COLORS.profit} stopOpacity={0.35} />
+            <stop offset="100%" stopColor={SERIES_COLORS.profit} stopOpacity={0} />
+          </linearGradient>
+        </defs>
+        <CartesianGrid stroke="#1E2227" strokeDasharray="3 3" />
+        <XAxis
+          dataKey="month"
+          stroke="#77808C"
+          tick={{ fontSize }}
+          tickLine={false}
+          axisLine={{ stroke: "#24282D" }}
+          interval={compact ? "preserveStartEnd" : 0}
+          height={compact ? 18 : 28}
+        />
+        <YAxis
+          yAxisId="left"
+          stroke="#77808C"
+          tick={{ fontSize }}
+          tickFormatter={(v) => fmtMoneyCompact(v * 100)}
+          tickLine={false}
+          axisLine={{ stroke: "#24282D" }}
+          width={compact ? 44 : 56}
+        />
+        <YAxis
+          yAxisId="right"
+          orientation="right"
+          stroke="#77808C"
+          tick={{ fontSize }}
+          tickFormatter={(v) => `${v.toFixed(0)}%`}
+          tickLine={false}
+          axisLine={{ stroke: "#24282D" }}
+          width={compact ? 32 : 40}
+        />
+        <YAxis yAxisId="sales" orientation="right" hide />
+        <Tooltip
+          contentStyle={{
+            background: "#0B0D0F",
+            border: "1px solid #24282D",
+            fontSize: 12,
+            borderRadius: 0,
+          }}
+          labelStyle={{ color: "#B8C0CC" }}
+          formatter={(value, name) => {
+            const v = Number(value) || 0;
+            const label = String(name);
+            if (label === "Margin") return [`${v.toFixed(1)}%`, label];
+            if (label === "Sales") return [v.toFixed(0), label];
+            return [MONEY_PRECISE.format(v), label];
+          }}
+        />
+        {active.sales ? (
+          <Bar
+            yAxisId="sales"
+            dataKey="sales"
+            name="Sales"
+            fill={SERIES_COLORS.sales}
+            fillOpacity={0.45}
+            barSize={compact ? 8 : 14}
+            isAnimationActive={false}
+          />
+        ) : null}
+        {active.revenue ? (
+          <Area
+            yAxisId="left"
+            type="monotone"
+            dataKey="revenue"
+            name="Revenue"
+            stroke={SERIES_COLORS.revenue}
+            strokeWidth={2}
+            fill="url(#revFill)"
+            isAnimationActive={false}
+          />
+        ) : null}
+        {active.profit ? (
+          <Area
+            yAxisId="left"
+            type="monotone"
+            dataKey="profit"
+            name="Profit"
+            stroke={SERIES_COLORS.profit}
+            strokeWidth={2}
+            fill="url(#profitFill)"
+            isAnimationActive={false}
+          />
+        ) : null}
+        {active.margin ? (
+          <Line
+            yAxisId="right"
+            type="monotone"
+            dataKey="margin"
+            name="Margin"
+            stroke={SERIES_COLORS.margin}
+            strokeWidth={2}
+            strokeDasharray="4 4"
+            dot={false}
+            isAnimationActive={false}
+          />
+        ) : null}
+      </ComposedChart>
+    </ResponsiveContainer>
+  );
+}
+
+function AnalyticsModal({
+  data,
+  onClose,
+}: {
+  data: TrendDatum[];
+  onClose: () => void;
+}) {
+  const [active, setActive] = useState<Record<SeriesKey, boolean>>({
     revenue: true,
     profit: true,
     margin: true,
+    sales: false,
   });
+  const [range, setRange] = useState<RangeKey>("12m");
 
-  const data = useMemo(
-    () =>
-      monthly.map((m) => ({
-        month: formatMonth(m.month),
-        revenue: m.revenue_cents / 100,
-        profit: m.profit_cents / 100,
-        margin:
-          m.revenue_cents > 0 ? (m.profit_cents / m.revenue_cents) * 100 : 0,
-      })),
-    [monthly]
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const view = useMemo(
+    () => (range === "6m" ? data.slice(-6) : data),
+    [data, range]
   );
 
-  const hasData = monthly.some((m) => m.sales_count > 0);
   const toggle = (key: SeriesKey) =>
-    setSeries((s) => ({ ...s, [key]: !s[key] }));
+    setActive((s) => ({ ...s, [key]: !s[key] }));
 
-  const toggleBtn = (key: SeriesKey, label: string) => (
-    <button
-      type="button"
-      onClick={() => toggle(key)}
-      className={`inline-flex items-center gap-1.5 border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.06em] transition-colors ${
-        series[key]
-          ? "border-[#343941] bg-[#111315] text-[#E6E8EB]"
-          : "border-[#24282D] text-[#77808C] hover:text-[#B8C0CC]"
-      }`}
-    >
-      <span
-        className="inline-block h-1.5 w-1.5 rounded-full"
-        style={{
-          backgroundColor: series[key] ? SERIES_COLORS[key] : "#3F454D",
-        }}
-      />
-      {label}
-    </button>
-  );
+  const seriesOpts: { key: SeriesKey; label: string }[] = [
+    { key: "revenue", label: "Revenue" },
+    { key: "profit", label: "Profit" },
+    { key: "margin", label: "Margin %" },
+    { key: "sales", label: "Sales count" },
+  ];
+  const rangeOpts: { key: RangeKey; label: string }[] = [
+    { key: "6m", label: "6M" },
+    { key: "12m", label: "12M" },
+  ];
 
   return (
-    <section className="border border-[#24282D] bg-[#0B0D0F] p-3">
-      <SectionHeading
-        eyebrow="Trend"
-        title="Last 12 months"
-        compact
-        right={
-          <div className="flex gap-1">
-            {toggleBtn("revenue", "Revenue")}
-            {toggleBtn("profit", "Profit")}
-            {toggleBtn("margin", "Margin %")}
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+    >
+      <div
+        className="flex max-h-[90vh] w-full max-w-4xl flex-col border border-[#24282D] bg-[#0B0D0F] shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-[#24282D] px-4 py-3">
+          <div>
+            <div className="text-[9px] font-medium uppercase tracking-[0.12em] text-[#77808C]">
+              Profit & Loss
+            </div>
+            <h2 className="text-[14px] font-semibold tracking-tight text-[#E6E8EB]">
+              Performance trend
+            </h2>
           </div>
-        }
-      />
-      {hasData ? (
-        <div className="h-[200px] w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-              <defs>
-                <linearGradient id="revFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={SERIES_COLORS.revenue} stopOpacity={0.35} />
-                  <stop offset="100%" stopColor={SERIES_COLORS.revenue} stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="profitFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={SERIES_COLORS.profit} stopOpacity={0.35} />
-                  <stop offset="100%" stopColor={SERIES_COLORS.profit} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid stroke="#1E2227" strokeDasharray="3 3" />
-              <XAxis
-                dataKey="month"
-                stroke="#77808C"
-                tick={{ fontSize: 11 }}
-                tickLine={false}
-                axisLine={{ stroke: "#24282D" }}
-              />
-              <YAxis
-                yAxisId="left"
-                stroke="#77808C"
-                tick={{ fontSize: 11 }}
-                tickFormatter={(v) => fmtMoneyCompact(v * 100)}
-                tickLine={false}
-                axisLine={{ stroke: "#24282D" }}
-                width={56}
-              />
-              <YAxis
-                yAxisId="right"
-                orientation="right"
-                stroke="#77808C"
-                tick={{ fontSize: 11 }}
-                tickFormatter={(v) => `${v.toFixed(0)}%`}
-                tickLine={false}
-                axisLine={{ stroke: "#24282D" }}
-                width={40}
-              />
-              <Tooltip
-                contentStyle={{
-                  background: "#0B0D0F",
-                  border: "1px solid #24282D",
-                  fontSize: 12,
-                  borderRadius: 0,
-                }}
-                labelStyle={{ color: "#B8C0CC" }}
-                formatter={(value, name) => {
-                  const v = Number(value) || 0;
-                  const label = String(name);
-                  if (label === "Margin") return [`${v.toFixed(1)}%`, label];
-                  return [MONEY_PRECISE.format(v), label];
-                }}
-              />
-              {series.revenue ? (
-                <Area
-                  yAxisId="left"
-                  type="monotone"
-                  dataKey="revenue"
-                  name="Revenue"
-                  stroke={SERIES_COLORS.revenue}
-                  strokeWidth={2}
-                  fill="url(#revFill)"
-                  isAnimationActive={false}
-                />
-              ) : null}
-              {series.profit ? (
-                <Area
-                  yAxisId="left"
-                  type="monotone"
-                  dataKey="profit"
-                  name="Profit"
-                  stroke={SERIES_COLORS.profit}
-                  strokeWidth={2}
-                  fill="url(#profitFill)"
-                  isAnimationActive={false}
-                />
-              ) : null}
-              {series.margin ? (
-                <Line
-                  yAxisId="right"
-                  type="monotone"
-                  dataKey="margin"
-                  name="Margin"
-                  stroke={SERIES_COLORS.margin}
-                  strokeWidth={2}
-                  strokeDasharray="4 4"
-                  dot={false}
-                  isAnimationActive={false}
-                />
-              ) : null}
-            </ComposedChart>
-          </ResponsiveContainer>
+          <div className="flex items-center gap-2">
+            <div className="flex border border-[#24282D]">
+              {rangeOpts.map((opt) => (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => setRange(opt.key)}
+                  className={`px-3 py-1.5 text-[11px] font-semibold transition-colors ${
+                    range === opt.key
+                      ? "bg-[#20B26B] text-[#07100B]"
+                      : "text-[#B8C0CC] hover:text-[#E6E8EB]"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="border border-[#24282D] bg-[#111315] px-2.5 py-1.5 text-[12px] font-semibold text-[#B8C0CC] transition-colors hover:border-[#5A626E] hover:text-[#E6E8EB]"
+            >
+              Esc ✕
+            </button>
+          </div>
         </div>
-      ) : (
-        <EmptyState message="No sales in the last 12 months yet. Record a sale from the ledger to see your trend here." />
-      )}
-    </section>
+
+        <div className="flex flex-wrap gap-1.5 border-b border-[#24282D] px-4 py-2.5">
+          {seriesOpts.map((opt) => (
+            <button
+              key={opt.key}
+              type="button"
+              onClick={() => toggle(opt.key)}
+              className={`inline-flex items-center gap-1.5 border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.06em] transition-colors ${
+                active[opt.key]
+                  ? "border-[#343941] bg-[#111315] text-[#E6E8EB]"
+                  : "border-[#24282D] text-[#77808C] hover:text-[#B8C0CC]"
+              }`}
+            >
+              <span
+                className="inline-block h-1.5 w-1.5 rounded-full"
+                style={{
+                  backgroundColor: active[opt.key]
+                    ? SERIES_COLORS[opt.key]
+                    : "#3F454D",
+                }}
+              />
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="min-h-0 flex-1 p-4">
+          <div className="h-[55vh] min-h-[320px] w-full">
+            <TrendChart data={view} active={active} />
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
 function StaleAlertBlock({ stale }: { stale: StaleAlert }) {
-  if (stale.count === 0) {
-    return (
-      <div className="border border-[#1F5F45] bg-[#0E251B] p-4">
-        <div className="text-[10px] font-medium uppercase tracking-[0.08em] text-[#20B26B]">
-          Clean inventory
-        </div>
-        <div className="mt-1 text-[13px] text-[#E6E8EB]">
-          No cards have been sitting longer than 90 days.
-        </div>
-      </div>
-    );
-  }
   return (
     <div className="border border-[#723030] bg-[#1A0E0E] p-4">
       <div className="flex items-start justify-between gap-3">
@@ -641,7 +764,7 @@ function StaleAlertBlock({ stale }: { stale: StaleAlert }) {
   );
 }
 
-function InventoryHealth({
+function CapitalAllocation({
   inventory,
 }: {
   inventory: FinancialsSummary["inventory"];
@@ -663,8 +786,8 @@ function InventoryHealth({
   return (
     <section className="border border-[#24282D] bg-[#0B0D0F] p-3">
       <SectionHeading
-        eyebrow="Inventory Health"
-        title="How much is sitting where"
+        eyebrow="Capital Allocation"
+        title="Where your capital is tied up"
         compact
         right={
           <Link
@@ -676,11 +799,11 @@ function InventoryHealth({
         }
       />
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-[200px_1fr]">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-[180px_1fr]">
         <div className="relative">
           {hasData ? (
             <>
-              <div className="h-[170px] w-full">
+              <div className="h-[160px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
@@ -689,8 +812,8 @@ function InventoryHealth({
                       nameKey="name"
                       cx="50%"
                       cy="50%"
-                      innerRadius={48}
-                      outerRadius={72}
+                      innerRadius={44}
+                      outerRadius={68}
                       stroke="#0B0D0F"
                       strokeWidth={2}
                       isAnimationActive={false}
@@ -723,10 +846,10 @@ function InventoryHealth({
               </div>
               <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
                 <div className="text-[9px] font-medium uppercase tracking-[0.1em] text-[#77808C]">
-                  Inventory
+                  Capital
                 </div>
                 <div className="font-data text-[15px] font-semibold tabular-nums leading-tight text-[#E6E8EB]">
-                  {fmtMoneyCompact(inventory.total_estimated_value_cents)}
+                  {fmtMoneyCompact(totalCapital)}
                 </div>
                 <div className="text-[9px] text-[#77808C]">
                   {totalCount} card{totalCount === 1 ? "" : "s"}
@@ -760,7 +883,7 @@ function InventoryHealth({
                     key={row.label}
                     className="border-t border-[#1E2227] text-[#E6E8EB]"
                   >
-                    <td className="py-2 pr-3">
+                    <td className="py-1.5 pr-3">
                       <span className="inline-flex items-center gap-2">
                         <span
                           className="inline-block h-2 w-2 rounded-full"
@@ -769,16 +892,16 @@ function InventoryHealth({
                         {row.label} days
                       </span>
                     </td>
-                    <td className="py-2 pr-3 text-right tabular-nums text-[#B8C0CC]">
+                    <td className="py-1.5 pr-3 text-right tabular-nums text-[#B8C0CC]">
                       {row.count}
                     </td>
-                    <td className="py-2 pr-3 text-right font-data tabular-nums">
+                    <td className="py-1.5 pr-3 text-right font-data tabular-nums">
                       {fmtMoney(row.cost_basis_cents)}
                     </td>
-                    <td className="py-2 pr-3 text-right font-data tabular-nums text-[#B8C0CC]">
+                    <td className="py-1.5 pr-3 text-right font-data tabular-nums text-[#B8C0CC]">
                       {fmtMoney(row.estimated_value_cents)}
                     </td>
-                    <td className="py-2 text-right tabular-nums text-[#B8C0CC]">
+                    <td className="py-1.5 text-right tabular-nums text-[#B8C0CC]">
                       {pct.toFixed(0)}%
                     </td>
                   </tr>
@@ -788,18 +911,17 @@ function InventoryHealth({
           </table>
         </div>
       </div>
-
     </section>
   );
 }
 
-function ChannelBreakdownPanel({ rows }: { rows: ChannelBreakdown[] }) {
+function ChannelPerformancePanel({ rows }: { rows: ChannelBreakdown[] }) {
   if (rows.length === 0) {
     return (
       <section className="border border-[#24282D] bg-[#0B0D0F] p-3">
         <SectionHeading
-          eyebrow="Channels (90d)"
-          title="Profit by channel"
+          eyebrow="Channel Performance"
+          title="Revenue & profit by channel"
           compact
         />
         <EmptyState message="No sales in the last 90 days." />
@@ -810,12 +932,17 @@ function ChannelBreakdownPanel({ rows }: { rows: ChannelBreakdown[] }) {
   return (
     <section className="border border-[#24282D] bg-[#0B0D0F] p-3">
       <SectionHeading
-        eyebrow="Channels (90d)"
-        title="Profit by channel"
+        eyebrow="Channel Performance"
+        title="Revenue & profit by channel"
         compact
+        right={
+          <span className="text-[10px] uppercase tracking-[0.08em] text-[#77808C]">
+            Last 90d
+          </span>
+        }
       />
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[640px] text-left text-[12px]">
+        <table className="w-full min-w-[560px] text-left text-[12px]">
           <thead>
             <tr className="text-[10px] uppercase tracking-[0.08em] text-[#77808C]">
               <th className="py-2 pr-3">Channel</th>
@@ -828,6 +955,7 @@ function ChannelBreakdownPanel({ rows }: { rows: ChannelBreakdown[] }) {
           </thead>
           <tbody>
             {rows.map((row) => {
+              const negative = row.profit_cents < 0;
               const widthPct = Math.max(
                 4,
                 (Math.abs(row.profit_cents) / maxProfit) * 100
@@ -835,10 +963,19 @@ function ChannelBreakdownPanel({ rows }: { rows: ChannelBreakdown[] }) {
               return (
                 <tr
                   key={row.channel}
-                  className="group border-t border-[#1E2227] text-[#E6E8EB] transition-colors hover:bg-[#111315]"
+                  className={`group border-t border-[#1E2227] text-[#E6E8EB] transition-colors hover:bg-[#111315] ${
+                    negative ? "bg-[#160C0C]" : ""
+                  }`}
                 >
                   <td className="py-1.5 pr-3 font-semibold capitalize">
-                    {row.channel}
+                    <span className="inline-flex items-center gap-2">
+                      <span
+                        className={`inline-block h-2 w-2 rounded-full ${
+                          negative ? "bg-[#E05C5C]" : "bg-[#20B26B]"
+                        }`}
+                      />
+                      {row.channel}
+                    </span>
                   </td>
                   <td className="py-1.5 pr-3 text-right font-data tabular-nums">
                     {fmtMoney(row.revenue_cents)}
@@ -848,7 +985,11 @@ function ChannelBreakdownPanel({ rows }: { rows: ChannelBreakdown[] }) {
                   >
                     {fmtMoney(row.profit_cents)}
                   </td>
-                  <td className="py-1.5 pr-3 text-right font-data tabular-nums text-[#F0B429]">
+                  <td
+                    className={`py-1.5 pr-3 text-right font-data tabular-nums ${
+                      negative ? "text-[#E05C5C]" : "text-[#F0B429]"
+                    }`}
+                  >
                     {fmtPct(row.margin_pct, 0)}
                   </td>
                   <td className="py-1.5 pr-3 text-right tabular-nums text-[#B8C0CC]">
@@ -857,7 +998,7 @@ function ChannelBreakdownPanel({ rows }: { rows: ChannelBreakdown[] }) {
                   <td className="py-1.5 pr-3">
                     <div className="h-1.5 w-20 bg-[#1E2227]">
                       <div
-                        className={`h-full ${row.profit_cents >= 0 ? "bg-[#20B26B]" : "bg-[#E05C5C]"}`}
+                        className={`h-full ${negative ? "bg-[#E05C5C]" : "bg-[#20B26B]"}`}
                         style={{ width: `${widthPct}%` }}
                       />
                     </div>
@@ -872,34 +1013,57 @@ function ChannelBreakdownPanel({ rows }: { rows: ChannelBreakdown[] }) {
   );
 }
 
-function PerformersPanel({
+function PerformersAccordion({
   winners,
   losers,
 }: {
   winners: CardPerformance[];
   losers: CardPerformance[];
 }) {
+  const [open, setOpen] = useState(false);
+  const count = winners.length + losers.length;
   return (
-    <section>
-      <SectionHeading
-        eyebrow="Performers (180d)"
-        title="Best and worst trades"
-        compact
-      />
-      <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-        <PerformerList
-          title="Best performing"
-          rows={winners}
-          emptyMessage="No profitable sales in the last 180 days yet."
-          tone="up"
-        />
-        <PerformerList
-          title="Worst performing"
-          rows={losers}
-          emptyMessage="No losing sales in the last 180 days — well done."
-          tone="down"
-        />
-      </div>
+    <section className="border border-[#24282D] bg-[#0B0D0F]">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left transition-colors hover:bg-[#111315]"
+      >
+        <div className="flex items-baseline gap-3">
+          <div>
+            <div className="text-[9px] font-medium uppercase tracking-[0.12em] text-[#77808C]">
+              Performers · 180d
+            </div>
+            <div className="text-[13px] font-semibold tracking-tight text-[#E6E8EB]">
+              View performers
+            </div>
+          </div>
+          <span className="text-[10px] uppercase tracking-[0.08em] text-[#77808C]">
+            Best & worst trades · Profit · ROI
+          </span>
+        </div>
+        <span className="text-[12px] text-[#77808C]">
+          {count > 0 ? `${count} ` : ""}
+          {open ? "▲" : "▼"}
+        </span>
+      </button>
+      {open ? (
+        <div className="grid grid-cols-1 gap-2 border-t border-[#24282D] p-2 md:grid-cols-2">
+          <PerformerList
+            title="Best performing"
+            rows={winners}
+            emptyMessage="No profitable sales in the last 180 days yet."
+            tone="up"
+          />
+          <PerformerList
+            title="Worst performing"
+            rows={losers}
+            emptyMessage="No losing sales in the last 180 days — well done."
+            tone="down"
+          />
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -916,7 +1080,7 @@ function PerformerList({
   tone: "up" | "down";
 }) {
   return (
-    <div className="border border-[#24282D] bg-[#0B0D0F]">
+    <div className="border border-[#24282D] bg-[#090B0D]">
       <div className="flex items-center justify-between border-b border-[#24282D] px-4 py-2">
         <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#B8C0CC]">
           {title}
@@ -926,7 +1090,7 @@ function PerformerList({
         </div>
       </div>
       {rows.length === 0 ? (
-        <EmptyState message={emptyMessage} />
+        <EmptyState message={emptyMessage} height={120} />
       ) : (
         <ul className="divide-y divide-[#1E2227]">
           {rows.map((row, i) => (
@@ -962,57 +1126,18 @@ function PerformerList({
   );
 }
 
-function DealerScoreInline({ score }: { score: DealerScore }) {
-  const scoreClass =
-    score.total >= 80
-      ? "text-[#20B26B]"
-      : score.total >= 60
-        ? "text-[#86B817]"
-        : score.total >= 40
-          ? "text-[#F0B429]"
-          : "text-[#E05C5C]";
-  const components: { label: string; value: number }[] = [
-    { label: "Margin", value: score.components.margin },
-    { label: "Turn", value: score.components.turn },
-    { label: "Stale", value: score.components.stale },
-    { label: "Sell-thr", value: score.components.sell_through },
-  ];
+function EmptyState({
+  message,
+  height = 160,
+}: {
+  message: string;
+  height?: number;
+}) {
   return (
     <div
-      className="flex items-center gap-3 border border-[#24282D] bg-[#0B0D0F] px-3 py-1.5"
-      title={`Composite of margin / turn / stale / sell-through (25 pts each)`}
+      className="flex items-center justify-center px-4 text-center text-[12px] text-[#77808C]"
+      style={{ height }}
     >
-      <div className="flex items-baseline gap-1">
-        <span className="text-[9px] font-medium uppercase tracking-[0.1em] text-[#77808C]">
-          Dealer
-        </span>
-        <span className={`font-data text-[18px] font-semibold tabular-nums leading-none ${scoreClass}`}>
-          {score.total}
-        </span>
-        <span className="text-[10px] text-[#77808C]">/100</span>
-      </div>
-      <div className="hidden items-center gap-2 sm:flex">
-        {components.map((c) => (
-          <div key={c.label} className="flex items-center gap-1">
-            <span className="text-[9px] uppercase tracking-[0.06em] text-[#77808C]">
-              {c.label}
-            </span>
-            <div className="h-1 w-10 bg-[#1E2227]">
-              <div
-                className="h-full bg-[#3B82F6]"
-                style={{ width: `${(c.value / 25) * 100}%` }}
-              />
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function EmptyState({ message }: { message: string }) {
-  return (
-    <div className="flex h-[160px] items-center justify-center px-4 text-center text-[12px] text-[#77808C]">
       {message}
     </div>
   );
@@ -1024,13 +1149,16 @@ function LoadingFinancials() {
       <main className="min-h-screen bg-[#090B0D] text-[#E6E8EB]">
         <div className="animate-pulse space-y-3 p-4">
           <div className="h-7 w-40 bg-[#1E2227]" />
-          <div className="grid grid-cols-5 gap-2">
-            {[0, 1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-20 bg-[#1E2227]" />
+          <div className="grid grid-cols-4 gap-2 sm:grid-cols-8">
+            {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
+              <div key={i} className="h-14 bg-[#1E2227]" />
             ))}
           </div>
-          <div className="h-[280px] bg-[#1E2227]" />
-          <div className="h-[280px] bg-[#1E2227]" />
+          <div className="h-[260px] bg-[#1E2227]" />
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            <div className="h-[220px] bg-[#1E2227]" />
+            <div className="h-[220px] bg-[#1E2227]" />
+          </div>
         </div>
       </main>
     </AuthenticatedLayout>
@@ -1103,9 +1231,10 @@ export default function FinancialsPage() {
               Synced with ledger
             </span>
           </div>
-          {summary ? (
-            <DealerScoreInline score={summary.dealer_score} />
-          ) : null}
+          <span className="inline-flex items-center gap-1.5 border border-[#1F5F45] bg-[#0E251B] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#20B26B]">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#20B26B]" />
+            Dealer analytics
+          </span>
         </header>
 
         {error ? (
@@ -1120,25 +1249,23 @@ export default function FinancialsPage() {
               snapshot={summary.snapshot}
               velocity={summary.velocity}
             />
-            <PnlOverview
+            <PnlSection
               totals={summary.totals}
+              monthly={summary.monthly}
               period={period}
               setPeriod={setPeriod}
             />
             {summary.inventory.stale.count > 0 ? (
               <StaleAlertBlock stale={summary.inventory.stale} />
             ) : null}
-            <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1fr_380px]">
-              <PnlChart monthly={summary.monthly} />
-              <InventoryHealth inventory={summary.inventory} />
-            </div>
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-              <ChannelBreakdownPanel rows={summary.channels_90d} />
-              <PerformersPanel
-                winners={summary.winners}
-                losers={summary.losers}
-              />
+              <CapitalAllocation inventory={summary.inventory} />
+              <ChannelPerformancePanel rows={summary.channels_90d} />
             </div>
+            <PerformersAccordion
+              winners={summary.winners}
+              losers={summary.losers}
+            />
           </div>
         ) : null}
       </main>
