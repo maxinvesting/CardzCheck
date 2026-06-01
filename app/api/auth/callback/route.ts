@@ -2,19 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { NextRequest } from "next/server";
 import { hasBusinessWorkspaceAccess } from "@/lib/business/workspace-access";
-
-function sanitizeNextPath(nextParam: string | null): string | null {
-  if (!nextParam) return null;
-  if (!nextParam.startsWith("/") || nextParam.startsWith("//")) return null;
-
-  try {
-    const parsed = new URL(nextParam, "http://localhost");
-    if (parsed.origin !== "http://localhost") return null;
-    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
-  } catch {
-    return null;
-  }
-}
+import { sanitizeNextPath } from "@/lib/auth/safe-redirect";
 
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);

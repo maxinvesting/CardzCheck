@@ -154,9 +154,9 @@ export default function EbayListingModal({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               maxLength={80}
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder-white/20 focus:border-emerald-500/50 focus:outline-none"
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder-white/45 focus:border-emerald-500/50 focus:outline-none"
             />
-            <p className="mt-0.5 text-right text-[10px] text-white/20">{title.length}/80</p>
+            <p className="mt-0.5 text-right text-[10px] text-white/55">{title.length}/80</p>
           </div>
 
           {/* Category + Condition */}

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
+import { getOwnerAuth } from "@/lib/admin";
 
 const MIGRATIONS: Record<string, string> = {
   analyst: "20240126_analyst_threads.sql",
@@ -8,8 +9,14 @@ const MIGRATIONS: Record<string, string> = {
 };
 
 // Returns a migration SQL so the setup page can offer "Copy SQL".
+// Owner-only — exposes raw migration text.
 // ?migration=analyst (default) or ?migration=users
 export async function GET(request: NextRequest) {
+  const { user, unauthorizedResponse } = await getOwnerAuth();
+  if (!user) {
+    return unauthorizedResponse ?? NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const { searchParams } = new URL(request.url);
   const migration = searchParams.get("migration") || "analyst";
   const file = MIGRATIONS[migration] || MIGRATIONS.analyst;

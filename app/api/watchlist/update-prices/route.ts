@@ -27,11 +27,10 @@ export async function POST(request: NextRequest) {
     const authHeader = request.headers.get("authorization");
     const cronSecret = process.env.CRON_SECRET?.trim();
     if (!cronSecret) {
-      if (process.env.NODE_ENV === "production") {
-        console.error("[watchlist/update-prices] CRON_SECRET is missing in production");
-        return NextResponse.json({ error: "Server misconfigured" }, { status: 500 });
-      }
-    } else if (authHeader !== `Bearer ${cronSecret}`) {
+      console.error("[watchlist/update-prices] CRON_SECRET is not configured");
+      return NextResponse.json({ error: "Server misconfigured" }, { status: 500 });
+    }
+    if (authHeader !== `Bearer ${cronSecret}`) {
       console.error("Unauthorized cron request");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -174,13 +173,8 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Also support GET for manual testing
-export async function GET(request: NextRequest) {
-  // In development, allow GET requests for testing
-  if (process.env.NODE_ENV === "development") {
-    return POST(request);
-  }
-
+// Method not allowed for GET — POST with CRON_SECRET Bearer header is required.
+export async function GET() {
   return NextResponse.json(
     { error: "Method not allowed" },
     { status: 405 }

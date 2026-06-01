@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+import { createClient } from "@/lib/supabase/server";
 import {
   buildFallbackGradeEstimate,
   buildImageStats,
@@ -153,6 +154,14 @@ export async function POST(request: NextRequest) {
   let imageStats = buildImageStats([]);
 
   try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
     const bodyCard = body?.card && typeof body.card === "object" ? body.card : null;
     const cardMeta: GradeScanCardMeta = {

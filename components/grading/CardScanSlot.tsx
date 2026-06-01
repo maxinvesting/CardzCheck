@@ -487,10 +487,10 @@ export default function CardScanSlot({
                               value={refinementText}
                               onChange={(e) => setRefinementText(e.target.value)}
                               placeholder="e.g. there's a scratch on the top-left corner you missed…"
-                              className="w-full resize-none rounded-md border border-white/12 bg-white/5 px-3 py-2 text-xs text-white/80 placeholder:text-white/25 focus:outline-none focus:ring-1 focus:ring-amber-500/40"
+                              className="w-full resize-none rounded-md border border-white/12 bg-white/5 px-3 py-2 text-xs text-white/80 placeholder:text-white/45 focus:outline-none focus:ring-1 focus:ring-amber-500/40"
                             />
                             <div className="flex items-center justify-between">
-                              <span className={`text-[10px] ${refinementText.length > 450 ? "text-rose-400" : "text-white/25"}`}>
+                              <span className={`text-[10px] ${refinementText.length > 450 ? "text-rose-400" : "text-white/55"}`}>
                                 {refinementText.length}/500
                               </span>
                               <button
@@ -593,10 +593,10 @@ export default function CardScanSlot({
                   value={preScanNotes}
                   onChange={(e) => setPreScanNotes(e.target.value)}
                   placeholder="e.g. I think the centering is slightly off, possible scratch near top-left corner…"
-                  className="w-full resize-none rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/80 placeholder:text-white/20 focus:outline-none focus:ring-1 focus:ring-amber-500/30"
+                  className="w-full resize-none rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/80 placeholder:text-white/45 focus:outline-none focus:ring-1 focus:ring-amber-500/30"
                 />
                 {preScanNotes.length > 0 && (
-                  <p className={`text-right text-[10px] ${preScanNotes.length > 360 ? "text-rose-400" : "text-white/20"}`}>
+                  <p className={`text-right text-[10px] ${preScanNotes.length > 360 ? "text-rose-400" : "text-white/55"}`}>
                     {preScanNotes.length}/400
                   </p>
                 )}

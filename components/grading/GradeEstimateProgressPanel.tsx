@@ -83,7 +83,7 @@ export default function GradeEstimateProgressPanel({
         </h3>
         <div className="flex items-center gap-2">
           {elapsedLabel ? (
-            <span className={`rounded-full px-2.5 py-1 text-xs ${flat ? "border border-white/10 bg-white/[0.03] text-white/42" : "border border-[var(--biz-border)] bg-[color:var(--biz-surface-soft)] text-[var(--biz-muted)]"}`}>
+            <span className={`rounded-full px-2.5 py-1 text-xs ${flat ? "border border-white/10 bg-white/[0.03] text-white/65" : "border border-[var(--biz-border)] bg-[color:var(--biz-surface-soft)] text-[var(--biz-muted)]"}`}>
               {elapsedLabel}
             </span>
           ) : null}
@@ -96,7 +96,7 @@ export default function GradeEstimateProgressPanel({
       {identityLabel ? (
         <div className="mb-3">
           <p className={`text-sm font-medium ${flat ? "text-white/82" : "text-[var(--biz-text)]"}`}>{identityLabel}</p>
-          <p className={`text-xs ${flat ? "text-white/42" : "text-[var(--biz-muted)]"}`}>Identity verified for this run</p>
+          <p className={`text-xs ${flat ? "text-white/65" : "text-[var(--biz-muted)]"}`}>Identity verified for this run</p>
         </div>
       ) : null}
 

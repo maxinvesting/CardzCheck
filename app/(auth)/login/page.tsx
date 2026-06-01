@@ -6,6 +6,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import SportsCardBackground from "@/components/SportsCardBackground";
 import { hasBusinessWorkspaceAccess } from "@/lib/business/workspace-access";
+import { sanitizeNextPath } from "@/lib/auth/safe-redirect";
 
 function LoginForm() {
   const [email, setEmail] = useState("");
@@ -34,9 +35,10 @@ function LoginForm() {
 
     // Ensure we have a session before redirecting
     if (data.session) {
-      let redirectTarget = redirectParam || "/dashboard";
+      const safeRedirect = sanitizeNextPath(redirectParam);
+      let redirectTarget = safeRedirect || "/dashboard";
 
-      if (!redirectParam && data.user) {
+      if (!safeRedirect && data.user) {
         const hasBusinessAccess = await hasBusinessWorkspaceAccess(
           supabase as any,
           data.user.id
