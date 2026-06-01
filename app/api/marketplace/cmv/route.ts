@@ -1,9 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { computeListingCmv } from "@/lib/marketplace/pricing";
+import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
   const cardId = req.nextUrl.searchParams.get("card_id");
   if (!cardId) {
     return NextResponse.json({ error: "card_id_required" }, { status: 400 });

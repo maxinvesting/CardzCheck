@@ -29,15 +29,12 @@ type LifecycleListing = {
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const cronSecret = process.env.CRON_SECRET?.trim();
   if (!cronSecret) {
-    if (process.env.NODE_ENV === "production") {
-      console.error("[cron/marketplace-lifecycle] CRON_SECRET missing in production");
-      return NextResponse.json({ error: "Server misconfigured" }, { status: 500 });
-    }
-  } else {
-    const authHeader = req.headers.get("authorization");
-    if (authHeader !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    console.error("[cron/marketplace-lifecycle] CRON_SECRET is not configured");
+    return NextResponse.json({ error: "Server misconfigured" }, { status: 500 });
+  }
+  const authHeader = req.headers.get("authorization");
+  if (authHeader !== `Bearer ${cronSecret}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const supabase = await createServiceClient();

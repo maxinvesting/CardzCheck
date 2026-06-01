@@ -193,7 +193,7 @@ export default function BlackLabelScanCard({
                   autoComplete="off"
                   disabled={isBusy}
                   placeholder="2023 Prizm Victor Wembanyama Silver Prizm #136"
-                  className="w-full border-b border-white/12 bg-transparent px-0 py-3 text-sm text-[#f7f2e8] placeholder:text-white/25 focus:border-[#8e7740]/60 focus:outline-none"
+                  className="w-full border-b border-white/12 bg-transparent px-0 py-3 text-sm text-[#f7f2e8] placeholder:text-white/50 focus:border-[#8e7740]/60 focus:outline-none"
                 />
 
                 <div>
@@ -213,7 +213,7 @@ export default function BlackLabelScanCard({
                   onChange={(event) => setPreScanNotes(event.target.value)}
                   disabled={isBusy}
                   placeholder="Possible surface scratch near the top edge, centering looks slightly left heavy."
-                  className="w-full resize-none border-b border-white/12 bg-transparent px-0 py-3 text-sm text-[#f7f2e8] placeholder:text-white/25 focus:border-[#8e7740]/60 focus:outline-none"
+                  className="w-full resize-none border-b border-white/12 bg-transparent px-0 py-3 text-sm text-[#f7f2e8] placeholder:text-white/50 focus:border-[#8e7740]/60 focus:outline-none"
                 />
               </div>
 
@@ -464,7 +464,7 @@ export default function BlackLabelScanCard({
                     value={refinementText}
                     onChange={(event) => setRefinementText(event.target.value)}
                     placeholder="There is a surface scratch on the upper left edge that was underweighted."
-                    className="w-full resize-none border-b border-white/12 bg-transparent px-0 py-3 text-sm text-[#f7f2e8] placeholder:text-white/25 focus:border-[#8e7740]/60 focus:outline-none"
+                    className="w-full resize-none border-b border-white/12 bg-transparent px-0 py-3 text-sm text-[#f7f2e8] placeholder:text-white/50 focus:border-[#8e7740]/60 focus:outline-none"
                   />
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <span className="text-xs text-white/35">{refinementText.length}/500</span>

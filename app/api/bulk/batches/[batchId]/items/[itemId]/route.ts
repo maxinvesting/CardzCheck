@@ -34,7 +34,20 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     );
   }
 
-  // RLS ensures the item is in user's batch; we also verify batchId for safety
+  // Explicit ownership check (defense in depth — do not rely on RLS alone)
+  const { data: batch, error: batchError } = await supabase
+    .from("bulk_batches")
+    .select("id, user_id")
+    .eq("id", batchId)
+    .single();
+
+  if (batchError || !batch) {
+    return NextResponse.json({ error: "Batch not found" }, { status: 404 });
+  }
+  if (batch.user_id !== user.id) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const { data: item, error } = await supabase
     .from("bulk_batch_items")
     .update({ status: body.status, updated_at: new Date().toISOString() })

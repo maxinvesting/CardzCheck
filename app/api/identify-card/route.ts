@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { extractCardIdentityDetailed, type ImageInput } from "@/lib/card-identity";
+import { createClient } from "@/lib/supabase/server";
 import {
   ALLOWED_MIME_TYPES,
   ALLOWED_URL_HOSTS,
@@ -333,6 +334,14 @@ async function resolveImageInput(imageUrl: string): Promise<ImageInput> {
 
 export async function POST(request: NextRequest) {
   try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return jsonError("unauthorized", 401);
+    }
+
     const parsed = await parseIdentifyRequest(request);
 
     if (parsed.images.length === 0) {

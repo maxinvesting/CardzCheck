@@ -710,11 +710,11 @@ export default function GradeProbabilityPanel({
                 </span>
               </div>
             ) : (
-              <span className="text-[52px] font-black leading-none text-white/20">--</span>
+              <span className="text-[52px] font-black leading-none text-white/45">--</span>
             )}
 
             <div className="mt-1.5 flex items-center gap-1.5">
-              <span className="text-[9px] font-bold uppercase tracking-widest text-white/25">EV</span>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-white/55">EV</span>
               <span className="text-sm font-semibold text-white/35">{evLabel}</span>
             </div>
 
@@ -731,7 +731,7 @@ export default function GradeProbabilityPanel({
                   {confidence} conf.
                 </span>
               )}
-              <span className="text-[9px] text-white/25">→ {verdict.suggestedGrader}</span>
+              <span className="text-[10px] text-white/55">→ {verdict.suggestedGrader}</span>
             </div>
           </div>
 
@@ -782,7 +782,7 @@ export default function GradeProbabilityPanel({
                 : null}
             </div>
             {resolvedGradeProbabilities ? (
-              <p className="mt-2 text-[8px] leading-snug text-white/22">
+              <p className="mt-2 text-[10px] leading-snug text-white/55">
                 {gradingCopy.panel.multiGraderBandsNote}
               </p>
             ) : null}
@@ -916,7 +916,7 @@ export default function GradeProbabilityPanel({
             {exportError && (
               <p className="mt-2 text-[10px] text-rose-400">{exportError}</p>
             )}
-            <p className="mt-3 text-[9px] leading-relaxed text-white/18" data-export-disclaimer="true">
+            <p className="mt-3 text-[10px] leading-relaxed text-white/55" data-export-disclaimer="true">
               {gradingCopy.panel.disclaimer}
             </p>
           </div>
@@ -938,7 +938,7 @@ export default function GradeProbabilityPanel({
               }}
             />
           ) : (
-            <div className="text-white/15 text-sm">No image</div>
+            <div className="text-white/40 text-sm">No image</div>
           )}
         </div>
 
@@ -1000,7 +1000,7 @@ export default function GradeProbabilityPanel({
               Raw sold →
             </a>
           </div>
-          <p className="mt-2 text-[9px] text-white/25">
+          <p className="mt-2 text-[10px] text-white/55">
             Click to verify current eBay sold prices
           </p>
         </div>
