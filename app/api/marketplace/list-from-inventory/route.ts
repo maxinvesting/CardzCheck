@@ -141,6 +141,27 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Require at least one user-uploaded photo before the card can be listed.
+  // Stock/cert images (image_url) don't count — sellers must add their own.
+  let hasUserPhotos = Boolean(item.user_image_url);
+  if (!hasUserPhotos) {
+    const { count } = await supabase
+      .from("card_images")
+      .select("id", { count: "exact", head: true })
+      .eq("card_id", item.id)
+      .eq("user_id", user.id);
+    hasUserPhotos = (count ?? 0) > 0;
+  }
+  if (!hasUserPhotos) {
+    return NextResponse.json(
+      {
+        error: "photos_required",
+        message: "Add at least one photo of this card before listing it on the marketplace.",
+      },
+      { status: 422 }
+    );
+  }
+
   const estimatedValueCents = pickEstimatedValueCents(item) ?? input.list_price_cents ?? null;
   if (estimatedValueCents == null) {
     return NextResponse.json(

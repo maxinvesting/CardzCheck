@@ -25,6 +25,12 @@ interface Props {
   onSuccess: (listingId: string) => void;
 }
 
+function hasUserPhotos(item: BusinessInventoryItem): boolean {
+  if (item.user_image_url) return true;
+  if (Array.isArray(item.card_images) && item.card_images.length > 0) return true;
+  return false;
+}
+
 function estimatedCents(item: BusinessInventoryItem): number | null {
   if (typeof item.current_market_value_cents === "number" && item.current_market_value_cents > 0)
     return item.current_market_value_cents;
@@ -39,6 +45,7 @@ function estimatedCents(item: BusinessInventoryItem): number | null {
 
 export default function CardzCheckListingModal({ item, onClose, onSuccess }: Props) {
   const cmvCents = useMemo(() => estimatedCents(item), [item]);
+  const photosPresent = useMemo(() => hasUserPhotos(item), [item]);
 
   const [mode, setMode] = useState<PricingMode>("cardzcheck");
   const [price, setPrice] = useState<string>(
@@ -68,7 +75,9 @@ export default function CardzCheckListingModal({ item, onClose, onSuccess }: Pro
       : null;
 
   const canSubmit =
-    !busy && (mode === "cardzcheck" ? true : priceCents != null && priceCents > 0);
+    !busy &&
+    photosPresent &&
+    (mode === "cardzcheck" ? true : priceCents != null && priceCents > 0);
 
   async function submit() {
     setError(null);
@@ -152,6 +161,14 @@ export default function CardzCheckListingModal({ item, onClose, onSuccess }: Pro
           {error ? (
             <div className="mb-4 border border-[#723030] bg-[#2A1111] px-3 py-2 text-xs text-[#E05C5C]">
               {error}
+            </div>
+          ) : null}
+
+          {!photosPresent ? (
+            <div className="mb-4 border border-[#5A4A1F] bg-[#251E0E] px-3 py-2.5 text-xs text-[#F0B429]">
+              <span className="font-semibold">Add photos first.</span> You need at least one
+              photo of this card before you can list it. Add photos from the card&apos;s profile
+              in your ledger, then come back to list it.
             </div>
           ) : null}
 
