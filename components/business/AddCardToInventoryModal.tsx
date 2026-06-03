@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { normalizeCertWriteFields } from "@/lib/images/cert-image";
+import { createClient } from "@/lib/supabase/client";
 
 export interface PendingInventoryCard {
   card_id?: string;
@@ -119,6 +120,48 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cmvLoading, setCmvLoading] = useState(false);
+  const [images, setImages] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
+
+  // Seed images from any photo the card already arrived with (grade scan,
+  // smart-search, etc.); a fresh manual add starts with none.
+  useEffect(() => {
+    if (!isOpen) return;
+    const seeded = [card?.user_image_url, card?.imageUrl].filter(
+      (u): u is string => typeof u === "string" && u.length > 0
+    );
+    setImages(Array.from(new Set(seeded)));
+  }, [isOpen, card?.user_image_url, card?.imageUrl]);
+
+  async function handleUploadFiles(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    setError(null);
+    try {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("You must be signed in to upload photos.");
+      const urls: string[] = [];
+      for (const file of Array.from(files)) {
+        const fileName = `${user.id}/${Date.now()}-${file.name}`;
+        const { data, error: upErr } = await supabase.storage
+          .from("card-images")
+          .upload(fileName, file);
+        if (upErr) throw new Error(upErr.message);
+        const {
+          data: { publicUrl },
+        } = supabase.storage.from("card-images").getPublicUrl(data.path);
+        urls.push(publicUrl);
+      }
+      setImages((prev) => Array.from(new Set([...prev, ...urls])));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to upload photo");
+    } finally {
+      setUploading(false);
+    }
+  }
 
   // Fetch estimated CMV when modal opens with a card
   useEffect(() => {
@@ -169,6 +212,10 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (images.length === 0) {
+      setError("Add at least one photo of the card before saving.");
+      return;
+    }
     setLoading(true);
     setError(null);
 
@@ -178,12 +225,8 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
         grading_company: gradeFields.gradingCompany,
         cert_number: card.psa_cert_number,
       });
-      const resolvedImageUrl = card.user_image_url || card.imageUrl || null;
-      const resolvedImageSource = card.user_image_url
-        ? "user"
-        : resolvedImageUrl
-        ? "user"
-        : "none";
+      const resolvedImageUrl = images[0] ?? card.user_image_url ?? card.imageUrl ?? null;
+      const resolvedImageSource = resolvedImageUrl ? "user" : "none";
 
       const res = await fetch("/api/business/inventory", {
         method: "POST",
@@ -216,7 +259,7 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
             : null,
           image_url: resolvedImageUrl,
           image_source: resolvedImageSource,
-          user_image_url: card.user_image_url || null,
+          user_image_url: resolvedImageUrl,
           location: form.location || null,
           notes: form.notes || null,
         }),
@@ -243,6 +286,7 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
         location: "",
         notes: "",
       });
+      setImages([]);
 
       onSuccess(card.player_name);
       onClose();
@@ -260,13 +304,15 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
     options?: readonly string[],
     placeholder?: string
   ) => (
-    <div>
-      <label className="block text-xs text-gray-400 mb-1">{label}</label>
+    <label className="block">
+      <span className="mb-1 block text-[10px] font-medium uppercase tracking-[0.08em] text-[#77808C]">
+        {label}
+      </span>
       {type === "select" ? (
         <select
           value={form[key]}
           onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"
+          className="w-full border border-[#343941] bg-[#0F1317] px-3 py-2 text-sm text-[#E6E8EB] focus:border-[#20B26B] focus:outline-none"
         >
           {options?.map((o) => (
             <option key={o} value={o}>
@@ -288,117 +334,197 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
           value={form[key]}
           onChange={(e) => setForm({ ...form, [key]: e.target.value })}
           placeholder={placeholder}
-          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500"
+          className="w-full border border-[#343941] bg-[#0F1317] px-3 py-2 text-sm text-[#E6E8EB] placeholder-[#5A626E] focus:border-[#20B26B] focus:outline-none"
         />
       )}
-    </div>
+    </label>
   );
 
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget && !loading) onClose();
       }}
     >
-      <div className="bg-[#111827] border border-white/[0.08] rounded-2xl w-full max-w-lg shadow-none max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-gray-800 flex items-start justify-between">
-          <h2 className="text-lg font-bold text-white">Add Card to Inventory</h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-300">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {/* Card Preview */}
-          <div className="flex gap-3 p-3 bg-gray-800/60 border border-gray-700/50 rounded-xl">
-            {card.imageUrl && (
-              <img
-                src={card.imageUrl}
-                alt={card.player_name}
-                className="w-14 h-20 object-cover rounded-lg flex-shrink-0"
-              />
-            )}
-            <div className="min-w-0">
-              <p className="text-sm font-bold text-white truncate">{card.player_name}</p>
-              {card.year && <p className="text-xs text-gray-400">{card.year}</p>}
-              {card.set_name && (
-                <p className="text-xs text-gray-400 truncate">{card.set_name}</p>
-              )}
-              {card.parallel_type && (
-                <p className="text-xs text-emerald-400">{card.parallel_type}</p>
-              )}
-              {gradeFields.gradeLabel && (
-                <p className="text-xs text-blue-400 font-medium">{gradeFields.gradeLabel}</p>
-              )}
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Add card to inventory"
+        className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden border border-[#24282D] bg-[#0B0D0F] text-[#E6E8EB] shadow-2xl"
+      >
+        {/* Header */}
+        <header className="flex items-start justify-between border-b border-[#24282D] px-5 py-4">
+          <div className="min-w-0">
+            <div className="text-[10px] font-medium uppercase tracking-[0.12em] text-[#77808C]">
+              Inventory
             </div>
+            <h2 className="mt-0.5 text-base font-semibold text-[#E6E8EB]">
+              Add Card to Inventory
+            </h2>
           </div>
-
-          {error && (
-            <div className="p-3 bg-red-900/20 border border-red-700 rounded-lg">
-              <p className="text-sm text-red-400">{error}</p>
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-4">
-            {inp("Quantity", "quantity", "number")}
-            {inp("Acquisition Type", "acquisition_type", "select", ACQ_OPTIONS)}
-            {inp("Acquisition Date", "acquisition_date", "date")}
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            {inp("Cost Basis ($)", "cost_basis", "number")}
-            {inp("Tax ($)", "tax", "number")}
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            {inp("Shipping ($)", "shipping", "number")}
-            {inp("Fees ($)", "fees_paid", "number")}
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            {inp("Channel", "channel", "select", CHANNEL_OPTIONS)}
-            {inp("Status", "status", "select", STATUS_OPTIONS)}
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            {inp("List Price ($)", "list_price", "number")}
-            <div>
-              <label className="block text-xs text-gray-400 mb-1">
-                Market Value / Card ($)
-                {cmvLoading && (
-                  <span className="ml-2 text-amber-400">Fetching estimate…</span>
-                )}
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                value={form.current_market_value}
-                onChange={(e) =>
-                  setForm({ ...form, current_market_value: e.target.value })
-                }
-                placeholder="Override with your own value"
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500"
-              />
-            </div>
-          </div>
-          {inp("Storage", "location", "text", undefined, "Storage unit, binder, etc.")}
-          <div>
-            <label className="block text-xs text-gray-400 mb-1">Notes</label>
-            <textarea
-              value={form.notes}
-              onChange={(e) => setForm({ ...form, notes: e.target.value })}
-              rows={2}
-              placeholder="Serial number, condition notes, etc."
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white resize-none placeholder-gray-500"
-            />
-          </div>
-
           <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-medium rounded-lg transition-colors"
+            type="button"
+            onClick={() => !loading && onClose()}
+            className="px-1 text-lg leading-none text-[#77808C] hover:text-[#E6E8EB]"
+            aria-label="Close"
           >
-            {loading ? "Adding..." : "Add to Inventory"}
+            ✕
           </button>
+        </header>
+
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <div className="flex min-h-0 flex-1 gap-5 overflow-y-auto px-5 py-4">
+            {/* Card photos — left rail (required) */}
+            <aside className="w-full flex-shrink-0 sm:w-52">
+              <div className="border border-[#24282D] bg-[#0F1317] p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-[10px] font-medium uppercase tracking-[0.08em] text-[#77808C]">
+                    Photos
+                  </span>
+                  <span className="text-[10px] font-semibold text-[#E05C5C]">Required</span>
+                </div>
+
+                {images.length > 0 ? (
+                  <div className="mb-2 grid grid-cols-2 gap-2">
+                    {images.map((url) => (
+                      <div key={url} className="group relative">
+                        <img
+                          src={url}
+                          alt={card.player_name}
+                          className="aspect-[5/7] w-full border border-[#24282D] object-cover"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setImages((prev) => prev.filter((u) => u !== url))}
+                          className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center bg-black/70 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100"
+                          aria-label="Remove photo"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mb-2 flex aspect-[5/7] w-full items-center justify-center border border-dashed border-[#343941] bg-[#0B0D0F] px-2 text-center text-[10px] text-[#5A626E]">
+                    Add at least one photo to list this card later
+                  </div>
+                )}
+
+                <label
+                  className={`flex cursor-pointer items-center justify-center border border-[#343941] bg-[#0B0D0F] px-2 py-2 text-[11px] font-medium text-[#B8C0CC] transition-colors hover:border-[#20B26B] hover:text-[#E6E8EB] ${
+                    uploading ? "pointer-events-none opacity-60" : ""
+                  }`}
+                >
+                  {uploading ? "Uploading…" : images.length > 0 ? "+ Add more photos" : "Upload photos"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => {
+                      void handleUploadFiles(e.target.files);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+
+                <div className="mt-3 border-t border-[#24282D] pt-2">
+                  <p className="truncate text-sm font-semibold text-[#E6E8EB]">
+                    {card.player_name}
+                  </p>
+                  {card.year && <p className="text-xs text-[#77808C]">{card.year}</p>}
+                  {card.set_name && (
+                    <p className="truncate text-xs text-[#77808C]">{card.set_name}</p>
+                  )}
+                  {card.parallel_type && (
+                    <p className="mt-1 text-xs font-medium text-[#20B26B]">{card.parallel_type}</p>
+                  )}
+                  {gradeFields.gradeLabel && (
+                    <p className="mt-1 text-xs font-medium text-[#5FA8FF]">{gradeFields.gradeLabel}</p>
+                  )}
+                </div>
+              </div>
+            </aside>
+
+            {/* Form fields */}
+            <div className="min-w-0 flex-1 space-y-4">
+              {error && (
+                <div className="border border-[#723030] bg-[#2A1111] px-3 py-2 text-xs text-[#E05C5C]">
+                  {error}
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {inp("Quantity", "quantity", "number")}
+                {inp("Acquisition Type", "acquisition_type", "select", ACQ_OPTIONS)}
+                {inp("Acquisition Date", "acquisition_date", "date")}
+              </div>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {inp("Cost Basis ($)", "cost_basis", "number")}
+                {inp("Tax ($)", "tax", "number")}
+                {inp("Shipping ($)", "shipping", "number")}
+                {inp("Fees ($)", "fees_paid", "number")}
+              </div>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {inp("Channel", "channel", "select", CHANNEL_OPTIONS)}
+                {inp("Status", "status", "select", STATUS_OPTIONS)}
+                {inp("List Price ($)", "list_price", "number")}
+                <label className="block">
+                  <span className="mb-1 block text-[10px] font-medium uppercase tracking-[0.08em] text-[#77808C]">
+                    Market Value / Card ($)
+                    {cmvLoading && (
+                      <span className="ml-2 text-[#F0B429]">Fetching…</span>
+                    )}
+                  </span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={form.current_market_value}
+                    onChange={(e) =>
+                      setForm({ ...form, current_market_value: e.target.value })
+                    }
+                    placeholder="Override estimate"
+                    className="w-full border border-[#343941] bg-[#0F1317] px-3 py-2 text-sm text-[#E6E8EB] placeholder-[#5A626E] focus:border-[#20B26B] focus:outline-none"
+                  />
+                </label>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {inp("Storage", "location", "text", undefined, "Storage unit, binder, etc.")}
+                <label className="block">
+                  <span className="mb-1 block text-[10px] font-medium uppercase tracking-[0.08em] text-[#77808C]">
+                    Notes
+                  </span>
+                  <textarea
+                    value={form.notes}
+                    onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                    rows={2}
+                    placeholder="Serial number, condition notes, etc."
+                    className="w-full resize-none border border-[#343941] bg-[#0F1317] px-3 py-2 text-sm text-[#E6E8EB] placeholder-[#5A626E] focus:border-[#20B26B] focus:outline-none"
+                  />
+                </label>
+              </div>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <footer className="flex items-center justify-end gap-2 border-t border-[#24282D] px-5 py-3">
+            <button
+              type="button"
+              onClick={() => !loading && onClose()}
+              className="border border-[#343941] px-4 py-2 text-xs font-medium text-[#B8C0CC] transition-colors hover:border-[#5A626E] hover:text-[#E6E8EB]"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading || uploading || images.length === 0}
+              title={images.length === 0 ? "Add at least one photo first" : undefined}
+              className="border border-[#20B26B] bg-[#20B26B] px-4 py-2 text-xs font-semibold text-[#07100B] transition-colors hover:bg-[#33C47C] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {loading ? "Adding…" : "Add to Inventory"}
+            </button>
+          </footer>
         </form>
       </div>
     </div>

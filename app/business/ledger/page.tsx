@@ -5,7 +5,6 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import BusinessPaywall from "@/components/business/BusinessPaywall";
 import BusinessMigrationBanner from "@/components/business/BusinessMigrationBanner";
-import BusinessInventoryItemEditor from "@/components/business/BusinessInventoryItemEditor";
 import CardzCheckListingModal from "@/components/business/CardzCheckListingModal";
 import LedgerTable, { type LedgerInlineEditPayload } from "@/components/business/LedgerTable";
 import LedgerBulkActionsBar, {
@@ -153,11 +152,6 @@ export default function LedgerPage() {
     [items]
   );
 
-  const selectedItem = useMemo(
-    () => items.find((item) => item.id === selectedLedgerItemId) ?? null,
-    [items, selectedLedgerItemId]
-  );
-
   const ledgerRows = useMemo(
     () => mapInventoryToLedgerRows(activeInventoryItems),
     [activeInventoryItems]
@@ -277,6 +271,7 @@ export default function LedgerPage() {
 
   const handleLedgerRowClick = useCallback((row: LedgerTableRow) => {
     setSelectedLedgerItemId(row.id);
+    setProfileItemId(row.id);
   }, []);
 
   const handleToggleRow = useCallback((rowId: string) => {
@@ -368,31 +363,6 @@ export default function LedgerPage() {
       }
     },
     [loadInventory, selectedRowIds]
-  );
-
-  const handleSaveItem = useCallback(
-    async (id: string, updates: Partial<BusinessInventoryItem>) => {
-      try {
-        const res = await fetch("/api/business/inventory", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id, ...updates }),
-        });
-
-        const data = await res.json().catch(() => null);
-        if (!res.ok) throw new Error(data?.error || "Failed to save item");
-
-        const updated = data as BusinessInventoryItem;
-        setItems((prev) => prev.map((item) => (item.id === id ? updated : item)));
-        setToast({ type: "success", message: "Item saved" });
-      } catch (error) {
-        setToast({
-          type: "error",
-          message: error instanceof Error ? error.message : "Failed to save item",
-        });
-      }
-    },
-    []
   );
 
   const handleCreateSale = useCallback(
@@ -642,82 +612,6 @@ export default function LedgerPage() {
           )}
         </div>
 
-        {selectedItem && (
-          <>
-            <div
-              className="fixed inset-0 z-40 bg-black/50"
-              onClick={() => setSelectedLedgerItemId(null)}
-            />
-            <aside className="fixed right-0 top-0 z-50 h-full w-full max-w-3xl overflow-y-auto border-l border-[#24282D] bg-[#0F1317] shadow-2xl">
-              <div className="sticky top-0 z-10 border-b border-[#24282D] bg-[#0B0D0F]/95 px-4 py-3 backdrop-blur">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="text-[10px] font-medium uppercase tracking-[0.12em] text-[#77808C]">
-                      Ledger action
-                    </div>
-                    <h2 className="mt-1 truncate text-sm font-semibold text-[#E6E8EB]">
-                      {selectedItem.title}
-                    </h2>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedLedgerItemId(null)}
-                    className="px-2 text-xl leading-none text-[#77808C] hover:text-[#E6E8EB]"
-                    aria-label="Close item drawer"
-                  >
-                    x
-                  </button>
-                </div>
-
-                <div className="mt-3 grid grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setMarkSoldItem(selectedItem)}
-                    className="border border-[#1F5F45] bg-[#0E251B] px-3 py-2 text-xs font-semibold text-[#20B26B] hover:bg-[#143624]"
-                  >
-                    Sell
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setTradeItem(selectedItem)}
-                    className="border border-[#5A4A1F] bg-[#251E0E] px-3 py-2 text-xs font-semibold text-[#F0B429] hover:bg-[#33290F]"
-                  >
-                    Trade
-                  </button>
-                  {selectedItem.ebay_listing_url ? (
-                    <a
-                      href={selectedItem.ebay_listing_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="border border-[#343941] bg-[#111315] px-3 py-2 text-center text-xs font-semibold text-[#B8C0CC] hover:text-[#E6E8EB]"
-                    >
-                      View listing
-                    </a>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setListItem(selectedItem)}
-                      className="border border-[#86B817] bg-[#1F2B0A] px-3 py-2 text-xs font-semibold text-[#C5F06A] hover:bg-[#29380F]"
-                    >
-                      List
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <BusinessInventoryItemEditor
-                item={selectedItem}
-                onSave={handleSaveItem}
-                onClose={() => setSelectedLedgerItemId(null)}
-                tone="dark"
-                showOpenProfileLink
-                showGradeProbabilitySection={false}
-                showEbayListingAction={false}
-              />
-            </aside>
-          </>
-        )}
-
         <CardProfileDrawer
           isOpen={profileItemId != null}
           itemId={profileItemId}
@@ -725,14 +619,20 @@ export default function LedgerPage() {
             profileItemId ? items.find((it) => it.id === profileItemId) ?? null : null
           }
           mode="business"
-          onClose={() => setProfileItemId(null)}
-          onEdit={(it) => {
+          onClose={() => {
             setProfileItemId(null);
-            setSelectedLedgerItemId(it.id);
+            setSelectedLedgerItemId(null);
+          }}
+          onSaved={(updated) => {
+            setItems((prev) => prev.map((it) => (it.id === updated.id ? updated : it)));
           }}
           onMarkSold={(it) => {
             setProfileItemId(null);
             setMarkSoldItem(it);
+          }}
+          onTrade={(it) => {
+            setProfileItemId(null);
+            setTradeItem(it);
           }}
           onList={(it) => {
             setProfileItemId(null);

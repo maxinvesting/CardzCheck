@@ -23,13 +23,21 @@ interface ProfileLikeItem {
   cert_number?: string | null;
   psa_cert_number?: string | null;
   cost_basis_total_cents?: number | null;
+  tax_cents?: number | null;
+  shipping_cents?: number | null;
+  fees_paid_cents?: number | null;
   list_price_cents?: number | null;
+  current_market_value_cents?: number | null;
   estimated_cmv?: number | null;
   est_cmv?: number | null;
   last_known_price_cents?: number | null;
   quantity?: number | null;
   channel?: string | null;
   status?: string | null;
+  condition_status?: string | null;
+  acquisition_type?: string | null;
+  location?: string | null;
+  title?: string | null;
   notes?: string | null;
   trusted_image?: TrustedCardImage | null;
   image_url?: string | null;
@@ -60,10 +68,12 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   /** Optional callbacks — when omitted, the matching action button is hidden. */
-  onEdit?: (item: BusinessInventoryItem) => void;
   onMarkSold?: (item: BusinessInventoryItem) => void;
+  onTrade?: (item: BusinessInventoryItem) => void;
   onList?: (item: BusinessInventoryItem) => void;
   onDelete?: (item: BusinessInventoryItem) => void;
+  /** Called after an inline edit is saved, so parents can sync their state. */
+  onSaved?: (item: BusinessInventoryItem) => void;
 }
 
 const MONEY = new Intl.NumberFormat("en-US", {
@@ -128,16 +138,18 @@ export default function CardProfileDrawer({
   mode = "business",
   isOpen,
   onClose,
-  onEdit,
   onMarkSold,
+  onTrade,
   onList,
   onDelete,
+  onSaved,
 }: Props) {
   const initialNarrowed = (initialItem ?? null) as ProfileLikeItem | null;
   const [item, setItem] = useState<ProfileLikeItem | null>(initialNarrowed);
   const [sales, setSales] = useState<SaleSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
 
   useEffect(() => {
     if (initialItem) {
@@ -205,6 +217,14 @@ export default function CardProfileDrawer({
     return () => window.removeEventListener("keydown", handleKey);
   }, [isOpen, onClose]);
 
+  useEffect(() => {
+    if (!isOpen) setEditing(false);
+  }, [isOpen]);
+
+  useEffect(() => {
+    setEditing(false);
+  }, [itemId]);
+
   if (!isOpen) return null;
 
   const image: TrustedCardImage | null | undefined =
@@ -270,7 +290,17 @@ export default function CardProfileDrawer({
           </div>
         ) : null}
 
-        {item ? (
+        {item && editing && mode === "business" ? (
+          <InventoryEditForm
+            item={item}
+            onCancel={() => setEditing(false)}
+            onSaved={(updated) => {
+              setItem((prev) => ({ ...(prev ?? {}), ...updated }) as ProfileLikeItem);
+              setEditing(false);
+              onSaved?.(updated);
+            }}
+          />
+        ) : item ? (
           <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-[300px_1fr]">
             {/* Left column: identity, stats, actions */}
             <div className="flex min-h-0 flex-col overflow-y-auto border-b border-[#24282D] p-5 md:border-b-0 md:border-r">
@@ -340,8 +370,8 @@ export default function CardProfileDrawer({
 
               {/* Actions */}
               <div className="mt-4 grid grid-cols-2 gap-2">
-                {onEdit ? (
-                  <ActionButton onClick={() => onEdit(item as BusinessInventoryItem)} primary>
+                {mode === "business" ? (
+                  <ActionButton onClick={() => setEditing(true)} primary>
                     Edit
                   </ActionButton>
                 ) : null}
@@ -355,6 +385,11 @@ export default function CardProfileDrawer({
                 {onMarkSold && item.status !== "sold" ? (
                   <ActionButton onClick={() => onMarkSold(item as BusinessInventoryItem)}>
                     Mark sold
+                  </ActionButton>
+                ) : null}
+                {onTrade && item.status !== "sold" ? (
+                  <ActionButton onClick={() => onTrade(item as BusinessInventoryItem)}>
+                    Trade
                   </ActionButton>
                 ) : null}
                 {onList ? (
@@ -616,5 +651,251 @@ function ActionButton({
     <button type="button" onClick={onClick} className={className}>
       {children}
     </button>
+  );
+}
+
+const STATUS_OPTIONS = ["unlisted", "listed", "pending_sale", "sold", "returned", "traded"];
+const CHANNEL_OPTIONS = ["ebay", "whatnot", "instagram", "show", "local", "other", "veriswap"];
+const ACQ_OPTIONS = ["buy", "trade", "rip", "consignment", "other"];
+const CONDITION_OPTIONS = ["raw", "graded"];
+
+function centsToInput(cents: number | null | undefined): string {
+  if (cents == null) return "";
+  return (cents / 100).toFixed(2);
+}
+
+function inputToCents(value: string): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.round(n * 100) : 0;
+}
+
+/**
+ * Inline editor rendered inside the card profile drawer (business mode).
+ * Replaces the legacy blue BusinessInventoryItemEditor — same dark theme as the
+ * profile, PATCHes /api/business/inventory and hands the updated row back up.
+ */
+function InventoryEditForm({
+  item,
+  onCancel,
+  onSaved,
+}: {
+  item: ProfileLikeItem;
+  onCancel: () => void;
+  onSaved: (updated: BusinessInventoryItem) => void;
+}) {
+  const [form, setForm] = useState({
+    title: item.title ?? "",
+    quantity: String(item.quantity ?? 1),
+    status: item.status ?? "unlisted",
+    channel: item.channel ?? "other",
+    acquisition_type: item.acquisition_type ?? "buy",
+    condition_status: item.condition_status ?? (item.grade ? "graded" : "raw"),
+    acquisition_date: item.acquisition_date ? item.acquisition_date.slice(0, 10) : "",
+    location: item.location ?? "",
+    grading_company: item.grading_company ?? "",
+    grade: item.grade != null ? String(item.grade) : "",
+    cert_number: item.cert_number ?? item.psa_cert_number ?? "",
+    notes: item.notes ?? "",
+    cost_basis: centsToInput(item.cost_basis_total_cents),
+    tax: centsToInput(item.tax_cents),
+    shipping: centsToInput(item.shipping_cents),
+    fees_paid: centsToInput(item.fees_paid_cents),
+    list_price: centsToInput(item.list_price_cents),
+    market_value: centsToInput(item.current_market_value_cents),
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function set<K extends keyof typeof form>(key: K, value: string) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  async function save() {
+    setSaving(true);
+    setError(null);
+    try {
+      const updates: Record<string, unknown> = {
+        id: item.id,
+        title: form.title,
+        quantity: Math.max(1, Math.round(Number(form.quantity) || 1)),
+        status: form.status,
+        channel: form.channel,
+        acquisition_type: form.acquisition_type,
+        condition_status: form.condition_status,
+        acquisition_date: form.acquisition_date || null,
+        location: form.location || null,
+        grading_company: form.grading_company || null,
+        grade: form.grade || null,
+        cert_number: form.cert_number || null,
+        notes: form.notes || null,
+        cost_basis_total_cents: inputToCents(form.cost_basis),
+        tax_cents: inputToCents(form.tax),
+        shipping_cents: inputToCents(form.shipping),
+        fees_paid_cents: inputToCents(form.fees_paid),
+        list_price_cents: form.list_price.trim() === "" ? null : inputToCents(form.list_price),
+        current_market_value_cents:
+          form.market_value.trim() === "" ? null : inputToCents(form.market_value),
+      };
+      const res = await fetch("/api/business/inventory", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || "Failed to save");
+      onSaved(data as BusinessInventoryItem);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="flex-1 overflow-y-auto px-5 py-4">
+        {error ? (
+          <div className="mb-4 border border-[#723030] bg-[#2A1111] px-3 py-2 text-xs text-[#E05C5C]">
+            {error}
+          </div>
+        ) : null}
+
+        <EditField label="Title" full>
+          <input
+            value={form.title}
+            onChange={(e) => set("title", e.target.value)}
+            className={INPUT_CLASS}
+          />
+        </EditField>
+
+        <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
+          <EditField label="Quantity">
+            <input
+              type="number"
+              min={1}
+              value={form.quantity}
+              onChange={(e) => set("quantity", e.target.value)}
+              className={INPUT_CLASS}
+            />
+          </EditField>
+          <EditSelect label="Status" value={form.status} options={STATUS_OPTIONS} onChange={(v) => set("status", v)} />
+          <EditField label="Cost Basis ($)">
+            <input type="number" step="0.01" value={form.cost_basis} onChange={(e) => set("cost_basis", e.target.value)} className={INPUT_CLASS} />
+          </EditField>
+          <EditField label="Tax ($)">
+            <input type="number" step="0.01" value={form.tax} onChange={(e) => set("tax", e.target.value)} className={INPUT_CLASS} />
+          </EditField>
+
+          <EditSelect label="Channel" value={form.channel} options={CHANNEL_OPTIONS} onChange={(v) => set("channel", v)} />
+          <EditSelect label="Acquisition" value={form.acquisition_type} options={ACQ_OPTIONS} onChange={(v) => set("acquisition_type", v)} />
+          <EditField label="Shipping ($)">
+            <input type="number" step="0.01" value={form.shipping} onChange={(e) => set("shipping", e.target.value)} className={INPUT_CLASS} />
+          </EditField>
+          <EditField label="Fees Paid ($)">
+            <input type="number" step="0.01" value={form.fees_paid} onChange={(e) => set("fees_paid", e.target.value)} className={INPUT_CLASS} />
+          </EditField>
+
+          <EditField label="Acquisition Date">
+            <input type="date" value={form.acquisition_date} onChange={(e) => set("acquisition_date", e.target.value)} className={INPUT_CLASS} />
+          </EditField>
+          <EditField label="Storage / Location">
+            <input value={form.location} onChange={(e) => set("location", e.target.value)} className={INPUT_CLASS} />
+          </EditField>
+          <EditSelect label="Condition" value={form.condition_status} options={CONDITION_OPTIONS} onChange={(v) => set("condition_status", v)} />
+          <EditField label="Grading Co.">
+            <input value={form.grading_company} onChange={(e) => set("grading_company", e.target.value)} className={INPUT_CLASS} />
+          </EditField>
+
+          <EditField label="Grade">
+            <input value={form.grade} onChange={(e) => set("grade", e.target.value)} className={INPUT_CLASS} />
+          </EditField>
+          <EditField label="Cert #">
+            <input value={form.cert_number} onChange={(e) => set("cert_number", e.target.value)} className={INPUT_CLASS} />
+          </EditField>
+          <EditField label="List Price ($)">
+            <input type="number" step="0.01" value={form.list_price} onChange={(e) => set("list_price", e.target.value)} className={INPUT_CLASS} />
+          </EditField>
+          <EditField label="Est. Market Value ($)">
+            <input type="number" step="0.01" value={form.market_value} onChange={(e) => set("market_value", e.target.value)} className={INPUT_CLASS} />
+          </EditField>
+        </div>
+
+        <EditField label="Notes" full className="mt-3">
+          <textarea
+            rows={3}
+            value={form.notes}
+            onChange={(e) => set("notes", e.target.value)}
+            className={`${INPUT_CLASS} resize-none`}
+          />
+        </EditField>
+      </div>
+
+      <div className="flex items-center justify-end gap-2 border-t border-[#24282D] px-5 py-3">
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={saving}
+          className="border border-[#343941] px-4 py-2 text-xs font-medium text-[#B8C0CC] transition-colors hover:border-[#5A626E] hover:text-[#E6E8EB] disabled:opacity-50"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={save}
+          disabled={saving}
+          className="border border-[#20B26B] bg-[#20B26B] px-4 py-2 text-xs font-semibold text-[#07100B] transition-colors hover:bg-[#33C47C] disabled:opacity-50"
+        >
+          {saving ? "Saving…" : "Save changes"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const INPUT_CLASS =
+  "w-full border border-[#343941] bg-[#0F1317] px-2.5 py-1.5 text-sm text-[#E6E8EB] focus:border-[#20B26B] focus:outline-none";
+
+function EditField({
+  label,
+  children,
+  full = false,
+  className = "",
+}: {
+  label: string;
+  children: React.ReactNode;
+  full?: boolean;
+  className?: string;
+}) {
+  return (
+    <label className={`block ${full ? "col-span-full" : ""} ${className}`}>
+      <span className="mb-1 block text-[10px] font-medium uppercase tracking-[0.08em] text-[#77808C]">
+        {label}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+function EditSelect({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  onChange: (v: string) => void;
+}) {
+  return (
+    <EditField label={label}>
+      <select value={value} onChange={(e) => onChange(e.target.value)} className={INPUT_CLASS}>
+        {options.map((o) => (
+          <option key={o} value={o}>
+            {o}
+          </option>
+        ))}
+      </select>
+    </EditField>
   );
 }
