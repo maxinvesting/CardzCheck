@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import CompactMetricsRow from "@/components/dashboard/CompactMetricsRow";
 import CompactTopPerformers from "@/components/dashboard/CompactTopPerformers";
@@ -8,7 +9,10 @@ import CompactQuickActions from "@/components/dashboard/CompactQuickActions";
 import ActivityFeed from "@/components/dashboard/ActivityFeed";
 import { Surface } from "@/components/ui/Surface";
 import { MicButton } from "@/components/ui/MicButton";
-import AddCardModalNew from "@/components/AddCardModalNew";
+// Heavy modal (~1.3k lines) — load its chunk only when the modal is opened.
+const AddCardModalNew = dynamic(() => import("@/components/AddCardModalNew"), {
+  ssr: false,
+});
 import BulkCertImportModal from "@/components/business/BulkCertImportModal";
 import { useTierGates } from "@/hooks/useTierGates";
 import PaywallModal from "@/components/PaywallModal";
@@ -198,6 +202,7 @@ export default function DashboardPage() {
         </section>
 
         {/* Add Card Modal */}
+        {showAddModal && (
         <AddCardModalNew
           isOpen={showAddModal}
           onClose={() => setShowAddModal(false)}
@@ -218,6 +223,7 @@ export default function DashboardPage() {
           }}
           onLimitReached={() => setShowPaywall(true)}
         />
+        )}
 
         {/* Bulk Cert Import Modal */}
         <BulkCertImportModal

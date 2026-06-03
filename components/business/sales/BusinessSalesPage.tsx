@@ -1,9 +1,22 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import BusinessPaywall from "@/components/business/BusinessPaywall";
-import SalesAgentTerminal from "@/components/business/messaging/SalesAgentTerminal";
+// Heavy terminal (~960 lines + messaging deps) — split into its own chunk so it
+// doesn't bloat the sales page's initial bundle.
+const SalesAgentTerminal = dynamic(
+  () => import("@/components/business/messaging/SalesAgentTerminal"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-full items-center justify-center p-8 text-[var(--biz-muted)]">
+        Loading…
+      </div>
+    ),
+  }
+);
 import { createClient } from "@/lib/supabase/client";
 import type { MessageThread, MessagingStats } from "@/lib/messaging/types";
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import BusinessPaywall from "@/components/business/BusinessPaywall";
 import BusinessMigrationBanner from "@/components/business/BusinessMigrationBanner";
@@ -17,7 +18,10 @@ import type { PendingInventoryCard } from "@/components/business/AddCardToInvent
 import BulkCertImportModal from "@/components/business/BulkCertImportModal";
 import CardProfileDrawer from "@/components/business/CardProfileDrawer";
 import { useTierGates } from "@/hooks/useTierGates";
-import AddCardModalNew from "@/components/AddCardModalNew";
+// Heavy modal (~1.3k lines) — load its chunk only when the modal is opened.
+const AddCardModalNew = dynamic(() => import("@/components/AddCardModalNew"), {
+  ssr: false,
+});
 import CardPickerModal from "@/components/CardPickerModal";
 import type { CardPickerSelection } from "@/components/CardPicker";
 import { createClient } from "@/lib/supabase/client";
@@ -750,6 +754,7 @@ export default function LedgerPage() {
           }}
         />
 
+        {showAddCardModal && (
         <AddCardModalNew
           isOpen={showAddCardModal}
           onClose={() => setShowAddCardModal(false)}
@@ -763,6 +768,7 @@ export default function LedgerPage() {
           }}
           onCardSelected={handleCardIdentified}
         />
+        )}
 
         <CardPickerModal
           isOpen={showCardPicker}

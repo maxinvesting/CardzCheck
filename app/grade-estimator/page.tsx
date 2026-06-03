@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { AnimatePresence, motion } from "framer-motion";
 import DualCardUploader from "@/components/DualCardUploader";
 import GradeProbabilityPanel from "@/components/grading/GradeProbabilityPanel";
@@ -8,7 +9,12 @@ import GradeEstimateProgressPanel from "@/components/grading/GradeEstimateProgre
 import GradeEstimatorValuePanel from "@/components/GradeEstimatorValuePanel";
 import GradeEstimatorHistoryPanel from "@/components/grading/GradeEstimatorHistoryPanel";
 import { GradeScanLabelPanel } from "@/components/grading/GradeScanLabelPanel";
-import SubmissionBuilderPanel from "@/components/grading/SubmissionBuilderPanel";
+// Heavy panel (~1.6k lines) — only rendered when the submission builder is
+// toggled open, so defer loading its chunk until then.
+const SubmissionBuilderPanel = dynamic(
+  () => import("@/components/grading/SubmissionBuilderPanel"),
+  { ssr: false }
+);
 import GradeAnalysisAnimation from "@/components/grading/GradeAnalysisAnimation";
 import ConfirmAddCardModal from "@/components/ConfirmAddCardModal";
 import PaywallModal from "@/components/PaywallModal";
