@@ -78,11 +78,6 @@ function fmtCents(cents: number | null | undefined): string {
   return MONEY.format(cents / 100);
 }
 
-function fmtDollars(value: number | null | undefined): string {
-  if (value == null) return "—";
-  return MONEY.format(value);
-}
-
 function fmtDate(value: string | null | undefined): string {
   if (!value) return "—";
   const d = new Date(value);
@@ -222,7 +217,7 @@ export default function CardProfileDrawer({
 
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -231,15 +226,15 @@ export default function CardProfileDrawer({
         role="dialog"
         aria-label="Card profile"
         aria-modal="true"
-        className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#111827] text-[#E6E8EB] shadow-2xl"
+        className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden border border-[#24282D] bg-[#0B0D0F] text-[#E6E8EB] shadow-2xl"
       >
         {/* Header */}
-        <header className="flex items-center justify-between border-b border-gray-800 px-6 py-4">
+        <header className="flex items-center justify-between border-b border-[#24282D] px-5 py-3">
           <div className="min-w-0">
-            <div className="text-[10px] font-medium uppercase tracking-[0.12em] text-gray-500">
+            <div className="text-[10px] font-medium uppercase tracking-[0.12em] text-[#77808C]">
               Card profile
             </div>
-            <h2 className="mt-0.5 truncate text-lg font-bold text-white">
+            <h2 className="mt-0.5 truncate text-base font-semibold text-[#E6E8EB]">
               {item?.player_name ?? (loading ? "Loading…" : "Card")}
             </h2>
           </div>
@@ -247,7 +242,7 @@ export default function CardProfileDrawer({
             {item ? (
               <Link
                 href={`/card/${item.id}?from=${mode}`}
-                className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-1.5 text-xs font-medium text-gray-300 transition-colors hover:bg-gray-700 hover:text-white"
+                className="border border-[#343941] px-3 py-1.5 text-[11px] font-medium text-[#B8C0CC] transition-colors hover:border-[#5A626E] hover:text-[#E6E8EB]"
                 title="Open full profile in a new tab"
                 target="_blank"
                 rel="noopener noreferrer"
@@ -258,7 +253,7 @@ export default function CardProfileDrawer({
             <button
               type="button"
               onClick={onClose}
-              className="text-gray-500 hover:text-gray-300"
+              className="px-1 text-[#77808C] hover:text-[#E6E8EB]"
               aria-label="Close"
             >
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -269,88 +264,82 @@ export default function CardProfileDrawer({
         </header>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto">
-          {error ? (
-            <div className="m-4 rounded-lg border border-red-800 bg-red-900/30 p-3 text-xs text-red-300">
-              {error}
-            </div>
-          ) : null}
+        {error ? (
+          <div className="m-4 border border-[#723030] bg-[#2A1111] p-3 text-xs text-[#E05C5C]">
+            {error}
+          </div>
+        ) : null}
 
-          {item ? (
-            <>
-              {/* Hero: image + summary */}
-              <section className="flex gap-4 border-b border-gray-800 p-6">
-                <div className="h-48 w-36 flex-shrink-0 overflow-hidden rounded-lg border border-gray-800 bg-gray-900">
-                  <CardImage
-                    image={image}
-                    alt={item.player_name ?? "Card"}
-                    className="h-full w-full"
-                    imageClassName="h-full w-full object-cover"
-                    fallbackClassName="h-full w-full"
-                  />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-[11px] uppercase tracking-wide text-gray-500">
-                    {gradeLabel(item)}
-                    {item.cert_number || item.psa_cert_number ? (
-                      <span className="ml-2 text-gray-600">
-                        Cert {item.cert_number ?? item.psa_cert_number}
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="mt-1 text-base font-semibold leading-tight text-white">
-                    {item.player_name ?? "—"}
-                  </div>
-                  <div className="mt-0.5 text-xs text-gray-400">{metaLine(item) || "—"}</div>
+        {item ? (
+          <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-[300px_1fr]">
+            {/* Left column: identity, stats, actions */}
+            <div className="flex min-h-0 flex-col overflow-y-auto border-b border-[#24282D] p-5 md:border-b-0 md:border-r">
+              <div className="aspect-[3/4] w-full overflow-hidden border border-[#24282D] bg-[#0F1317]">
+                <CardImage
+                  image={image}
+                  alt={item.player_name ?? "Card"}
+                  className="h-full w-full"
+                  imageClassName="h-full w-full object-cover"
+                  fallbackClassName="h-full w-full"
+                />
+              </div>
 
-                  <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-                    <Stat label="Cost basis" value={fmtCents(item.cost_basis_total_cents)} />
-                    <Stat
-                      label="CMV"
-                      value={fmtCents(pickEstimatedCents(item))}
-                    />
-                    <EditablePriceStat
-                      label="Your price"
-                      cents={item.list_price_cents ?? null}
-                      disabled={mode !== "business"}
-                      onSave={async (next) => {
-                        if (!item) return;
-                        const res = await fetch("/api/business/inventory", {
-                          method: "PATCH",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ id: item.id, list_price_cents: next }),
-                        });
-                        if (!res.ok) {
-                          const data = await res.json().catch(() => null);
-                          throw new Error(data?.error || "Failed to save");
-                        }
-                        const updated = await res.json();
-                        setItem((prev) =>
-                          prev ? { ...prev, list_price_cents: updated.list_price_cents } : prev
-                        );
-                      }}
-                    />
-                    <Stat
-                      label="Est. P&L"
-                      value={fmtCents(pnlCents)}
-                      tone={
-                        pnlCents == null
-                          ? "neutral"
-                          : pnlCents > 0
-                            ? "positive"
-                            : pnlCents < 0
-                              ? "negative"
-                              : "neutral"
-                      }
-                    />
-                    <Stat label="Channel" value={item.channel ?? "—"} />
-                    <Stat label="Status" value={item.status ?? "—"} />
-                  </dl>
-                </div>
-              </section>
+              <div className="mt-3 text-[10px] uppercase tracking-wide text-[#77808C]">
+                {gradeLabel(item)}
+                {item.cert_number || item.psa_cert_number ? (
+                  <span className="ml-2 text-[#5A626E]">
+                    Cert {item.cert_number ?? item.psa_cert_number}
+                  </span>
+                ) : null}
+              </div>
+              <div className="mt-1 text-sm font-semibold leading-tight text-[#E6E8EB]">
+                {item.player_name ?? "—"}
+              </div>
+              <div className="mt-0.5 text-[11px] text-[#77808C]">{metaLine(item) || "—"}</div>
+
+              <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px]">
+                <Stat label="Cost basis" value={fmtCents(item.cost_basis_total_cents)} />
+                <Stat label="CMV" value={fmtCents(pickEstimatedCents(item))} />
+                <EditablePriceStat
+                  label="Your price"
+                  cents={item.list_price_cents ?? null}
+                  disabled={mode !== "business"}
+                  onSave={async (next) => {
+                    if (!item) return;
+                    const res = await fetch("/api/business/inventory", {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ id: item.id, list_price_cents: next }),
+                    });
+                    if (!res.ok) {
+                      const data = await res.json().catch(() => null);
+                      throw new Error(data?.error || "Failed to save");
+                    }
+                    const updated = await res.json();
+                    setItem((prev) =>
+                      prev ? { ...prev, list_price_cents: updated.list_price_cents } : prev
+                    );
+                  }}
+                />
+                <Stat
+                  label="Est. P&L"
+                  value={fmtCents(pnlCents)}
+                  tone={
+                    pnlCents == null
+                      ? "neutral"
+                      : pnlCents > 0
+                        ? "positive"
+                        : pnlCents < 0
+                          ? "negative"
+                          : "neutral"
+                  }
+                />
+                <Stat label="Channel" value={item.channel ?? "—"} />
+                <Stat label="Status" value={item.status ?? "—"} />
+              </dl>
 
               {/* Actions */}
-              <section className="flex flex-wrap gap-2 border-b border-gray-800 px-6 py-4">
+              <div className="mt-4 grid grid-cols-2 gap-2">
                 {onEdit ? (
                   <ActionButton onClick={() => onEdit(item as BusinessInventoryItem)} primary>
                     Edit
@@ -359,9 +348,9 @@ export default function CardProfileDrawer({
                 <Link
                   href={buildCompareListingsUrl(item)}
                   onClick={onClose}
-                  className="inline-flex items-center rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm font-medium text-gray-100 transition hover:bg-gray-800"
+                  className="inline-flex items-center justify-center border border-[#343941] bg-[#0F1317] px-3 py-1.5 text-xs font-medium text-[#B8C0CC] transition hover:border-[#5A626E] hover:text-[#E6E8EB]"
                 >
-                  Compare Listings
+                  Compare
                 </Link>
                 {onMarkSold && item.status !== "sold" ? (
                   <ActionButton onClick={() => onMarkSold(item as BusinessInventoryItem)}>
@@ -369,8 +358,8 @@ export default function CardProfileDrawer({
                   </ActionButton>
                 ) : null}
                 {onList ? (
-                  <ActionButton onClick={() => onList(item as BusinessInventoryItem)}>
-                    List on eBay
+                  <ActionButton onClick={() => onList(item as BusinessInventoryItem)} accent>
+                    List on CardzCheck
                   </ActionButton>
                 ) : null}
                 {onDelete ? (
@@ -381,9 +370,17 @@ export default function CardProfileDrawer({
                     Delete
                   </ActionButton>
                 ) : null}
-              </section>
+              </div>
 
-              {/* Targets & plans */}
+              <div className="mt-4 space-y-0.5 text-[10px] text-[#5A626E]">
+                {item.acquisition_date ? <div>Acquired {fmtDate(item.acquisition_date)}</div> : null}
+                {item.created_at ? <div>Added {fmtDate(item.created_at)}</div> : null}
+                {item.quantity ? <div>Qty {item.quantity}</div> : null}
+              </div>
+            </div>
+
+            {/* Right column: targets, comps, notes, sales */}
+            <div className="min-h-0 overflow-y-auto">
               {mode === "business" ? (
                 <TargetsSection
                   inventoryItemId={item.id}
@@ -392,36 +389,29 @@ export default function CardProfileDrawer({
                 />
               ) : null}
 
-              {/* Comps across platforms */}
               {marketplaceLinks.length > 0 ? (
-                <section className="border-b border-gray-800 px-6 py-4">
+                <section className="border-b border-[#24282D] px-4 py-3">
                   <div className="flex items-baseline justify-between">
-                    <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-[#77808C]">
                       Comps across platforms
                     </div>
-                    <div className="text-[10px] text-gray-600">Opens in new tab</div>
+                    <div className="text-[10px] text-[#5A626E]">Opens in new tab</div>
                   </div>
-                  <div className="mt-2 grid grid-cols-2 gap-2">
+                  <div className="mt-2 grid grid-cols-2 gap-1.5 lg:grid-cols-3">
                     {marketplaceLinks.map((link) => (
                       <a
                         key={link.id}
                         href={link.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="group flex items-center justify-between gap-2 rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 transition-colors hover:border-gray-700 hover:bg-gray-800"
+                        className="group flex items-center justify-between gap-1 border border-[#24282D] bg-[#0F1317] px-2 py-1.5 transition-colors hover:border-[#5A626E]"
                         style={{ borderLeft: `2px solid ${link.accentColor}` }}
+                        title={link.tagline}
                       >
-                        <div className="min-w-0">
-                          <div className="truncate text-xs font-semibold text-white">
-                            {link.name}
-                          </div>
-                          <div className="truncate text-[10px] text-gray-500">
-                            {link.tagline}
-                          </div>
-                        </div>
-                        <span
-                          className="shrink-0 rounded border border-gray-700 px-1.5 py-0.5 text-[8px] font-semibold tracking-wide text-gray-500 group-hover:text-gray-300"
-                        >
+                        <span className="truncate text-[11px] font-medium text-[#E6E8EB]">
+                          {link.name}
+                        </span>
+                        <span className="shrink-0 text-[8px] font-semibold uppercase tracking-wide text-[#5A626E] group-hover:text-[#B8C0CC]">
                           {MARKETPLACE_TYPE_LABELS[link.type]}
                         </span>
                       </a>
@@ -430,48 +420,39 @@ export default function CardProfileDrawer({
                 </section>
               ) : null}
 
-              {/* Notes */}
               {item.notes ? (
-                <section className="border-b border-gray-800 px-6 py-4">
-                  <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+                <section className="border-b border-[#24282D] px-4 py-3">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-[#77808C]">
                     Notes
                   </div>
-                  <p className="mt-1 whitespace-pre-wrap text-xs text-gray-400">
-                    {item.notes}
-                  </p>
+                  <p className="mt-1 whitespace-pre-wrap text-[11px] text-[#B8C0CC]">{item.notes}</p>
                 </section>
               ) : null}
 
-              {/* Sales */}
               {sales.length > 0 ? (
-                <section className="border-b border-gray-800 px-6 py-4">
-                  <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+                <section className="px-4 py-3">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-[#77808C]">
                     Recent sales ({sales.length})
                   </div>
-                  <ul className="mt-2 divide-y divide-gray-800">
-                    {sales.slice(0, 5).map((sale, idx) => (
-                      <li
-                        key={sale.id ?? idx}
-                        className="flex items-center justify-between py-2 text-xs"
-                      >
-                        <div className="text-gray-400">
+                  <ul className="mt-1 divide-y divide-[#1E2227]">
+                    {sales.slice(0, 4).map((sale, idx) => (
+                      <li key={sale.id ?? idx} className="flex items-center justify-between py-1.5 text-[11px]">
+                        <div className="text-[#77808C]">
                           {fmtDate(sale.sold_at ?? sale.sale_date)}
-                          {sale.channel ? (
-                            <span className="ml-2 text-gray-500">· {sale.channel}</span>
-                          ) : null}
+                          {sale.channel ? <span className="ml-2 text-[#5A626E]">· {sale.channel}</span> : null}
                         </div>
                         <div className="text-right tabular-nums">
-                          <div className="text-white">
+                          <div className="text-[#E6E8EB]">
                             {fmtCents(sale.sold_price_cents ?? sale.sale_price_cents)}
                           </div>
                           {sale.profit_cents != null ? (
                             <div
                               className={
                                 sale.profit_cents > 0
-                                  ? "text-emerald-400"
+                                  ? "text-[#20B26B]"
                                   : sale.profit_cents < 0
-                                    ? "text-red-400"
-                                    : "text-gray-500"
+                                    ? "text-[#E05C5C]"
+                                    : "text-[#5A626E]"
                               }
                             >
                               {fmtCents(sale.profit_cents)}
@@ -483,22 +464,13 @@ export default function CardProfileDrawer({
                   </ul>
                 </section>
               ) : null}
-
-              {/* Metadata footer */}
-              <section className="px-6 py-4 text-[10px] text-gray-600">
-                {item.acquisition_date ? (
-                  <div>Acquired {fmtDate(item.acquisition_date)}</div>
-                ) : null}
-                {item.created_at ? <div>Added {fmtDate(item.created_at)}</div> : null}
-                {item.quantity ? <div>Qty {item.quantity}</div> : null}
-              </section>
-            </>
-          ) : loading ? (
-            <div className="flex items-center justify-center p-10 text-xs text-gray-500">
-              Loading card…
             </div>
-          ) : null}
-        </div>
+          </div>
+        ) : loading ? (
+          <div className="flex flex-1 items-center justify-center p-10 text-xs text-[#77808C]">
+            Loading card…
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -515,13 +487,13 @@ function Stat({
 }) {
   const valueClass =
     tone === "positive"
-      ? "text-emerald-400"
+      ? "text-[#20B26B]"
       : tone === "negative"
-        ? "text-red-400"
-        : "text-white";
+        ? "text-[#E05C5C]"
+        : "text-[#E6E8EB]";
   return (
     <div className="flex items-center justify-between gap-2">
-      <dt className="text-gray-500">{label}</dt>
+      <dt className="text-[#77808C]">{label}</dt>
       <dd className={`tabular-nums ${valueClass}`}>{value}</dd>
     </div>
   );
@@ -597,7 +569,7 @@ function EditablePriceStat({
                 setEditing(false);
               }
             }}
-            className="w-20 rounded-md border border-gray-700 bg-gray-800 px-2 py-0.5 text-right text-xs text-white focus:border-emerald-500 focus:outline-none"
+            className="w-20 border border-[#343941] bg-[#0F1317] px-2 py-0.5 text-right text-xs text-[#E6E8EB] focus:border-[#20B26B] focus:outline-none"
             disabled={saving}
           />
         ) : (
@@ -605,7 +577,7 @@ function EditablePriceStat({
             type="button"
             onClick={startEdit}
             disabled={disabled}
-            className={`text-white ${disabled ? "" : "cursor-pointer hover:text-emerald-400"}`}
+            className={`text-[#E6E8EB] ${disabled ? "" : "cursor-pointer hover:text-[#20B26B]"}`}
             title={disabled ? undefined : "Click to edit"}
           >
             {fmtCents(cents)}
@@ -620,21 +592,25 @@ function ActionButton({
   children,
   onClick,
   primary = false,
+  accent = false,
   tone,
 }: {
   children: React.ReactNode;
   onClick: () => void;
   primary?: boolean;
+  accent?: boolean;
   tone?: "danger";
 }) {
   let className =
-    "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ";
-  if (primary) {
-    className += "bg-emerald-600 text-white hover:bg-emerald-700";
+    "inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium transition-colors ";
+  if (accent) {
+    className += "border border-[#20B26B] bg-[#20B26B] font-semibold text-[#07100B] hover:bg-[#33C47C]";
+  } else if (primary) {
+    className += "border border-[#1F5F45] bg-[#0E251B] font-semibold text-[#20B26B] hover:bg-[#143624]";
   } else if (tone === "danger") {
-    className += "border border-red-800 bg-red-900/30 text-red-300 hover:bg-red-900/50";
+    className += "border border-[#5C2228] bg-[#2A1111] text-[#E05C5C] hover:bg-[#3A1717]";
   } else {
-    className += "border border-gray-700 bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white";
+    className += "border border-[#343941] bg-[#0F1317] text-[#B8C0CC] hover:border-[#5A626E] hover:text-[#E6E8EB]";
   }
   return (
     <button type="button" onClick={onClick} className={className}>

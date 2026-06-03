@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import BusinessPaywall from "@/components/business/BusinessPaywall";
 import BusinessMigrationBanner from "@/components/business/BusinessMigrationBanner";
 import BusinessInventoryItemEditor from "@/components/business/BusinessInventoryItemEditor";
-import EbayListingModal from "@/components/business/EbayListingModal";
+import CardzCheckListingModal from "@/components/business/CardzCheckListingModal";
 import LedgerTable, { type LedgerInlineEditPayload } from "@/components/business/LedgerTable";
 import LedgerBulkActionsBar, {
   type LedgerBulkAction,
@@ -477,9 +477,9 @@ export default function LedgerPage() {
   );
 
   const handleListSuccess = useCallback(
-    async (_listingId: string, _listingUrl: string) => {
+    async (_listingId: string) => {
       setListItem(null);
-      setToast({ type: "success", message: "Listing created" });
+      setToast({ type: "success", message: "Listed on CardzCheck marketplace" });
       await loadInventory();
     },
     [loadInventory]
@@ -828,7 +828,7 @@ export default function LedgerPage() {
         />
 
         {listItem && (
-          <EbayListingModal
+          <CardzCheckListingModal
             item={listItem}
             onClose={() => setListItem(null)}
             onSuccess={handleListSuccess}

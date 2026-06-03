@@ -14,7 +14,13 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
-import { applyDay30Markdown, DAY30_DAYS, DAY60_DAYS } from "@/lib/marketplace/lifecycle";
+import {
+  applyAutoMarkdown,
+  applyDay30Markdown,
+  ebayColistPriceCents,
+  DAY30_DAYS,
+  DAY60_DAYS,
+} from "@/lib/marketplace/lifecycle";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -24,6 +30,19 @@ type LifecycleListing = {
   list_price_cents: number;
   listed_at: string;
   status: string;
+  ebay_colist_enabled?: boolean | null;
+};
+
+type AutoMarkdownListing = {
+  id: string;
+  list_price_cents: number;
+  listed_at: string;
+  status: string;
+  auto_markdown_pct: number | null;
+  auto_markdown_interval_days: number | null;
+  auto_markdown_floor_cents: number | null;
+  last_markdown_at: string | null;
+  ebay_colist_enabled: boolean | null;
 };
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
@@ -45,7 +64,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   // ---- Day 30: price reduction -----------------------------------------
   const { data: day30Candidates, error: day30Err } = await supabase
     .from("listings")
-    .select("id, list_price_cents, listed_at, status")
+    .select("id, list_price_cents, listed_at, status, ebay_colist_enabled")
     .eq("mode", "full_service")
     .in("status", ["active"])
     .lte("listed_at", day30Cutoff)
@@ -67,6 +86,9 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
           list_price_cents: newPrice,
           status: "price_reduced",
           day30_triggered_at: now.toISOString(),
+          ...(listing.ebay_colist_enabled
+            ? { ebay_colist_price_cents: ebayColistPriceCents(newPrice) }
+            : {}),
         })
         .eq("id", listing.id)
         .is("day30_triggered_at", null);
@@ -134,6 +156,80 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     }
   }
 
+  // ---- Self-serve seller-configured auto-markdown -----------------------
+  // Lowers self-serve listings by the seller's configured percentage once the
+  // configured interval has elapsed since the last markdown (or listing).
+  const { data: autoCandidates, error: autoErr } = await supabase
+    .from("listings")
+    .select(
+      "id, list_price_cents, listed_at, status, auto_markdown_pct, auto_markdown_interval_days, auto_markdown_floor_cents, last_markdown_at, ebay_colist_enabled"
+    )
+    .eq("mode", "self_serve")
+    .eq("auto_markdown_enabled", true)
+    .in("status", ["active", "price_reduced"]);
+
+  if (autoErr) {
+    console.error("[cron/marketplace-lifecycle] auto-markdown fetch error", autoErr);
+    return NextResponse.json({ error: autoErr.message }, { status: 500 });
+  }
+
+  let autoReduced = 0;
+  let autoSkipped = 0;
+  let autoErrors = 0;
+  for (const listing of (autoCandidates ?? []) as AutoMarkdownListing[]) {
+    try {
+      const pct = listing.auto_markdown_pct;
+      const intervalDays = listing.auto_markdown_interval_days;
+      if (!pct || !intervalDays) {
+        autoSkipped++;
+        continue;
+      }
+      const sinceIso = listing.last_markdown_at ?? listing.listed_at;
+      const elapsedDays = (now.getTime() - new Date(sinceIso).getTime()) / (24 * 60 * 60 * 1000);
+      if (elapsedDays < intervalDays) {
+        autoSkipped++;
+        continue;
+      }
+      const newPrice = applyAutoMarkdown(listing.list_price_cents, pct, listing.auto_markdown_floor_cents);
+      if (newPrice >= listing.list_price_cents) {
+        // Already at floor — nothing to do, but stamp so we don't re-check daily.
+        await supabase
+          .from("listings")
+          .update({ last_markdown_at: now.toISOString() })
+          .eq("id", listing.id);
+        autoSkipped++;
+        continue;
+      }
+
+      const { error: updErr } = await supabase
+        .from("listings")
+        .update({
+          list_price_cents: newPrice,
+          status: "price_reduced",
+          last_markdown_at: now.toISOString(),
+          ...(listing.ebay_colist_enabled
+            ? { ebay_colist_price_cents: ebayColistPriceCents(newPrice) }
+            : {}),
+        })
+        .eq("id", listing.id);
+      if (updErr) throw updErr;
+
+      const { error: histErr } = await supabase.from("pricing_history").insert({
+        listing_id: listing.id,
+        old_price_cents: listing.list_price_cents,
+        new_price_cents: newPrice,
+        reason: "auto_markdown",
+        changed_by: null,
+      });
+      if (histErr) throw histErr;
+
+      autoReduced++;
+    } catch (err) {
+      console.error(`[cron/marketplace-lifecycle] auto-markdown failed for listing ${listing.id}`, err);
+      autoErrors++;
+    }
+  }
+
   const summary = {
     ran_at: now.toISOString(),
     day30: {
@@ -145,6 +241,12 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       candidates: day60Candidates?.length ?? 0,
       flagged: day60Flagged,
       errors: day60Errors,
+    },
+    auto_markdown: {
+      candidates: autoCandidates?.length ?? 0,
+      reduced: autoReduced,
+      skipped: autoSkipped,
+      errors: autoErrors,
     },
   };
   console.log("[cron/marketplace-lifecycle] done", summary);
