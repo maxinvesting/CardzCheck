@@ -1,15 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import dynamic from "next/dynamic";
+// recharts is heavy — load the chart module's chunk only when these render.
+const DistributionMediansChart = dynamic(
+  () => import("./MarketDiscountCharts").then((m) => m.DistributionMediansChart),
+  { ssr: false }
+);
+const DeltaChart = dynamic(
+  () => import("./MarketDiscountCharts").then((m) => m.DeltaChart),
+  { ssr: false }
+);
 
 type DebugResponse = {
   latestFactors: Array<{
@@ -328,15 +329,7 @@ export default function MarketDiscountAdminClient() {
           <div className="bg-gray-900/70 border border-gray-800 rounded-xl p-4">
             <h2 className="font-semibold mb-3">Distribution Medians</h2>
             <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={distributionRows}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                  <XAxis dataKey="series" stroke="#94a3b8" />
-                  <YAxis stroke="#94a3b8" />
-                  <Tooltip />
-                  <Bar dataKey="median" fill="#38bdf8" />
-                </BarChart>
-              </ResponsiveContainer>
+              <DistributionMediansChart rows={distributionRows} />
             </div>
             <div className="mt-3 text-xs text-gray-400">
               Active outliers removed: {data.selectedDistributions.active?.outliersRemoved ?? 0} | Sold outliers removed: {data.selectedDistributions.sold?.outliersRemoved ?? 0}
@@ -348,15 +341,7 @@ export default function MarketDiscountAdminClient() {
       <div className="bg-gray-900/70 border border-gray-800 rounded-xl p-4">
         <h2 className="font-semibold mb-3">Where New CMV Differs From Listing Median</h2>
         <div className="h-64 mb-4">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={topDeltaChart}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-              <XAxis dataKey="label" hide />
-              <YAxis stroke="#94a3b8" />
-              <Tooltip />
-              <Bar dataKey="deltaPct" fill="#f59e0b" />
-            </BarChart>
-          </ResponsiveContainer>
+          <DeltaChart rows={topDeltaChart} />
         </div>
 
         <div className="max-h-72 overflow-auto border border-gray-800 rounded-lg">

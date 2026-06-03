@@ -1,26 +1,36 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-  Area,
-  Bar,
-  CartesianGrid,
-  Cell,
-  ComposedChart,
-  Line,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+  AGING_COLORS,
+  SERIES_COLORS,
+  fmtMoney,
+  fmtMoneyCompact,
+  fmtPct,
+  fmtSigned,
+  pctDelta,
+  pnlClass,
+  formatMonth,
+  type PeriodKey,
+  type SeriesKey,
+  type RangeKey,
+  type TrendDatum,
+} from "./financialsFormat";
+// recharts is heavy — load the chart module's chunk only when these render.
+const TrendChart = dynamic(
+  () => import("./FinancialsCharts").then((m) => m.TrendChart),
+  { ssr: false }
+);
+const AgingPieChart = dynamic(
+  () => import("./FinancialsCharts").then((m) => m.AgingPieChart),
+  { ssr: false }
+);
 import BusinessPaywall from "@/components/business/BusinessPaywall";
 import { createClient } from "@/lib/supabase/client";
 import type {
-  AgingBucket,
   CardPerformance,
   ChannelBreakdown,
   FinancialsSummary,
@@ -30,80 +40,6 @@ import type {
   StaleAlert,
   Velocity,
 } from "@/lib/business/financials";
-
-type PeriodKey = "last_30d" | "mtd" | "ytd";
-type SeriesKey = "revenue" | "profit" | "margin" | "sales";
-type RangeKey = "6m" | "12m";
-
-const MONEY = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 0,
-});
-
-const MONEY_PRECISE = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-
-const AGING_COLORS: Record<AgingBucket["label"], string> = {
-  "0-30": "#20B26B",
-  "31-60": "#86B817",
-  "61-90": "#F0B429",
-  "90+": "#E05C5C",
-};
-
-const SERIES_COLORS: Record<SeriesKey, string> = {
-  revenue: "#3B82F6",
-  profit: "#20B26B",
-  margin: "#F0B429",
-  sales: "#A855F7",
-};
-
-function fmtMoney(cents: number | null | undefined): string {
-  if (cents == null) return "—";
-  return MONEY.format(cents / 100);
-}
-
-function fmtMoneyCompact(cents: number | null | undefined): string {
-  if (cents == null) return "—";
-  const abs = Math.abs(cents) / 100;
-  const sign = cents < 0 ? "-" : "";
-  if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(1)}M`;
-  if (abs >= 10_000) return `${sign}$${(abs / 1_000).toFixed(0)}k`;
-  if (abs >= 1_000) return `${sign}$${(abs / 1_000).toFixed(1)}k`;
-  return `${sign}$${abs.toFixed(0)}`;
-}
-
-function fmtPct(value: number | null | undefined, digits = 1): string {
-  if (value == null) return "—";
-  return `${value.toFixed(digits)}%`;
-}
-
-function fmtSigned(value: number, suffix = "%"): string {
-  const sign = value > 0 ? "+" : "";
-  return `${sign}${value.toFixed(1)}${suffix}`;
-}
-
-function pctDelta(curr: number, prev: number): number | null {
-  if (prev === 0) return curr === 0 ? 0 : null;
-  return ((curr - prev) / Math.abs(prev)) * 100;
-}
-
-function pnlClass(cents: number): string {
-  if (cents > 0) return "text-[#20B26B]";
-  if (cents < 0) return "text-[#E05C5C]";
-  return "text-[#B8C0CC]";
-}
-
-function formatMonth(key: string): string {
-  const [y, m] = key.split("-");
-  const d = new Date(Number(y), Number(m) - 1, 1);
-  return d.toLocaleDateString("en-US", { month: "short" });
-}
 
 function SectionHeading({
   eyebrow,
@@ -453,139 +389,6 @@ function LegendDot({ color, label }: { color: string; label: string }) {
   );
 }
 
-type TrendDatum = {
-  month: string;
-  revenue: number;
-  profit: number;
-  margin: number;
-  sales: number;
-};
-
-function TrendChart({
-  data,
-  active,
-  compact = false,
-}: {
-  data: TrendDatum[];
-  active: Record<SeriesKey, boolean>;
-  compact?: boolean;
-}) {
-  const fontSize = compact ? 10 : 12;
-  return (
-    <ResponsiveContainer width="100%" height="100%">
-      <ComposedChart
-        data={data}
-        margin={{ top: 8, right: 8, left: 0, bottom: compact ? 0 : 8 }}
-      >
-        <defs>
-          <linearGradient id="revFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={SERIES_COLORS.revenue} stopOpacity={0.35} />
-            <stop offset="100%" stopColor={SERIES_COLORS.revenue} stopOpacity={0} />
-          </linearGradient>
-          <linearGradient id="profitFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={SERIES_COLORS.profit} stopOpacity={0.35} />
-            <stop offset="100%" stopColor={SERIES_COLORS.profit} stopOpacity={0} />
-          </linearGradient>
-        </defs>
-        <CartesianGrid stroke="#1E2227" strokeDasharray="3 3" />
-        <XAxis
-          dataKey="month"
-          stroke="#77808C"
-          tick={{ fontSize }}
-          tickLine={false}
-          axisLine={{ stroke: "#24282D" }}
-          interval={compact ? "preserveStartEnd" : 0}
-          height={compact ? 18 : 28}
-        />
-        <YAxis
-          yAxisId="left"
-          stroke="#77808C"
-          tick={{ fontSize }}
-          tickFormatter={(v) => fmtMoneyCompact(v * 100)}
-          tickLine={false}
-          axisLine={{ stroke: "#24282D" }}
-          width={compact ? 44 : 56}
-        />
-        <YAxis
-          yAxisId="right"
-          orientation="right"
-          stroke="#77808C"
-          tick={{ fontSize }}
-          tickFormatter={(v) => `${v.toFixed(0)}%`}
-          tickLine={false}
-          axisLine={{ stroke: "#24282D" }}
-          width={compact ? 32 : 40}
-        />
-        <YAxis yAxisId="sales" orientation="right" hide />
-        <Tooltip
-          contentStyle={{
-            background: "#0B0D0F",
-            border: "1px solid #24282D",
-            fontSize: 12,
-            borderRadius: 0,
-          }}
-          labelStyle={{ color: "#B8C0CC" }}
-          formatter={(value, name) => {
-            const v = Number(value) || 0;
-            const label = String(name);
-            if (label === "Margin") return [`${v.toFixed(1)}%`, label];
-            if (label === "Sales") return [v.toFixed(0), label];
-            return [MONEY_PRECISE.format(v), label];
-          }}
-        />
-        {active.sales ? (
-          <Bar
-            yAxisId="sales"
-            dataKey="sales"
-            name="Sales"
-            fill={SERIES_COLORS.sales}
-            fillOpacity={0.45}
-            barSize={compact ? 8 : 14}
-            isAnimationActive={false}
-          />
-        ) : null}
-        {active.revenue ? (
-          <Area
-            yAxisId="left"
-            type="monotone"
-            dataKey="revenue"
-            name="Revenue"
-            stroke={SERIES_COLORS.revenue}
-            strokeWidth={2}
-            fill="url(#revFill)"
-            isAnimationActive={false}
-          />
-        ) : null}
-        {active.profit ? (
-          <Area
-            yAxisId="left"
-            type="monotone"
-            dataKey="profit"
-            name="Profit"
-            stroke={SERIES_COLORS.profit}
-            strokeWidth={2}
-            fill="url(#profitFill)"
-            isAnimationActive={false}
-          />
-        ) : null}
-        {active.margin ? (
-          <Line
-            yAxisId="right"
-            type="monotone"
-            dataKey="margin"
-            name="Margin"
-            stroke={SERIES_COLORS.margin}
-            strokeWidth={2}
-            strokeDasharray="4 4"
-            dot={false}
-            isAnimationActive={false}
-          />
-        ) : null}
-      </ComposedChart>
-    </ResponsiveContainer>
-  );
-}
-
 function AnalyticsModal({
   data,
   onClose,
@@ -803,45 +606,7 @@ function CapitalAllocation({
           {hasData ? (
             <>
               <div className="h-[160px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={pieData}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={44}
-                      outerRadius={68}
-                      stroke="#0B0D0F"
-                      strokeWidth={2}
-                      isAnimationActive={false}
-                    >
-                      {pieData.map((entry) => (
-                        <Cell
-                          key={entry.name}
-                          fill={AGING_COLORS[entry.name as AgingBucket["label"]]}
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      contentStyle={{
-                        background: "#0B0D0F",
-                        border: "1px solid #24282D",
-                        fontSize: 12,
-                        borderRadius: 0,
-                      }}
-                      formatter={(value, _name, item) => {
-                        const v = Number(value) || 0;
-                        const payload = (item as { payload?: { count?: number; name?: string } } | undefined)?.payload;
-                        return [
-                          `${MONEY.format(v / 100)} (${payload?.count ?? 0} cards)`,
-                          `${payload?.name ?? ""} days`,
-                        ];
-                      }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
+                <AgingPieChart pieData={pieData} />
               </div>
               <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
                 <div className="text-[9px] font-medium uppercase tracking-[0.1em] text-[#77808C]">
