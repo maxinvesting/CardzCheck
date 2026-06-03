@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import AuthenticatedLayout from "@/components/AuthenticatedLayout";
-
 type NewsItem = {
   id: string;
   title: string;
@@ -234,7 +232,7 @@ export default function NewsPage() {
   if (data?.isBusiness) visibleCategories.push("business");
 
   return (
-    <AuthenticatedLayout>
+    <>
       <div className="min-h-screen" style={{ background: "var(--biz-bg, #0b1220)" }}>
 
         {/* ── Header ──────────────────────────────────────────────────── */}
@@ -397,6 +395,6 @@ export default function NewsPage() {
 
         </div>
       </div>
-    </AuthenticatedLayout>
+    </>
   );
 }

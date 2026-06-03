@@ -2,8 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import AuthenticatedLayout from "@/components/AuthenticatedLayout";
-
 const FAQ_SECTIONS = [
   {
     id: "getting-started",
@@ -282,7 +280,7 @@ export default function HelpPage() {
   })).filter((section) => !search || section.items.length > 0);
 
   return (
-    <AuthenticatedLayout>
+    <>
       <main className="max-w-3xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
@@ -415,6 +413,6 @@ export default function HelpPage() {
           </div>
         </div>
       </main>
-    </AuthenticatedLayout>
+    </>
   );
 }

@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import CompactMetricsRow from "@/components/dashboard/CompactMetricsRow";
 import CompactTopPerformers from "@/components/dashboard/CompactTopPerformers";
 import CompactQuickActions from "@/components/dashboard/CompactQuickActions";
@@ -149,7 +148,7 @@ export default function DashboardPage() {
   const userName = user?.name || (user?.email ? user.email.split("@")[0] : "");
 
   return (
-    <AuthenticatedLayout>
+    <>
       <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
         {/* Greeting */}
         <header className="mb-6 flex flex-wrap items-start justify-between gap-3">
@@ -299,6 +298,6 @@ export default function DashboardPage() {
           </div>
         )}
       </main>
-    </AuthenticatedLayout>
+    </>
   );
 }

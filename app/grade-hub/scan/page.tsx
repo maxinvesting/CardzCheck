@@ -6,7 +6,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
-import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import GradeEstimatorValuePanel from "@/components/GradeEstimatorValuePanel";
 import CardScanSlot, {
   type CardScanSlotCompleteResult,
@@ -340,7 +339,7 @@ function ScanPageInner() {
           : 4;
 
   return (
-    <AuthenticatedLayout>
+    <>
       <div className="min-h-screen bg-[#090B0D] text-[#E6E8EB]">
 
         {/* Header */}
@@ -1070,7 +1069,7 @@ function ScanPageInner() {
           50% { opacity: 0.4; }
         }
       `}</style>
-    </AuthenticatedLayout>
+    </>
   );
 }
 

@@ -3,7 +3,6 @@
 import { Suspense } from "react";
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import { createClient } from "@/lib/supabase/client";
 import { hasActiveBusinessTier } from "@/lib/subscription-tier";
 import type { User } from "@/types";
@@ -122,18 +121,18 @@ function AccountContent() {
 
   if (loading) {
     return (
-      <AuthenticatedLayout>
+      <>
         <div className="flex items-center justify-center min-h-screen">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         </div>
-      </AuthenticatedLayout>
+      </>
     );
   }
 
   const isBusinessMember = hasBusinessWorkspace;
 
   return (
-    <AuthenticatedLayout>
+    <>
       <main className="max-w-3xl mx-auto px-4 py-8">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-8">
           Account
@@ -250,18 +249,18 @@ function AccountContent() {
           </div>
         </div>
       </main>
-    </AuthenticatedLayout>
+    </>
   );
 }
 
 export default function AccountPage() {
   return (
     <Suspense fallback={
-      <AuthenticatedLayout>
+      <>
         <div className="flex items-center justify-center min-h-screen">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         </div>
-      </AuthenticatedLayout>
+      </>
     }>
       <AccountContent />
     </Suspense>

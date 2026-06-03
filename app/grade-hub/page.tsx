@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
-import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import {
   loadCachedHistoryRuns,
   mergeHistoryRuns,
@@ -191,7 +190,7 @@ export default function GradeHubPage() {
   };
 
   return (
-    <AuthenticatedLayout>
+    <>
       <div className="min-h-screen bg-[#090B0D] text-[#E6E8EB]">
 
         {/* Page header */}
@@ -553,6 +552,6 @@ export default function GradeHubPage() {
 
         {aboutOpen && <AboutModal onClose={() => setAboutOpen(false)} />}
       </div>
-    </AuthenticatedLayout>
+    </>
   );
 }

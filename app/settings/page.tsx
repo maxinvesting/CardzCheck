@@ -3,7 +3,6 @@
 import { Suspense } from "react";
 import { useState, useEffect } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import PricingModal from "@/components/PricingModal";
 import AppearanceSettingsCard from "@/components/business/settings/AppearanceSettingsCard";
 import EbayConnectSection from "@/components/business/settings/EbayConnectSection";
@@ -440,7 +439,7 @@ function SettingsContent() {
 
   if (loading) {
     return (
-      <AuthenticatedLayout>
+      <>
         <div className="flex items-center justify-center min-h-screen">
           <div
             className="animate-spin rounded-full h-8 w-8 border-b-2"
@@ -451,7 +450,7 @@ function SettingsContent() {
             }}
           />
         </div>
-      </AuthenticatedLayout>
+      </>
     );
   }
 
@@ -487,7 +486,7 @@ function SettingsContent() {
     !isBusinessSettings && hasBusinessWorkspace;
 
   return (
-    <AuthenticatedLayout>
+    <>
       <div className={isBusinessSettings ? "min-h-screen bg-[var(--biz-bg)]" : "min-h-screen bg-[#0b2347]"}>
         <main className={`max-w-4xl mx-auto px-4 py-10 ${isBusinessSettings ? "text-[var(--biz-text)]" : "text-white"}`}>
           <h1 className={`mb-8 text-3xl font-bold ${isBusinessSettings ? "text-[var(--biz-text)]" : "text-white"}`}>
@@ -990,7 +989,7 @@ function SettingsContent() {
         </main>
       </div>
       <PricingModal isOpen={pricingOpen} onClose={() => setPricingOpen(false)} />
-    </AuthenticatedLayout>
+    </>
   );
 }
 
@@ -998,14 +997,14 @@ export default function SettingsPage() {
   return (
     <Suspense
       fallback={
-        <AuthenticatedLayout>
+        <>
           <div className="flex items-center justify-center min-h-screen">
             <div
               className="animate-spin rounded-full h-8 w-8 border-b-2"
               style={{ borderBottomColor: "var(--biz-primary, #2563EB)" }}
             />
           </div>
-        </AuthenticatedLayout>
+        </>
       }
     >
       <SettingsContent />

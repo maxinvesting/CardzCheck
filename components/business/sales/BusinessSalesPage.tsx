@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import BusinessPaywall from "@/components/business/BusinessPaywall";
 import SalesAgentTerminal from "@/components/business/messaging/SalesAgentTerminal";
 import { createClient } from "@/lib/supabase/client";
@@ -82,7 +81,7 @@ export default function BusinessSalesPage() {
 
   if (loading) {
     return (
-      <AuthenticatedLayout>
+      <>
         <main className="sales-mono-theme min-h-screen px-3 py-3">
           <div className="animate-pulse space-y-3">
             <div className="h-12 w-72 rounded bg-[var(--biz-skeleton)]" />
@@ -96,23 +95,23 @@ export default function BusinessSalesPage() {
             <div className="h-[520px] rounded-md bg-[var(--biz-skeleton)]" />
           </div>
         </main>
-      </AuthenticatedLayout>
+      </>
     );
   }
 
   if (hasAccess === false) {
     return (
-      <AuthenticatedLayout>
+      <>
         <main className="sales-mono-theme min-h-screen px-4 py-4">
           <BusinessPaywall />
         </main>
-      </AuthenticatedLayout>
+      </>
     );
   }
 
   if (!stats) {
     return (
-      <AuthenticatedLayout>
+      <>
         <main className="sales-mono-theme min-h-screen px-4 py-8">
           <div className="mx-auto flex max-w-xl flex-col items-center justify-center rounded-md border border-dashed border-[var(--biz-border)] bg-[var(--biz-surface)] py-12 text-center">
             <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-md border border-[var(--biz-danger-border)] bg-[var(--biz-danger-soft)]">
@@ -145,14 +144,14 @@ export default function BusinessSalesPage() {
             </div>
           </div>
         </main>
-      </AuthenticatedLayout>
+      </>
     );
   }
 
   if (stats.total_threads === 0 && threads.length === 0) {
     const isConnected = ebayConnected === true;
     return (
-      <AuthenticatedLayout>
+      <>
         <main className="sales-mono-theme min-h-screen px-4 py-8">
           <div className="mx-auto flex max-w-xl flex-col items-center justify-center rounded-md border border-dashed border-[var(--biz-border)] bg-[var(--biz-surface)] py-12 text-center">
             <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-md border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)]">
@@ -206,12 +205,12 @@ export default function BusinessSalesPage() {
             ) : null}
           </div>
         </main>
-      </AuthenticatedLayout>
+      </>
     );
   }
 
   return (
-    <AuthenticatedLayout>
+    <>
       <main className="sales-mono-theme flex h-screen flex-col overflow-hidden">
         <SalesAgentTerminal
           initialStats={stats}
@@ -220,6 +219,6 @@ export default function BusinessSalesPage() {
           initialSyncRetriedAfterEmpty={syncRetriedAfterEmpty}
         />
       </main>
-    </AuthenticatedLayout>
+    </>
   );
 }

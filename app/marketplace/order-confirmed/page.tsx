@@ -1,5 +1,4 @@
 import Link from "next/link";
-import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import { createServiceClient } from "@/lib/supabase/server";
 import MessageSellerCTA from "./MessageSellerCTA";
 
@@ -24,7 +23,7 @@ export default async function OrderConfirmedPage({
   }
 
   return (
-    <AuthenticatedLayout>
+    <>
       <main className="p-6 lg:p-10 text-white">
         <div className="max-w-xl mx-auto space-y-6 text-center">
           <div className="text-4xl">✓</div>
@@ -58,6 +57,6 @@ export default async function OrderConfirmedPage({
           </div>
         </div>
       </main>
-    </AuthenticatedLayout>
+    </>
   );
 }

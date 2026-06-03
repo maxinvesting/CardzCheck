@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import { createClient } from "@/lib/supabase/server";
 import SellNewClient from "./SellNewClient";
 
@@ -14,7 +13,7 @@ export default async function SellNewPage() {
   if (!user) redirect("/login?next=/marketplace/sell/new");
 
   return (
-    <AuthenticatedLayout>
+    <>
       <main className="p-6 lg:p-10 text-white">
         <div className="max-w-2xl mx-auto space-y-6">
           <div>
@@ -32,6 +31,6 @@ export default async function SellNewPage() {
           <SellNewClient />
         </div>
       </main>
-    </AuthenticatedLayout>
+    </>
   );
 }

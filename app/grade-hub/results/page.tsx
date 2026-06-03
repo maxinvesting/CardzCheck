@@ -4,7 +4,6 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import GradeEstimatorValuePanel from "@/components/GradeEstimatorValuePanel";
 import GradeProbabilityPanel from "@/components/grading/GradeProbabilityPanel";
 import { useAuth } from "@/contexts/AuthContext";
@@ -195,7 +194,7 @@ function ResultsPageInner() {
   const scanPath = `${gradeHubBasePath}/scan?slots=${scanSlots}&mode=scan`;
 
   return (
-    <AuthenticatedLayout>
+    <>
       <main className="mx-auto max-w-6xl px-4 py-8 lg:px-6">
         <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -498,7 +497,7 @@ function ResultsPageInner() {
           </div>
         )}
       </main>
-    </AuthenticatedLayout>
+    </>
   );
 }
 

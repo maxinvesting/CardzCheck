@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import BusinessPaywall from "@/components/business/BusinessPaywall";
 import BusinessMigrationBanner from "@/components/business/BusinessMigrationBanner";
 import BusinessConsultantPanel from "@/components/business/BusinessConsultantPanel";
@@ -14,7 +13,7 @@ const shellBackdropClassName = "pointer-events-none absolute inset-0 bg-gray-50"
 
 function LoadingSkeleton() {
   return (
-    <AuthenticatedLayout>
+    <>
       <main className={shellClassName}>
         <div className={shellBackdropClassName} />
         <div className={contentClassName}>
@@ -26,7 +25,7 @@ function LoadingSkeleton() {
           </div>
         </div>
       </main>
-    </AuthenticatedLayout>
+    </>
   );
 }
 
@@ -81,7 +80,7 @@ function ConsultantPageContent() {
 
   if (loading) {
     return (
-      <AuthenticatedLayout>
+      <>
         <main className={shellClassName}>
           <div className={shellBackdropClassName} />
           <div className={contentClassName}>
@@ -93,13 +92,13 @@ function ConsultantPageContent() {
             </div>
           </div>
         </main>
-      </AuthenticatedLayout>
+      </>
     );
   }
 
   if (hasAccess === false) {
     return (
-      <AuthenticatedLayout>
+      <>
         <main className={shellClassName}>
           <div className={shellBackdropClassName} />
           <div className={contentClassName}>
@@ -108,12 +107,12 @@ function ConsultantPageContent() {
             </div>
           </div>
         </main>
-      </AuthenticatedLayout>
+      </>
     );
   }
 
   return (
-    <AuthenticatedLayout>
+    <>
       <main className={shellClassName}>
         <div className={shellBackdropClassName} />
         <div className={contentClassName}>
@@ -131,7 +130,7 @@ function ConsultantPageContent() {
           )}
         </div>
       </main>
-    </AuthenticatedLayout>
+    </>
   );
 }
 

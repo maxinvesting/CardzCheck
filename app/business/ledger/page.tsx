@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import BusinessPaywall from "@/components/business/BusinessPaywall";
 import BusinessMigrationBanner from "@/components/business/BusinessMigrationBanner";
 import BusinessInventoryItemEditor from "@/components/business/BusinessInventoryItemEditor";
@@ -93,7 +92,7 @@ function LedgerSummaryStrip({ summary }: { summary: LedgerSummary }) {
 
 function LoadingLedger() {
   return (
-    <AuthenticatedLayout>
+    <>
       <main className="min-h-screen bg-[#090B0D] text-[#E6E8EB]">
         <div className="animate-pulse p-4">
           <div className="mb-3 h-7 w-40 bg-[#1E2227]" />
@@ -108,7 +107,7 @@ function LoadingLedger() {
           <div className="h-[520px] border border-[#24282D] bg-[#0B0D0F]" />
         </div>
       </main>
-    </AuthenticatedLayout>
+    </>
   );
 }
 
@@ -535,16 +534,16 @@ export default function LedgerPage() {
 
   if (hasAccess === false) {
     return (
-      <AuthenticatedLayout>
+      <>
         <main className="min-h-screen bg-[#090B0D] px-4 py-4">
           <BusinessPaywall />
         </main>
-      </AuthenticatedLayout>
+      </>
     );
   }
 
   return (
-    <AuthenticatedLayout>
+    <>
       <main className="min-h-screen bg-[#090B0D] text-[#E6E8EB]">
         <div className="flex min-h-screen flex-col">
           <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#24282D] px-4 py-3">
@@ -849,6 +848,6 @@ export default function LedgerPage() {
           </div>
         )}
       </main>
-    </AuthenticatedLayout>
+    </>
   );
 }

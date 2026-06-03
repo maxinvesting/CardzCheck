@@ -2,7 +2,6 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import CardAnalyst from "@/components/CardAnalyst";
 import PricingModal from "@/components/PricingModal";
 import { createClient } from "@/lib/supabase/client";
@@ -99,11 +98,11 @@ function AnalystPageContent() {
 
   if (loading) {
     return (
-      <AuthenticatedLayout>
+      <>
         <div className="h-screen flex items-center justify-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500" />
         </div>
-      </AuthenticatedLayout>
+      </>
     );
   }
 
@@ -111,7 +110,7 @@ function AnalystPageContent() {
   if (!isPaid) {
     return (
       <>
-        <AuthenticatedLayout>
+        <>
           <div className="h-screen flex items-center justify-center p-4">
             <div className="max-w-md text-center">
               <div className="p-4 bg-purple-500/20 rounded-full inline-flex mb-6">
@@ -152,14 +151,14 @@ function AnalystPageContent() {
               </div>
             </div>
           </div>
-        </AuthenticatedLayout>
+        </>
         <PricingModal isOpen={pricingOpen} onClose={() => setPricingOpen(false)} />
       </>
     );
   }
 
   return (
-    <AuthenticatedLayout>
+    <>
       <div className="h-screen flex flex-col">
         {/* Page Header - Mobile only, desktop has header in component */}
         <div className="lg:hidden p-4 border-b border-gray-800">
@@ -194,7 +193,7 @@ function AnalystPageContent() {
           />
         </div>
       </div>
-    </AuthenticatedLayout>
+    </>
   );
 }
 
@@ -202,11 +201,11 @@ export default function AnalystPage() {
   return (
     <Suspense
       fallback={
-        <AuthenticatedLayout>
+        <>
           <div className="h-screen flex items-center justify-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500" />
           </div>
-        </AuthenticatedLayout>
+        </>
       }
     >
       <AnalystPageContent />

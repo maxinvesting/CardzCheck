@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import DualCardUploader from "@/components/DualCardUploader";
 import GradeProbabilityPanel from "@/components/grading/GradeProbabilityPanel";
 import GradeEstimateProgressPanel from "@/components/grading/GradeEstimateProgressPanel";
@@ -878,7 +877,7 @@ export default function GradeEstimatorPage() {
     : null;
 
   return (
-    <AuthenticatedLayout>
+    <>
       <main className="mx-auto max-w-3xl px-4 py-8 lg:max-w-5xl">
 
         {/* ── Page header ───────────────────────────────────────────── */}
@@ -1383,6 +1382,6 @@ export default function GradeEstimatorPage() {
           </div>
         ) : null}
       </main>
-    </AuthenticatedLayout>
+    </>
   );
 }

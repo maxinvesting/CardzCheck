@@ -1,5 +1,4 @@
 import Link from "next/link";
-import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import { createServiceClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -122,7 +121,7 @@ export default async function MarketplaceBrowsePage({
   const rows = (data ?? []) as unknown as ListingRow[];
 
   return (
-    <AuthenticatedLayout>
+    <>
       <main className="min-h-screen bg-[#090B0D] text-[#E6E8EB]">
         {/* Header */}
         <header className="border-b border-[#24282D] bg-[#0B0D0F] px-4 py-3">
@@ -268,7 +267,7 @@ export default async function MarketplaceBrowsePage({
           )}
         </section>
       </main>
-    </AuthenticatedLayout>
+    </>
   );
 }
 

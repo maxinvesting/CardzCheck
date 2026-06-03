@@ -2,7 +2,6 @@
 
 import { Suspense, useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import BusinessPaywall from "@/components/business/BusinessPaywall";
 import BusinessDashboardView from "@/components/business/BusinessDashboardView";
 import SaleFormModal from "@/components/business/SaleFormModal";
@@ -433,7 +432,7 @@ function BusinessDashboardContent() {
 
   if (loading) {
     return (
-      <AuthenticatedLayout>
+      <>
         <main className="mx-auto max-w-7xl px-4 py-2">
           <div className="animate-pulse space-y-4">
             <div className="h-8 w-48 rounded bg-[#E5E7EB]" />
@@ -448,22 +447,22 @@ function BusinessDashboardContent() {
             </div>
           </div>
         </main>
-      </AuthenticatedLayout>
+      </>
     );
   }
 
   if (hasAccess === false) {
     return (
-      <AuthenticatedLayout>
+      <>
         <main className="mx-auto max-w-7xl px-4 py-2">
           <BusinessPaywall />
         </main>
-      </AuthenticatedLayout>
+      </>
     );
   }
 
   return (
-    <AuthenticatedLayout>
+    <>
       <main className="mx-auto max-w-7xl px-4 py-2">
         <BusinessDashboardView
           businessName={businessName}
@@ -559,7 +558,7 @@ function BusinessDashboardContent() {
           </div>
         )}
       </main>
-    </AuthenticatedLayout>
+    </>
   );
 }
 
@@ -567,7 +566,7 @@ export default function BusinessDashboardPage() {
   return (
     <Suspense
       fallback={
-        <AuthenticatedLayout>
+        <>
           <main className="mx-auto max-w-7xl px-4 py-2">
             <div className="animate-pulse space-y-4">
               <div className="h-8 w-48 rounded bg-[#E5E7EB]" />
@@ -582,7 +581,7 @@ export default function BusinessDashboardPage() {
               </div>
             </div>
           </main>
-        </AuthenticatedLayout>
+        </>
       }
     >
       <BusinessDashboardContent />

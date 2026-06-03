@@ -1,8 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import AuthenticatedLayout from "@/components/AuthenticatedLayout";
-
 const TOOLS = [
   {
     name: "Financials",
@@ -36,7 +34,7 @@ const TOOLS = [
 
 export default function AnalyticsHubPage() {
   return (
-    <AuthenticatedLayout>
+    <>
       <div className="min-h-screen bg-[color:var(--biz-bg)] text-[color:var(--biz-text)]">
         <div className="mx-auto w-full max-w-5xl px-4 py-10 sm:px-6 lg:px-8">
           <header className="mb-8">
@@ -77,6 +75,6 @@ export default function AnalyticsHubPage() {
           </div>
         </div>
       </div>
-    </AuthenticatedLayout>
+    </>
   );
 }

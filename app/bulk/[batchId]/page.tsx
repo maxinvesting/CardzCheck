@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
-import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import { Surface } from "@/components/ui/Surface";
 import { createClient } from "@/lib/supabase/client";
 import { uploadBulkImages } from "@/lib/bulk/upload";
@@ -611,7 +610,7 @@ export default function BulkBatchPage() {
 
   if (loading) {
     return (
-      <AuthenticatedLayout>
+      <>
         <div className="max-w-6xl mx-auto px-4 py-8">
           <div className="h-8 w-48 bg-gray-700 rounded animate-pulse mb-6" />
           <div className="space-y-3">
@@ -620,13 +619,13 @@ export default function BulkBatchPage() {
             ))}
           </div>
         </div>
-      </AuthenticatedLayout>
+      </>
     );
   }
 
   if (error && !batch) {
     return (
-      <AuthenticatedLayout>
+      <>
         <div className="max-w-6xl mx-auto px-4 py-8">
           <Surface>
             <p className="text-red-400">{error}</p>
@@ -638,12 +637,12 @@ export default function BulkBatchPage() {
             </button>
           </Surface>
         </div>
-      </AuthenticatedLayout>
+      </>
     );
   }
 
   return (
-    <AuthenticatedLayout>
+    <>
       <div className="max-w-6xl mx-auto px-4 py-6">
         {/* Back link */}
         <button
@@ -875,6 +874,6 @@ export default function BulkBatchPage() {
           </div>
         )}
       </div>
-    </AuthenticatedLayout>
+    </>
   );
 }

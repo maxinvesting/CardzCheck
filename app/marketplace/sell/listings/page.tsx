@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -57,7 +56,7 @@ export default async function SellerListingsPage() {
   const rows = ((data ?? []) as unknown as SellerListingRow[]) ?? [];
 
   return (
-    <AuthenticatedLayout>
+    <>
       <main className="p-6 lg:p-10 text-white">
         <div className="max-w-5xl mx-auto space-y-6">
           <div className="flex items-center justify-between">
@@ -145,6 +144,6 @@ export default async function SellerListingsPage() {
           )}
         </div>
       </main>
-    </AuthenticatedLayout>
+    </>
   );
 }

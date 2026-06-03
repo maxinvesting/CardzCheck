@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import BusinessPaywall from "@/components/business/BusinessPaywall";
 import SalesTable, { type SalesFilters } from "@/components/business/SalesTable";
 import { createClient } from "@/lib/supabase/client";
@@ -150,16 +149,16 @@ export default function BusinessSalesHistoryPage() {
 
   if (hasAccess === false) {
     return (
-      <AuthenticatedLayout>
+      <>
         <main className="min-h-screen bg-[#090B0D] px-4 py-4">
           <BusinessPaywall />
         </main>
-      </AuthenticatedLayout>
+      </>
     );
   }
 
   return (
-    <AuthenticatedLayout>
+    <>
       <main className="min-h-screen bg-[#090B0D] text-[#E6E8EB]">
         <div className="flex min-h-screen flex-col">
           <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#24282D] px-4 py-3">
@@ -220,7 +219,7 @@ export default function BusinessSalesHistoryPage() {
           </div>
         )}
       </main>
-    </AuthenticatedLayout>
+    </>
   );
 }
 

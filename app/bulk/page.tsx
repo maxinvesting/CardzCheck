@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import { Surface } from "@/components/ui/Surface";
 import type { BulkBatch } from "@/types/bulk";
 
@@ -218,7 +217,7 @@ export default function BulkModePage() {
   }
 
   return (
-    <AuthenticatedLayout>
+    <>
       <div className="max-w-3xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="flex items-start justify-between gap-4 mb-8">
@@ -312,6 +311,6 @@ export default function BulkModePage() {
           onCreated={handleBatchCreated}
         />
       )}
-    </AuthenticatedLayout>
+    </>
   );
 }

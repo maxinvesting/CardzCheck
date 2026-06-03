@@ -3,7 +3,6 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import { createClient } from "@/lib/supabase/client";
 
 type InviteState = "loading" | "requires_auth" | "success" | "error";
@@ -18,7 +17,7 @@ export default function BusinessInvitePage() {
 
 function InviteLoadingFallback() {
   return (
-    <AuthenticatedLayout>
+    <>
       <main className="mx-auto max-w-xl px-4 py-14">
         <section className="rounded-2xl border border-[color:var(--biz-border)] bg-[var(--biz-surface)] p-6">
           <h1 className="text-2xl font-semibold text-[var(--biz-text)]">
@@ -29,7 +28,7 @@ function InviteLoadingFallback() {
           </p>
         </section>
       </main>
-    </AuthenticatedLayout>
+    </>
   );
 }
 
@@ -89,7 +88,7 @@ function BusinessInviteContent() {
   }, [router, token]);
 
   return (
-    <AuthenticatedLayout>
+    <>
       <main className="mx-auto max-w-xl px-4 py-14">
         <section className="rounded-2xl border border-[color:var(--biz-border)] bg-[var(--biz-surface)] p-6">
           <h1 className="text-2xl font-semibold text-[var(--biz-text)]">
@@ -126,6 +125,6 @@ function BusinessInviteContent() {
           )}
         </section>
       </main>
-    </AuthenticatedLayout>
+    </>
   );
 }

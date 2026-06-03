@@ -6,7 +6,6 @@
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import ContactSellerButton from "./ContactSellerButton";
 
@@ -55,7 +54,7 @@ export default async function SellerProfilePage({
     maskEmail((profile as { email: string | null }).email);
 
   return (
-    <AuthenticatedLayout>
+    <>
       <main className="min-h-screen bg-[#090B0D] text-[#E6E8EB]">
         <div className="mx-auto max-w-3xl px-4 py-6">
           <Link
@@ -119,6 +118,6 @@ export default async function SellerProfilePage({
           </section>
         </div>
       </main>
-    </AuthenticatedLayout>
+    </>
   );
 }

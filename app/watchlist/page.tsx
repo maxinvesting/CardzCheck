@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import WatchlistGrid from "@/components/WatchlistGrid";
 import CardPickerModal from "@/components/CardPickerModal";
 import type { CardPickerSelection } from "@/components/CardPicker";
@@ -232,7 +231,7 @@ export default function WatchlistPage() {
   // Pro upgrade prompt for free users
   if (!loading && !isPro) {
     return (
-      <AuthenticatedLayout>
+      <>
         <div className="h-screen flex items-center justify-center p-4">
           <div className="max-w-md text-center">
             <div className="p-4 bg-blue-500/20 rounded-full inline-flex mb-6">
@@ -287,12 +286,12 @@ export default function WatchlistPage() {
             </div>
           </div>
         </div>
-      </AuthenticatedLayout>
+      </>
     );
   }
 
   return (
-    <AuthenticatedLayout>
+    <>
       <main className="max-w-6xl mx-auto px-4 py-8">
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
@@ -574,6 +573,6 @@ export default function WatchlistPage() {
           />
         )}
       </main>
-    </AuthenticatedLayout>
+    </>
   );
 }

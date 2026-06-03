@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import { getOwnerAuth } from "@/lib/admin";
 import AdminAccessClient from "@/app/admin/access/AdminAccessClient";
 
@@ -11,7 +10,7 @@ export default async function AdminAccessPage() {
   }
 
   return (
-    <AuthenticatedLayout>
+    <>
       <main className="p-6 text-white lg:p-10">
         <div className="mx-auto max-w-4xl space-y-6">
           <div>
@@ -24,6 +23,6 @@ export default async function AdminAccessPage() {
           <AdminAccessClient />
         </div>
       </main>
-    </AuthenticatedLayout>
+    </>
   );
 }

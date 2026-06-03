@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import { getAdminAuth, isOwner } from "@/lib/admin";
 
 export default async function AdminHubPage() {
@@ -11,7 +10,7 @@ export default async function AdminHubPage() {
   }
 
   return (
-    <AuthenticatedLayout>
+    <>
       <main className="p-6 lg:p-10 text-white">
         <div className="max-w-3xl mx-auto space-y-8">
           <div>
@@ -77,6 +76,6 @@ export default async function AdminHubPage() {
           </div>
         </div>
       </main>
-    </AuthenticatedLayout>
+    </>
   );
 }

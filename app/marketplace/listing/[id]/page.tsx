@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import BuyButton from "./BuyButton";
 import MessageSellerButton from "./MessageSellerButton";
@@ -48,7 +47,7 @@ export default async function ListingDetailPage({
 
   if (!["active", "price_reduced"].includes(listing.status)) {
     return (
-      <AuthenticatedLayout>
+      <>
         <main className="min-h-screen bg-[#090B0D] text-[#E6E8EB]">
           <div className="mx-auto max-w-3xl px-4 py-8">
             <Link
@@ -62,7 +61,7 @@ export default async function ListingDetailPage({
             </div>
           </div>
         </main>
-      </AuthenticatedLayout>
+      </>
     );
   }
 
@@ -100,7 +99,7 @@ export default async function ListingDetailPage({
           : "text-[#B8C0CC]";
 
   return (
-    <AuthenticatedLayout>
+    <>
       <main className="min-h-screen bg-[#090B0D] text-[#E6E8EB]">
         <div className="mx-auto max-w-5xl px-4 py-6">
           <Link
@@ -232,7 +231,7 @@ export default async function ListingDetailPage({
           </div>
         </div>
       </main>
-    </AuthenticatedLayout>
+    </>
   );
 }
 

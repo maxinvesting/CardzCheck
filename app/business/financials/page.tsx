@@ -17,7 +17,6 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import BusinessPaywall from "@/components/business/BusinessPaywall";
 import { createClient } from "@/lib/supabase/client";
 import type {
@@ -1145,7 +1144,7 @@ function EmptyState({
 
 function LoadingFinancials() {
   return (
-    <AuthenticatedLayout>
+    <>
       <main className="min-h-screen bg-[#090B0D] text-[#E6E8EB]">
         <div className="animate-pulse space-y-3 p-4">
           <div className="h-7 w-40 bg-[#1E2227]" />
@@ -1161,7 +1160,7 @@ function LoadingFinancials() {
           </div>
         </div>
       </main>
-    </AuthenticatedLayout>
+    </>
   );
 }
 
@@ -1211,16 +1210,16 @@ export default function FinancialsPage() {
 
   if (hasAccess === false) {
     return (
-      <AuthenticatedLayout>
+      <>
         <main className="min-h-screen bg-[#090B0D] px-4 py-4">
           <BusinessPaywall />
         </main>
-      </AuthenticatedLayout>
+      </>
     );
   }
 
   return (
-    <AuthenticatedLayout>
+    <>
       <main className="min-h-screen bg-[#090B0D] text-[#E6E8EB]">
         <header className="flex items-baseline justify-between gap-3 border-b border-[#24282D] px-4 py-2 sm:px-6">
           <div className="flex items-baseline gap-3">
@@ -1269,6 +1268,6 @@ export default function FinancialsPage() {
           </div>
         ) : null}
       </main>
-    </AuthenticatedLayout>
+    </>
   );
 }

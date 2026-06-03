@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import { getAdminAuth } from "@/lib/admin";
 import AdminNewsClient from "./AdminNewsClient";
 
@@ -12,7 +11,7 @@ export default async function AdminNewsPage() {
   }
 
   return (
-    <AuthenticatedLayout>
+    <>
       <main className="p-6 lg:p-10 text-white">
         <div className="max-w-4xl mx-auto space-y-6">
           <div>
@@ -30,6 +29,6 @@ export default async function AdminNewsPage() {
           <AdminNewsClient />
         </div>
       </main>
-    </AuthenticatedLayout>
+    </>
   );
 }

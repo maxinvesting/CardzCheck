@@ -11,7 +11,6 @@ import ValuationCautions from "@/components/ValuationCautions";
 import PaywallModal from "@/components/PaywallModal";
 import PlanSelectionModal from "@/components/PlanSelectionModal";
 import WelcomeToast from "@/components/WelcomeToast";
-import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import ConfirmAddCardModal from "@/components/ConfirmAddCardModal";
 import GradeProbabilityPanel from "@/components/grading/GradeProbabilityPanel";
 import { CardIdentitySubtitle } from "@/components/ui";
@@ -524,7 +523,7 @@ function CompsPageContent() {
     : true;
 
   return (
-    <AuthenticatedLayout>
+    <>
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
         {/* Page Header */}
         <div className="mb-6">
@@ -1068,18 +1067,18 @@ function CompsPageContent() {
           </button>
         </div>
       )}
-    </AuthenticatedLayout>
+    </>
   );
 }
 
 export default function CompsPage() {
   return (
     <Suspense fallback={
-      <AuthenticatedLayout>
+      <>
         <div className="flex items-center justify-center min-h-screen">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         </div>
-      </AuthenticatedLayout>
+      </>
     }>
       <CompsPageContent />
     </Suspense>

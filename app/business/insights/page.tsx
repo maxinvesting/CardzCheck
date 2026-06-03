@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import AuthenticatedLayout from "@/components/AuthenticatedLayout";
 import BusinessAnalystPanel from "@/components/business/BusinessAnalystPanel";
 import BusinessMigrationBanner from "@/components/business/BusinessMigrationBanner";
 import BusinessPaywall from "@/components/business/BusinessPaywall";
@@ -60,29 +59,29 @@ export default function BusinessInsightsPage() {
 
   if (loading) {
     return (
-      <AuthenticatedLayout>
+      <>
         <main className="mx-auto max-w-7xl px-4 py-4">
           <div className="space-y-3 animate-pulse">
             <div className="h-8 w-64 rounded bg-gray-800" />
             <div className="h-48 rounded-xl bg-gray-800" />
           </div>
         </main>
-      </AuthenticatedLayout>
+      </>
     );
   }
 
   if (hasAccess === false) {
     return (
-      <AuthenticatedLayout>
+      <>
         <main className="mx-auto max-w-4xl px-4 py-6">
           <BusinessPaywall />
         </main>
-      </AuthenticatedLayout>
+      </>
     );
   }
 
   return (
-    <AuthenticatedLayout>
+    <>
       <main className="mx-auto max-w-7xl px-4 py-4">
         {needsMigration ? (
           <BusinessMigrationBanner
@@ -95,6 +94,6 @@ export default function BusinessInsightsPage() {
           <BusinessAnalystPanel items={items} />
         )}
       </main>
-    </AuthenticatedLayout>
+    </>
   );
 }
