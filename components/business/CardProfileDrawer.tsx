@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { CardImage } from "@/components/CardImage";
+import { createClient } from "@/lib/supabase/client";
 import TargetsSection from "@/components/business/TargetsSection";
 import {
   buildMarketplaceLinks,
@@ -703,6 +704,12 @@ function InventoryEditForm({
     list_price: centsToInput(item.list_price_cents),
     market_value: centsToInput(item.current_market_value_cents),
   });
+  const [images, setImages] = useState<string[]>(() =>
+    [item.user_image_url, item.image_url].filter(
+      (u): u is string => typeof u === "string" && u.startsWith("http")
+    )
+  );
+  const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -710,10 +717,38 @@ function InventoryEditForm({
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
+  async function uploadFiles(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    setError(null);
+    try {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("You must be signed in to upload photos.");
+      const urls: string[] = [];
+      for (const file of Array.from(files)) {
+        const fileName = `${user.id}/${Date.now()}-${file.name}`;
+        const { data, error: upErr } = await supabase.storage
+          .from("card-images")
+          .upload(fileName, file);
+        if (upErr) throw new Error(upErr.message);
+        urls.push(supabase.storage.from("card-images").getPublicUrl(data.path).data.publicUrl);
+      }
+      setImages((prev) => Array.from(new Set([...prev, ...urls])));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to upload photo");
+    } finally {
+      setUploading(false);
+    }
+  }
+
   async function save() {
     setSaving(true);
     setError(null);
     try {
+      const primaryImage = images[0] ?? null;
       const updates: Record<string, unknown> = {
         id: item.id,
         title: form.title,
@@ -728,6 +763,9 @@ function InventoryEditForm({
         grade: form.grade || null,
         cert_number: form.cert_number || null,
         notes: form.notes || null,
+        user_image_url: primaryImage,
+        image_url: primaryImage,
+        image_source: primaryImage ? "user" : "none",
         cost_basis_total_cents: inputToCents(form.cost_basis),
         tax_cents: inputToCents(form.tax),
         shipping_cents: inputToCents(form.shipping),
@@ -759,6 +797,55 @@ function InventoryEditForm({
             {error}
           </div>
         ) : null}
+
+        {/* Photos */}
+        <div className="mb-4">
+          <div className="mb-1.5 flex items-center justify-between">
+            <span className="text-[10px] font-medium uppercase tracking-[0.08em] text-[#77808C]">
+              Photos
+            </span>
+            <span className="text-[10px] text-[#5A626E]">
+              {images.length === 0 ? "Needed to list this card" : `${images.length} photo${images.length === 1 ? "" : "s"}`}
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {images.map((url) => (
+              <div key={url} className="group relative h-20 w-16">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={url}
+                  alt="Card"
+                  className="h-full w-full border border-[#24282D] object-cover"
+                />
+                <button
+                  type="button"
+                  onClick={() => setImages((prev) => prev.filter((u) => u !== url))}
+                  className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center bg-black/70 text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100"
+                  aria-label="Remove photo"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+            <label
+              className={`flex h-20 w-16 cursor-pointer flex-col items-center justify-center border border-dashed border-[#343941] bg-[#0F1317] text-center text-[9px] leading-tight text-[#77808C] transition-colors hover:border-[#20B26B] hover:text-[#E6E8EB] ${
+                uploading ? "pointer-events-none opacity-60" : ""
+              }`}
+            >
+              {uploading ? "Uploading…" : "+ Add photo"}
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  void uploadFiles(e.target.files);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+          </div>
+        </div>
 
         <EditField label="Title" full>
           <input
@@ -842,7 +929,7 @@ function InventoryEditForm({
         <button
           type="button"
           onClick={save}
-          disabled={saving}
+          disabled={saving || uploading}
           className="border border-[#20B26B] bg-[#20B26B] px-4 py-2 text-xs font-semibold text-[#07100B] transition-colors hover:bg-[#33C47C] disabled:opacity-50"
         >
           {saving ? "Saving…" : "Save changes"}
