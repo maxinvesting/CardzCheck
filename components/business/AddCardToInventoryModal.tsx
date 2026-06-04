@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { normalizeCertWriteFields } from "@/lib/images/cert-image";
-import { createClient } from "@/lib/supabase/client";
+import CardPhotoUploader from "@/components/business/CardPhotoUploader";
 
 export interface PendingInventoryCard {
   card_id?: string;
@@ -133,35 +133,6 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
     setImages(Array.from(new Set(seeded)));
   }, [isOpen, card?.user_image_url, card?.imageUrl]);
 
-  async function handleUploadFiles(files: FileList | null) {
-    if (!files || files.length === 0) return;
-    setUploading(true);
-    setError(null);
-    try {
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error("You must be signed in to upload photos.");
-      const urls: string[] = [];
-      for (const file of Array.from(files)) {
-        const fileName = `${user.id}/${Date.now()}-${file.name}`;
-        const { data, error: upErr } = await supabase.storage
-          .from("card-images")
-          .upload(fileName, file);
-        if (upErr) throw new Error(upErr.message);
-        const {
-          data: { publicUrl },
-        } = supabase.storage.from("card-images").getPublicUrl(data.path);
-        urls.push(publicUrl);
-      }
-      setImages((prev) => Array.from(new Set([...prev, ...urls])));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to upload photo");
-    } finally {
-      setUploading(false);
-    }
-  }
 
   // Fetch estimated CMV when modal opens with a card
   useEffect(() => {
@@ -376,58 +347,22 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
           <div className="flex min-h-0 flex-1 gap-5 overflow-y-auto px-5 py-4">
             {/* Card photos — left rail (required) */}
-            <aside className="w-full flex-shrink-0 sm:w-52">
+            <aside className="w-full flex-shrink-0 sm:w-56">
               <div className="border border-[#24282D] bg-[#0F1317] p-3">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="text-[10px] font-medium uppercase tracking-[0.08em] text-[#77808C]">
-                    Photos
-                  </span>
-                  <span className="text-[10px] font-semibold text-[#E05C5C]">Required</span>
-                </div>
-
-                {images.length > 0 ? (
-                  <div className="mb-2 grid grid-cols-2 gap-2">
-                    {images.map((url) => (
-                      <div key={url} className="group relative">
-                        <img
-                          src={url}
-                          alt={card.player_name}
-                          className="aspect-[5/7] w-full border border-[#24282D] object-cover"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setImages((prev) => prev.filter((u) => u !== url))}
-                          className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center bg-black/70 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100"
-                          aria-label="Remove photo"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="mb-2 flex aspect-[5/7] w-full items-center justify-center border border-dashed border-[#343941] bg-[#0B0D0F] px-2 text-center text-[10px] text-[#5A626E]">
-                    Add at least one photo to list this card later
-                  </div>
-                )}
-
-                <label
-                  className={`flex cursor-pointer items-center justify-center border border-[#343941] bg-[#0B0D0F] px-2 py-2 text-[11px] font-medium text-[#B8C0CC] transition-colors hover:border-[#20B26B] hover:text-[#E6E8EB] ${
-                    uploading ? "pointer-events-none opacity-60" : ""
-                  }`}
-                >
-                  {uploading ? "Uploading…" : images.length > 0 ? "+ Add more photos" : "Upload photos"}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    className="hidden"
-                    onChange={(e) => {
-                      void handleUploadFiles(e.target.files);
-                      e.target.value = "";
-                    }}
-                  />
-                </label>
+                <CardPhotoUploader
+                  images={images}
+                  onChange={setImages}
+                  max={gradeFields.conditionStatus === "graded" ? 3 : 10}
+                  onUploadingChange={setUploading}
+                  onError={setError}
+                  size="md"
+                />
+                <p className="mt-2 text-[10px] leading-snug text-[#5A626E]">
+                  {gradeFields.conditionStatus === "graded"
+                    ? "Up to 3 photos for graded cards."
+                    : "Up to 10 photos for raw cards."}{" "}
+                  At least one is required.
+                </p>
 
                 <div className="mt-3 border-t border-[#24282D] pt-2">
                   <p className="truncate text-sm font-semibold text-[#E6E8EB]">
