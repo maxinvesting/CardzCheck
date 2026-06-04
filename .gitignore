@@ -38,3 +38,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+.claude/worktrees/
+
+# local tooling / cli state
+.clone/
+.playwright-cli/
+supabase/.temp/
