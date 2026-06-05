@@ -353,11 +353,11 @@ function ScanPageInner() {
             </Link>
             <div>
               <div className="text-[10px] font-medium uppercase tracking-[0.12em] text-[#77808C]">
-                {mode === "mock" ? "Mock Submission" : "Scan Session"}
+                {mode === "mock" ? "Submission Builder" : "Scan Session"}
               </div>
               <h1 className="mt-0.5 flex items-center gap-3 text-[18px] font-semibold tracking-normal text-[#E6E8EB]">
                 {mode === "mock"
-                  ? "Mock Submission"
+                  ? "Submission Builder"
                   : wizardStep < 4
                     ? "New Scan Session"
                     : activeSlots === 1 ? "Analyze Card" : `Analyze ${activeSlots} Cards`}
@@ -411,7 +411,7 @@ function ScanPageInner() {
         {/* Body */}
         <div
           className="mx-auto px-6 pb-16 pt-10"
-          style={{ maxWidth: mode === "mock" ? 860 : wideScanLayout ? 1200 : 680 }}
+          style={{ maxWidth: mode === "mock" ? 1100 : wideScanLayout ? 1200 : 680 }}
         >
 
           {mode === "mock" && (

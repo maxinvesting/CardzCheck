@@ -105,7 +105,6 @@ export default function GradeHubPage() {
   const scanPath     = `${scanBasePath}/scan`;
 
   const [view,           setView]          = useState<PageView>("home");
-  const [mode,           setMode]          = useState<ScanMode>("scan");
   const [aboutOpen,      setAboutOpen]     = useState(false);
   const [credits,        setCredits]       = useState<CreditStatus | null>(null);
   const [creditsLoading, setCreditsLoading]= useState(true);
@@ -154,9 +153,9 @@ export default function GradeHubPage() {
     if (!authLoading && authUser) void loadHistory();
   }, [authLoading, authUser, loadHistory]);
 
-  const handleBeginAnalysis = useCallback(() => {
-    router.push(`${scanPath}?slots=1&mode=${mode}`);
-  }, [router, scanPath, mode]);
+  const launch = useCallback((m: ScanMode) => {
+    router.push(`${scanPath}?slots=1&mode=${m}`);
+  }, [router, scanPath]);
 
   const handleDeleteRun = useCallback(async (runId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -240,72 +239,76 @@ export default function GradeHubPage() {
 
         {/* HOME */}
         {view === "home" && (
-          <div className="mx-auto max-w-[800px] px-8 py-10">
+          <div className="mx-auto max-w-[1180px] px-6 py-8 md:px-10">
 
-            <p className="mb-6 text-[10px] font-medium uppercase tracking-[0.16em] text-[#77808C]">
-              New Analysis
-            </p>
-
-            <div className="mb-10 border border-[#24282D] bg-[#0F1317]">
-              {/* Mode toggle */}
-              <div className="flex border-b border-[#24282D]">
-                {([
-                  { key: "scan" as ScanMode, label: "Scan" },
-                  { key: "mock" as ScanMode, label: "Mock Submission" },
-                ]).map((item, i) => (
-                  <button
-                    key={item.key}
-                    type="button"
-                    onClick={() => setMode(item.key)}
-                    className={`px-6 py-3 text-[11px] font-semibold uppercase tracking-[0.08em] transition-colors ${
-                      mode === item.key
-                        ? "border-b-2 border-[#E6E8EB] text-[#E6E8EB] -mb-px"
-                        : "text-[#77808C] hover:text-[#B8C0CC]"
-                    } ${i === 0 ? "border-r border-[#24282D]" : ""}`}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-
-              <div className="flex items-center gap-6 px-6 py-5">
-                <p className="flex-1 text-[12px] leading-relaxed text-[#B8C0CC]">
-                  {mode === "scan"
-                    ? "Upload card photos — the engine scores centering, corners, edges, and surface and returns calibrated probability bands for PSA, BGS, CGC, SGC, and Tag Rater."
-                    : "Simulate a full grading submission. Get ROI analysis, break-even grade, and profit scenarios before sending cards."}
+            {/* Two-tile grading menu */}
+            <div className="mb-8 grid gap-4 md:grid-cols-2">
+              {/* Scan a card */}
+              <button
+                type="button"
+                onClick={() => launch("scan")}
+                disabled={creditsLoading}
+                className="group relative flex flex-col items-start overflow-hidden border border-[#24282D] bg-[#0F1317] p-7 text-left transition-colors hover:border-[#20B26B] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <span className="absolute inset-y-0 left-0 w-[3px] bg-[#20B26B]" />
+                <div className="mb-4 flex h-9 w-9 items-center justify-center rounded-full border border-[#20B26B]/40 bg-[#20B26B]/10 text-[#20B26B]">
+                  <svg width="17" height="17" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    <circle cx="12" cy="13" r="3.2" />
+                  </svg>
+                </div>
+                <h3 className="mb-1.5 text-[16px] font-semibold text-[#E6E8EB]">Scan a Card</h3>
+                <p className="mb-5 max-w-[42ch] text-[12px] leading-relaxed text-[#B8C0CC]">
+                  Upload photos — the engine scores centering, corners, edges, and surface and returns calibrated grade probabilities for PSA, BGS, CGC, SGC, and Tag Rater.
                 </p>
-                <button
-                  type="button"
-                  onClick={handleBeginAnalysis}
-                  disabled={creditsLoading}
-                  className="flex-shrink-0 whitespace-nowrap border border-[#20B26B] bg-[#20B26B] px-7 py-2.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#07100B] transition-colors hover:bg-[#33C47C] disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {creditsLoading ? "Loading…" : "Begin Analysis"}
-                </button>
-              </div>
+                <span className="mt-auto text-[11px] font-semibold uppercase tracking-[0.1em] text-[#20B26B] transition-colors group-hover:text-[#33C47C]">
+                  {creditsLoading ? "Loading…" : "Begin Scan →"}
+                </span>
+              </button>
 
-              <div className="border-t border-[#24282D] bg-[#0B0D0F] px-6 py-2.5">
-                <p className="text-[10px] text-[#77808C]">
-                  {creditsLoading
-                    ? "Checking access…"
-                    : !credits
-                      ? "Unable to load scan balance"
-                      : isBusinessPro
-                        ? "Business Pro · unlimited scans · up to 3 cards per batch"
-                        : isUnlimited
-                          ? "Unlimited scans"
-                          : `${remaining} scan${remaining !== 1 ? "s" : ""} remaining${credits.nextGrantAt ? ` · +1 in ${formatTimeUntil(credits.nextGrantAt)}` : ""}`}
-                  {!creditsLoading && !canScan && credits && (
-                    <span
-                      onClick={() => router.push(pathname?.startsWith("/business") ? "/business/settings" : "/settings")}
-                      className="ml-3 cursor-pointer text-[#20B26B] hover:text-[#33C47C]"
-                    >
-                      Upgrade →
-                    </span>
-                  )}
+              {/* Submission Builder */}
+              <button
+                type="button"
+                onClick={() => launch("mock")}
+                disabled={creditsLoading}
+                className="group relative flex flex-col items-start overflow-hidden border border-[#24282D] bg-[#0F1317] p-7 text-left transition-colors hover:border-[#5A626E] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <span className="absolute inset-y-0 left-0 w-[3px] bg-[#343941]" />
+                <div className="mb-4 flex h-9 w-9 items-center justify-center rounded-full border border-[#343941] bg-[#13171B] text-[#B8C0CC]">
+                  <svg width="17" height="17" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                  </svg>
+                </div>
+                <h3 className="mb-1.5 text-[16px] font-semibold text-[#E6E8EB]">Submission Builder</h3>
+                <p className="mb-5 max-w-[42ch] text-[12px] leading-relaxed text-[#B8C0CC]">
+                  Add your cards with costs and grading company, then upload photos. Get an AI grade estimate and projected profit before you send cards in.
                 </p>
-              </div>
+                <span className="mt-auto text-[11px] font-semibold uppercase tracking-[0.1em] text-[#B8C0CC] transition-colors group-hover:text-[#E6E8EB]">
+                  Open Builder →
+                </span>
+              </button>
             </div>
+
+            {/* Access line */}
+            <p className="mb-10 text-[11px] text-[#77808C]">
+              {creditsLoading
+                ? "Checking access…"
+                : !credits
+                  ? "Unable to load scan balance"
+                  : isBusinessPro
+                    ? "Business Pro · unlimited scans · up to 3 cards per batch"
+                    : isUnlimited
+                      ? "Unlimited scans"
+                      : `${remaining} scan${remaining !== 1 ? "s" : ""} remaining${credits.nextGrantAt ? ` · +1 in ${formatTimeUntil(credits.nextGrantAt)}` : ""}`}
+              {!creditsLoading && !canScan && credits && (
+                <span
+                  onClick={() => router.push(pathname?.startsWith("/business") ? "/business/settings" : "/settings")}
+                  className="ml-3 cursor-pointer text-[#20B26B] hover:text-[#33C47C]"
+                >
+                  Upgrade →
+                </span>
+              )}
+            </p>
 
             {/* Recent Scans */}
             <div>
@@ -399,7 +402,7 @@ export default function GradeHubPage() {
 
         {/* HISTORY */}
         {view === "history" && (
-          <div className="mx-auto max-w-[960px] px-8 py-10">
+          <div className="mx-auto max-w-[1180px] px-6 py-8 md:px-10">
 
             <div className="mb-6 flex items-center justify-between">
               <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-[#77808C]">
