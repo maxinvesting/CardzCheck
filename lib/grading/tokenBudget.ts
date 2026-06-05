@@ -1,6 +1,6 @@
 import { createServiceClient } from "@/lib/supabase/server";
 
-// Pricing for claude-sonnet-4-20250514.
+// Pricing for claude-sonnet-4-6 (same $3/$15 per 1M as prior Sonnet 4).
 const INPUT_COST_PER_1M_CENTS = 300;
 const OUTPUT_COST_PER_1M_CENTS = 1500;
 

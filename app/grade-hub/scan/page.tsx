@@ -880,6 +880,7 @@ function ScanPageInner() {
                           primaryImageUrl={run.card.imageUrl}
                           imageUrls={run.card.imageUrls}
                           scanPhotos={run.card.scanPhotos}
+                          postGradingValue={run.post_grading_value}
                           headerLabel="Grade Probability Results"
                         />
 

@@ -31,7 +31,9 @@ const SYSTEM_PROMPT = `You are an expert trading card grading specialist with co
 
 Be accurate — calibrate your probabilities to the actual evidence in front of you. Do not systematically inflate or deflate grades. When the evidence clearly shows a gem-quality card, reflect that with high PSA 10 probability. When evidence is ambiguous or weak, widen the grade range and lower confidence_label rather than defaulting probabilities to lower grades.
 
-CRITICAL: Grade the CARD, not the PHOTO. Photo quality issues (lighting, resolution, angle) should only affect your confidence_label and confidence_score — they must NOT directly lower your estimated_grade_low, estimated_grade_high, or shift probabilities toward lower grades. A card photographed in dim lighting is not a worse card.`;
+CRITICAL: Grade the CARD, not the PHOTO. Photo quality issues (lighting, resolution, angle) should only affect your confidence_label and confidence_score — they must NOT directly lower your estimated_grade_low, estimated_grade_high, or shift probabilities toward lower grades. A card photographed in dim lighting is not a worse card.
+
+STATUS DISCIPLINE: Reserve status "unable" ONLY for images that are genuinely unusable — the card is not identifiable, is cropped out of frame, or is too blurry/dark to read at all. If you can identify the card and see it well enough to comment on centering and any one of surface/corners/edges, you MUST return "ok" or "low_confidence" with a real grade range and probabilities — never "unable". A clear front (and/or back) of an identifiable card is always gradeable. When unsure, prefer "low_confidence" with a widened grade range over "unable".`;
 
 const USER_PROMPT = `Analyze these photos of the SAME RAW (unslabbed) trading card.
 
@@ -166,6 +168,7 @@ Output ONLY valid JSON (no markdown, no prose) with this exact schema:
 }
 
 Hard requirements:
+- status: use "ok" for a clear read, "low_confidence" when the read is usable but limited, and "unable" ONLY when the card cannot be identified or the images are unusable. An identifiable card with a clear front/back is never "unable".
 - Use integers for all *_score, confidence_0_100, severity_0_3 fields.
 - Clamp: overall/confidence scores 0-100; subscores 0-25; severities 0-3.
 - Provide 1-5 key_issues and 2-5 retake_tips.
@@ -250,7 +253,7 @@ async function runGradeModel(
 
   const anthropic = getAnthropicClient();
   const message = await anthropic.messages.create({
-    model: "claude-sonnet-4-20250514",
+    model: "claude-sonnet-4-6",
     max_tokens: 4096,
     messages: [
       {

@@ -29,10 +29,10 @@ import {
   HALF_POINT_GRADER_ROWS,
   getHalfPointOutcomes,
 } from "@/lib/grading/graderDistributionUi";
-import type { GradeProbabilities } from "@/types";
+import type { GradeProbabilities, WorthGradingResult } from "@/types";
 import { SpeakButton } from "@/components/ui/SpeakButton";
-import { buildCompsLinks, type CompsParams } from "@/lib/ebay/comps-url";
 import PreSubmissionAnalysisSection from "@/components/grading/PreSubmissionAnalysisSection";
+import GradeCompsValuePanel from "@/components/grading/GradeCompsValuePanel";
 
 interface GradeProbabilityPanelProps {
   estimate: GradeEstimate;
@@ -40,6 +40,8 @@ interface GradeProbabilityPanelProps {
   primaryImageUrl?: string | null;
   imageUrls?: string[] | null;
   scanPhotos?: GradeScanPhoto[] | null;
+  /** Priced comps from the scan — prefills the per-grade value inputs. */
+  postGradingValue?: WorthGradingResult | null;
   showPreliminaryBadge?: boolean;
   compact?: boolean;
   flat?: boolean;
@@ -280,19 +282,6 @@ function buildBgsPopUrl(cardIdentity: {
   return `https://www.beckett.com/search/#q=${encodeURIComponent(q)}&tab=population`;
 }
 
-function compsParamsForPanel(cardIdentity: VerdictCardIdentity): CompsParams {
-  const owner = cardIdentity?.owner_declared_title?.trim();
-  if (owner) {
-    return { title: owner };
-  }
-  return {
-    player: cardIdentity?.player_name,
-    year: cardIdentity?.year,
-    setName: cardIdentity?.set_name,
-    parallel: cardIdentity?.parallel_type,
-  };
-}
-
 function buildCardIdentityLabel(cardIdentity?: {
   player_name?: string;
   year?: string;
@@ -518,6 +507,7 @@ export default function GradeProbabilityPanel({
   primaryImageUrl,
   imageUrls,
   scanPhotos,
+  postGradingValue,
   showPreliminaryBadge,
   compact = false,
   flat = false,
@@ -575,6 +565,17 @@ export default function GradeProbabilityPanel({
   const confidencePillClass = confidence
     ? (confidencePillClasses[confidence] ?? confidencePillClasses.medium)
     : null;
+
+  const confidenceScore =
+    confidenceMeta?.overall_confidence_score ??
+    (confidence === "high" ? 82 : confidence === "low" ? 38 : 60);
+  const confidenceBarPct = Math.min(100, Math.max(0, confidenceScore));
+  const confidenceBarClass =
+    confidence === "high"
+      ? "bg-emerald-400"
+      : confidence === "low"
+      ? "bg-rose-400"
+      : "bg-amber-400";
 
   const cornerEvidenceSource = formatSourceKinds(estimate.evidence_photo_sources?.corners);
   const edgeEvidenceSource = formatSourceKinds(estimate.evidence_photo_sources?.edges);
@@ -701,38 +702,53 @@ export default function GradeProbabilityPanel({
           {/* Grade hero */}
           <div className="px-5 pb-5">
             {psaTotal > 0 && likely ? (
-              <div className="flex items-baseline gap-2.5">
-                <span className="text-[52px] font-black leading-none tracking-tight text-white">
+              <>
+                <p className="text-[9px] font-semibold uppercase tracking-widest text-white/40">
+                  Most likely grade
+                </p>
+                <span className="mt-1 block text-[44px] font-black leading-none tracking-tight text-white">
                   {likely.label}
                 </span>
-                <span className="text-[22px] font-bold leading-none text-blue-400">
-                  {formatPercent(likely.probability)}
-                </span>
-              </div>
+                <p className="mt-2 text-sm font-semibold text-blue-400">
+                  {formatPercent(likely.probability)} likely
+                  <span className="text-white/35"> · exp. grade {evLabel}</span>
+                </p>
+              </>
             ) : (
               <span className="text-[52px] font-black leading-none text-white/45">--</span>
             )}
-
-            <div className="mt-1.5 flex items-center gap-1.5">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-white/55">EV</span>
-              <span className="text-sm font-semibold text-white/35">{evLabel}</span>
-            </div>
 
             {cardLabel && (
               <p className="mt-3 text-[11px] leading-snug text-white/45">{cardLabel}</p>
             )}
 
+            {/* Recommendation + suggested grader */}
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${RECOMMENDATION_CLASSES[verdict.recommendation]}`}>
                 {verdict.recommendation}
               </span>
-              {confidence && confidencePillClass && (
-                <span className={`text-[9px] font-semibold uppercase tracking-wide ${confidencePillClass}`}>
-                  {confidence} conf.
-                </span>
-              )}
               <span className="text-[10px] text-white/55">→ {verdict.suggestedGrader}</span>
             </div>
+
+            {/* Confidence — labeled, with a score + bar so it isn't mistaken for likelihood */}
+            {confidence && (
+              <div className="mt-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[9px] font-semibold uppercase tracking-widest text-white/40">
+                    Confidence
+                  </span>
+                  <span className={`text-[10px] font-semibold uppercase tracking-wide ${confidencePillClass ?? "text-white/55"}`}>
+                    {confidence} · {confidenceScore}
+                  </span>
+                </div>
+                <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/10">
+                  <div
+                    className={`h-full rounded-full ${confidenceBarClass}`}
+                    style={{ width: `${confidenceBarPct}%` }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Warning banner */}
@@ -967,43 +983,15 @@ export default function GradeProbabilityPanel({
         )}
       </div>
 
-      {/* ── VERIFY COMPS ─────────────────────────────────────────────────── */}
+      {/* ── PER-GRADE COMPS + LIVE VALUE ENTRY ───────────────────────────── */}
       {cardIdentity &&
         (cardIdentity.owner_declared_title || cardIdentity.player_name || cardIdentity.set_name) && (
-        <div className={flat ? "mt-6 border-t border-white/[0.07] px-0 py-4" : "mt-3 rounded-lg border border-white/[0.07] bg-[#0d1b2a] px-4 py-3"}>
-          <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.18em] text-blue-400/70">
-            Verify Comps on eBay
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <a
-              href={buildCompsLinks(compsParamsForPanel(cardIdentity)).psa10Url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 rounded border border-blue-900/40 bg-blue-950/40 px-2.5 py-1 text-[11px] font-medium text-blue-300 hover:bg-blue-900/50 transition-colors"
-            >
-              PSA 10 sold →
-            </a>
-            <a
-              href={buildCompsLinks(compsParamsForPanel(cardIdentity)).psa9Url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 rounded border border-blue-900/40 bg-blue-950/40 px-2.5 py-1 text-[11px] font-medium text-blue-300 hover:bg-blue-900/50 transition-colors"
-            >
-              PSA 9 sold →
-            </a>
-            <a
-              href={buildCompsLinks(compsParamsForPanel(cardIdentity)).rawUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 rounded border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-white/50 hover:text-white/70 hover:bg-white/[0.07] transition-colors"
-            >
-              Raw sold →
-            </a>
-          </div>
-          <p className="mt-2 text-[10px] text-white/55">
-            Click to verify current eBay sold prices
-          </p>
-        </div>
+        <GradeCompsValuePanel
+          cardIdentity={cardIdentity}
+          psaOutcomes={psaOutcomes}
+          postGradingValue={postGradingValue}
+          flat={flat}
+        />
       )}
 
       {/* ── Footer ─────────────────────────────────────────────────── */}
