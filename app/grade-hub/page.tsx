@@ -21,15 +21,6 @@ type CreditStatus = {
 type ScanMode = "scan" | "mock";
 type PageView = "home" | "history";
 
-function formatTimeAgo(dateStr: string): string {
-  const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
-  if (seconds < 60)     return "just now";
-  if (seconds < 3600)   return `${Math.floor(seconds / 60)}m ago`;
-  if (seconds < 86400)  return `${Math.floor(seconds / 3600)}h ago`;
-  if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
-  return new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-
 function formatFullDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("en-US", {
     year: "numeric", month: "short", day: "numeric",
@@ -108,7 +99,6 @@ export default function GradeHubPage() {
   const [aboutOpen,      setAboutOpen]     = useState(false);
   const [credits,        setCredits]       = useState<CreditStatus | null>(null);
   const [creditsLoading, setCreditsLoading]= useState(true);
-  const [recentRuns,     setRecentRuns]    = useState<GradeEstimatorHistoryRun[]>([]);
   const [historyRuns,    setHistoryRuns]   = useState<GradeEstimatorHistoryRun[]>([]);
   const [historyLoading, setHistoryLoading]= useState(false);
   const [expandedRow,    setExpandedRow]   = useState<string | null>(null);
@@ -130,19 +120,16 @@ export default function GradeHubPage() {
 
   const loadHistory = useCallback(async () => {
     const cached = loadCachedHistoryRuns();
-    setRecentRuns(cached.slice(0, 5));
+    setHistoryRuns(cached);
     setHistoryLoading(true);
     try {
       const res  = await fetch("/api/grade-estimator/history");
-      if (!res.ok) { setRecentRuns(cached.slice(0, 5)); setHistoryRuns(cached); return; }
+      if (!res.ok) { setHistoryRuns(cached); return; }
       const data = await res.json();
       if (Array.isArray(data?.runs)) {
-        const merged = mergeHistoryRuns(data.runs, cached);
-        setRecentRuns(merged.slice(0, 5));
-        setHistoryRuns(merged);
+        setHistoryRuns(mergeHistoryRuns(data.runs, cached));
       }
     } catch {
-      setRecentRuns(cached.slice(0, 5));
       setHistoryRuns(cached);
     } finally {
       setHistoryLoading(false);
@@ -159,7 +146,6 @@ export default function GradeHubPage() {
 
   const handleDeleteRun = useCallback(async (runId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setRecentRuns((p) => p.filter((r) => r.id !== runId));
     setHistoryRuns((p) => p.filter((r) => r.id !== runId));
     removeCachedHistoryRun(runId);
     await fetch(`/api/grade-estimator/history?id=${encodeURIComponent(runId)}`, { method: "DELETE" }).catch(() => {});
@@ -216,7 +202,7 @@ export default function GradeHubPage() {
               onClick={() => setView(view === "history" ? "home" : "history")}
               className="border border-[#343941] px-3 py-1.5 text-[12px] font-medium text-[#B8C0CC] transition-colors hover:border-[#5A626E] hover:text-[#E6E8EB]"
             >
-              {view === "history" ? "← Home" : "History"}
+              {view === "history" ? "← Home" : "Recent Scans"}
             </button>
             {isBusinessPro && (
               <button
@@ -230,7 +216,7 @@ export default function GradeHubPage() {
             <button
               type="button"
               onClick={() => router.push(`${scanPath}?slots=1&mode=scan`)}
-              className="border border-[#20B26B] bg-[#20B26B] px-3 py-1.5 text-[12px] font-semibold text-[#07100B] transition-colors hover:bg-[#33C47C]"
+              className="border border-[#E6E8EB] bg-[#E6E8EB] px-3 py-1.5 text-[12px] font-semibold text-[#0B0D0F] transition-colors hover:border-white hover:bg-white"
             >
               + New Scan
             </button>
@@ -248,10 +234,10 @@ export default function GradeHubPage() {
                 type="button"
                 onClick={() => launch("scan")}
                 disabled={creditsLoading}
-                className="group relative flex flex-col items-start overflow-hidden border border-[#24282D] bg-[#0F1317] p-7 text-left transition-colors hover:border-[#20B26B] disabled:cursor-not-allowed disabled:opacity-60"
+                className="group relative flex flex-col items-start overflow-hidden border border-[#24282D] bg-[#0F1317] p-7 text-left transition-colors hover:border-[#5A626E] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                <span className="absolute inset-y-0 left-0 w-[3px] bg-[#20B26B]" />
-                <div className="mb-4 flex h-9 w-9 items-center justify-center rounded-full border border-[#20B26B]/40 bg-[#20B26B]/10 text-[#20B26B]">
+                <span className="absolute inset-y-0 left-0 w-[3px] bg-[#E6E8EB]" />
+                <div className="mb-4 flex h-9 w-9 items-center justify-center rounded-full border border-[#5A626E] bg-[#13171B] text-[#E6E8EB]">
                   <svg width="17" height="17" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                     <circle cx="12" cy="13" r="3.2" />
@@ -261,7 +247,7 @@ export default function GradeHubPage() {
                 <p className="mb-5 max-w-[42ch] text-[12px] leading-relaxed text-[#B8C0CC]">
                   Upload photos — the engine scores centering, corners, edges, and surface and returns calibrated grade probabilities for PSA, BGS, CGC, SGC, and Tag Rater.
                 </p>
-                <span className="mt-auto text-[11px] font-semibold uppercase tracking-[0.1em] text-[#20B26B] transition-colors group-hover:text-[#33C47C]">
+                <span className="mt-auto text-[11px] font-semibold uppercase tracking-[0.1em] text-[#E6E8EB] transition-colors group-hover:text-white">
                   {creditsLoading ? "Loading…" : "Begin Scan →"}
                 </span>
               </button>
@@ -303,100 +289,13 @@ export default function GradeHubPage() {
               {!creditsLoading && !canScan && credits && (
                 <span
                   onClick={() => router.push(pathname?.startsWith("/business") ? "/business/settings" : "/settings")}
-                  className="ml-3 cursor-pointer text-[#20B26B] hover:text-[#33C47C]"
+                  className="ml-3 cursor-pointer text-[#E6E8EB] underline underline-offset-2 hover:text-white"
                 >
                   Upgrade →
                 </span>
               )}
             </p>
 
-            {/* Recent Scans */}
-            <div>
-              <div className="mb-3 flex items-center justify-between">
-                <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-[#77808C]">
-                  Recent Scans
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setView("history")}
-                  className="text-[10px] text-[#B8C0CC] hover:text-[#E6E8EB]"
-                >
-                  View all →
-                </button>
-              </div>
-
-              <div className="overflow-hidden border border-[#24282D]">
-                <div
-                  className="grid gap-2 border-b border-[#24282D] bg-[#0B0D0F] px-4 py-2"
-                  style={{ gridTemplateColumns: "1fr 100px 80px 90px 32px" }}
-                >
-                  {["Card", "Predicted", "Confidence", "Date", ""].map((col, i) => (
-                    <span key={i} className="text-[9px] font-semibold uppercase tracking-[0.12em] text-[#77808C]">
-                      {col}
-                    </span>
-                  ))}
-                </div>
-
-                {historyLoading && recentRuns.length === 0 ? (
-                  [1, 2, 3].map((i) => (
-                    <div
-                      key={i}
-                      className={`grid gap-2 px-4 py-3 ${i < 3 ? "border-b border-[#24282D]" : ""}`}
-                      style={{ gridTemplateColumns: "1fr 100px 80px 90px 32px" }}
-                    >
-                      {[65, 50, 40, 50, 0].map((w, j) => w > 0 ? (
-                        <div key={j} className="h-2.5 rounded-sm bg-[#161616]" style={{ width: `${w}%` }} />
-                      ) : <span key={j} />)}
-                    </div>
-                  ))
-                ) : recentRuns.length === 0 ? (
-                  <div className="px-4 py-8 text-center">
-                    <p className="text-[12px] text-[#77808C]">No scans yet. Run your first analysis.</p>
-                  </div>
-                ) : (
-                  recentRuns.map((run, i) => {
-                    const confidence = run.estimate.grade_probabilities?.confidence;
-                    const confColor = confidence === "high" ? "text-[#20B26B]" : confidence === "medium" ? "text-[#C9A227]" : "text-[#77808C]";
-                    return (
-                      <div
-                        key={run.id}
-                        className={`grid items-center gap-2 px-4 py-3 transition-colors hover:bg-[#13171B] ${i < recentRuns.length - 1 ? "border-b border-[#24282D]" : ""}`}
-                        style={{ gridTemplateColumns: "1fr 100px 80px 90px 32px" }}
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate text-[12px] text-[#E6E8EB]">
-                            {run.card.player_name || "Unknown card"}
-                          </p>
-                          {(run.card.year || run.card.set_name) && (
-                            <p className="mt-0.5 text-[10px] text-[#77808C]">
-                              {[run.card.year, run.card.set_name].filter(Boolean).join(" · ")}
-                            </p>
-                          )}
-                        </div>
-                        <p className="font-mono text-[11px] font-semibold text-[#E6E8EB]">
-                          {formatGradeRange(run.estimate)}
-                        </p>
-                        <p className={`text-[10px] capitalize ${confColor}`}>
-                          {confidence ?? "—"}
-                        </p>
-                        <p className="text-[10px] text-[#77808C]">{formatTimeAgo(run.created_at)}</p>
-                        <button
-                          type="button"
-                          onClick={(e) => void handleDeleteRun(run.id, e)}
-                          className="flex items-center justify-center rounded p-1 text-[#77808C] transition-colors hover:text-[#dc2626]"
-                          title="Delete"
-                        >
-                          <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
           </div>
         )}
 
@@ -473,7 +372,7 @@ export default function GradeHubPage() {
                 sortedHistory.map((run, i) => {
                   const isExpanded = expandedRow === run.id;
                   const confidence = run.estimate.grade_probabilities?.confidence;
-                  const confColor  = confidence === "high" ? "text-[#20B26B]" : confidence === "medium" ? "text-[#C9A227]" : "text-[#77808C]";
+                  const confColor  = confidence === "high" ? "text-[#E6E8EB]" : confidence === "medium" ? "text-[#B8C0CC]" : "text-[#77808C]";
                   const est        = run.estimate;
 
                   return (
