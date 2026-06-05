@@ -66,12 +66,20 @@ export default async function SellerListingsPage() {
                 {rows.length} listing{rows.length === 1 ? "" : "s"}
               </p>
             </div>
-            <Link
-              href="/marketplace/sell/new"
-              className="px-3 py-2 rounded bg-cyan-700 hover:bg-cyan-600 text-sm"
-            >
-              + New listing
-            </Link>
+            <div className="flex gap-2">
+              <Link
+                href="/marketplace/sell/orders"
+                className="px-3 py-2 rounded border border-gray-700 hover:border-gray-500 text-sm"
+              >
+                Sales &amp; fulfillment
+              </Link>
+              <Link
+                href="/marketplace/sell/new"
+                className="px-3 py-2 rounded bg-cyan-700 hover:bg-cyan-600 text-sm"
+              >
+                + New listing
+              </Link>
+            </div>
           </div>
 
           {rows.length === 0 ? (

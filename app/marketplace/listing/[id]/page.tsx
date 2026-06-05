@@ -38,12 +38,25 @@ export default async function ListingDetailPage({
   const { data: listing } = await service
     .from("listings")
     .select(
-      "id, status, list_price_cents, cmv_low_cents, cmv_mid_cents, cmv_high_cents, pipeline, mode, seller_id, listed_at, marketplace_cards!inner(title, year, player, grade, grading_service, cert_number, parallel)"
+      "id, status, list_price_cents, shipping_cents, cmv_low_cents, cmv_mid_cents, cmv_high_cents, pipeline, mode, seller_id, listed_at, marketplace_cards!inner(title, year, player, grade, grading_service, cert_number, parallel)"
     )
     .eq("id", id)
     .single();
 
   if (!listing) notFound();
+
+  // Is the seller able to receive money? If not, the buy button is disabled
+  // with an explanation rather than a dead-end checkout error.
+  const { data: payoutRow } = await service
+    .from("seller_payout_accounts")
+    .select("charges_enabled, payouts_enabled, stripe_account_id")
+    .eq("user_id", listing.seller_id)
+    .maybeSingle();
+  const sellerReady = Boolean(
+    payoutRow?.stripe_account_id &&
+      payoutRow.charges_enabled &&
+      payoutRow.payouts_enabled
+  );
 
   if (!["active", "price_reduced"].includes(listing.status)) {
     return (
@@ -80,6 +93,7 @@ export default async function ListingDetailPage({
   const cmvMid = (listing as { cmv_mid_cents: number | null }).cmv_mid_cents;
   const cmvLow = (listing as { cmv_low_cents: number | null }).cmv_low_cents;
   const cmvHigh = (listing as { cmv_high_cents: number | null }).cmv_high_cents;
+  const shippingCents = (listing as { shipping_cents: number | null }).shipping_cents ?? 0;
 
   // Spread vs CMV mid — same logic as the browse table for consistency.
   const listCents = listing.list_price_cents;
@@ -207,12 +221,31 @@ export default async function ListingDetailPage({
                     Price reduced · Day-30
                   </div>
                 ) : null}
+
+                {/* Price breakdown */}
+                <dl className="mt-4 space-y-1 text-[12px]">
+                  <div className="flex items-center justify-between">
+                    <dt className="text-[#77808C]">Card</dt>
+                    <dd className="tabular-nums text-[#B8C0CC]">{fmtCents(listCents)}</dd>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <dt className="text-[#77808C]">Shipping &amp; tracking</dt>
+                    <dd className="tabular-nums text-[#B8C0CC]">
+                      {shippingCents > 0 ? fmtCents(shippingCents) : "Free"}
+                    </dd>
+                  </div>
+                  <div className="flex items-center justify-between border-t border-[#24282D] pt-1">
+                    <dt className="text-[#E6E8EB]">You pay</dt>
+                    <dd className="tabular-nums font-semibold text-[#E6E8EB]">
+                      {fmtCents(listCents + shippingCents)}
+                    </dd>
+                  </div>
+                </dl>
               </div>
 
               <div className="border-b border-[#24282D] px-5 py-4 text-[11px] text-[#B8C0CC] leading-relaxed">
-                Buyer protection: payment held until you confirm delivery.
-                Platform fee is paid by the seller — your card price is what
-                you pay.
+                Secure checkout by Stripe. The platform fee is paid by the seller.
+                Your card ships with tracking — confirm delivery when it arrives.
               </div>
 
               <div className="space-y-2 px-5 py-4">
@@ -220,6 +253,7 @@ export default async function ListingDetailPage({
                   listingId={listing.id}
                   isLoggedIn={!!user}
                   isOwnListing={!!user && user.id === listing.seller_id}
+                  sellerReady={sellerReady}
                 />
                 <MessageSellerButton
                   listingId={listing.id}

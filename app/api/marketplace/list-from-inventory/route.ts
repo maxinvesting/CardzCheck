@@ -26,6 +26,7 @@ const bodySchema = z
     inventory_item_id: z.string().uuid(),
     pricing_mode: z.enum(["cardzcheck", "self_serve"]),
     list_price_cents: z.number().int().positive().optional(),
+    shipping_cents: z.number().int().min(0).max(50000).optional(),
     auto_markdown: z
       .object({
         pct: z.number().gt(0).lt(1),
@@ -246,6 +247,7 @@ export async function POST(req: NextRequest) {
       mode,
       status: "active",
       list_price_cents: listPriceCents,
+      shipping_cents: input.shipping_cents ?? 599,
       cmv_low_cents: cmv.low_cents,
       cmv_mid_cents: cmv.mid_cents,
       cmv_high_cents: cmv.high_cents,

@@ -27,32 +27,27 @@ export default async function OrderConfirmedPage({
       <main className="p-6 lg:p-10 text-white">
         <div className="max-w-xl mx-auto space-y-6 text-center">
           <div className="text-4xl">✓</div>
-          <h1 className="text-2xl font-bold">Order received</h1>
+          <h1 className="text-2xl font-bold">Order confirmed</h1>
           <p className="text-sm text-gray-400">
-            Your payment is being processed. You'll get a confirmation email
-            once Stripe finalizes the transaction. Fulfillment details will
-            follow from the seller or platform.
+            Payment received and the seller has been notified. They&apos;ll ship to the
+            address you entered at checkout and add tracking. You can follow the status
+            anytime under <span className="text-gray-200">My purchases</span>.
           </p>
-          {session_id && (
-            <p className="text-xs text-gray-500 break-all">
-              Session: {session_id}
-            </p>
-          )}
           {transactionId ? (
             <MessageSellerCTA transactionId={transactionId} />
           ) : null}
-          <div className="flex gap-2 justify-center pt-2">
+          <div className="flex flex-wrap gap-2 justify-center pt-2">
             <Link
-              href="/marketplace"
-              className="px-4 py-2 rounded bg-cyan-700 hover:bg-cyan-600 text-sm"
+              href="/marketplace/orders"
+              className="px-4 py-2 rounded bg-emerald-600 hover:bg-emerald-500 text-sm font-semibold text-[#07100B]"
             >
-              Browse more
+              View my purchases
             </Link>
             <Link
-              href="/marketplace/sell/listings"
+              href="/marketplace"
               className="px-4 py-2 rounded border border-gray-700 hover:border-gray-500 text-sm"
             >
-              My listings
+              Browse more
             </Link>
           </div>
         </div>
