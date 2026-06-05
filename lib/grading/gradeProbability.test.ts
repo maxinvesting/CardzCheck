@@ -37,4 +37,22 @@ describe("distributionFromRange", () => {
     const compact = distributionFromRange("PSA8-9");
     expect(probabilityFor(compact, "PSA 9")).toBeCloseTo(0.65, 4);
   });
+
+  it("fills interior buckets for a multi-grade span (no zero holes)", () => {
+    const outcomes = distributionFromRange("PSA 7-9", "high");
+
+    const psa9 = probabilityFor(outcomes, "PSA 9");
+    const psa8 = probabilityFor(outcomes, "PSA 8");
+    const psa7 = probabilityFor(outcomes, "PSA 7 or lower");
+
+    // The interior grade must never be stranded at 0% while its neighbors
+    // carry probability \u2014 that was the original "PSA 9 40% / PSA 8 0% / 7- 60%" bug.
+    expect(psa8).toBeGreaterThan(0);
+    // Distribution is unimodal and peaks at the center grade (PSA 8).
+    expect(psa8).toBeGreaterThan(psa9);
+    expect(psa8).toBeGreaterThan(psa7);
+
+    const total = psa9 + psa8 + psa7;
+    expect(total).toBeCloseTo(1, 4);
+  });
 });

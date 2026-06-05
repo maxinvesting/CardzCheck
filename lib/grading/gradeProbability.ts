@@ -140,6 +140,43 @@ function baseLowProbability(low: number, high: number): number {
 }
 
 /**
+ * Spreads probability across EVERY grade in a multi-grade span (e.g. 7-9),
+ * not just the two endpoints. The old two-endpoint split left interior grades
+ * (PSA 8 in a 7-9 range) at exactly 0% — a nonsensical "hole" sitting between
+ * two populated buckets. This produces a unimodal, center-peaked distribution
+ * so a bucket is never zero while both of its neighbors are non-zero.
+ *
+ * Confidence controls peakedness: higher confidence concentrates mass on the
+ * center grade, lower confidence flattens toward uniform.
+ */
+function distributeAcrossSpan(
+  low: number,
+  high: number,
+  confidence?: "low" | "medium" | "high"
+): GradeOutcome[] {
+  const lo = Math.round(low);
+  const hi = Math.round(high);
+  const center = (lo + hi) / 2;
+  const halfWidth = (hi - lo) / 2;
+  const peakedness = confidence === "high" ? 1.6 : confidence === "low" ? 0.7 : 1;
+
+  const weighted: GradeOutcome[] = [];
+  for (let grade = lo; grade <= hi; grade++) {
+    const distance = Math.abs(grade - center);
+    // Triangular kernel: peaks at the center grade, falls off linearly.
+    const triangular = Math.max(halfWidth + 1 - distance, 0);
+    weighted.push({
+      label: formatPsaLabel(grade),
+      probability: Math.pow(triangular, peakedness),
+    });
+  }
+
+  // collapseOutcomes merges grades that share a bucket (e.g. 6 and 7 both
+  // collapse into "PSA 7 or lower") before normalization.
+  return normalizeDistribution(collapseOutcomes(weighted));
+}
+
+/**
  * Deterministic PSA-style range mapping.
  * - 8-9: medium 0.35 to 8, 0.65 to 9; low flattens to 0.45/0.55; high sharpens to 0.25/0.75.
  * - 9-10: medium 0.70 to 9, 0.30 to 10; low flattens to 0.60/0.40; high sharpens to 0.80/0.20.
@@ -184,6 +221,12 @@ export function distributionFromRange(
       { label: formatPsaLabel(high), probability: 1 - baseLow },
     ]);
     return normalizeDistribution(outcomes);
+  }
+
+  // Ranges spanning more than one grade (e.g. 7-9) must fill their interior
+  // buckets — an endpoint-only split leaves grades like PSA 8 stranded at 0%.
+  if (high - low >= 2) {
+    return distributeAcrossSpan(low, high, confidence);
   }
 
   const base = baseLowProbability(low, high);
