@@ -14,6 +14,7 @@ export interface PendingInventoryCard {
   grader?: string;
   grade?: string;
   imageUrl?: string;
+  imageUrls?: string[];
   user_image_url?: string;
   psa_cert_number?: string;
   quantity?: number;
@@ -127,11 +128,11 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
   // smart-search, etc.); a fresh manual add starts with none.
   useEffect(() => {
     if (!isOpen) return;
-    const seeded = [card?.user_image_url, card?.imageUrl].filter(
+    const seeded = [card?.user_image_url, card?.imageUrl, ...(card?.imageUrls ?? [])].filter(
       (u): u is string => typeof u === "string" && u.length > 0
     );
     setImages(Array.from(new Set(seeded)));
-  }, [isOpen, card?.user_image_url, card?.imageUrl]);
+  }, [isOpen, card]);
 
 
   // Fetch estimated CMV when modal opens with a card
@@ -169,7 +170,7 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
         }
       })
       .finally(() => setCmvLoading(false));
-  }, [isOpen, card?.player_name, card?.year, card?.set_name, card?.grader, card?.grade, card?.card_number, card?.parallel_type]);
+  }, [isOpen, card]);
 
   if (!isOpen || !card) return null;
 
@@ -230,6 +231,7 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
             : null,
           image_url: resolvedImageUrl,
           image_source: resolvedImageSource,
+          image_urls: images,
           user_image_url: resolvedImageUrl,
           location: form.location || null,
           notes: form.notes || null,

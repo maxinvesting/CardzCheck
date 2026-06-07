@@ -3,11 +3,16 @@ import { createClient } from "@/lib/supabase/server";
 import {
   listSales,
   createSale,
+  requireBusinessAccess,
 } from "@/lib/business/actions";
 import {
   createSaleSchema,
   listSalesQuerySchema,
 } from "@/lib/business/sales-schemas";
+import {
+  getInventorySnapshots,
+  recordLedgerAction,
+} from "@/lib/business/ledger-actions";
 
 async function getAuthUserId() {
   const supabase = await createClient();
@@ -78,7 +83,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const supabase = await createClient();
+    const context = await requireBusinessAccess(userId);
+    const inventoryBeforeRows = parsed.data.inventory_item_id
+      ? await getInventorySnapshots(supabase, userId, [parsed.data.inventory_item_id])
+      : [];
+
     const sale = await createSale(userId, parsed.data);
+    await recordLedgerAction({
+      supabase,
+      userId,
+      businessAccountId: context.businessAccountId,
+      actionType: "sale_create",
+      label: "record sale",
+      payload: {
+        saleId: sale.id,
+        inventoryItemId: sale.inventory_item_id,
+        inventoryBeforeRows,
+      },
+    });
     return NextResponse.json(sale, { status: 201 });
   } catch (err: any) {
     if (err?.status === 403)

@@ -10,6 +10,7 @@ export interface PsaLookupResult {
   grade: string | null;
   grading_company: "PSA";
   parallel_type: string | null;
+  image_urls?: string[];
 }
 
 export interface UsePsaLookupReturn {

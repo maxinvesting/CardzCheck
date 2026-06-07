@@ -8,14 +8,16 @@ import { identifyCardFromImages } from "@/lib/identify-card/client";
 import { normalizeHttpUrl, uniqueHttpUrls } from "@/lib/collection-images";
 import { normalizeGradeScanPhotos } from "@/lib/grading/scanPhotos";
 
-// ── Design tokens (red/white) ─────────────────────────────────────────────────
-const RED        = "#B91C1C";
-const RED_DIM    = "rgba(185,28,28,0.08)";
-const RED_BORDER = "rgba(185,28,28,0.25)";
-const TEXT       = "#111111";
-const MUTED      = "#888888";
-const BORDER     = "#E5E5E5";
-const SURFACE    = "#F7F7F7";
+// ── Design tokens (dark — matches grading shell) ──────────────────────────────
+const RED        = "#20B26B"; // accent (green) — retained name to limit churn
+const RED_DIM    = "rgba(32,178,107,0.08)";
+const RED_BORDER = "rgba(32,178,107,0.3)";
+const ON_ACCENT  = "#07100B"; // text on accent buttons
+const TEXT       = "#E6E8EB";
+const MUTED      = "#77808C";
+const BORDER     = "#24282D";
+const SURFACE    = "#0F1317";
+const SURFACE_SOFT = "#13171B";
 
 const MIN_PHOTOS = 2;
 const MAX_PHOTOS = 10;
@@ -321,7 +323,7 @@ export default function DualCardUploader({
       <div style={{
         minHeight: 200, display: "flex", flexDirection: "column",
         alignItems: "center", justifyContent: "center", gap: 12,
-        border: `1px solid ${BORDER}`, borderRadius: 2, background: SURFACE,
+        border: `1px solid ${BORDER}`, borderRadius: 2, background: SURFACE_SOFT,
       }}>
         <div style={{
           width: 24, height: 24, borderRadius: "50%",
@@ -377,7 +379,7 @@ export default function DualCardUploader({
             borderRadius: 2,
             padding: "20px 16px",
             textAlign: "center",
-            background: dragging ? RED_DIM : SURFACE,
+            background: dragging ? RED_DIM : SURFACE_SOFT,
             cursor: disabled ? "not-allowed" : photos.length === 0 ? "pointer" : "default",
             transition: "all 0.1s",
           }}
@@ -416,7 +418,7 @@ export default function DualCardUploader({
             style={{
               padding: "12px 20px",
               fontSize: 11, fontWeight: 700, letterSpacing: "0.9px", textTransform: "uppercase",
-              color: "#fff", background: RED,
+              color: ON_ACCENT, background: RED,
               border: "none", borderRadius: 2,
               cursor: disabled ? "not-allowed" : "pointer",
               width: "100%",
@@ -425,7 +427,7 @@ export default function DualCardUploader({
               display: "block",
             }}
           >
-            Insert card photos
+            Upload front + back
           </button>
 
           <p style={{ fontSize: 9, color: MUTED, marginTop: 10 }}>
@@ -483,10 +485,10 @@ export default function DualCardUploader({
                     style={{
                       position: "absolute", top: 4, right: 4,
                       width: 20, height: 20, borderRadius: 2,
-                      background: "rgba(255,255,255,0.92)",
+                      background: "rgba(0,0,0,0.65)",
                       border: `1px solid ${BORDER}`,
                       display: "flex", alignItems: "center", justifyContent: "center",
-                      cursor: "pointer", color: MUTED, padding: 0,
+                      cursor: "pointer", color: "#E6E8EB", padding: 0,
                     }}
                     aria-label="Remove image"
                   >
@@ -553,8 +555,8 @@ export default function DualCardUploader({
         style={{
           padding: "13px",
           fontSize: 11, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase",
-          color: canAnalyze && !disabled ? "#fff" : MUTED,
-          background: canAnalyze && !disabled ? RED : SURFACE,
+          color: canAnalyze && !disabled ? ON_ACCENT : MUTED,
+          background: canAnalyze && !disabled ? RED : SURFACE_SOFT,
           border: `1px solid ${canAnalyze && !disabled ? RED : BORDER}`,
           borderRadius: 2,
           cursor: !canAnalyze || disabled ? "not-allowed" : "pointer",
@@ -563,7 +565,7 @@ export default function DualCardUploader({
       >
         {canAnalyze
           ? `Analyze ${totalPhotos} photo${totalPhotos === 1 ? "" : "s"} →`
-          : `Insert ${MIN_PHOTOS}–${MAX_PHOTOS} photos to continue`}
+          : `Upload front and back to start`}
       </button>
 
     </div>

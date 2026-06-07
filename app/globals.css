@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..600;1,9..144,300..500&family=Inter:wght@400;500;600&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -174,4 +174,213 @@ body {
 
 .font-ui {
   font-family: "Inter", system-ui, sans-serif;
+}
+
+/* ───────────────────────────────────────────────────────────────
+   Merchant Desk — business dashboard design language
+   A refined, private-trading-desk aesthetic: near-black canvas,
+   champagne-gold hairlines, an editorial Fraunces display face,
+   asymmetric bento, and atmosphere instead of boxes.
+─────────────────────────────────────────────────────────────── */
+.desk {
+  --desk-gold: #c2a86a;
+  --desk-gold-bright: #e7d3a1;
+  --desk-gold-soft: rgba(194, 168, 106, 0.14);
+  --desk-gold-line: rgba(194, 168, 106, 0.32);
+  --desk-sage: #9baca3;
+  --desk-red: #cf8585;
+  --desk-ink: var(--biz-text);
+  position: relative;
+  isolation: isolate;
+}
+
+/* Ambient light — pinned to the content column, never the chrome */
+.desk::before {
+  content: "";
+  position: absolute;
+  inset: -40px -40px auto -40px;
+  height: 460px;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(120% 100% at 82% -30%, rgba(255, 255, 255, 0.045), transparent 58%),
+    radial-gradient(90% 80% at 8% -20%, rgba(255, 255, 255, 0.03), transparent 60%);
+}
+
+.desk-display {
+  font-family: "Fraunces", Georgia, "Times New Roman", serif;
+  font-optical-sizing: auto;
+  letter-spacing: -0.012em;
+}
+
+.desk-figure {
+  font-family: "Fraunces", Georgia, serif;
+  font-optical-sizing: auto;
+  font-weight: 380;
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: -0.018em;
+}
+
+.desk-eyebrow {
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--biz-faint);
+}
+
+.desk-rule {
+  height: 1px;
+  width: 100%;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04) 42%, transparent 78%);
+}
+
+.desk-panel {
+  position: relative;
+  border: 1px solid var(--biz-border);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.022), rgba(255, 255, 255, 0) 34%),
+    var(--biz-surface);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.02) inset, 0 24px 60px rgba(0, 0, 0, 0.45);
+}
+
+.desk-panel--feature {
+  border-color: rgba(194, 168, 106, 0.22);
+  background:
+    linear-gradient(180deg, rgba(194, 168, 106, 0.07), rgba(255, 255, 255, 0) 30%),
+    var(--biz-surface);
+}
+
+/* Buttons */
+.desk-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: 500 12px/1 "Inter", system-ui, sans-serif;
+  letter-spacing: 0.005em;
+  padding: 8px 12px;
+  color: var(--biz-muted-strong);
+  border: 1px solid var(--biz-border);
+  background: rgba(255, 255, 255, 0.014);
+  border-radius: 10px;
+  white-space: nowrap;
+  transition: color .18s ease, border-color .18s ease, background-color .18s ease;
+}
+.desk-btn:hover {
+  color: var(--biz-text);
+  border-color: var(--biz-border-strong);
+  background: rgba(255, 255, 255, 0.045);
+}
+.desk-btn-gold {
+  color: #f4e9cf;
+  border: 1px solid rgba(194, 168, 106, 0.45);
+  background: linear-gradient(180deg, rgba(194, 168, 106, 0.18), rgba(194, 168, 106, 0.06));
+  box-shadow: 0 1px 0 rgba(231, 211, 161, 0.14) inset, 0 10px 26px rgba(194, 168, 106, 0.08);
+}
+.desk-btn-gold:hover {
+  color: #fbf3df;
+  border-color: rgba(194, 168, 106, 0.72);
+  background: linear-gradient(180deg, rgba(194, 168, 106, 0.27), rgba(194, 168, 106, 0.11));
+}
+
+/* Live "books open" pulse */
+.desk-pulse {
+  position: relative;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--biz-profit);
+  box-shadow: 0 0 0 0 rgba(155, 172, 163, 0.5);
+  animation: desk-pulse 2.6s ease-in-out infinite;
+}
+@keyframes desk-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(155, 172, 163, 0.45); }
+  70%  { box-shadow: 0 0 0 6px rgba(155, 172, 163, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(155, 172, 163, 0); }
+}
+
+/* Staggered entrance */
+@keyframes desk-rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.desk-rise {
+  animation: desk-rise .7s cubic-bezier(.2, .7, .2, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .desk-rise { animation: none; }
+  .desk-pulse { animation: none; }
+}
+
+/* Activity row hover */
+.desk-row {
+  transition: background-color .16s ease;
+  border-radius: 10px;
+}
+.desk-row:hover {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+/* Flow-bar segments */
+.desk-seg {
+  position: relative;
+  height: 100%;
+  transition: filter .2s ease;
+}
+.desk-seg:hover { filter: brightness(1.15); }
+
+/* Quick-action tiles */
+.desk-action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--biz-border);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0) 40%),
+    var(--biz-surface);
+  color: var(--biz-muted-strong);
+  text-align: left;
+  transition: transform .18s ease, border-color .18s ease, color .18s ease, background-color .18s ease;
+}
+.desk-action:hover {
+  transform: translateY(-1px);
+  border-color: var(--biz-border-strong);
+  color: var(--biz-text);
+}
+.desk-action-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  color: inherit;
+}
+.desk-action-label {
+  font: 600 13px/1.1 "Inter", system-ui, sans-serif;
+  letter-spacing: -0.005em;
+}
+.desk-action--primary {
+  border-color: var(--biz-primary-border);
+  color: var(--biz-primary-foreground);
+  background: var(--biz-primary);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.28) inset, 0 14px 34px rgba(0, 0, 0, 0.45);
+}
+.desk-action--primary:hover {
+  color: var(--biz-primary-foreground);
+  border-color: var(--biz-primary-border);
+  background: var(--biz-primary-hover);
+  transform: translateY(-1px);
+}
+.desk-action--primary .desk-action-icon {
+  background: rgba(10, 10, 10, 0.12) !important;
+}
+.desk-action--primary .desk-action-label {
+  font-weight: 700;
 }

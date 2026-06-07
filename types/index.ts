@@ -239,6 +239,31 @@ export interface BusinessMetrics {
   activeInventoryCount: number;
 }
 
+// Per-period financial snapshot (all amounts in cents)
+export interface BusinessPeriodStat {
+  revenue_cents: number;
+  profit_cents: number;
+  cogs_cents: number;
+  sales_count: number;
+}
+
+export type BusinessPeriodKey = "daily" | "weekly" | "monthly" | "yearly";
+
+export type BusinessPeriodMetrics = Record<BusinessPeriodKey, BusinessPeriodStat>;
+
+// Active marketplace listing surfaced on the business dashboard preview
+export interface MarketplaceListingPreview {
+  id: string;
+  card_id: string | null;
+  title: string;
+  status: string;
+  list_price_cents: number;
+  cmv_mid_cents: number | null;
+  spread_cents: number | null;
+  listed_at: string;
+  updated_at: string;
+}
+
 // Usage tracking for free tier limits
 export interface Usage {
   id: string;

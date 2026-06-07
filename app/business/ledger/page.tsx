@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import BusinessPaywall from "@/components/business/BusinessPaywall";
 import BusinessMigrationBanner from "@/components/business/BusinessMigrationBanner";
 import CardzCheckListingModal from "@/components/business/CardzCheckListingModal";
 import LedgerTable, { type LedgerInlineEditPayload } from "@/components/business/LedgerTable";
+import LedgerPhotoGrid from "@/components/business/LedgerPhotoGrid";
 import LedgerBulkActionsBar, {
   type LedgerBulkAction,
 } from "@/components/business/LedgerBulkActionsBar";
@@ -38,6 +39,8 @@ const MONEY_FORMATTER = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 0,
   maximumFractionDigits: 0,
 });
+
+type LedgerViewMode = "spreadsheet" | "photos";
 
 function formatSummaryMoney(cents: number | null): string {
   if (cents == null) return "—";
@@ -114,6 +117,72 @@ function LoadingLedger() {
   );
 }
 
+function SpreadsheetIcon() {
+  return (
+    <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 5h16M4 12h16M4 19h16M8 5v14" />
+    </svg>
+  );
+}
+
+function PhotosIcon() {
+  return (
+    <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 6a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v2M7 20h11a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2Z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="m8 16 2.25-2.25a1.5 1.5 0 0 1 2.12 0L14 15.38l1.13-1.13a1.5 1.5 0 0 1 2.12 0L19 16M9 10.5h.01" />
+    </svg>
+  );
+}
+
+function LedgerViewToggle({
+  value,
+  onChange,
+}: {
+  value: LedgerViewMode;
+  onChange: (next: LedgerViewMode) => void;
+}) {
+  const options: Array<{ value: LedgerViewMode; label: string; icon: ReactNode }> = [
+    { value: "spreadsheet", label: "Spreadsheet", icon: <SpreadsheetIcon /> },
+    { value: "photos", label: "Photos", icon: <PhotosIcon /> },
+  ];
+
+  return (
+    <div
+      role="group"
+      aria-label="Ledger view"
+      className="inline-flex rounded-md border border-[#343941] bg-[#0B0D0F] p-0.5"
+    >
+      {options.map((option) => {
+        const active = value === option.value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            aria-label={`${option.label} view`}
+            aria-pressed={active}
+            title={`${option.label} view`}
+            onClick={() => onChange(option.value)}
+            className={`inline-flex h-8 w-10 items-center justify-center rounded transition-colors ${
+              active
+                ? "bg-[#E6E8EB] text-[#090B0D]"
+                : "text-[#B8C0CC] hover:bg-[#1E2227] hover:text-[#E6E8EB]"
+            }`}
+          >
+            {option.icon}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+type UndoActionSummary = {
+  id: string;
+  type: string;
+  label: string;
+  created_at: string;
+};
+
 export default function LedgerPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -138,8 +207,10 @@ export default function LedgerPage() {
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(
     null
   );
-  const [lastTradeId, setLastTradeId] = useState<string | null>(null);
-  const [undoingTrade, setUndoingTrade] = useState(false);
+  const [latestUndoAction, setLatestUndoAction] =
+    useState<UndoActionSummary | null>(null);
+  const [undoingLedgerAction, setUndoingLedgerAction] = useState(false);
+  const [viewMode, setViewMode] = useState<LedgerViewMode>("spreadsheet");
 
   const activeInventoryItems = useMemo(
     () =>
@@ -226,48 +297,66 @@ export default function LedgerPage() {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
-  const loadLastTrade = useCallback(async () => {
+  // Deep links from the dashboard quick actions (e.g. ?action=trade) open the
+  // matching standalone modal on mount, then clean the URL.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const action = new URLSearchParams(window.location.search).get("action");
+    if (action === "trade") {
+      setShowStandaloneTrade(true);
+    }
+    if (action) {
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+  }, []);
+
+  const loadLatestUndoAction = useCallback(async () => {
     try {
-      const res = await fetch("/api/business/trades", { cache: "no-store" });
+      const res = await fetch("/api/business/ledger/undo", { cache: "no-store" });
       if (!res.ok) return;
       const data = await res.json();
-      const trades = Array.isArray(data?.trades) ? data.trades : [];
-      setLastTradeId(trades[0]?.id ?? null);
+      setLatestUndoAction(data?.action ?? null);
     } catch {
       // non-fatal
     }
   }, []);
 
   useEffect(() => {
-    if (hasAccess) void loadLastTrade();
-  }, [hasAccess, loadLastTrade]);
+    if (hasAccess) void loadLatestUndoAction();
+  }, [hasAccess, loadLatestUndoAction]);
 
-  const handleUndoLastTrade = useCallback(async () => {
-    if (!lastTradeId || undoingTrade) return;
+  const handleUndoLedgerAction = useCallback(async () => {
+    if (!latestUndoAction || undoingLedgerAction) return;
     const confirmed = window.confirm(
-      "Undo the most recent trade? Outgoing cards will be restored to inventory and any incoming cards will be removed."
+      `Undo the last ledger action (${latestUndoAction.label})?`
     );
     if (!confirmed) return;
-    setUndoingTrade(true);
+    setUndoingLedgerAction(true);
     try {
-      const res = await fetch(`/api/business/trades/${lastTradeId}`, {
+      const res = await fetch("/api/business/ledger/undo", {
         method: "DELETE",
       });
       const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.error || "Failed to undo trade");
-      setToast({ type: "success", message: "Last trade undone" });
-      setLastTradeId(null);
+      if (!res.ok) throw new Error(data?.error || "Failed to undo ledger action");
+      setToast({
+        type: "success",
+        message: data?.action?.label
+          ? `Undid ${data.action.label}`
+          : "Last ledger action undone",
+      });
+      setLatestUndoAction(null);
       await loadInventory();
-      await loadLastTrade();
+      await loadLatestUndoAction();
     } catch (error) {
       setToast({
         type: "error",
-        message: error instanceof Error ? error.message : "Failed to undo trade",
+        message:
+          error instanceof Error ? error.message : "Failed to undo ledger action",
       });
     } finally {
-      setUndoingTrade(false);
+      setUndoingLedgerAction(false);
     }
-  }, [lastTradeId, loadInventory, loadLastTrade, undoingTrade]);
+  }, [latestUndoAction, loadInventory, loadLatestUndoAction, undoingLedgerAction]);
 
   const handleLedgerRowClick = useCallback((row: LedgerTableRow) => {
     setSelectedLedgerItemId(row.id);
@@ -308,6 +397,7 @@ export default function LedgerPage() {
         if (!res.ok) throw new Error(data?.error || "Failed to save");
         const updated = data as BusinessInventoryItem;
         setItems((prev) => prev.map((item) => (item.id === rowId ? updated : item)));
+        void loadLatestUndoAction();
       } catch (error) {
         setToast({
           type: "error",
@@ -315,7 +405,7 @@ export default function LedgerPage() {
         });
       }
     },
-    []
+    [loadLatestUndoAction]
   );
 
   const handleBulkAction = useCallback(
@@ -336,6 +426,7 @@ export default function LedgerPage() {
           setItems((prev) => prev.filter((item) => !selectedRowIds.has(item.id)));
           setSelectedRowIds(new Set());
           setToast({ type: "success", message: `Deleted ${ids.length} item(s)` });
+          await loadLatestUndoAction();
         } else {
           const updates: Record<string, unknown> = {};
           if (action.type === "status") updates.status = action.value;
@@ -352,6 +443,7 @@ export default function LedgerPage() {
           }
           setToast({ type: "success", message: `Updated ${ids.length} item(s)` });
           await loadInventory();
+          await loadLatestUndoAction();
         }
       } catch (error) {
         setToast({
@@ -362,7 +454,7 @@ export default function LedgerPage() {
         setIsBulkWorking(false);
       }
     },
-    [loadInventory, selectedRowIds]
+    [loadInventory, loadLatestUndoAction, selectedRowIds]
   );
 
   const handleCreateSale = useCallback(
@@ -397,6 +489,7 @@ export default function LedgerPage() {
         }
         setToast({ type: "success", message: "Sale recorded" });
         setMarkSoldItem(null);
+        void loadLatestUndoAction();
       } catch (error) {
         setToast({
           type: "error",
@@ -404,7 +497,7 @@ export default function LedgerPage() {
         });
       }
     },
-    [items, loadInventory, selectedLedgerItemId]
+    [items, loadInventory, loadLatestUndoAction, selectedLedgerItemId]
   );
 
   const handleCreateTrade = useCallback(
@@ -418,8 +511,6 @@ export default function LedgerPage() {
 
         const data = await res.json().catch(() => null);
         if (!res.ok) throw new Error(data?.error || "Failed to record trade");
-
-        if (data?.trade?.id) setLastTradeId(data.trade.id as string);
 
         const outgoingIds = new Set<string>();
         for (const o of payload.outgoing ?? []) outgoingIds.add(o.inventory_item_id);
@@ -435,6 +526,7 @@ export default function LedgerPage() {
         setShowStandaloneTrade(false);
         // Reload inventory to surface any new incoming cards added by the trade.
         void loadInventory();
+        void loadLatestUndoAction();
         setToast({ type: "success", message: "Trade recorded" });
       } catch (error) {
         setToast({
@@ -443,7 +535,7 @@ export default function LedgerPage() {
         });
       }
     },
-    [loadInventory, selectedLedgerItemId]
+    [loadInventory, loadLatestUndoAction, selectedLedgerItemId]
   );
 
   const handleListSuccess = useCallback(
@@ -460,8 +552,9 @@ export default function LedgerPage() {
       setPendingInventoryCard(null);
       setToast({ type: "success", message: `Added "${playerName}" to inventory` });
       void loadInventory();
+      void loadLatestUndoAction();
     },
-    [loadInventory]
+    [loadInventory, loadLatestUndoAction]
   );
 
   const handleCardPickerSelect = useCallback((card: CardPickerSelection) => {
@@ -494,6 +587,7 @@ export default function LedgerPage() {
       grader?: string;
       psa_cert_number?: string;
       imageUrl?: string;
+      imageUrls?: string[];
       user_image_url?: string;
       quantity?: number;
     }) => {
@@ -530,12 +624,26 @@ export default function LedgerPage() {
               </h1>
             </div>
             <div className="flex items-center gap-2">
-              <a
-                href="/api/business/export?type=inventory"
+              <button
+                type="button"
+                onClick={handleUndoLedgerAction}
+                disabled={!latestUndoAction || undoingLedgerAction}
+                title={
+                  latestUndoAction
+                    ? `Undo last ledger action: ${latestUndoAction.label}`
+                    : "No ledger action to undo"
+                }
+                className="border border-[#5A4A1F] bg-[#251E0E] px-3 py-1.5 text-[12px] font-semibold text-[#F0B429] transition-colors hover:bg-[#33290F] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {undoingLedgerAction ? "Undoing…" : "Undo"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowStandaloneTrade(true)}
                 className="border border-[#343941] px-3 py-1.5 text-[12px] font-medium text-[#B8C0CC] transition-colors hover:border-[#5A626E] hover:text-[#E6E8EB]"
               >
-                Export
-              </a>
+                Trade
+              </button>
               {gates?.canBulkAddByCert ? (
                 <button
                   type="button"
@@ -545,26 +653,6 @@ export default function LedgerPage() {
                   Bulk add by cert
                 </button>
               ) : null}
-              <button
-                type="button"
-                onClick={handleUndoLastTrade}
-                disabled={!lastTradeId || undoingTrade}
-                title={
-                  lastTradeId
-                    ? "Undo the most recent trade"
-                    : "No recent trade to undo"
-                }
-                className="border border-[#5A4A1F] bg-[#251E0E] px-3 py-1.5 text-[12px] font-semibold text-[#F0B429] transition-colors hover:bg-[#33290F] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {undoingTrade ? "Undoing…" : "Undo last trade"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowStandaloneTrade(true)}
-                className="border border-[#343941] px-3 py-1.5 text-[12px] font-medium text-[#B8C0CC] transition-colors hover:border-[#5A626E] hover:text-[#E6E8EB]"
-              >
-                Trade
-              </button>
               <button
                 type="button"
                 onClick={() => setShowAddCardModal(true)}
@@ -588,6 +676,13 @@ export default function LedgerPage() {
             </div>
           ) : (
             <section className="min-w-0 flex-1 px-4 py-4">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <div className="text-[12px] text-[#77808C]">
+                  {ledgerRows.length.toLocaleString("en-US")} active card{ledgerRows.length === 1 ? "" : "s"}
+                </div>
+                <LedgerViewToggle value={viewMode} onChange={setViewMode} />
+              </div>
+
               {selectedRowIds.size > 0 && (
                 <div className="mb-3">
                   <LedgerBulkActionsBar
@@ -598,16 +693,27 @@ export default function LedgerPage() {
                   />
                 </div>
               )}
-              <LedgerTable
-                rows={ledgerRows}
-                selectedRowId={selectedLedgerItemId}
-                onRowClick={handleLedgerRowClick}
-                selectedRowIds={selectedRowIds}
-                onToggleRow={handleToggleRow}
-                onToggleAll={handleToggleAll}
-                onInlineEdit={handleInlineEdit}
-                onOpenProfile={(row) => setProfileItemId(row.id)}
-              />
+              {viewMode === "spreadsheet" ? (
+                <LedgerTable
+                  rows={ledgerRows}
+                  selectedRowId={selectedLedgerItemId}
+                  onRowClick={handleLedgerRowClick}
+                  selectedRowIds={selectedRowIds}
+                  onToggleRow={handleToggleRow}
+                  onToggleAll={handleToggleAll}
+                  onInlineEdit={handleInlineEdit}
+                  onOpenProfile={(row) => setProfileItemId(row.id)}
+                />
+              ) : (
+                <LedgerPhotoGrid
+                  rows={ledgerRows}
+                  selectedRowId={selectedLedgerItemId}
+                  onRowClick={handleLedgerRowClick}
+                  selectedRowIds={selectedRowIds}
+                  onToggleRow={handleToggleRow}
+                  onToggleAll={handleToggleAll}
+                />
+              )}
             </section>
           )}
         </div>
@@ -625,6 +731,7 @@ export default function LedgerPage() {
           }}
           onSaved={(updated) => {
             setItems((prev) => prev.map((it) => (it.id === updated.id ? updated : it)));
+            void loadLatestUndoAction();
           }}
           onMarkSold={(it) => {
             setProfileItemId(null);
@@ -650,6 +757,7 @@ export default function LedgerPage() {
                 message: `Added ${count} card${count === 1 ? "" : "s"} to inventory`,
               });
               void loadInventory();
+              void loadLatestUndoAction();
             }
           }}
         />

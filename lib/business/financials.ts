@@ -59,6 +59,21 @@ export type MonthBucket = {
   sales_count: number;
 };
 
+export type CashFlowBucket = {
+  month: string;
+  cash_in_cents: number; // net cash received from sales settled in the month
+  cash_out_cents: number; // cash spent acquiring inventory in the month
+  net_cents: number; // cash_in - cash_out
+};
+
+export type CashFlow = {
+  monthly: CashFlowBucket[]; // trailing 12 months
+  current_month_net_cents: number;
+  prev_month_net_cents: number;
+  current_month_in_cents: number;
+  current_month_out_cents: number;
+};
+
 export type ChannelBreakdown = {
   channel: string;
   revenue_cents: number;
@@ -119,6 +134,7 @@ export type FinancialsSummary = {
     ytd: PeriodTotals;
   };
   monthly: MonthBucket[];
+  cashflow: CashFlow;
   channels_90d: ChannelBreakdown[];
   inventory: {
     active_count: number;
@@ -211,6 +227,76 @@ function buildMonthBuckets(rows: SaleRow[], now: Date): MonthBucket[] {
     bucket.sales_count += 1;
   }
   return Array.from(buckets.values());
+}
+
+/**
+ * Monthly cash flow: actual cash received from sales (net of fees/shipping)
+ * minus cash spent acquiring inventory, bucketed by trailing 12 months.
+ * This is distinct from accrual profit — it tracks real money in/out.
+ */
+function buildCashFlow(
+  sales: SaleRow[],
+  inventory: InventoryRow[],
+  now: Date
+): CashFlow {
+  const buckets = new Map<string, CashFlowBucket>();
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+    const key = monthKey(d);
+    buckets.set(key, {
+      month: key,
+      cash_in_cents: 0,
+      cash_out_cents: 0,
+      net_cents: 0,
+    });
+  }
+
+  // Cash in — prefer the actual net payout; fall back to gross less fees/shipping.
+  for (const row of sales) {
+    const bucket = buckets.get(monthKey(new Date(row.sold_at)));
+    if (!bucket) continue;
+    const netPayout = toInt(row.net_payout_cents);
+    const cashIn =
+      netPayout !== 0
+        ? netPayout
+        : toInt(row.sold_price_cents) +
+          toInt(row.shipping_charged_cents) -
+          toInt(row.platform_fees_cents) -
+          toInt(row.shipping_cost_cents);
+    bucket.cash_in_cents += cashIn;
+  }
+
+  // Cash out — cost basis of inventory acquired in the month.
+  for (const row of inventory) {
+    const acquired = row.acquisition_date
+      ? new Date(row.acquisition_date)
+      : new Date(row.created_at);
+    const bucket = buckets.get(monthKey(acquired));
+    if (!bucket) continue;
+    bucket.cash_out_cents += toInt(row.cost_basis_total_cents);
+  }
+
+  for (const bucket of buckets.values()) {
+    bucket.net_cents = bucket.cash_in_cents - bucket.cash_out_cents;
+  }
+
+  const monthly = Array.from(buckets.values());
+  const curKey = monthKey(
+    new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
+  );
+  const prevKey = monthKey(
+    new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1))
+  );
+  const cur = buckets.get(curKey);
+  const prev = buckets.get(prevKey);
+
+  return {
+    monthly,
+    current_month_net_cents: cur?.net_cents ?? 0,
+    prev_month_net_cents: prev?.net_cents ?? 0,
+    current_month_in_cents: cur?.cash_in_cents ?? 0,
+    current_month_out_cents: cur?.cash_out_cents ?? 0,
+  };
 }
 
 function buildChannelBreakdown(rows: SaleRow[], cutoff: Date): ChannelBreakdown[] {
@@ -506,6 +592,7 @@ export async function getFinancialsSummary(
   const ytd = aggregatePeriod(saleRows, yearStart, now);
 
   const monthly = buildMonthBuckets(saleRows, now);
+  const cashflow = buildCashFlow(saleRows, inventoryRows, now);
   const channels_90d = buildChannelBreakdown(saleRows, last90Start);
   const inv = buildInventory(inventoryRows, now);
 
@@ -524,6 +611,7 @@ export async function getFinancialsSummary(
     velocity,
     totals: { last_30d: last30, prev_30d: prev30, mtd, ytd },
     monthly,
+    cashflow,
     channels_90d,
     inventory: {
       active_count: inv.snapshot.active_count,

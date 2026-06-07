@@ -44,6 +44,12 @@ interface CardScanSlotProps {
   deferAnalysis?: boolean;
   /** Hide the inline pre-scan notes editor; notes come only from `initialNotes` (wizard steps). */
   hidePreScanNotesEditor?: boolean;
+  /**
+   * Suppress the built-in done-state result panels (probability + value + refine)
+   * so a parent (e.g. Grade ROI Simulator) can present results itself.
+   * A compact "analysis complete" confirmation is shown instead.
+   */
+  hideInlineResults?: boolean;
 }
 
 // Slot accent — left-border color per slot index
@@ -60,6 +66,7 @@ export default function CardScanSlot({
   initialNotes = "",
   deferAnalysis = false,
   hidePreScanNotesEditor = false,
+  hideInlineResults = false,
 }: CardScanSlotProps) {
   const accentBorder = SLOT_COLORS[slotIndex % SLOT_COLORS.length];
   const accentText = SLOT_LABEL_COLORS[slotIndex % SLOT_LABEL_COLORS.length];
@@ -415,7 +422,19 @@ export default function CardScanSlot({
       {/* Body */}
       <div className="p-4">
         <AnimatePresence mode="wait">
-          {isDone && gradeEstimate && (
+          {isDone && gradeEstimate && hideInlineResults && (
+            <motion.div key="result-compact" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center justify-between gap-3 rounded-xl border border-emerald-500/25 bg-emerald-500/5 px-4 py-3">
+              <span className="flex items-center gap-2 text-sm font-medium text-emerald-300/90">
+                <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd"/></svg>
+                Analysis complete — projection updated
+              </span>
+              <button onClick={handleReset} className="text-[11px] text-white/40 underline decoration-white/20 underline-offset-2 hover:text-white/70">
+                Replace photos
+              </button>
+            </motion.div>
+          )}
+
+          {isDone && gradeEstimate && !hideInlineResults && (
             <motion.div key="result" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }}>
               <GradeProbabilityPanel
                 estimate={gradeEstimate}

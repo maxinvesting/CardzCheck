@@ -223,7 +223,7 @@ function BUSINESS_NAV_ITEMS(): NavItem[] {
         { name: "Sales Agent", href: "/business/sales-agent", icon: <SalesIcon /> },
       ],
     },
-    { name: "Analytics", href: "/business/financials", icon: <BadgeIcon />, badge: "dot" },
+    { name: "Analytics", href: "/business/financials", icon: <BadgeIcon /> },
     { name: "Marketplace", href: "/marketplace", icon: <ShopIcon /> },
     {
       name: "Business",

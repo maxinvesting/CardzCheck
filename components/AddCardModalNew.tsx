@@ -36,6 +36,7 @@ interface AddCardModalNewProps {
     grader?: string;
     psa_cert_number?: string;
     imageUrl?: string;
+    imageUrls?: string[];
     user_image_url?: string;
     quantity?: number;
   }) => void;
@@ -302,6 +303,7 @@ export default function AddCardModalNew({
     }
     const parsedQuantity = Math.max(1, Number.parseInt(quantity, 10) || 1);
     const certDigits = gradedCertInput.replace(/\D/g, "");
+    const psaImageUrls = psaResult.image_urls ?? [];
     onCardSelected({
       player_name: psaResult.player_name,
       year: psaResult.year ?? undefined,
@@ -311,6 +313,9 @@ export default function AddCardModalNew({
       grade: psaResult.grade ?? undefined,
       grader: "PSA",
       psa_cert_number: certDigits || undefined,
+      imageUrl: psaImageUrls[0] ?? undefined,
+      imageUrls: psaImageUrls,
+      user_image_url: psaImageUrls[0] ?? undefined,
       quantity: parsedQuantity,
     });
     resetForm();
@@ -352,6 +357,8 @@ export default function AddCardModalNew({
     const parallelType = gradedManualForm.parallel_type.trim();
 
     if ((addMode === "watchlist" || addMode === "business") && onCardSelected) {
+      const psaImageUrls =
+        gradedCompany === "PSA" && psaResult?.image_urls ? psaResult.image_urls : [];
       onCardSelected({
         player_name: playerName,
         year: year || undefined,
@@ -361,6 +368,9 @@ export default function AddCardModalNew({
         grade,
         grader: gradedCompany,
         psa_cert_number: gradedCompany === "PSA" && certDigits ? certDigits : undefined,
+        imageUrl: psaImageUrls[0] ?? undefined,
+        imageUrls: psaImageUrls,
+        user_image_url: psaImageUrls[0] ?? undefined,
         quantity: parsedQuantity,
       });
       resetForm();
@@ -691,6 +701,7 @@ export default function AddCardModalNew({
         parallel_type: identifiedCard.parallel_type,
         grade: effectiveGrade,
         imageUrl: identifiedCard.imageUrl || undefined,
+        imageUrls: identifiedCard.imageUrls || undefined,
         user_image_url: identifiedCard.userImageUrl || undefined,
         quantity: parsedQuantity,
       };

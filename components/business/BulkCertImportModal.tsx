@@ -1,7 +1,9 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import CertBarcodeScanner from "@/components/business/CertBarcodeScanner";
+import CardPhotoUploader from "@/components/business/CardPhotoUploader";
 
 interface PsaMapped {
   player_name: string | null;
@@ -20,6 +22,7 @@ interface BulkRow {
   status: RowStatus;
   reason?: string;
   mapped?: PsaMapped;
+  images: string[];
   quantity: number;
   cost_basis_dollars: string;
   channel: string;
@@ -66,10 +69,17 @@ export default function BulkCertImportModal({ isOpen, onClose, onSuccess }: Bulk
   const [showScanner, setShowScanner] = useState(false);
   const [isLookingUp, setIsLookingUp] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [uploadingRows, setUploadingRows] = useState<Set<string>>(() => new Set());
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [summary, setSummary] = useState<{ added: number; failed: number } | null>(null);
+  const [mounted, setMounted] = useState(false);
 
   const foundCount = useMemo(() => rows.filter((r) => r.status === "found").length, [rows]);
+  const isUploadingPhotos = uploadingRows.size > 0;
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const appendCertFromScan = useCallback((cert: string) => {
     setPasted((prev) => {
@@ -80,17 +90,18 @@ export default function BulkCertImportModal({ isOpen, onClose, onSuccess }: Bulk
     });
   }, []);
 
-  if (!isOpen) return null;
+  if (!isOpen || !mounted) return null;
 
   function resetAll() {
     setPasted("");
     setRows([]);
+    setUploadingRows(new Set());
     setSummary(null);
     setErrorMessage(null);
   }
 
   function handleClose() {
-    if (isLookingUp || isSubmitting) return;
+    if (isLookingUp || isSubmitting || isUploadingPhotos) return;
     resetAll();
     onClose();
   }
@@ -120,6 +131,7 @@ export default function BulkCertImportModal({ isOpen, onClose, onSuccess }: Bulk
         status: r.status,
         reason: r.reason,
         mapped: r.mapped,
+        images: Array.isArray(r.image_urls) ? r.image_urls.filter(Boolean).slice(0, 3) : [],
         quantity: 1,
         cost_basis_dollars: defaultCostBasis,
         channel: defaultChannel,
@@ -138,7 +150,24 @@ export default function BulkCertImportModal({ isOpen, onClose, onSuccess }: Bulk
   }
 
   function removeRow(index: number) {
+    const row = rows[index];
+    if (row) {
+      setUploadingRows((prev) => {
+        const next = new Set(prev);
+        next.delete(row.cert);
+        return next;
+      });
+    }
     setRows((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function updateRowUploading(cert: string, uploading: boolean) {
+    setUploadingRows((prev) => {
+      const next = new Set(prev);
+      if (uploading) next.add(cert);
+      else next.delete(cert);
+      return next;
+    });
   }
 
   async function retryRow(index: number) {
@@ -161,6 +190,9 @@ export default function BulkCertImportModal({ isOpen, onClose, onSuccess }: Bulk
         status: result.status,
         reason: result.reason,
         mapped: result.mapped,
+        images: Array.isArray(result.image_urls)
+          ? result.image_urls.filter(Boolean).slice(0, 3)
+          : row.images,
       });
     } catch (err: any) {
       updateRow(index, { status: "error", reason: err?.message ?? "Lookup failed" });
@@ -187,10 +219,18 @@ export default function BulkCertImportModal({ isOpen, onClose, onSuccess }: Bulk
         status: r.inv_status || "unlisted",
         acquisition_type: defaultAcquisitionType || null,
         acquisition_date: defaultAcquisitionDate || null,
+        image_urls: r.images,
+        image_url: r.images[0] ?? null,
+        user_image_url: r.images[0] ?? null,
+        image_source: r.images.length > 0 ? "user" : "none",
       }));
 
     if (payloadRows.length === 0) {
       setErrorMessage("No rows ready to add.");
+      return;
+    }
+    if (isUploadingPhotos) {
+      setErrorMessage("Wait for photo uploads to finish before adding cards.");
       return;
     }
 
@@ -219,14 +259,14 @@ export default function BulkCertImportModal({ isOpen, onClose, onSuccess }: Bulk
     }
   }
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-[9999] flex items-start justify-center overflow-y-auto bg-black/60 p-2 backdrop-blur-sm sm:items-center sm:p-4"
       onClick={(e) => {
         if (e.target === e.currentTarget) handleClose();
       }}
     >
-      <div className={`flex max-h-[calc(100vh-1rem)] w-full ${rows.length === 0 ? "max-w-lg" : "max-w-4xl"} flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-black shadow-2xl sm:max-h-[90vh]`}>
+      <div className={`flex max-h-[calc(100vh-1rem)] w-full ${rows.length === 0 ? "max-w-lg" : "max-w-6xl"} flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-black shadow-2xl sm:max-h-[90vh]`}>
         <header className="flex items-center justify-between border-b border-white/10 px-5 py-3">
           <div>
             <h2 className="text-lg font-bold text-white">Bulk add by PSA cert</h2>
@@ -237,7 +277,8 @@ export default function BulkCertImportModal({ isOpen, onClose, onSuccess }: Bulk
           <button
             type="button"
             onClick={handleClose}
-            className="rounded-md p-1 text-gray-500 hover:bg-gray-800 hover:text-gray-300"
+            disabled={isLookingUp || isSubmitting || isUploadingPhotos}
+            className="rounded-md p-1 text-gray-500 hover:bg-gray-800 hover:text-gray-300 disabled:cursor-not-allowed disabled:opacity-50"
             aria-label="Close"
           >
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -337,13 +378,14 @@ export default function BulkCertImportModal({ isOpen, onClose, onSuccess }: Bulk
               </div>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-xs">
+            <div className="w-full overflow-x-auto">
+              <table className="min-w-[1120px] text-xs">
                 <thead className="bg-neutral-950 text-left text-[11px] uppercase tracking-wide text-gray-400">
                   <tr>
                     <th className="px-2 py-2">Cert</th>
                     <th className="px-2 py-2">Status</th>
                     <th className="px-2 py-2">Card</th>
+                    <th className="px-2 py-2">Photos</th>
                     <th className="px-2 py-2">Grade</th>
                     <th className="px-2 py-2">Qty</th>
                     <th className="px-2 py-2">Cost ($)</th>
@@ -354,7 +396,7 @@ export default function BulkCertImportModal({ isOpen, onClose, onSuccess }: Bulk
                 </thead>
                 <tbody className="divide-y divide-gray-800">
                   {rows.map((row, idx) => (
-                    <tr key={`${row.cert}-${idx}`} className="align-top">
+                    <tr key={row.cert} className="align-top">
                       <td className="px-2 py-2 font-mono text-xs text-gray-200">{row.cert}</td>
                       <td className="px-2 py-2">
                         <StatusChip status={row.status} reason={row.reason} />
@@ -371,6 +413,19 @@ export default function BulkCertImportModal({ isOpen, onClose, onSuccess }: Bulk
                                 .join(" · ")}
                             </div>
                           </div>
+                        ) : (
+                          <span className="text-gray-500">—</span>
+                        )}
+                      </td>
+                      <td className="w-56 px-2 py-2">
+                        {row.status === "found" ? (
+                          <CardPhotoUploader
+                            images={row.images}
+                            onChange={(images) => updateRow(idx, { images })}
+                            max={3}
+                            onUploadingChange={(uploading) => updateRowUploading(row.cert, uploading)}
+                            onError={setErrorMessage}
+                          />
                         ) : (
                           <span className="text-gray-500">—</span>
                         )}
@@ -441,7 +496,8 @@ export default function BulkCertImportModal({ isOpen, onClose, onSuccess }: Bulk
                           <button
                             type="button"
                             onClick={() => removeRow(idx)}
-                            className="rounded border border-white/15 bg-neutral-900 px-2 py-0.5 text-[11px] text-gray-200 hover:bg-gray-700"
+                            disabled={uploadingRows.has(row.cert)}
+                            className="rounded border border-white/15 bg-neutral-900 px-2 py-0.5 text-[11px] text-gray-200 hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             Remove
                           </button>
@@ -476,7 +532,7 @@ export default function BulkCertImportModal({ isOpen, onClose, onSuccess }: Bulk
             <button
               type="button"
               onClick={handleClose}
-              disabled={isLookingUp || isSubmitting}
+              disabled={isLookingUp || isSubmitting || isUploadingPhotos}
               className="rounded-md border border-white/15 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-gray-200 hover:bg-gray-700 disabled:opacity-50"
             >
               Close
@@ -495,7 +551,7 @@ export default function BulkCertImportModal({ isOpen, onClose, onSuccess }: Bulk
                 <button
                   type="button"
                   onClick={resetAll}
-                  disabled={isLookingUp || isSubmitting}
+                  disabled={isLookingUp || isSubmitting || isUploadingPhotos}
                   className="rounded-md border border-white/15 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-gray-200 hover:bg-gray-700 disabled:opacity-50"
                 >
                   Start over
@@ -503,11 +559,13 @@ export default function BulkCertImportModal({ isOpen, onClose, onSuccess }: Bulk
                 <button
                   type="button"
                   onClick={submit}
-                  disabled={isSubmitting || foundCount === 0}
+                  disabled={isSubmitting || isUploadingPhotos || foundCount === 0}
                   className="rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-black hover:bg-gray-200 disabled:opacity-50"
                 >
                   {isSubmitting
                     ? "Adding…"
+                    : isUploadingPhotos
+                    ? "Uploading photos…"
                     : `Add ${foundCount} card${foundCount === 1 ? "" : "s"} to ledger`}
                 </button>
               </>
@@ -521,7 +579,8 @@ export default function BulkCertImportModal({ isOpen, onClose, onSuccess }: Bulk
         onClose={() => setShowScanner(false)}
         onCertDetected={appendCertFromScan}
       />
-    </div>
+    </div>,
+    document.body
   );
 }
 

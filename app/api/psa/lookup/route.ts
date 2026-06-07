@@ -9,6 +9,8 @@ import {
   parsePsaCertHtml,
   readPsaToken,
 } from "@/lib/psa/lookup";
+import { fetchPsaCertLookup } from "@/lib/images/psa-cert";
+import { uniqueTrustedImageUrls } from "@/lib/images/shared";
 
 async function lookupPsaViaPublicCertPage(certDigits: string) {
   const urls = [
@@ -43,6 +45,28 @@ async function lookupPsaViaPublicCertPage(certDigits: string) {
   return null;
 }
 
+async function lookupPsaImageUrls(certDigits: string): Promise<string[]> {
+  try {
+    const imageResult = await fetchPsaCertLookup(certDigits);
+    return uniqueTrustedImageUrls([
+      imageResult?.frontImageUrl,
+      imageResult?.backImageUrl,
+    ]).slice(0, 3);
+  } catch {
+    return [];
+  }
+}
+
+async function withPsaImages<T extends Record<string, unknown>>(
+  certDigits: string,
+  payload: T
+): Promise<T & { image_urls: string[] }> {
+  return {
+    ...payload,
+    image_urls: await lookupPsaImageUrls(certDigits),
+  };
+}
+
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
   const {
@@ -75,7 +99,7 @@ export async function POST(request: NextRequest) {
   if (!token) {
     const fallback = await lookupPsaViaPublicCertPage(certDigits);
     if (fallback) {
-      return NextResponse.json({ found: true, ...fallback });
+      return NextResponse.json(await withPsaImages(certDigits, { found: true, ...fallback }));
     }
 
     console.error("[psa/lookup] No PSA token in env (checked PSA_ACCESS_TOKEN / PSA_API_TOKEN, any casing)");
@@ -108,7 +132,7 @@ export async function POST(request: NextRequest) {
     if (!res.ok) {
       const fallback = await lookupPsaViaPublicCertPage(certDigits);
       if (fallback) {
-        return NextResponse.json({ found: true, ...fallback });
+        return NextResponse.json(await withPsaImages(certDigits, { found: true, ...fallback }));
       }
 
       console.error("[psa/lookup] PSA API error", res.status, getPsaServerMessage(psaData));
@@ -120,7 +144,7 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     const fallback = await lookupPsaViaPublicCertPage(certDigits);
     if (fallback) {
-      return NextResponse.json({ found: true, ...fallback });
+      return NextResponse.json(await withPsaImages(certDigits, { found: true, ...fallback }));
     }
 
     console.error("[psa/lookup] PSA fetch failed", err);
@@ -138,7 +162,7 @@ export async function POST(request: NextRequest) {
   if (!cert) {
     const fallback = await lookupPsaViaPublicCertPage(certDigits);
     if (fallback) {
-      return NextResponse.json({ found: true, ...fallback });
+      return NextResponse.json(await withPsaImages(certDigits, { found: true, ...fallback }));
     }
 
     console.error("[psa/lookup] PSA response missing cert payload", getPsaServerMessage(psaData));
@@ -153,5 +177,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Cert not found", found: false });
   }
 
-  return NextResponse.json({ found: true, ...mapped });
+  return NextResponse.json(await withPsaImages(certDigits, { found: true, ...mapped }));
 }

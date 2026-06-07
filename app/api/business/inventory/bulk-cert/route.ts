@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createInventoryItem } from "@/lib/business/actions";
+import { createInventoryItem, requireBusinessAccess } from "@/lib/business/actions";
 import { getTierGates } from "@/lib/access";
+import { recordLedgerAction } from "@/lib/business/ledger-actions";
+import { uniqueTrustedImageUrls } from "@/lib/images/shared";
 
 const MAX_ROWS_PER_CALL = 100;
 
@@ -20,6 +22,10 @@ interface BulkCertRowInput {
   status?: string | null;
   acquisition_type?: string | null;
   acquisition_date?: string | null;
+  image_urls?: string[] | null;
+  image_url?: string | null;
+  user_image_url?: string | null;
+  image_source?: string | null;
   notes?: string | null;
 }
 
@@ -28,6 +34,39 @@ function buildTitle(row: BulkCertRowInput): string {
     .filter(Boolean)
     .join(" ")
     .trim();
+}
+
+function getRowImageUrls(row: BulkCertRowInput): string[] {
+  return uniqueTrustedImageUrls([
+    ...(Array.isArray(row.image_urls) ? row.image_urls : []),
+    row.user_image_url,
+    row.image_url,
+  ]).slice(0, 3);
+}
+
+async function insertCardImages(args: {
+  supabase: Awaited<ReturnType<typeof createClient>>;
+  userId: string;
+  itemId: string;
+  imageUrls: string[];
+}): Promise<void> {
+  if (args.imageUrls.length === 0) return;
+
+  const imageRecords = args.imageUrls.map((url, index) => ({
+    card_id: args.itemId,
+    user_id: args.userId,
+    storage_path: url,
+    position: index,
+    label: index === 0 ? "front" : index === 1 ? "back" : null,
+  }));
+
+  const { error } = await args.supabase.from("card_images").insert(imageRecords);
+  if (error) {
+    console.warn("[bulk-cert] failed to insert card images", {
+      itemId: args.itemId,
+      error: error.message,
+    });
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -70,12 +109,14 @@ export async function POST(request: NextRequest) {
   }
 
   const rows = body.rows as BulkCertRowInput[];
+  const context = await requireBusinessAccess(user.id);
 
   type InsertOutcome =
     | { cert: string; status: "added"; id: string }
     | { cert: string; status: "failed"; error: string };
 
   const results: InsertOutcome[] = [];
+  const addedIds: string[] = [];
 
   for (const row of rows) {
     const cert = typeof row.cert === "string" ? row.cert.trim() : "";
@@ -85,6 +126,8 @@ export async function POST(request: NextRequest) {
     }
 
     try {
+      const imageUrls = getRowImageUrls(row);
+      const primaryImageUrl = imageUrls[0] ?? null;
       const payload = {
         title: buildTitle(row) || `PSA Cert ${cert}`,
         player_name: row.player_name ?? null,
@@ -103,10 +146,20 @@ export async function POST(request: NextRequest) {
         psa_cert_number: cert,
         channel: row.channel ?? null,
         status: row.status ?? "unlisted",
+        image_url: primaryImageUrl,
+        image_source: primaryImageUrl ? "user" : "none",
+        user_image_url: primaryImageUrl,
         notes: row.notes ?? null,
       };
 
       const item = await createInventoryItem(user.id, payload as any);
+      await insertCardImages({
+        supabase,
+        userId: user.id,
+        itemId: item.id,
+        imageUrls,
+      });
+      addedIds.push(item.id);
       results.push({ cert, status: "added", id: item.id });
     } catch (err: any) {
       console.error("[bulk-cert] insert failed", cert, err);
@@ -120,6 +173,17 @@ export async function POST(request: NextRequest) {
 
   const added = results.filter((r) => r.status === "added").length;
   const failed = results.length - added;
+
+  if (addedIds.length > 0) {
+    await recordLedgerAction({
+      supabase,
+      userId: user.id,
+      businessAccountId: context.businessAccountId,
+      actionType: "inventory_bulk_create",
+      label: "bulk add by cert",
+      payload: { itemIds: addedIds },
+    });
+  }
 
   return NextResponse.json({ results, added, failed });
 }

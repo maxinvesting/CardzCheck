@@ -1748,6 +1748,146 @@ export async function getBusinessMetrics(userId: string): Promise<BusinessMetric
   };
 }
 
+async function aggregatePeriodKpis(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  businessAccountId: string,
+  from: string,
+  to: string
+): Promise<{ revenue_cents: number; profit_cents: number; cogs_cents: number; sales_count: number }> {
+  const { data, error } = await supabase
+    .from("business_sales")
+    .select("sold_price_cents, shipping_charged_cents, profit_cents, cogs_cents")
+    .eq("business_account_id", businessAccountId)
+    .eq("is_deleted", false)
+    .gte("sold_at", from)
+    .lt("sold_at", to);
+
+  if (error) throw error;
+
+  const rows = data ?? [];
+  let revenueCents = 0;
+  let profitCents = 0;
+  let cogsCents = 0;
+  for (const row of rows) {
+    revenueCents += toInt(row.sold_price_cents) + toInt(row.shipping_charged_cents);
+    profitCents += toInt(row.profit_cents);
+    cogsCents += toInt(row.cogs_cents);
+  }
+
+  return {
+    revenue_cents: revenueCents,
+    profit_cents: profitCents,
+    cogs_cents: cogsCents,
+    sales_count: rows.length,
+  };
+}
+
+async function aggregateLegacyPeriodKpis(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  ownerUserId: string,
+  from: string,
+  to: string
+): Promise<{ revenue_cents: number; profit_cents: number; cogs_cents: number; sales_count: number }> {
+  const fromDate = from.slice(0, 10);
+  const toDate = to.slice(0, 10);
+  const { data, error } = await supabase
+    .from("business_sales")
+    .select("sale_price_cents, shipping_charged_cents, profit_cents, cogs_cents")
+    .eq("user_id", ownerUserId)
+    .gte("sale_date", fromDate)
+    .lt("sale_date", toDate);
+
+  if (error) throw error;
+
+  const rows = data ?? [];
+  let revenueCents = 0;
+  let profitCents = 0;
+  let cogsCents = 0;
+  for (const row of rows) {
+    revenueCents += toInt(row.sale_price_cents) + toInt(row.shipping_charged_cents);
+    profitCents += toInt(row.profit_cents);
+    cogsCents += toInt(row.cogs_cents);
+  }
+
+  return {
+    revenue_cents: revenueCents,
+    profit_cents: profitCents,
+    cogs_cents: cogsCents,
+    sales_count: rows.length,
+  };
+}
+
+/**
+ * Financial snapshot for the four dashboard periods: today, this week
+ * (Monday-anchored), this month, and this year — all in UTC to match the
+ * MTD/YTD figures elsewhere. Falls back to the legacy schema when the modern
+ * business_sales columns are absent.
+ */
+export async function getBusinessPeriodMetrics(
+  userId: string
+): Promise<import("@/types").BusinessPeriodMetrics> {
+  const context = await requireBusinessAccess(userId);
+  const supabase = await createClient();
+
+  const now = new Date();
+  const rangeEnd = new Date(now.getTime() + 1000).toISOString();
+
+  const dayStart = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+  );
+  // Monday-anchored week start.
+  const weekStart = new Date(dayStart);
+  const dow = (dayStart.getUTCDay() + 6) % 7; // 0 = Monday
+  weekStart.setUTCDate(dayStart.getUTCDate() - dow);
+  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const yearStart = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
+
+  const zero = { revenue_cents: 0, profit_cents: 0, cogs_cents: 0, sales_count: 0 };
+
+  const ranges: Array<["daily" | "weekly" | "monthly" | "yearly", string]> = [
+    ["daily", dayStart.toISOString()],
+    ["weekly", weekStart.toISOString()],
+    ["monthly", monthStart.toISOString()],
+    ["yearly", yearStart.toISOString()],
+  ];
+
+  const result: import("@/types").BusinessPeriodMetrics = {
+    daily: { ...zero },
+    weekly: { ...zero },
+    monthly: { ...zero },
+    yearly: { ...zero },
+  };
+
+  try {
+    const aggregates = await Promise.all(
+      ranges.map(([, from]) =>
+        aggregatePeriodKpis(supabase, context.businessAccountId, from, rangeEnd)
+      )
+    );
+    ranges.forEach(([key], i) => {
+      result[key] = aggregates[i];
+    });
+  } catch (error) {
+    if (isBusinessSalesSchemaMismatch(error)) {
+      try {
+        const aggregates = await Promise.all(
+          ranges.map(([, from]) =>
+            aggregateLegacyPeriodKpis(supabase, context.ownerUserId, from, rangeEnd)
+          )
+        );
+        ranges.forEach(([key], i) => {
+          result[key] = aggregates[i];
+        });
+      } catch {
+        // leave zeros
+      }
+    }
+    // non-schema errors: leave zeros
+  }
+
+  return result;
+}
+
 // =============================================
 // CSV EXPORT
 // =============================================

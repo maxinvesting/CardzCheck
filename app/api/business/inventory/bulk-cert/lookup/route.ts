@@ -2,19 +2,33 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { lookupPsaCert, normalizeCertInput, PsaMappedResult } from "@/lib/psa/lookup";
 import { getTierGates } from "@/lib/access";
+import { fetchPsaCertLookup } from "@/lib/images/psa-cert";
+import { uniqueTrustedImageUrls } from "@/lib/images/shared";
 
 const MAX_CERTS_PER_CALL = 100;
 const CONCURRENCY = 5;
 const CHUNK_DELAY_MS = 200;
 
 type BulkCertLookupRow =
-  | { cert: string; status: "found"; mapped: PsaMappedResult }
+  | { cert: string; status: "found"; mapped: PsaMappedResult; image_urls: string[] }
   | { cert: string; status: "not_found" }
   | { cert: string; status: "invalid"; reason: string }
   | { cert: string; status: "error"; reason: string };
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function lookupPsaImageUrls(cert: string): Promise<string[]> {
+  try {
+    const imageResult = await fetchPsaCertLookup(cert);
+    return uniqueTrustedImageUrls([
+      imageResult?.frontImageUrl,
+      imageResult?.backImageUrl,
+    ]).slice(0, 3);
+  } catch {
+    return [];
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -77,7 +91,10 @@ export async function POST(request: NextRequest) {
     const settled = await Promise.allSettled(
       chunk.map(async (cert): Promise<BulkCertLookupRow> => {
         const outcome = await lookupPsaCert(cert);
-        if (outcome.status === "found") return { cert, status: "found", mapped: outcome.mapped };
+        if (outcome.status === "found") {
+          const image_urls = await lookupPsaImageUrls(cert);
+          return { cert, status: "found", mapped: outcome.mapped, image_urls };
+        }
         if (outcome.status === "not_found") return { cert, status: "not_found" };
         if (outcome.status === "invalid") return { cert, status: "invalid", reason: outcome.reason };
         return { cert, status: "error", reason: outcome.reason };

@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireBusinessAccess, createInventoryItem } from "@/lib/business/actions";
+import {
+  getInventorySnapshots,
+  recordLedgerAction,
+} from "@/lib/business/ledger-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -107,7 +111,7 @@ export async function GET(): Promise<NextResponse> {
     };
     const typedTrades = (trades ?? []) as TradeRow[];
     const tradeIds = typedTrades.map((t) => t.id);
-    let itemsByTrade: Record<string, Array<{
+    const itemsByTrade: Record<string, Array<{
       direction: "in" | "out";
       collection_item_id: string;
       fair_value_cents: number | null;
@@ -206,6 +210,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         { status: 400 }
       );
     }
+
+    const outgoingBeforeRows = await getInventorySnapshots(
+      supabase,
+      user.id,
+      outgoingInputs.map((item) => item.inventory_item_id)
+    );
 
     // Load each outgoing item, validate ownership/closed status, sum basis.
     type Loaded = {
@@ -347,6 +357,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     // Incoming items: create new inventory rows + insert trade_item links.
+    const incomingItemIds: string[] = [];
     for (const inc of incomingItems) {
       const created = await createInventoryItem(user.id, {
         title: inc.title,
@@ -373,6 +384,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         notes: parsed.notes?.trim() || null,
         image_url: inc.image_url ?? null,
       } as never);
+      incomingItemIds.push(created.id);
 
       const { error: tiErr } = await supabase.from("business_trade_items").insert({
         trade_id: trade.id,
@@ -391,6 +403,20 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         throw tiErr;
       }
     }
+
+    await recordLedgerAction({
+      supabase,
+      userId: user.id,
+      businessAccountId: context.businessAccountId,
+      actionType: "trade_create",
+      label: "record trade",
+      payload: {
+        tradeId: trade.id,
+        outgoingItemIds: loadedOutgoing.map((item) => item.id),
+        incomingItemIds,
+        outgoingBeforeRows,
+      },
+    });
 
     return NextResponse.json({ trade }, { status: 201 });
   } catch (error) {

@@ -32,6 +32,7 @@ import BusinessPaywall from "@/components/business/BusinessPaywall";
 import { createClient } from "@/lib/supabase/client";
 import type {
   CardPerformance,
+  CashFlow,
   ChannelBreakdown,
   FinancialsSummary,
   MonthBucket,
@@ -117,10 +118,26 @@ function MetricCell({
 function SnapshotAndVelocity({
   snapshot,
   velocity,
+  cashflow,
 }: {
   snapshot: Snapshot;
   velocity: Velocity;
+  cashflow: CashFlow;
 }) {
+  const cashDelta =
+    cashflow.current_month_net_cents - cashflow.prev_month_net_cents;
+  const cashSub =
+    cashflow.prev_month_net_cents === 0 && cashDelta === 0
+      ? { text: "no prior month", tone: null }
+      : {
+          text: `${cashDelta >= 0 ? "+" : "-"}${fmtMoneyCompact(Math.abs(cashDelta))} vs last mo`,
+          tone:
+            cashDelta > 0
+              ? ("up" as const)
+              : cashDelta < 0
+                ? ("down" as const)
+                : null,
+        };
   const pnlSub =
     snapshot.unrealized_pnl_pct == null
       ? undefined
@@ -140,7 +157,7 @@ function SnapshotAndVelocity({
 
   return (
     <section>
-      <div className="grid grid-cols-2 divide-x divide-y divide-[#24282D] border border-[#24282D] bg-[#0B0D0F] sm:grid-cols-4 sm:divide-y-0 xl:grid-cols-8">
+      <div className="grid grid-cols-2 divide-x divide-y divide-[#24282D] border border-[#24282D] bg-[#0B0D0F] sm:grid-cols-3 sm:divide-y-0 xl:grid-cols-9">
         <MetricCell
           label="Inventory value"
           value={fmtMoney(snapshot.inventory_value_cents)}
@@ -154,6 +171,12 @@ function SnapshotAndVelocity({
           value={fmtMoney(snapshot.unrealized_pnl_cents)}
           valueClass={pnlClass(snapshot.unrealized_pnl_cents)}
           sub={pnlSub}
+        />
+        <MetricCell
+          label="Cash flow (mo)"
+          value={fmtMoney(cashflow.current_month_net_cents)}
+          valueClass={pnlClass(cashflow.current_month_net_cents)}
+          sub={cashSub}
         />
         <MetricCell
           label="Active inventory"
@@ -995,10 +1018,6 @@ export default function FinancialsPage() {
               Synced with ledger
             </span>
           </div>
-          <span className="inline-flex items-center gap-1.5 border border-[#1F5F45] bg-[#0E251B] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#20B26B]">
-            <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#20B26B]" />
-            Dealer analytics
-          </span>
         </header>
 
         {error ? (
@@ -1012,6 +1031,7 @@ export default function FinancialsPage() {
             <SnapshotAndVelocity
               snapshot={summary.snapshot}
               velocity={summary.velocity}
+              cashflow={summary.cashflow}
             />
             <PnlSection
               totals={summary.totals}

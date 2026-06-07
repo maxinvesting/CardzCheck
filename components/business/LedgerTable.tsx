@@ -6,6 +6,7 @@ import type { LedgerTableRow } from "@/lib/business/ledger-table";
 
 export type LedgerInlineField =
   | "cost_basis_total_cents"
+  | "current_market_value_cents"
   | "list_price_cents"
   | "status"
   | "channel";
@@ -81,6 +82,19 @@ function stopRowClick(event: React.MouseEvent<HTMLElement>) {
   event.stopPropagation();
 }
 
+type MoneyDraftParseResult =
+  | { ok: true; cents: number | null }
+  | { ok: false };
+
+function parseMoneyDraft(value: string): MoneyDraftParseResult {
+  const normalized = value.trim().replace(/[$,\s]/g, "");
+  if (normalized === "") return { ok: true, cents: null };
+
+  const dollars = Number(normalized);
+  if (!Number.isFinite(dollars) || dollars < 0) return { ok: false };
+  return { ok: true, cents: Math.round(dollars * 100) };
+}
+
 function HeaderCell({
   children,
   align = "left",
@@ -135,12 +149,16 @@ function InlineMoneyCell({
   ariaLabel,
   align = "right",
   className = "",
+  emptyValue = null,
+  detail,
 }: {
   cents: number | null;
   onSave: (nextCents: number | null) => Promise<void> | void;
   ariaLabel: string;
   align?: "left" | "right" | "center";
   className?: string;
+  emptyValue?: number | null;
+  detail?: React.ReactNode;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<string>("");
@@ -160,13 +178,12 @@ function InlineMoneyCell({
   }
 
   async function commit() {
-    const trimmed = draft.trim();
-    const nextCents =
-      trimmed === "" ? null : Math.round(Number(trimmed) * 100);
-    if (trimmed !== "" && !Number.isFinite(Number(trimmed))) {
+    const parsed = parseMoneyDraft(draft);
+    if (!parsed.ok) {
       setEditing(false);
       return;
     }
+    const nextCents = parsed.cents ?? emptyValue;
     if (nextCents === cents) {
       setEditing(false);
       return;
@@ -180,9 +197,8 @@ function InlineMoneyCell({
       <Cell align={align} className={className}>
         <input
           ref={inputRef}
-          type="number"
-          step="0.01"
-          min={0}
+          type="text"
+          inputMode="decimal"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onClick={stopRowClick}
@@ -214,7 +230,12 @@ function InlineMoneyCell({
         aria-label={`Edit ${ariaLabel}`}
         title="Click to edit"
       >
-        {formatMoney(cents)}
+        <span className="block">{formatMoney(cents)}</span>
+        {detail ? (
+          <span className="block text-[9px] uppercase tracking-[0.08em] text-[color:var(--biz-muted)]">
+            {detail}
+          </span>
+        ) : null}
       </button>
     </Cell>
   );
@@ -406,23 +427,40 @@ export default function LedgerTable({
                       onSave={(next) => handleEdit(row.id, "cost_basis_total_cents", next)}
                       ariaLabel={`cost basis for ${row.cardLabel}`}
                       className="text-[color:var(--biz-text)]"
+                      emptyValue={0}
                     />
                   ) : (
                     <Cell align="right" className="tabular-nums text-[color:var(--biz-text)]">
                       {formatMoney(row.costBasisCents)}
                     </Cell>
                   )}
-                  <Cell
-                    align="right"
-                    className={`tabular-nums ${neutralMoneyClassName(row.estimatedValueCents)}`}
-                  >
-                    <div>{formatMoney(row.estimatedValueCents)}</div>
-                    {row.estimatedValueSource === "fallback" && (
-                      <div className="text-[9px] uppercase tracking-[0.08em] text-[color:var(--biz-muted)]">
-                        Fallback
-                      </div>
-                    )}
-                  </Cell>
+                  {onInlineEdit ? (
+                    <InlineMoneyCell
+                      cents={row.estimatedValueCents}
+                      onSave={(next) =>
+                        handleEdit(
+                          row.id,
+                          "current_market_value_cents",
+                          next == null ? null : Math.round(next / Math.max(row.quantity, 1))
+                        )
+                      }
+                      ariaLabel={`CMV for ${row.cardLabel}`}
+                      className={neutralMoneyClassName(row.estimatedValueCents)}
+                      detail={row.estimatedValueSource === "fallback" ? "Fallback" : undefined}
+                    />
+                  ) : (
+                    <Cell
+                      align="right"
+                      className={`tabular-nums ${neutralMoneyClassName(row.estimatedValueCents)}`}
+                    >
+                      <div>{formatMoney(row.estimatedValueCents)}</div>
+                      {row.estimatedValueSource === "fallback" && (
+                        <div className="text-[9px] uppercase tracking-[0.08em] text-[color:var(--biz-muted)]">
+                          Fallback
+                        </div>
+                      )}
+                    </Cell>
+                  )}
                   {onInlineEdit ? (
                     <InlineMoneyCell
                       cents={row.yourPriceCents}

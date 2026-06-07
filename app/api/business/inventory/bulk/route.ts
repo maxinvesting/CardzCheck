@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { requireBusinessAccess, bulkUpdateInventory } from "@/lib/business/actions";
+import { bulkUpdateInventory, requireBusinessAccess } from "@/lib/business/actions";
+import {
+  getInventorySnapshots,
+  recordLedgerAction,
+} from "@/lib/business/ledger-actions";
 
 export async function PATCH(request: NextRequest) {
   try {
@@ -28,7 +32,22 @@ export async function PATCH(request: NextRequest) {
         { status: 400 }
       );
 
+    const context = await requireBusinessAccess(user.id);
+    const beforeRows = await getInventorySnapshots(supabase, user.id, ids);
     await bulkUpdateInventory(user.id, ids, updates);
+    if (beforeRows.length > 0) {
+      await recordLedgerAction({
+        supabase,
+        userId: user.id,
+        businessAccountId: context.businessAccountId,
+        actionType: "inventory_bulk_update",
+        label: "bulk edit",
+        payload: {
+          itemIds: ids,
+          beforeRows,
+        },
+      });
+    }
     return NextResponse.json({ updated: ids.length });
   } catch (err: any) {
     if (err?.status === 403)

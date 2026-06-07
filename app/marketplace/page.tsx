@@ -1,5 +1,6 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,11 @@ interface ListingRow {
     parallel: string | null;
   };
 }
+
+type AuthUserSummary = {
+  email?: string | null;
+  user_metadata?: Record<string, unknown> | null;
+};
 
 const PIPELINES = ["standard", "elite", "grails"] as const;
 
@@ -73,6 +79,49 @@ function spreadVsCmv(listCents: number, cmvCents: number | null): {
   return { pctText: `${sign}${rounded.toFixed(1)}%`, toneClass: tone };
 }
 
+function getStringMetadata(
+  metadata: Record<string, unknown> | null | undefined,
+  key: string
+): string | null {
+  const value = metadata?.[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function usernameFromEmail(email?: string | null): string | null {
+  if (!email) return null;
+  const username = email.split("@")[0]?.trim();
+  return username || null;
+}
+
+function titleCaseUsername(username: string): string {
+  return username
+    .split(/[._-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function displayNameForUser(user: AuthUserSummary): string {
+  const metadataName =
+    getStringMetadata(user.user_metadata, "full_name") ??
+    getStringMetadata(user.user_metadata, "name") ??
+    getStringMetadata(user.user_metadata, "display_name");
+  if (metadataName) return metadataName;
+
+  const username = usernameFromEmail(user.email);
+  return username ? titleCaseUsername(username) : "Marketplace member";
+}
+
+function initialsForUser(displayName: string, email?: string | null): string {
+  const nameParts = displayName.split(/\s+/).filter(Boolean);
+  if (nameParts.length >= 2) {
+    return `${nameParts[0][0]}${nameParts[1][0]}`.toUpperCase();
+  }
+
+  const source = nameParts[0] ?? usernameFromEmail(email) ?? "M";
+  return source.slice(0, 2).toUpperCase();
+}
+
 const PIPELINE_CHIP: Record<ListingRow["pipeline"], string> = {
   standard: "border-[#343941] text-[#B8C0CC] bg-[#0B0D0F]",
   elite: "border-purple-500/40 text-purple-300 bg-purple-900/20",
@@ -85,7 +134,18 @@ export default async function MarketplaceBrowsePage({
   searchParams: Promise<Filters>;
 }) {
   const filters = await searchParams;
+  const supabase = await createClient();
   const service = await createServiceClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: profileRow } = user
+    ? await supabase.from("users").select("name").eq("id", user.id).maybeSingle()
+    : { data: null };
+  const profileName =
+    typeof (profileRow as { name?: unknown } | null)?.name === "string"
+      ? ((profileRow as { name: string }).name.trim() || null)
+      : null;
 
   let query = service
     .from("listings")
@@ -124,26 +184,23 @@ export default async function MarketplaceBrowsePage({
     <>
       <main className="min-h-screen bg-[#090B0D] text-[#E6E8EB]">
         {/* Header */}
-        <header className="border-b border-[#24282D] bg-[#0B0D0F] px-4 py-3">
-          <div className="mx-auto flex max-w-7xl flex-wrap items-end justify-between gap-3">
-            <div>
-              <div className="text-[10px] font-medium uppercase tracking-[0.12em] text-[#77808C]">
-                Marketplace
-              </div>
-              <h1 className="mt-0.5 text-[18px] font-semibold tracking-normal text-[#E6E8EB]">
-                Fixed-price exchange
-                <span className="ml-2 text-[12px] font-normal text-[#77808C]">
-                  · {rows.length} active
-                </span>
-              </h1>
-            </div>
-            <Link
-              href="/marketplace/sell/new"
-              className="border border-[#20B26B] bg-[#20B26B] px-3 py-1.5 text-[12px] font-semibold text-[#07100B] transition-colors hover:bg-[#33C47C]"
-            >
-              List a card
-            </Link>
+        <header className="relative overflow-visible border-b border-[#24282D] bg-black px-4 pb-9 pt-12 text-center sm:pb-11 sm:pt-14">
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-[linear-gradient(180deg,rgba(255,255,255,0.14),rgba(255,255,255,0.03)_42%,rgba(255,255,255,0)_100%)]" />
+          <div className="absolute right-4 top-4 z-20">
+            {user ? (
+              <MarketplaceProfileMenu user={user} profileName={profileName} />
+            ) : (
+              <Link
+                href="/login?redirect=/marketplace"
+                className="inline-flex h-8 items-center border border-[#343941] bg-[#0F1317]/90 px-2.5 text-[12px] font-semibold text-[#B8C0CC] shadow-[0_0_18px_rgba(255,255,255,0.05)] backdrop-blur hover:border-[#5A626E] hover:text-[#F4F6F8]"
+              >
+                Sign in
+              </Link>
+            )}
           </div>
+          <h1 className="relative text-center text-[28px] font-semibold uppercase text-[#F4F6F8] [text-shadow:0_1px_0_rgba(255,255,255,0.35),0_0_18px_rgba(255,255,255,0.18),0_2px_10px_rgba(0,0,0,0.85)] sm:text-[40px] lg:text-[52px]">
+            CardzCheck Marketplace
+          </h1>
         </header>
 
         {/* Filter strip */}
@@ -225,7 +282,7 @@ export default async function MarketplaceBrowsePage({
                           <Td align="right" className="font-semibold tabular-nums text-[#E6E8EB]">
                             {formatMoneyCents(r.list_price_cents)}
                             {r.status === "price_reduced" ? (
-                              <div className="text-[9px] uppercase tracking-wide text-amber-300">
+                              <div className="text-[9px] uppercase text-amber-300">
                                 Reduced
                               </div>
                             ) : null}
@@ -241,7 +298,7 @@ export default async function MarketplaceBrowsePage({
                           </Td>
                           <Td align="center">
                             <span
-                              className={`inline-flex border px-1.5 py-0.5 text-[9px] uppercase tracking-wide ${PIPELINE_CHIP[r.pipeline]}`}
+                              className={`inline-flex border px-1.5 py-0.5 text-[9px] uppercase ${PIPELINE_CHIP[r.pipeline]}`}
                             >
                               {r.pipeline}
                             </span>
@@ -252,7 +309,7 @@ export default async function MarketplaceBrowsePage({
                           <Td align="right">
                             <Link
                               href={`/marketplace/listing/${r.id}`}
-                              className="inline-flex border border-[#343941] bg-[#0B0D0F] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#B8C0CC] hover:border-[#5A626E] hover:text-[#E6E8EB]"
+                              className="inline-flex border border-[#343941] bg-[#0B0D0F] px-2 py-0.5 text-[10px] font-semibold uppercase text-[#B8C0CC] hover:border-[#5A626E] hover:text-[#E6E8EB]"
                             >
                               View
                             </Link>
@@ -271,13 +328,146 @@ export default async function MarketplaceBrowsePage({
   );
 }
 
+function MarketplaceProfileMenu({
+  user,
+  profileName,
+}: {
+  user: AuthUserSummary;
+  profileName: string | null;
+}) {
+  const displayName = profileName ?? displayNameForUser(user);
+  const initials = initialsForUser(displayName, user.email);
+
+  return (
+    <details className="group relative text-left">
+      <summary className="flex h-8 cursor-pointer list-none items-center gap-2 border border-[#343941] bg-[#0F1317]/90 px-2 pr-2.5 text-[12px] font-semibold text-[#E6E8EB] shadow-[0_0_18px_rgba(255,255,255,0.05)] backdrop-blur transition-colors hover:border-[#5A626E]">
+        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#1D5FD1] text-[10px] font-semibold text-white">
+          {initials}
+        </span>
+        <span className="hidden sm:inline">Profile</span>
+      </summary>
+
+      <div className="absolute right-0 mt-2 w-[min(calc(100vw-2rem),300px)] overflow-hidden border border-[#24282D] bg-[#090B0D] text-[#E6E8EB] shadow-2xl">
+        <div className="border-b border-[#1A1E23] bg-[#0F1317] p-3">
+          <div className="flex items-start gap-2.5">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#1D5FD1] text-[12px] font-semibold text-white">
+              {initials}
+            </div>
+            <div className="min-w-0 pt-0.5">
+              <div className="truncate text-[13px] font-semibold text-[#F4F6F8]">
+                {displayName}
+              </div>
+              <div className="mt-0.5 text-[11px] text-[#77808C]">
+                Marketplace profile
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <nav className="bg-[#090B0D] p-1.5">
+          <MarketplaceMenuItem
+            href="/marketplace/profile?tab=purchases"
+            icon={<OrdersIcon />}
+            title="Purchases"
+            description="Recent orders and delivery status"
+          />
+          <MarketplaceMenuItem
+            href="/marketplace/profile?tab=watchlist"
+            icon={<HeartIcon />}
+            title="Watchlist"
+            description="Saved marketplace cards"
+          />
+          <MarketplaceMenuItem
+            href="/marketplace/profile?tab=offers"
+            icon={<OfferIcon />}
+            title="Offers"
+            description="Offers sent and received"
+          />
+          <MarketplaceMenuItem
+            href="/marketplace/profile?tab=selling"
+            icon={<TagIcon />}
+            title="Selling"
+            description="Monitor active listings, sales, watchers, and carts"
+          />
+        </nav>
+      </div>
+    </details>
+  );
+}
+
+function MarketplaceMenuItem({
+  href,
+  icon,
+  title,
+  description,
+}: {
+  href: string;
+  icon: ReactNode;
+  title: string;
+  description: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="flex items-center gap-2.5 px-2.5 py-2 transition-colors hover:bg-[#12161B]"
+    >
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center border border-[#24282D] bg-[#0F1317] text-[#B8C0CC]">
+        {icon}
+      </span>
+      <span className="min-w-0">
+        <span className="block truncate text-[12px] font-semibold text-[#E6E8EB]">
+          {title}
+        </span>
+        <span className="mt-0.5 block truncate text-[10px] text-[#77808C]">
+          {description}
+        </span>
+      </span>
+    </Link>
+  );
+}
+
+function OrdersIcon() {
+  return (
+    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h10M7 11h10M7 15h6" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 3h12a2 2 0 0 1 2 2v14l-3-2-3 2-3-2-3 2-3-2V5a2 2 0 0 1 2-2Z" />
+    </svg>
+  );
+}
+
+function HeartIcon() {
+  return (
+    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.8 8.6c0 5.2-8.8 10.4-8.8 10.4S3.2 13.8 3.2 8.6A4.6 4.6 0 0 1 12 6.7a4.6 4.6 0 0 1 8.8 1.9Z" />
+    </svg>
+  );
+}
+
+function OfferIcon() {
+  return (
+    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8.5A2.5 2.5 0 0 1 6.5 6H18a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6.5A2.5 2.5 0 0 1 4 15.5v-7Z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h4m-4 4h8m1-4h.01" />
+    </svg>
+  );
+}
+
+function TagIcon() {
+  return (
+    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13 11 4H5v6l9 9a2.8 2.8 0 0 0 4 0l2-2a2.8 2.8 0 0 0 0-4Z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 8h.01" />
+    </svg>
+  );
+}
+
 function Th({
   children,
   align = "left",
   className = "",
   title,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
   align?: "left" | "right" | "center";
   className?: string;
   title?: string;
@@ -288,7 +478,7 @@ function Th({
     <th
       scope="col"
       title={title}
-      className={`sticky top-0 z-10 border-b border-[#24282D] bg-[#0B0D0F] px-2 py-2 text-[10px] font-medium uppercase tracking-[0.08em] text-[#77808C] ${alignClass} ${className}`}
+      className={`sticky top-0 z-10 border-b border-[#24282D] bg-[#0B0D0F] px-2 py-2 text-[10px] font-medium uppercase text-[#77808C] ${alignClass} ${className}`}
     >
       {children}
     </th>
@@ -300,7 +490,7 @@ function Td({
   align = "left",
   className = "",
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
   align?: "left" | "right" | "center";
   className?: string;
 }) {

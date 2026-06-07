@@ -2,16 +2,17 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import BusinessMetrics from "@/components/business/BusinessMetrics";
 import { MicButton } from "@/components/ui/MicButton";
-import { Surface } from "@/components/ui/Surface";
 import type {
-  BusinessInventoryItem,
   BusinessMetrics as MetricsType,
+  BusinessPeriodKey,
+  BusinessPeriodMetrics,
   BusinessSale,
+  MarketplaceListingPreview,
   UserStorefront,
 } from "@/types";
-import type { InventoryValueSummary } from "@/lib/business/inventory-value";
+
+/* ── formatting helpers ─────────────────────────────────────────── */
 
 function fmt(cents: number): string {
   return new Intl.NumberFormat("en-US", {
@@ -22,12 +23,17 @@ function fmt(cents: number): string {
   }).format(cents / 100);
 }
 
-function timeAgo(iso: string): string {
-  const diffDays = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
-  if (diffDays <= 0) return "Today";
-  if (diffDays === 1) return "1d ago";
-  if (diffDays < 7) return `${diffDays}d ago`;
-  return `${Math.floor(diffDays / 7)}w ago`;
+function fmtCompact(cents: number): string {
+  const dollars = cents / 100;
+  if (Math.abs(dollars) >= 10_000) {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      notation: "compact",
+      maximumFractionDigits: 1,
+    }).format(dollars);
+  }
+  return fmt(cents);
 }
 
 function fmtDate(iso: string | null | undefined): string {
@@ -37,62 +43,12 @@ function fmtDate(iso: string | null | undefined): string {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function daysSince(dateStr: string | null): number | null {
-  if (!dateStr) return null;
-  const timestamp = new Date(dateStr).getTime();
-  if (!Number.isFinite(timestamp)) return null;
-  return Math.floor((Date.now() - timestamp) / 86_400_000);
-}
-
 function clipTitle(title: string | null | undefined, max = 52): string {
   const trimmed = (title ?? "").trim();
   if (!trimmed) return "Untitled card";
   if (trimmed.length <= max) return trimmed;
   return `${trimmed.slice(0, max - 1).trimEnd()}…`;
 }
-
-function gradeLabel(item: BusinessInventoryItem): string {
-  if (item.grading_company && item.grade) return `${item.grading_company} ${item.grade}`;
-  if (item.grade) return item.grade;
-  return item.condition_status === "graded" ? "Graded" : "Raw";
-}
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="text-[9px] font-normal uppercase tracking-[0.1em] text-slate-500">
-      {children}
-    </span>
-  );
-}
-
-function FunnelBar({ value, color }: { value: number; color: string }) {
-  return (
-    <div className="h-[3px] w-full overflow-hidden bg-[var(--biz-surface-soft)]" style={{ borderRadius: 0 }}>
-      <div
-        className="h-full transition-[width] duration-300"
-        style={{ width: `${Math.max(0, Math.min(100, value))}%`, backgroundColor: color, borderRadius: 0 }}
-      />
-    </div>
-  );
-}
-
-type SignalTone = "emerald" | "amber" | "red";
-
-type SignalCard = {
-  label: "Opportunity" | "Trend" | "Alert";
-  title: string;
-  detail: string;
-  meta: string;
-  ctaLabel: string;
-  ctaHref: string;
-  tone: SignalTone;
-};
-
-const SIGNAL_STYLES: Record<SignalTone, { tagBg: string; tagText: string; borderAccent: string }> = {
-  emerald: { tagBg: "var(--biz-primary)", tagText: "var(--biz-primary-foreground)", borderAccent: "var(--biz-primary)" },
-  amber:   { tagBg: "#FAEEDA", tagText: "#854F0B", borderAccent: "#854F0B" },
-  red:     { tagBg: "#FCEBEB", tagText: "#A32D2D", borderAccent: "#A32D2D" },
-};
 
 const CHANNEL_LABELS: Record<string, string> = {
   ebay: "eBay",
@@ -104,771 +60,626 @@ const CHANNEL_LABELS: Record<string, string> = {
   veriswap: "Veriswap",
 };
 
-const secondaryActionClass =
-  "inline-flex items-center gap-1.5 rounded-none border border-[0.5px] border-[var(--biz-border)] bg-transparent px-2.5 py-1.5 text-xs font-medium text-[var(--biz-text)] transition-colors hover:bg-[var(--biz-hover)]";
+/* ── small presentational atoms ─────────────────────────────────── */
 
-const primaryActionClass =
-  "inline-flex items-center gap-1.5 rounded-none bg-[var(--biz-primary)] px-2.5 py-1.5 text-xs font-medium text-[var(--biz-primary-foreground)] transition-colors hover:bg-[var(--biz-primary-hover)]";
-
-interface Props {
-  businessName: string | null;
-  metrics: MetricsType | null;
-  metricsLoading: boolean;
-  inventorySummary: InventoryValueSummary | null;
-  items: BusinessInventoryItem[];
-  recentSales: BusinessSale[];
-  recentSalesLoading: boolean;
-  ebayStoreHref: string | null;
-  needsMigration: boolean;
-  storefronts?: UserStorefront[];
-  onDashboardVoiceCommand?: (transcript: string) => void;
-  onItemVoiceCommand?: (item: BusinessInventoryItem, transcript: string) => void;
+function Eyebrow({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return <span className={`desk-eyebrow ${className}`}>{children}</span>;
 }
 
 function SkeletonLine({ w = "w-full" }: { w?: string }) {
-  return <div className={`h-3.5 ${w} rounded-md bg-slate-100 animate-pulse`} />;
+  return <div className={`h-3.5 ${w} rounded-md animate-pulse`} style={{ background: "var(--biz-skeleton)" }} />;
+}
+
+/* ── period model ───────────────────────────────────────────────── */
+
+const PERIODS: { key: BusinessPeriodKey; label: string; caption: string }[] = [
+  { key: "daily", label: "Today", caption: "since midnight" },
+  { key: "weekly", label: "This week", caption: "week to date" },
+  { key: "monthly", label: "This month", caption: "month to date" },
+  { key: "yearly", label: "This year", caption: "year to date" },
+];
+
+type ListingSort = "newest" | "value_high" | "value_low" | "updated" | "margin";
+
+const LISTING_SORTS: { key: ListingSort; label: string }[] = [
+  { key: "newest", label: "Newest" },
+  { key: "value_high", label: "Highest value" },
+  { key: "value_low", label: "Lowest value" },
+  { key: "updated", label: "Recently updated" },
+  { key: "margin", label: "Best margin" },
+];
+
+interface Props {
+  businessName: string | null;
+  periodMetrics: BusinessPeriodMetrics | null;
+  periodMetricsLoading: boolean;
+  metrics: MetricsType | null;
+  recentSales: BusinessSale[];
+  recentSalesLoading: boolean;
+  listings: MarketplaceListingPreview[];
+  listingsLoading: boolean;
+  ebayStoreHref: string | null;
+  needsMigration: boolean;
+  storefronts?: UserStorefront[];
+  onRecordSale?: () => void;
+  onRecordTrade?: () => void;
+  onDashboardVoiceCommand?: (transcript: string) => void;
 }
 
 export default function BusinessDashboardView({
   businessName,
+  periodMetrics,
+  periodMetricsLoading,
   metrics,
-  metricsLoading,
-  inventorySummary,
-  items,
   recentSales,
   recentSalesLoading,
+  listings,
+  listingsLoading,
   ebayStoreHref,
   needsMigration,
   storefronts = [],
+  onRecordSale,
+  onRecordTrade,
   onDashboardVoiceCommand,
-  onItemVoiceCommand,
 }: Props) {
   const [showStorefrontDropdown, setShowStorefrontDropdown] = useState(false);
+  const [period, setPeriod] = useState<BusinessPeriodKey>("monthly");
+  const [listingSort, setListingSort] = useState<ListingSort>("newest");
 
   const primaryStorefront = storefronts.find((store) => store.is_primary) ?? storefronts[0] ?? null;
   const hasStorefronts = storefronts.length > 0;
-  const hasWhatnotStorefront = storefronts.some((store) => store.platform === "whatnot");
-  const hasWebsiteStorefront = storefronts.some(
-    (store) => store.platform === "website" || store.platform === "shopify"
-  );
 
-  const dashboardData = useMemo(() => {
-    const activeItems = items.filter(
-      (item) => item.status !== "sold" && item.status !== "returned" && item.status !== "traded"
-    );
-    const listedItems = activeItems.filter(
-      (item) => item.status === "listed" || item.status === "pending_sale"
-    );
-    const unlistedItems = activeItems.filter((item) => item.status === "unlisted");
-    const rawItems = activeItems.filter(
-      (item) => item.condition_status === "raw" || !item.grade?.trim()
-    );
-    const agedItems = activeItems.filter((item) => {
-      const days = daysSince(item.acquisition_date);
-      return days != null && days >= 60;
-    });
-    const noCmvItems = activeItems.filter(
-      (item) => (item.current_market_value_cents ?? 0) <= 0
-    );
-    const staleListedItems = listedItems
-      .map((item) => ({ item, days: daysSince(item.acquisition_date) }))
-      .filter((entry): entry is { item: BusinessInventoryItem; days: number } => entry.days != null)
-      .filter((entry) => entry.days >= 45)
-      .sort((a, b) => b.days - a.days);
+  const activePeriod = PERIODS.find((p) => p.key === period)!;
+  const stat = periodMetrics?.[period] ?? null;
 
-    const topInventory = [...activeItems]
-      .filter((item) => (item.current_market_value_cents ?? 0) > 0)
-      .sort(
-        (a, b) =>
-          (b.current_market_value_cents ?? 0) - (a.current_market_value_cents ?? 0)
-      )
-      .slice(0, 2);
-    const recentlyAdded = [...items]
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-      .slice(0, 5);
-
-    const bestOpportunity = [...unlistedItems]
-      .filter((item) => (item.current_market_value_cents ?? 0) > 0)
-      .sort((a, b) => {
-        const marginA = (a.current_market_value_cents ?? 0) - (a.cost_basis_total_cents ?? 0);
-        const marginB = (b.current_market_value_cents ?? 0) - (b.cost_basis_total_cents ?? 0);
-        if (marginB !== marginA) return marginB - marginA;
-        return (b.current_market_value_cents ?? 0) - (a.current_market_value_cents ?? 0);
-      })[0] ?? null;
-
-    const bestGradingCandidate = [...rawItems]
-      .filter((item) => (item.current_market_value_cents ?? 0) > 0)
-      .sort(
-        (a, b) =>
-          (b.current_market_value_cents ?? 0) - (a.current_market_value_cents ?? 0)
-      )[0] ?? null;
-
-    const idleCapitalCents = unlistedItems.reduce(
-      (sum, item) => sum + (item.current_market_value_cents ?? item.cost_basis_total_cents ?? 0),
-      0
-    );
-
-    const staleCapitalCents = staleListedItems.reduce(
-      (sum, entry) =>
-        sum + (entry.item.current_market_value_cents ?? entry.item.list_price_cents ?? 0),
-      0
-    );
-
-    return {
-      activeItems,
-      activeCount: activeItems.length,
-      listedItems,
-      listedCount: listedItems.length,
-      unlistedItems,
-      unlisted: unlistedItems,
-      rawItems,
-      aged: agedItems,
-      noCmv: noCmvItems,
-      staleListedItems,
-      topInventory,
-      topMovers: topInventory,
-      recentlyAdded,
-      bestOpportunity,
-      bestGradingCandidate,
-      idleCapitalCents,
-      staleCapitalCents,
-    };
-  }, [items]);
+  /* ── snapshot figures ─────────────────────────────────────────── */
+  const snapshot = useMemo(() => {
+    const revenue = stat?.revenue_cents ?? 0;
+    const profit = stat?.profit_cents ?? 0;
+    const cogs = stat?.cogs_cents ?? 0;
+    const count = stat?.sales_count ?? 0;
+    const avgSale = count > 0 ? Math.round(revenue / count) : 0;
+    // Margin = profit ÷ revenue; ROI = profit ÷ cost of goods.
+    const margin = revenue > 0 ? (profit / revenue) * 100 : null;
+    const roi = cogs > 0 ? (profit / cogs) * 100 : null;
+    return { revenue, profit, cogs, count, avgSale, margin, roi };
+  }, [stat]);
 
   const recentSalesList = useMemo(
     () =>
       [...recentSales]
-        .sort(
-          (a, b) =>
-            new Date(b.sold_at).getTime() - new Date(a.sold_at).getTime()
-        )
-        .slice(0, 2),
+        .sort((a, b) => new Date(b.sold_at).getTime() - new Date(a.sold_at).getTime())
+        .slice(0, 6),
     [recentSales]
   );
 
-  const recentSalesGrossCents = useMemo(
-    () => recentSales.reduce((sum, sale) => sum + (sale.gross_revenue_cents ?? 0), 0),
-    [recentSales]
-  );
-
-  const recentSalesProfitCents = useMemo(
-    () => recentSales.reduce((sum, sale) => sum + (sale.profit_cents ?? 0), 0),
-    [recentSales]
-  );
-
-  const topSalesChannel = useMemo(() => {
-    const totals = new Map<string, { count: number; revenue: number }>();
-    for (const sale of recentSales) {
-      const channel = sale.channel || "other";
-      const current = totals.get(channel) ?? { count: 0, revenue: 0 };
-      current.count += 1;
-      current.revenue += sale.gross_revenue_cents ?? 0;
-      totals.set(channel, current);
+  const sortedListings = useMemo(() => {
+    const copy = [...listings];
+    switch (listingSort) {
+      case "value_high":
+        copy.sort((a, b) => b.list_price_cents - a.list_price_cents);
+        break;
+      case "value_low":
+        copy.sort((a, b) => a.list_price_cents - b.list_price_cents);
+        break;
+      case "updated":
+        copy.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+        break;
+      case "margin":
+        copy.sort((a, b) => (b.spread_cents ?? -Infinity) - (a.spread_cents ?? -Infinity));
+        break;
+      case "newest":
+      default:
+        copy.sort((a, b) => new Date(b.listed_at).getTime() - new Date(a.listed_at).getTime());
+        break;
     }
+    return copy.slice(0, 5);
+  }, [listings, listingSort]);
 
-    return [...totals.entries()]
-      .map(([channel, stats]) => ({ channel, ...stats }))
-      .sort((a, b) => {
-        if (b.count !== a.count) return b.count - a.count;
-        return b.revenue - a.revenue;
-      })[0] ?? null;
-  }, [recentSales]);
+  const hasMarginData = listings.some((l) => l.spread_cents != null);
+  const storefrontHref = "/marketplace/profile?tab=selling";
 
-  const soldLast30Count = recentSales.length;
-  const activeCount = dashboardData.activeItems.length;
-  const listedCount = dashboardData.listedItems.length;
-  const unlistedCount = dashboardData.unlistedItems.length;
-  const itemsEmpty = items.length === 0;
-  const listRate = activeCount > 0 ? Math.round((listedCount / activeCount) * 100) : 0;
-  const sellThroughRate = listedCount > 0 ? Math.round((soldLast30Count / listedCount) * 100) : 0;
-
-  const signalCards = useMemo<SignalCard[]>(() => {
-    const opportunity = dashboardData.bestOpportunity;
-    const alertItem = dashboardData.staleListedItems[0]?.item ?? null;
-    const alertDays = dashboardData.staleListedItems[0]?.days ?? null;
-
-    const cards: SignalCard[] = [];
-
-    cards.push(
-      opportunity
-        ? {
-            label: "Opportunity",
-            title: `${clipTitle(opportunity.title, 58)} is ready to list`,
-            detail: `Est. MV ${fmt(opportunity.current_market_value_cents ?? 0)} vs cost ${fmt(
-              opportunity.cost_basis_total_cents ?? 0
-            )}`,
-            meta: `${gradeLabel(opportunity)} • ${daysSince(opportunity.acquisition_date) ?? 0}d held • ${unlistedCount} unlisted`,
-            ctaLabel: "Open Card",
-            ctaHref: `/card/${opportunity.id}?from=business`,
-            tone: "emerald",
-          }
-        : {
-            label: "Opportunity",
-            title: `${unlistedCount} cards are ready for pricing`,
-            detail: `${fmt(dashboardData.idleCapitalCents)} of inventory is not live yet`,
-            meta: activeCount > 0 ? `${listRate}% list rate across active inventory` : "Add inventory to start tracking opportunities",
-            ctaLabel: "Review Inventory",
-            ctaHref: "/business/ledger",
-            tone: "emerald",
-          }
-    );
-
-    cards.push(
-      topSalesChannel
-        ? {
-            label: "Trend",
-            title: `${CHANNEL_LABELS[topSalesChannel.channel] ?? topSalesChannel.channel} is leading your recent sell-through`,
-            detail: `${topSalesChannel.count} of the last ${Math.max(recentSales.length, 1)} sales • avg ${fmt(
-              Math.round(topSalesChannel.revenue / Math.max(topSalesChannel.count, 1))
-            )}`,
-            meta:
-              recentSalesList[0] != null
-                ? `${clipTitle(recentSalesList[0].inventory_item?.title, 40)} sold ${timeAgo(recentSalesList[0].sold_at)}`
-                : "Recent sales will surface channel momentum here",
-            ctaLabel: "Open Sales",
-            ctaHref: "/business/ledger?tab=sales",
-            tone: "amber",
-          }
-        : {
-            label: "Trend",
-            title: "No recent sales trend yet",
-            detail: "The last 30 days of sales will surface your strongest channel and average order value.",
-            meta: listedCount > 0 ? `${listedCount} active listings are ready to track` : "List cards to start collecting sell-through data",
-            ctaLabel: "View Ledger",
-            ctaHref: "/business/ledger",
-            tone: "amber",
-          }
-    );
-
-    cards.push(
-      alertItem && alertDays != null
-        ? {
-            label: "Alert",
-            title: `${dashboardData.staleListedItems.length} listings are stale`,
-            detail: `${fmt(dashboardData.staleCapitalCents)} is tied up in cards sitting 45+ days`,
-            meta: `${clipTitle(alertItem.title, 42)} has been live ${alertDays}d`,
-            ctaLabel: "Review Listings",
-            ctaHref: "/business/ledger",
-            tone: "red",
-          }
-        : {
-            label: "Alert",
-            title: unlistedCount > 0 ? `${unlistedCount} cards are still unlisted` : "No stale capital flagged today",
-            detail:
-              unlistedCount > 0
-                ? `${fmt(dashboardData.idleCapitalCents)} is still waiting on a listing decision`
-                : "Your active inventory does not show stale listed inventory right now.",
-            meta:
-              unlistedCount > 0
-                ? `${sellThroughRate}% 30d sell-through on currently listed cards`
-                : "Continue monitoring pricing and list velocity from the ledger",
-            ctaLabel: unlistedCount > 0 ? "Review Inventory" : "Open Ledger",
-            ctaHref: "/business/ledger",
-            tone: "red",
-          }
-    );
-
-    return cards;
-  }, [
-    activeCount,
-    dashboardData.bestOpportunity,
-    dashboardData.idleCapitalCents,
-    dashboardData.staleCapitalCents,
-    dashboardData.staleListedItems,
-    listedCount,
-    listRate,
-    recentSales.length,
-    recentSalesList,
-    sellThroughRate,
-    topSalesChannel,
-    unlistedCount,
-  ]);
-
-  const funnelTotal = Math.max(unlistedCount + listedCount + soldLast30Count, 1);
+  /* ── page shortcuts ───────────────────────────────────────────── */
+  const shortcuts: {
+    href: string;
+    eyebrow: string;
+    title: string;
+    detail: string;
+    icon: React.ReactNode;
+  }[] = [
+    {
+      href: "/business/financials",
+      eyebrow: "Financials",
+      title: "Performance & margins",
+      detail: "Revenue trends, capital allocation, and profit over time.",
+      icon: (
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 3v18h18M7 14l3-3 3 3 5-6" />
+      ),
+    },
+    {
+      href: "/business/grade-hub",
+      eyebrow: "Grading",
+      title: "Grade ROI simulator",
+      detail: "Submission simulations and projected profit before you send.",
+      icon: (
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+      ),
+    },
+    {
+      href: "/business/ledger",
+      eyebrow: "Ledger",
+      title: "Inventory & records",
+      detail: "Purchases, trades, sales records, and full inventory management.",
+      icon: (
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+      ),
+    },
+  ];
 
   return (
-    <div className="space-y-6">
-
-      {/* ── Page header ─────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-xl font-semibold text-[var(--biz-text)] leading-snug">
-            {businessName ?? "CardzCheck Business"}
+    <div className="desk pt-3 pb-14">
+      {/* ── Masthead ────────────────────────────────────────────── */}
+      <header className="desk-rise flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2.5">
+            <span className="desk-pulse" aria-hidden />
+            <Eyebrow>
+              {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+            </Eyebrow>
+          </div>
+          <h1 className="desk-display mt-2 truncate text-[34px] font-medium leading-[1.05] text-[var(--biz-text-strong)] sm:text-[42px]">
+            {businessName ?? "CardzCheck"}
           </h1>
-          <p className="text-xs text-[var(--muted)]">
-            {new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })} overview
-          </p>
+          <p className="mt-1.5 text-[13px] text-[var(--biz-muted)]">Business dashboard</p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-2">
           {onDashboardVoiceCommand && (
             <MicButton
-              label="Ask by Voice"
+              label="Ask by voice"
               title="Ask the Business Advisor by voice"
               size="sm"
               onResult={onDashboardVoiceCommand}
-              className="cc-btn-secondary whitespace-nowrap rounded-lg text-xs font-medium"
+              className="desk-btn"
             />
           )}
+
           {hasStorefronts ? (
             storefronts.length > 1 ? (
               <div className="relative">
                 <button
                   type="button"
                   onClick={() => setShowStorefrontDropdown((current) => !current)}
-                  className={secondaryActionClass}
+                  className="desk-btn"
                 >
                   Storefronts
-                  <svg className="h-3.5 w-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="h-3.5 w-3.5 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
                 </button>
                 {showStorefrontDropdown && (
                   <>
                     <div className="fixed inset-0 z-30" onClick={() => setShowStorefrontDropdown(false)} />
-                    <div className="absolute right-0 top-full mt-1 z-40 w-56 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-lg py-1">
+                    <div
+                      className="absolute right-0 top-full z-40 mt-2 w-60 overflow-hidden rounded-xl py-1"
+                      style={{ background: "var(--biz-surface-raised)", border: "1px solid var(--biz-border)", boxShadow: "var(--biz-shadow-md)" }}
+                    >
                       {storefronts.map((sf) => (
                         <a
                           key={sf.id}
                           href={sf.store_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex items-center gap-2 px-3 py-2 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                          className="flex items-center gap-2 px-3 py-2 text-xs text-[var(--biz-muted-strong)] transition-colors hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]"
                           onClick={() => setShowStorefrontDropdown(false)}
                         >
                           <span className="truncate font-medium">{sf.display_name}</span>
                           {sf.is_primary && (
-                            <span className="shrink-0 text-[9px] font-semibold text-[var(--biz-secondary)]">PRIMARY</span>
+                            <span className="shrink-0 text-[9px] font-semibold tracking-wide text-[var(--biz-muted-strong)]">PRIMARY</span>
                           )}
-                          <svg className="w-3 h-3 shrink-0 ml-auto text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="ml-auto h-3 w-3 shrink-0 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                           </svg>
                         </a>
                       ))}
-                      <div className="border-t border-gray-100 dark:border-gray-700 mt-1 pt-1">
-                        <Link
-                          href="/business/settings?section=storefronts"
-                          onClick={() => setShowStorefrontDropdown(false)}
-                          className="block border-t border-[var(--biz-border)] px-3 py-2 text-sm font-medium text-[var(--biz-primary)] transition-colors hover:bg-[var(--biz-surface-soft)]"
-                        >
-                          Manage storefronts
-                        </Link>
-                      </div>
+                      <Link
+                        href="/business/settings?section=storefronts"
+                        onClick={() => setShowStorefrontDropdown(false)}
+                        className="mt-1 block border-t border-[var(--biz-border)] px-3 py-2 text-xs font-medium text-[var(--biz-text)] transition-colors hover:bg-[var(--biz-hover)]"
+                      >
+                        Manage storefronts
+                      </Link>
                     </div>
                   </>
                 )}
               </div>
             ) : (
-              <button
-                onClick={() => setShowStorefrontDropdown(!showStorefrontDropdown)}
-                className="cc-btn-secondary whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium flex items-center gap-1.5"
+              <a
+                href={primaryStorefront!.store_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="desk-btn"
               >
-                {primaryStorefront.display_name}
-                <svg className="h-3.5 w-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5h5m0 0v5m0-5L10 14" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 9v10h10" />
+                {primaryStorefront!.display_name}
+                <svg className="h-3.5 w-3.5 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 4h6m0 0v6m0-6L10 14" />
                 </svg>
-              </button>
+              </a>
             )
-          ) : ebayStoreHref ? (
-            <a
-              href={ebayStoreHref}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="cc-btn-secondary whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium"
-            >
-              eBay Storefront
-            </a>
-          ) : (
-            <Link
-              href="/business/settings"
-              className="cc-btn-secondary whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium text-[var(--muted)]"
-            >
-              Add Storefront
-            </Link>
-          )}
-          <a
-            href="/api/business/export?type=inventory"
-            className="cc-btn-secondary whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium"
-          >
+          ) : null}
+
+          <a href="/api/business/export?type=inventory" className="desk-btn">
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
             Export
           </a>
-          <Link
-            href="/business/ledger"
-            className="cc-btn-primary flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Add Item
-          </Link>
         </div>
-      </div>
-
-      {/* ── KPI strip ───────────────────────────────────────────────────── */}
-      <BusinessMetrics
-        metrics={metrics}
-        loading={metricsLoading}
-        inventorySummary={inventorySummary}
-        totalItemCount={items.length}
-      />
+      </header>
 
       {needsMigration && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-[var(--biz-warning)]">
+        <div
+          className="mt-6 rounded-xl px-4 py-3 text-sm"
+          style={{ border: "1px solid var(--biz-warning-border)", background: "var(--biz-warning-soft)", color: "var(--biz-warning)" }}
+        >
           Database setup required.{" "}
-          <Link href="/business/ledger" className="underline hover:text-amber-700">
-            Go to Ledger
+          <Link href="/business/ledger" className="underline">
+            Go to the Ledger
           </Link>{" "}
           to complete setup.
         </div>
       )}
 
-      {/* ── Main data grid ────────────────────────────────────────────── */}
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+      {/* ── Financial snapshot hero ──────────────────────────────── */}
+      <section className="desk-rise mt-7" style={{ animationDelay: "60ms" }}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <Eyebrow>Financial snapshot</Eyebrow>
+            <span className="text-[11px] text-[var(--biz-faint)]">· {activePeriod.caption}</span>
+          </div>
 
-            {/* Top Movers */}
-            <Surface title="Top Movers · Est. Market Value">
-              {itemsEmpty ? (
-                <p className="text-[var(--biz-muted)] text-xs">
-                  No inventory yet.{" "}
-                  <Link href="/business/ledger" className="text-[var(--biz-primary)] hover:underline">
-                    Add items
-                  </Link>{" "}
-                  to see top performers.
-                </p>
-              ) : dashboardData.topMovers.length === 0 ? (
-                <p className="text-[var(--biz-muted)] text-xs">
-                  Add Est. Market Values to your items to see top movers.
-                </p>
+          {/* Period selector */}
+          <div
+            className="inline-flex items-center gap-0.5 rounded-full p-1"
+            style={{ background: "rgba(255,255,255,0.025)", border: "1px solid var(--biz-border-subtle)" }}
+            role="tablist"
+            aria-label="Financial period"
+          >
+            {PERIODS.map((p) => {
+              const active = p.key === period;
+              return (
+                <button
+                  key={p.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setPeriod(p.key)}
+                  className="rounded-full px-3.5 py-1.5 text-[11.5px] font-medium transition-colors"
+                  style={{
+                    color: active ? "var(--biz-primary-foreground)" : "var(--biz-muted)",
+                    background: active ? "var(--biz-primary)" : "transparent",
+                    boxShadow: active ? "0 6px 16px rgba(0,0,0,0.35)" : undefined,
+                  }}
+                >
+                  {p.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="desk-rule mt-3" />
+
+        {/* Hero figures: revenue + profit dominate, secondaries underneath */}
+        <div className="mt-7 grid grid-cols-1 gap-x-10 gap-y-9 lg:grid-cols-[1.15fr_1px_1fr]">
+          {/* Revenue + profit */}
+          <div className="grid grid-cols-2 gap-x-8">
+            <div>
+              <Eyebrow>Revenue</Eyebrow>
+              {periodMetricsLoading ? (
+                <div className="mt-3 h-12 w-32 animate-pulse rounded-lg" style={{ background: "var(--biz-skeleton)" }} />
               ) : (
-                <ul className="space-y-3">
-                  {dashboardData.topMovers.map((item) => (
-                    <li key={item.id} className="flex items-center justify-between gap-3">
-                      <Link
-                        href={`/card/${item.id}?from=business`}
-                        className="truncate text-xs text-[var(--biz-text)] hover:underline transition-colors"
-                        title={item.title}
-                      >
-                        {clipTitle(item.title, 42)}
-                      </Link>
-                      <div className="flex shrink-0 items-center gap-1.5">
-                        {onItemVoiceCommand && (
-                          <MicButton
-                            size="sm"
-                            title={`Voice actions for ${item.title || "inventory item"}`}
-                            onResult={(text) => onItemVoiceCommand(item, text)}
-                            className="bg-[var(--biz-surface-soft)] text-[var(--biz-muted)] hover:bg-[var(--biz-hover)]"
-                          />
-                        )}
-                        <span className="text-xs font-semibold tabular-nums text-[var(--biz-primary)]">
-                          {fmt(item.current_market_value_cents!)}
-                        </span>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+                <p className="desk-figure mt-2.5 text-[46px] leading-none text-[var(--biz-text-strong)] sm:text-[52px]">
+                  {fmtCompact(snapshot.revenue)}
+                </p>
               )}
-            </Surface>
-
-            {/* Inventory Funnel + Risk Signals combined */}
-            <Surface title="Inventory Status">
-              {itemsEmpty ? (
-                <p className="text-[var(--biz-muted)] text-xs">No inventory data yet.</p>
+              <p className="mt-2.5 text-[11px] text-[var(--biz-faint)]">
+                {metrics ? `${fmt(metrics.revenueYtd)} year to date` : activePeriod.caption}
+              </p>
+            </div>
+            <div>
+              <Eyebrow>Profit</Eyebrow>
+              {periodMetricsLoading ? (
+                <div className="mt-3 h-12 w-32 animate-pulse rounded-lg" style={{ background: "var(--biz-skeleton)" }} />
               ) : (
-                <>
-                  {/* Funnel numbers */}
-                  <div className="grid grid-cols-3 gap-3 mb-5">
-                    <div className="text-center rounded-lg border border-[var(--biz-border)] bg-[var(--biz-bg)] py-3 px-2">
-                      <p className="text-xl font-semibold tabular-nums text-[var(--biz-warning)]">
-                        {dashboardData.unlisted.length}
-                      </p>
-                      <p className="mt-1 text-[10px] text-[var(--biz-muted)]">Unlisted</p>
-                    </div>
-                    <div className="text-center rounded-lg border border-[var(--biz-border)] bg-[var(--biz-bg)] py-3 px-2">
-                      <p className="text-xl font-semibold tabular-nums text-[var(--biz-text)]">
-                        {dashboardData.listedCount}
-                      </p>
-                      <p className="mt-1 text-[10px] text-[var(--biz-muted)]">Listed</p>
-                    </div>
-                    <div className="text-center rounded-lg border border-[var(--biz-border)] bg-[var(--biz-bg)] py-3 px-2">
-                      <p className="text-xl font-semibold tabular-nums text-[var(--biz-primary)]">
-                        {recentSalesLoading ? "—" : soldLast30Count}
-                      </p>
-                      <p className="mt-1 text-[10px] text-[var(--biz-muted)]">Sold (30d)</p>
-                    </div>
-                  </div>
-
-                  {/* Risk signals */}
-                  <div
-                    style={{ borderTop: "1px solid var(--biz-border)" }}
-                    className="pt-4 space-y-2.5"
-                  >
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--biz-muted)] mb-3">
-                      Risk Signals
-                    </p>
-                    {[
-                      {
-                        label: "Unlisted items",
-                        count: dashboardData.unlisted.length,
-                        color: dashboardData.unlisted.length > 0 ? "text-[var(--biz-warning)]" : "text-[var(--biz-muted)]",
-                      },
-                      {
-                        label: "Items held > 60 days",
-                        count: dashboardData.aged.length,
-                        color: dashboardData.aged.length > 0 ? "text-red-500" : "text-[var(--biz-muted)]",
-                      },
-                      {
-                        label: "Missing Est. Market Value",
-                        count: dashboardData.noCmv.length,
-                        color: dashboardData.noCmv.length > 0 ? "text-[var(--biz-text)]" : "text-[var(--biz-muted)]",
-                      },
-                    ].map(({ label, count, color }) => (
-                      <div key={label} className="flex items-center justify-between">
-                        <span className="text-xs text-[var(--biz-muted)]">{label}</span>
-                        <span className={`text-xs font-semibold tabular-nums ${color}`}>{count}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {(dashboardData.unlisted.length > 0 || dashboardData.aged.length > 0) && (
-                    <Link
-                      href="/business/ledger"
-                      className="mt-4 inline-block text-xs text-[var(--biz-primary)] hover:underline transition-colors"
-                    >
-                      Review in Ledger →
-                    </Link>
-                  )}
-
-                  <p
-                    style={{ borderTop: "1px solid var(--biz-border)" }}
-                    className="mt-4 pt-3 text-[10px] text-[var(--biz-muted)]"
-                  >
-                    {dashboardData.activeCount} active item{dashboardData.activeCount !== 1 ? "s" : ""} in inventory
-                  </p>
-                </>
+                <p
+                  className="desk-figure mt-2.5 text-[46px] leading-none sm:text-[52px]"
+                  style={{ color: snapshot.profit >= 0 ? "var(--biz-profit)" : "var(--desk-red)" }}
+                >
+                  {snapshot.profit >= 0 ? "" : "−"}
+                  {fmtCompact(Math.abs(snapshot.profit))}
+                </p>
               )}
-            </Surface>
-
-            {/* Quick Actions */}
-            <div className="flex flex-col gap-5">
-              <Surface title="Quick Actions">
-                <div className="grid grid-cols-2 gap-2">
-                  <Link
-                    href="/business/ledger"
-                    className="cc-btn-primary flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-xs font-medium"
-                  >
-                    <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                    Add Inventory
-                  </Link>
-                  <a
-                    href="/api/business/export?type=inventory"
-                    className="cc-btn-secondary flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-xs font-medium"
-                  >
-                    <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                    </svg>
-                    Export
-                  </a>
-                  {primaryStorefront ? (
-                    <a
-                      href={primaryStorefront.store_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="cc-btn-secondary flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-xs font-medium"
-                    >
-                      <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                      </svg>
-                      {primaryStorefront.display_name}
-                    </a>
-                  ) : ebayStoreHref ? (
-                    <a
-                      href={ebayStoreHref}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="cc-btn-secondary flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-xs font-medium"
-                    >
-                      <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                      </svg>
-                      eBay Store
-                    </a>
-                  ) : (
-                    <Link
-                      href="/business/settings"
-                      className="cc-btn-secondary flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-xs font-medium text-[var(--muted)]"
-                    >
-                      <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                      </svg>
-                      Add Storefront
-                    </Link>
-                  )}
-                  <Link
-                    href="/business/grade-probability"
-                    className="cc-btn-secondary flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-xs font-medium text-[var(--biz-warning)]"
-                  >
-                    <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
-                    </svg>
-                    Grade Probability
-                  </Link>
-                </div>
-              </Surface>
-
-              {/* Grade callout */}
-              <div
-                style={{
-                  border: "1px solid var(--biz-border)",
-                  borderLeft: "3px solid var(--biz-accent-amber)",
-                }}
-                className="rounded-xl bg-[var(--biz-surface)] p-4 flex items-start gap-3"
-              >
-                <div className="shrink-0 w-7 h-7 rounded-md bg-amber-500/15 flex items-center justify-center mt-0.5">
-                  <svg className="w-3.5 h-3.5 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold text-[var(--biz-text)]">
-                    Grade before you sell
-                  </p>
-                  <p className="mt-1 text-[11px] text-[var(--biz-muted)] leading-snug">
-                    Estimate grade probability and assess whether submitting to PSA/BGS is worth it.
-                  </p>
-                  <Link
-                    href="/business/grade-probability"
-                    className="mt-2.5 inline-block text-[11px] font-medium text-[var(--biz-warning)] hover:underline"
-                  >
-                    Try Grade Probability →
-                  </Link>
-                </div>
-              </div>
+              <p className="mt-2.5 text-[11px] text-[var(--biz-faint)]">
+                {snapshot.margin != null ? `${snapshot.margin.toFixed(1)}% margin` : "No sales this period"}
+              </p>
             </div>
           </div>
 
-          {/* ── Recent Activity ──────────────────────────────────────────── */}
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-            <Surface title="Recently Added">
-              {itemsEmpty ? (
-                <p className="text-[var(--biz-muted)] text-xs">
-                  No items yet.{" "}
-                  <Link href="/business/ledger" className="text-[var(--biz-primary)] hover:underline">
-                    Add your first item
-                  </Link>
-                  .
-                </p>
-              ) : (
-                <ul className="space-y-2.5">
-                  {dashboardData.recentlyAdded.map((item) => (
-                    <li key={item.id} className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span
-                          className={`shrink-0 w-1.5 h-1.5 rounded-full ${
-	                            item.status === "listed" || item.status === "pending_sale"
-	                              ? "bg-[var(--biz-secondary)]"
-	                              : item.status === "sold"
-	                              ? "bg-[var(--biz-primary)]"
-                              : "bg-slate-300"
-                          }`}
-                        />
-                        <Link
-                          href={`/card/${item.id}?from=business`}
-                          className="truncate text-xs text-[var(--biz-text)] hover:underline transition-colors"
-                          title={item.title}
-                        >
-                          {item.title}
-                        </Link>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-1.5">
-                        {onItemVoiceCommand && (
-                          <MicButton
-                            size="sm"
-                            title={`Voice actions for ${item.title || "inventory item"}`}
-                            onResult={(text) => onItemVoiceCommand(item, text)}
-                            className="bg-[var(--biz-surface-soft)] text-[var(--biz-muted)] hover:bg-[var(--biz-hover)]"
-                          />
-                        )}
-                        <span className="text-[10px] text-[var(--biz-muted)] tabular-nums">
-                          {fmtDate(item.created_at)}
-                        </span>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {items.length > 8 && (
-                <Link
-                  href="/business/ledger"
-                  className="mt-4 inline-block text-xs text-[var(--biz-primary)] hover:underline transition-colors"
-                >
-                  View all {items.length} items →
-                </Link>
-              )}
-            </Surface>
+          <div className="hidden lg:block" style={{ background: "var(--biz-border-subtle)" }} aria-hidden />
 
-            <Surface title="Recent Sales">
-              {recentSalesLoading ? (
-                <div className="space-y-2.5">
-                  {[...Array(4)].map((_, i) => (
-                    <SkeletonLine key={i} w={i % 2 === 0 ? "w-full" : "w-3/4"} />
-                  ))}
-                </div>
-              ) : recentSales.length === 0 ? (
-                <p className="text-[var(--biz-muted)] text-xs">
-                  No sales recorded yet.{" "}
-                  <Link
-                    href="/business/ledger?tab=sales"
-                    className="text-[var(--biz-primary)] hover:underline"
-                  >
-                    Go to Sales tab
-                  </Link>{" "}
-                  to record one.
-                </p>
-              ) : (
-                <ul className="space-y-3">
-                  {recentSales.map((sale) => (
-                    <li key={sale.id} className="flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <p
-                          className="truncate text-xs text-[var(--biz-text)]"
-                          title={sale.inventory_item?.title ?? "Sale"}
-                        >
-                          {sale.inventory_item?.title ?? "Sale"}
-                        </p>
-                        <p className="text-[10px] text-[var(--biz-muted)]">
-                          {CHANNEL_LABELS[sale.channel] ?? sale.channel} · {fmtDate(sale.sold_at)}
-                        </p>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className="text-xs font-semibold tabular-nums text-[var(--biz-primary)]">
-                          {fmt(sale.gross_revenue_cents)}
-                        </p>
-                        <p
-                          className={`text-[10px] tabular-nums ${
-                            sale.profit_cents >= 0 ? "text-[var(--biz-muted)]" : "text-red-500"
-                          }`}
-                        >
-                          {sale.profit_cents >= 0 ? "+" : ""}
-                          {fmt(sale.profit_cents)} profit
-                        </p>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {recentSales.length > 0 && (
-                <Link
-                  href="/business/ledger?tab=sales"
-                  className="mt-4 inline-block text-xs text-[var(--biz-primary)] hover:underline transition-colors"
-                >
-                  View all sales →
-                </Link>
-              )}
-            </Surface>
+          {/* Secondary metrics */}
+          <div className="grid grid-cols-2 gap-x-8 gap-y-6 sm:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4">
+            {[
+              { label: "Sales", value: periodMetricsLoading ? "—" : String(snapshot.count) },
+              { label: "Avg sale", value: periodMetricsLoading ? "—" : snapshot.count > 0 ? fmt(snapshot.avgSale) : "—" },
+              {
+                label: "ROI",
+                value: periodMetricsLoading ? "—" : snapshot.roi != null ? `${snapshot.roi.toFixed(0)}%` : "—",
+              },
+              { label: "Cost of goods", value: periodMetricsLoading ? "—" : fmtCompact(snapshot.cogs) },
+            ].map((cell) => (
+              <div key={cell.label}>
+                <Eyebrow>{cell.label}</Eyebrow>
+                <p className="desk-figure mt-2 text-[26px] leading-none text-[var(--biz-text)]">{cell.value}</p>
+              </div>
+            ))}
           </div>
+        </div>
+      </section>
+
+      {/* ── Quick actions ────────────────────────────────────────── */}
+      <section className="desk-rise mt-9" style={{ animationDelay: "120ms" }}>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          {/* Record Sale — prominent */}
+          <button
+            type="button"
+            onClick={onRecordSale}
+            className="desk-action desk-action--primary group col-span-1 sm:col-span-1"
+          >
+            <span className="desk-action-icon" style={{ background: "rgba(20,16,7,0.16)" }}>
+              <svg className="h-[18px] w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+              </svg>
+            </span>
+            <span className="desk-action-label">Record sale</span>
+          </button>
+
+          {/* Record Trade — prominent */}
+          <button
+            type="button"
+            onClick={onRecordTrade}
+            className="desk-action desk-action--primary group col-span-1 sm:col-span-1"
+          >
+            <span className="desk-action-icon" style={{ background: "rgba(20,16,7,0.16)" }}>
+              <svg className="h-[18px] w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+              </svg>
+            </span>
+            <span className="desk-action-label">Record trade</span>
+          </button>
+
+          {/* Secondary nav actions */}
+          {[
+            {
+              href: "/business/ledger",
+              label: "Open ledger",
+              icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.9} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />,
+            },
+            {
+              href: "/business/financials",
+              label: "Financials",
+              icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.9} d="M3 3v18h18M7 14l3-3 3 3 5-6" />,
+            },
+            {
+              href: "/business/grade-hub",
+              label: "Grading",
+              icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.9} d="M9 12l2 2 4-4m-6.165-7.303a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />,
+            },
+          ].map((action) => (
+            <Link key={action.href} href={action.href} className="desk-action group">
+              <span className="desk-action-icon">
+                <svg className="h-[18px] w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  {action.icon}
+                </svg>
+              </span>
+              <span className="desk-action-label">{action.label}</span>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      {/* ── Recent sales + Marketplace preview ───────────────────── */}
+      <section className="desk-rise mt-6 grid grid-cols-1 gap-5 lg:grid-cols-2" style={{ animationDelay: "180ms" }}>
+        {/* Recent sales */}
+        <div className="desk-panel p-6">
+          <div className="flex items-baseline justify-between">
+            <Eyebrow>Recent sales</Eyebrow>
+            {recentSales.length > 0 && (
+              <Link href="/business/sales" className="text-[11px] font-medium text-[var(--biz-muted-strong)] transition-colors hover:text-[var(--biz-text)] hover:underline">
+                View all sales →
+              </Link>
+            )}
+          </div>
+          {recentSalesLoading ? (
+            <div className="mt-5 space-y-3.5">
+              {[...Array(4)].map((_, i) => (
+                <SkeletonLine key={i} w={i % 2 === 0 ? "w-full" : "w-3/4"} />
+              ))}
+            </div>
+          ) : recentSales.length === 0 ? (
+            <div className="mt-5">
+              <p className="text-xs text-[var(--biz-muted)]">No sales recorded yet.</p>
+              <button
+                type="button"
+                onClick={onRecordSale}
+                className="mt-2 text-xs font-medium text-[var(--biz-muted-strong)] transition-colors hover:text-[var(--biz-text)] hover:underline"
+              >
+                Record your first sale →
+              </button>
+            </div>
+          ) : (
+            <ul className="mt-4 space-y-0.5">
+              {recentSalesList.map((sale) => (
+                <li key={sale.id} className="desk-row flex items-center justify-between gap-3 px-2 py-2.5">
+                  <div className="min-w-0">
+                    <p className="truncate text-[13px] text-[var(--biz-text)]" title={sale.inventory_item?.title ?? "Sale"}>
+                      {clipTitle(sale.inventory_item?.title, 42)}
+                    </p>
+                    <p className="mt-0.5 text-[10.5px] text-[var(--biz-faint)]">
+                      {CHANNEL_LABELS[sale.channel] ?? sale.channel} · {fmtDate(sale.sold_at)}
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="desk-figure text-[15px] text-[var(--biz-text-strong)]">
+                      {fmt(sale.gross_revenue_cents)}
+                    </p>
+                    <p
+                      className="text-[10.5px] tabular-nums"
+                      style={{ color: sale.profit_cents >= 0 ? "var(--biz-profit)" : "var(--desk-red)" }}
+                    >
+                      {sale.profit_cents >= 0 ? "+" : "−"}
+                      {fmt(Math.abs(sale.profit_cents))} profit
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {/* Marketplace listings preview */}
+        <div className="desk-panel p-6">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <Eyebrow>Marketplace listings</Eyebrow>
+            <Link href={storefrontHref} className="text-[11px] font-medium text-[var(--biz-muted-strong)] transition-colors hover:text-[var(--biz-text)] hover:underline">
+              Open storefront →
+            </Link>
+          </div>
+
+          {/* Sort control */}
+          {listings.length > 0 && (
+            <div className="mt-3 flex flex-wrap items-center gap-1.5">
+              {LISTING_SORTS.filter((s) => s.key !== "margin" || hasMarginData).map((s) => {
+                const active = s.key === listingSort;
+                return (
+                  <button
+                    key={s.key}
+                    type="button"
+                    onClick={() => setListingSort(s.key)}
+                    className="rounded-full px-2.5 py-1 text-[10.5px] font-medium transition-colors"
+                    style={{
+                      color: active ? "var(--biz-text)" : "var(--biz-faint)",
+                      background: active ? "rgba(255,255,255,0.06)" : "transparent",
+                      border: active ? "1px solid var(--biz-border-strong)" : "1px solid transparent",
+                    }}
+                  >
+                    {s.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {listingsLoading ? (
+            <div className="mt-5 space-y-3.5">
+              {[...Array(4)].map((_, i) => (
+                <SkeletonLine key={i} w={i % 2 === 0 ? "w-full" : "w-2/3"} />
+              ))}
+            </div>
+          ) : listings.length === 0 ? (
+            <div className="mt-5">
+              <p className="text-xs text-[var(--biz-muted)]">No active marketplace listings.</p>
+              <Link href="/business/ledger" className="mt-2 inline-block text-xs font-medium text-[var(--biz-muted-strong)] transition-colors hover:text-[var(--biz-text)] hover:underline">
+                List a card from the ledger →
+              </Link>
+            </div>
+          ) : (
+            <ul className="mt-4 space-y-0.5">
+              {sortedListings.map((listing) => (
+                <li key={listing.id}>
+                  <Link
+                    href={`/marketplace/listing/${listing.id}`}
+                    className="desk-row flex items-center justify-between gap-3 px-2 py-2.5"
+                  >
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <span
+                        className="h-1.5 w-1.5 shrink-0 rounded-full"
+                        style={{ background: listing.status === "price_reduced" ? "var(--biz-warning)" : "var(--biz-profit)" }}
+                      />
+                      <div className="min-w-0">
+                        <p className="truncate text-[13px] text-[var(--biz-text)]" title={listing.title}>
+                          {clipTitle(listing.title, 40)}
+                        </p>
+                        <p className="mt-0.5 text-[10.5px] text-[var(--biz-faint)]">
+                          {listing.status === "price_reduced" ? "Price reduced" : "Active"}
+                          {listing.spread_cents != null && (
+                            <>
+                              {" · "}
+                              <span style={{ color: listing.spread_cents >= 0 ? "var(--biz-profit)" : "var(--desk-red)" }}>
+                                {listing.spread_cents >= 0 ? "+" : "−"}
+                                {fmt(Math.abs(listing.spread_cents))} vs CMV
+                              </span>
+                            </>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="desk-figure shrink-0 text-[15px] text-[var(--biz-text-strong)]">
+                      {fmt(listing.list_price_cents)}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </section>
+
+      {/* ── Page shortcuts ───────────────────────────────────────── */}
+      <section className="desk-rise mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3" style={{ animationDelay: "240ms" }}>
+        {shortcuts.map((s) => (
+          <Link
+            key={s.href}
+            href={s.href}
+            className="desk-panel group flex flex-col gap-3 p-5 transition-transform hover:-translate-y-0.5"
+          >
+            <div className="flex items-center justify-between">
+              <span
+                className="flex h-9 w-9 items-center justify-center rounded-xl"
+                style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--biz-border)" }}
+              >
+                <svg className="h-[18px] w-[18px]" style={{ color: "var(--biz-muted-strong)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  {s.icon}
+                </svg>
+              </span>
+              <span className="text-[var(--biz-faint)] transition-transform group-hover:translate-x-0.5">→</span>
+            </div>
+            <div>
+              <Eyebrow>{s.eyebrow}</Eyebrow>
+              <p className="desk-display mt-1 text-[16px] leading-tight text-[var(--biz-text-strong)]">{s.title}</p>
+              <p className="mt-1.5 text-[11.5px] leading-snug text-[var(--biz-muted)]">{s.detail}</p>
+            </div>
+          </Link>
+        ))}
+      </section>
+
+      {/* eBay — de-emphasized, treated as one external channel */}
+      {ebayStoreHref && (
+        <div className="desk-rise mt-6 flex justify-center" style={{ animationDelay: "300ms" }}>
+          <a
+            href={ebayStoreHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-[11px] text-[var(--biz-faint)] transition-colors hover:text-[var(--biz-muted)]"
+          >
+            View eBay storefront
+            <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+          </a>
+        </div>
+      )}
     </div>
   );
 }
