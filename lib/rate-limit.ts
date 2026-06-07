@@ -51,6 +51,10 @@ export const ENDPOINT_RATE_LIMITS = {
   "/api/grade-estimate/start":  { requests: 10,  window: "1 m" },
   "/api/analyst":               { requests: 20,  window: "1 m" },
   "/api/business/consultant":   { requests: 20,  window: "1 m" },
+  // Expensive resolvers that fan out to external eBay scraping / Browse API
+  "/api/grading/pre-submission-analysis": { requests: 10, window: "1 m" },
+  "/api/grade-estimator/value":           { requests: 20, window: "1 m" },
+  "/api/cards/search":                    { requests: 30, window: "1 m" },
 } as const satisfies Record<string, { requests: number; window: string }>;
 
 export type RateLimitedEndpoint = keyof typeof ENDPOINT_RATE_LIMITS;

@@ -46,6 +46,9 @@ const INMEMORY_RATE_LIMITS: Record<string, InMemoryConfig> = {
   "/api/grade-estimate/start":{ limit: 10, windowMs: 60_000 },
   "/api/analyst":             { limit: 20, windowMs: 60_000 },
   "/api/business/consultant": { limit: 20, windowMs: 60_000 },
+  "/api/grading/pre-submission-analysis": { limit: 10, windowMs: 60_000 },
+  "/api/grade-estimator/value":           { limit: 20, windowMs: 60_000 },
+  "/api/cards/search":                    { limit: 30, windowMs: 60_000 },
 };
 
 // Sliding-window store: "endpoint:ip:userId" → sorted array of request timestamps

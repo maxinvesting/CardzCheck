@@ -40,6 +40,19 @@ type ResolverSources = {
 };
 
 export async function POST(request: NextRequest) {
+  // Require a signed-in user outside test mode — this resolver can fan out to
+  // the external eBay Browse API, so leaving it open invites abuse. The
+  // test-mode mock path below stays usable for local development.
+  if (!isTestMode()) {
+    const auth = await createClient();
+    const {
+      data: { user },
+    } = await auth.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    }
+  }
+
   let payload: unknown;
   try {
     payload = await request.json();

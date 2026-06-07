@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { scrapeEbaySoldListings } from "@/lib/ebay/scraper";
 import { buildCompsLinks } from "@/lib/ebay/comps-url";
+import { createClient } from "@/lib/supabase/server";
 import type { GradeEstimate } from "@/types";
 import {
   breakEvenGrade,
@@ -91,6 +92,16 @@ async function fetchGradeCompPrice(
 
 export async function POST(request: NextRequest) {
   try {
+    // Require a signed-in user — this endpoint triggers multiple eBay sold-comp
+    // scrapes, so leaving it open invites denial-of-wallet abuse.
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    }
+
     const body = (await request.json()) as RequestBody;
     if (!body?.card?.player_name) {
       return NextResponse.json({ error: "Missing card identity" }, { status: 400 });

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import type { GradeProbabilities, WorthGradingResult } from "@/types";
 import { fetchGradeCmv, computeWorthGrading, normalizeProbabilities } from "@/lib/grade-estimator/value";
 import { DEFAULT_COMPS_WINDOW_DAYS } from "@/lib/grade-estimator/constants";
+import { createClient } from "@/lib/supabase/server";
 
 type GradeEstimatorValueRequest = {
   card: {
@@ -20,6 +21,16 @@ type GradeEstimatorValueRequest = {
 
 export async function POST(request: NextRequest) {
   try {
+    // Require a signed-in user — this endpoint fans out to external eBay CMV
+    // lookups, so leaving it open invites denial-of-wallet abuse.
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    }
+
     const body = (await request.json()) as GradeEstimatorValueRequest;
     if (!body?.card?.player_name || !body.gradeProbabilities) {
       return NextResponse.json(
