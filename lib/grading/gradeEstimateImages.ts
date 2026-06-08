@@ -10,6 +10,7 @@ import {
   isGradeScanPhotoKind,
   normalizeGradeScanPhotos,
 } from "@/lib/grading/scanPhotos";
+import { isAllowedImageUrl } from "@/lib/images/imageUrlAllowlist";
 import type { GradeScanPhoto, GradeScanPhotoKind } from "@/types";
 
 export const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
@@ -57,15 +58,13 @@ function validateBase64Image(dataUrl: string): {
 }
 
 function validateImageUrl(url: string): { valid: boolean; error?: string } {
-  if (!url.startsWith("https://")) {
-    return { valid: false, error: "Image URL must use HTTPS" };
+  // SSRF guard: only fetch from our own storage / trusted CDNs. Image URLs come
+  // from the client, so an https-only check is not enough — it would still allow
+  // internal https services. Require an allowlisted host.
+  if (!isAllowedImageUrl(url)) {
+    return { valid: false, error: "Image URL host is not allowed" };
   }
-  try {
-    new URL(url);
-    return { valid: true };
-  } catch {
-    return { valid: false, error: "Invalid URL format" };
-  }
+  return { valid: true };
 }
 
 function validateFetchedImage(
@@ -225,7 +224,7 @@ export async function resolveGradeEstimateImages(
           throw new Error(urlValidation.error || "Invalid image URL");
         }
 
-        const imageResponse = await fetch(imageUrl);
+        const imageResponse = await fetch(imageUrl, { redirect: "error" });
         if (!imageResponse.ok) {
           throw new Error("Image URL is not accessible");
         }

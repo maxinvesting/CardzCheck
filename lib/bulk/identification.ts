@@ -13,6 +13,7 @@ import {
   extractCardIdentityDetailed,
   type ImageInput,
 } from "@/lib/card-identity";
+import { isAllowedImageUrl } from "@/lib/images/imageUrlAllowlist";
 import { LOW_CONFIDENCE_THRESHOLD } from "./config";
 import type { IdentificationInput, IdentificationResult } from "@/types/bulk";
 
@@ -24,8 +25,18 @@ const MAX_DOWNLOAD_BYTES = 4 * 1024 * 1024; // 4 MB
 // ----------------------------------------------------------------
 
 async function fetchImageAsInput(url: string): Promise<ImageInput | null> {
+  // SSRF guard: only fetch images from our own storage / trusted CDNs. The URL
+  // is client-supplied (bulk items accept a primary/secondary image URL), so an
+  // unguarded fetch could be aimed at internal services or cloud metadata.
+  if (!isAllowedImageUrl(url)) {
+    console.warn(`[bulk/identification] Rejected non-allowlisted image URL: ${url}`);
+    return null;
+  }
   try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(10_000),
+      redirect: "error",
+    });
     if (!response.ok) {
       console.warn(`[bulk/identification] Failed to fetch image: ${url} (${response.status})`);
       return null;

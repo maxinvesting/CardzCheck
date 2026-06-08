@@ -265,7 +265,7 @@ async function resolveImageInput(imageUrl: string): Promise<ImageInput> {
 
   let headResponse: Response;
   try {
-    headResponse = await fetch(parsedUrl.toString(), { method: "HEAD" });
+    headResponse = await fetch(parsedUrl.toString(), { method: "HEAD", redirect: "error" });
   } catch {
     throw new HttpError("Unable to fetch image metadata", 400);
   }
@@ -295,7 +295,7 @@ async function resolveImageInput(imageUrl: string): Promise<ImageInput> {
     throw new HttpError(formatSizeLimitError(headContentLength), 413);
   }
 
-  const imageResponse = await fetch(parsedUrl.toString());
+  const imageResponse = await fetch(parsedUrl.toString(), { redirect: "error" });
   if (!imageResponse.ok) {
     throw new HttpError("Failed to download image", 400);
   }
