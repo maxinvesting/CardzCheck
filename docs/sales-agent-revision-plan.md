@@ -21,6 +21,15 @@
 > `eslint-disable` with a ref-to-latest pattern. The eBay Trading-API XML-parser hardening
 > noted below stays deferred because eBay messaging is gated off (Option B) — revisit only if
 > eBay is ever re-enabled.
+>
+> **Relocation (decision: move + keep business-only):** the seller inbox moved out of the
+> business-workspace Ledger group into the marketplace seller area at
+> `/marketplace/sell/messages`, alongside Listings and Orders (new SectionTabs group).
+> `/business/messages` and `/business/sales-agent` redirect there. The deal-desk's AI tooling
+> stays paid-business-only — the page shell is public but `/api/business/messages` enforces
+> `requireBusinessOwnerContext` and non-business users see `BusinessPaywall`. The Sidebar unread
+> badge moved from the Ledger item to the Marketplace item. Also removed the eBay-keyed
+> empty-state retry that surfaced a misleading "Background sync retried" notice.
 
 ---
 
