@@ -22,14 +22,20 @@
 > noted below stays deferred because eBay messaging is gated off (Option B) — revisit only if
 > eBay is ever re-enabled.
 >
-> **Relocation (decision: move + keep business-only):** the seller inbox moved out of the
-> business-workspace Ledger group into the marketplace seller area at
-> `/marketplace/sell/messages`, alongside Listings and Orders (new SectionTabs group).
-> `/business/messages` and `/business/sales-agent` redirect there. The deal-desk's AI tooling
-> stays paid-business-only — the page shell is public but `/api/business/messages` enforces
-> `requireBusinessOwnerContext` and non-business users see `BusinessPaywall`. The Sidebar unread
-> badge moved from the Ledger item to the Marketplace item. Also removed the eBay-keyed
-> empty-state retry that surfaced a misleading "Background sync retried" notice.
+> **Relocation:** the seller inbox moved out of the business-workspace Ledger group into the
+> marketplace seller area at `/marketplace/sell/messages`, alongside Listings and Orders (new
+> SectionTabs group). `/business/messages` and `/business/sales-agent` redirect there. The
+> Sidebar unread badge moved from the Ledger item to the Marketplace item. Also removed the
+> eBay-keyed empty-state retry that surfaced a misleading "Background sync retried" notice.
+>
+> **Freemium (decision: free inbox, paid AI):** resolved the "selling is open but messaging is
+> paywalled" inconsistency. Any authenticated marketplace seller can read/reply to buyers —
+> `GET /api/business/messages` (returns `isBusiness`) and `GET/POST
+> /api/business/messages/[threadId]` are auth-only, RLS-scoped to the participant. The AI
+> deal-desk stays business-gated: `ai-reply` keeps `requireBusinessOwnerContext`, and the UI
+> hides auto-draft, NegotiationPanel, Re-draft, "Other replies", and the batch Review button for
+> free sellers, replacing them with an "upgrade to Business" nudge. Free sellers keep the
+> compose box + Send. `hasBusinessOwnerAccess` (non-throwing) added to `lib/business/context`.
 
 ---
 
