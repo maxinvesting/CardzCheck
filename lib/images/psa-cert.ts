@@ -26,7 +26,14 @@ type PsaCertCacheRow = {
 
 const PSA_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const PSA_ERROR_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
-const PSA_CERT_URL_BASE = "https://api.psacard.com/publicapi/cert/GetByCertNumber";
+/**
+ * The PSA Public API endpoint that returns the actual scans PSA captured at
+ * grading. `GetByCertNumber` (used elsewhere for metadata) does NOT include
+ * images — this is the only endpoint that does. Returns an array of
+ * `{ IsFrontImage: boolean, ImageURL: string }` (CloudFront URLs).
+ */
+const PSA_CERT_IMAGES_URL_BASE =
+  "https://api.psacard.com/publicapi/cert/GetImagesByCertNumber";
 
 /** Minimum digit length for PSA cert lookup (matches app/api/psa/lookup). */
 const MIN_CERT_DIGITS = 5;
@@ -41,79 +48,69 @@ export function normalizePsaCertNumber(value: string | null | undefined): string
   return digits.length >= MIN_CERT_DIGITS ? digits : null;
 }
 
-export function buildPsaCertCdnImageUrls(certDigits: string): {
+/**
+ * Recursively collect `{ IsFrontImage, ImageURL }` entries from the
+ * GetImagesByCertNumber response. PSA returns a flat array, but we walk
+ * defensively in case the payload is ever wrapped.
+ */
+function collectPsaApiImages(
+  payload: unknown
+): Array<{ isFront: boolean | null; url: string }> {
+  const out: Array<{ isFront: boolean | null; url: string }> = [];
+
+  const walk = (node: unknown) => {
+    if (Array.isArray(node)) {
+      node.forEach(walk);
+      return;
+    }
+    if (!node || typeof node !== "object") return;
+
+    const record = node as Record<string, unknown>;
+    const urlKey = Object.keys(record).find((key) => /^image_?url$/i.test(key));
+    const urlValue = urlKey ? record[urlKey] : null;
+    if (typeof urlValue === "string" && urlValue.trim()) {
+      const frontKey = Object.keys(record).find((key) => /is_?front(_?image)?/i.test(key));
+      const isFront =
+        frontKey && typeof record[frontKey] === "boolean"
+          ? (record[frontKey] as boolean)
+          : null;
+      out.push({ isFront, url: urlValue });
+    }
+
+    for (const value of Object.values(record)) {
+      if (value && typeof value === "object") walk(value);
+    }
+  };
+
+  walk(payload);
+  return out;
+}
+
+/** Map PSA API image entries to front/back, falling back to document order. */
+export function mapPsaApiImages(payload: unknown): {
   frontImageUrl: string | null;
   backImageUrl: string | null;
 } {
-  return {
-    frontImageUrl: null,
-    backImageUrl: null,
-  };
-}
+  let frontImageUrl: string | null = null;
+  let backImageUrl: string | null = null;
+  const unassigned: string[] = [];
 
-function mergeWithCdnFallback(
-  certDigits: string,
-  front: string | null,
-  back: string | null
-): { frontImageUrl: string | null; backImageUrl: string | null } {
-  const cdn = buildPsaCertCdnImageUrls(certDigits);
-  return {
-    frontImageUrl: front ?? cdn.frontImageUrl,
-    backImageUrl: back ?? cdn.backImageUrl,
-  };
-}
-
-function parseCertPageForImageUrls(html: string, certDigits: string): {
-  frontImageUrl: string | null;
-  backImageUrl: string | null;
-} {
-  const rawMatches = html.match(/https?:\/\/[^"'\\s)]+/g) ?? [];
-  const urls = rawMatches
-    .map((value) => normalizeTrustedImageUrl(value))
-    .filter((value): value is string => Boolean(value))
-    .filter((url) => {
-      const lower = url.toLowerCase();
-      return (
-        /\.(jpg|jpeg|png|webp)(\?|$)/.test(lower) &&
-        (lower.includes("cert") ||
-          lower.includes("scan") ||
-          lower.includes("image") ||
-          lower.includes(certDigits))
-      );
-    });
-
-  const pickBy = (slot: "front" | "back"): string | null => {
-    const winner =
-      urls.find((url) =>
-        slot === "front"
-          ? /(_f\.|_front\.|front|obverse)/i.test(url)
-          : /(_b\.|_back\.|back|reverse)/i.test(url)
-      ) ?? null;
-    return winner;
-  };
-
-  return {
-    frontImageUrl: pickBy("front"),
-    backImageUrl: pickBy("back"),
-  };
-}
-
-async function fetchPsaCertPageImageUrls(certDigits: string): Promise<{
-  frontImageUrl: string | null;
-  backImageUrl: string | null;
-}> {
-  try {
-    const response = await fetch(`https://www.psacard.com/cert/${encodeURIComponent(certDigits)}`, {
-      headers: { Accept: "text/html" },
-      cache: "no-store",
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!response.ok) return { frontImageUrl: null, backImageUrl: null };
-    const html = await response.text();
-    return parseCertPageForImageUrls(html, certDigits);
-  } catch {
-    return { frontImageUrl: null, backImageUrl: null };
+  for (const entry of collectPsaApiImages(payload)) {
+    const url = normalizeTrustedImageUrl(entry.url);
+    if (!url) continue;
+    if (entry.isFront === true && !frontImageUrl) {
+      frontImageUrl = url;
+    } else if (entry.isFront === false && !backImageUrl) {
+      backImageUrl = url;
+    } else {
+      unassigned.push(url);
+    }
   }
+
+  if (!frontImageUrl && unassigned.length > 0) frontImageUrl = unassigned.shift() ?? null;
+  if (!backImageUrl && unassigned.length > 0) backImageUrl = unassigned.shift() ?? null;
+
+  return { frontImageUrl, backImageUrl };
 }
 
 function nowIso(offsetMs = 0): string {
@@ -253,52 +250,6 @@ async function writeCachedLookup(result: PsaCertLookupResult): Promise<void> {
   }
 }
 
-/** Add PSA CDN slab URLs when JSON parsing missed images (or older cache rows pre-CDN). */
-function enrichResultWithCdn(
-  certDigits: string,
-  result: PsaCertLookupResult
-): PsaCertLookupResult {
-  if (result.status === "invalid") return result;
-
-  const { frontImageUrl, backImageUrl } = mergeWithCdnFallback(
-    certDigits,
-    result.frontImageUrl,
-    result.backImageUrl
-  );
-  if (
-    frontImageUrl === result.frontImageUrl &&
-    backImageUrl === result.backImageUrl
-  ) {
-    return result;
-  }
-
-  const hasImages = Boolean(frontImageUrl || backImageUrl);
-  return {
-    ...result,
-    frontImageUrl,
-    backImageUrl,
-    status: hasImages ? "found" : result.status,
-    lastError: hasImages ? null : result.lastError,
-  };
-}
-
-async function enrichWithAllFallbacks(
-  certDigits: string,
-  frontImageUrl: string | null,
-  backImageUrl: string | null
-): Promise<{ frontImageUrl: string | null; backImageUrl: string | null }> {
-  const cdnMerged = mergeWithCdnFallback(certDigits, frontImageUrl, backImageUrl);
-  if (cdnMerged.frontImageUrl || cdnMerged.backImageUrl) {
-    return cdnMerged;
-  }
-
-  const pageImages = await fetchPsaCertPageImageUrls(certDigits);
-  return {
-    frontImageUrl: pageImages.frontImageUrl ?? cdnMerged.frontImageUrl,
-    backImageUrl: pageImages.backImageUrl ?? cdnMerged.backImageUrl,
-  };
-}
-
 export async function fetchPsaCertLookup(
   rawCertNumber: string | null | undefined
 ): Promise<PsaCertLookupResult | null> {
@@ -306,28 +257,19 @@ export async function fetchPsaCertLookup(
   if (!certNumber) return null;
 
   const cached = await readCachedLookup(certNumber);
-  if (cached) {
-    const enriched = enrichResultWithCdn(certNumber, cached);
-    if (
-      enriched.frontImageUrl !== cached.frontImageUrl ||
-      enriched.backImageUrl !== cached.backImageUrl ||
-      enriched.status !== cached.status
-    ) {
-      await writeCachedLookup(enriched);
-    }
-    return enriched;
-  }
+  if (cached) return cached;
 
   const token = (process.env.PSA_ACCESS_TOKEN ?? process.env.PSA_API_TOKEN)?.trim();
   if (!token) {
-    const { frontImageUrl, backImageUrl } = await enrichWithAllFallbacks(certNumber, null, null);
+    // PSA only serves cert scans to authenticated callers; without a token we
+    // cannot produce images. Cache as no_image so we don't retry every render.
     const result: PsaCertLookupResult = {
       certNumber,
-      status: frontImageUrl || backImageUrl ? "found" : "no_image",
-      frontImageUrl,
-      backImageUrl,
+      status: "no_image",
+      frontImageUrl: null,
+      backImageUrl: null,
       payload: null,
-      lastError: null,
+      lastError: "PSA access token not configured",
     };
     await writeCachedLookup(result);
     return result;
@@ -336,15 +278,17 @@ export async function fetchPsaCertLookup(
   let payload: unknown = null;
 
   try {
-    const response = await fetch(`${PSA_CERT_URL_BASE}/${encodeURIComponent(certNumber)}`, {
-      headers: {
-        Accept: "application/json",
-        Authorization: `Bearer ${token}`,
-        "X-Api-Key": token,
-      },
-      cache: "no-store",
-      signal: AbortSignal.timeout(8000),
-    });
+    const response = await fetch(
+      `${PSA_CERT_IMAGES_URL_BASE}/${encodeURIComponent(certNumber)}`,
+      {
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        cache: "no-store",
+        signal: AbortSignal.timeout(8000),
+      }
+    );
 
     payload = await response.json().catch(() => null);
 
@@ -362,64 +306,43 @@ export async function fetchPsaCertLookup(
     }
 
     if (!response.ok) {
-      const merged = await enrichWithAllFallbacks(certNumber, null, null);
-      const hasCdn = Boolean(merged.frontImageUrl || merged.backImageUrl);
       const result: PsaCertLookupResult = {
         certNumber,
-        status: hasCdn ? "found" : "error",
-        frontImageUrl: merged.frontImageUrl,
-        backImageUrl: merged.backImageUrl,
+        status: "error",
+        frontImageUrl: null,
+        backImageUrl: null,
         payload,
-        lastError: hasCdn
-          ? null
-          : `PSA API request failed with status ${response.status}`,
+        lastError: `PSA images request failed with status ${response.status}`,
       };
       await writeCachedLookup(result);
       return result;
     }
 
-    const extracted = extractPsaImageUrls(payload);
-    const merged = await enrichWithAllFallbacks(
-      certNumber,
-      extracted.frontImageUrl,
-      extracted.backImageUrl
-    );
-    const { frontImageUrl, backImageUrl } = merged;
+    const { frontImageUrl, backImageUrl } = mapPsaApiImages(payload);
+    const hasImages = Boolean(frontImageUrl || backImageUrl);
 
     const result: PsaCertLookupResult = {
       certNumber,
-      status:
-        frontImageUrl || backImageUrl
-          ? "found"
-          : detectInvalidPayload(payload)
-          ? "invalid"
-          : "no_image",
+      status: hasImages ? "found" : detectInvalidPayload(payload) ? "invalid" : "no_image",
       frontImageUrl,
       backImageUrl,
       payload,
-      lastError:
-        frontImageUrl || backImageUrl
-          ? null
-          : detectInvalidPayload(payload)
-          ? "PSA cert not found"
-          : "PSA cert response did not contain usable images",
+      lastError: hasImages
+        ? null
+        : detectInvalidPayload(payload)
+        ? "PSA cert not found"
+        : "PSA has no images on file for this cert",
     };
     await writeCachedLookup(result);
     return result;
   } catch (error) {
-    const merged = await enrichWithAllFallbacks(certNumber, null, null);
-    const hasCdn = Boolean(merged.frontImageUrl || merged.backImageUrl);
     const result: PsaCertLookupResult = {
       certNumber,
-      status: hasCdn ? "found" : "error",
-      frontImageUrl: merged.frontImageUrl,
-      backImageUrl: merged.backImageUrl,
+      status: "error",
+      frontImageUrl: null,
+      backImageUrl: null,
       payload,
-      lastError: hasCdn
-        ? null
-        : error instanceof Error
-        ? error.message
-        : "Unknown PSA API error",
+      lastError: error instanceof Error ? error.message : "Unknown PSA API error",
     };
     await writeCachedLookup(result);
     return result;

@@ -5,6 +5,11 @@ const PLACEHOLDER_HOSTS = new Set([
   "placehold.it",
   "via.placeholder.com",
 ]);
+// Hosts we never trust for card images. `cert-images.psa.com` is NXDOMAIN —
+// it does not resolve. Third-party providers (e.g. TCGAPIs) fabricate URLs in
+// the `cert-images.psa.com/{cert}/large/{cert}_f.jpg` shape that never load.
+// PSA's real scans (via the GetImagesByCertNumber API) are served from
+// CloudFront, which is not blocked. See lib/images/psa-cert.ts.
 const BLOCKED_IMAGE_HOSTS = new Set(["cert-images.psa.com"]);
 
 export function normalizeHttpUrl(value: unknown): string | null {

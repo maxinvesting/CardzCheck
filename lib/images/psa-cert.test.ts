@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildPsaCertCdnImageUrls,
   extractPsaImageUrls,
+  mapPsaApiImages,
   normalizePsaCertNumber,
 } from "@/lib/images/psa-cert";
 
@@ -14,8 +14,32 @@ describe("PSA cert helpers", () => {
     expect(normalizePsaCertNumber("12")).toBeNull();
   });
 
-  it("builds canonical PSA CDN image URLs", () => {
-    expect(buildPsaCertCdnImageUrls("120344868")).toEqual({
+  it("maps GetImagesByCertNumber response by IsFrontImage flag", () => {
+    const payload = [
+      { IsFrontImage: false, ImageURL: "https://d1htnxwo4o0jhw.cloudfront.net/cert/120344868_b.jpg" },
+      { IsFrontImage: true, ImageURL: "https://d1htnxwo4o0jhw.cloudfront.net/cert/120344868_f.jpg" },
+    ];
+
+    expect(mapPsaApiImages(payload)).toEqual({
+      frontImageUrl: "https://d1htnxwo4o0jhw.cloudfront.net/cert/120344868_f.jpg",
+      backImageUrl: "https://d1htnxwo4o0jhw.cloudfront.net/cert/120344868_b.jpg",
+    });
+  });
+
+  it("falls back to document order when IsFrontImage is absent", () => {
+    const payload = [
+      { ImageURL: "https://d1htnxwo4o0jhw.cloudfront.net/cert/a.jpg" },
+      { ImageURL: "https://d1htnxwo4o0jhw.cloudfront.net/cert/b.jpg" },
+    ];
+
+    expect(mapPsaApiImages(payload)).toEqual({
+      frontImageUrl: "https://d1htnxwo4o0jhw.cloudfront.net/cert/a.jpg",
+      backImageUrl: "https://d1htnxwo4o0jhw.cloudfront.net/cert/b.jpg",
+    });
+  });
+
+  it("returns nulls when GetImagesByCertNumber response is empty", () => {
+    expect(mapPsaApiImages([])).toEqual({
       frontImageUrl: null,
       backImageUrl: null,
     });
