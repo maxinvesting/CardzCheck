@@ -7,11 +7,11 @@ vi.mock("next/navigation", () => ({
 }));
 
 describe("/business/sales-agent page", () => {
-  it("redirects legacy Sales Agent traffic to the Messages inbox", async () => {
+  it("redirects legacy Sales Agent traffic to the marketplace seller inbox", async () => {
     const mod = await import("@/app/business/sales-agent/page");
 
     mod.default();
 
-    expect(redirectMock).toHaveBeenCalledWith("/business/messages");
+    expect(redirectMock).toHaveBeenCalledWith("/marketplace/sell/messages");
   });
 });

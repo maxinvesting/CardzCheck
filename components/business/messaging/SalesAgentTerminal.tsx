@@ -26,21 +26,16 @@ import {
 import ConversationView from "./ConversationView";
 import ConversationRow from "./ConversationRow";
 import BatchReviewModal from "./BatchReviewModal";
-import StatusPill from "@/components/business/ui/StatusPill";
 
 interface Props {
   initialStats: MessagingStats;
   initialThreads: MessageThread[];
   businessName?: string | null;
-  initialSyncRetriedAfterEmpty?: boolean;
 }
 
 interface ThreadCollectionResponse {
   stats: MessagingStats;
   threads: MessageThread[];
-  sync?: {
-    retriedAfterEmpty?: boolean;
-  };
 }
 
 type TerminalFilter = "needs_you" | "waiting" | "all";
@@ -98,7 +93,6 @@ export default function SalesAgentTerminal({
   initialStats,
   initialThreads,
   businessName,
-  initialSyncRetriedAfterEmpty = false,
 }: Props) {
   void initialStats;
   void businessName;
@@ -121,9 +115,6 @@ export default function SalesAgentTerminal({
   const [sendError, setSendError] = useState<string | null>(null);
   const [mobileShowThread, setMobileShowThread] = useState(false);
   const [listRefreshing, setListRefreshing] = useState(false);
-  const [syncRetriedAfterEmpty, setSyncRetriedAfterEmpty] = useState(
-    initialSyncRetriedAfterEmpty
-  );
   const [draftCache, setDraftCache] = useState<
     Map<string, MarketplaceReplyDraftResult>
   >(() => new Map());
@@ -259,7 +250,6 @@ export default function SalesAgentTerminal({
       if (!data) return;
       setAllThreads(data.threads);
       setStats(data.stats);
-      setSyncRetriedAfterEmpty(Boolean(data.sync?.retriedAfterEmpty));
       const stillExists = data.threads.some((t) => t.id === selectedId);
       if (!stillExists && data.threads[0]?.id) {
         setSelectedId(data.threads[0].id);
@@ -447,9 +437,6 @@ export default function SalesAgentTerminal({
           <h1 className="text-[13px] font-semibold tracking-tight text-[var(--biz-text-strong)]">
             Messages
           </h1>
-          {syncRetriedAfterEmpty ? (
-            <StatusPill tone="warning">Sync retried</StatusPill>
-          ) : null}
         </div>
 
         {/* Primary 3-segment filter */}
@@ -531,10 +518,10 @@ export default function SalesAgentTerminal({
             {listRefreshing ? "…" : "Refresh"}
           </button>
           <a
-            href="/business/ledger?tab=sales"
+            href="/marketplace/sell/listings"
             className="text-[11px] font-medium text-[var(--biz-muted)] hover:text-[var(--biz-text)]"
           >
-            Ledger →
+            Listings →
           </a>
         </div>
       </header>

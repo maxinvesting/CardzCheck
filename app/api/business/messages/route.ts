@@ -5,7 +5,6 @@ import {
   getMessagingOverview,
   type PlatformFilter,
 } from "@/lib/messaging/service";
-import { clearEbayMessagingCache, isEbayConnected } from "@/lib/messaging/adapters/ebay";
 import type { ThreadFilter } from "@/lib/messaging/types";
 
 const VALID_FILTERS: ThreadFilter[] = [
@@ -47,26 +46,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Invalid platform" }, { status: 400 });
   }
 
-  let [overview, ebayConnected] = await Promise.all([
-    getMessagingOverview(user.id, filter, platform),
-    isEbayConnected(user.id),
-  ]);
-
-  let retriedAfterEmpty = false;
-  // Only retry the eBay cache when the eBay platform could have produced rows.
-  const ebayCouldContribute = platform === "all" || platform === "ebay";
-  if (ebayCouldContribute && ebayConnected && overview.stats.total_threads === 0 && overview.threads.length === 0) {
-    clearEbayMessagingCache(user.id);
-    overview = await getMessagingOverview(user.id, filter, platform);
-    retriedAfterEmpty = true;
-  }
+  const overview = await getMessagingOverview(user.id, filter, platform);
 
   return NextResponse.json({
     stats: overview.stats,
     threads: overview.threads,
-    ebayConnected,
-    sync: {
-      retriedAfterEmpty,
-    },
   });
 }

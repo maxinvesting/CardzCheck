@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSellerUnreadCount } from "@/hooks/useSellerUnreadCount";
 
-const MESSAGES_HREF = "/business/messages";
+const MESSAGES_HREF = "/marketplace/sell/messages";
 
 type SubTab = { name: string; href: string; badge?: string };
 type Section = { paths: string[]; tabs: SubTab[] };
@@ -39,11 +39,24 @@ const SECTIONS: Section[] = [
   },
   // ── Business Ledger ──
   {
-    paths: ["/business/ledger", "/business/sales", "/business/messages", "/business/sales-agent", "/business/inventory"],
+    paths: ["/business/ledger", "/business/sales", "/business/inventory"],
     tabs: [
       { name: "Inventory", href: "/business/ledger" },
       { name: "Sales & Trades", href: "/business/sales" },
-      { name: "Messages", href: "/business/messages" },
+    ],
+  },
+  // ── Marketplace seller area ──
+  {
+    paths: [
+      "/marketplace/sell/listings",
+      "/marketplace/sell/orders",
+      "/marketplace/sell/messages",
+      "/marketplace/sell/new",
+    ],
+    tabs: [
+      { name: "Listings", href: "/marketplace/sell/listings" },
+      { name: "Orders", href: "/marketplace/sell/orders" },
+      { name: "Messages", href: "/marketplace/sell/messages" },
     ],
   },
   // ── Business Analytics ──
@@ -56,7 +69,7 @@ const SECTIONS: Section[] = [
   },
   // ── Business "Business" tab ──
   {
-    paths: ["/business/consultant", "/business/help", "/business/settings", "/business/insights", "/business/analyst", "/business/messages"],
+    paths: ["/business/consultant", "/business/help", "/business/settings", "/business/insights", "/business/analyst"],
     tabs: [
       { name: "Advisor", href: "/business/consultant" },
       { name: "Help & FAQ", href: "/business/help" },

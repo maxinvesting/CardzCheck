@@ -1,3 +1,6 @@
-import BusinessSalesPage from "@/components/business/sales/BusinessSalesPage";
+import { redirect } from "next/navigation";
 
-export default BusinessSalesPage;
+// The seller inbox moved into the marketplace seller area.
+export default function BusinessMessagesPage() {
+  redirect("/marketplace/sell/messages");
+}

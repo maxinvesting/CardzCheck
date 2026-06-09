@@ -28,7 +28,6 @@ export default function BusinessSalesPage() {
   const [threads, setThreads] = useState<MessageThread[]>([]);
   const [msgError, setMsgError] = useState<string | null>(null);
   const [businessName, setBusinessName] = useState<string | null>(null);
-  const [syncRetriedAfterEmpty, setSyncRetriedAfterEmpty] = useState(false);
 
   const loadData = useCallback(async () => {
     setMsgError(null);
@@ -39,7 +38,7 @@ export default function BusinessSalesPage() {
       } = await supabase.auth.getUser();
 
       if (!user) {
-        router.push("/login?redirect=/business/messages");
+        router.push("/login?redirect=/marketplace/sell/messages");
         return;
       }
 
@@ -59,7 +58,7 @@ export default function BusinessSalesPage() {
         return;
       }
       if (accessRes.status === 401) {
-        router.push("/login?redirect=/business/messages");
+        router.push("/login?redirect=/marketplace/sell/messages");
         return;
       }
       setHasAccess(true);
@@ -68,14 +67,13 @@ export default function BusinessSalesPage() {
         cache: "no-store",
       });
       if (msgRes.status === 401) {
-        router.push("/login?redirect=/business/messages");
+        router.push("/login?redirect=/marketplace/sell/messages");
         return;
       }
       if (msgRes.ok) {
         const data = await msgRes.json();
         setStats(data.stats);
         setThreads(data.threads);
-        setSyncRetriedAfterEmpty(Boolean(data?.sync?.retriedAfterEmpty));
       } else {
         setMsgError(`Failed to load sales workspace (${msgRes.status})`);
       }
@@ -147,10 +145,10 @@ export default function BusinessSalesPage() {
                 Try Again
               </button>
               <a
-                href="/business/ledger?tab=sales"
+                href="/marketplace/sell/listings"
                 className="rounded border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-3 py-1.5 text-[12px] font-semibold text-[var(--biz-text)] transition-colors hover:bg-[var(--biz-hover)]"
               >
-                Open ledger sales
+                View your listings
               </a>
             </div>
           </div>
@@ -176,16 +174,11 @@ export default function BusinessSalesPage() {
               Buyer questions and offers on your marketplace listings will show up here. List inventory to start getting messages.
             </p>
             <a
-              href="/business/ledger?tab=sales"
+              href="/marketplace/sell/listings"
               className="mt-5 rounded bg-[var(--biz-primary)] px-3 py-1.5 text-[12px] font-semibold text-[var(--biz-primary-foreground)] transition-colors hover:bg-[var(--biz-primary-hover)]"
             >
-              Open ledger sales
+              View your listings
             </a>
-            {syncRetriedAfterEmpty ? (
-              <p className="mt-4 text-[11px] text-[var(--biz-warning)]">
-                Background sync retried automatically while checking for new messages.
-              </p>
-            ) : null}
           </div>
         </main>
       </>
@@ -199,7 +192,6 @@ export default function BusinessSalesPage() {
           initialStats={stats}
           initialThreads={threads}
           businessName={businessName}
-          initialSyncRetriedAfterEmpty={syncRetriedAfterEmpty}
         />
       </main>
     </>

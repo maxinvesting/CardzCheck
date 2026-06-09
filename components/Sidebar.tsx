@@ -222,7 +222,6 @@ function BUSINESS_NAV_ITEMS(): NavItem[] {
       children: [
         { name: "Inventory", href: "/business/ledger", icon: <LedgerIcon /> },
         { name: "Sales & Trades", href: "/business/sales", icon: <SalesIcon /> },
-        { name: "Messages", href: "/business/messages", icon: <SalesIcon /> },
       ],
     },
     { name: "Analytics", href: "/business/financials", icon: <BadgeIcon /> },
@@ -257,11 +256,11 @@ export default function Sidebar() {
   const isBusinessRoute = pathname.startsWith("/business");
   const isBusinessWorkspace = true;
   const hasPaidWorkspace = true;
-  // Unread marketplace conversations, rolled up onto the Ledger item (the
-  // parent of the nested Messages tab) so it's visible from any page.
+  // Unread seller conversations, surfaced on the Marketplace item (the seller
+  // inbox now lives under /marketplace/sell) so it's visible from any page.
   const unreadMessages = useSellerUnreadCount(Boolean(user));
   const baseNavItems = BUSINESS_NAV_ITEMS().map((item) =>
-    item.href === "/business/ledger" && unreadMessages > 0
+    item.href === "/marketplace" && unreadMessages > 0
       ? { ...item, unreadCount: unreadMessages }
       : item
   );
