@@ -1,6 +1,6 @@
 # Sales Agent — Revision Plan
 
-**Status:** Phases 0–2 implemented (2026-06-08); Phase 3 + live unread badge deferred
+**Status:** Complete (Phases 0–3 + unread badge shipped 2026-06-08)
 **Decision:** Revise + scope down (do **not** delete)
 **Owner:** TBD
 **Created:** 2026-06-08
@@ -10,9 +10,17 @@
 > in `lib/messaging/service.ts` (adapter retained, reversible). Removed auto-resolve/archive
 > theater, the eBay/CC platform toggle, the draft pre-warm (drafts now on-demand), and the
 > "Agent activity"/"Agent cleared" UI. Stripped debug logging. Empty/error states reframed to
-> the CardzCheck marketplace. **Deferred:** the live sidebar unread badge (needs a count
-> endpoint + polling in the shared Sidebar — not worth bundling into this refactor) and Phase 3
-> render hardening.
+> the CardzCheck marketplace.
+>
+> **Unread badge:** `GET /api/business/messages/unread-count` + `useSellerUnreadCount` hook;
+> count rolled up onto the Sidebar "Ledger" item and shown on the Messages SectionTab.
+>
+> **Phase 3 (render hardening):** removed the vestigial briefing fetch (it discarded a Claude
+> call + overview computation on every mount/refresh) and deleted the orphaned briefing route,
+> `AgentBriefing` component, and `lib/messaging/briefing.ts`; replaced the mount-refresh
+> `eslint-disable` with a ref-to-latest pattern. The eBay Trading-API XML-parser hardening
+> noted below stays deferred because eBay messaging is gated off (Option B) — revisit only if
+> eBay is ever re-enabled.
 
 ---
 
