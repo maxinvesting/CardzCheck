@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSellerUnreadCount } from "@/hooks/useSellerUnreadCount";
+
+const MESSAGES_HREF = "/business/messages";
 
 type SubTab = { name: string; href: string; badge?: string };
 type Section = { paths: string[]; tabs: SubTab[] };
@@ -79,6 +82,10 @@ function findSection(pathname: string): Section | null {
 export default function SectionTabs() {
   const pathname = usePathname() ?? "";
   const section = findSection(pathname);
+  const hasMessagesTab = Boolean(
+    section?.tabs.some((tab) => tab.href === MESSAGES_HREF)
+  );
+  const unreadMessages = useSellerUnreadCount(hasMessagesTab);
   if (!section || section.tabs.length < 2) return null;
 
   return (
@@ -104,6 +111,18 @@ export default function SectionTabs() {
                 {tab.badge && (
                   <span className="rounded border border-[color:var(--biz-border-strong)] bg-[color:var(--biz-surface-soft)] px-1 py-0.5 text-[9px] font-bold text-[color:var(--biz-muted-strong)]">
                     {tab.badge}
+                  </span>
+                )}
+                {tab.href === MESSAGES_HREF && unreadMessages > 0 && (
+                  <span
+                    className="inline-flex min-w-[18px] items-center justify-center rounded-full px-1.5 py-0.5 text-[9px] font-bold leading-none tabular-nums"
+                    style={{
+                      background: "var(--biz-text-strong)",
+                      color: "var(--biz-bg)",
+                    }}
+                    aria-label={`${unreadMessages} unread messages`}
+                  >
+                    {unreadMessages > 99 ? "99+" : unreadMessages}
                   </span>
                 )}
               </span>

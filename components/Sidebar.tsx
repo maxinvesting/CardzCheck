@@ -8,12 +8,14 @@ import type { User } from "@/types";
 import PricingModal from "@/components/PricingModal";
 import { clearCurrentUserCache, getCurrentUserCached } from "@/lib/current-user-client";
 import { createClient } from "@/lib/supabase/client";
+import { useSellerUnreadCount } from "@/hooks/useSellerUnreadCount";
 
 type NavItem = {
   name: string;
   href: string;
   icon: ReactNode;
   badge?: string;
+  unreadCount?: number;
   isPro?: boolean;
   exact?: boolean;
   children?: NavItem[];
@@ -255,7 +257,14 @@ export default function Sidebar() {
   const isBusinessRoute = pathname.startsWith("/business");
   const isBusinessWorkspace = true;
   const hasPaidWorkspace = true;
-  const baseNavItems = BUSINESS_NAV_ITEMS();
+  // Unread marketplace conversations, rolled up onto the Ledger item (the
+  // parent of the nested Messages tab) so it's visible from any page.
+  const unreadMessages = useSellerUnreadCount(Boolean(user));
+  const baseNavItems = BUSINESS_NAV_ITEMS().map((item) =>
+    item.href === "/business/ledger" && unreadMessages > 0
+      ? { ...item, unreadCount: unreadMessages }
+      : item
+  );
   const navItems: NavItem[] = isAdminUser
     ? [
         ...baseNavItems,
@@ -366,6 +375,19 @@ export default function Sidebar() {
             <path d="M12 2l2 7h7l-6 4.5 2.3 7L12 17l-5.3 3.5L9 13 3 8.5h7z" />
           </svg>
         )}
+        {item.unreadCount ? (
+          <span
+            className="ml-auto inline-flex min-w-[18px] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none tabular-nums"
+            style={{
+              background: "var(--biz-text-strong)",
+              color: "var(--biz-bg)",
+            }}
+            title={`${item.unreadCount} unread ${item.unreadCount === 1 ? "conversation" : "conversations"}`}
+            aria-label={`${item.unreadCount} unread messages`}
+          >
+            {item.unreadCount > 99 ? "99+" : item.unreadCount}
+          </span>
+        ) : null}
         {item.badge && !isProFeature && (
           item.badge === "dot" ? (
             <span
