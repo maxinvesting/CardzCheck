@@ -7,21 +7,21 @@ import BusinessMigrationBanner from "@/components/business/BusinessMigrationBann
 import BusinessConsultantPanel from "@/components/business/BusinessConsultantPanel";
 import { createClient } from "@/lib/supabase/client";
 
-const shellClassName = "relative min-h-screen overflow-hidden bg-white text-gray-900";
+// Transparent shell — inherits the "Merchant Desk" dark canvas painted by
+// AuthenticatedLayout (business-theme / business-workspace-theme).
+const shellClassName = "relative min-h-screen text-[var(--biz-text)]";
 const contentClassName = "relative mx-auto max-w-[96rem] px-4 py-4 sm:px-5 lg:px-8";
-const shellBackdropClassName = "pointer-events-none absolute inset-0 bg-gray-50";
 
 function LoadingSkeleton() {
   return (
     <>
       <main className={shellClassName}>
-        <div className={shellBackdropClassName} />
         <div className={contentClassName}>
           <div className="mx-auto max-w-4xl space-y-4 animate-pulse">
-            <div className="mx-auto h-6 w-32 rounded-full bg-gray-200" />
-            <div className="mx-auto h-14 w-96 max-w-full rounded-full bg-gray-200" />
-            <div className="mx-auto h-6 w-[42rem] max-w-full rounded-full bg-gray-100" />
-            <div className="h-80 rounded-2xl border border-gray-200 bg-gray-50" />
+            <div className="mx-auto h-6 w-32 rounded-full bg-[var(--biz-skeleton)]" />
+            <div className="mx-auto h-14 w-96 max-w-full rounded-full bg-[var(--biz-skeleton)]" />
+            <div className="mx-auto h-6 w-[42rem] max-w-full rounded-full bg-[var(--biz-surface-soft)]" />
+            <div className="h-80 rounded-2xl border border-[var(--biz-border)] bg-[var(--biz-surface)]" />
           </div>
         </div>
       </main>
@@ -82,13 +82,12 @@ function ConsultantPageContent() {
     return (
       <>
         <main className={shellClassName}>
-          <div className={shellBackdropClassName} />
           <div className={contentClassName}>
             <div className="mx-auto max-w-4xl space-y-4 animate-pulse">
-              <div className="mx-auto h-6 w-32 rounded-full bg-gray-200" />
-              <div className="mx-auto h-14 w-96 max-w-full rounded-full bg-gray-200" />
-              <div className="mx-auto h-6 w-[42rem] max-w-full rounded-full bg-gray-100" />
-              <div className="h-80 rounded-2xl border border-gray-200 bg-gray-50" />
+              <div className="mx-auto h-6 w-32 rounded-full bg-[var(--biz-skeleton)]" />
+              <div className="mx-auto h-14 w-96 max-w-full rounded-full bg-[var(--biz-skeleton)]" />
+              <div className="mx-auto h-6 w-[42rem] max-w-full rounded-full bg-[var(--biz-surface-soft)]" />
+              <div className="h-80 rounded-2xl border border-[var(--biz-border)] bg-[var(--biz-surface)]" />
             </div>
           </div>
         </main>
@@ -100,7 +99,6 @@ function ConsultantPageContent() {
     return (
       <>
         <main className={shellClassName}>
-          <div className={shellBackdropClassName} />
           <div className={contentClassName}>
             <div className="mx-auto max-w-4xl">
               <BusinessPaywall />
@@ -114,7 +112,6 @@ function ConsultantPageContent() {
   return (
     <>
       <main className={shellClassName}>
-        <div className={shellBackdropClassName} />
         <div className={contentClassName}>
           {needsMigration ? (
             <div className="mx-auto max-w-4xl">
