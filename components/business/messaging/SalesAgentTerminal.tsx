@@ -124,7 +124,6 @@ export default function SalesAgentTerminal({
   const [syncRetriedAfterEmpty, setSyncRetriedAfterEmpty] = useState(
     initialSyncRetriedAfterEmpty
   );
-  const [briefingLoading, setBriefingLoading] = useState(false);
   const [draftCache, setDraftCache] = useState<
     Map<string, MarketplaceReplyDraftResult>
   >(() => new Map());
@@ -193,19 +192,6 @@ export default function SalesAgentTerminal({
     [allThreads, selectedId]
   );
 
-  const fetchBriefing = useCallback(async () => {
-    setBriefingLoading(true);
-    try {
-      const res = await fetch(`/api/business/sales/briefing`, { cache: "no-store" });
-      if (!res.ok) return;
-      await res.json();
-    } catch {
-      // ignore
-    } finally {
-      setBriefingLoading(false);
-    }
-  }, []);
-
   const draftCacheRef = useRef(draftCache);
   useEffect(() => {
     draftCacheRef.current = draftCache;
@@ -268,7 +254,6 @@ export default function SalesAgentTerminal({
 
   const refreshThreadList = useCallback(async () => {
     setListRefreshing(true);
-    void fetchBriefing();
     try {
       const data = await loadAllThreads();
       if (!data) return;
@@ -283,7 +268,7 @@ export default function SalesAgentTerminal({
     } finally {
       setListRefreshing(false);
     }
-  }, [fetchBriefing, loadAllThreads, loadThread, selectedId]);
+  }, [loadAllThreads, loadThread, selectedId]);
 
   const handleUpdateThreadStatus = useCallback(
     (threadId: string, status: MessageThread["status"]) => {
@@ -418,14 +403,15 @@ export default function SalesAgentTerminal({
     }
   }, [initialThreads, loadThread]);
 
+  // Refresh the feed once on mount so counts reflect the latest sync. We invoke
+  // the latest refreshThreadList via a ref so this fires exactly once without
+  // re-running when its (selectedId-dependent) identity changes.
+  const refreshThreadListRef = useRef(refreshThreadList);
   useEffect(() => {
-    fetchBriefing();
-  }, [fetchBriefing]);
-
-  // Refresh the feed once on mount so counts reflect the latest sync.
+    refreshThreadListRef.current = refreshThreadList;
+  }, [refreshThreadList]);
   useEffect(() => {
-    void refreshThreadList();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    void refreshThreadListRef.current();
   }, []);
 
   return (
@@ -538,11 +524,11 @@ export default function SalesAgentTerminal({
           <button
             type="button"
             onClick={refreshThreadList}
-            disabled={listRefreshing || briefingLoading}
+            disabled={listRefreshing}
             className="rounded border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-2 py-1 text-[11px] font-semibold text-[var(--biz-text)] transition-colors hover:border-[var(--biz-border-strong)] hover:bg-[var(--biz-hover)] disabled:cursor-not-allowed disabled:opacity-50"
             title="Refresh feed"
           >
-            {listRefreshing || briefingLoading ? "…" : "Refresh"}
+            {listRefreshing ? "…" : "Refresh"}
           </button>
           <a
             href="/business/ledger?tab=sales"
