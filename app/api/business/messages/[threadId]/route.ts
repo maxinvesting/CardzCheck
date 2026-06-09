@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { requireBusinessOwnerContext } from "@/lib/business/context";
 import {
   getThread,
   getMessages,
@@ -10,6 +9,9 @@ import {
 import { getEbayRawDebug } from "@/lib/messaging/adapters/ebay";
 import { isCardzcheckThreadId } from "@/lib/messaging/adapters/cardzcheck";
 
+// Freemium: reading and replying to a thread is available to any authenticated
+// participant (RLS scopes access to the buyer/seller of the thread). The paid
+// AI deal-desk is gated separately on the ai-reply endpoint.
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ threadId: string }> }
@@ -21,14 +23,6 @@ export async function GET(
 
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  try {
-    await requireBusinessOwnerContext(user.id);
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Owner access required";
-    const status = (error as { status?: number })?.status ?? 403;
-    return NextResponse.json({ error: message }, { status });
   }
 
   const { threadId } = await params;
@@ -67,14 +61,6 @@ export async function POST(
 
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  try {
-    await requireBusinessOwnerContext(user.id);
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Owner access required";
-    const status = (error as { status?: number })?.status ?? 403;
-    return NextResponse.json({ error: message }, { status });
   }
 
   const { threadId } = await params;

@@ -301,6 +301,21 @@ export async function requireBusinessOwnerContext(
   return context;
 }
 
+/**
+ * Non-throwing business-owner check. Returns true only if the user has an
+ * active business subscription as owner. Used to decide whether to surface
+ * paid deal-desk tooling (AI drafting, negotiation insights) versus the free
+ * baseline seller inbox.
+ */
+export async function hasBusinessOwnerAccess(userId: string): Promise<boolean> {
+  try {
+    await requireBusinessOwnerContext(userId);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function canReserveAnotherSeat(seats: BusinessSeatSummary): boolean {
   return seats.reservedSeats < seats.seatQuantity;
 }

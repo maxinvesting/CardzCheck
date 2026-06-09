@@ -23,6 +23,7 @@ const SECONDARY_ACTION_IDS: MarketplaceReplyAction[] = [
 ];
 
 interface Props {
+  isBusiness: boolean;
   context: MarketplaceReplyGenerationContext;
   recommendation: MarketplaceReplyRecommendation;
   draftResult: MarketplaceReplyDraftResult | null;
@@ -40,6 +41,7 @@ interface Props {
 }
 
 export default function AIActionsPanel({
+  isBusiness,
   context,
   recommendation,
   draftResult,
@@ -92,43 +94,45 @@ export default function AIActionsPanel({
         background: "var(--biz-surface-soft)",
       }}
     >
-      {/* Agent reasoning */}
-      <div className="flex items-start gap-2">
-        <span
-          className="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full"
-          style={{ background: "var(--biz-automation)" }}
-          aria-hidden
-        >
-          <svg
-            className="h-2.5 w-2.5 text-[var(--biz-primary-foreground)]"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
+      {/* Suggested move (business only) */}
+      {isBusiness ? (
+        <div className="flex items-start gap-2">
+          <span
+            className="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full"
+            style={{ background: "var(--biz-automation)" }}
+            aria-hidden
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2.5}
-              d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"
-            />
-          </svg>
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--biz-automation)] font-mono-num">
-              Agent recommends
-            </span>
-            <span className="text-[13px] font-semibold text-[var(--biz-text-strong)]">
-              {recommendedMeta.label}
-            </span>
+            <svg
+              className="h-2.5 w-2.5 text-[var(--biz-primary-foreground)]"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2.5}
+                d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"
+              />
+            </svg>
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--biz-automation)] font-mono-num">
+                Suggested
+              </span>
+              <span className="text-[13px] font-semibold text-[var(--biz-text-strong)]">
+                {recommendedMeta.label}
+              </span>
+            </div>
+            <p className="mt-0.5 text-[11px] leading-snug text-[var(--biz-muted)]">
+              {recommendation.reason}
+            </p>
           </div>
-          <p className="mt-0.5 text-[11px] leading-snug text-[var(--biz-muted)]">
-            {recommendation.reason}
-          </p>
         </div>
-      </div>
+      ) : null}
 
-      {replyError ? (
+      {isBusiness && replyError ? (
         <div className="mt-2 rounded border border-[var(--biz-danger-border)] bg-[var(--biz-danger-soft)] px-2 py-1.5 text-[11px] text-[var(--biz-danger)]">
           {replyError}
         </div>
@@ -140,9 +144,11 @@ export default function AIActionsPanel({
           value={replyText}
           onChange={(event) => onReplyTextChange(event.target.value)}
           placeholder={
-            replyLoading
-              ? "Agent is drafting…"
-              : "Agent will draft a reply when the thread opens. Edit or send."
+            isBusiness
+              ? replyLoading
+                ? "Drafting…"
+                : "A suggested reply appears here when the thread opens. Edit or send."
+              : "Write a reply to the buyer…"
           }
           rows={3}
           style={{ resize: "none" }}
@@ -158,62 +164,80 @@ export default function AIActionsPanel({
           disabled={!canSend}
           className="flex-1 rounded bg-[var(--biz-primary)] px-3 py-2 text-[12px] font-semibold text-[var(--biz-primary-foreground)] transition-colors hover:bg-[var(--biz-primary-hover)] disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {sendLoading ? "Sending…" : `Send · ${recommendedMeta.label}`}
+          {sendLoading ? "Sending…" : isBusiness ? `Send · ${recommendedMeta.label}` : "Send"}
         </button>
-        <button
-          type="button"
-          onClick={() => handleActionClick(recommendation.action)}
-          disabled={replyLoading}
-          title="Re-draft using the recommended action"
-          className="rounded border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-2.5 py-2 text-[11px] font-semibold text-[var(--biz-muted-strong)] transition-colors hover:border-[var(--biz-border-strong)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)] disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {replyLoading ? "…" : "Re-draft"}
-        </button>
+        {isBusiness ? (
+          <button
+            type="button"
+            onClick={() => handleActionClick(recommendation.action)}
+            disabled={replyLoading}
+            title="Re-draft using the recommended action"
+            className="rounded border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-2.5 py-2 text-[11px] font-semibold text-[var(--biz-muted-strong)] transition-colors hover:border-[var(--biz-border-strong)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {replyLoading ? "…" : "Re-draft"}
+          </button>
+        ) : null}
       </div>
 
       <p className="mt-1 text-[10px] uppercase tracking-[0.10em] text-[var(--biz-faint)] font-mono-num">
         {sendLabel}
       </p>
 
-      {/* Secondary actions — collapsed by default */}
-      <div className="mt-2 border-t border-[var(--biz-border)] pt-2">
-        <button
-          type="button"
-          onClick={() => setSecondaryOpen((v) => !v)}
-          className="flex w-full items-center justify-between text-[11px] font-semibold text-[var(--biz-muted-strong)] hover:text-[var(--biz-text)]"
-          aria-expanded={secondaryOpen}
-        >
-          <span>Other replies</span>
-          <span aria-hidden className="transition-transform" style={{ transform: secondaryOpen ? "rotate(180deg)" : "none" }}>
-            ▾
-          </span>
-        </button>
-        {secondaryOpen ? (
-          <div
-            className="mt-2 grid gap-1.5"
-            style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))" }}
+      {/* Secondary actions (business) — or an upgrade nudge (free) */}
+      {isBusiness ? (
+        <div className="mt-2 border-t border-[var(--biz-border)] pt-2">
+          <button
+            type="button"
+            onClick={() => setSecondaryOpen((v) => !v)}
+            className="flex w-full items-center justify-between text-[11px] font-semibold text-[var(--biz-muted-strong)] hover:text-[var(--biz-text)]"
+            aria-expanded={secondaryOpen}
           >
-            {secondaryActions.map((action) => {
-              const isSelected = action.id === selectedAction;
-              const styleClasses = isSelected
-                ? "border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] text-[var(--biz-text-strong)]"
-                : "border-[var(--biz-border)] bg-[var(--biz-surface-soft)] text-[var(--biz-muted-strong)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]";
-              return (
-                <button
-                  key={action.id}
-                  type="button"
-                  onClick={() => handleActionClick(action.id)}
-                  disabled={replyLoading}
-                  title={action.description}
-                  className={`min-w-0 truncate rounded border px-2 py-1.5 text-[11px] font-semibold transition-colors focus:outline-none focus:ring-1 focus:ring-[var(--biz-focus)] disabled:cursor-not-allowed disabled:opacity-60 ${styleClasses}`}
-                >
-                  {action.label}
-                </button>
-              );
-            })}
-          </div>
-        ) : null}
-      </div>
+            <span>Other replies</span>
+            <span aria-hidden className="transition-transform" style={{ transform: secondaryOpen ? "rotate(180deg)" : "none" }}>
+              ▾
+            </span>
+          </button>
+          {secondaryOpen ? (
+            <div
+              className="mt-2 grid gap-1.5"
+              style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))" }}
+            >
+              {secondaryActions.map((action) => {
+                const isSelected = action.id === selectedAction;
+                const styleClasses = isSelected
+                  ? "border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] text-[var(--biz-text-strong)]"
+                  : "border-[var(--biz-border)] bg-[var(--biz-surface-soft)] text-[var(--biz-muted-strong)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]";
+                return (
+                  <button
+                    key={action.id}
+                    type="button"
+                    onClick={() => handleActionClick(action.id)}
+                    disabled={replyLoading}
+                    title={action.description}
+                    className={`min-w-0 truncate rounded border px-2 py-1.5 text-[11px] font-semibold transition-colors focus:outline-none focus:ring-1 focus:ring-[var(--biz-focus)] disabled:cursor-not-allowed disabled:opacity-60 ${styleClasses}`}
+                  >
+                    {action.label}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        <a
+          href="/business"
+          className="mt-2 flex items-center gap-2 rounded border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] px-2.5 py-2 text-[11px] text-[var(--biz-text)] transition-colors hover:bg-[var(--biz-primary-soft-strong)]"
+        >
+          <span aria-hidden>🔒</span>
+          <span className="min-w-0 flex-1">
+            <span className="font-semibold text-[var(--biz-text-strong)]">
+              AI drafting &amp; negotiation insights
+            </span>
+            <span className="text-[var(--biz-muted)]"> — upgrade to Business</span>
+          </span>
+          <span aria-hidden className="text-[var(--biz-muted-strong)]">→</span>
+        </a>
+      )}
 
       {sendError ? (
         <p className="mt-1.5 text-[11px] text-[var(--biz-danger)]">{sendError}</p>

@@ -31,11 +31,13 @@ interface Props {
   initialStats: MessagingStats;
   initialThreads: MessageThread[];
   businessName?: string | null;
+  initialIsBusiness?: boolean;
 }
 
 interface ThreadCollectionResponse {
   stats: MessagingStats;
   threads: MessageThread[];
+  isBusiness?: boolean;
 }
 
 type TerminalFilter = "needs_you" | "waiting" | "all";
@@ -93,11 +95,13 @@ export default function SalesAgentTerminal({
   initialStats,
   initialThreads,
   businessName,
+  initialIsBusiness = false,
 }: Props) {
   void initialStats;
   void businessName;
   const [, setStats] = useState<MessagingStats>(initialStats);
   const [allThreads, setAllThreads] = useState<MessageThread[]>(initialThreads);
+  const [isBusiness, setIsBusiness] = useState(initialIsBusiness);
   const [filter, setFilter] = useState<TerminalFilter>("needs_you");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(
@@ -250,6 +254,7 @@ export default function SalesAgentTerminal({
       if (!data) return;
       setAllThreads(data.threads);
       setStats(data.stats);
+      if (typeof data.isBusiness === "boolean") setIsBusiness(data.isBusiness);
       const stillExists = data.threads.some((t) => t.id === selectedId);
       if (!stillExists && data.threads[0]?.id) {
         setSelectedId(data.threads[0].id);
@@ -498,7 +503,7 @@ export default function SalesAgentTerminal({
               className="w-full rounded border border-[var(--biz-border)] bg-[var(--biz-bg)] py-1 pl-7 pr-2 text-[12px] text-[var(--biz-text)] placeholder-[var(--biz-muted)] focus:border-[var(--biz-primary-border)] focus:outline-none focus:ring-1 focus:ring-[var(--biz-focus)]"
             />
           </div>
-          {needsYouThreads.length > 0 ? (
+          {isBusiness && needsYouThreads.length > 0 ? (
             <button
               type="button"
               onClick={() => setBatchOpen(true)}
@@ -621,6 +626,7 @@ export default function SalesAgentTerminal({
                   thread={selectedThreadMeta ?? selectedThread}
                   messages={messages}
                   negotiation={negotiation}
+                  isBusiness={isBusiness}
                   onGenerateReply={handleGenerateReply}
                   draftResult={draftResult}
                   replyLoading={replyLoading}

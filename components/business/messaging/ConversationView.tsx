@@ -88,6 +88,7 @@ interface Props {
   thread: MessageThread;
   messages: Message[];
   negotiation: NegotiationAnalysis | null;
+  isBusiness: boolean;
   onGenerateReply: (action: MarketplaceReplyAction, sellerNote?: string) => void;
   draftResult: MarketplaceReplyDraftResult | null;
   replyLoading: boolean;
@@ -102,6 +103,7 @@ export default function ConversationView({
   thread,
   messages,
   negotiation,
+  isBusiness,
   onGenerateReply,
   draftResult,
   replyLoading,
@@ -135,9 +137,10 @@ export default function ConversationView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [thread.id]);
 
-  // Auto-draft the recommended reply when the thread opens (or when messages
-  // load and there's no draft yet). Makes the agent actually act on arrival.
+  // Auto-draft the recommended reply when the thread opens (business only —
+  // AI drafting is the paid tier; free sellers compose manually).
   useEffect(() => {
+    if (!isBusiness) return;
     if (replyLoading) return;
     if (draftResult) return;
     if (replyText.trim()) return;
@@ -145,7 +148,7 @@ export default function ConversationView({
     if (thread.status === "resolved" || thread.status === "archived") return;
     onGenerateReply(recommendation.action);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [thread.id, messages.length]);
+  }, [thread.id, messages.length, isBusiness]);
 
   async function handleSend() {
     const body = replyText.trim();
@@ -215,11 +218,13 @@ export default function ConversationView({
         </div>
       </div>
 
-      <NegotiationPanel
-        thread={thread}
-        negotiation={negotiation}
-        recommendation={recommendation}
-      />
+      {isBusiness ? (
+        <NegotiationPanel
+          thread={thread}
+          negotiation={negotiation}
+          recommendation={recommendation}
+        />
+      ) : null}
 
       <div className="flex-1 overflow-y-auto bg-[var(--biz-bg)] px-3 py-3">
         <div className="mx-auto flex max-w-3xl flex-col gap-2.5">
@@ -259,6 +264,7 @@ export default function ConversationView({
 
       <div className="border-t border-[var(--biz-border)] bg-[var(--biz-surface)] px-3 py-2">
         <AIActionsPanel
+          isBusiness={isBusiness}
           context={replyContext}
           recommendation={recommendation}
           draftResult={draftResult}

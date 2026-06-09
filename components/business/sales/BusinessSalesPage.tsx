@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import BusinessPaywall from "@/components/business/BusinessPaywall";
 // Heavy terminal (~960 lines + messaging deps) — split into its own chunk so it
 // doesn't bloat the sales page's initial bundle.
 const SalesAgentTerminal = dynamic(
@@ -23,9 +22,9 @@ import type { MessageThread, MessagingStats } from "@/lib/messaging/types";
 export default function BusinessSalesPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [hasAccess, setHasAccess] = useState<boolean | null>(null);
   const [stats, setStats] = useState<MessagingStats | null>(null);
   const [threads, setThreads] = useState<MessageThread[]>([]);
+  const [isBusiness, setIsBusiness] = useState(false);
   const [msgError, setMsgError] = useState<string | null>(null);
   const [businessName, setBusinessName] = useState<string | null>(null);
 
@@ -49,20 +48,6 @@ export default function BusinessSalesPage() {
         .maybeSingle();
       if (profile?.business_name) setBusinessName(profile.business_name);
 
-      const accessRes = await fetch("/api/business/inventory", {
-        cache: "no-store",
-      });
-      if (accessRes.status === 403) {
-        setHasAccess(false);
-        setLoading(false);
-        return;
-      }
-      if (accessRes.status === 401) {
-        router.push("/login?redirect=/marketplace/sell/messages");
-        return;
-      }
-      setHasAccess(true);
-
       const msgRes = await fetch("/api/business/messages", {
         cache: "no-store",
       });
@@ -74,8 +59,9 @@ export default function BusinessSalesPage() {
         const data = await msgRes.json();
         setStats(data.stats);
         setThreads(data.threads);
+        setIsBusiness(Boolean(data.isBusiness));
       } else {
-        setMsgError(`Failed to load sales workspace (${msgRes.status})`);
+        setMsgError(`Failed to load your inbox (${msgRes.status})`);
       }
     } catch (err) {
       setMsgError(err instanceof Error ? err.message : "Network error");
@@ -103,16 +89,6 @@ export default function BusinessSalesPage() {
             <div className="h-10 rounded-md bg-[var(--biz-skeleton)]" />
             <div className="h-[520px] rounded-md bg-[var(--biz-skeleton)]" />
           </div>
-        </main>
-      </>
-    );
-  }
-
-  if (hasAccess === false) {
-    return (
-      <>
-        <main className="sales-mono-theme min-h-screen px-4 py-4">
-          <BusinessPaywall />
         </main>
       </>
     );
@@ -192,6 +168,7 @@ export default function BusinessSalesPage() {
           initialStats={stats}
           initialThreads={threads}
           businessName={businessName}
+          initialIsBusiness={isBusiness}
         />
       </main>
     </>
