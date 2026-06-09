@@ -434,11 +434,6 @@ async function fetchMemberMessageExchanges(
         return [];
       }
 
-      // Log first 1200 chars of first page for debugging
-      if (page === 1) {
-        console.log("[ebay/debug] GetMemberMessages raw (first 1200):", text.slice(0, 1200));
-      }
-
       // Extract exchanges using simple regex (avoids XML parser dependency)
       // Note: use [^>]* to handle optional XML attributes on any tag
       const pageMessages: ParsedMemberMessage[] = [];
@@ -488,8 +483,6 @@ async function fetchMemberMessageExchanges(
             });
           }
         }
-
-        console.log(`[ebay/debug] exchange msgId=${msgId} sender=${sender} status=${status} responses=${responses.length}`);
 
         pageMessages.push({
           messageId: msgId,
@@ -641,18 +634,8 @@ async function getSellerEbayUsername(userId: string): Promise<string | null> {
 async function getValidTokenForUser(userId: string): Promise<string | null> {
   try {
     const token = await getValidToken(userId);
-    const hasToken = !!token;
-    console.info("[dbg:ebay_token] lookup", {
-      userIdSuffix: userId.slice(-6),
-      hasToken,
-      ts: Date.now(),
-    });
     return token ?? null;
   } catch {
-    console.info("[dbg:ebay_token] lookup_error", {
-      userIdSuffix: userId.slice(-6),
-      ts: Date.now(),
-    });
     return null;
   }
 }
@@ -678,14 +661,7 @@ export async function isEbayConnected(userId: string): Promise<boolean> {
 
 export async function getEbayThreads(userId: string): Promise<MessageThread[]> {
   const cached = getCachedValue(threadCache, userId);
-  if (cached) {
-    console.info("[dbg:ebay_threads] cache_hit", {
-      userIdSuffix: userId.slice(-6),
-      cachedCount: cached.length,
-      ts: Date.now(),
-    });
-    return cached;
-  }
+  if (cached) return cached;
 
   // Fetch from both APIs in parallel; combine results
   const [inquiries, memberMessages] = await Promise.all([
@@ -698,13 +674,6 @@ export async function getEbayThreads(userId: string): Promise<MessageThread[]> {
   const sorted = all.sort(
     (a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime()
   );
-  console.info("[dbg:ebay_threads] fetched", {
-    userIdSuffix: userId.slice(-6),
-    inquiryCount: inquiries.length,
-    memberMessageCount: memberMessages.length,
-    totalCount: sorted.length,
-    ts: Date.now(),
-  });
   return setCachedValue(
     threadCache,
     userId,

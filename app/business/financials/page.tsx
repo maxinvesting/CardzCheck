@@ -579,7 +579,7 @@ function StaleAlertBlock({ stale }: { stale: StaleAlert }) {
           View inventory →
         </Link>
         <Link
-          href="/business/sales-agent?intent=reprice_stale"
+          href="/business/messages?intent=reprice_stale"
           className="border border-[#343941] bg-[#0B0D0F] px-3 py-1.5 text-[11px] font-semibold text-[#B8C0CC] hover:border-[#5A626E] hover:text-[#E6E8EB]"
         >
           Bulk reprice →

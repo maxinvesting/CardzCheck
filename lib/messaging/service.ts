@@ -327,10 +327,23 @@ async function enrichThreads(
 
 // ─── Thread queries ──────────────────────────────────────────────────────────
 
+// eBay buyer-message sync runs on eBay's legacy Trading API (GetMemberMessages /
+// AddMemberMessageRTQ), which has no supported REST successor and is on eBay's
+// decommission path. It is gated off here so the Messages inbox runs purely on
+// the CardzCheck marketplace (our own DB). Flip to `true` only behind a
+// deliberate decision to re-enable the legacy path. The adapter is retained so
+// re-enabling is a one-line change.
+const EBAY_MESSAGING_ENABLED = false;
+
 async function loadThreadsForPlatform(
   userId: string,
   platform: PlatformFilter
 ): Promise<MessageThread[]> {
+  if (!EBAY_MESSAGING_ENABLED) {
+    // eBay disabled — every platform filter collapses to CardzCheck only.
+    if (platform === "ebay") return [];
+    return await getCardzcheckThreads(userId);
+  }
   if (platform === "ebay") return await getEbayThreads(userId);
   if (platform === "cardzcheck") return await getCardzcheckThreads(userId);
   // "all" or any unknown — fan out to both

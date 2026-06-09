@@ -28,14 +28,12 @@ interface Props {
   thread: MessageThread;
   selected: boolean;
   onSelect: (id: string) => void;
-  autoResolvedLabel?: string | null;
 }
 
 export default function ConversationRow({
   thread,
   selected,
   onSelect,
-  autoResolvedLabel = null,
 }: Props) {
   const priority = buildPriorityRationale(thread);
   const offerText =
@@ -92,11 +90,6 @@ export default function ConversationRow({
             {offerText ? (
               <span className="biz-mono shrink-0 text-[10px] text-[var(--biz-primary)]">
                 {offerText}
-              </span>
-            ) : null}
-            {autoResolvedLabel ? (
-              <span className="shrink-0 rounded-sm border border-[var(--biz-automation-border)] bg-[var(--biz-automation-soft)] px-1 py-px text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--biz-automation)]">
-                Agent resolved
               </span>
             ) : null}
           </div>

@@ -1,5 +1,3 @@
-import { redirect } from "next/navigation";
+import BusinessSalesPage from "@/components/business/sales/BusinessSalesPage";
 
-export default function BusinessMessagesPage() {
-  redirect("/business/sales-agent");
-}
+export default BusinessSalesPage;

@@ -1,3 +1,6 @@
-import BusinessSalesPage from "@/components/business/sales/BusinessSalesPage";
+import { redirect } from "next/navigation";
 
-export default BusinessSalesPage;
+// Legacy route — the Sales Agent was renamed to the Messages inbox.
+export default function BusinessSalesAgentPage() {
+  redirect("/business/messages");
+}

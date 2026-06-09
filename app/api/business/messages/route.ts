@@ -28,7 +28,6 @@ export async function GET(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  console.info("[dbg:messages_api] auth_ok", { hasUser: true, ts: Date.now() });
   try {
     await requireBusinessOwnerContext(user.id);
   } catch (error) {
@@ -60,20 +59,7 @@ export async function GET(req: NextRequest) {
     clearEbayMessagingCache(user.id);
     overview = await getMessagingOverview(user.id, filter, platform);
     retriedAfterEmpty = true;
-    console.info("[dbg:messages_api] retried_after_empty", {
-      filter,
-      totalThreads: overview.stats.total_threads,
-      returnedThreads: overview.threads.length,
-      ts: Date.now(),
-    });
   }
-  console.info("[dbg:messages_api] overview", {
-    filter,
-    ebayConnected,
-    totalThreads: overview.stats.total_threads,
-    returnedThreads: overview.threads.length,
-    ts: Date.now(),
-  });
 
   return NextResponse.json({
     stats: overview.stats,

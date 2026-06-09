@@ -18,7 +18,6 @@ import type {
   MarketplaceReplyDraftResult,
   MarketplaceReplyAction,
 } from "@/lib/messaging/reply-drafts";
-import { classifyThreadFromPreview } from "@/lib/messaging/reply-drafts";
 import {
   buildPriorityRationale,
   isClosedSalesThread,
@@ -52,30 +51,19 @@ const FILTERS: { key: TerminalFilter; label: string }[] = [
   { key: "all", label: "All" },
 ];
 
-type PlatformTab = "ebay" | "cardzcheck";
-
-const PLATFORM_TABS: { key: PlatformTab; label: string }[] = [
-  { key: "ebay", label: "eBay" },
-  { key: "cardzcheck", label: "CardzCheck" },
-];
-
 function applyTerminalFilter(
   thread: MessageThread,
   filter: TerminalFilter,
-  now: number,
-  autoResolvedIds: Set<string>
+  now: number
 ): boolean {
-  const isAutoResolved = autoResolvedIds.has(thread.id);
   switch (filter) {
     case "needs_you":
-      if (isAutoResolved) return false;
       return (
         thread.status === "needs_response" ||
         thread.unread_count > 0 ||
         (isStaleSalesThread(thread, now) && !isClosedSalesThread(thread))
       );
     case "waiting":
-      if (isAutoResolved) return false;
       return thread.status === "awaiting_buyer";
     case "all":
     default:
@@ -116,7 +104,6 @@ export default function SalesAgentTerminal({
   void businessName;
   const [, setStats] = useState<MessagingStats>(initialStats);
   const [allThreads, setAllThreads] = useState<MessageThread[]>(initialThreads);
-  const [platformTab, setPlatformTab] = useState<PlatformTab>("ebay");
   const [filter, setFilter] = useState<TerminalFilter>("needs_you");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(
@@ -141,10 +128,6 @@ export default function SalesAgentTerminal({
   const [draftCache, setDraftCache] = useState<
     Map<string, MarketplaceReplyDraftResult>
   >(() => new Map());
-  const [prewarming, setPrewarming] = useState<Set<string>>(() => new Set());
-  const [activity, setActivity] = useState<
-    Array<{ id: string; kind: "drafted" | "resolved" | "archived"; label: string; at: number }>
-  >([]);
   const [batchOpen, setBatchOpen] = useState(false);
 
   const deferredQuery = useDeferredValue(searchQuery);
@@ -154,70 +137,20 @@ export default function SalesAgentTerminal({
     return () => clearInterval(id);
   }, []);
 
-  const pushActivity = useCallback(
-    (entry: { id: string; kind: "drafted" | "resolved" | "archived"; label: string }) => {
-      setActivity((prev) => {
-        if (prev.some((e) => e.id === entry.id && e.kind === entry.kind)) return prev;
-        const next = [{ ...entry, at: Date.now() }, ...prev];
-        return next.slice(0, 8);
-      });
-    },
-    []
-  );
-
-  const platformThreads = useMemo(
-    () => allThreads.filter((t) => t.platform === platformTab),
-    [allThreads, platformTab]
-  );
-
-  const autoResolvedMap = useMemo(() => {
-    const map = new Map<string, { label: string; reason: "buyer_thanks" | "seller_quiet" }>();
-    for (const t of allThreads) {
-      const cls = classifyThreadFromPreview(t, now);
-      if (cls.resolvable && cls.label && cls.reason) {
-        map.set(t.id, { label: cls.label, reason: cls.reason });
-      }
-    }
-    return map;
-  }, [allThreads, now]);
-
-  const autoResolvedIds = useMemo(
-    () => new Set(autoResolvedMap.keys()),
-    [autoResolvedMap]
-  );
-
-  const agentClearedCount = useMemo(() => {
-    let n = 0;
-    for (const t of allThreads) {
-      if (autoResolvedIds.has(t.id) && t.platform === platformTab) n++;
-    }
-    return n;
-  }, [allThreads, autoResolvedIds, platformTab]);
-
-  const platformCounts = useMemo(() => {
-    let ebay = 0;
-    let cc = 0;
-    for (const t of allThreads) {
-      if (t.platform === "ebay") ebay++;
-      else if (t.platform === "cardzcheck") cc++;
-    }
-    return { ebay, cardzcheck: cc };
-  }, [allThreads]);
-
   const needsYouThreads = useMemo(() => {
-    return platformThreads
-      .filter((t) => applyTerminalFilter(t, "needs_you", now, autoResolvedIds))
+    return allThreads
+      .filter((t) => applyTerminalFilter(t, "needs_you", now))
       .sort((a, b) => {
         const rankDiff = priorityRank(a, now) - priorityRank(b, now);
         if (rankDiff !== 0) return rankDiff;
         return dollarImpactCents(b) - dollarImpactCents(a);
       });
-  }, [platformThreads, autoResolvedIds, now]);
+  }, [allThreads, now]);
 
   const visibleThreads = useMemo(() => {
     const query = deferredQuery.trim().toLowerCase();
-    let next = platformThreads.filter((thread) =>
-      applyTerminalFilter(thread, filter, now, autoResolvedIds)
+    let next = allThreads.filter((thread) =>
+      applyTerminalFilter(thread, filter, now)
     );
     if (query) {
       next = next.filter((thread) => {
@@ -240,22 +173,20 @@ export default function SalesAgentTerminal({
       );
     });
     return next;
-  }, [platformThreads, filter, deferredQuery, now]);
+  }, [allThreads, filter, deferredQuery, now]);
 
   const filterCounts = useMemo(() => {
     const counts: Record<TerminalFilter, number> = {
       needs_you: 0,
       waiting: 0,
-      all: platformThreads.length,
+      all: allThreads.length,
     };
-    for (const thread of platformThreads) {
-      if (applyTerminalFilter(thread, "needs_you", now, autoResolvedIds))
-        counts.needs_you++;
-      if (applyTerminalFilter(thread, "waiting", now, autoResolvedIds))
-        counts.waiting++;
+    for (const thread of allThreads) {
+      if (applyTerminalFilter(thread, "needs_you", now)) counts.needs_you++;
+      if (applyTerminalFilter(thread, "waiting", now)) counts.waiting++;
     }
     return counts;
-  }, [platformThreads, now, autoResolvedIds]);
+  }, [allThreads, now]);
 
   const selectedThreadMeta = useMemo(
     () => allThreads.find((t) => t.id === selectedId) ?? null,
@@ -285,7 +216,7 @@ export default function SalesAgentTerminal({
       setThreadLoading(true);
       setReplyError(null);
       setSendError(null);
-      // Use any cached pre-warmed draft so the composer is filled immediately.
+      // Reuse any cached draft so the composer is pre-filled instantly.
       const cached = draftCacheRef.current.get(threadId);
       setDraftResult(cached ?? null);
       try {
@@ -309,7 +240,7 @@ export default function SalesAgentTerminal({
 
   const loadAllThreads = useCallback(async () => {
     try {
-      const res = await fetch(`/api/business/messages?filter=all&platform=all`, {
+      const res = await fetch(`/api/business/messages?filter=all&platform=cardzcheck`, {
         cache: "no-store",
       });
       if (!res.ok) return null;
@@ -491,103 +422,11 @@ export default function SalesAgentTerminal({
     fetchBriefing();
   }, [fetchBriefing]);
 
-  // Emit activity entries when threads are auto-resolved by the agent.
-  useEffect(() => {
-    for (const [threadId, info] of autoResolvedMap) {
-      const thread = allThreads.find((t) => t.id === threadId);
-      if (!thread) continue;
-      const buyer = thread.buyer_display_name ?? thread.buyer_username;
-      pushActivity({
-        id: threadId,
-        kind: info.reason === "buyer_thanks" ? "resolved" : "archived",
-        label:
-          info.reason === "buyer_thanks"
-            ? `Resolved ${buyer} · acknowledged`
-            : `Archived ${buyer} · stale 7d+`,
-      });
-    }
-  }, [autoResolvedMap, allThreads, pushActivity]);
-
-  // Pre-warm drafts for the top Needs-you threads so opening them feels instant.
-  useEffect(() => {
-    const targets = needsYouThreads
-      .filter((t) => t.platform === platformTab)
-      .slice(0, 5)
-      .filter((t) => !draftCache.has(t.id) && !prewarming.has(t.id));
-    if (targets.length === 0) return;
-
-    setPrewarming((prev) => {
-      const next = new Set(prev);
-      for (const t of targets) next.add(t.id);
-      return next;
-    });
-
-    let cancelled = false;
-    (async () => {
-      for (const t of targets) {
-        if (cancelled) return;
-        try {
-          const res = await fetch(`/api/business/messages/${t.id}/ai-reply`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "smart_reply" }),
-          });
-          if (!res.ok) continue;
-          const data = (await res.json()) as MarketplaceReplyDraftResult;
-          if (cancelled) return;
-          setDraftCache((prev) => {
-            const next = new Map(prev);
-            next.set(t.id, data);
-            return next;
-          });
-          const buyer = t.buyer_display_name ?? t.buyer_username;
-          pushActivity({
-            id: `draft-${t.id}`,
-            kind: "drafted",
-            label: `Drafted reply · ${buyer}`,
-          });
-        } catch {
-          // ignore individual failures
-        } finally {
-          setPrewarming((prev) => {
-            const next = new Set(prev);
-            next.delete(t.id);
-            return next;
-          });
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [needsYouThreads, platformTab]);
-
-  // On initial mount fetch ALL platforms so the tabs show real counts.
+  // Refresh the feed once on mount so counts reflect the latest sync.
   useEffect(() => {
     void refreshThreadList();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // When the platform tab changes, re-anchor the selection to the first
-  // thread in the newly-visible queue.
-  useEffect(() => {
-    const stillInTab = allThreads.find(
-      (t) => t.id === selectedId && t.platform === platformTab
-    );
-    if (stillInTab) return;
-    const first = allThreads.find((t) => t.platform === platformTab);
-    if (first) {
-      setSelectedId(first.id);
-      loadThread(first.id);
-    } else {
-      setSelectedId(null);
-      setSelectedThread(null);
-      setMessages([]);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [platformTab]);
 
   return (
     <div
@@ -600,9 +439,6 @@ export default function SalesAgentTerminal({
         ["--biz-primary-soft-strong" as string]: "rgba(255,255,255,0.12)",
         ["--biz-primary-border" as string]: "rgba(255,255,255,0.20)",
         ["--biz-primary-foreground" as string]: "#000000",
-        ["--biz-automation" as string]: "#cfcfcf",
-        ["--biz-automation-soft" as string]: "rgba(255,255,255,0.06)",
-        ["--biz-automation-border" as string]: "rgba(255,255,255,0.18)",
         ["--biz-warning" as string]: "#d6d6d6",
         ["--biz-warning-soft" as string]: "rgba(255,255,255,0.06)",
         ["--biz-warning-border" as string]: "rgba(255,255,255,0.16)",
@@ -619,32 +455,14 @@ export default function SalesAgentTerminal({
         ["--biz-focus" as string]: "rgba(255,255,255,0.25)",
       } as Record<string, string>}
     >
-      {/* Slim top bar — segmented filter + platform toggle + search */}
+      {/* Slim top bar — segmented filter + search */}
       <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--biz-border)] bg-[var(--biz-surface)] px-3 py-2">
         <div className="flex items-center gap-2">
-          <span
-            className="inline-flex h-5 w-5 items-center justify-center rounded-full"
-            style={{ background: "var(--biz-automation-soft, rgba(110,180,255,0.12))" }}
-            aria-hidden
-          >
-            <span
-              className="h-1.5 w-1.5 rounded-full"
-              style={{ background: "var(--biz-automation)" }}
-            />
-          </span>
           <h1 className="text-[13px] font-semibold tracking-tight text-[var(--biz-text-strong)]">
-            Sales Agent
+            Messages
           </h1>
           {syncRetriedAfterEmpty ? (
             <StatusPill tone="warning">Sync retried</StatusPill>
-          ) : null}
-          {agentClearedCount > 0 ? (
-            <span
-              className="rounded-full border border-[var(--biz-automation-border)] bg-[var(--biz-automation-soft)] px-2 py-px text-[10px] font-semibold text-[var(--biz-automation)]"
-              title="Threads the agent has cleared from your queue."
-            >
-              Agent cleared {agentClearedCount}
-            </span>
           ) : null}
         </div>
 
@@ -673,44 +491,6 @@ export default function SalesAgentTerminal({
                 <span>{tab.label}</span>
                 <span
                   className={`biz-mono text-[10px] tabular-nums ${
-                    isActive
-                      ? "text-[var(--biz-primary-foreground)]/80"
-                      : "text-[var(--biz-faint)]"
-                  }`}
-                >
-                  {count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Compact platform toggle */}
-        <div
-          className="flex items-center gap-0.5 rounded border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] p-0.5"
-          role="tablist"
-          aria-label="Messaging platform"
-        >
-          {PLATFORM_TABS.map((tab) => {
-            const isActive = platformTab === tab.key;
-            const count = platformCounts[tab.key];
-            return (
-              <button
-                key={tab.key}
-                type="button"
-                role="tab"
-                aria-selected={isActive}
-                onClick={() => setPlatformTab(tab.key)}
-                title={`${tab.label} (${count})`}
-                className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] transition-colors ${
-                  isActive
-                    ? "bg-[var(--biz-primary)] text-[var(--biz-primary-foreground)]"
-                    : "text-[var(--biz-muted-strong)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]"
-                }`}
-              >
-                <span>{tab.key === "ebay" ? "eBay" : "CC"}</span>
-                <span
-                  className={`biz-mono text-[9px] tabular-nums ${
                     isActive
                       ? "text-[var(--biz-primary-foreground)]/80"
                       : "text-[var(--biz-faint)]"
@@ -773,37 +553,6 @@ export default function SalesAgentTerminal({
         </div>
       </header>
 
-      {/* Agent activity ticker */}
-      {activity.length > 0 ? (
-        <div className="flex shrink-0 items-center gap-2 overflow-hidden border-b border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-3 py-1">
-          <span className="biz-mono shrink-0 text-[9px] uppercase tracking-[0.14em] text-[var(--biz-automation)]">
-            Agent activity
-          </span>
-          <div className="flex min-w-0 flex-1 items-center gap-3 overflow-x-auto whitespace-nowrap">
-            {activity.map((entry) => (
-              <span
-                key={`${entry.kind}-${entry.id}`}
-                className="flex items-center gap-1 text-[11px] text-[var(--biz-muted-strong)]"
-              >
-                <span
-                  aria-hidden
-                  className="h-1.5 w-1.5 shrink-0 rounded-full"
-                  style={{
-                    background:
-                      entry.kind === "drafted"
-                        ? "var(--biz-automation)"
-                        : entry.kind === "resolved"
-                          ? "var(--biz-profit, #4ade80)"
-                          : "var(--biz-muted)",
-                  }}
-                />
-                {entry.label}
-              </span>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
       {/* Main two-pane layout: queue | conversation+agent */}
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <div className="flex h-full w-full">
@@ -831,7 +580,6 @@ export default function SalesAgentTerminal({
                       thread={thread}
                       selected={thread.id === selectedId}
                       onSelect={handleSelectThread}
-                      autoResolvedLabel={autoResolvedMap.get(thread.id)?.label ?? null}
                     />
                   ))
                 )}
@@ -954,4 +702,3 @@ export default function SalesAgentTerminal({
     </div>
   );
 }
-

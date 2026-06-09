@@ -26,7 +26,6 @@ export default function BusinessSalesPage() {
   const [hasAccess, setHasAccess] = useState<boolean | null>(null);
   const [stats, setStats] = useState<MessagingStats | null>(null);
   const [threads, setThreads] = useState<MessageThread[]>([]);
-  const [ebayConnected, setEbayConnected] = useState<boolean | null>(null);
   const [msgError, setMsgError] = useState<string | null>(null);
   const [businessName, setBusinessName] = useState<string | null>(null);
   const [syncRetriedAfterEmpty, setSyncRetriedAfterEmpty] = useState(false);
@@ -40,7 +39,7 @@ export default function BusinessSalesPage() {
       } = await supabase.auth.getUser();
 
       if (!user) {
-        router.push("/login?redirect=/business/sales-agent");
+        router.push("/login?redirect=/business/messages");
         return;
       }
 
@@ -60,7 +59,7 @@ export default function BusinessSalesPage() {
         return;
       }
       if (accessRes.status === 401) {
-        router.push("/login?redirect=/business/sales-agent");
+        router.push("/login?redirect=/business/messages");
         return;
       }
       setHasAccess(true);
@@ -69,14 +68,13 @@ export default function BusinessSalesPage() {
         cache: "no-store",
       });
       if (msgRes.status === 401) {
-        router.push("/login?redirect=/business/sales-agent");
+        router.push("/login?redirect=/business/messages");
         return;
       }
       if (msgRes.ok) {
         const data = await msgRes.json();
         setStats(data.stats);
         setThreads(data.threads);
-        setEbayConnected(data.ebayConnected ?? false);
         setSyncRetriedAfterEmpty(Boolean(data?.sync?.retriedAfterEmpty));
       } else {
         setMsgError(`Failed to load sales workspace (${msgRes.status})`);
@@ -133,10 +131,10 @@ export default function BusinessSalesPage() {
               </svg>
             </div>
             <h2 className="text-[15px] font-semibold text-[var(--biz-text)]">
-              Unable to load sales terminal
+              Unable to load messages
             </h2>
             <p className="mt-1 max-w-sm text-[12px] text-[var(--biz-muted)]">
-              {msgError ?? "Something went wrong. Try refreshing or reconnecting your eBay account."}
+              {msgError ?? "Something went wrong loading your inbox. Try refreshing."}
             </p>
             <div className="mt-5 flex gap-2">
               <button
@@ -149,10 +147,10 @@ export default function BusinessSalesPage() {
                 Try Again
               </button>
               <a
-                href="/api/auth/ebay"
+                href="/business/ledger?tab=sales"
                 className="rounded border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-3 py-1.5 text-[12px] font-semibold text-[var(--biz-text)] transition-colors hover:bg-[var(--biz-hover)]"
               >
-                Reconnect eBay
+                Open ledger sales
               </a>
             </div>
           </div>
@@ -162,58 +160,30 @@ export default function BusinessSalesPage() {
   }
 
   if (stats.total_threads === 0 && threads.length === 0) {
-    const isConnected = ebayConnected === true;
     return (
       <>
         <main className="sales-mono-theme min-h-screen px-4 py-8">
           <div className="mx-auto flex max-w-xl flex-col items-center justify-center rounded-md border border-dashed border-[var(--biz-border)] bg-[var(--biz-surface)] py-12 text-center">
             <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-md border border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)]">
               <svg className="h-6 w-6 text-[var(--biz-primary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 13V7a2 2 0 00-2-2h-3m-2 14H6a2 2 0 01-2-2V7a2 2 0 012-2h2m3 14l5-5m0 0l5-5m-5 5H9" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
               </svg>
             </div>
-            {isConnected ? (
-              <>
-                <h2 className="text-[15px] font-semibold text-[var(--biz-text)]">
-                  eBay connected — no live threads yet
-                </h2>
-                <p className="mt-1 max-w-md text-[12px] leading-relaxed text-[var(--biz-muted)]">
-                  Offers, buyer questions, and follow-ups will surface here automatically. Reconnect to force a refresh.
-                </p>
-                <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-                  <a
-                    href="/api/auth/ebay"
-                    className="rounded border border-[var(--biz-border)] bg-[var(--biz-surface-soft)] px-3 py-1.5 text-[12px] font-semibold text-[var(--biz-text)] transition-colors hover:bg-[var(--biz-hover)]"
-                  >
-                    Reconnect eBay
-                  </a>
-                  <a
-                    href="/business/ledger?tab=sales"
-                    className="rounded bg-[var(--biz-primary)] px-3 py-1.5 text-[12px] font-semibold text-[var(--biz-primary-foreground)] transition-colors hover:bg-[var(--biz-primary-hover)]"
-                  >
-                    Open ledger sales
-                  </a>
-                </div>
-              </>
-            ) : (
-              <>
-                <h2 className="text-[15px] font-semibold text-[var(--biz-text)]">
-                  Connect eBay to power the terminal
-                </h2>
-                <p className="mt-1 max-w-md text-[12px] leading-relaxed text-[var(--biz-muted)]">
-                  Link your eBay account to pull in live offers, buyer questions, and follow-ups.
-                </p>
-                <a
-                  href="/api/auth/ebay"
-                  className="mt-5 rounded bg-[var(--biz-primary)] px-3 py-1.5 text-[12px] font-semibold text-[var(--biz-primary-foreground)] transition-colors hover:bg-[var(--biz-primary-hover)]"
-                >
-                  Connect eBay Account
-                </a>
-              </>
-            )}
+            <h2 className="text-[15px] font-semibold text-[var(--biz-text)]">
+              No messages yet
+            </h2>
+            <p className="mt-1 max-w-md text-[12px] leading-relaxed text-[var(--biz-muted)]">
+              Buyer questions and offers on your marketplace listings will show up here. List inventory to start getting messages.
+            </p>
+            <a
+              href="/business/ledger?tab=sales"
+              className="mt-5 rounded bg-[var(--biz-primary)] px-3 py-1.5 text-[12px] font-semibold text-[var(--biz-primary-foreground)] transition-colors hover:bg-[var(--biz-primary-hover)]"
+            >
+              Open ledger sales
+            </a>
             {syncRetriedAfterEmpty ? (
               <p className="mt-4 text-[11px] text-[var(--biz-warning)]">
-                Background sync retried automatically while checking for live threads.
+                Background sync retried automatically while checking for new messages.
               </p>
             ) : null}
           </div>
