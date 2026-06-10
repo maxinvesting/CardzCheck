@@ -37,32 +37,32 @@ const inventoryRows = [
   {
     item: "2023 Prizm Victor Wembanyama #136",
     status: "Listed",
-    channel: "CardzCheck",
+    days: "3d",
     price: "$148",
   },
   {
     item: "2020 Topps Chrome Formula 1 lot",
-    status: "Draft",
-    channel: "eBay",
+    status: "Listed",
+    days: "6d",
     price: "$92",
   },
   {
     item: "Pokemon 151 sealed bundle",
-    status: "Inbound",
-    channel: "Whatnot",
+    status: "Draft",
+    days: "—",
     price: "$64",
   },
   {
     item: "2019 Optic Ja Morant PSA 9",
     status: "Sold",
-    channel: "Local",
+    days: "Paid out",
     price: "$118",
   },
 ];
 
 const activityRows = [
-  { label: "eBay import", detail: "18 active listings synced", time: "9:14 AM" },
-  { label: "Sale recorded", detail: "$118 local pickup, $41 profit", time: "8:52 AM" },
+  { label: "New listings", detail: "6 cards listed from collection", time: "9:14 AM" },
+  { label: "Order paid", detail: "$118 sale, label printed, $41 profit", time: "8:52 AM" },
   { label: "Team update", detail: "AR moved 6 items to draft", time: "Yesterday" },
 ];
 
@@ -77,8 +77,8 @@ const features: Feature[] = [
   {
     title: "Sell it on the platform",
     description:
-      "List cards straight from your collection. Sell on the CardzCheck Marketplace or route inventory to eBay, Whatnot, shows, or your own site.",
-    points: ["List to the CardzCheck Marketplace", "Route to eBay, Whatnot, and more", "Drafts, active listings, and sold status"],
+      "List a card straight from your collection to the CardzCheck Marketplace, then take secure payments and print shipping labels without ever leaving the platform.",
+    points: ["List in one click from your collection", "Secure checkout and built-in payouts", "Shipping labels and order tracking"],
     icon: <IconPath d="M6 7h12l1 13H5L6 7ZM9 7a3 3 0 0 1 6 0M9 13h6" />,
   },
   {
@@ -106,7 +106,7 @@ const workflow = [
   {
     label: "02",
     title: "Prepare the sale",
-    body: "Choose the channel, set the list price, write the listing, and keep drafts separate from active inventory.",
+    body: "List from your collection to the marketplace, set the price, write the listing, and keep drafts separate from active inventory.",
   },
   {
     label: "03",
@@ -139,7 +139,7 @@ const plans: Plan[] = [
     description: "For sellers who want one place for their whole collection.",
     features: [
       "Unlimited collection and inventory",
-      "Marketplace and channel selling tools",
+      "Marketplace listing and selling tools",
       "Profit, fees, and payout reporting",
       "Annual billing available",
     ],
@@ -209,13 +209,13 @@ function OperationsPreview() {
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--biz-muted)]">
               Inventory queue
             </p>
-            <span className="text-[11px] text-[color:var(--biz-faint)]">Channel ready</span>
+            <span className="text-[11px] text-[color:var(--biz-faint)]">Ready to list</span>
           </div>
           <div>
             <div className="grid grid-cols-[minmax(0,1fr)_64px_76px_56px] gap-x-3 border-y border-[color:var(--biz-border)] bg-[color:var(--biz-near-black)] px-4 py-2 text-[10px] uppercase tracking-[0.1em] text-[color:var(--biz-faint)]">
               <span>Item</span>
               <span>Status</span>
-              <span>Channel</span>
+              <span>Listed</span>
               <span className="text-right">Price</span>
             </div>
             {inventoryRows.map((row) => (
@@ -227,7 +227,7 @@ function OperationsPreview() {
                   {row.item}
                 </span>
                 <span className="text-[color:var(--biz-muted-strong)]">{row.status}</span>
-                <span className="text-[color:var(--biz-muted)]">{row.channel}</span>
+                <span className="text-[color:var(--biz-muted)]">{row.days}</span>
                 <span className="text-right font-medium tabular-nums text-[color:var(--biz-text)]">
                   {row.price}
                 </span>
@@ -254,15 +254,15 @@ function OperationsPreview() {
 
           <div className="mt-5 border-t border-[color:var(--biz-border)] pt-4">
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--biz-muted)]">
-              Connected channels
+              Built into the marketplace
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
-              {["CardzCheck", "eBay", "Whatnot", "Website", "Local"].map((channel) => (
+              {["Secure checkout", "Stripe payouts", "Shipping labels", "Buyer messaging", "Low fees"].map((feature) => (
                 <span
-                  key={channel}
+                  key={feature}
                   className="rounded border border-[color:var(--biz-border)] px-2.5 py-1 text-[11px] text-[color:var(--biz-muted-strong)]"
                 >
-                  {channel}
+                  {feature}
                 </span>
               ))}
             </div>
@@ -471,9 +471,9 @@ export default function Home() {
                 </p>
               </div>
               <div className="border-l border-[color:var(--biz-border-strong)] pl-3">
-                <p className="font-semibold text-[color:var(--biz-text-strong)]">Selling</p>
+                <p className="font-semibold text-[color:var(--biz-text-strong)]">Marketplace</p>
                 <p className="mt-1 text-xs leading-relaxed text-[color:var(--biz-muted)]">
-                  CardzCheck, eBay, Whatnot, website, local.
+                  List, sell, ship, and get paid in-platform.
                 </p>
               </div>
               <div className="border-l border-[color:var(--biz-border-strong)] pl-3">
@@ -496,8 +496,8 @@ export default function Home() {
                 Everything your card business needs, in one place.
               </h2>
               <p className="mt-4 text-sm leading-7 text-[color:var(--biz-muted)]">
-                Your collection, your selling channels, and your financials live together — so the same card
-                moves from intake to listing to sale without losing the numbers behind it.
+                Your collection, the marketplace, and your financials live together — so the same card
+                moves from your shelf to a sold, paid-out order without losing the numbers behind it.
               </p>
             </div>
 
@@ -539,21 +539,21 @@ export default function Home() {
         <section className="border-y border-[color:var(--biz-border)] bg-[color:var(--biz-near-black)]">
           <div className="mx-auto grid max-w-6xl gap-10 px-5 py-16 lg:grid-cols-[1fr_1fr] lg:items-start">
             <div>
-              <SectionLabel>Sales channels</SectionLabel>
+              <SectionLabel>The marketplace</SectionLabel>
               <h2 className="mt-3 text-3xl font-semibold tracking-tight text-[color:var(--biz-text-strong)] sm:text-4xl">
-                Keep every channel in one operating view.
+                Sell on the CardzCheck Marketplace.
               </h2>
               <p className="mt-4 text-sm leading-7 text-[color:var(--biz-muted)]">
-                Connect the places you sell, then use the ledger to understand what sold, where it sold,
-                what it cost, and what came back to the business.
+                List straight from your collection and the platform handles the rest — checkout, payouts,
+                and shipping — then writes every sale back to your books automatically.
               </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               {[
-                ["CardzCheck Marketplace", "Create and monitor marketplace listings from inventory."],
-                ["eBay", "Connect an account, import active listings, and record seller costs."],
-                ["Whatnot", "Track Whatnot storefront details, fees, and sale records."],
-                ["Shows, Local, Website", "Keep offline and direct sales in the same business ledger."],
+                ["List from your collection", "Turn a card you already own into a live listing in one click — no re-entering details."],
+                ["Get paid securely", "Buyers check out on-platform and you're paid through built-in Stripe payouts."],
+                ["Shipping built in", "Buy a prepaid label and hand off tracking the moment an order comes in."],
+                ["Low seller fees", "Keep more of every sale, with seller fees as low as 1% — a fraction of the big marketplaces."],
               ].map(([title, body]) => (
                 <article key={title} className="rounded-lg border border-[color:var(--biz-border)] bg-[color:var(--biz-surface)] p-5">
                   <h3 className="text-base font-semibold text-[color:var(--biz-text-strong)]">{title}</h3>
