@@ -4,9 +4,9 @@ import "../styles/businessTheme.css";
 import { AppProviders } from "@/components/AppProviders";
 
 export const metadata: Metadata = {
-  title: "CardzCheck — The Intelligence Platform for Sports Card Collectors and Businesses",
+  title: "CardzCheck - Inventory and Sales Software for Card Businesses",
   description:
-    "Grade probability, pricing estimates, collection tracking, and full business operations in one platform.",
+    "Manage sports card inventory, listings, sales, teams, and ledger workflows in one business workspace.",
 };
 
 export const viewport: Viewport = {
