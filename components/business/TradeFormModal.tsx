@@ -88,7 +88,6 @@ interface IncomingRow {
   cert_number: string;
   image_url: string | null;
   fairValue: string;
-  costBasis: string;
   lookupBusy: boolean;
   lookupError: string | null;
 }
@@ -107,7 +106,6 @@ function blankIncoming(): IncomingRow {
     cert_number: "",
     image_url: null,
     fairValue: "",
-    costBasis: "",
     lookupBusy: false,
     lookupError: null,
   };
@@ -137,6 +135,7 @@ export default function TradeFormModal({
   const [partnerName, setPartnerName] = useState("");
   const [cashPaid, setCashPaid] = useState("");
   const [cashReceived, setCashReceived] = useState("");
+  const [tradeFee, setTradeFee] = useState("");
   const [notes, setNotes] = useState("");
   const [outgoing, setOutgoing] = useState<OutgoingRow[]>([]);
   const [incoming, setIncoming] = useState<IncomingRow[]>([]);
@@ -149,6 +148,7 @@ export default function TradeFormModal({
     setPartnerName("");
     setCashPaid("");
     setCashReceived("");
+    setTradeFee("");
     setNotes("");
     setError(null);
     if (item) {
@@ -173,10 +173,6 @@ export default function TradeFormModal({
     return map;
   }, [availableItems]);
 
-  const outgoingFairCents = useMemo(
-    () => outgoing.reduce((acc, row) => acc + inputToCents(row.fairValue), 0),
-    [outgoing]
-  );
   const outgoingBasisCents = useMemo(
     () =>
       outgoing.reduce((acc, row) => {
@@ -185,14 +181,42 @@ export default function TradeFormModal({
       }, 0),
     [outgoing, itemsById]
   );
-  const incomingBasisCents = useMemo(
-    () => incoming.reduce((acc, row) => acc + inputToCents(row.costBasis), 0),
-    [incoming]
-  );
   const cashPaidCents = inputToCents(cashPaid);
   const cashReceivedCents = inputToCents(cashReceived);
-  const realizedGainCents =
-    outgoingFairCents + cashReceivedCents - cashPaidCents - outgoingBasisCents;
+  const tradeFeeCents = inputToCents(tradeFee);
+
+  // Total cost basis that rolls into the cards received: the basis of what we
+  // gave away, plus net cash out, plus any (online) trade fee. We never type a
+  // basis for an incoming card — it's derived from the economics of the trade.
+  const incomingBasisPoolCents = Math.max(
+    0,
+    outgoingBasisCents + cashPaidCents - cashReceivedCents + tradeFeeCents
+  );
+
+  // Spread the basis pool across incoming cards in proportion to their
+  // estimated value (even split if no estimates yet). Rounding remainder lands
+  // on the last row so the allocation always sums back to the pool exactly.
+  const allocatedBasisById = useMemo(() => {
+    const map = new Map<string, number>();
+    if (incoming.length === 0) return map;
+    const estimates = incoming.map((r) => Math.max(0, inputToCents(r.fairValue)));
+    const totalEst = estimates.reduce((a, c) => a + c, 0);
+    let allocated = 0;
+    incoming.forEach((row, i) => {
+      let cents: number;
+      if (i === incoming.length - 1) {
+        cents = incomingBasisPoolCents - allocated;
+      } else if (totalEst > 0) {
+        cents = Math.round((incomingBasisPoolCents * estimates[i]) / totalEst);
+      } else {
+        cents = Math.round(incomingBasisPoolCents / incoming.length);
+      }
+      cents = Math.max(0, cents);
+      map.set(row.id, cents);
+      allocated += cents;
+    });
+    return map;
+  }, [incoming, incomingBasisPoolCents]);
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -235,17 +259,7 @@ export default function TradeFormModal({
   }
 
   function updateIncoming(id: string, patch: Partial<IncomingRow>) {
-    setIncoming((prev) =>
-      prev.map((r) => {
-        if (r.id !== id) return r;
-        const next = { ...r, ...patch };
-        // If user updates fair value and basis is empty, mirror it
-        if (patch.fairValue !== undefined && !r.costBasis) {
-          next.costBasis = patch.fairValue ?? "";
-        }
-        return next;
-      })
-    );
+    setIncoming((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   }
 
   function removeIncoming(id: string) {
@@ -351,7 +365,7 @@ export default function TradeFormModal({
         setError("Enter an estimated value for every incoming card.");
         return;
       }
-      const basis = inputToCents(row.costBasis) || fair;
+      const basis = allocatedBasisById.get(row.id) ?? fair;
       cleanIncoming.push({
         card_id: row.card_id,
         title: buildIncomingTitle(row),
@@ -680,20 +694,12 @@ export default function TradeFormModal({
                             className={`mt-1 ${inputClass}`}
                           />
                         </label>
-                        <label>
-                          <span className={labelClass}>Cost basis ($)</span>
-                          <input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={row.costBasis}
-                            onChange={(e) =>
-                              updateIncoming(row.id, { costBasis: e.target.value })
-                            }
-                            placeholder="Defaults to estimated value"
-                            className={`mt-1 ${inputClass} placeholder:text-[#4F5863]`}
-                          />
-                        </label>
+                        <div>
+                          <span className={labelClass}>Cost basis (auto)</span>
+                          <div className="mt-1 flex h-[38px] items-center border border-[#24282D] bg-[#0B0D0F] px-3 text-sm tabular-nums text-[#B8C0CC]">
+                            {formatMoney(allocatedBasisById.get(row.id) ?? 0)}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -701,7 +707,7 @@ export default function TradeFormModal({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <label>
                 <span className={labelClass}>Cash paid ($)</span>
                 <input
@@ -724,31 +730,50 @@ export default function TradeFormModal({
                   className={`mt-1 ${inputClass}`}
                 />
               </label>
+              <label>
+                <span className={labelClass}>Trade fee ($)</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={tradeFee}
+                  onChange={(e) => setTradeFee(e.target.value)}
+                  placeholder="Online trades"
+                  className={`mt-1 ${inputClass} placeholder:text-[#4F5863]`}
+                />
+              </label>
             </div>
 
             <div className="border border-[#24282D] bg-[#090B0D] p-3 text-xs">
-              <div className="flex justify-between text-[#77808C]">
-                <span>Outgoing fair value</span>
-                <span className="font-data tabular-nums">{formatMoney(outgoingFairCents)}</span>
+              <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-[#77808C]">
+                Cost basis carried into received cards
               </div>
-              <div className="mt-1.5 flex justify-between text-[#77808C]">
-                <span>Outgoing basis</span>
+              <div className="flex justify-between text-[#77808C]">
+                <span>Basis of cards given away</span>
                 <span className="font-data tabular-nums">{formatMoney(outgoingBasisCents)}</span>
               </div>
               <div className="mt-1.5 flex justify-between text-[#77808C]">
-                <span>Incoming basis</span>
-                <span className="font-data tabular-nums">{formatMoney(incomingBasisCents)}</span>
+                <span>+ Cash paid</span>
+                <span className="font-data tabular-nums">{formatMoney(cashPaidCents)}</span>
               </div>
               <div className="mt-1.5 flex justify-between text-[#77808C]">
-                <span>Estimated realized gain</span>
-                <span
-                  className={`font-data font-semibold tabular-nums ${
-                    realizedGainCents >= 0 ? "text-[#20B26B]" : "text-[#E05C5C]"
-                  }`}
-                >
-                  {formatMoney(realizedGainCents)}
+                <span>− Cash received</span>
+                <span className="font-data tabular-nums">{formatMoney(cashReceivedCents)}</span>
+              </div>
+              <div className="mt-1.5 flex justify-between text-[#77808C]">
+                <span>+ Trade fee</span>
+                <span className="font-data tabular-nums">{formatMoney(tradeFeeCents)}</span>
+              </div>
+              <div className="mt-2 flex justify-between border-t border-[#24282D] pt-2 text-[#E6E8EB]">
+                <span className="font-semibold">Total basis to allocate</span>
+                <span className="font-data font-semibold tabular-nums text-[#20B26B]">
+                  {formatMoney(incomingBasisPoolCents)}
                 </span>
               </div>
+              <p className="mt-2 text-[11px] leading-snug text-[#5A626E]">
+                Split across received cards by estimated value. No gain is realized at
+                trade time — it&apos;s recognized when these cards later sell.
+              </p>
             </div>
 
             <label>
