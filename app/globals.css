@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..600;1,9..144,300..500&family=Inter:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..600;1,9..144,300..500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -383,4 +383,88 @@ body {
 }
 .desk-action--primary .desk-action-label {
   font-weight: 700;
+}
+
+/* ───────────────────────────────────────────────────────────────
+   Landing page — marketing surface in the Merchant Desk language
+─────────────────────────────────────────────────────────────── */
+.lp-mono {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* Staggered entrance with explicit delay control */
+.lp-rise {
+  opacity: 0;
+  animation: desk-rise 0.8s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+/* Probability / fill bars draw in from the left */
+@keyframes lp-bar-grow {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+.lp-bar-fill {
+  transform-origin: left center;
+  animation: lp-bar-grow 1.2s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+/* Sparkline self-draws */
+@keyframes lp-draw {
+  to { stroke-dashoffset: 0; }
+}
+.lp-spark {
+  animation: lp-draw 1.8s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+/* Slow gold sheen sweeping the hero intelligence panel */
+@keyframes lp-sheen {
+  0% { transform: translateX(-130%) skewX(-18deg); }
+  100% { transform: translateX(260%) skewX(-18deg); }
+}
+.lp-sheen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(231, 211, 161, 0.06),
+    transparent
+  );
+  width: 45%;
+  animation: lp-sheen 7s ease-in-out infinite;
+}
+
+/* Ticker marquee */
+@keyframes lp-ticker {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.lp-ticker-track {
+  display: inline-flex;
+  white-space: nowrap;
+  animation: lp-ticker 38s linear infinite;
+}
+
+/* Feature / link hover lift */
+.lp-hover-lift {
+  transition: transform 0.22s ease, border-color 0.22s ease, background-color 0.22s ease;
+}
+.lp-hover-lift:hover {
+  transform: translateY(-3px);
+  border-color: var(--biz-border-strong);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-rise,
+  .lp-bar-fill,
+  .lp-spark,
+  .lp-sheen::after,
+  .lp-ticker-track {
+    animation: none;
+  }
+  .lp-rise { opacity: 1; }
 }
