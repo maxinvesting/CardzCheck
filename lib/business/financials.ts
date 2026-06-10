@@ -34,10 +34,47 @@ type InventoryRow = {
   estimated_cmv: number | null;
   est_cmv: number | null;
   acquisition_date: string | null;
+  acquisition_type: string | null;
   created_at: string;
   status: string | null;
   channel: string | null;
 };
+
+/**
+ * Normalized view of a recorded trade for the financials engine.
+ * `cash_in` / `cash_out` are the real money that moved at trade time;
+ * `has_incoming` distinguishes a card-for-card swap (gain deferred into the
+ * received cards' basis) from a pure cards-for-cash disposal.
+ */
+type TradeRow = {
+  traded_at: string;
+  cash_in_cents: number; // cash received in the trade
+  cash_out_cents: number; // cash paid out in the trade
+  outgoing_basis_cents: number; // cost basis of cards given away
+  has_incoming: boolean; // true if any card came back in the trade
+};
+
+/**
+ * How much of a trade should be recognized in P&L *now*, consistent with the
+ * app's deferral model. Card-for-card swaps defer their gain into the received
+ * cards' basis, so only the cash that can't be absorbed (cash received beyond
+ * the basis given up) is recognized at trade time. A pure cards-for-cash
+ * disposal (no card received) realizes the full gain or loss immediately, since
+ * there's nothing to defer the basis into. Returns null when nothing is
+ * recognized yet (the normal deferred case).
+ */
+function tradeRecognition(
+  t: TradeRow
+): { revenue_cents: number; cogs_cents: number; profit_cents: number } | null {
+  const net = t.cash_in_cents - t.cash_out_cents - t.outgoing_basis_cents;
+  const recognize = t.has_incoming ? net > 0 : true;
+  if (!recognize) return null;
+  return {
+    revenue_cents: t.cash_in_cents,
+    cogs_cents: t.cash_out_cents + t.outgoing_basis_cents,
+    profit_cents: net,
+  };
+}
 
 export type PeriodTotals = {
   revenue_cents: number;
@@ -167,7 +204,12 @@ function emptyPeriod(): PeriodTotals {
   };
 }
 
-function aggregatePeriod(rows: SaleRow[], from: Date, to: Date): PeriodTotals {
+function aggregatePeriod(
+  rows: SaleRow[],
+  from: Date,
+  to: Date,
+  trades: TradeRow[] = []
+): PeriodTotals {
   const fromMs = from.getTime();
   const toMs = to.getTime();
   const totals = emptyPeriod();
@@ -181,6 +223,17 @@ function aggregatePeriod(rows: SaleRow[], from: Date, to: Date): PeriodTotals {
     totals.fees_cents += toInt(row.platform_fees_cents);
     totals.shipping_cost_cents += toInt(row.shipping_cost_cents);
     totals.profit_cents += toInt(row.profit_cents);
+    totals.sales_count += 1;
+  }
+  // Trades recognized in P&L: only the non-deferrable cash gain/loss.
+  for (const trade of trades) {
+    const t = new Date(trade.traded_at).getTime();
+    if (t < fromMs || t >= toMs) continue;
+    const rec = tradeRecognition(trade);
+    if (!rec) continue;
+    totals.revenue_cents += rec.revenue_cents;
+    totals.cogs_cents += rec.cogs_cents;
+    totals.profit_cents += rec.profit_cents;
     totals.sales_count += 1;
   }
   if (totals.revenue_cents > 0) {
@@ -200,7 +253,11 @@ function monthKey(d: Date): string {
   return `${y}-${m}`;
 }
 
-function buildMonthBuckets(rows: SaleRow[], now: Date): MonthBucket[] {
+function buildMonthBuckets(
+  rows: SaleRow[],
+  now: Date,
+  trades: TradeRow[] = []
+): MonthBucket[] {
   const buckets = new Map<string, MonthBucket>();
   for (let i = 11; i >= 0; i--) {
     const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
@@ -226,6 +283,16 @@ function buildMonthBuckets(rows: SaleRow[], now: Date): MonthBucket[] {
     bucket.profit_cents += toInt(row.profit_cents);
     bucket.sales_count += 1;
   }
+  for (const trade of trades) {
+    const bucket = buckets.get(monthKey(new Date(trade.traded_at)));
+    if (!bucket) continue;
+    const rec = tradeRecognition(trade);
+    if (!rec) continue;
+    bucket.revenue_cents += rec.revenue_cents;
+    bucket.cogs_cents += rec.cogs_cents;
+    bucket.profit_cents += rec.profit_cents;
+    bucket.sales_count += 1;
+  }
   return Array.from(buckets.values());
 }
 
@@ -237,7 +304,8 @@ function buildMonthBuckets(rows: SaleRow[], now: Date): MonthBucket[] {
 function buildCashFlow(
   sales: SaleRow[],
   inventory: InventoryRow[],
-  now: Date
+  now: Date,
+  trades: TradeRow[] = []
 ): CashFlow {
   const buckets = new Map<string, CashFlowBucket>();
   for (let i = 11; i >= 0; i--) {
@@ -266,14 +334,26 @@ function buildCashFlow(
     bucket.cash_in_cents += cashIn;
   }
 
-  // Cash out — cost basis of inventory acquired in the month.
+  // Cash out — cost basis of inventory acquired in the month. Skip
+  // trade-acquired cards: their basis is rolled over from the trade, not cash
+  // spent — the real cash for a trade is its cash_paid, added below.
   for (const row of inventory) {
+    if (row.acquisition_type === "trade") continue;
     const acquired = row.acquisition_date
       ? new Date(row.acquisition_date)
       : new Date(row.created_at);
     const bucket = buckets.get(monthKey(acquired));
     if (!bucket) continue;
     bucket.cash_out_cents += toInt(row.cost_basis_total_cents);
+  }
+
+  // Trades move real cash regardless of how the gain is recognized: cash
+  // received is money in, cash paid is money out, bucketed by trade date.
+  for (const trade of trades) {
+    const bucket = buckets.get(monthKey(new Date(trade.traded_at)));
+    if (!bucket) continue;
+    bucket.cash_in_cents += trade.cash_in_cents;
+    bucket.cash_out_cents += trade.cash_out_cents;
   }
 
   for (const bucket of buckets.values()) {
@@ -299,12 +379,14 @@ function buildCashFlow(
   };
 }
 
-function buildChannelBreakdown(rows: SaleRow[], cutoff: Date): ChannelBreakdown[] {
+function buildChannelBreakdown(
+  rows: SaleRow[],
+  cutoff: Date,
+  trades: TradeRow[] = []
+): ChannelBreakdown[] {
   const map = new Map<string, ChannelBreakdown>();
   const cutoffMs = cutoff.getTime();
-  for (const row of rows) {
-    if (new Date(row.sold_at).getTime() < cutoffMs) continue;
-    const channel = (row.channel || "other").toLowerCase();
+  const ensure = (channel: string): ChannelBreakdown => {
     if (!map.has(channel)) {
       map.set(channel, {
         channel,
@@ -314,10 +396,24 @@ function buildChannelBreakdown(rows: SaleRow[], cutoff: Date): ChannelBreakdown[
         margin_pct: null,
       });
     }
-    const entry = map.get(channel)!;
+    return map.get(channel)!;
+  };
+  for (const row of rows) {
+    if (new Date(row.sold_at).getTime() < cutoffMs) continue;
+    const entry = ensure((row.channel || "other").toLowerCase());
     entry.revenue_cents +=
       toInt(row.sold_price_cents) + toInt(row.shipping_charged_cents);
     entry.profit_cents += toInt(row.profit_cents);
+    entry.sales_count += 1;
+  }
+  // Recognized trade gains show up as their own "trade" channel.
+  for (const trade of trades) {
+    if (new Date(trade.traded_at).getTime() < cutoffMs) continue;
+    const rec = tradeRecognition(trade);
+    if (!rec) continue;
+    const entry = ensure("trade");
+    entry.revenue_cents += rec.revenue_cents;
+    entry.profit_cents += rec.profit_cents;
     entry.sales_count += 1;
   }
   const out = Array.from(map.values());
@@ -528,7 +624,7 @@ export async function getFinancialsSummary(
       (a, b) => a.getTime() - b.getTime()
     )[0];
 
-  const [salesRes, inventoryRes] = await Promise.all([
+  const [salesRes, inventoryRes, tradesRes] = await Promise.all([
     supabase
       .from("business_sales")
       .select(
@@ -541,10 +637,18 @@ export async function getFinancialsSummary(
     supabase
       .from(BUSINESS_TABLE)
       .select(
-        "id,title,player_name,year,cost_basis_total_cents,current_market_value_cents,estimated_cmv,est_cmv,acquisition_date,created_at,status,channel"
+        "id,title,player_name,year,cost_basis_total_cents,current_market_value_cents,estimated_cmv,est_cmv,acquisition_date,acquisition_type,created_at,status,channel"
       )
       .eq("user_id", userId)
       .eq("item_kind", BUSINESS_ITEM_KIND),
+    supabase
+      .from("business_trades")
+      .select(
+        "id,traded_at,cash_paid_cents,cash_received_cents,outgoing_basis_cents,incoming_basis_cents,trade_items:business_trade_items(direction)"
+      )
+      .eq("business_account_id", context.businessAccountId)
+      .eq("is_deleted", false)
+      .gte("traded_at", salesFrom.toISOString()),
   ]);
 
   type RawSale = SaleRow & {
@@ -586,14 +690,34 @@ export async function getFinancialsSummary(
   }));
   const inventoryRows: InventoryRow[] = (inventoryRes.data ?? []) as InventoryRow[];
 
-  const last30 = aggregatePeriod(saleRows, last30Start, now);
-  const prev30 = aggregatePeriod(saleRows, prev30Start, last30Start);
-  const mtd = aggregatePeriod(saleRows, monthStart, now);
-  const ytd = aggregatePeriod(saleRows, yearStart, now);
+  // Trades — gracefully degrade to none if the trade ledger isn't migrated yet.
+  type RawTrade = {
+    traded_at: string;
+    cash_paid_cents: number | null;
+    cash_received_cents: number | null;
+    outgoing_basis_cents: number | null;
+    incoming_basis_cents: number | null;
+    trade_items?: Array<{ direction: string | null }> | null;
+  };
+  const rawTrades: RawTrade[] = tradesRes.error
+    ? []
+    : ((tradesRes.data ?? []) as unknown as RawTrade[]);
+  const tradeRows: TradeRow[] = rawTrades.map((t) => ({
+    traded_at: t.traded_at,
+    cash_in_cents: toInt(t.cash_received_cents),
+    cash_out_cents: toInt(t.cash_paid_cents),
+    outgoing_basis_cents: toInt(t.outgoing_basis_cents),
+    has_incoming: (t.trade_items ?? []).some((it) => it.direction === "in"),
+  }));
 
-  const monthly = buildMonthBuckets(saleRows, now);
-  const cashflow = buildCashFlow(saleRows, inventoryRows, now);
-  const channels_90d = buildChannelBreakdown(saleRows, last90Start);
+  const last30 = aggregatePeriod(saleRows, last30Start, now, tradeRows);
+  const prev30 = aggregatePeriod(saleRows, prev30Start, last30Start, tradeRows);
+  const mtd = aggregatePeriod(saleRows, monthStart, now, tradeRows);
+  const ytd = aggregatePeriod(saleRows, yearStart, now, tradeRows);
+
+  const monthly = buildMonthBuckets(saleRows, now, tradeRows);
+  const cashflow = buildCashFlow(saleRows, inventoryRows, now, tradeRows);
+  const channels_90d = buildChannelBreakdown(saleRows, last90Start, tradeRows);
   const inv = buildInventory(inventoryRows, now);
 
   const velocity = buildVelocity(
