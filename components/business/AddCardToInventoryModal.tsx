@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { normalizeCertWriteFields } from "@/lib/images/cert-image";
 import CardPhotoUploader from "@/components/business/CardPhotoUploader";
 
@@ -123,16 +123,70 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
   const [cmvLoading, setCmvLoading] = useState(false);
   const [images, setImages] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [certInput, setCertInput] = useState("");
+  const [certFetching, setCertFetching] = useState(false);
+  const [certNote, setCertNote] = useState<string | null>(null);
+
+  // Pull the official PSA slab scans for a cert and add them to the photo set.
+  // Used by the card-picker flow (which carries no cert) and as an auto-fetch
+  // when a card arrives with a cert number but no photos.
+  const fetchCertImages = useCallback(async (rawCert: string, maxPhotos: number) => {
+    const digits = rawCert.replace(/\D/g, "");
+    if (digits.length < 5) {
+      setCertNote("Enter a valid PSA cert number (5+ digits).");
+      return;
+    }
+    setCertFetching(true);
+    setCertNote(null);
+    try {
+      const res = await fetch("/api/psa/lookup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ certNumber: digits }),
+      });
+      const data = await res.json().catch(() => null);
+      const urls: string[] = Array.isArray(data?.image_urls)
+        ? data.image_urls.filter((u: unknown): u is string => typeof u === "string" && u.length > 0)
+        : [];
+      if (urls.length > 0) {
+        setImages((prev) => Array.from(new Set([...prev, ...urls])).slice(0, maxPhotos));
+        setCertNote(`Added ${urls.length} PSA scan${urls.length > 1 ? "s" : ""} from cert ${digits}.`);
+      } else {
+        setCertNote(
+          data?.found === false ? "Cert not found." : "No PSA scan on file for this cert."
+        );
+      }
+    } catch {
+      setCertNote("Couldn't reach PSA — upload photos instead.");
+    } finally {
+      setCertFetching(false);
+    }
+  }, []);
 
   // Seed images from any photo the card already arrived with (grade scan,
-  // smart-search, etc.); a fresh manual add starts with none.
+  // smart-search, etc.); a fresh manual add starts with none. If the card came
+  // with a PSA cert but no photo, auto-fetch the slab scans.
   useEffect(() => {
     if (!isOpen) return;
     const seeded = [card?.user_image_url, card?.imageUrl, ...(card?.imageUrls ?? [])].filter(
       (u): u is string => typeof u === "string" && u.length > 0
     );
-    setImages(Array.from(new Set(seeded)));
-  }, [isOpen, card]);
+    const uniqueSeeded = Array.from(new Set(seeded));
+    setImages(uniqueSeeded);
+
+    const initialCert = card?.psa_cert_number ?? "";
+    setCertInput(initialCert);
+    setCertNote(null);
+
+    const grade = card ? resolveGradeFields(card) : null;
+    if (
+      uniqueSeeded.length === 0 &&
+      grade?.gradingCompany === "PSA" &&
+      initialCert.replace(/\D/g, "").length >= 5
+    ) {
+      void fetchCertImages(initialCert, grade.conditionStatus === "graded" ? 3 : 10);
+    }
+  }, [isOpen, card, fetchCertImages]);
 
 
   // Fetch estimated CMV when modal opens with a card
@@ -181,6 +235,7 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
 
   const title = buildTitle(card);
   const gradeFields = resolveGradeFields(card);
+  const maxPhotos = gradeFields.conditionStatus === "graded" ? 3 : 10;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -195,7 +250,7 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
       const parsedQuantity = Math.max(1, Number.parseInt(form.quantity, 10) || 1);
       const normalizedCert = normalizeCertWriteFields({
         grading_company: gradeFields.gradingCompany,
-        cert_number: card.psa_cert_number,
+        cert_number: certInput.trim() || card.psa_cert_number,
       });
       const resolvedImageUrl = images[0] ?? card.user_image_url ?? card.imageUrl ?? null;
       const resolvedImageSource = resolvedImageUrl ? "user" : "none";
@@ -260,6 +315,8 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
         notes: "",
       });
       setImages([]);
+      setCertInput("");
+      setCertNote(null);
 
       onSuccess(card.player_name);
       onClose();
@@ -354,7 +411,7 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
                 <CardPhotoUploader
                   images={images}
                   onChange={setImages}
-                  max={gradeFields.conditionStatus === "graded" ? 3 : 10}
+                  max={maxPhotos}
                   onUploadingChange={setUploading}
                   onError={setError}
                   size="md"
@@ -381,6 +438,48 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
                     <p className="mt-1 text-xs font-medium text-[#5FA8FF]">{gradeFields.gradeLabel}</p>
                   )}
                 </div>
+
+                {gradeFields.gradingCompany === "PSA" && (
+                  <div className="mt-3 border-t border-[#24282D] pt-2">
+                    <label className="mb-1 block text-[10px] font-medium uppercase tracking-[0.08em] text-[#77808C]">
+                      PSA cert number
+                    </label>
+                    <div className="flex gap-1.5">
+                      <input
+                        value={certInput}
+                        onChange={(e) => setCertInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            void fetchCertImages(certInput, maxPhotos);
+                          }
+                        }}
+                        onBlur={() => {
+                          if (
+                            images.length === 0 &&
+                            certInput.replace(/\D/g, "").length >= 5
+                          ) {
+                            void fetchCertImages(certInput, maxPhotos);
+                          }
+                        }}
+                        placeholder="e.g. 142462150"
+                        inputMode="numeric"
+                        className="min-w-0 flex-1 border border-[#343941] bg-[#0F1317] px-2 py-1.5 text-sm text-[#E6E8EB] placeholder-[#5A626E] focus:border-[#20B26B] focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void fetchCertImages(certInput, maxPhotos)}
+                        disabled={certFetching || certInput.replace(/\D/g, "").length < 5}
+                        className="flex-shrink-0 border border-[#343941] bg-[#11161B] px-2 py-1.5 text-[11px] text-[#E6E8EB] transition-colors hover:border-[#20B26B] disabled:opacity-40"
+                      >
+                        {certFetching ? "…" : "Fetch scan"}
+                      </button>
+                    </div>
+                    <p className="mt-1 text-[10px] leading-snug text-[#5A626E]">
+                      {certNote ?? "Pull the official PSA slab scans by cert number."}
+                    </p>
+                  </div>
+                )}
               </div>
             </aside>
 
