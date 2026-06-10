@@ -68,30 +68,30 @@ const activityRows = [
 
 const features: Feature[] = [
   {
-    title: "Inventory Intake",
+    title: "Manage your whole collection",
     description:
-      "Add cards one by one, import cert batches, attach photos, and keep location, cost basis, condition, quantity, and notes in one record.",
-    points: ["Manual add and bulk workflows", "Photos, certs, grades, and locations", "Editable inventory history"],
+      "Keep every card in one place — cost basis, current value, condition, grade, photos, location, and quantity. From a single slab to thousands of cards.",
+    points: ["Add cards one by one or import in bulk", "Cost basis and current value tracking", "Photos, grades, conditions, and locations"],
     icon: <IconPath d="M4 6h16M4 12h16M4 18h10M8 6v12" />,
   },
   {
-    title: "Selling Workspace",
+    title: "Sell it on the platform",
     description:
-      "Prepare listings, set list prices, route items to CardzCheck Marketplace, eBay, Whatnot, shows, local deals, or your own website.",
-    points: ["Channel and storefront tracking", "Listing drafts and active listings", "Status from inbound to sold"],
+      "List cards straight from your collection. Sell on the CardzCheck Marketplace or route inventory to eBay, Whatnot, shows, or your own site.",
+    points: ["List to the CardzCheck Marketplace", "Route to eBay, Whatnot, and more", "Drafts, active listings, and sold status"],
     icon: <IconPath d="M6 7h12l1 13H5L6 7ZM9 7a3 3 0 0 1 6 0M9 13h6" />,
   },
   {
-    title: "Sales and Ledger",
+    title: "Run the financials like a company",
     description:
-      "Record orders, fees, shipping, taxes, COGS, net payout, and profit so the business can reconcile what actually happened.",
-    points: ["Revenue, fees, payout, and profit", "Sales filters and order IDs", "Accounting export"],
+      "Every sale tracks revenue, fees, shipping, taxes, cost of goods, and payout, rolled into P&L and cash flow so you always know what the business made.",
+    points: ["Revenue, fees, payout, and profit", "P&L and cash-flow reporting", "Accounting-ready exports"],
     icon: <IconPath d="M5 4h14v16H5V4Zm4 4h6M9 12h6M9 16h3" />,
   },
   {
-    title: "Team Operations",
+    title: "Scale with a team",
     description:
-      "Give owners, managers, and employees a shared operating view with roles, seats, assignments, and handoffs across the sales flow.",
+      "Grow past a one-person operation. Add owners, managers, and employees to a shared workspace with roles and seats so the books stay in one place.",
     points: ["Owner, manager, and employee roles", "Team seats and invites", "Shared business dashboard"],
     icon: <IconPath d="M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm8 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM4 20a4 4 0 0 1 8 0M12 20a4 4 0 0 1 8 0" />,
   },
@@ -125,37 +125,37 @@ const plans: Plan[] = [
     name: "Free",
     price: "$0",
     cadence: "forever",
-    description: "A small starter workspace for trying the product.",
+    description: "A starter workspace for trying the product.",
     features: [
-      `${LIMITS.FREE_COLLECTION} saved cards`,
+      `${LIMITS.FREE_COLLECTION} collection cards`,
       `${LIMITS.FREE_SEARCHES} card lookups`,
-      "Basic account and dashboard access",
+      "Account and dashboard basics",
     ],
   },
   {
-    name: "Business",
+    name: "Pro",
     price: formatPrice(PRO_MONTHLY_PRICE),
     cadence: "per month",
-    description: "For sellers who want one place to track inventory and sales.",
+    description: "For sellers who want one place for their whole collection.",
     features: [
-      "Unlimited inventory workspace",
-      "Marketplace selling tools",
-      "Business consultant messages",
+      "Unlimited collection and inventory",
+      "Marketplace and channel selling tools",
+      "Profit, fees, and payout reporting",
       "Annual billing available",
     ],
     emphasized: true,
     note: `${formatPrice(PRO_ANNUAL_PRICE)}/yr saves ${formatPrice(ANNUAL_SAVINGS)}`,
   },
   {
-    name: "Business Pro",
+    name: "Business",
     price: formatPrice(BUSINESS_MONTHLY_PRICE),
     cadence: "per month",
-    description: "For teams and higher-volume operators.",
+    description: "For teams and higher-volume operations.",
     features: [
+      "Everything in Pro",
       "Bulk cert import and larger workflows",
-      `${BUSINESS_INCLUDED_SEATS} included seat`,
-      `Additional seats ${formatPrice(BUSINESS_ADDITIONAL_SEAT_MONTHLY_PRICE)}/mo`,
-      "Lower marketplace fees",
+      `${BUSINESS_INCLUDED_SEATS} seat included, extra seats ${formatPrice(BUSINESS_ADDITIONAL_SEAT_MONTHLY_PRICE)}/mo`,
+      "Role-based team access",
     ],
   },
 ];
@@ -195,9 +195,6 @@ function OperationsPreview() {
           </p>
           <p className="mt-0.5 text-[11px] text-[color:var(--biz-faint)]">Sample operating view</p>
         </div>
-        <span className="rounded border border-[color:var(--biz-border-strong)] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[color:var(--biz-muted)]">
-          Today
-        </span>
       </div>
 
       <div className="grid border-b border-[color:var(--biz-border)] sm:grid-cols-3">
@@ -326,16 +323,9 @@ function PlanCard({ plan }: { plan: Plan }) {
           : "border-[color:var(--biz-border)] bg-[color:var(--biz-surface)]"
       }`}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="text-lg font-semibold text-[color:var(--biz-text-strong)]">{plan.name}</h3>
-          <p className="mt-1 text-sm leading-relaxed text-[color:var(--biz-muted)]">{plan.description}</p>
-        </div>
-        {plan.emphasized ? (
-          <span className="rounded border border-[color:var(--biz-primary-border)] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-[color:var(--biz-muted-strong)]">
-            Core
-          </span>
-        ) : null}
+      <div>
+        <h3 className="text-lg font-semibold text-[color:var(--biz-text-strong)]">{plan.name}</h3>
+        <p className="mt-1 text-sm leading-relaxed text-[color:var(--biz-muted)]">{plan.description}</p>
       </div>
 
       <div className="mt-6">
@@ -449,13 +439,13 @@ export default function Home() {
       <main>
         <section className="mx-auto grid max-w-6xl items-center gap-10 px-5 pb-16 pt-14 lg:grid-cols-[0.88fr_1.12fr] lg:pb-20 lg:pt-20">
           <div>
-            <SectionLabel>For card sellers, shops, and operators</SectionLabel>
+            <SectionLabel>For collectors, sellers, and card shops</SectionLabel>
             <h1 className="mt-5 max-w-3xl text-4xl font-semibold tracking-tight text-[color:var(--biz-text-strong)] sm:text-6xl sm:leading-[1.02]">
-              Sports card inventory software.
+              Run your card collection like a business.
             </h1>
             <p className="mt-6 max-w-xl text-base leading-7 text-[color:var(--biz-muted)] sm:text-lg">
-              CardzCheck helps you run the business side of cards: intake inventory, prepare listings,
-              manage selling channels, record orders, and keep profit visible without another spreadsheet.
+              Manage your entire collection, sell it on the platform, and track your financials like a
+              real company — everything you need to grow a card operation, in one workspace.
             </p>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
@@ -475,9 +465,9 @@ export default function Home() {
 
             <div className="mt-9 grid gap-3 text-sm text-[color:var(--biz-muted-strong)] sm:grid-cols-3">
               <div className="border-l border-[color:var(--biz-border-strong)] pl-3">
-                <p className="font-semibold text-[color:var(--biz-text-strong)]">Inventory</p>
+                <p className="font-semibold text-[color:var(--biz-text-strong)]">Collection</p>
                 <p className="mt-1 text-xs leading-relaxed text-[color:var(--biz-muted)]">
-                  Cost, photos, condition, location, status.
+                  Cost, value, condition, grade, location.
                 </p>
               </div>
               <div className="border-l border-[color:var(--biz-border-strong)] pl-3">
@@ -487,9 +477,9 @@ export default function Home() {
                 </p>
               </div>
               <div className="border-l border-[color:var(--biz-border-strong)] pl-3">
-                <p className="font-semibold text-[color:var(--biz-text-strong)]">Ledger</p>
+                <p className="font-semibold text-[color:var(--biz-text-strong)]">Financials</p>
                 <p className="mt-1 text-xs leading-relaxed text-[color:var(--biz-muted)]">
-                  Revenue, fees, COGS, payout, profit.
+                  Revenue, fees, COGS, payout, P&amp;L.
                 </p>
               </div>
             </div>
@@ -503,10 +493,11 @@ export default function Home() {
             <div className="max-w-2xl">
               <SectionLabel>Platform</SectionLabel>
               <h2 className="mt-3 text-3xl font-semibold tracking-tight text-[color:var(--biz-text-strong)] sm:text-4xl">
-                Built around the work sellers do every day.
+                Everything your card business needs, in one place.
               </h2>
               <p className="mt-4 text-sm leading-7 text-[color:var(--biz-muted)]">
-                The product centers on inventory, listings, sales records, team handoffs, and financial visibility.
+                Your collection, your selling channels, and your financials live together — so the same card
+                moves from intake to listing to sale without losing the numbers behind it.
               </p>
             </div>
 
