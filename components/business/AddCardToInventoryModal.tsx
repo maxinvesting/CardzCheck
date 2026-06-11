@@ -18,6 +18,8 @@ export interface PendingInventoryCard {
   user_image_url?: string;
   psa_cert_number?: string;
   quantity?: number;
+  /** True when the card was typed in by hand — skip the automatic value lookup. */
+  manualEntry?: boolean;
 }
 
 interface Props {
@@ -196,6 +198,11 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
       ...prev,
       quantity: String(Math.max(1, card.quantity ?? 1)),
     }));
+    // Manual entry is a pure passthrough — never run a value lookup.
+    if (card.manualEntry) {
+      setCmvLoading(false);
+      return;
+    }
     setCmvLoading(true);
     const q = new URLSearchParams({ player: card.player_name, format: "dual" });
     if (card.year) q.set("year", card.year);

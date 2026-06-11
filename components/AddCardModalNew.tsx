@@ -39,6 +39,8 @@ interface AddCardModalNewProps {
     imageUrls?: string[];
     user_image_url?: string;
     quantity?: number;
+    /** True when the card was typed in by hand — downstream flows must not run any lookup/search. */
+    manualEntry?: boolean;
   }) => void;
 }
 
@@ -225,6 +227,12 @@ export default function AddCardModalNew({
   // Upload mode state
   const [previews, setPreviews] = useState<string[]>([]);
   const [identifiedCard, setIdentifiedCard] = useState<CardIdentificationResult | null>(null);
+  /**
+   * True while the current confirm/submit originated from hand-typed entry.
+   * Manual add is a pure passthrough — we never search/identify the card, and
+   * downstream inventory steps must not run a value lookup either.
+   */
+  const [manualEntry, setManualEntry] = useState(false);
 
   // Manual mode state
   const [manualForm, setManualForm] = useState({
@@ -261,6 +269,7 @@ export default function AddCardModalNew({
     setError(null);
     setPreviews([]);
     setIdentifiedCard(null);
+    setManualEntry(false);
     setManualForm({ player_name: "", year: "", set_name: "", parallel_type: "" });
     setGradedManualForm({
       player_name: "",
@@ -372,6 +381,7 @@ export default function AddCardModalNew({
         imageUrls: psaImageUrls,
         user_image_url: psaImageUrls[0] ?? undefined,
         quantity: parsedQuantity,
+        manualEntry: true,
       });
       resetForm();
       onClose();
@@ -428,6 +438,7 @@ export default function AddCardModalNew({
       return;
     }
     setError(null);
+    setManualEntry(false);
     setIdentifiedCard(buildCardIdentificationFromPsa(psaResult));
     const gradeValue = psaResult.grade?.trim();
     const optionMatch = gradeValue
@@ -537,6 +548,7 @@ export default function AddCardModalNew({
         selectedImageUrls[0] || previewUrls[0] || "";
 
       // Success - set identified card (NO gradeEstimate - that's separate)
+      setManualEntry(false);
       setIdentifiedCard(normalizeIdentificationResult({
         player_name: result.player_name,
         players: result.players || [result.player_name],
@@ -664,6 +676,7 @@ export default function AddCardModalNew({
       warnings: [],
       evidenceSummary: null,
     };
+    setManualEntry(true);
     setIdentifiedCard({
       player_name: manualForm.player_name,
       year: manualForm.year || undefined,
@@ -704,6 +717,7 @@ export default function AddCardModalNew({
         imageUrls: identifiedCard.imageUrls || undefined,
         user_image_url: identifiedCard.userImageUrl || undefined,
         quantity: parsedQuantity,
+        manualEntry,
       };
       onCardSelected(cardData);
       resetForm();
@@ -987,10 +1001,22 @@ export default function AddCardModalNew({
                   </div>
                 </div>
               </button>
-              <button
-                onClick={() => { if (hasCardPicker && onOpenSmartSearch) { onOpenSmartSearch(); return; } setMode("manual"); }}
-                className={optionCardCls}
-              >
+              {hasCardPicker && onOpenSmartSearch && (
+                <button onClick={() => onOpenSmartSearch()} className={optionCardCls}>
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 border border-[#343941] bg-[#1E2227] flex items-center justify-center group-hover:border-[#20B26B] transition-colors">
+                      <svg className="w-5 h-5 text-[#77808C] group-hover:text-[#20B26B]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M11 18a7 7 0 100-14 7 7 0 000 14z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-[#E6E8EB]">Find in Card Database</p>
+                      <p className="text-xs text-[#77808C]">Use structured filters to pick the exact card</p>
+                    </div>
+                  </div>
+                </button>
+              )}
+              <button onClick={() => setMode("manual")} className={optionCardCls}>
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 border border-[#343941] bg-[#1E2227] flex items-center justify-center group-hover:border-[#20B26B] transition-colors">
                     <svg className="w-5 h-5 text-[#77808C] group-hover:text-[#20B26B]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -998,8 +1024,8 @@ export default function AddCardModalNew({
                     </svg>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-[#E6E8EB]">{hasCardPicker ? "Find in Card Database" : "Enter Manually"}</p>
-                    <p className="text-xs text-[#77808C]">{hasCardPicker ? "Use structured filters to pick the exact card" : "Type the card details yourself"}</p>
+                    <p className="text-sm font-medium text-[#E6E8EB]">Enter Manually</p>
+                    <p className="text-xs text-[#77808C]">Type the card details yourself — no search</p>
                   </div>
                 </div>
               </button>

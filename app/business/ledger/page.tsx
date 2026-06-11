@@ -590,6 +590,7 @@ export default function LedgerPage() {
       imageUrls?: string[];
       user_image_url?: string;
       quantity?: number;
+      manualEntry?: boolean;
     }) => {
       setShowAddCardModal(false);
       setPendingInventoryCard(cardData);
