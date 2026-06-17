@@ -28,6 +28,7 @@ interface ListingRow {
     grading_service: string;
     manufacturer: string;
     parallel: string | null;
+    image_url: string | null;
   };
 }
 
@@ -150,7 +151,7 @@ export default async function MarketplaceBrowsePage({
   let query = service
     .from("listings")
     .select(
-      "id, list_price_cents, cmv_mid_cents, pipeline, status, listed_at, marketplace_cards!inner(title, year, player, grade, grading_service, manufacturer, parallel)"
+      "id, list_price_cents, cmv_mid_cents, pipeline, status, listed_at, marketplace_cards!inner(title, year, player, grade, grading_service, manufacturer, parallel, image_url)"
     )
     .in("status", ["active", "price_reduced"])
     .order("listed_at", { ascending: false })
@@ -219,107 +220,10 @@ export default async function MarketplaceBrowsePage({
               No listings match your filters.
             </div>
           ) : (
-            <div className="overflow-hidden border border-[#24282D] bg-[#0F1317]">
-              <div className="max-h-[calc(100vh-220px)] min-h-[400px] overflow-auto">
-                <table className="w-full border-collapse font-data text-[12px]">
-                  <thead>
-                    <tr>
-                      <Th>Card</Th>
-                      <Th className="w-[80px]">Grade</Th>
-                      <Th align="right" className="w-[100px]">
-                        Price
-                      </Th>
-                      <Th align="right" className="w-[82px]" title="Spread vs CMV mid">
-                        Spread
-                      </Th>
-                      <Th align="right" className="w-[84px]" title="CMV mid reference">
-                        CMV
-                      </Th>
-                      <Th align="center" className="w-[90px]">
-                        Tier
-                      </Th>
-                      <Th align="right" className="w-[80px]">
-                        Listed
-                      </Th>
-                      <Th align="right" className="w-[80px]">
-                        Action
-                      </Th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((r) => {
-                      const card = r.marketplace_cards;
-                      const spread = spreadVsCmv(r.list_price_cents, r.cmv_mid_cents);
-                      return (
-                        <tr
-                          key={r.id}
-                          className="group border-b border-[#1A1E23] transition-colors hover:bg-[#161A1F]"
-                        >
-                          <Td className="max-w-[280px]">
-                            <Link
-                              href={`/marketplace/listing/${r.id}`}
-                              className="block min-w-0 truncate"
-                            >
-                              <div className="truncate font-medium text-[#E6E8EB] group-hover:underline">
-                                {card.player}
-                              </div>
-                              <div className="mt-0.5 truncate text-[10px] text-[#77808C]">
-                                {[
-                                  card.year,
-                                  card.manufacturer,
-                                  card.parallel,
-                                ]
-                                  .filter(Boolean)
-                                  .join(" · ")}
-                              </div>
-                            </Link>
-                          </Td>
-                          <Td>
-                            <span className="text-[#B8C0CC]">
-                              {card.grading_service} {card.grade}
-                            </span>
-                          </Td>
-                          <Td align="right" className="font-semibold tabular-nums text-[#E6E8EB]">
-                            {formatMoneyCents(r.list_price_cents)}
-                            {r.status === "price_reduced" ? (
-                              <div className="text-[9px] uppercase text-amber-300">
-                                Reduced
-                              </div>
-                            ) : null}
-                          </Td>
-                          <Td
-                            align="right"
-                            className={`tabular-nums ${spread.toneClass}`}
-                          >
-                            {spread.pctText}
-                          </Td>
-                          <Td align="right" className="tabular-nums text-[#77808C]">
-                            {formatMoneyCents(r.cmv_mid_cents)}
-                          </Td>
-                          <Td align="center">
-                            <span
-                              className={`inline-flex border px-1.5 py-0.5 text-[9px] uppercase ${PIPELINE_CHIP[r.pipeline]}`}
-                            >
-                              {r.pipeline}
-                            </span>
-                          </Td>
-                          <Td align="right" className="text-[10px] text-[#77808C]">
-                            {relativeListed(r.listed_at)}
-                          </Td>
-                          <Td align="right">
-                            <Link
-                              href={`/marketplace/listing/${r.id}`}
-                              className="inline-flex border border-[#343941] bg-[#0B0D0F] px-2 py-0.5 text-[10px] font-semibold uppercase text-[#B8C0CC] hover:border-[#5A626E] hover:text-[#E6E8EB]"
-                            >
-                              View
-                            </Link>
-                          </Td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+              {rows.map((r) => (
+                <CardTile key={r.id} row={r} />
+              ))}
             </div>
           )}
         </section>
@@ -461,45 +365,70 @@ function TagIcon() {
   );
 }
 
-function Th({
-  children,
-  align = "left",
-  className = "",
-  title,
-}: {
-  children: ReactNode;
-  align?: "left" | "right" | "center";
-  className?: string;
-  title?: string;
-}) {
-  const alignClass =
-    align === "right" ? "text-right" : align === "center" ? "text-center" : "text-left";
-  return (
-    <th
-      scope="col"
-      title={title}
-      className={`sticky top-0 z-10 border-b border-[#24282D] bg-[#0B0D0F] px-2 py-2 text-[10px] font-medium uppercase text-[#77808C] ${alignClass} ${className}`}
-    >
-      {children}
-    </th>
-  );
-}
+function CardTile({ row }: { row: ListingRow }) {
+  const card = row.marketplace_cards;
+  const spread = spreadVsCmv(row.list_price_cents, row.cmv_mid_cents);
+  const subline = [card.year, card.manufacturer, card.parallel]
+    .filter(Boolean)
+    .join(" · ");
 
-function Td({
-  children,
-  align = "left",
-  className = "",
-}: {
-  children: ReactNode;
-  align?: "left" | "right" | "center";
-  className?: string;
-}) {
-  const alignClass =
-    align === "right" ? "text-right" : align === "center" ? "text-center" : "text-left";
   return (
-    <td className={`px-2 py-1.5 align-middle leading-snug ${alignClass} ${className}`}>
-      {children}
-    </td>
+    <Link
+      href={`/marketplace/listing/${row.id}`}
+      className="group flex flex-col overflow-hidden border border-[#24282D] bg-[#0F1317] transition-colors hover:border-[#5A626E]"
+    >
+      {/* Portrait card image */}
+      <div className="relative aspect-[5/7] overflow-hidden bg-[#0B0D0F]">
+        {card.image_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={card.image_url}
+            alt={`${card.player} ${card.year} ${card.title}`.trim()}
+            loading="lazy"
+            className="h-full w-full object-contain transition-transform duration-200 group-hover:scale-[1.03]"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-[10px] uppercase tracking-wide text-[#3A414B]">
+            No image
+          </div>
+        )}
+        <span
+          className={`absolute left-1.5 top-1.5 inline-flex border px-1.5 py-0.5 text-[9px] uppercase ${PIPELINE_CHIP[row.pipeline]}`}
+        >
+          {row.pipeline}
+        </span>
+        {row.status === "price_reduced" ? (
+          <span className="absolute right-1.5 top-1.5 inline-flex border border-amber-500/40 bg-amber-900/40 px-1.5 py-0.5 text-[9px] uppercase text-amber-300 backdrop-blur">
+            Reduced
+          </span>
+        ) : null}
+      </div>
+
+      {/* Meta */}
+      <div className="flex flex-1 flex-col gap-1 p-2.5">
+        <div className="truncate text-[13px] font-semibold text-[#E6E8EB] group-hover:underline">
+          {card.player}
+        </div>
+        {subline ? (
+          <div className="truncate text-[10px] text-[#77808C]">{subline}</div>
+        ) : null}
+        <div className="text-[10px] text-[#B8C0CC]">
+          {card.grading_service} {card.grade}
+        </div>
+        <div className="mt-1 flex items-baseline justify-between gap-2">
+          <span className="text-[15px] font-semibold tabular-nums text-[#E6E8EB]">
+            {formatMoneyCents(row.list_price_cents)}
+          </span>
+          <span className={`text-[10px] tabular-nums ${spread.toneClass}`}>
+            {spread.pctText}
+          </span>
+        </div>
+        <div className="mt-0.5 flex items-center justify-between text-[9px] text-[#5A626E]">
+          <span>CMV {formatMoneyCents(row.cmv_mid_cents)}</span>
+          <span>{relativeListed(row.listed_at)}</span>
+        </div>
+      </div>
+    </Link>
   );
 }
 
