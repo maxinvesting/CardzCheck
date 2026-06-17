@@ -46,7 +46,7 @@ export default function CompactTopPerformers({ items, loading }: CompactTopPerfo
         {items.length > 0 && (
           <Link
             href="/collection"
-            className="text-xs font-medium text-[color:var(--biz-primary,#0b7a4b)] hover:underline"
+            className="text-xs font-medium text-[color:var(--biz-link)] hover:text-[color:var(--biz-text-strong)] hover:underline"
           >
             View all
           </Link>
@@ -89,9 +89,13 @@ export default function CompactTopPerformers({ items, loading }: CompactTopPerfo
                   </p>
                   {pctChange !== null && (
                     <p
-                      className={`text-[10px] tabular-nums ${
-                      pctChange >= 0 ? "text-green-400" : "text-red-400"
-                    }`}
+                      className="text-[10px] tabular-nums"
+                      style={{
+                        color:
+                          pctChange >= 0
+                            ? "var(--biz-profit)"
+                            : "var(--biz-danger)",
+                      }}
                     >
                       {pctChange >= 0 ? "+" : ""}{(pctChange * 100).toFixed(0)}%
                     </p>

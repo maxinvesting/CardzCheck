@@ -250,45 +250,40 @@ export default function DashboardPage() {
         {/* Toast Notification */}
         {toast && (
           <div
-            className={`fixed bottom-4 right-4 p-4 rounded-lg shadow-lg z-50 flex items-center gap-3 ${
-              toast.type === "success"
-                ? "bg-green-600 text-white"
-                : "bg-red-600 text-white"
-            }`}
+            role="status"
+            aria-live="polite"
+            className="fixed bottom-4 right-4 z-50 flex items-center gap-3 rounded-lg border border-[var(--biz-border-strong)] bg-[var(--biz-surface-raised)] p-4 text-[var(--biz-text)] shadow-[var(--biz-shadow-md)]"
+            style={{
+              borderLeftWidth: 3,
+              borderLeftColor:
+                toast.type === "success" ? "var(--biz-profit)" : "var(--biz-danger)",
+            }}
           >
-            {toast.type === "success" ? (
+            <svg
+              className="h-5 w-5 shrink-0"
+              style={{
+                color:
+                  toast.type === "success" ? "var(--biz-profit)" : "var(--biz-danger)",
+              }}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d={toast.type === "success" ? "M5 13l4 4L19 7" : "M6 18L18 6M6 6l12 12"}
+              />
+            </svg>
+            <span className="text-sm">{toast.message}</span>
+            <button
+              onClick={() => setToast(null)}
+              aria-label="Dismiss notification"
+              className="ml-2 text-[var(--biz-muted)] transition-colors hover:text-[var(--biz-text)]"
+            >
               <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M5 13l4 4L19 7"
-                />
-              </svg>
-            ) : (
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            )}
-            <span>{toast.message}</span>
-            <button onClick={() => setToast(null)} className="ml-2 hover:opacity-75">
-              <svg
-                className="w-4 h-4"
+                className="h-4 w-4"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"

@@ -428,16 +428,27 @@ export default function CardPicker({
       ? "Pick a card to search pricing data"
       : "Pick a card to run a pricing search";
 
-  return (
-    <div className="space-y-5">
-      <div>
-        <p className="text-sm text-gray-500 dark:text-gray-400">{labelCopy}</p>
-      </div>
+  const fieldLabelCls =
+    "mb-1 block text-[10px] font-medium uppercase tracking-[0.08em] text-[#77808C]";
+  const fieldCls =
+    "w-full border border-[#343941] bg-[#0F1317] px-3 py-2 text-sm text-[#E6E8EB] placeholder-[#5A626E] focus:border-[#20B26B] focus:outline-none disabled:opacity-50";
+  const typeaheadMenuCls =
+    "absolute z-20 mt-1 max-h-56 w-full overflow-y-auto border border-[#343941] bg-[#0F1317] shadow-xl";
+  const typeaheadItemCls =
+    "w-full px-3 py-2 text-left text-sm text-[#E6E8EB] hover:bg-[#1A1F25]";
+  const secondaryBtnCls =
+    "inline-flex items-center border border-[#343941] px-3 py-1.5 text-[11px] font-semibold text-[#B8C0CC] transition-colors hover:border-[#5A626E] hover:text-[#E6E8EB] disabled:opacity-50";
+  const accentBtnCls =
+    "inline-flex items-center border border-[#20B26B] px-3 py-1.5 text-[11px] font-semibold text-[#20B26B] transition-colors hover:bg-[#20B26B]/10 disabled:opacity-50";
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-[#77808C]">{labelCopy}</p>
+
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <div>
-          <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-2">
-            Player <span className="text-red-500">*</span>
+          <label className={fieldLabelCls}>
+            Player <span className="text-[#E05C5C]">*</span>
           </label>
           <div className="relative">
             <input
@@ -456,16 +467,16 @@ export default function CardPicker({
               }}
               placeholder="Start typing a player name"
               disabled={disabled}
-              className="w-full px-3 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
+              className={fieldCls}
             />
             {!disabled && playerOptions.length > 0 && !selectedPlayer && (
-              <div className="absolute z-20 mt-1 w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-56 overflow-y-auto">
+              <div className={typeaheadMenuCls}>
                 {playerOptions.map((option) => (
                   <button
                     key={option.id}
                     type="button"
                     onClick={() => handlePlayerSelect(option)}
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-900 dark:text-white"
+                    className={typeaheadItemCls}
                   >
                     {option.label}
                   </button>
@@ -476,8 +487,8 @@ export default function CardPicker({
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-2">
-            Set <span className="text-red-500">*</span>
+          <label className={fieldLabelCls}>
+            Set <span className="text-[#E05C5C]">*</span>
           </label>
           <div className="relative">
             <input
@@ -496,16 +507,16 @@ export default function CardPicker({
               }}
               placeholder="Start typing a set name"
               disabled={disabled}
-              className="w-full px-3 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
+              className={fieldCls}
             />
             {!disabled && setOptions.length > 0 && !selectedSet && (
-              <div className="absolute z-20 mt-1 w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-56 overflow-y-auto">
+              <div className={typeaheadMenuCls}>
                 {setOptions.map((option) => (
                   <button
                     key={option.id}
                     type="button"
                     onClick={() => handleSetSelect(option)}
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-900 dark:text-white"
+                    className={typeaheadItemCls}
                   >
                     {option.label}
                   </button>
@@ -516,9 +527,7 @@ export default function CardPicker({
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-2">
-            Year
-          </label>
+          <label className={fieldLabelCls}>Year</label>
           <input
             type="text"
             value={year}
@@ -528,14 +537,12 @@ export default function CardPicker({
             }}
             placeholder="e.g., 1986"
             disabled={disabled}
-            className="w-full px-3 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
+            className={fieldCls}
           />
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-2">
-            Parallel
-          </label>
+          <label className={fieldLabelCls}>Parallel</label>
           <input
             list="cardpicker-parallels"
             value={parallel}
@@ -545,7 +552,7 @@ export default function CardPicker({
             }}
             placeholder="e.g., Silver Prizm"
             disabled={disabled}
-            className="w-full px-3 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
+            className={fieldCls}
           />
           <datalist id="cardpicker-parallels">
             {CARD_VARIANTS.map((variant) => (
@@ -555,9 +562,7 @@ export default function CardPicker({
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-2">
-            Grader
-          </label>
+          <label className={fieldLabelCls}>Grader</label>
           <select
             value={grader}
             onChange={(e) => {
@@ -565,7 +570,7 @@ export default function CardPicker({
               resetResults();
             }}
             disabled={disabled}
-            className="w-full px-3 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
+            className={fieldCls}
           >
             <option value="">Any grader</option>
             {GRADER_OPTIONS.map((option) => (
@@ -577,9 +582,7 @@ export default function CardPicker({
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-2">
-            Grade
-          </label>
+          <label className={fieldLabelCls}>Grade</label>
           <select
             value={grade}
             onChange={(e) => {
@@ -587,7 +590,7 @@ export default function CardPicker({
               resetResults();
             }}
             disabled={disabled}
-            className="w-full px-3 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
+            className={fieldCls}
           >
             <option value="">Any grade</option>
             {GRADE_OPTIONS.map((option) => (
@@ -599,9 +602,7 @@ export default function CardPicker({
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-2">
-            Card #
-          </label>
+          <label className={fieldLabelCls}>Card #</label>
           <input
             type="text"
             value={cardNumber}
@@ -611,7 +612,7 @@ export default function CardPicker({
             }}
             placeholder="e.g., 57"
             disabled={disabled}
-            className="w-full px-3 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
+            className={fieldCls}
           />
         </div>
       </div>
@@ -621,29 +622,29 @@ export default function CardPicker({
           type="button"
           onClick={() => handleSearch()}
           disabled={!canSearch || disabled || loading}
-          className="px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+          className="border border-[#20B26B] bg-[#20B26B] px-4 py-2 text-xs font-semibold text-[#07100B] transition-colors hover:bg-[#33C47C] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {loading ? "Searching..." : "Search"}
         </button>
         {formattedGrade && (
-          <span className="text-xs text-gray-500 dark:text-gray-400">
+          <span className="text-xs text-[#77808C]">
             Using grade filter: {formattedGrade}
           </span>
         )}
       </div>
 
       {searchError && (
-        <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-          <p className="text-sm text-red-600 dark:text-red-400">{searchError}</p>
+        <div className="border border-[#723030] bg-[#2A1111] px-3 py-2 text-xs text-[#E05C5C]">
+          {searchError}
         </div>
       )}
 
       {hasSearched && !loading && !searchError && results.length === 0 && (
-        <div className="p-4 bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-800 rounded-lg">
-          <p className="text-sm font-medium text-gray-900 dark:text-white">
+        <div className="border border-[#24282D] bg-[#0F1317] p-3">
+          <p className="text-sm font-medium text-[#E6E8EB]">
             No exact catalog match found.
           </p>
-          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+          <p className="mt-1 text-xs text-[#77808C]">
             {externalLookupUnavailable
               ? "No catalog match found. External lookup unavailable."
               : "Try one of these close matches or add manually."}
@@ -654,7 +655,7 @@ export default function CardPicker({
                 type="button"
                 onClick={() => handleSearch({ relax: true })}
                 disabled={loading}
-                className="inline-flex items-center rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300 dark:hover:bg-blue-900/30"
+                className={secondaryBtnCls}
               >
                 Relax filters
               </button>
@@ -664,7 +665,7 @@ export default function CardPicker({
                 type="button"
                 onClick={handleManualEntry}
                 disabled={disabled}
-                className="inline-flex items-center rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 disabled:opacity-50 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300 dark:hover:bg-emerald-900/30"
+                className={accentBtnCls}
               >
                 Add manually anyway
               </button>
@@ -676,18 +677,18 @@ export default function CardPicker({
       {results.length > 0 && (
         <div className="space-y-3">
           {!hasExactResult && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-900/20">
-              <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
+            <div className="border border-[#5A4A1E] bg-[#241D0C] p-3">
+              <p className="text-sm font-medium text-[#F0B429]">
                 No exact catalog match found.
               </p>
-              <p className="mt-1 text-sm text-amber-800 dark:text-amber-300">
+              <p className="mt-1 text-xs text-[#C79A3A]">
                 Try one of these close matches or add manually.
               </p>
             </div>
           )}
 
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+            <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-[#77808C]">
               Candidates ({results.length})
             </p>
             <div className="flex flex-wrap items-center gap-2">
@@ -696,7 +697,7 @@ export default function CardPicker({
                   type="button"
                   onClick={() => handleSearch({ relax: true })}
                   disabled={loading}
-                  className="inline-flex items-center rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300 dark:hover:bg-blue-900/30"
+                  className={secondaryBtnCls}
                 >
                   Relax filters
                 </button>
@@ -706,7 +707,7 @@ export default function CardPicker({
                   type="button"
                   onClick={handleManualEntry}
                   disabled={disabled}
-                  className="inline-flex items-center rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 disabled:opacity-50 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300 dark:hover:bg-emerald-900/30"
+                  className={accentBtnCls}
                 >
                   Add manually
                 </button>
@@ -715,59 +716,59 @@ export default function CardPicker({
           </div>
 
           {externalLookupUnavailable && (
-            <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600 dark:border-gray-800 dark:bg-gray-900/40 dark:text-gray-400">
+            <p className="border border-[#24282D] bg-[#0F1317] px-3 py-2 text-xs text-[#77808C]">
               No catalog match found. External lookup unavailable.
             </p>
           )}
 
           <div className="space-y-3">
             {groupedResults.map((group) => (
-              <div key={group.key} className="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
-                <div className="bg-gray-50 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-gray-800/60 dark:text-gray-400">
+              <div key={group.key} className="overflow-hidden border border-[#24282D]">
+                <div className="bg-[#11161B] px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#77808C]">
                   {group.key}
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="min-w-[880px] w-full divide-y divide-gray-200 text-left text-xs dark:divide-gray-800">
-                    <thead className="bg-white dark:bg-gray-900">
-                      <tr className="text-gray-500 dark:text-gray-400">
-                        <th className="px-3 py-2 font-semibold">Year</th>
-                        <th className="px-3 py-2 font-semibold">Player</th>
-                        <th className="px-3 py-2 font-semibold">Set</th>
-                        <th className="px-3 py-2 font-semibold">Card #</th>
-                        <th className="px-3 py-2 font-semibold">Parallel</th>
-                        <th className="px-3 py-2 font-semibold">Grader</th>
-                        <th className="px-3 py-2 font-semibold">Grade</th>
-                        <th className="px-3 py-2 font-semibold">Confidence</th>
-                        <th className="px-3 py-2 font-semibold">Reason</th>
-                        <th className="px-3 py-2 font-semibold"></th>
+                  <table className="w-full min-w-[880px] divide-y divide-[#24282D] text-left text-xs">
+                    <thead className="bg-[#0B0D0F]">
+                      <tr className="text-[#77808C]">
+                        <th className="px-2.5 py-1.5 font-semibold">Year</th>
+                        <th className="px-2.5 py-1.5 font-semibold">Player</th>
+                        <th className="px-2.5 py-1.5 font-semibold">Set</th>
+                        <th className="px-2.5 py-1.5 font-semibold">Card #</th>
+                        <th className="px-2.5 py-1.5 font-semibold">Parallel</th>
+                        <th className="px-2.5 py-1.5 font-semibold">Grader</th>
+                        <th className="px-2.5 py-1.5 font-semibold">Grade</th>
+                        <th className="px-2.5 py-1.5 font-semibold">Confidence</th>
+                        <th className="px-2.5 py-1.5 font-semibold">Reason</th>
+                        <th className="px-2.5 py-1.5 font-semibold"></th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                    <tbody className="divide-y divide-[#1A1F25]">
                       {group.cards.map((card) => (
-                        <tr key={card.id} className="align-top text-gray-700 dark:text-gray-300">
-                          <td className="px-3 py-2">{card.year || "-"}</td>
-                          <td className="px-3 py-2 font-medium text-gray-900 dark:text-white">
+                        <tr key={card.id} className="align-top text-[#B8C0CC]">
+                          <td className="px-2.5 py-1.5">{card.year || "-"}</td>
+                          <td className="px-2.5 py-1.5 font-medium text-[#E6E8EB]">
                             {card.player_name || "-"}
                           </td>
-                          <td className="px-3 py-2">{card.set_name || "-"}</td>
-                          <td className="px-3 py-2">{normalizeCardNumber(card.card_number) || "-"}</td>
-                          <td className="px-3 py-2">{card.variant || "-"}</td>
-                          <td className="px-3 py-2">{card.grader || "-"}</td>
-                          <td className="px-3 py-2">{card.grade || "-"}</td>
-                          <td className="px-3 py-2">
-                            <span className="inline-flex rounded-full border border-gray-200 px-2 py-0.5 font-semibold text-gray-700 dark:border-gray-700 dark:text-gray-300">
+                          <td className="px-2.5 py-1.5">{card.set_name || "-"}</td>
+                          <td className="px-2.5 py-1.5">{normalizeCardNumber(card.card_number) || "-"}</td>
+                          <td className="px-2.5 py-1.5">{card.variant || "-"}</td>
+                          <td className="px-2.5 py-1.5">{card.grader || "-"}</td>
+                          <td className="px-2.5 py-1.5">{card.grade || "-"}</td>
+                          <td className="px-2.5 py-1.5">
+                            <span className="inline-flex border border-[#343941] px-2 py-0.5 font-semibold text-[#B8C0CC]">
                               {card.confidence || "Similar"}
                             </span>
                           </td>
-                          <td className="px-3 py-2 max-w-[220px]">
+                          <td className="px-2.5 py-1.5 max-w-[220px]">
                             <span>{card.reason || buildCardDisplayName(card)}</span>
                           </td>
-                          <td className="px-3 py-2">
+                          <td className="px-2.5 py-1.5">
                             <button
                               type="button"
                               onClick={() => handleSelect(card)}
                               disabled={disabled}
-                              className="whitespace-nowrap rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+                              className="whitespace-nowrap border border-[#20B26B] bg-[#20B26B] px-3 py-1.5 text-[11px] font-semibold text-[#07100B] transition-colors hover:bg-[#33C47C] disabled:opacity-50"
                             >
                               Use this match
                             </button>

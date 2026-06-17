@@ -154,9 +154,9 @@ export default function ActivityFeed({ recentCards = [] }: ActivityFeedProps) {
                 className="group flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-[color:var(--biz-hover,#f3f4f6)]"
               >
                 {/* Icon */}
-                <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-[color:var(--biz-primary-soft)] flex items-center justify-center">
                   <svg
-                    className="w-4 h-4 text-blue-400"
+                    className="w-4 h-4 text-[color:var(--biz-muted)]"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -179,9 +179,9 @@ export default function ActivityFeed({ recentCards = [] }: ActivityFeedProps) {
                     <span>{formatTimeAgo(search.timestamp)}</span>
                     {search.resultCount !== undefined && (
                       <>
-                        <span className="text-gray-300">·</span>
+                        <span className="text-[color:var(--biz-faint)]">·</span>
                         {search.resultCount === 0 ? (
-                          <span className="text-amber-600">
+                          <span className="text-[color:var(--biz-warning)]">
                             0 results · Try removing year or set
                           </span>
                         ) : (
@@ -191,8 +191,8 @@ export default function ActivityFeed({ recentCards = [] }: ActivityFeedProps) {
                     )}
                     {search.cmv !== undefined && search.cmv !== null && (
                       <>
-                        <span className="text-gray-300">·</span>
-                        <span className="text-[color:var(--biz-primary,#0b7a4b)]">
+                        <span className="text-[color:var(--biz-faint)]">·</span>
+                        <span className="text-[color:var(--biz-profit)]">
                           Est. value: ${search.cmv.toLocaleString()}
                         </span>
                       </>
@@ -234,7 +234,7 @@ export default function ActivityFeed({ recentCards = [] }: ActivityFeedProps) {
               className="flex items-center gap-3 rounded-lg px-2.5 py-2 transition-colors hover:bg-[color:var(--biz-hover,#f3f4f6)]"
             >
               {/* Thumbnail or icon */}
-              <div className="flex-shrink-0 h-8 w-8 overflow-hidden rounded-lg bg-blue-500/10">
+              <div className="flex-shrink-0 h-8 w-8 overflow-hidden rounded-lg bg-[color:var(--biz-primary-soft)]">
                 {card.image_url ? (
                   <img
                     src={card.image_url}
@@ -244,7 +244,7 @@ export default function ActivityFeed({ recentCards = [] }: ActivityFeedProps) {
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
                     <svg
-                      className="w-4 h-4 text-blue-400"
+                      className="w-4 h-4 text-[color:var(--biz-muted)]"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -269,8 +269,8 @@ export default function ActivityFeed({ recentCards = [] }: ActivityFeedProps) {
                   <span>Added {formatTimeAgo(card.created_at)}</span>
                   {card.purchase_price && (
                     <>
-                      <span className="text-gray-300">·</span>
-                      <span className="text-[color:var(--biz-primary,#0b7a4b)]">
+                      <span className="text-[color:var(--biz-faint)]">·</span>
+                      <span className="text-[color:var(--biz-profit)]">
                         Paid: ${card.purchase_price.toLocaleString()}
                       </span>
                     </>

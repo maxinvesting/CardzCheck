@@ -11,24 +11,6 @@ interface CompactMetricsRowProps {
 export default function CompactMetricsRow({ items, loading }: CompactMetricsRowProps) {
   const summary = computeCollectionSummary(items);
 
-  // Debug logging
-  if (items.length > 0 && !loading) {
-    console.log('\n=== CompactMetricsRow Raw Data ===');
-    console.log('Item count:', items.length);
-    console.log('Summary:', summary);
-
-    // Log first 3 items with all their fields
-    items.slice(0, 3).forEach((item, idx) => {
-      console.log(`\nItem ${idx} (${item.player_name}):`);
-      console.log('  estimated_cmv:', (item as any).estimated_cmv, '| type:', typeof (item as any).estimated_cmv);
-      console.log('  est_cmv:', (item as any).est_cmv, '| type:', typeof (item as any).est_cmv);
-      console.log('  cmv:', (item as any).cmv, '| type:', typeof (item as any).cmv);
-      console.log('  purchase_price:', item.purchase_price, '| type:', typeof item.purchase_price);
-      console.log('  All fields:', Object.keys(item));
-    });
-    console.log('=== END CompactMetricsRow ===\n');
-  }
-
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
@@ -100,11 +82,13 @@ export default function CompactMetricsRow({ items, loading }: CompactMetricsRowP
         </p>
         {summary.totalUnrealizedPL !== null ? (
           <p
-            className={`mt-1 text-2xl font-semibold tabular-nums ${
-              summary.totalUnrealizedPL >= 0
-                ? "text-emerald-600"
-                : "text-red-600"
-            }`}
+            className="mt-1 text-2xl font-semibold tabular-nums"
+            style={{
+              color:
+                summary.totalUnrealizedPL >= 0
+                  ? "var(--biz-profit)"
+                  : "var(--biz-danger)",
+            }}
           >
             {summary.totalUnrealizedPL >= 0 ? "+" : ""}
             {formatCurrency(summary.totalUnrealizedPL)}
