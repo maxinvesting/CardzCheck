@@ -2,6 +2,7 @@ import "server-only";
 
 import { createServiceClient } from "@/lib/supabase/server";
 import { normalizeTrustedImageUrl } from "@/lib/images/shared";
+import { readPsaToken } from "@/lib/psa/lookup";
 
 export type PsaCertCacheStatus = "found" | "no_image" | "invalid" | "error";
 
@@ -259,7 +260,11 @@ export async function fetchPsaCertLookup(
   const cached = await readCachedLookup(certNumber);
   if (cached) return cached;
 
-  const token = (process.env.PSA_ACCESS_TOKEN ?? process.env.PSA_API_TOKEN)?.trim();
+  // Use the same multi-casing reader as the metadata lookup. Production stores
+  // the token under a casing the two exact-uppercase names missed, which made
+  // image fetches silently fall through to the no-token branch (metadata worked,
+  // images came back empty).
+  const token = readPsaToken();
   if (!token) {
     // PSA only serves cert scans to authenticated callers; without a token we
     // cannot produce images. Cache as no_image so we don't retry every render.
