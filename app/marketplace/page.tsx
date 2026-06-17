@@ -5,13 +5,27 @@ import { createClient, createServiceClient } from "@/lib/supabase/server";
 export const dynamic = "force-dynamic";
 
 type Filters = {
+  q?: string;
   player?: string;
   manufacturer?: string;
   grade?: string;
+  grading_service?: string;
+  year?: string;
   pipeline?: string;
   min_price?: string;
   max_price?: string;
+  sort?: string;
 };
+
+type SortKey = "newest" | "price_low" | "price_high";
+
+const SORTS: Record<SortKey, { label: string; column: string; ascending: boolean }> = {
+  newest: { label: "Newest", column: "listed_at", ascending: false },
+  price_low: { label: "Price: low to high", column: "list_price_cents", ascending: true },
+  price_high: { label: "Price: high to low", column: "list_price_cents", ascending: false },
+};
+
+const GRADING_SERVICES = ["PSA", "BGS", "SGC"] as const;
 
 interface ListingRow {
   id: string;
@@ -148,15 +162,27 @@ export default async function MarketplaceBrowsePage({
       ? ((profileRow as { name: string }).name.trim() || null)
       : null;
 
+  const sortKey: SortKey =
+    filters.sort && filters.sort in SORTS ? (filters.sort as SortKey) : "newest";
+  const sort = SORTS[sortKey];
+
   let query = service
     .from("listings")
     .select(
       "id, list_price_cents, cmv_mid_cents, pipeline, status, listed_at, marketplace_cards!inner(title, year, player, grade, grading_service, manufacturer, parallel, image_url)"
     )
     .in("status", ["active", "price_reduced"])
-    .order("listed_at", { ascending: false })
+    .order(sort.column, { ascending: sort.ascending })
     .limit(120);
 
+  // Free-text search spans player, set title, and parallel.
+  if (filters.q?.trim()) {
+    const term = filters.q.trim().replace(/[%,()]/g, " ");
+    query = query.or(
+      `player.ilike.%${term}%,title.ilike.%${term}%,parallel.ilike.%${term}%`,
+      { referencedTable: "marketplace_cards" }
+    );
+  }
   if (filters.player) {
     query = query.ilike("marketplace_cards.player", `%${filters.player}%`);
   }
@@ -165,6 +191,13 @@ export default async function MarketplaceBrowsePage({
   }
   if (filters.grade) {
     query = query.eq("marketplace_cards.grade", filters.grade);
+  }
+  if (filters.grading_service && GRADING_SERVICES.includes(filters.grading_service as typeof GRADING_SERVICES[number])) {
+    query = query.eq("marketplace_cards.grading_service", filters.grading_service);
+  }
+  if (filters.year) {
+    const year = Number(filters.year);
+    if (Number.isFinite(year)) query = query.eq("marketplace_cards.year", year);
   }
   if (filters.pipeline && PIPELINES.includes(filters.pipeline as typeof PIPELINES[number])) {
     query = query.eq("pipeline", filters.pipeline);
@@ -432,71 +465,204 @@ function CardTile({ row }: { row: ListingRow }) {
   );
 }
 
+const FIELD_CLASS =
+  "h-9 w-full border border-[#24282D] bg-[#0F1317] px-2.5 text-[12px] text-[#E6E8EB] placeholder:text-[#5A626E] focus:border-[#5A626E] focus:outline-none";
+
 function FilterBar({ filters }: { filters: Filters }) {
+  // Open the advanced panel automatically when any deep filter is already set.
+  const deepFilterActive = Boolean(
+    filters.player ||
+      (filters.manufacturer && filters.manufacturer !== "all") ||
+      filters.grade ||
+      filters.grading_service ||
+      filters.year ||
+      filters.pipeline ||
+      filters.min_price ||
+      filters.max_price
+  );
+  const activeCount =
+    (filters.player ? 1 : 0) +
+    (filters.manufacturer && filters.manufacturer !== "all" ? 1 : 0) +
+    (filters.grade ? 1 : 0) +
+    (filters.grading_service ? 1 : 0) +
+    (filters.year ? 1 : 0) +
+    (filters.pipeline ? 1 : 0) +
+    (filters.min_price ? 1 : 0) +
+    (filters.max_price ? 1 : 0);
+
   return (
-    <form
-      method="get"
-      className="border-b border-[#24282D] bg-[#0B0D0F] px-4 py-2"
-    >
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-2">
-        <input
-          name="player"
-          defaultValue={filters.player ?? ""}
-          placeholder="Player"
-          className="border border-[#24282D] bg-[#0F1317] px-2 py-1 text-[12px] text-[#E6E8EB] placeholder:text-[#5A626E] focus:border-[#5A626E] focus:outline-none"
-        />
-        <select
-          name="manufacturer"
-          defaultValue={filters.manufacturer ?? "all"}
-          className="border border-[#24282D] bg-[#0F1317] px-2 py-1 text-[12px] text-[#E6E8EB] focus:border-[#5A626E] focus:outline-none"
-        >
-          <option value="all">All manufacturers</option>
-          <option value="topps">Topps</option>
-          <option value="panini">Panini</option>
-        </select>
-        <input
-          name="grade"
-          defaultValue={filters.grade ?? ""}
-          placeholder="Grade"
-          className="w-[88px] border border-[#24282D] bg-[#0F1317] px-2 py-1 text-[12px] text-[#E6E8EB] placeholder:text-[#5A626E] focus:border-[#5A626E] focus:outline-none"
-        />
-        <select
-          name="pipeline"
-          defaultValue={filters.pipeline ?? ""}
-          className="border border-[#24282D] bg-[#0F1317] px-2 py-1 text-[12px] text-[#E6E8EB] focus:border-[#5A626E] focus:outline-none"
-        >
-          <option value="">All tiers</option>
-          <option value="standard">Standard</option>
-          <option value="elite">Elite</option>
-          <option value="grails">Grails</option>
-        </select>
-        <input
-          name="min_price"
-          type="number"
-          defaultValue={filters.min_price ?? ""}
-          placeholder="Min $"
-          className="w-[88px] border border-[#24282D] bg-[#0F1317] px-2 py-1 text-[12px] text-[#E6E8EB] placeholder:text-[#5A626E] focus:border-[#5A626E] focus:outline-none"
-        />
-        <input
-          name="max_price"
-          type="number"
-          defaultValue={filters.max_price ?? ""}
-          placeholder="Max $"
-          className="w-[88px] border border-[#24282D] bg-[#0F1317] px-2 py-1 text-[12px] text-[#E6E8EB] placeholder:text-[#5A626E] focus:border-[#5A626E] focus:outline-none"
-        />
-        <button
-          type="submit"
-          className="border border-[#343941] bg-[#0F1317] px-3 py-1 text-[12px] font-medium text-[#B8C0CC] hover:border-[#5A626E] hover:text-[#E6E8EB]"
-        >
-          Apply
-        </button>
-        <Link
-          href="/marketplace"
-          className="text-[11px] text-[#77808C] hover:text-[#E6E8EB]"
-        >
-          Reset
-        </Link>
+    <form method="get" className="border-b border-[#24282D] bg-[#0B0D0F] px-4 py-3">
+      <div className="mx-auto max-w-7xl">
+        {/* Search bar */}
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#5A626E]" />
+            <input
+              name="q"
+              type="search"
+              defaultValue={filters.q ?? ""}
+              placeholder="Search player, set, or parallel…"
+              className="h-10 w-full border border-[#24282D] bg-[#0F1317] pl-9 pr-3 text-[13px] text-[#E6E8EB] placeholder:text-[#5A626E] focus:border-[#5A626E] focus:outline-none"
+            />
+          </div>
+          <select
+            name="sort"
+            defaultValue={filters.sort ?? "newest"}
+            className="hidden h-10 border border-[#24282D] bg-[#0F1317] px-2.5 text-[12px] text-[#E6E8EB] focus:border-[#5A626E] focus:outline-none sm:block"
+          >
+            {(Object.keys(SORTS) as SortKey[]).map((key) => (
+              <option key={key} value={key}>
+                {SORTS[key].label}
+              </option>
+            ))}
+          </select>
+          <button
+            type="submit"
+            className="h-10 shrink-0 border border-[#343941] bg-[#1D5FD1] px-4 text-[12px] font-semibold text-white hover:bg-[#2A6FE0]"
+          >
+            Search
+          </button>
+        </div>
+
+        {/* Deep filters */}
+        <details open={deepFilterActive} className="group mt-2">
+          <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[11px] font-medium text-[#77808C] hover:text-[#B8C0CC]">
+            <ChevronIcon className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
+            <span>Filters</span>
+            {activeCount > 0 ? (
+              <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[#1D5FD1] px-1 text-[9px] font-semibold text-white">
+                {activeCount}
+              </span>
+            ) : null}
+          </summary>
+
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+            <Field label="Player">
+              <input
+                name="player"
+                defaultValue={filters.player ?? ""}
+                placeholder="Any player"
+                className={FIELD_CLASS}
+              />
+            </Field>
+            <Field label="Manufacturer">
+              <select
+                name="manufacturer"
+                defaultValue={filters.manufacturer ?? "all"}
+                className={FIELD_CLASS}
+              >
+                <option value="all">All manufacturers</option>
+                <option value="topps">Topps</option>
+                <option value="panini">Panini</option>
+              </select>
+            </Field>
+            <Field label="Grading service">
+              <select
+                name="grading_service"
+                defaultValue={filters.grading_service ?? ""}
+                className={FIELD_CLASS}
+              >
+                <option value="">All services</option>
+                {GRADING_SERVICES.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Grade">
+              <input
+                name="grade"
+                defaultValue={filters.grade ?? ""}
+                placeholder="e.g. 10"
+                className={FIELD_CLASS}
+              />
+            </Field>
+            <Field label="Year">
+              <input
+                name="year"
+                type="number"
+                defaultValue={filters.year ?? ""}
+                placeholder="e.g. 2024"
+                className={FIELD_CLASS}
+              />
+            </Field>
+            <Field label="Tier">
+              <select
+                name="pipeline"
+                defaultValue={filters.pipeline ?? ""}
+                className={FIELD_CLASS}
+              >
+                <option value="">All tiers</option>
+                <option value="standard">Standard</option>
+                <option value="elite">Elite</option>
+                <option value="grails">Grails</option>
+              </select>
+            </Field>
+            <Field label="Min price">
+              <input
+                name="min_price"
+                type="number"
+                defaultValue={filters.min_price ?? ""}
+                placeholder="Min $"
+                className={FIELD_CLASS}
+              />
+            </Field>
+            <Field label="Max price">
+              <input
+                name="max_price"
+                type="number"
+                defaultValue={filters.max_price ?? ""}
+                placeholder="Max $"
+                className={FIELD_CLASS}
+              />
+            </Field>
+          </div>
+
+          <div className="mt-3 flex items-center gap-3">
+            <button
+              type="submit"
+              className="h-8 border border-[#343941] bg-[#0F1317] px-3 text-[12px] font-medium text-[#B8C0CC] hover:border-[#5A626E] hover:text-[#E6E8EB]"
+            >
+              Apply filters
+            </button>
+            <Link
+              href="/marketplace"
+              className="text-[11px] text-[#77808C] hover:text-[#E6E8EB]"
+            >
+              Reset all
+            </Link>
+          </div>
+        </details>
       </div>
     </form>
+  );
+}
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-[10px] font-medium uppercase tracking-wide text-[#5A626E]">
+        {label}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+function SearchIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <circle cx="11" cy="11" r="7" strokeWidth={2} />
+      <path strokeLinecap="round" strokeWidth={2} d="m20 20-3.5-3.5" />
+    </svg>
+  );
+}
+
+function ChevronIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m9 6 6 6-6 6" />
+    </svg>
   );
 }
