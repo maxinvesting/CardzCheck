@@ -645,17 +645,21 @@ export default function BusinessConsultantPanel({ initialPrompt }: { initialProm
     <div className="desk relative z-10">
 
       {/* ── MASTHEAD ────────────────────────────────────────────────────── */}
-      <header className="desk-rise flex flex-wrap items-end justify-between gap-x-6 gap-y-2 pb-4 mb-5 border-b border-[var(--biz-border)]">
-        <div className="min-w-0">
+      <header className="desk-rise flex flex-wrap items-end justify-between gap-x-6 gap-y-3 pb-4 mb-5 border-b border-[var(--biz-border)]">
+        <div className="min-w-0 max-w-2xl">
           <div className="flex items-center gap-2.5">
             <span className="desk-pulse" aria-hidden />
-            <span className="desk-eyebrow">Business Advisor</span>
+            <span className="desk-eyebrow">Assistants · AI Advisor</span>
           </div>
           <h1 className="desk-display mt-2 text-[26px] font-medium leading-[1.1] text-[var(--biz-text-strong)] sm:text-[30px]">
-            Ask your desk
+            Business Advisor
           </h1>
+          <p className="mt-2 text-[13px] leading-relaxed text-[var(--biz-muted)]">
+            AI-powered guidance for pricing, grading, inventory management,
+            liquidity planning, and business decisions.
+          </p>
         </div>
-        <p className="text-[13px] text-[var(--biz-muted)] pb-1">
+        <p className="hidden sm:block text-[12px] font-medium uppercase tracking-[0.14em] text-[var(--biz-muted)] pb-1">
           Pricing · Inventory · Grading · Liquidity
         </p>
       </header>

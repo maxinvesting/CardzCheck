@@ -744,7 +744,7 @@ export default function CardProfilePage() {
 
       const title = displayTitle(item);
       router.push(
-        `/business/consultant?prompt=${encodeURIComponent(`For ${title}, ${command.transcript}`)}`
+        `/assistants/advisor?prompt=${encodeURIComponent(`For ${title}, ${command.transcript}`)}`
       );
     },
     [isBusinessMode, item, pendingVoiceDelete, performDeleteBusinessInventoryItem, router]

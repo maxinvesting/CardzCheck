@@ -29,7 +29,7 @@ const LEGACY_TO_BUSINESS_REDIRECTS: RedirectRule[] = [
   { from: "/grade-hub", to: "/business/grade-hub" },
   { from: "/grade-probability", to: "/business/grade-hub" },
   { from: "/grade-estimator", to: "/business/grade-hub" },
-  { from: "/analyst", to: "/business/consultant" },
+  { from: "/analyst", to: "/assistants/advisor" },
   { from: "/dashboard", to: "/business" },
   { from: "/collection", to: "/business/ledger" },
   { from: "/watchlist", to: "/business/ledger" },

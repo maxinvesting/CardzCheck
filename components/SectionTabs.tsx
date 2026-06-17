@@ -67,11 +67,11 @@ const SECTIONS: Section[] = [
       { name: "Grading", href: "/business/grade-hub" },
     ],
   },
-  // ── Business "Business" tab ──
+  // ── Assistants · Business Advisor ──
   {
-    paths: ["/business/consultant", "/business/help", "/business/settings", "/business/insights", "/business/analyst"],
+    paths: ["/assistants/advisor", "/business/help", "/business/settings", "/business/insights", "/business/analyst"],
     tabs: [
-      { name: "Advisor", href: "/business/consultant" },
+      { name: "Advisor", href: "/assistants/advisor" },
       { name: "Help & FAQ", href: "/business/help" },
       { name: "Settings", href: "/business/settings" },
     ],

@@ -332,7 +332,7 @@ function BusinessDashboardContent() {
         setToast({ type: "error", message: "Manage individual cards from the Ledger" });
         return;
       }
-      router.push(`/business/consultant?prompt=${encodeURIComponent(command.transcript)}`);
+      router.push(`/assistants/advisor?prompt=${encodeURIComponent(command.transcript)}`);
     },
     [router]
   );

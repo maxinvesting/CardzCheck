@@ -9,6 +9,8 @@ import PricingModal from "@/components/PricingModal";
 import { clearCurrentUserCache, getCurrentUserCached } from "@/lib/current-user-client";
 import { createClient } from "@/lib/supabase/client";
 import { useSellerUnreadCount } from "@/hooks/useSellerUnreadCount";
+import AssistantIcon from "@/components/assistants/AssistantIcon";
+import { NAV_ASSISTANTS } from "@/lib/assistants/registry";
 
 type NavItem = {
   name: string;
@@ -226,15 +228,6 @@ function BUSINESS_NAV_ITEMS(): NavItem[] {
     },
     { name: "Analytics", href: "/business/financials", icon: <BadgeIcon /> },
     { name: "Marketplace", href: "/marketplace", icon: <ShopIcon /> },
-    {
-      name: "Business",
-      href: "/business/consultant",
-      icon: <AnalystIcon />,
-      children: [
-        { name: "Advisor", href: "/business/consultant", icon: <AnalystIcon /> },
-        { name: "Help & FAQ", href: "/business/help", icon: <HelpIcon /> },
-      ],
-    },
   ];
 }
 
@@ -256,20 +249,19 @@ export default function Sidebar() {
   const isBusinessRoute = pathname.startsWith("/business");
   const isBusinessWorkspace = true;
   const hasPaidWorkspace = true;
-  // Unread seller conversations, surfaced on the Marketplace item (the seller
-  // inbox now lives under /marketplace/sell) so it's visible from any page.
+  // Unread seller conversations — surfaced on the Sales Agent assistant (the
+  // deal-desk / inbox) so the badge sits with the tool that owns the inbox.
   const unreadMessages = useSellerUnreadCount(Boolean(user));
-  const baseNavItems = BUSINESS_NAV_ITEMS().map((item) =>
-    item.href === "/marketplace" && unreadMessages > 0
-      ? { ...item, unreadCount: unreadMessages }
-      : item
-  );
-  const navItems: NavItem[] = isAdminUser
-    ? [
-        ...baseNavItems,
-        { name: "Admin", href: "/admin", icon: <AdminIcon />, badge: "Admin" },
-      ]
-    : baseNavItems;
+  const navItems: NavItem[] = BUSINESS_NAV_ITEMS();
+  const assistantNavItems: NavItem[] = NAV_ASSISTANTS.map((a) => ({
+    name: a.name,
+    href: a.href,
+    icon: <AssistantIcon icon={a.icon} />,
+    // The Sales Agent is the seller deal-desk / inbox — surface unread offers.
+    ...(a.id === "sales-agent" && unreadMessages > 0
+      ? { unreadCount: unreadMessages }
+      : {}),
+  }));
   const businessSurfaceClass = "bg-[var(--biz-near-black)] border-[color:var(--biz-border)]";
 
   useEffect(() => {
@@ -498,6 +490,17 @@ export default function Sidebar() {
         <nav className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
           {navItems.map((item) => renderNavLink(item))}
 
+          {assistantNavItems.length > 0 && (
+            <>
+              <div className={`mt-3 pb-1 px-3 text-[9px] font-semibold uppercase tracking-[0.16em] font-mono-num ${
+                isBusinessWorkspace ? "text-[var(--biz-muted)]" : "text-[color:var(--biz-faint)]"
+              }`}>
+                Assistants
+              </div>
+              {assistantNavItems.map((item) => renderNavLink(item))}
+            </>
+          )}
+
           {user && (user.app_role === "admin" || user.app_role === "owner") && (
             <>
               <div className={`mt-3 pb-1 px-3 text-[9px] font-semibold uppercase tracking-[0.16em] font-mono-num ${
@@ -506,6 +509,7 @@ export default function Sidebar() {
                 Admin
               </div>
               {[
+                { name: "Overview", href: "/admin", icon: <AdminIcon />, exact: true },
                 { name: "Marketplace", href: "/admin/marketplace", icon: <ShopIcon /> },
                 { name: "News", href: "/admin/news", icon: <NewsIcon /> },
               ].map((item) => (
@@ -514,7 +518,9 @@ export default function Sidebar() {
                   href={item.href}
                   onClick={() => setIsOpen(false)}
                   className={`flex items-center gap-3 px-3 py-2 rounded transition-colors ${
-                    pathname === item.href || pathname.startsWith(`${item.href}/`)
+                    item.exact
+                      ? pathname === item.href
+                      : pathname === item.href || pathname.startsWith(`${item.href}/`)
                       ? isBusinessWorkspace
                         ? "border-l-2 border-l-orange-500 bg-orange-500/10 text-orange-300"
                         : "bg-orange-600 text-white"
