@@ -4,6 +4,7 @@ import {
   computeLedgerSummary,
   mapInventoryItemToLedgerRow,
   mapInventoryToLedgerRows,
+  sortLedgerRows,
 } from "@/lib/business/ledger-table";
 
 function makeItem(overrides: Partial<BusinessInventoryItem> = {}): BusinessInventoryItem {
@@ -119,5 +120,46 @@ describe("ledger table mapping", () => {
       totalEstimatedValueCents: 6000,
       estimatedPnlCents: 1000,
     });
+  });
+
+  it("sorts by value descending by default with null values last", () => {
+    const rows = mapInventoryToLedgerRows([
+      makeItem({ id: "low", title: "Beta", current_market_value_cents: 1000 }),
+      makeItem({ id: "none", title: "Alpha", current_market_value_cents: null }),
+      makeItem({ id: "high", title: "Gamma", current_market_value_cents: 9000 }),
+    ]);
+
+    expect(sortLedgerRows(rows, "value_desc").map((r) => r.id)).toEqual([
+      "high",
+      "low",
+      "none",
+    ]);
+    expect(sortLedgerRows(rows, "value_asc").map((r) => r.id)).toEqual([
+      "low",
+      "high",
+      "none",
+    ]);
+    // null value still sorts last even ascending.
+  });
+
+  it("sorts by P&L, cost, and name", () => {
+    const rows = mapInventoryToLedgerRows([
+      makeItem({ id: "a", title: "Zebra", cost_basis_total_cents: 1000, current_market_value_cents: 5000 }),
+      makeItem({ id: "b", title: "Apple", cost_basis_total_cents: 9000, current_market_value_cents: 9500 }),
+    ]);
+
+    expect(sortLedgerRows(rows, "pnl_desc").map((r) => r.id)).toEqual(["a", "b"]);
+    expect(sortLedgerRows(rows, "cost_desc").map((r) => r.id)).toEqual(["b", "a"]);
+    expect(sortLedgerRows(rows, "name_asc").map((r) => r.id)).toEqual(["b", "a"]);
+  });
+
+  it("does not mutate the input array", () => {
+    const rows = mapInventoryToLedgerRows([
+      makeItem({ id: "x", current_market_value_cents: 100 }),
+      makeItem({ id: "y", current_market_value_cents: 900 }),
+    ]);
+    const before = rows.map((r) => r.id);
+    sortLedgerRows(rows, "value_desc");
+    expect(rows.map((r) => r.id)).toEqual(before);
   });
 });

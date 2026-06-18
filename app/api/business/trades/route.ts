@@ -6,6 +6,7 @@ import {
   getInventorySnapshots,
   recordLedgerAction,
 } from "@/lib/business/ledger-actions";
+import { netCashForTrade, recordCashTransaction } from "@/lib/business/cash";
 
 export const dynamic = "force-dynamic";
 
@@ -416,6 +417,22 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         incomingItemIds,
         outgoingBeforeRows,
       },
+    });
+
+    // Cash on hand: a trade moves real money — cash received in, cash paid out.
+    // Linked to the trade so it reverses if the trade is undone or deleted.
+    await recordCashTransaction({
+      supabase,
+      userId: user.id,
+      businessAccountId: context.businessAccountId,
+      amountCents: netCashForTrade(cashReceived, cashPaid),
+      kind: "trade",
+      sourceType: "trade",
+      sourceId: trade.id,
+      note: parsed.partner_name?.trim()
+        ? `Trade with ${parsed.partner_name.trim()}`
+        : "Trade",
+      occurredAt: tradedAtIso,
     });
 
     return NextResponse.json({ trade }, { status: 201 });

@@ -1,4 +1,5 @@
 import type { BusinessContext } from "@/types";
+import { reverseCashBySource } from "@/lib/business/cash";
 
 const BUSINESS_TABLE = "collection_items" as const;
 const LEDGER_ACTIONS_TABLE = "business_ledger_actions" as const;
@@ -230,6 +231,13 @@ async function undoSaleCreate(
         .eq("id", saleId)
         .eq("business_account_id", businessAccountId)
     );
+    // Unwind the cash this sale put on hand.
+    await reverseCashBySource({
+      supabase,
+      businessAccountId,
+      sourceType: "sale",
+      sourceId: saleId,
+    });
   }
 
   await restoreInventoryRows(
@@ -268,6 +276,13 @@ async function undoTradeCreate(
         .eq("id", tradeId)
         .eq("business_account_id", businessAccountId)
     );
+    // Unwind the net cash this trade moved.
+    await reverseCashBySource({
+      supabase,
+      businessAccountId,
+      sourceType: "trade",
+      sourceId: tradeId,
+    });
   }
 }
 

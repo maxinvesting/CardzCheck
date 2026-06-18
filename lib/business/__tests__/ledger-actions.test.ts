@@ -181,7 +181,17 @@ describe("ledger action undo", () => {
       op: "update",
       payload: expect.objectContaining({ is_deleted: true }),
     });
+    // The sale's cash on hand impact is reversed (soft-deleted) by source.
     expect(calls[1]).toMatchObject({
+      table: "business_cash_transactions",
+      op: "update",
+      payload: expect.objectContaining({ is_deleted: true }),
+      filters: expect.arrayContaining([
+        ["source_type", "sale"],
+        ["source_id", "sale-1"],
+      ]),
+    });
+    expect(calls[2]).toMatchObject({
       table: "collection_items",
       op: "update",
       payload: expect.objectContaining({
@@ -190,7 +200,7 @@ describe("ledger action undo", () => {
         cost_basis_total_cents: 9000,
       }),
     });
-    expect(calls[1].payload).not.toHaveProperty("id");
-    expect(calls[1].payload).not.toHaveProperty("created_at");
+    expect(calls[2].payload).not.toHaveProperty("id");
+    expect(calls[2].payload).not.toHaveProperty("created_at");
   });
 });

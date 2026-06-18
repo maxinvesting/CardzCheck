@@ -9,6 +9,11 @@ import {
 } from "@/lib/business/context";
 import type { BusinessInventoryItem, BusinessSale, BusinessMetrics } from "@/types";
 import { computeNetPayout, computeProfit } from "@/lib/business/sales-utils";
+import {
+  cashInForSale,
+  recordCashTransaction,
+  reverseCashBySource,
+} from "@/lib/business/cash";
 import { enqueueCertImageResolution } from "@/lib/images/cert-image-jobs";
 import { normalizeCertWriteFields } from "@/lib/images/cert-image";
 import { hydrateTrustedImagesForItems } from "@/lib/images/resolver";
@@ -1434,6 +1439,21 @@ export async function createSale(
       throw err;
     }
 
+    // Cash on hand: the sale puts its net payout in the bank. Linked to the sale
+    // so it reverses automatically if the sale is undone or deleted. Best-effort.
+    await recordCashTransaction({
+      supabase,
+      userId,
+      businessAccountId: context.businessAccountId,
+      amountCents: cashInForSale(insertPayload.net_payout_cents as number),
+      kind: "sale",
+      sourceType: "sale",
+      sourceId: created.id,
+      note: inventoryContext?.title ? `Sale: ${inventoryContext.title}` : "Sale proceeds",
+      occurredAt:
+        typeof insertPayload.sold_at === "string" ? insertPayload.sold_at : null,
+    });
+
     const [withTitles] = await attachInventoryTitles(context.businessAccountId, [
       toBusinessSale(created),
     ]);
@@ -1563,6 +1583,25 @@ export async function updateSale(
     throw err;
   }
 
+  // Cash on hand: re-sync the sale's cash impact to the edited net payout.
+  await reverseCashBySource({
+    supabase,
+    businessAccountId: context.businessAccountId,
+    sourceType: "sale",
+    sourceId: saleId,
+  });
+  await recordCashTransaction({
+    supabase,
+    userId,
+    businessAccountId: context.businessAccountId,
+    amountCents: cashInForSale(payload.net_payout_cents as number),
+    kind: "sale",
+    sourceType: "sale",
+    sourceId: saleId,
+    note: inventoryContext?.title ? `Sale: ${inventoryContext.title}` : "Sale proceeds",
+    occurredAt: typeof payload.sold_at === "string" ? payload.sold_at : null,
+  });
+
   const [withTitles] = await attachInventoryTitles(context.businessAccountId, [
     toBusinessSale(updated),
   ]);
@@ -1593,6 +1632,14 @@ export async function deleteSale(userId: string, saleId: string): Promise<void> 
       .eq("user_id", context.ownerUserId);
     if (legacyDeleteError) throw legacyDeleteError;
   }
+
+  // Unwind the sale's cash on hand impact.
+  await reverseCashBySource({
+    supabase,
+    businessAccountId: context.businessAccountId,
+    sourceType: "sale",
+    sourceId: saleId,
+  });
 }
 
 // =============================================

@@ -28,6 +28,62 @@ export interface LedgerSummary {
   estimatedPnlCents: number | null;
 }
 
+export type LedgerSortKey =
+  | "value_desc"
+  | "value_asc"
+  | "pnl_desc"
+  | "cost_desc"
+  | "name_asc";
+
+export const DEFAULT_LEDGER_SORT_KEY: LedgerSortKey = "value_desc";
+
+export const LEDGER_SORT_OPTIONS: ReadonlyArray<{ value: LedgerSortKey; label: string }> = [
+  { value: "value_desc", label: "Value: high to low" },
+  { value: "value_asc", label: "Value: low to high" },
+  { value: "pnl_desc", label: "P&L: high to low" },
+  { value: "cost_desc", label: "Cost: high to low" },
+  { value: "name_asc", label: "Name: A to Z" },
+];
+
+/** Comparator that always pushes null/undefined values to the end, regardless of direction. */
+function compareNullable(
+  a: number | null,
+  b: number | null,
+  dir: "asc" | "desc"
+): number {
+  if (a == null && b == null) return 0;
+  if (a == null) return 1;
+  if (b == null) return -1;
+  return dir === "desc" ? b - a : a - b;
+}
+
+/** Returns a new array of rows sorted by the given key. Does not mutate the input. */
+export function sortLedgerRows(
+  rows: LedgerTableRow[],
+  key: LedgerSortKey
+): LedgerTableRow[] {
+  const sorted = [...rows];
+  switch (key) {
+    case "value_asc":
+      return sorted.sort((a, b) =>
+        compareNullable(a.estimatedValueCents, b.estimatedValueCents, "asc")
+      );
+    case "pnl_desc":
+      return sorted.sort((a, b) => compareNullable(a.pnlCents, b.pnlCents, "desc"));
+    case "cost_desc":
+      return sorted.sort((a, b) => compareNullable(a.costBasisCents, b.costBasisCents, "desc"));
+    case "name_asc":
+      return sorted.sort((a, b) =>
+        a.cardLabel.localeCompare(b.cardLabel, "en", { sensitivity: "base" })
+      );
+    case "value_desc":
+    default:
+      return sorted.sort((a, b) =>
+        compareNullable(a.estimatedValueCents, b.estimatedValueCents, "desc")
+      );
+  }
+}
+
 const FALLBACK_VALUE_CENT_FIELDS = [
   "last_known_price_cents",
   "last_price_cents",

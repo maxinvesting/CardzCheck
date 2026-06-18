@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireBusinessAccess } from "@/lib/business/actions";
+import { getCashBalanceCents } from "@/lib/business/cash";
 
 const BUSINESS_TABLE = "collection_items" as const;
 const BUSINESS_ITEM_KIND = "inventory" as const;
@@ -144,6 +145,10 @@ export type Snapshot = {
   active_count: number;
   avg_hold_days: number | null;
   avg_unrealized_per_card_cents: number | null;
+  /** Liquid cash the business holds (manual balance + sale/trade cash flow). */
+  cash_on_hand_cents: number;
+  /** Total business value = estimated inventory value + cash on hand. */
+  total_business_value_cents: number;
 };
 
 export type Velocity = {
@@ -500,6 +505,9 @@ function buildInventory(rows: InventoryRow[], now: Date): {
     avg_hold_days: active > 0 ? Math.round(totalHoldDays / active) : null,
     avg_unrealized_per_card_cents:
       active > 0 ? Math.round(unrealized / active) : null,
+    // Cash is layered in by getFinancialsSummary, which has the account context.
+    cash_on_hand_cents: 0,
+    total_business_value_cents: totalValue,
   };
 
   const stale: StaleAlert = {
@@ -624,7 +632,7 @@ export async function getFinancialsSummary(
       (a, b) => a.getTime() - b.getTime()
     )[0];
 
-  const [salesRes, inventoryRes, tradesRes] = await Promise.all([
+  const [salesRes, inventoryRes, tradesRes, cashBalanceCents] = await Promise.all([
     supabase
       .from("business_sales")
       .select(
@@ -649,6 +657,7 @@ export async function getFinancialsSummary(
       .eq("business_account_id", context.businessAccountId)
       .eq("is_deleted", false)
       .gte("traded_at", salesFrom.toISOString()),
+    getCashBalanceCents(supabase, context.businessAccountId),
   ]);
 
   type RawSale = SaleRow & {
@@ -719,6 +728,10 @@ export async function getFinancialsSummary(
   const cashflow = buildCashFlow(saleRows, inventoryRows, now, tradeRows);
   const channels_90d = buildChannelBreakdown(saleRows, last90Start, tradeRows);
   const inv = buildInventory(inventoryRows, now);
+  // Layer cash on hand into the snapshot now that we have the account context.
+  inv.snapshot.cash_on_hand_cents = cashBalanceCents;
+  inv.snapshot.total_business_value_cents =
+    inv.snapshot.inventory_value_cents + cashBalanceCents;
 
   const velocity = buildVelocity(
     saleRows,

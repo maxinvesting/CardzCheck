@@ -16,6 +16,7 @@ import TradeFormModal, { type TradeFormPayload } from "@/components/business/Tra
 import AddCardToInventoryModal from "@/components/business/AddCardToInventoryModal";
 import type { PendingInventoryCard } from "@/components/business/AddCardToInventoryModal";
 import BulkCertImportModal from "@/components/business/BulkCertImportModal";
+import CashManagerModal from "@/components/business/CashManagerModal";
 import CardProfileDrawer from "@/components/business/CardProfileDrawer";
 import { useTierGates } from "@/hooks/useTierGates";
 // Heavy modal (~1.3k lines) — load its chunk only when the modal is opened.
@@ -28,8 +29,12 @@ import { createClient } from "@/lib/supabase/client";
 import {
   computeLedgerSummary,
   mapInventoryToLedgerRows,
+  sortLedgerRows,
+  LEDGER_SORT_OPTIONS,
+  DEFAULT_LEDGER_SORT_KEY,
   type LedgerSummary,
   type LedgerTableRow,
+  type LedgerSortKey,
 } from "@/lib/business/ledger-table";
 import type { BusinessInventoryItem } from "@/types";
 
@@ -54,7 +59,15 @@ function pnlClassName(cents: number | null): string {
   return "text-[#B8C0CC]";
 }
 
-function LedgerSummaryStrip({ summary }: { summary: LedgerSummary }) {
+function LedgerSummaryStrip({
+  summary,
+  cashBalanceCents,
+  onManageCash,
+}: {
+  summary: LedgerSummary;
+  cashBalanceCents: number | null;
+  onManageCash: () => void;
+}) {
   const cells = [
     {
       label: "Total Inventory Count",
@@ -80,7 +93,7 @@ function LedgerSummaryStrip({ summary }: { summary: LedgerSummary }) {
 
   return (
     <div className="overflow-x-auto border-y border-[#24282D] bg-[#0B0D0F]">
-      <div className="grid min-w-[760px] grid-cols-4 divide-x divide-[#24282D]">
+      <div className="grid min-w-[920px] grid-cols-5 divide-x divide-[#24282D]">
         {cells.map((cell) => (
           <div key={cell.label} className="px-3 py-2">
             <div className="text-[10px] font-medium uppercase tracking-[0.08em] text-[#77808C]">
@@ -91,6 +104,24 @@ function LedgerSummaryStrip({ summary }: { summary: LedgerSummary }) {
             </div>
           </div>
         ))}
+        <button
+          type="button"
+          onClick={onManageCash}
+          title="Manage cash on hand"
+          className="group px-3 py-2 text-left transition-colors hover:bg-[#111315]"
+        >
+          <div className="flex items-center justify-between">
+            <div className="text-[10px] font-medium uppercase tracking-[0.08em] text-[#77808C]">
+              Cash on Hand
+            </div>
+            <span className="text-[10px] font-medium text-[#3B82F6] opacity-0 transition-opacity group-hover:opacity-100">
+              Manage
+            </span>
+          </div>
+          <div className="mt-0.5 font-data text-[13px] font-semibold tabular-nums text-[#20B26B]">
+            {cashBalanceCents == null ? "—" : formatSummaryMoney(cashBalanceCents)}
+          </div>
+        </button>
       </div>
     </div>
   );
@@ -211,6 +242,9 @@ export default function LedgerPage() {
     useState<UndoActionSummary | null>(null);
   const [undoingLedgerAction, setUndoingLedgerAction] = useState(false);
   const [viewMode, setViewMode] = useState<LedgerViewMode>("spreadsheet");
+  const [sortKey, setSortKey] = useState<LedgerSortKey>(DEFAULT_LEDGER_SORT_KEY);
+  const [cashBalanceCents, setCashBalanceCents] = useState<number | null>(null);
+  const [showCashModal, setShowCashModal] = useState(false);
 
   const activeInventoryItems = useMemo(
     () =>
@@ -226,6 +260,11 @@ export default function LedgerPage() {
   const ledgerRows = useMemo(
     () => mapInventoryToLedgerRows(activeInventoryItems),
     [activeInventoryItems]
+  );
+
+  const sortedLedgerRows = useMemo(
+    () => sortLedgerRows(ledgerRows, sortKey),
+    [ledgerRows, sortKey]
   );
 
   const ledgerSummary = useMemo(
@@ -321,9 +360,25 @@ export default function LedgerPage() {
     }
   }, []);
 
+  const loadCashBalance = useCallback(async () => {
+    try {
+      const res = await fetch("/api/business/cash", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (typeof data?.balance_cents === "number") {
+        setCashBalanceCents(data.balance_cents);
+      }
+    } catch {
+      // non-fatal
+    }
+  }, []);
+
   useEffect(() => {
-    if (hasAccess) void loadLatestUndoAction();
-  }, [hasAccess, loadLatestUndoAction]);
+    if (hasAccess) {
+      void loadLatestUndoAction();
+      void loadCashBalance();
+    }
+  }, [hasAccess, loadLatestUndoAction, loadCashBalance]);
 
   const handleUndoLedgerAction = useCallback(async () => {
     if (!latestUndoAction || undoingLedgerAction) return;
@@ -347,6 +402,7 @@ export default function LedgerPage() {
       setLatestUndoAction(null);
       await loadInventory();
       await loadLatestUndoAction();
+      void loadCashBalance();
     } catch (error) {
       setToast({
         type: "error",
@@ -356,7 +412,7 @@ export default function LedgerPage() {
     } finally {
       setUndoingLedgerAction(false);
     }
-  }, [latestUndoAction, loadInventory, loadLatestUndoAction, undoingLedgerAction]);
+  }, [latestUndoAction, loadInventory, loadLatestUndoAction, loadCashBalance, undoingLedgerAction]);
 
   const handleLedgerRowClick = useCallback((row: LedgerTableRow) => {
     setSelectedLedgerItemId(row.id);
@@ -490,6 +546,7 @@ export default function LedgerPage() {
         setToast({ type: "success", message: "Sale recorded" });
         setMarkSoldItem(null);
         void loadLatestUndoAction();
+        void loadCashBalance();
       } catch (error) {
         setToast({
           type: "error",
@@ -497,7 +554,7 @@ export default function LedgerPage() {
         });
       }
     },
-    [items, loadInventory, loadLatestUndoAction, selectedLedgerItemId]
+    [items, loadInventory, loadLatestUndoAction, loadCashBalance, selectedLedgerItemId]
   );
 
   const handleCreateTrade = useCallback(
@@ -527,6 +584,7 @@ export default function LedgerPage() {
         // Reload inventory to surface any new incoming cards added by the trade.
         void loadInventory();
         void loadLatestUndoAction();
+        void loadCashBalance();
         setToast({ type: "success", message: "Trade recorded" });
       } catch (error) {
         setToast({
@@ -535,7 +593,7 @@ export default function LedgerPage() {
         });
       }
     },
-    [loadInventory, loadLatestUndoAction, selectedLedgerItemId]
+    [loadInventory, loadLatestUndoAction, loadCashBalance, selectedLedgerItemId]
   );
 
   const handleListSuccess = useCallback(
@@ -664,7 +722,11 @@ export default function LedgerPage() {
             </div>
           </header>
 
-          <LedgerSummaryStrip summary={ledgerSummary} />
+          <LedgerSummaryStrip
+            summary={ledgerSummary}
+            cashBalanceCents={cashBalanceCents}
+            onManageCash={() => setShowCashModal(true)}
+          />
 
           {needsMigration ? (
             <div className="px-4 py-4">
@@ -681,7 +743,25 @@ export default function LedgerPage() {
                 <div className="text-[12px] text-[#77808C]">
                   {ledgerRows.length.toLocaleString("en-US")} active card{ledgerRows.length === 1 ? "" : "s"}
                 </div>
-                <LedgerViewToggle value={viewMode} onChange={setViewMode} />
+                <div className="flex items-center gap-2">
+                  <label className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-medium uppercase tracking-[0.08em] text-[#77808C]">
+                      Sort
+                    </span>
+                    <select
+                      value={sortKey}
+                      onChange={(e) => setSortKey(e.target.value as LedgerSortKey)}
+                      className="border border-[#343941] bg-[#0B0D0F] px-2 py-1.5 text-[12px] font-medium text-[#B8C0CC] focus:border-[#20B26B] focus:outline-none"
+                    >
+                      {LEDGER_SORT_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <LedgerViewToggle value={viewMode} onChange={setViewMode} />
+                </div>
               </div>
 
               {selectedRowIds.size > 0 && (
@@ -696,7 +776,7 @@ export default function LedgerPage() {
               )}
               {viewMode === "spreadsheet" ? (
                 <LedgerTable
-                  rows={ledgerRows}
+                  rows={sortedLedgerRows}
                   selectedRowId={selectedLedgerItemId}
                   onRowClick={handleLedgerRowClick}
                   selectedRowIds={selectedRowIds}
@@ -707,7 +787,7 @@ export default function LedgerPage() {
                 />
               ) : (
                 <LedgerPhotoGrid
-                  rows={ledgerRows}
+                  rows={sortedLedgerRows}
                   selectedRowId={selectedLedgerItemId}
                   onRowClick={handleLedgerRowClick}
                   selectedRowIds={selectedRowIds}
@@ -746,6 +826,12 @@ export default function LedgerPage() {
             setProfileItemId(null);
             setListItem(it);
           }}
+        />
+
+        <CashManagerModal
+          isOpen={showCashModal}
+          onClose={() => setShowCashModal(false)}
+          onChanged={() => void loadCashBalance()}
         />
 
         <BulkCertImportModal

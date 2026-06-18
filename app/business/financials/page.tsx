@@ -157,7 +157,18 @@ function SnapshotAndVelocity({
 
   return (
     <section>
-      <div className="grid grid-cols-2 divide-x divide-y divide-[#24282D] border border-[#24282D] bg-[#0B0D0F] sm:grid-cols-3 sm:divide-y-0 xl:grid-cols-9">
+      <div className="grid grid-cols-2 divide-x divide-y divide-[#24282D] border border-[#24282D] bg-[#0B0D0F] sm:grid-cols-3 sm:divide-y-0 xl:grid-cols-11">
+        <MetricCell
+          label="Cash on hand"
+          value={fmtMoney(snapshot.cash_on_hand_cents)}
+          valueClass="text-[#20B26B]"
+          sub={{ text: "manage in ledger", tone: null }}
+        />
+        <MetricCell
+          label="Total value"
+          value={fmtMoney(snapshot.total_business_value_cents)}
+          sub={{ text: "inventory + cash", tone: null }}
+        />
         <MetricCell
           label="Inventory value"
           value={fmtMoney(snapshot.inventory_value_cents)}

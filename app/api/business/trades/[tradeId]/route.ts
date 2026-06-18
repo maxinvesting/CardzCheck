@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { requireBusinessAccess } from "@/lib/business/actions";
+import { reverseCashBySource } from "@/lib/business/cash";
 
 export const dynamic = "force-dynamic";
 
@@ -79,6 +80,14 @@ export async function DELETE(
       .update({ is_deleted: true, updated_at: new Date().toISOString() })
       .eq("id", tradeId);
     if (softDelErr) throw softDelErr;
+
+    // Unwind the net cash this trade moved.
+    await reverseCashBySource({
+      supabase,
+      businessAccountId: context.businessAccountId,
+      sourceType: "trade",
+      sourceId: tradeId,
+    });
 
     return NextResponse.json({ ok: true });
   } catch (error) {
