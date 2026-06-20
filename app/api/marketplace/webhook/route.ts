@@ -70,7 +70,95 @@ function extractShipTo(
   };
 }
 
+/**
+ * Trade Center cash-on-top leg. The paying side completed a Stripe Checkout for
+ * the cash balance; mark the trade paid + confirmed and capture the
+ * Stripe-authoritative payment ids. Money math (the platform fee) was set as the
+ * application_fee on the destination charge — we just record it here.
+ */
+async function handleTradeCashCompleted(session: Stripe.Checkout.Session) {
+  const tradeId = session.metadata?.trade_id;
+  if (!tradeId) {
+    console.error("[marketplace/webhook] trade cash missing trade_id", session.id);
+    return NextResponse.json({ error: "invalid_metadata" }, { status: 400 });
+  }
+
+  const service = await createServiceClient();
+
+  // Idempotency: already settled this session → no-op.
+  const { data: existing } = await service
+    .from("trades")
+    .select("id, cash_status, initiator_approved, recipient_approved")
+    .eq("id", tradeId)
+    .maybeSingle();
+  if (!existing) {
+    return NextResponse.json({ error: "trade_not_found" }, { status: 404 });
+  }
+  if ((existing as { cash_status: string }).cash_status === "paid") {
+    return NextResponse.json({ received: true, idempotent: true });
+  }
+
+  // Pull the charge for the authoritative fee + transfer ids.
+  let applicationFeeCents = 0;
+  let stripeTransferId: string | null = null;
+  const paymentIntentId =
+    typeof session.payment_intent === "string"
+      ? session.payment_intent
+      : session.payment_intent?.id ?? null;
+  if (paymentIntentId) {
+    try {
+      const pi = await stripe().paymentIntents.retrieve(paymentIntentId, {
+        expand: ["latest_charge"],
+      });
+      const charge = pi.latest_charge as Stripe.Charge | null;
+      if (charge) {
+        applicationFeeCents =
+          typeof charge.application_fee_amount === "number"
+            ? charge.application_fee_amount
+            : 0;
+        stripeTransferId =
+          typeof charge.transfer === "string"
+            ? charge.transfer
+            : charge.transfer?.id ?? null;
+      }
+    } catch (err) {
+      console.error("[marketplace/webhook] trade charge retrieve failed", err);
+    }
+  }
+
+  const now = new Date().toISOString();
+  const bothApproved =
+    (existing as { initiator_approved: boolean }).initiator_approved &&
+    (existing as { recipient_approved: boolean }).recipient_approved;
+
+  const { error: updateErr } = await service
+    .from("trades")
+    .update({
+      cash_status: "paid",
+      status: bothApproved ? "confirmed" : "accepted",
+      confirmed_at: bothApproved ? now : null,
+      stripe_session_id: session.id,
+      stripe_payment_intent_id: paymentIntentId,
+      stripe_transfer_id: stripeTransferId,
+      platform_fee_cents: applicationFeeCents,
+    })
+    .eq("id", tradeId);
+  if (updateErr) {
+    console.error("[marketplace/webhook] trade cash update failed", updateErr);
+    return NextResponse.json(
+      { error: "trade_update_failed", message: updateErr.message },
+      { status: 500 }
+    );
+  }
+
+  return NextResponse.json({ received: true });
+}
+
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
+  // Trade Center cash legs are tagged with metadata.trade.
+  if (session.metadata?.trade === "true") {
+    return handleTradeCashCompleted(session);
+  }
   // Only process sessions that originated from this marketplace.
   if (session.metadata?.marketplace !== "true") {
     return NextResponse.json({ received: true, skipped: "not_marketplace" });

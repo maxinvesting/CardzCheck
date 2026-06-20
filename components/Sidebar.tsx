@@ -213,6 +213,19 @@ function SalesIcon() {
   );
 }
 
+function SwapIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M7 16V4m0 0L4 7m3-3l3 3m7 1v12m0 0l3-3m-3 3l-3-3"
+      />
+    </svg>
+  );
+}
+
 function BUSINESS_NAV_ITEMS(): NavItem[] {
   return [
     { name: "Dashboard", href: "/business", icon: <HomeIcon />, exact: true },
@@ -226,6 +239,7 @@ function BUSINESS_NAV_ITEMS(): NavItem[] {
       ],
     },
     { name: "Analytics", href: "/business/financials", icon: <BadgeIcon /> },
+    { name: "Trade Center", href: "/trade", icon: <SwapIcon /> },
     { name: "Marketplace", href: "/marketplace", icon: <ShopIcon /> },
   ];
 }
