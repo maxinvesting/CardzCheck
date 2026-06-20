@@ -11,9 +11,23 @@ import {
   createMarketplaceReplyContext,
   recommendMarketplaceReplyAction,
 } from "@/lib/messaging/reply-drafts";
-import NegotiationPanel from "./NegotiationPanel";
 import AIActionsPanel from "./AIActionsPanel";
-import { SALES_STATUS_LABELS, SALES_STATUS_STYLES } from "./salesDealDesk";
+
+const STATUS_STYLES: Record<MessageThread["status"], string> = {
+  needs_response: "border-amber-700/40 bg-amber-900/25 text-amber-400",
+  open: "border-[var(--biz-primary-border)] bg-[var(--biz-primary-soft)] text-[var(--biz-primary)]",
+  awaiting_buyer: "border-violet-700/40 bg-violet-900/25 text-violet-400",
+  resolved: "border-[var(--biz-border)] bg-[var(--biz-surface-soft)] text-[var(--biz-muted)]",
+  archived: "border-[#222] bg-[#111] text-[#555]",
+};
+
+const STATUS_LABELS: Record<MessageThread["status"], string> = {
+  needs_response: "Needs action",
+  open: "Open",
+  awaiting_buyer: "Awaiting buyer",
+  resolved: "Resolved",
+  archived: "Archived",
+};
 
 const IMAGE_URL_RE = /https?:\/\/\S+\.(?:jpg|jpeg|png|gif|webp|bmp|tiff?)(?:\?\S*)?/gi;
 
@@ -218,14 +232,6 @@ export default function ConversationView({
         </div>
       </div>
 
-      {isBusiness ? (
-        <NegotiationPanel
-          thread={thread}
-          negotiation={negotiation}
-          recommendation={recommendation}
-        />
-      ) : null}
-
       <div className="flex-1 overflow-y-auto bg-[var(--biz-bg)] px-3 py-3">
         <div className="mx-auto flex max-w-3xl flex-col gap-2.5">
           {messages.map((message) => {
@@ -296,9 +302,9 @@ function PlatformChip({ platform }: { platform: MessageThread["platform"] }) {
 function StatusChip({ status }: { status: MessageThread["status"] }) {
   return (
     <span
-      className={`rounded-sm border px-1.5 py-px text-[10px] font-semibold uppercase tracking-[0.08em] ${SALES_STATUS_STYLES[status]}`}
+      className={`rounded-sm border px-1.5 py-px text-[10px] font-semibold uppercase tracking-[0.08em] ${STATUS_STYLES[status]}`}
     >
-      {SALES_STATUS_LABELS[status]}
+      {STATUS_LABELS[status]}
     </span>
   );
 }

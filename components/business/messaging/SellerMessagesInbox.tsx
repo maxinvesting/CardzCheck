@@ -18,14 +18,8 @@ import type {
   MarketplaceReplyDraftResult,
   MarketplaceReplyAction,
 } from "@/lib/messaging/reply-drafts";
-import {
-  buildPriorityRationale,
-  isClosedSalesThread,
-  isStaleSalesThread,
-} from "./salesDealDesk";
 import ConversationView from "./ConversationView";
 import ConversationRow from "./ConversationRow";
-import BatchReviewModal from "./BatchReviewModal";
 
 interface Props {
   initialStats: MessagingStats;
@@ -50,16 +44,11 @@ const FILTERS: { key: TerminalFilter; label: string }[] = [
 
 function applyTerminalFilter(
   thread: MessageThread,
-  filter: TerminalFilter,
-  now: number
+  filter: TerminalFilter
 ): boolean {
   switch (filter) {
     case "needs_you":
-      return (
-        thread.status === "needs_response" ||
-        thread.unread_count > 0 ||
-        (isStaleSalesThread(thread, now) && !isClosedSalesThread(thread))
-      );
+      return thread.status === "needs_response" || thread.unread_count > 0;
     case "waiting":
       return thread.status === "awaiting_buyer";
     case "all":
@@ -68,30 +57,11 @@ function applyTerminalFilter(
   }
 }
 
-function priorityRank(thread: MessageThread, now: number): number {
-  const r = buildPriorityRationale(thread, now);
-  switch (r.level) {
-    case "urgent":
-      return 0;
-    case "high":
-      return 1;
-    case "medium":
-      return 2;
-    default:
-      return 3;
-  }
+function lastActivityMs(thread: MessageThread): number {
+  return new Date(thread.last_message_at).getTime();
 }
 
-function dollarImpactCents(thread: MessageThread): number {
-  return (
-    thread.offer_amount_cents ??
-    thread.suggested_counter_cents ??
-    thread.listing_price_cents ??
-    0
-  );
-}
-
-export default function SalesAgentTerminal({
+export default function SellerMessagesInbox({
   initialStats,
   initialThreads,
   businessName,
@@ -122,29 +92,13 @@ export default function SalesAgentTerminal({
   const [draftCache, setDraftCache] = useState<
     Map<string, MarketplaceReplyDraftResult>
   >(() => new Map());
-  const [batchOpen, setBatchOpen] = useState(false);
 
   const deferredQuery = useDeferredValue(searchQuery);
-  const [now, setNow] = useState<number>(() => Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 30000);
-    return () => clearInterval(id);
-  }, []);
-
-  const needsYouThreads = useMemo(() => {
-    return allThreads
-      .filter((t) => applyTerminalFilter(t, "needs_you", now))
-      .sort((a, b) => {
-        const rankDiff = priorityRank(a, now) - priorityRank(b, now);
-        if (rankDiff !== 0) return rankDiff;
-        return dollarImpactCents(b) - dollarImpactCents(a);
-      });
-  }, [allThreads, now]);
 
   const visibleThreads = useMemo(() => {
     const query = deferredQuery.trim().toLowerCase();
     let next = allThreads.filter((thread) =>
-      applyTerminalFilter(thread, filter, now)
+      applyTerminalFilter(thread, filter)
     );
     if (query) {
       next = next.filter((thread) => {
@@ -156,18 +110,9 @@ export default function SalesAgentTerminal({
         );
       });
     }
-    next.sort((a, b) => {
-      const rankDiff = priorityRank(a, now) - priorityRank(b, now);
-      if (rankDiff !== 0) return rankDiff;
-      const moneyDiff = dollarImpactCents(b) - dollarImpactCents(a);
-      if (moneyDiff !== 0) return moneyDiff;
-      return (
-        new Date(b.last_message_at).getTime() -
-        new Date(a.last_message_at).getTime()
-      );
-    });
+    next.sort((a, b) => lastActivityMs(b) - lastActivityMs(a));
     return next;
-  }, [allThreads, filter, deferredQuery, now]);
+  }, [allThreads, filter, deferredQuery]);
 
   const filterCounts = useMemo(() => {
     const counts: Record<TerminalFilter, number> = {
@@ -176,11 +121,11 @@ export default function SalesAgentTerminal({
       all: allThreads.length,
     };
     for (const thread of allThreads) {
-      if (applyTerminalFilter(thread, "needs_you", now)) counts.needs_you++;
-      if (applyTerminalFilter(thread, "waiting", now)) counts.waiting++;
+      if (applyTerminalFilter(thread, "needs_you")) counts.needs_you++;
+      if (applyTerminalFilter(thread, "waiting")) counts.waiting++;
     }
     return counts;
-  }, [allThreads, now]);
+  }, [allThreads]);
 
   const selectedThreadMeta = useMemo(
     () => allThreads.find((t) => t.id === selectedId) ?? null,
@@ -311,47 +256,6 @@ export default function SalesAgentTerminal({
     [selectedId]
   );
 
-  const handleSendMessageById = useCallback(
-    async (threadId: string, body: string) => {
-      try {
-        const res = await fetch(`/api/business/messages/${threadId}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ body }),
-        });
-        if (!res.ok) return false;
-        const data = await res.json();
-        const sent = data.message as Message;
-        applyThreadUpdate((t) =>
-          t.id === threadId
-            ? {
-                ...t,
-                last_message_preview: sent.body,
-                last_message_at: sent.created_at,
-                unread_count: 0,
-                status: "awaiting_buyer",
-              }
-            : t
-        );
-        return true;
-      } catch {
-        return false;
-      }
-    },
-    [applyThreadUpdate]
-  );
-
-  const handleCacheDraft = useCallback(
-    (threadId: string, draft: MarketplaceReplyDraftResult) => {
-      setDraftCache((prev) => {
-        const next = new Map(prev);
-        next.set(threadId, draft);
-        return next;
-      });
-    },
-    []
-  );
-
   const handleSendMessage = useCallback(
     async (body: string) => {
       if (!selectedId) return false;
@@ -413,7 +317,7 @@ export default function SalesAgentTerminal({
     <div
       className="flex h-full flex-col overflow-hidden bg-[var(--biz-bg)]"
       style={{
-        // Strip color from all biz-* tokens used inside the terminal
+        // Strip color from all biz-* tokens used inside the inbox
         ["--biz-primary" as string]: "#ffffff",
         ["--biz-primary-hover" as string]: "#e6e6e6",
         ["--biz-primary-soft" as string]: "rgba(255,255,255,0.06)",
@@ -503,16 +407,6 @@ export default function SalesAgentTerminal({
               className="w-full rounded border border-[var(--biz-border)] bg-[var(--biz-bg)] py-1 pl-7 pr-2 text-[12px] text-[var(--biz-text)] placeholder-[var(--biz-muted)] focus:border-[var(--biz-primary-border)] focus:outline-none focus:ring-1 focus:ring-[var(--biz-focus)]"
             />
           </div>
-          {isBusiness && needsYouThreads.length > 0 ? (
-            <button
-              type="button"
-              onClick={() => setBatchOpen(true)}
-              className="rounded bg-[var(--biz-primary)] px-2.5 py-1 text-[11px] font-semibold text-[var(--biz-primary-foreground)] transition-colors hover:bg-[var(--biz-primary-hover)]"
-              title="Review queue with keyboard shortcuts"
-            >
-              Review {needsYouThreads.length}
-            </button>
-          ) : null}
           <button
             type="button"
             onClick={refreshThreadList}
@@ -531,7 +425,7 @@ export default function SalesAgentTerminal({
         </div>
       </header>
 
-      {/* Main two-pane layout: queue | conversation+agent */}
+      {/* Main two-pane layout: queue | conversation */}
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <div className="flex h-full w-full">
           {/* Queue column */}
@@ -565,7 +459,7 @@ export default function SalesAgentTerminal({
             </div>
           </div>
 
-          {/* Conversation detail + side rail */}
+          {/* Conversation detail */}
           <div
             className={`h-full flex-1 lg:block ${
               mobileShowThread ? "block" : "hidden"
@@ -659,7 +553,7 @@ export default function SalesAgentTerminal({
                     Pick a conversation
                   </p>
                   <p className="mt-1 text-[12px] leading-relaxed text-[var(--biz-muted)]">
-                    Select a thread from the queue to draft a reply and move the deal forward.
+                    Select a thread from the queue to draft a reply and respond to the buyer.
                   </p>
                 </div>
               </div>
@@ -667,17 +561,6 @@ export default function SalesAgentTerminal({
           </div>
         </div>
       </div>
-
-      {batchOpen ? (
-        <BatchReviewModal
-          threads={needsYouThreads}
-          draftCache={draftCache}
-          onCacheDraft={handleCacheDraft}
-          onSend={handleSendMessageById}
-          onResolve={(id) => handleUpdateThreadStatus(id, "resolved")}
-          onClose={() => setBatchOpen(false)}
-        />
-      ) : null}
     </div>
   );
 }

@@ -44,16 +44,6 @@ export const ASSISTANTS: AssistantDef[] = [
     tags: ["Pricing", "Inventory", "Grading", "Liquidity"],
     icon: "advisor",
   },
-  {
-    id: "sales-agent",
-    name: "Sales Agent",
-    description:
-      "Generate listings, optimize pricing, identify buyers, and accelerate inventory turnover.",
-    href: "/assistants/sales-agent",
-    status: "live",
-    tags: ["Listings", "Negotiation", "Buyers", "Turnover"],
-    icon: "sales",
-  },
 ];
 
 /** Assistants surfaced as "coming soon" on the landing page only (not in nav). */

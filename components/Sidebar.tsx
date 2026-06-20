@@ -8,7 +8,6 @@ import type { User } from "@/types";
 import PricingModal from "@/components/PricingModal";
 import { clearCurrentUserCache, getCurrentUserCached } from "@/lib/current-user-client";
 import { createClient } from "@/lib/supabase/client";
-import { useSellerUnreadCount } from "@/hooks/useSellerUnreadCount";
 import AssistantIcon from "@/components/assistants/AssistantIcon";
 import { NAV_ASSISTANTS } from "@/lib/assistants/registry";
 
@@ -249,18 +248,11 @@ export default function Sidebar() {
   const isBusinessRoute = pathname.startsWith("/business");
   const isBusinessWorkspace = true;
   const hasPaidWorkspace = true;
-  // Unread seller conversations — surfaced on the Sales Agent assistant (the
-  // deal-desk / inbox) so the badge sits with the tool that owns the inbox.
-  const unreadMessages = useSellerUnreadCount(Boolean(user));
   const navItems: NavItem[] = BUSINESS_NAV_ITEMS();
   const assistantNavItems: NavItem[] = NAV_ASSISTANTS.map((a) => ({
     name: a.name,
     href: a.href,
     icon: <AssistantIcon icon={a.icon} />,
-    // The Sales Agent is the seller deal-desk / inbox — surface unread offers.
-    ...(a.id === "sales-agent" && unreadMessages > 0
-      ? { unreadCount: unreadMessages }
-      : {}),
   }));
   const businessSurfaceClass = "bg-[var(--biz-near-black)] border-[color:var(--biz-border)]";
 

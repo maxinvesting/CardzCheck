@@ -3,10 +3,10 @@
 import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-// Heavy terminal (~960 lines + messaging deps) — split into its own chunk so it
-// doesn't bloat the sales page's initial bundle.
-const SalesAgentTerminal = dynamic(
-  () => import("@/components/business/messaging/SalesAgentTerminal"),
+// Heavy inbox (messaging deps) — split into its own chunk so it doesn't bloat
+// the page's initial bundle.
+const SellerMessagesInbox = dynamic(
+  () => import("@/components/business/messaging/SellerMessagesInbox"),
   {
     ssr: false,
     loading: () => (
@@ -164,7 +164,7 @@ export default function BusinessSalesPage() {
   return (
     <>
       <main className="sales-mono-theme flex h-screen flex-col overflow-hidden">
-        <SalesAgentTerminal
+        <SellerMessagesInbox
           initialStats={stats}
           initialThreads={threads}
           businessName={businessName}

@@ -2,7 +2,6 @@
 
 import { formatPrice } from "@/lib/pricing";
 import type { MessageThread } from "@/lib/messaging/types";
-import { buildPriorityRationale } from "./salesDealDesk";
 
 function relativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -35,7 +34,6 @@ export default function ConversationRow({
   selected,
   onSelect,
 }: Props) {
-  const priority = buildPriorityRationale(thread);
   const offerText =
     typeof thread.offer_amount_cents === "number"
       ? formatPrice(thread.offer_amount_cents / 100)
@@ -43,15 +41,6 @@ export default function ConversationRow({
   const buyerLabel = thread.buyer_display_name ?? thread.buyer_username;
   const hasUnread = thread.unread_count > 0;
   const preview = thread.last_message_preview ?? "";
-
-  const priorityColor =
-    priority.level === "urgent"
-      ? "var(--biz-danger)"
-      : priority.level === "high"
-        ? "var(--biz-warning)"
-        : priority.level === "medium"
-          ? "var(--biz-primary)"
-          : "transparent";
 
   return (
     <button
@@ -63,11 +52,6 @@ export default function ConversationRow({
           : "bg-transparent hover:bg-[var(--biz-surface-soft)]"
       }`}
     >
-      <span
-        aria-hidden
-        className="absolute inset-y-0 left-0 w-[3px]"
-        style={{ background: priorityColor }}
-      />
       <div className="flex items-center gap-2 pl-1.5">
         {hasUnread ? (
           <span
