@@ -1,6 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireBusinessAccess } from "@/lib/business/actions";
 import { getCashBalanceCents } from "@/lib/business/cash";
+import {
+  TRADE_RECOGNITION_SELECT,
+  normalizeTradeRow,
+  tradeRecognition,
+  type RawTradeRow,
+  type RecognizableTrade,
+} from "@/lib/business/trade-recognition";
 
 const BUSINESS_TABLE = "collection_items" as const;
 const BUSINESS_ITEM_KIND = "inventory" as const;
@@ -41,41 +48,10 @@ type InventoryRow = {
   channel: string | null;
 };
 
-/**
- * Normalized view of a recorded trade for the financials engine.
- * `cash_in` / `cash_out` are the real money that moved at trade time;
- * `has_incoming` distinguishes a card-for-card swap (gain deferred into the
- * received cards' basis) from a pure cards-for-cash disposal.
- */
-type TradeRow = {
-  traded_at: string;
-  cash_in_cents: number; // cash received in the trade
-  cash_out_cents: number; // cash paid out in the trade
-  outgoing_basis_cents: number; // cost basis of cards given away
-  has_incoming: boolean; // true if any card came back in the trade
-};
-
-/**
- * How much of a trade should be recognized in P&L *now*, consistent with the
- * app's deferral model. Card-for-card swaps defer their gain into the received
- * cards' basis, so only the cash that can't be absorbed (cash received beyond
- * the basis given up) is recognized at trade time. A pure cards-for-cash
- * disposal (no card received) realizes the full gain or loss immediately, since
- * there's nothing to defer the basis into. Returns null when nothing is
- * recognized yet (the normal deferred case).
- */
-function tradeRecognition(
-  t: TradeRow
-): { revenue_cents: number; cogs_cents: number; profit_cents: number } | null {
-  const net = t.cash_in_cents - t.cash_out_cents - t.outgoing_basis_cents;
-  const recognize = t.has_incoming ? net > 0 : true;
-  if (!recognize) return null;
-  return {
-    revenue_cents: t.cash_in_cents,
-    cogs_cents: t.cash_out_cents + t.outgoing_basis_cents,
-    profit_cents: net,
-  };
-}
+// Trade-recognition math now lives in `lib/business/trade-recognition.ts` so the
+// dashboard KPIs and this page recognize trades identically. `TradeRow` is kept
+// as a local alias to minimize churn in the signatures below.
+type TradeRow = RecognizableTrade;
 
 export type PeriodTotals = {
   revenue_cents: number;
@@ -651,9 +627,7 @@ export async function getFinancialsSummary(
       .eq("item_kind", BUSINESS_ITEM_KIND),
     supabase
       .from("business_trades")
-      .select(
-        "id,traded_at,cash_paid_cents,cash_received_cents,outgoing_basis_cents,incoming_basis_cents,trade_items:business_trade_items(direction)"
-      )
+      .select(TRADE_RECOGNITION_SELECT)
       .eq("business_account_id", context.businessAccountId)
       .eq("is_deleted", false)
       .gte("traded_at", salesFrom.toISOString()),
@@ -700,24 +674,10 @@ export async function getFinancialsSummary(
   const inventoryRows: InventoryRow[] = (inventoryRes.data ?? []) as InventoryRow[];
 
   // Trades — gracefully degrade to none if the trade ledger isn't migrated yet.
-  type RawTrade = {
-    traded_at: string;
-    cash_paid_cents: number | null;
-    cash_received_cents: number | null;
-    outgoing_basis_cents: number | null;
-    incoming_basis_cents: number | null;
-    trade_items?: Array<{ direction: string | null }> | null;
-  };
-  const rawTrades: RawTrade[] = tradesRes.error
+  const rawTrades: RawTradeRow[] = tradesRes.error
     ? []
-    : ((tradesRes.data ?? []) as unknown as RawTrade[]);
-  const tradeRows: TradeRow[] = rawTrades.map((t) => ({
-    traded_at: t.traded_at,
-    cash_in_cents: toInt(t.cash_received_cents),
-    cash_out_cents: toInt(t.cash_paid_cents),
-    outgoing_basis_cents: toInt(t.outgoing_basis_cents),
-    has_incoming: (t.trade_items ?? []).some((it) => it.direction === "in"),
-  }));
+    : ((tradesRes.data ?? []) as unknown as RawTradeRow[]);
+  const tradeRows: TradeRow[] = rawTrades.map(normalizeTradeRow);
 
   const last30 = aggregatePeriod(saleRows, last30Start, now, tradeRows);
   const prev30 = aggregatePeriod(saleRows, prev30Start, last30Start, tradeRows);

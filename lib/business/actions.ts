@@ -17,6 +17,13 @@ import {
 import { enqueueCertImageResolution } from "@/lib/images/cert-image-jobs";
 import { normalizeCertWriteFields } from "@/lib/images/cert-image";
 import { hydrateTrustedImagesForItems } from "@/lib/images/resolver";
+import {
+  TRADE_RECOGNITION_SELECT,
+  normalizeTradeRow,
+  sumRecognizedTrades,
+  type RawTradeRow,
+  type RecognizableTrade,
+} from "@/lib/business/trade-recognition";
 
 // Uses unified collection_items table with item_kind = 'inventory'
 const BUSINESS_TABLE = "collection_items" as const;
@@ -1651,6 +1658,31 @@ export async function deleteSale(userId: string, saleId: string): Promise<void> 
  * Used as the primary computation method (avoids dependency on an RPC function
  * that may not be deployed yet).
  */
+/**
+ * Fetch + normalize recognized-trade inputs for a business account since `fromIso`.
+ * Trades are folded into the dashboard KPIs so its revenue/profit reconciles with
+ * the Financials page, which counts them via the same recognition engine. Degrades
+ * to an empty list when the trade ledger isn't migrated (legacy / sales-only).
+ */
+async function fetchRecognizedTrades(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  businessAccountId: string,
+  fromIso: string
+): Promise<RecognizableTrade[]> {
+  try {
+    const { data, error } = await supabase
+      .from("business_trades")
+      .select(TRADE_RECOGNITION_SELECT)
+      .eq("business_account_id", businessAccountId)
+      .eq("is_deleted", false)
+      .gte("traded_at", fromIso);
+    if (error) return [];
+    return ((data ?? []) as unknown as RawTradeRow[]).map(normalizeTradeRow);
+  } catch {
+    return [];
+  }
+}
+
 async function aggregateSalesKpis(
   supabase: Awaited<ReturnType<typeof createClient>>,
   businessAccountId: string,
@@ -1774,6 +1806,17 @@ export async function getBusinessMetrics(userId: string): Promise<BusinessMetric
     }
   }
 
+  // Fold recognized trades into MTD/YTD so the dashboard headline reconciles
+  // with the Financials page (which counts trades via the same engine).
+  const trades = await fetchRecognizedTrades(
+    supabase,
+    context.businessAccountId,
+    yearStart.toISOString()
+  );
+  const endMs = rangeEnd.getTime();
+  const mtdTrades = sumRecognizedTrades(trades, monthStart.getTime(), endMs);
+  const ytdTrades = sumRecognizedTrades(trades, yearStart.getTime(), endMs);
+
   // Active inventory count
   const { count: activeCount } = await supabase
     .from(BUSINESS_TABLE)
@@ -1785,12 +1828,12 @@ export async function getBusinessMetrics(userId: string): Promise<BusinessMetric
     .neq("status", "traded");
 
   return {
-    revenueMtd: toInt(mtd.revenue_cents),
-    revenueYtd: toInt(ytd.revenue_cents),
-    profitMtd: toInt(mtd.profit_cents),
-    profitYtd: toInt(ytd.profit_cents),
-    salesCountMtd: toInt(mtd.sales_count),
-    salesCountYtd: toInt(ytd.sales_count),
+    revenueMtd: toInt(mtd.revenue_cents) + mtdTrades.revenue_cents,
+    revenueYtd: toInt(ytd.revenue_cents) + ytdTrades.revenue_cents,
+    profitMtd: toInt(mtd.profit_cents) + mtdTrades.profit_cents,
+    profitYtd: toInt(ytd.profit_cents) + ytdTrades.profit_cents,
+    salesCountMtd: toInt(mtd.sales_count) + mtdTrades.sales_count,
+    salesCountYtd: toInt(ytd.sales_count) + ytdTrades.sales_count,
     activeInventoryCount: activeCount ?? 0,
   };
 }
@@ -1930,6 +1973,25 @@ export async function getBusinessPeriodMetrics(
       }
     }
     // non-schema errors: leave zeros
+  }
+
+  // Fold recognized trades into each period so the dashboard snapshot matches
+  // the Financials page. yearStart is the earliest window we report, so one
+  // fetch covers every period.
+  const trades = await fetchRecognizedTrades(
+    supabase,
+    context.businessAccountId,
+    yearStart.toISOString()
+  );
+  if (trades.length > 0) {
+    const endMs = Date.parse(rangeEnd);
+    ranges.forEach(([key, from]) => {
+      const t = sumRecognizedTrades(trades, Date.parse(from), endMs);
+      result[key].revenue_cents += t.revenue_cents;
+      result[key].profit_cents += t.profit_cents;
+      result[key].cogs_cents += t.cogs_cents;
+      result[key].sales_count += t.sales_count;
+    });
   }
 
   return result;
