@@ -13,7 +13,7 @@ import {
 export const metadata = {
   title: "Assistants · CardzCheck",
   description:
-    "Specialized AI tools for sports-card dealers — advisory, sales, pricing, grading, and more.",
+    "Specialized tools for sports-card dealers — advisory, sales, pricing, grading, and more.",
 };
 
 function LiveCard({ a }: { a: AssistantDef }) {
@@ -104,10 +104,10 @@ export default function AssistantsLandingPage() {
             </span>
           </div>
           <h1 className="mt-2 text-[26px] font-medium leading-[1.1] tracking-tight text-[var(--biz-text-strong)] sm:text-[30px]">
-            Your AI operating system
+            Your business operating system
           </h1>
           <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-[var(--biz-muted)]">
-            A suite of specialized AI assistants built for sports-card dealers —
+            A suite of specialized assistants built for sports-card dealers —
             each focused on a part of the business, from advisory and sales to
             pricing, grading, and inventory.
           </p>
@@ -136,6 +136,12 @@ export default function AssistantsLandingPage() {
             ))}
           </div>
         </section>
+
+        {/* Transparency disclaimer */}
+        <p className="mt-8 border-t border-[var(--biz-border)] pt-4 text-[11px] leading-5 text-[var(--biz-faint)]">
+          Assistants are AI-powered and may make mistakes. Verify important
+          numbers and decisions before acting on them.
+        </p>
       </div>
     </main>
   );
