@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import BusinessPaywall from "@/components/business/BusinessPaywall";
 import SalesTable, { type SalesFilters } from "@/components/business/SalesTable";
+import TradesTable, { type BusinessTrade } from "@/components/business/TradesTable";
 import { createClient } from "@/lib/supabase/client";
 import type { BusinessSale } from "@/types";
 import { formatMoney } from "@/lib/business/sales-utils";
@@ -28,6 +29,8 @@ export default function BusinessSalesHistoryPage() {
   const [sales, setSales] = useState<BusinessSale[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
+  const [trades, setTrades] = useState<BusinessTrade[]>([]);
+  const [tradesLoading, setTradesLoading] = useState(true);
   const [filters, setFilters] = useState<SalesFilters>(defaultFilters);
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
@@ -68,6 +71,24 @@ export default function BusinessSalesHistoryPage() {
     }
   }, [filters, page, router]);
 
+  const loadTrades = useCallback(async () => {
+    setTradesLoading(true);
+    try {
+      const res = await fetch("/api/business/trades", { cache: "no-store" });
+      if (!res.ok) {
+        // Trades are best-effort here; surface nothing if the ledger isn't migrated.
+        setTrades([]);
+        return;
+      }
+      const data = await res.json();
+      setTrades((data.trades ?? []) as BusinessTrade[]);
+    } catch {
+      setTrades([]);
+    } finally {
+      setTradesLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     async function init() {
       const supabase = createClient();
@@ -79,9 +100,10 @@ export default function BusinessSalesHistoryPage() {
         return;
       }
       void loadSales();
+      void loadTrades();
     }
     void init();
-  }, [router, loadSales]);
+  }, [router, loadSales, loadTrades]);
 
   useEffect(() => {
     if (!toast) return;
@@ -133,6 +155,59 @@ export default function BusinessSalesHistoryPage() {
       }
     },
     [loadSales]
+  );
+
+  const handleDeleteTrade = useCallback(
+    async (tradeId: string) => {
+      try {
+        const res = await fetch(`/api/business/trades/${tradeId}`, {
+          method: "DELETE",
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || "Failed to undo trade");
+        }
+        setToast({ type: "success", message: "Trade undone" });
+        await loadTrades();
+      } catch (err) {
+        setToast({
+          type: "error",
+          message: err instanceof Error ? err.message : "Failed to undo trade",
+        });
+      }
+    },
+    [loadTrades]
+  );
+
+  // Trades come back unpaginated; filter them client-side to match the
+  // date range + search the user has applied to sales. A channel filter
+  // other than "all" hides trades (they have no sales channel).
+  const filteredTrades = useMemo(() => {
+    if (filters.channel) return [];
+    const fromMs = filters.from ? Date.parse(`${filters.from}T00:00:00.000Z`) : null;
+    const toMs = filters.to ? Date.parse(`${filters.to}T23:59:59.999Z`) : null;
+    const q = filters.search.trim().toLowerCase();
+    return trades.filter((trade) => {
+      const tradedMs = Date.parse(trade.traded_at);
+      if (fromMs !== null && tradedMs < fromMs) return false;
+      if (toMs !== null && tradedMs > toMs) return false;
+      if (q) {
+        const haystack = [
+          trade.partner_name ?? "",
+          trade.notes ?? "",
+          ...trade.items.map((it) => it.title ?? ""),
+        ]
+          .join(" ")
+          .toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [trades, filters]);
+
+  const tradesRealized = useMemo(
+    () => filteredTrades.reduce((acc, t) => acc + t.realized_gain_cents, 0),
+    [filteredTrades]
   );
 
   const summary = useMemo(() => {
@@ -205,6 +280,33 @@ export default function BusinessSalesHistoryPage() {
               total={total}
               onPageChange={setPage}
             />
+
+            {(tradesLoading || filteredTrades.length > 0) && (
+              <div className="mt-6">
+                <div className="mb-2 flex items-baseline justify-between">
+                  <h2 className="text-[13px] font-semibold uppercase tracking-[0.1em] text-[#77808C]">
+                    Trades{!tradesLoading ? ` (${filteredTrades.length})` : ""}
+                  </h2>
+                  {!tradesLoading && filteredTrades.length > 0 && (
+                    <span className="text-[11px] text-[#77808C]">
+                      Realized gain{" "}
+                      <span
+                        className={
+                          tradesRealized >= 0 ? "ledger-pnl-pos" : "ledger-pnl-neg"
+                        }
+                      >
+                        {formatMoney(tradesRealized)}
+                      </span>
+                    </span>
+                  )}
+                </div>
+                <TradesTable
+                  trades={filteredTrades}
+                  loading={tradesLoading}
+                  onDeleteTrade={handleDeleteTrade}
+                />
+              </div>
+            )}
           </section>
         </div>
         {toast && (
