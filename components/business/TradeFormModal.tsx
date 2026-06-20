@@ -19,6 +19,7 @@ export type TradeIncomingPayload = {
   card_number: string | null;
   grade: string | null;
   grading_company: string | null;
+  cert_number: string | null;
   fair_value_cents: number;
   allocated_cost_basis_cents: number;
   image_url: string | null;
@@ -291,6 +292,11 @@ export default function TradeFormModal({
         updateIncoming(id, { lookupBusy: false, lookupError: msg });
         return;
       }
+      const scanUrl = Array.isArray(data.image_urls)
+        ? data.image_urls.find(
+            (u: unknown): u is string => typeof u === "string" && u.length > 0
+          ) ?? null
+        : null;
       setIncoming((prev) =>
         prev.map((r) =>
           r.id === id
@@ -303,6 +309,7 @@ export default function TradeFormModal({
                 parallel_type: data.parallel_type ?? r.parallel_type,
                 grade: data.grade ?? r.grade,
                 grading_company: data.grading_company ?? r.grading_company ?? "PSA",
+                image_url: scanUrl ?? r.image_url,
                 lookupBusy: false,
                 lookupError: null,
               }
@@ -376,6 +383,7 @@ export default function TradeFormModal({
         card_number: row.card_number.trim() || null,
         grade: row.grade.trim() || null,
         grading_company: row.grading_company.trim() || null,
+        cert_number: row.cert_number.trim() || null,
         fair_value_cents: fair,
         allocated_cost_basis_cents: basis,
         image_url: row.image_url,

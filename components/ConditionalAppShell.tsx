@@ -32,8 +32,6 @@ const BARE_EXACT = new Set<string>([
 // Path prefixes that render bare (no shell).
 const BARE_PREFIXES = [
   "/grade-report",          // print / export views
-  "/card/",                 // full-bleed card detail
-  "/business/card/",        // re-export of /card detail
   "/cards/",                // legacy card detail
   "/marketplace/messages",  // buyer/seller messaging panes
 ];

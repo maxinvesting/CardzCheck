@@ -260,17 +260,6 @@ export default function CardProfileDrawer({
             </h2>
           </div>
           <div className="flex items-center gap-2">
-            {item ? (
-              <Link
-                href={`/card/${item.id}?from=${mode}`}
-                className="border border-[#343941] px-3 py-1.5 text-[11px] font-medium text-[#B8C0CC] transition-colors hover:border-[#5A626E] hover:text-[#E6E8EB]"
-                title="Open full profile in a new tab"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Full ↗
-              </Link>
-            ) : null}
             <button
               type="button"
               onClick={onClose}

@@ -68,7 +68,11 @@ describe("normalizeTradeRow", () => {
     });
   });
 
-  it("treats a row with no incoming items as a disposal even if incoming_basis is set", () => {
+  it("falls back to incoming_basis_cents when a swap has no 'in' item rows", () => {
+    // Legacy single-card trades and partially-failed multi-card trades carry
+    // incoming basis on the header without 'in' item rows. They are still swaps
+    // (basis deferred into received cards), not disposals — booking the full
+    // loss would be a phantom. has_incoming must fall back to the basis signal.
     const raw: RawTradeRow = {
       traded_at: "2026-06-03T00:00:00.000Z",
       cash_paid_cents: 0,
@@ -76,6 +80,20 @@ describe("normalizeTradeRow", () => {
       outgoing_basis_cents: 15000,
       incoming_basis_cents: 33100,
       trade_items: [{ direction: "out" }, { direction: "out" }],
+    };
+    expect(normalizeTradeRow(raw).has_incoming).toBe(true);
+    // And the would-be phantom disposal loss is deferred, not recognized.
+    expect(tradeRecognition(normalizeTradeRow(raw))).toBeNull();
+  });
+
+  it("treats a row with no incoming items and no incoming basis as a disposal", () => {
+    const raw: RawTradeRow = {
+      traded_at: "2026-06-03T00:00:00.000Z",
+      cash_paid_cents: 0,
+      cash_received_cents: 0,
+      outgoing_basis_cents: 15000,
+      incoming_basis_cents: 0,
+      trade_items: [{ direction: "out" }],
     };
     expect(normalizeTradeRow(raw).has_incoming).toBe(false);
   });

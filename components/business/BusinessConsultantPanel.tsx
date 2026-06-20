@@ -647,15 +647,11 @@ export default function BusinessConsultantPanel({ initialPrompt }: { initialProm
       {/* ── MASTHEAD ────────────────────────────────────────────────────── */}
       <header className="desk-rise flex flex-wrap items-end justify-between gap-x-6 gap-y-3 pb-4 mb-5 border-b border-[var(--biz-border)]">
         <div className="min-w-0 max-w-2xl">
-          <div className="flex items-center gap-2.5">
-            <span className="desk-pulse" aria-hidden />
-            <span className="desk-eyebrow">Assistants · AI Advisor</span>
-          </div>
-          <h1 className="desk-display mt-2 text-[26px] font-medium leading-[1.1] text-[var(--biz-text-strong)] sm:text-[30px]">
+          <h1 className="desk-display text-[26px] font-medium leading-[1.1] text-[var(--biz-text-strong)] sm:text-[30px]">
             Business Advisor
           </h1>
           <p className="mt-2 text-[13px] leading-relaxed text-[var(--biz-muted)]">
-            AI-powered guidance for pricing, grading, inventory management,
+            Guidance for pricing, grading, inventory management,
             liquidity planning, and business decisions.
           </p>
         </div>
@@ -1011,6 +1007,12 @@ export default function BusinessConsultantPanel({ initialPrompt }: { initialProm
                 </button>
               ))}
             </div>
+
+            {/* Transparency disclaimer */}
+            <p className="mt-2.5 text-center text-[10px] leading-4 text-[var(--biz-faint)]">
+              Responses are AI-generated and may be inaccurate. Verify important
+              numbers and decisions before acting.
+            </p>
           </div>
         </div>
 

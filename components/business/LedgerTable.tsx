@@ -2,7 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import type { LedgerTableRow } from "@/lib/business/ledger-table";
+import type {
+  LedgerTableRow,
+  LedgerSortColumn,
+  LedgerSortState,
+} from "@/lib/business/ledger-table";
 
 export type LedgerInlineField =
   | "cost_basis_total_cents"
@@ -27,6 +31,10 @@ interface LedgerTableProps {
   onInlineEdit?: (payload: LedgerInlineEditPayload) => Promise<void> | void;
   /** When provided, "Profile" opens a drawer instead of routing. */
   onOpenProfile?: (row: LedgerTableRow) => void;
+  /** Current sort state; when provided headers become clickable sort controls. */
+  sort?: LedgerSortState;
+  /** Called with the clicked column; parent computes the next sort state. */
+  onSort?: (column: LedgerSortColumn) => void;
 }
 
 const STATUS_OPTIONS = ["unlisted", "listed", "pending_sale", "sold", "returned", "traded"] as const;
@@ -74,6 +82,16 @@ function signedClassName(value: number | null): string {
   return "text-[color:var(--biz-muted)]";
 }
 
+// P&L uses concrete hex (matching the page summary strip) so it colors
+// correctly regardless of whether the appearance theme vars are present:
+// green in profit, red at a loss, grey at break-even.
+function pnlClassName(value: number | null): string {
+  if (value == null) return "text-[#77808C]";
+  if (value > 0) return "text-[#20B26B]";
+  if (value < 0) return "text-[#E05C5C]";
+  return "text-[#B8C0CC]";
+}
+
 function neutralMoneyClassName(value: number | null): string {
   return value == null ? "text-[color:var(--biz-faint)]" : "text-[color:var(--biz-text)]";
 }
@@ -95,26 +113,74 @@ function parseMoneyDraft(value: string): MoneyDraftParseResult {
   return { ok: true, cents: Math.round(dollars * 100) };
 }
 
+function SortArrow({ direction }: { direction: "asc" | "desc" }) {
+  return (
+    <span aria-hidden className="text-[color:var(--biz-text-strong)]">
+      {direction === "desc" ? "▼" : "▲"}
+    </span>
+  );
+}
+
 function HeaderCell({
   children,
   align = "left",
   className = "",
   title,
+  sortColumn,
+  activeSort,
+  onSort,
 }: {
   children: React.ReactNode;
   align?: "left" | "right" | "center";
   className?: string;
   title?: string;
+  /** When provided (with onSort), this header sorts by the given column. */
+  sortColumn?: LedgerSortColumn;
+  activeSort?: LedgerSortState;
+  onSort?: (column: LedgerSortColumn) => void;
 }) {
   const alignClass =
     align === "right" ? "text-right" : align === "center" ? "text-center" : "text-left";
+  const sortable = Boolean(sortColumn && onSort);
+  const isActive = sortable && activeSort?.column === sortColumn;
+
+  const baseClass = `sticky top-0 z-10 border-b border-[color:var(--biz-border)] bg-[color:var(--biz-near-black)] px-2 py-2 text-[10px] font-medium uppercase tracking-[0.08em] ${alignClass} ${className}`;
+
+  if (!sortable) {
+    return (
+      <th scope="col" title={title} className={`${baseClass} text-[color:var(--biz-muted)]`}>
+        {children}
+      </th>
+    );
+  }
+
+  const justify =
+    align === "right" ? "justify-end" : align === "center" ? "justify-center" : "justify-start";
+
   return (
     <th
       scope="col"
       title={title}
-      className={`sticky top-0 z-10 border-b border-[color:var(--biz-border)] bg-[color:var(--biz-near-black)] px-2 py-2 text-[10px] font-medium uppercase tracking-[0.08em] text-[color:var(--biz-muted)] ${alignClass} ${className}`}
+      aria-sort={isActive ? (activeSort!.direction === "desc" ? "descending" : "ascending") : "none"}
+      className={`${baseClass} ${
+        isActive ? "text-[color:var(--biz-text-strong)]" : "text-[color:var(--biz-muted)]"
+      }`}
     >
-      {children}
+      <button
+        type="button"
+        onClick={() => onSort!(sortColumn!)}
+        className={`group inline-flex w-full items-center gap-1 ${justify} uppercase tracking-[0.08em] transition-colors hover:text-[color:var(--biz-text-strong)] focus:outline-none focus:ring-1 focus:ring-[color:var(--biz-focus)]`}
+        title="Click to sort"
+      >
+        <span>{children}</span>
+        {isActive ? (
+          <SortArrow direction={activeSort!.direction} />
+        ) : (
+          <span aria-hidden className="opacity-0 transition-opacity group-hover:opacity-40">
+            ▼
+          </span>
+        )}
+      </button>
     </th>
   );
 }
@@ -285,6 +351,8 @@ export default function LedgerTable({
   onToggleAll,
   onInlineEdit,
   onOpenProfile,
+  sort,
+  onSort,
 }: LedgerTableProps) {
   const selectable = Boolean(selectedRowIds && onToggleRow);
   const allSelected =
@@ -325,27 +393,78 @@ export default function LedgerTable({
                   />
                 </HeaderCell>
               ) : null}
-              <HeaderCell className="min-w-[180px]">Card</HeaderCell>
+              <HeaderCell
+                className="min-w-[180px]"
+                sortColumn="card"
+                activeSort={sort}
+                onSort={onSort}
+              >
+                Card
+              </HeaderCell>
               <HeaderCell className="w-[64px]">Grade</HeaderCell>
-              <HeaderCell align="right" className="w-[78px]">
+              <HeaderCell
+                align="right"
+                className="w-[78px]"
+                sortColumn="cost"
+                activeSort={sort}
+                onSort={onSort}
+              >
                 Cost
               </HeaderCell>
-              <HeaderCell align="right" className="w-[84px]" title="Estimated Value (CMV)">
+              <HeaderCell
+                align="right"
+                className="w-[84px]"
+                title="Estimated Value (CMV)"
+                sortColumn="cmv"
+                activeSort={sort}
+                onSort={onSort}
+              >
                 CMV
               </HeaderCell>
-              <HeaderCell align="right" className="w-[80px]">
+              <HeaderCell
+                align="right"
+                className="w-[80px]"
+                sortColumn="price"
+                activeSort={sort}
+                onSort={onSort}
+              >
                 Price
               </HeaderCell>
-              <HeaderCell align="right" className="w-[82px]" title="Lowest Listing">
+              <HeaderCell
+                align="right"
+                className="w-[82px]"
+                title="Lowest Listing"
+                sortColumn="lowest"
+                activeSort={sort}
+                onSort={onSort}
+              >
                 Lowest
               </HeaderCell>
-              <HeaderCell align="right" className="w-[64px]">
+              <HeaderCell
+                align="right"
+                className="w-[64px]"
+                sortColumn="spread"
+                activeSort={sort}
+                onSort={onSort}
+              >
                 Spread
               </HeaderCell>
-              <HeaderCell align="right" className="w-[80px]">
+              <HeaderCell
+                align="right"
+                className="w-[80px]"
+                sortColumn="pnl"
+                activeSort={sort}
+                onSort={onSort}
+              >
                 P&amp;L
               </HeaderCell>
-              <HeaderCell align="right" className="w-[52px]">
+              <HeaderCell
+                align="right"
+                className="w-[52px]"
+                sortColumn="days"
+                activeSort={sort}
+                onSort={onSort}
+              >
                 Days
               </HeaderCell>
               <HeaderCell align="center" className="w-[104px]">
@@ -485,7 +604,7 @@ export default function LedgerTable({
                   <Cell align="right" className={`tabular-nums ${signedClassName(row.spreadPct)}`}>
                     {formatSpread(row.spreadPct)}
                   </Cell>
-                  <Cell align="right" className={`tabular-nums ${signedClassName(row.pnlCents)}`}>
+                  <Cell align="right" className={`tabular-nums ${pnlClassName(row.pnlCents)}`}>
                     {formatMoney(row.pnlCents)}
                   </Cell>
                   <Cell align="right" className="tabular-nums text-[color:var(--biz-muted)]">

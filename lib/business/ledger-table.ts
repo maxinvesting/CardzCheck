@@ -28,28 +28,64 @@ export interface LedgerSummary {
   estimatedPnlCents: number | null;
 }
 
-export type LedgerSortKey =
-  | "value_desc"
-  | "value_asc"
-  | "pnl_desc"
-  | "cost_desc"
-  | "name_asc";
+/** Sortable columns in the ledger table, keyed to a row field. */
+export type LedgerSortColumn =
+  | "card"
+  | "cost"
+  | "cmv"
+  | "price"
+  | "lowest"
+  | "spread"
+  | "pnl"
+  | "days";
 
-export const DEFAULT_LEDGER_SORT_KEY: LedgerSortKey = "value_desc";
+export type LedgerSortDirection = "asc" | "desc";
 
-export const LEDGER_SORT_OPTIONS: ReadonlyArray<{ value: LedgerSortKey; label: string }> = [
-  { value: "value_desc", label: "Value: high to low" },
-  { value: "value_asc", label: "Value: low to high" },
-  { value: "pnl_desc", label: "P&L: high to low" },
-  { value: "cost_desc", label: "Cost: high to low" },
-  { value: "name_asc", label: "Name: A to Z" },
+export interface LedgerSortState {
+  column: LedgerSortColumn;
+  direction: LedgerSortDirection;
+}
+
+export const DEFAULT_LEDGER_SORT: LedgerSortState = { column: "cmv", direction: "desc" };
+
+/** First-click direction for a column: text reads best A→Z, numbers high→low. */
+export function defaultSortDirection(column: LedgerSortColumn): LedgerSortDirection {
+  return column === "card" ? "asc" : "desc";
+}
+
+/**
+ * Next sort state when a header is clicked: clicking the active column flips
+ * direction; clicking a new column resets to that column's default direction.
+ */
+export function nextLedgerSort(
+  current: LedgerSortState,
+  column: LedgerSortColumn
+): LedgerSortState {
+  if (current.column === column) {
+    return { column, direction: current.direction === "desc" ? "asc" : "desc" };
+  }
+  return { column, direction: defaultSortDirection(column) };
+}
+
+/** Stable string token for a sort state (used as a <select> value). */
+export function ledgerSortToken(state: LedgerSortState): string {
+  return `${state.column}_${state.direction}`;
+}
+
+/** Preset sorts surfaced in the photo-grid dropdown (which has no clickable headers). */
+export const LEDGER_SORT_PRESETS: ReadonlyArray<{ label: string; state: LedgerSortState }> = [
+  { label: "Value: high to low", state: { column: "cmv", direction: "desc" } },
+  { label: "Value: low to high", state: { column: "cmv", direction: "asc" } },
+  { label: "P&L: high to low", state: { column: "pnl", direction: "desc" } },
+  { label: "Cost: high to low", state: { column: "cost", direction: "desc" } },
+  { label: "Name: A to Z", state: { column: "card", direction: "asc" } },
 ];
 
 /** Comparator that always pushes null/undefined values to the end, regardless of direction. */
 function compareNullable(
   a: number | null,
   b: number | null,
-  dir: "asc" | "desc"
+  dir: LedgerSortDirection
 ): number {
   if (a == null && b == null) return 0;
   if (a == null) return 1;
@@ -57,31 +93,32 @@ function compareNullable(
   return dir === "desc" ? b - a : a - b;
 }
 
-/** Returns a new array of rows sorted by the given key. Does not mutate the input. */
+const NUMERIC_COLUMN_SELECTORS: Record<
+  Exclude<LedgerSortColumn, "card">,
+  (row: LedgerTableRow) => number | null
+> = {
+  cost: (r) => r.costBasisCents,
+  cmv: (r) => r.estimatedValueCents,
+  price: (r) => r.yourPriceCents,
+  lowest: (r) => r.lowestListingCents,
+  spread: (r) => r.spreadPct,
+  pnl: (r) => r.pnlCents,
+  days: (r) => r.daysHeld,
+};
+
+/** Returns a new array of rows sorted by the given column + direction. Does not mutate the input. */
 export function sortLedgerRows(
   rows: LedgerTableRow[],
-  key: LedgerSortKey
+  { column, direction }: LedgerSortState
 ): LedgerTableRow[] {
   const sorted = [...rows];
-  switch (key) {
-    case "value_asc":
-      return sorted.sort((a, b) =>
-        compareNullable(a.estimatedValueCents, b.estimatedValueCents, "asc")
-      );
-    case "pnl_desc":
-      return sorted.sort((a, b) => compareNullable(a.pnlCents, b.pnlCents, "desc"));
-    case "cost_desc":
-      return sorted.sort((a, b) => compareNullable(a.costBasisCents, b.costBasisCents, "desc"));
-    case "name_asc":
-      return sorted.sort((a, b) =>
-        a.cardLabel.localeCompare(b.cardLabel, "en", { sensitivity: "base" })
-      );
-    case "value_desc":
-    default:
-      return sorted.sort((a, b) =>
-        compareNullable(a.estimatedValueCents, b.estimatedValueCents, "desc")
-      );
+  if (column === "card") {
+    const cmp = (a: LedgerTableRow, b: LedgerTableRow) =>
+      a.cardLabel.localeCompare(b.cardLabel, "en", { sensitivity: "base" });
+    return sorted.sort((a, b) => (direction === "asc" ? cmp(a, b) : -cmp(a, b)));
   }
+  const select = NUMERIC_COLUMN_SELECTORS[column];
+  return sorted.sort((a, b) => compareNullable(select(a), select(b), direction));
 }
 
 const FALLBACK_VALUE_CENT_FIELDS = [

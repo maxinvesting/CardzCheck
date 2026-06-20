@@ -129,16 +129,12 @@ describe("ledger table mapping", () => {
       makeItem({ id: "high", title: "Gamma", current_market_value_cents: 9000 }),
     ]);
 
-    expect(sortLedgerRows(rows, "value_desc").map((r) => r.id)).toEqual([
-      "high",
-      "low",
-      "none",
-    ]);
-    expect(sortLedgerRows(rows, "value_asc").map((r) => r.id)).toEqual([
-      "low",
-      "high",
-      "none",
-    ]);
+    expect(
+      sortLedgerRows(rows, { column: "cmv", direction: "desc" }).map((r) => r.id)
+    ).toEqual(["high", "low", "none"]);
+    expect(
+      sortLedgerRows(rows, { column: "cmv", direction: "asc" }).map((r) => r.id)
+    ).toEqual(["low", "high", "none"]);
     // null value still sorts last even ascending.
   });
 
@@ -148,9 +144,15 @@ describe("ledger table mapping", () => {
       makeItem({ id: "b", title: "Apple", cost_basis_total_cents: 9000, current_market_value_cents: 9500 }),
     ]);
 
-    expect(sortLedgerRows(rows, "pnl_desc").map((r) => r.id)).toEqual(["a", "b"]);
-    expect(sortLedgerRows(rows, "cost_desc").map((r) => r.id)).toEqual(["b", "a"]);
-    expect(sortLedgerRows(rows, "name_asc").map((r) => r.id)).toEqual(["b", "a"]);
+    expect(
+      sortLedgerRows(rows, { column: "pnl", direction: "desc" }).map((r) => r.id)
+    ).toEqual(["a", "b"]);
+    expect(
+      sortLedgerRows(rows, { column: "cost", direction: "desc" }).map((r) => r.id)
+    ).toEqual(["b", "a"]);
+    expect(
+      sortLedgerRows(rows, { column: "card", direction: "asc" }).map((r) => r.id)
+    ).toEqual(["b", "a"]);
   });
 
   it("does not mutate the input array", () => {
@@ -159,7 +161,7 @@ describe("ledger table mapping", () => {
       makeItem({ id: "y", current_market_value_cents: 900 }),
     ]);
     const before = rows.map((r) => r.id);
-    sortLedgerRows(rows, "value_desc");
+    sortLedgerRows(rows, { column: "cmv", direction: "desc" });
     expect(rows.map((r) => r.id)).toEqual(before);
   });
 });

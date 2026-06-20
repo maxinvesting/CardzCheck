@@ -45,14 +45,29 @@ function toInt(value: number | null | undefined): number {
   return Math.round(value);
 }
 
-/** Map a raw `business_trades` row (+ joined item directions) into the recognition shape. */
+/**
+ * Map a raw `business_trades` row (+ joined item directions) into the recognition shape.
+ *
+ * `has_incoming` is normally derived from the presence of a `direction='in'`
+ * trade_item, but it ALSO falls back to `incoming_basis_cents > 0`. Some trades
+ * carry incoming basis on the header without any `'in'` item rows: legacy
+ * single-card trades (the original route wrote `incoming_basis = fair + cash_paid
+ * − cash_received` but never captured an incoming card), and multi-card trades
+ * where the non-atomic POST committed the header + outgoing rows but failed
+ * before persisting the incoming inventory. In both cases the basis was carried
+ * forward into received cards, so recognizing them as full cards-for-cash
+ * disposals would book a phantom realized loss. A non-zero incoming basis means
+ * value was deferred forward — never write it off as an immediate disposal.
+ */
 export function normalizeTradeRow(row: RawTradeRow): RecognizableTrade {
   return {
     traded_at: row.traded_at,
     cash_in_cents: toInt(row.cash_received_cents),
     cash_out_cents: toInt(row.cash_paid_cents),
     outgoing_basis_cents: toInt(row.outgoing_basis_cents),
-    has_incoming: (row.trade_items ?? []).some((it) => it.direction === "in"),
+    has_incoming:
+      (row.trade_items ?? []).some((it) => it.direction === "in") ||
+      toInt(row.incoming_basis_cents) > 0,
   };
 }
 

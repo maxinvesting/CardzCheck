@@ -30,11 +30,13 @@ import {
   computeLedgerSummary,
   mapInventoryToLedgerRows,
   sortLedgerRows,
-  LEDGER_SORT_OPTIONS,
-  DEFAULT_LEDGER_SORT_KEY,
+  nextLedgerSort,
+  ledgerSortToken,
+  LEDGER_SORT_PRESETS,
+  DEFAULT_LEDGER_SORT,
   type LedgerSummary,
   type LedgerTableRow,
-  type LedgerSortKey,
+  type LedgerSortState,
 } from "@/lib/business/ledger-table";
 import type { BusinessInventoryItem } from "@/types";
 
@@ -242,7 +244,7 @@ export default function LedgerPage() {
     useState<UndoActionSummary | null>(null);
   const [undoingLedgerAction, setUndoingLedgerAction] = useState(false);
   const [viewMode, setViewMode] = useState<LedgerViewMode>("spreadsheet");
-  const [sortKey, setSortKey] = useState<LedgerSortKey>(DEFAULT_LEDGER_SORT_KEY);
+  const [sort, setSort] = useState<LedgerSortState>(DEFAULT_LEDGER_SORT);
   const [cashBalanceCents, setCashBalanceCents] = useState<number | null>(null);
   const [showCashModal, setShowCashModal] = useState(false);
 
@@ -263,8 +265,8 @@ export default function LedgerPage() {
   );
 
   const sortedLedgerRows = useMemo(
-    () => sortLedgerRows(ledgerRows, sortKey),
-    [ledgerRows, sortKey]
+    () => sortLedgerRows(ledgerRows, sort),
+    [ledgerRows, sort]
   );
 
   const ledgerSummary = useMemo(
@@ -744,22 +746,29 @@ export default function LedgerPage() {
                   {ledgerRows.length.toLocaleString("en-US")} active card{ledgerRows.length === 1 ? "" : "s"}
                 </div>
                 <div className="flex items-center gap-2">
-                  <label className="flex items-center gap-1.5">
-                    <span className="text-[10px] font-medium uppercase tracking-[0.08em] text-[#77808C]">
-                      Sort
-                    </span>
-                    <select
-                      value={sortKey}
-                      onChange={(e) => setSortKey(e.target.value as LedgerSortKey)}
-                      className="border border-[#343941] bg-[#0B0D0F] px-2 py-1.5 text-[12px] font-medium text-[#B8C0CC] focus:border-[#20B26B] focus:outline-none"
-                    >
-                      {LEDGER_SORT_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                  {viewMode === "photos" ? (
+                    <label className="flex items-center gap-1.5">
+                      <span className="text-[10px] font-medium uppercase tracking-[0.08em] text-[#77808C]">
+                        Sort
+                      </span>
+                      <select
+                        value={ledgerSortToken(sort)}
+                        onChange={(e) => {
+                          const preset = LEDGER_SORT_PRESETS.find(
+                            (option) => ledgerSortToken(option.state) === e.target.value
+                          );
+                          if (preset) setSort(preset.state);
+                        }}
+                        className="border border-[#343941] bg-[#0B0D0F] px-2 py-1.5 text-[12px] font-medium text-[#B8C0CC] focus:border-[#20B26B] focus:outline-none"
+                      >
+                        {LEDGER_SORT_PRESETS.map((option) => (
+                          <option key={ledgerSortToken(option.state)} value={ledgerSortToken(option.state)}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
                   <LedgerViewToggle value={viewMode} onChange={setViewMode} />
                 </div>
               </div>
@@ -784,6 +793,8 @@ export default function LedgerPage() {
                   onToggleAll={handleToggleAll}
                   onInlineEdit={handleInlineEdit}
                   onOpenProfile={(row) => setProfileItemId(row.id)}
+                  sort={sort}
+                  onSort={(column) => setSort((current) => nextLedgerSort(current, column))}
                 />
               ) : (
                 <LedgerPhotoGrid
