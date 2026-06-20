@@ -7,8 +7,59 @@ import {
   recordLedgerAction,
 } from "@/lib/business/ledger-actions";
 import { netCashForTrade, recordCashTransaction } from "@/lib/business/cash";
+import { fetchPsaCertLookup } from "@/lib/images/psa-cert";
+import { uniqueTrustedImageUrls } from "@/lib/images/shared";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * Pull the official PSA slab scans for a received card and store them on the new
+ * inventory item, mirroring how /api/business/inventory persists card images.
+ * Without this, traded-in graded cards never get a photo: the trade route only
+ * set a single image_url, and the background cert-image resolver uses a
+ * different (unreliable) provider path. fetchPsaCertLookup hits PSA's
+ * GetImagesByCertNumber directly (front + back).
+ */
+async function attachPsaScansToTradeItem(args: {
+  supabase: Awaited<ReturnType<typeof createClient>>;
+  userId: string;
+  itemId: string;
+  certNumber: string | null;
+  gradingCompany: string | null;
+}): Promise<void> {
+  if (!args.certNumber) return;
+  if ((args.gradingCompany ?? "PSA").toUpperCase() !== "PSA") return;
+
+  try {
+    const result = await fetchPsaCertLookup(args.certNumber);
+    const imageUrls = uniqueTrustedImageUrls([
+      result?.frontImageUrl,
+      result?.backImageUrl,
+    ]).slice(0, 3);
+    if (imageUrls.length === 0) return;
+
+    const imageRecords = imageUrls.map((url, index) => ({
+      card_id: args.itemId,
+      user_id: args.userId,
+      storage_path: url,
+      position: index,
+      label: index === 0 ? "front" : index === 1 ? "back" : null,
+    }));
+
+    const { error } = await args.supabase.from("card_images").insert(imageRecords);
+    if (error) {
+      console.warn("[business/trades] failed to insert card images", {
+        itemId: args.itemId,
+        error: error.message,
+      });
+    }
+  } catch (err) {
+    console.warn("[business/trades] PSA scan fetch failed", {
+      itemId: args.itemId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
 
 const outgoingItemSchema = z.object({
   inventory_item_id: z.string().uuid(),
@@ -388,6 +439,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         image_url: inc.image_url ?? null,
       } as never);
       incomingItemIds.push(created.id);
+
+      await attachPsaScansToTradeItem({
+        supabase,
+        userId: user.id,
+        itemId: created.id,
+        certNumber: inc.cert_number ?? null,
+        gradingCompany: inc.grading_company ?? null,
+      });
 
       const { error: tiErr } = await supabase.from("business_trade_items").insert({
         trade_id: trade.id,
