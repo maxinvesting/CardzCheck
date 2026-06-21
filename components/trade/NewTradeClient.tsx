@@ -11,12 +11,14 @@ export default function NewTradeClient({
   myCards,
   partnerCards,
   seedWantId,
+  isSubscriber,
 }: {
   partnerId: string;
   partnerName: string;
   myCards: TradeableCard[];
   partnerCards: TradeableCard[];
   seedWantId: string | null;
+  isSubscriber: boolean;
 }) {
   const router = useRouter();
 
@@ -60,6 +62,7 @@ export default function NewTradeClient({
         myCards={myCards}
         theirCards={partnerCards}
         partnerName={partnerName}
+        isSubscriber={isSubscriber}
         initialTheirIds={seedTheirIds}
         submitLabel="Send trade offer"
         onSubmit={submit}

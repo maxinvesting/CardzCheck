@@ -23,6 +23,7 @@ export default function TradeCenterClient({
   browse,
   inventory,
   ownerNames,
+  isSubscriber,
 }: {
   currentUserId: string;
   initialView: string;
@@ -30,6 +31,7 @@ export default function TradeCenterClient({
   browse: BinderCard[];
   inventory: OwnInventoryCard[];
   ownerNames: Record<string, string | null>;
+  isSubscriber: boolean;
 }) {
   const [view, setView] = useState<View>(normalizeView(initialView));
 
@@ -41,7 +43,33 @@ export default function TradeCenterClient({
             Trade Center
           </h1>
           <p className="mt-0.5 text-[13px] text-[color:var(--biz-muted)]">
-            Swap cards with other collectors. Both sides approve, then ship direct.
+            Swap cards with other dealers. Both sides approve, then ship direct.
+          </p>
+          <p className="mt-1 text-[12px] text-[color:var(--biz-muted)]">
+            {isSubscriber ? (
+              <>
+                <span className="font-semibold text-[color:var(--biz-profit)]">
+                  Direct trades are free
+                </span>{" "}
+                with your membership. Prefer we mediate? The middleman is{" "}
+                <span className="font-semibold text-[color:var(--biz-text)]">
+                  3% of total trade value
+                </span>
+                .
+              </>
+            ) : (
+              <>
+                Middleman trades cost{" "}
+                <span className="font-semibold text-[color:var(--biz-text)]">
+                  3% of total trade value
+                </span>
+                .{" "}
+                <a href="/pricing" className="font-semibold text-[color:var(--biz-link)] hover:underline">
+                  Subscribe
+                </a>{" "}
+                to trade direct for free.
+              </>
+            )}
           </p>
         </div>
         <button

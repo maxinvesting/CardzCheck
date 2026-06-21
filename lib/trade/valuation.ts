@@ -17,6 +17,8 @@ export interface TradeValuation {
   recipientGivesCents: number;
   /** initiatorGives − recipientGives. Positive ⇒ initiator side is heavier. */
   differenceCents: number;
+  /** Combined value of both sides' cards plus any cash — the middleman fee base. */
+  totalValueCents: number;
   balanced: boolean;
 }
 
@@ -53,6 +55,7 @@ export function valuateTrade(
     initiatorGivesCents,
     recipientGivesCents,
     differenceCents,
+    totalValueCents: initiatorCardCents + recipientCardCents + cash,
     balanced: Math.abs(differenceCents) <= toleranceCents,
   };
 }

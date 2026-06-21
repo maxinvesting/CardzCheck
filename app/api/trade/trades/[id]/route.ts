@@ -3,7 +3,8 @@ import { z } from "zod";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { fetchOwnedCards, getTrade } from "@/lib/trade/queries";
 import { settleTrade, statusAfterApproval } from "@/lib/trade/transitions";
-import { TRADE_MAX_CASH_CENTS } from "@/lib/trade/config";
+import { TRADE_MAX_CASH_CENTS, tradePlatformFeeCents } from "@/lib/trade/config";
+import { getTierGates } from "@/lib/access";
 import { isTerminal, sideForUser } from "@/lib/trade/types";
 import type { Trade, TradeItem, TradeSide, TradeableCard } from "@/lib/trade/types";
 
@@ -21,6 +22,7 @@ const reviseSchema = z.object({
   recipient_item_ids: z.array(z.string().uuid()).default([]),
   cash_from: z.enum(["initiator", "recipient"]).nullable().optional(),
   cash_cents: z.number().int().min(0).max(TRADE_MAX_CASH_CENTS).optional(),
+  use_middleman: z.boolean().optional(),
   note: z.string().max(2000).optional(),
 });
 
@@ -167,6 +169,32 @@ export async function PATCH(
       );
     }
 
+    // Settlement method: carry forward the trade's existing choice unless the
+    // counter explicitly changes it. Direct (free) settlement is subscriber-only.
+    const useMiddleman = input.use_middleman ?? trade.use_middleman ?? false;
+    if (!useMiddleman) {
+      const gates = await getTierGates(user.id);
+      if (gates.tier === "free") {
+        return NextResponse.json(
+          {
+            error: "subscription_required",
+            message:
+              "Free direct trades require a CardzCheck membership. Subscribe, or switch to the middleman (3% of total trade value).",
+          },
+          { status: 402 }
+        );
+      }
+    }
+    const totalValueCents =
+      initiatorCards.reduce((s, c) => s + (c.estimated_value_cents || 0), 0) +
+      recipientCards.reduce((s, c) => s + (c.estimated_value_cents || 0), 0) +
+      cashCents;
+    const platformFeeCents = tradePlatformFeeCents({
+      useMiddleman,
+      totalValueCents,
+      cashCents,
+    });
+
     // Replace items wholesale, reset approvals — the reviser approves their own
     // counter; the other party must now re-approve.
     await service.from("trade_items").delete().eq("trade_id", id);
@@ -196,6 +224,8 @@ export async function PATCH(
         cash_from: cashCents > 0 ? input.cash_from ?? null : null,
         cash_cents: cashCents,
         cash_status: "none",
+        use_middleman: useMiddleman,
+        platform_fee_cents: platformFeeCents,
         note: input.note ?? trade.note,
         initiator_approved: side === "initiator",
         recipient_approved: side === "recipient",

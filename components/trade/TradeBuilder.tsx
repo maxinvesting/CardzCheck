@@ -4,7 +4,11 @@ import { useMemo, useState } from "react";
 import TradeCardTile from "./TradeCardTile";
 import { formatCents } from "@/lib/trade/format";
 import { suggestCashToBalance, valuateTrade } from "@/lib/trade/valuation";
-import { TRADE_MAX_CASH_CENTS } from "@/lib/trade/config";
+import {
+  TRADE_MAX_CASH_CENTS,
+  TRADE_MIDDLEMAN_FEE_PCT,
+  tradeMiddlemanFeeCents,
+} from "@/lib/trade/config";
 import type { TradeableCard, TradeSide } from "@/lib/trade/types";
 
 type CashDir = "none" | "me" | "them";
@@ -14,6 +18,7 @@ export interface TradeBuilderPayload {
   recipient_item_ids: string[];
   cash_from: TradeSide | null;
   cash_cents: number;
+  use_middleman: boolean;
   note: string;
 }
 
@@ -27,6 +32,7 @@ export default function TradeBuilder({
   myCards,
   theirCards,
   partnerName,
+  isSubscriber,
   initialMyIds = [],
   initialTheirIds = [],
   initialCashDir = "none",
@@ -39,6 +45,8 @@ export default function TradeBuilder({
   myCards: TradeableCard[];
   theirCards: TradeableCard[];
   partnerName: string;
+  /** Whether the current user has a paid membership (can settle direct trades for free). */
+  isSubscriber: boolean;
   initialMyIds?: string[];
   initialTheirIds?: string[];
   initialCashDir?: CashDir;
@@ -55,6 +63,9 @@ export default function TradeBuilder({
     initialCashCents > 0 ? (initialCashCents / 100).toFixed(2) : ""
   );
   const [note, setNote] = useState(initialNote);
+  // Subscribers default to the free direct trade; non-subscribers must use the
+  // middleman (their only path) unless/until they upgrade.
+  const [useMiddleman, setUseMiddleman] = useState<boolean>(!isSubscriber);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -122,6 +133,7 @@ export default function TradeBuilder({
       recipient_item_ids: mySide === "initiator" ? theirIds : myIds,
       cash_from: cashFrom,
       cash_cents: cashDir === "none" ? 0 : cashCents,
+      use_middleman: useMiddleman,
       note: note.trim(),
     };
     setSubmitting(true);
@@ -146,7 +158,7 @@ export default function TradeBuilder({
           subtitle={`${mine.size} card${mine.size === 1 ? "" : "s"} · ${formatCents(myCardCents)}`}
         >
           {myCards.length === 0 ? (
-            <Empty text="You have no cards flagged “Available for Trade”. Add some from your binder." />
+            <Empty text="You have no cards listed for trade. List some from your inventory first." />
           ) : (
             <Grid>
               {myCards.map((c) => (
@@ -256,6 +268,75 @@ export default function TradeBuilder({
             </span>
           )}
         </div>
+      </div>
+
+      {/* Settlement method */}
+      <div className="border border-[color:var(--biz-border)] bg-[color:var(--biz-surface)] p-4">
+        <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.08em] text-[color:var(--biz-muted)]">
+          How you’ll settle
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {/* Direct */}
+          <button
+            type="button"
+            onClick={() => isSubscriber && setUseMiddleman(false)}
+            disabled={!isSubscriber}
+            className={`flex flex-col items-start gap-1 border p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+              !useMiddleman
+                ? "border-[color:var(--biz-primary)] bg-[color:var(--biz-primary-soft)]"
+                : "border-[color:var(--biz-border)] hover:border-[color:var(--biz-border-strong)]"
+            }`}
+          >
+            <div className="flex w-full items-center justify-between">
+              <span className="text-[13px] font-semibold text-[color:var(--biz-text-strong)]">
+                Direct trade
+              </span>
+              <span className="text-[12px] font-semibold text-[color:var(--biz-profit)]">Free</span>
+            </div>
+            <span className="text-[11px] text-[color:var(--biz-muted)]">
+              {isSubscriber
+                ? "Both sides approve and ship to each other. No platform fee."
+                : "Membership required — subscribe to trade direct for free."}
+            </span>
+          </button>
+
+          {/* Middleman */}
+          <button
+            type="button"
+            onClick={() => setUseMiddleman(true)}
+            className={`flex flex-col items-start gap-1 border p-3 text-left transition-colors ${
+              useMiddleman
+                ? "border-[color:var(--biz-primary)] bg-[color:var(--biz-primary-soft)]"
+                : "border-[color:var(--biz-border)] hover:border-[color:var(--biz-border-strong)]"
+            }`}
+          >
+            <div className="flex w-full items-center justify-between">
+              <span className="text-[13px] font-semibold text-[color:var(--biz-text-strong)]">
+                Middleman
+              </span>
+              <span className="text-[12px] font-semibold text-[color:var(--biz-text)]">
+                {(TRADE_MIDDLEMAN_FEE_PCT * 100).toFixed(0)}%
+              </span>
+            </div>
+            <span className="text-[11px] text-[color:var(--biz-muted)]">
+              We mediate the swap. {(TRADE_MIDDLEMAN_FEE_PCT * 100).toFixed(0)}% of total trade
+              value
+              {valuation.totalValueCents > 0
+                ? ` — ${formatCents(tradeMiddlemanFeeCents(valuation.totalValueCents))} on this trade`
+                : ""}
+              .
+            </span>
+          </button>
+        </div>
+        {!isSubscriber ? (
+          <p className="mt-2 text-[11px] text-[color:var(--biz-muted)]">
+            Free direct trades are a membership perk.{" "}
+            <a href="/pricing" className="font-semibold text-[color:var(--biz-link)] hover:underline">
+              Subscribe
+            </a>{" "}
+            to skip the middleman fee.
+          </p>
+        ) : null}
       </div>
 
       {/* Note */}

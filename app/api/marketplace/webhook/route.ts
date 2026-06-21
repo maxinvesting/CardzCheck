@@ -88,7 +88,7 @@ async function handleTradeCashCompleted(session: Stripe.Checkout.Session) {
   // Idempotency: already settled this session → no-op.
   const { data: existing } = await service
     .from("trades")
-    .select("id, cash_status, initiator_approved, recipient_approved")
+    .select("id, cash_status, initiator_approved, recipient_approved, use_middleman, platform_fee_cents")
     .eq("id", tradeId)
     .maybeSingle();
   if (!existing) {
@@ -140,7 +140,13 @@ async function handleTradeCashCompleted(session: Stripe.Checkout.Session) {
       stripe_session_id: session.id,
       stripe_payment_intent_id: paymentIntentId,
       stripe_transfer_id: stripeTransferId,
-      platform_fee_cents: applicationFeeCents,
+      // Preserve the quoted fee: a middleman trade's stored platform_fee_cents
+      // is the full 3%-of-total-value fee, which may exceed what was collectible
+      // on the (capped) cash leg. For non-middleman trades, record what Stripe
+      // actually charged.
+      platform_fee_cents: (existing as { use_middleman?: boolean }).use_middleman
+        ? (existing as { platform_fee_cents?: number }).platform_fee_cents ?? applicationFeeCents
+        : applicationFeeCents,
     })
     .eq("id", tradeId);
   if (updateErr) {

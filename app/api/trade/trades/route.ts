@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { fetchOwnedCards, listMyTrades } from "@/lib/trade/queries";
-import { TRADE_MAX_CASH_CENTS } from "@/lib/trade/config";
+import {
+  TRADE_MAX_CASH_CENTS,
+  tradePlatformFeeCents,
+} from "@/lib/trade/config";
+import { getTierGates } from "@/lib/access";
 import type { TradeSide, TradeableCard } from "@/lib/trade/types";
 
 export const runtime = "nodejs";
@@ -23,6 +27,7 @@ const createSchema = z
     recipient_item_ids: z.array(z.string().uuid()).default([]),
     cash_from: z.enum(["initiator", "recipient"]).nullable().optional(),
     cash_cents: z.number().int().min(0).max(TRADE_MAX_CASH_CENTS).optional(),
+    use_middleman: z.boolean().optional().default(false),
     note: z.string().max(2000).optional(),
   })
   .refine((b) => b.initiator_item_ids.length + b.recipient_item_ids.length > 0, {
@@ -110,6 +115,35 @@ export async function POST(req: NextRequest) {
   }
 
   const cashCents = input.cash_cents ?? 0;
+
+  // ── Settlement method + fee ────────────────────────────────────────────────
+  // Direct (ship-to-ship) trades are free but reserved for subscribers. Anyone
+  // can use the middleman, which costs 3% of the total trade value.
+  const useMiddleman = input.use_middleman ?? false;
+  if (!useMiddleman) {
+    const gates = await getTierGates(user.id);
+    if (gates.tier === "free") {
+      return NextResponse.json(
+        {
+          error: "subscription_required",
+          message:
+            "Free direct trades require a CardzCheck membership. Subscribe to trade for free, or use the middleman (3% of total trade value).",
+        },
+        { status: 402 }
+      );
+    }
+  }
+
+  const totalValueCents =
+    initiatorCards.reduce((s, c) => s + (c.estimated_value_cents || 0), 0) +
+    recipientCards.reduce((s, c) => s + (c.estimated_value_cents || 0), 0) +
+    cashCents;
+  const platformFeeCents = tradePlatformFeeCents({
+    useMiddleman,
+    totalValueCents,
+    cashCents,
+  });
+
   const service = await createServiceClient();
 
   const { data: trade, error: tradeErr } = await service
@@ -121,6 +155,8 @@ export async function POST(req: NextRequest) {
       cash_from: cashCents > 0 ? input.cash_from ?? null : null,
       cash_cents: cashCents,
       cash_status: "none",
+      use_middleman: useMiddleman,
+      platform_fee_cents: platformFeeCents,
       note: input.note ?? null,
       last_actor_id: user.id,
       initiator_approved: true,

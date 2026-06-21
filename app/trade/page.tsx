@@ -6,6 +6,7 @@ import {
   listOwnInventory,
   resolveDisplayNames,
 } from "@/lib/trade/queries";
+import { getTierGates } from "@/lib/access";
 import TradeCenterClient from "@/components/trade/TradeCenterClient";
 
 export const dynamic = "force-dynamic";
@@ -22,10 +23,11 @@ export default async function TradeCenterPage({
   } = await supabase.auth.getUser();
   if (!user) redirect("/login?redirect=/trade");
 
-  const [myTrades, browse, inventory] = await Promise.all([
+  const [myTrades, browse, inventory, gates] = await Promise.all([
     listMyTrades(user.id),
     browseBinders(user.id, 60),
     listOwnInventory(user.id),
+    getTierGates(user.id),
   ]);
 
   const names = await resolveDisplayNames(browse.map((b) => b.owner_id));
@@ -40,6 +42,7 @@ export default async function TradeCenterPage({
       browse={browse}
       inventory={inventory}
       ownerNames={ownerNames}
+      isSubscriber={gates.tier !== "free"}
     />
   );
 }

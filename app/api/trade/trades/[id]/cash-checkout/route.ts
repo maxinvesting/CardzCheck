@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { stripe } from "@/lib/stripe";
 import { getPayoutAccount, isPayoutReady } from "@/lib/marketplace/connect";
-import { tradeCashFeeCents } from "@/lib/trade/config";
 import { sideForUser } from "@/lib/trade/types";
 import type { Trade } from "@/lib/trade/types";
 
@@ -69,7 +68,17 @@ export async function POST(
     );
   }
 
-  const feeCents = tradeCashFeeCents(trade.cash_cents);
+  // Platform fee on this cash leg:
+  //   • Direct trade  → free (subscriber perk); nothing is taken from the cash.
+  //   • Middleman      → the 3%-of-total-value fee computed at trade time, but a
+  //                      Stripe application_fee can't exceed the charged amount,
+  //                      so it's capped at the cash leg. When the fee exceeds the
+  //                      cash on top (card-heavy middleman trades) the remainder
+  //                      isn't collectible through this rail — a dedicated fee
+  //                      charge is the follow-up. We never take more than the cash.
+  const feeCents = trade.use_middleman
+    ? Math.min(trade.platform_fee_cents || 0, trade.cash_cents - 1)
+    : 0;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
   const session = await stripe().checkout.sessions.create({
@@ -122,7 +131,9 @@ export async function POST(
       status: "cash_pending",
       cash_status: "pending",
       stripe_session_id: session.id,
-      platform_fee_cents: feeCents,
+      // Keep the trade's stored platform_fee_cents (the true 3%-of-total-value
+      // middleman fee) intact — `feeCents` here is only what's collectible on
+      // this cash leg, which may be capped below the full fee.
       last_actor_id: user.id,
     })
     .eq("id", trade.id);

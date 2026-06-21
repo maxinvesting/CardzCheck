@@ -27,6 +27,8 @@ export interface Trade {
   cash_from: TradeSide | null;
   cash_cents: number;
   cash_status: CashStatus;
+  /** Settlement method: true = platform-mediated (3% of total value), false = direct ship-to-ship (free, subscriber-only). */
+  use_middleman: boolean;
   platform_fee_cents: number;
   stripe_session_id: string | null;
   stripe_payment_intent_id: string | null;

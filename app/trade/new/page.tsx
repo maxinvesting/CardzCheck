@@ -6,6 +6,7 @@ import {
   getTradeableCards,
   resolveDisplayNames,
 } from "@/lib/trade/queries";
+import { getTierGates } from "@/lib/access";
 import NewTradeClient from "@/components/trade/NewTradeClient";
 
 export const dynamic = "force-dynamic";
@@ -32,23 +33,24 @@ export default async function NewTradePage({
           Start a trade
         </h1>
         <p className="mb-6 text-[13px] text-[color:var(--biz-muted)]">
-          Browse other traders’ binders and pick a card you want — that’s how you
-          kick off a trade.
+          Browse other dealers’ trade inventory and pick a card you want — that’s
+          how you kick off a trade.
         </p>
         <Link
           href="/trade?view=browse"
           className="inline-flex h-10 items-center border border-[color:var(--biz-primary-border)] bg-[color:var(--biz-primary)] px-5 text-[13px] font-semibold text-[color:var(--biz-primary-foreground)] hover:bg-[color:var(--biz-primary-hover)]"
         >
-          Browse trade binders
+          Browse trade inventory
         </Link>
       </div>
     );
   }
 
-  const [myCards, partnerCards, names] = await Promise.all([
+  const [myCards, partnerCards, names, gates] = await Promise.all([
     getTradeableCards(user.id),
     getBinder(partnerId),
     resolveDisplayNames([partnerId]),
+    getTierGates(user.id),
   ]);
   const partnerName = names.get(partnerId) ?? "this trader";
 
@@ -59,6 +61,7 @@ export default async function NewTradePage({
       myCards={myCards}
       partnerCards={partnerCards}
       seedWantId={wantId}
+      isSubscriber={gates.tier !== "free"}
     />
   );
 }

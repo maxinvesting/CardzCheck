@@ -13,10 +13,12 @@ export default function TradeDetailClient({
   trade,
   currentUserId,
   cashFlash,
+  isSubscriber,
 }: {
   trade: TradeDetail;
   currentUserId: string;
   cashFlash: "success" | "canceled" | null;
+  isSubscriber: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
@@ -127,6 +129,27 @@ export default function TradeDetailClient({
         />
       </div>
 
+      {/* Settlement method */}
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border border-[color:var(--biz-border)] bg-[color:var(--biz-surface)] px-3 py-2.5 text-[12px]">
+        <span className="text-[color:var(--biz-muted)]">
+          Settlement:{" "}
+          <span className="font-semibold text-[color:var(--biz-text)]">
+            {trade.use_middleman ? "Middleman (mediated)" : "Direct ship-to-ship"}
+          </span>
+        </span>
+        {trade.use_middleman ? (
+          <span className="text-[color:var(--biz-muted)]">
+            Platform fee{" "}
+            <span className="font-semibold text-[color:var(--biz-text)]">
+              {formatCents(trade.platform_fee_cents)}
+            </span>{" "}
+            (3% of total value)
+          </span>
+        ) : (
+          <span className="font-semibold text-[color:var(--biz-profit)]">Free · membership</span>
+        )}
+      </div>
+
       {trade.note ? (
         <div className="mt-4 border border-[color:var(--biz-border)] bg-[color:var(--biz-surface)] p-3 text-[12px] text-[color:var(--biz-text)]">
           <span className="text-[color:var(--biz-muted)]">Note: </span>
@@ -215,6 +238,7 @@ export default function TradeDetailClient({
           myItems={myItems}
           theirItems={theirItems}
           trade={trade}
+          isSubscriber={isSubscriber}
           onDone={() => {
             setCounterOpen(false);
             router.refresh();
@@ -333,6 +357,7 @@ function CounterEditor({
   myItems,
   theirItems,
   trade,
+  isSubscriber,
   onDone,
 }: {
   tradeId: string;
@@ -342,6 +367,7 @@ function CounterEditor({
   myItems: TradeItem[];
   theirItems: TradeItem[];
   trade: TradeDetail;
+  isSubscriber: boolean;
   onDone: () => void;
 }) {
   const [myCards, setMyCards] = useState<TradeableCard[] | null>(null);
@@ -403,6 +429,7 @@ function CounterEditor({
           myCards={myCards}
           theirCards={theirCards}
           partnerName={partnerName}
+          isSubscriber={isSubscriber}
           initialMyIds={myItems.map((i) => i.collection_item_id).filter(Boolean) as string[]}
           initialTheirIds={theirItems.map((i) => i.collection_item_id).filter(Boolean) as string[]}
           initialCashDir={cashDir as "none" | "me" | "them"}
