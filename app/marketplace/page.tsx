@@ -75,25 +75,6 @@ function relativeListed(iso: string): string {
   return `${months}mo ago`;
 }
 
-function spreadVsCmv(listCents: number, cmvCents: number | null): {
-  pctText: string;
-  toneClass: string;
-} {
-  if (cmvCents == null || cmvCents <= 0) {
-    return { pctText: "—", toneClass: "text-[#5A626E]" };
-  }
-  const pct = ((listCents - cmvCents) / cmvCents) * 100;
-  const rounded = Math.round(pct * 10) / 10;
-  const sign = rounded > 0 ? "+" : "";
-  const tone =
-    rounded > 5
-      ? "text-[#E05C5C]" // overpriced vs CMV
-      : rounded < -5
-        ? "text-[#20B26B]" // bargain vs CMV
-        : "text-[#B8C0CC]";
-  return { pctText: `${sign}${rounded.toFixed(1)}%`, toneClass: tone };
-}
-
 function getStringMetadata(
   metadata: Record<string, unknown> | null | undefined,
   key: string
@@ -400,7 +381,6 @@ function TagIcon() {
 
 function CardTile({ row }: { row: ListingRow }) {
   const card = row.marketplace_cards;
-  const spread = spreadVsCmv(row.list_price_cents, row.cmv_mid_cents);
   const subline = [card.year, card.manufacturer, card.parallel]
     .filter(Boolean)
     .join(" · ");
@@ -452,13 +432,9 @@ function CardTile({ row }: { row: ListingRow }) {
           <span className="text-[15px] font-semibold tabular-nums text-[#E6E8EB]">
             {formatMoneyCents(row.list_price_cents)}
           </span>
-          <span className={`text-[10px] tabular-nums ${spread.toneClass}`}>
-            {spread.pctText}
+          <span className="text-[9px] text-[#5A626E]">
+            {relativeListed(row.listed_at)}
           </span>
-        </div>
-        <div className="mt-0.5 flex items-center justify-between text-[9px] text-[#5A626E]">
-          <span>CMV {formatMoneyCents(row.cmv_mid_cents)}</span>
-          <span>{relativeListed(row.listed_at)}</span>
         </div>
       </div>
     </Link>

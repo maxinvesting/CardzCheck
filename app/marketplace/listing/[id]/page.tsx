@@ -38,7 +38,7 @@ export default async function ListingDetailPage({
   const { data: listing } = await service
     .from("listings")
     .select(
-      "id, status, list_price_cents, shipping_cents, cmv_low_cents, cmv_mid_cents, cmv_high_cents, pipeline, mode, seller_id, listed_at, marketplace_cards!inner(title, year, player, grade, grading_service, cert_number, parallel)"
+      "id, status, list_price_cents, shipping_cents, cmv_low_cents, cmv_mid_cents, cmv_high_cents, pipeline, mode, seller_id, listed_at, marketplace_cards!inner(title, year, player, grade, grading_service, cert_number, parallel, image_url)"
     )
     .eq("id", id)
     .single();
@@ -87,30 +87,39 @@ export default async function ListingDetailPage({
       grading_service: string;
       cert_number: string | null;
       parallel: string | null;
+      image_url: string | null;
     };
   }).marketplace_cards;
 
-  const cmvMid = (listing as { cmv_mid_cents: number | null }).cmv_mid_cents;
-  const cmvLow = (listing as { cmv_low_cents: number | null }).cmv_low_cents;
-  const cmvHigh = (listing as { cmv_high_cents: number | null }).cmv_high_cents;
   const shippingCents = (listing as { shipping_cents: number | null }).shipping_cents ?? 0;
-
-  // Spread vs CMV mid — same logic as the browse table for consistency.
   const listCents = listing.list_price_cents;
-  const spread =
-    cmvMid && cmvMid > 0 ? ((listCents - cmvMid) / cmvMid) * 100 : null;
-  const spreadText =
-    spread == null
-      ? "—"
-      : `${spread > 0 ? "+" : ""}${(Math.round(spread * 10) / 10).toFixed(1)}%`;
-  const spreadTone =
-    spread == null
-      ? "text-[#5A626E]"
-      : spread > 5
-        ? "text-[#E05C5C]"
-        : spread < -5
-          ? "text-[#20B26B]"
-          : "text-[#B8C0CC]";
+
+  // Build a recent-sold-comps search so buyers can verify pricing against live
+  // market data themselves. We don't publish our own valuation, so the comps
+  // links are the source of truth rather than an internal CMV estimate.
+  const gradeLabel = card.grade?.toUpperCase().includes(
+    card.grading_service?.toUpperCase() ?? ""
+  )
+    ? card.grade
+    : `${card.grading_service ?? ""} ${card.grade ?? ""}`.trim();
+  const compsQuery = [
+    card.year,
+    card.title,
+    card.player,
+    card.parallel,
+    gradeLabel,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const ebaySoldUrl = `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(
+    compsQuery
+  )}&LH_Sold=1&LH_Complete=1&_sop=13`;
+  const onepointUrl = `https://130point.com/sales/?query=${encodeURIComponent(
+    compsQuery
+  )}`;
+  const psaCertUrl = card.cert_number
+    ? `https://www.psacard.com/cert/${encodeURIComponent(card.cert_number)}`
+    : null;
 
   return (
     <>
@@ -151,6 +160,22 @@ export default async function ListingDetailPage({
           <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
             {/* Left: card details */}
             <section className="border border-[#24282D] bg-[#0F1317] p-5">
+              {/* Card photo */}
+              <div className="mb-5 flex justify-center border border-[#24282D] bg-[#0B0D0F] p-4">
+                {card.image_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={card.image_url}
+                    alt={`${card.player} ${card.year} ${card.title}`.trim()}
+                    className="max-h-[420px] w-auto object-contain"
+                  />
+                ) : (
+                  <div className="flex aspect-[5/7] w-full max-w-[300px] items-center justify-center text-[10px] uppercase tracking-wide text-[#3A414B]">
+                    No image provided
+                  </div>
+                )}
+              </div>
+
               <h2 className="text-[10px] font-semibold uppercase tracking-wide text-[#77808C]">
                 Card details
               </h2>
@@ -184,20 +209,36 @@ export default async function ListingDetailPage({
               </dl>
 
               <h2 className="mt-5 text-[10px] font-semibold uppercase tracking-wide text-[#77808C]">
-                Market reference
+                Check recent comps
               </h2>
-              <div className="mt-2 grid grid-cols-3 border border-[#24282D]">
-                <CmvCell label="CMV low" value={fmtCents(cmvLow)} />
-                <CmvCell
-                  label="CMV mid"
-                  value={fmtCents(cmvMid)}
-                  emphasis
+              <p className="mt-2 text-[11px] leading-relaxed text-[#B8C0CC]">
+                We don&apos;t publish our own valuation for this card. Pricing is
+                set by the seller — use the links below to review recent sold
+                comps and decide what it&apos;s worth to you.
+              </p>
+              <div className="mt-3 grid gap-2">
+                <CompLink
+                  href={ebaySoldUrl}
+                  label="eBay — recent sold listings"
+                  sub="Sold &amp; completed, newest first"
                 />
-                <CmvCell label="CMV high" value={fmtCents(cmvHigh)} />
+                <CompLink
+                  href={onepointUrl}
+                  label="130point — sales search"
+                  sub="Aggregated eBay &amp; auction sales"
+                />
+                {psaCertUrl ? (
+                  <CompLink
+                    href={psaCertUrl}
+                    label={`PSA — verify cert #${card.cert_number}`}
+                    sub="Confirm the grade on PSA&apos;s registry"
+                  />
+                ) : null}
               </div>
-              <p className="mt-2 text-[10px] text-[#5A626E]">
-                CMV pulled from recent eBay sold comps. Spread shown on the
-                price card is list vs. CMV mid.
+              <p className="mt-3 text-[10px] leading-relaxed text-[#5A626E]">
+                Comps open on third-party sites in a new tab. Sold prices vary by
+                condition, timing, and sale type — treat them as a reference, not
+                a guarantee.
               </p>
             </section>
 
@@ -211,9 +252,8 @@ export default async function ListingDetailPage({
                   <div className="text-[32px] font-semibold tabular-nums text-[#E6E8EB]">
                     {fmtCents(listCents)}
                   </div>
-                  <div className={`text-[12px] tabular-nums ${spreadTone}`}>
-                    {spreadText}{" "}
-                    <span className="text-[10px] text-[#5A626E]">vs CMV</span>
+                  <div className="text-[10px] text-[#5A626E]">
+                    Seller-set price
                   </div>
                 </div>
                 {listing.status === "price_reduced" ? (
@@ -278,29 +318,31 @@ function DetailRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function CmvCell({
+function CompLink({
+  href,
   label,
-  value,
-  emphasis = false,
+  sub,
 }: {
+  href: string;
   label: string;
-  value: string;
-  emphasis?: boolean;
+  sub: string;
 }) {
   return (
-    <div
-      className={`px-3 py-2 border-l first:border-l-0 border-[#24282D] ${
-        emphasis ? "bg-[#0B1A12]" : "bg-[#0B0D0F]"
-      }`}
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="group flex items-center justify-between border border-[#24282D] bg-[#0B0D0F] px-3 py-2.5 transition-colors hover:border-[#5A626E]"
     >
-      <div className="text-[10px] uppercase tracking-wide text-[#77808C]">
-        {label}
-      </div>
-      <div
-        className={`mt-0.5 tabular-nums ${emphasis ? "text-[#20B26B] font-semibold" : "text-[#E6E8EB]"}`}
-      >
-        {value}
-      </div>
-    </div>
+      <span className="min-w-0">
+        <span className="block truncate text-[12px] text-[#E6E8EB] group-hover:underline">
+          {label}
+        </span>
+        <span className="block truncate text-[10px] text-[#77808C]">{sub}</span>
+      </span>
+      <span className="ml-3 shrink-0 text-[12px] text-[#5A626E] group-hover:text-[#B8C0CC]">
+        ↗
+      </span>
+    </a>
   );
 }
