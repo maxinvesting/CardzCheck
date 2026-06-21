@@ -14,6 +14,7 @@ import {
   pctDelta,
   pnlClass,
   formatMonth,
+  formatDay,
   type PeriodKey,
   type SeriesKey,
   type RangeKey,
@@ -34,6 +35,7 @@ import type {
   CardPerformance,
   CashFlow,
   ChannelBreakdown,
+  DayBucket,
   FinancialsSummary,
   MonthBucket,
   PeriodTotals,
@@ -231,11 +233,13 @@ function SnapshotAndVelocity({
 function PnlSection({
   totals,
   monthly,
+  daily,
   period,
   setPeriod,
 }: {
   totals: FinancialsSummary["totals"];
   monthly: MonthBucket[];
+  daily: DayBucket[];
   period: PeriodKey;
   setPeriod: (p: PeriodKey) => void;
 }) {
@@ -262,7 +266,9 @@ function PnlSection({
     { key: "ytd", label: "YTD" },
   ];
 
-  const chartData = useMemo(
+  // Full 12-month series — feeds the "Expand analytics" modal, which keeps its
+  // own 6M/12M range control regardless of the selected period.
+  const monthlyChartData = useMemo(
     () =>
       monthly.map((m) => ({
         month: formatMonth(m.month),
@@ -274,7 +280,58 @@ function PnlSection({
       })),
     [monthly]
   );
-  const hasChart = monthly.some((m) => m.sales_count > 0);
+
+  // Inline trend preview follows the selected timeframe: daily resolution for
+  // the short windows, the current calendar year's months for YTD.
+  const periodChartData = useMemo<TrendDatum[]>(() => {
+    if (period === "ytd") {
+      const yearPrefix = `${new Date().getFullYear()}-`;
+      return monthly
+        .filter((m) => m.month.startsWith(yearPrefix))
+        .map((m) => ({
+          month: formatMonth(m.month),
+          revenue: m.revenue_cents / 100,
+          profit: m.profit_cents / 100,
+          margin:
+            m.revenue_cents > 0 ? (m.profit_cents / m.revenue_cents) * 100 : 0,
+          sales: m.sales_count,
+        }));
+    }
+    const now = new Date();
+    const monthStartKey = `${now.getUTCFullYear()}-${String(
+      now.getUTCMonth() + 1
+    ).padStart(2, "0")}-01`;
+    const days =
+      period === "mtd"
+        ? daily.filter((d) => d.day >= monthStartKey)
+        : daily.slice(-30);
+    return days.map((d) => ({
+      month: formatDay(d.day),
+      revenue: d.revenue_cents / 100,
+      profit: d.profit_cents / 100,
+      margin:
+        d.revenue_cents > 0 ? (d.profit_cents / d.revenue_cents) * 100 : 0,
+      sales: d.sales_count,
+    }));
+  }, [monthly, daily, period]);
+
+  const trendLabel =
+    period === "last_30d"
+      ? "Trend · 30d"
+      : period === "mtd"
+        ? "Trend · MTD"
+        : "Trend · YTD";
+  const emptyMessage =
+    period === "last_30d"
+      ? "No sales in the last 30 days yet. Record a sale from the ledger to see your trend here."
+      : period === "mtd"
+        ? "No sales this month yet. Record a sale from the ledger to see your trend here."
+        : "No sales this year yet. Record a sale from the ledger to see your trend here.";
+
+  const hasChart = periodChartData.some(
+    (d) => d.sales > 0 || d.revenue !== 0 || d.profit !== 0
+  );
+  const hasModalChart = monthly.some((m) => m.sales_count > 0);
 
   return (
     <section className="border border-[#24282D] bg-[#0B0D0F]">
@@ -370,7 +427,7 @@ function PnlSection({
         <div className="mb-1.5 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <span className="text-[10px] font-medium uppercase tracking-[0.1em] text-[#77808C]">
-              Trend · 12 mo
+              {trendLabel}
             </span>
             <div className="hidden items-center gap-2.5 sm:flex">
               <LegendDot color={SERIES_COLORS.revenue} label="Revenue" />
@@ -378,7 +435,7 @@ function PnlSection({
               <LegendDot color={SERIES_COLORS.margin} label="Margin %" />
             </div>
           </div>
-          {hasChart ? (
+          {hasModalChart ? (
             <button
               type="button"
               onClick={() => setExpanded(true)}
@@ -391,21 +448,21 @@ function PnlSection({
         {hasChart ? (
           <div className="h-[120px] w-full">
             <TrendChart
-              data={chartData}
+              data={periodChartData}
               active={{ revenue: true, profit: true, margin: true, sales: false }}
               compact
             />
           </div>
         ) : (
-          <EmptyState
-            message="No sales in the last 12 months yet. Record a sale from the ledger to see your trend here."
-            height={120}
-          />
+          <EmptyState message={emptyMessage} height={120} />
         )}
       </div>
 
       {expanded ? (
-        <AnalyticsModal data={chartData} onClose={() => setExpanded(false)} />
+        <AnalyticsModal
+          data={monthlyChartData}
+          onClose={() => setExpanded(false)}
+        />
       ) : null}
     </section>
   );
@@ -1047,6 +1104,7 @@ export default function FinancialsPage() {
             <PnlSection
               totals={summary.totals}
               monthly={summary.monthly}
+              daily={summary.daily}
               period={period}
               setPeriod={setPeriod}
             />

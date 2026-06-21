@@ -73,6 +73,15 @@ export type MonthBucket = {
   sales_count: number;
 };
 
+export type DayBucket = {
+  day: string; // YYYY-MM-DD (UTC)
+  revenue_cents: number;
+  cogs_cents: number;
+  fees_cents: number;
+  profit_cents: number;
+  sales_count: number;
+};
+
 export type CashFlowBucket = {
   month: string;
   cash_in_cents: number; // net cash received from sales settled in the month
@@ -152,6 +161,7 @@ export type FinancialsSummary = {
     ytd: PeriodTotals;
   };
   monthly: MonthBucket[];
+  daily: DayBucket[];
   cashflow: CashFlow;
   channels_90d: ChannelBreakdown[];
   inventory: {
@@ -266,6 +276,62 @@ function buildMonthBuckets(
   }
   for (const trade of trades) {
     const bucket = buckets.get(monthKey(new Date(trade.traded_at)));
+    if (!bucket) continue;
+    const rec = tradeRecognition(trade);
+    if (!rec) continue;
+    bucket.revenue_cents += rec.revenue_cents;
+    bucket.cogs_cents += rec.cogs_cents;
+    bucket.profit_cents += rec.profit_cents;
+    bucket.sales_count += 1;
+  }
+  return Array.from(buckets.values());
+}
+
+function dayKey(d: Date): string {
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/**
+ * Daily P&L buckets for the trailing `days` window. Mirrors buildMonthBuckets
+ * but at day resolution so the trend chart can follow short timeframes
+ * (Last 30d / MTD) instead of always showing the 12-month view.
+ */
+function buildDayBuckets(
+  rows: SaleRow[],
+  now: Date,
+  trades: TradeRow[] = [],
+  days = 35
+): DayBucket[] {
+  const buckets = new Map<string, DayBucket>();
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - i)
+    );
+    const key = dayKey(d);
+    buckets.set(key, {
+      day: key,
+      revenue_cents: 0,
+      cogs_cents: 0,
+      fees_cents: 0,
+      profit_cents: 0,
+      sales_count: 0,
+    });
+  }
+  for (const row of rows) {
+    const bucket = buckets.get(dayKey(new Date(row.sold_at)));
+    if (!bucket) continue;
+    bucket.revenue_cents +=
+      toInt(row.sold_price_cents) + toInt(row.shipping_charged_cents);
+    bucket.cogs_cents += toInt(row.cogs_cents);
+    bucket.fees_cents += toInt(row.platform_fees_cents);
+    bucket.profit_cents += toInt(row.profit_cents);
+    bucket.sales_count += 1;
+  }
+  for (const trade of trades) {
+    const bucket = buckets.get(dayKey(new Date(trade.traded_at)));
     if (!bucket) continue;
     const rec = tradeRecognition(trade);
     if (!rec) continue;
@@ -685,6 +751,7 @@ export async function getFinancialsSummary(
   const ytd = aggregatePeriod(saleRows, yearStart, now, tradeRows);
 
   const monthly = buildMonthBuckets(saleRows, now, tradeRows);
+  const daily = buildDayBuckets(saleRows, now, tradeRows);
   const cashflow = buildCashFlow(saleRows, inventoryRows, now, tradeRows);
   const channels_90d = buildChannelBreakdown(saleRows, last90Start, tradeRows);
   const inv = buildInventory(inventoryRows, now);
@@ -708,6 +775,7 @@ export async function getFinancialsSummary(
     velocity,
     totals: { last_30d: last30, prev_30d: prev30, mtd, ytd },
     monthly,
+    daily,
     cashflow,
     channels_90d,
     inventory: {

@@ -88,3 +88,11 @@ export function formatMonth(key: string): string {
   const d = new Date(Number(y), Number(m) - 1, 1);
   return d.toLocaleDateString("en-US", { month: "short" });
 }
+
+export function formatDay(key: string): string {
+  const [y, m, d] = key.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+}
