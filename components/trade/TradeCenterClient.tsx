@@ -7,7 +7,14 @@ import { formatCents, statusMeta, TONE_CLASS } from "@/lib/trade/format";
 import type { BinderCard, TradeDetail } from "@/lib/trade/types";
 import type { OwnInventoryCard } from "@/lib/trade/queries";
 
-type View = "trades" | "browse" | "binder";
+type View = "trades" | "browse" | "inventory";
+
+function normalizeView(raw: string): View {
+  if (raw === "browse") return "browse";
+  // "binder" kept as a legacy deep-link alias for the renamed inventory tab.
+  if (raw === "inventory" || raw === "binder") return "inventory";
+  return "trades";
+}
 
 export default function TradeCenterClient({
   currentUserId,
@@ -24,9 +31,7 @@ export default function TradeCenterClient({
   inventory: OwnInventoryCard[];
   ownerNames: Record<string, string | null>;
 }) {
-  const [view, setView] = useState<View>(
-    initialView === "browse" || initialView === "binder" ? initialView : "trades"
-  );
+  const [view, setView] = useState<View>(normalizeView(initialView));
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6">
@@ -54,7 +59,7 @@ export default function TradeCenterClient({
           [
             ["trades", "My Trades"],
             ["browse", "Browse"],
-            ["binder", `My Binder${inventory.filter((c) => c.is_tradeable).length ? ` · ${inventory.filter((c) => c.is_tradeable).length}` : ""}`],
+            ["inventory", `My Inventory${inventory.filter((c) => c.is_tradeable).length ? ` · ${inventory.filter((c) => c.is_tradeable).length}` : ""}`],
           ] as [View, string][]
         ).map(([key, label], i) => (
           <button
@@ -77,7 +82,7 @@ export default function TradeCenterClient({
       ) : view === "browse" ? (
         <BrowseView cards={browse} ownerNames={ownerNames} />
       ) : (
-        <BinderView initial={inventory} />
+        <InventoryView initial={inventory} />
       )}
     </div>
   );
@@ -115,8 +120,8 @@ function TradesView({
     return (
       <EmptyState
         title="No trades yet"
-        body="Browse other collectors’ binders to send your first offer."
-        actionLabel="Browse binders"
+        body="Browse other dealers’ trade inventory to send your first offer."
+        actionLabel="Browse inventory"
         onAction={onBrowse}
       />
     );
@@ -258,7 +263,7 @@ function BrowseView({
     return (
       <EmptyState
         title="No cards available to trade yet"
-        body="When other collectors flag cards as “Available for Trade,” they’ll show up here."
+        body="When other dealers list cards for trade, they’ll show up here."
       />
     );
   }
@@ -285,11 +290,12 @@ function BrowseView({
   );
 }
 
-// ── My Binder ────────────────────────────────────────────────────────────────
+// ── My Inventory ─────────────────────────────────────────────────────────────
 
-function BinderView({ initial }: { initial: OwnInventoryCard[] }) {
+function InventoryView({ initial }: { initial: OwnInventoryCard[] }) {
   const [cards, setCards] = useState(initial);
   const [busy, setBusy] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
 
   async function toggle(id: string, next: boolean) {
     setBusy(id);
@@ -307,40 +313,124 @@ function BinderView({ initial }: { initial: OwnInventoryCard[] }) {
     }
   }
 
+  const listed = useMemo(() => cards.filter((c) => c.is_tradeable), [cards]);
+
+  const available = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const pool = cards.filter((c) => !c.is_tradeable);
+    if (!q) return pool;
+    return pool.filter((c) =>
+      [c.player, c.title, c.year, c.grading_company, c.grade]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(q)
+    );
+  }, [cards, query]);
+
   if (cards.length === 0) {
     return (
       <EmptyState
-        title="Your inventory is empty"
-        body="Add cards to your collection or ledger first, then flag them for trade here."
+        title="No inventory yet"
+        body="Add cards to your ledger first, then list them for trade here."
       />
     );
   }
 
+  const listedValue = listed.reduce((s, c) => s + (c.estimated_value_cents || 0), 0);
+
   return (
-    <div>
-      <p className="mb-3 text-[12px] text-[color:var(--biz-muted)]">
-        Flag cards as “Available for Trade” to show them in your public binder.
-        Other collectors can then offer trades for them.
-      </p>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-        {cards.map((c) => (
-          <div key={c.id} className="flex flex-col">
-            <TradeCardTile card={c} />
-            <button
-              type="button"
-              disabled={busy === c.id}
-              onClick={() => toggle(c.id, !c.is_tradeable)}
-              className={`mt-1 h-7 border text-[11px] font-medium transition-colors disabled:opacity-60 ${
-                c.is_tradeable
-                  ? "border-[color:var(--biz-primary-border)] bg-[color:var(--biz-primary-soft)] text-[color:var(--biz-text-strong)]"
-                  : "border-[color:var(--biz-border)] text-[color:var(--biz-muted)] hover:border-[color:var(--biz-border-strong)]"
-              }`}
-            >
-              {c.is_tradeable ? "✓ In binder" : "Add to binder"}
-            </button>
+    <div className="flex flex-col gap-7">
+      {/* Listed for trade */}
+      <section>
+        <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.06em] text-[color:var(--biz-muted)]">
+            Listed for trade
+            <span className="text-[color:var(--biz-faint)]">{listed.length}</span>
+          </h2>
+          {listed.length > 0 ? (
+            <span className="text-[11px] text-[color:var(--biz-muted)]">
+              {formatCents(listedValue)} total · visible to other dealers in Browse
+            </span>
+          ) : null}
+        </div>
+
+        {listed.length === 0 ? (
+          <div className="border border-dashed border-[color:var(--biz-border)] bg-[color:var(--biz-surface)] px-6 py-10 text-center">
+            <p className="text-[13px] font-semibold text-[color:var(--biz-text-strong)]">
+              Nothing listed for trade yet
+            </p>
+            <p className="mx-auto mt-1 max-w-sm text-[12px] text-[color:var(--biz-muted)]">
+              Pick cards from your inventory below to list them in the Trade Center —
+              just like listing on the Marketplace.
+            </p>
           </div>
-        ))}
-      </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+            {listed.map((c) => (
+              <div key={c.id} className="flex flex-col">
+                <TradeCardTile
+                  card={c}
+                  corner={
+                    <span className="border border-[color:var(--biz-primary-border)] bg-[color:var(--biz-primary)] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[color:var(--biz-primary-foreground)]">
+                      Listed
+                    </span>
+                  }
+                />
+                <button
+                  type="button"
+                  disabled={busy === c.id}
+                  onClick={() => toggle(c.id, false)}
+                  className="mt-1 h-7 border border-[color:var(--biz-border)] text-[11px] font-medium text-[color:var(--biz-muted)] transition-colors hover:border-[color:var(--biz-danger,#7a2e2e)] hover:text-[color:var(--biz-text)] disabled:opacity-60"
+                >
+                  {busy === c.id ? "…" : "Remove listing"}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Add from inventory */}
+      <section>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.06em] text-[color:var(--biz-muted)]">
+            Add from inventory
+            <span className="text-[color:var(--biz-faint)]">{available.length}</span>
+          </h2>
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search inventory…"
+            className="h-8 w-48 border border-[color:var(--biz-border)] bg-[color:var(--biz-surface)] px-2.5 text-[12px] text-[color:var(--biz-text)] outline-none placeholder:text-[color:var(--biz-faint)] focus:border-[color:var(--biz-border-strong)]"
+          />
+        </div>
+
+        {available.length === 0 ? (
+          <div className="border border-dashed border-[color:var(--biz-border)] bg-[color:var(--biz-surface)] px-6 py-10 text-center text-[12px] text-[color:var(--biz-muted)]">
+            {query.trim()
+              ? "No inventory matches your search."
+              : "Every available card is already listed for trade."}
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+            {available.map((c) => (
+              <div key={c.id} className="flex flex-col">
+                <TradeCardTile card={c} />
+                <button
+                  type="button"
+                  disabled={busy === c.id}
+                  onClick={() => toggle(c.id, true)}
+                  className="mt-1 h-7 border border-[color:var(--biz-primary-border)] bg-[color:var(--biz-primary-soft)] text-[11px] font-medium text-[color:var(--biz-text-strong)] transition-colors hover:bg-[color:var(--biz-primary)] hover:text-[color:var(--biz-primary-foreground)] disabled:opacity-60"
+                >
+                  {busy === c.id ? "…" : "List for trade"}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 }
