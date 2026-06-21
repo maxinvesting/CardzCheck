@@ -3,7 +3,9 @@
 import { Suspense, useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import BusinessPaywall from "@/components/business/BusinessPaywall";
-import BusinessDashboardView from "@/components/business/BusinessDashboardView";
+import BusinessDashboardView, {
+  type DashboardTrade,
+} from "@/components/business/BusinessDashboardView";
 import SaleFormModal from "@/components/business/SaleFormModal";
 import { createClient } from "@/lib/supabase/client";
 import type {
@@ -48,6 +50,8 @@ function BusinessDashboardContent() {
   const [periodMetricsLoading, setPeriodMetricsLoading] = useState(true);
   const [recentSales, setRecentSales] = useState<BusinessSale[]>([]);
   const [recentSalesLoading, setRecentSalesLoading] = useState(false);
+  const [recentTrades, setRecentTrades] = useState<DashboardTrade[]>([]);
+  const [recentTradesLoading, setRecentTradesLoading] = useState(false);
   const [listings, setListings] = useState<MarketplaceListingPreview[]>([]);
   const [listingsLoading, setListingsLoading] = useState(true);
   const [needsMigration, setNeedsMigration] = useState(false);
@@ -170,6 +174,24 @@ function BusinessDashboardContent() {
     }
   }, []);
 
+  const loadRecentTrades = useCallback(async () => {
+    setRecentTradesLoading(true);
+    try {
+      const res = await fetch("/api/business/trades", { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        setRecentTrades(Array.isArray(data.trades) ? data.trades.slice(0, 8) : []);
+      } else {
+        // Trade ledger may not be migrated; surface nothing rather than erroring.
+        setRecentTrades([]);
+      }
+    } catch {
+      setRecentTrades([]);
+    } finally {
+      setRecentTradesLoading(false);
+    }
+  }, []);
+
   const loadUserProfile = useCallback(async () => {
     const supabase = createClient();
     const {
@@ -243,6 +265,7 @@ function BusinessDashboardContent() {
         loadMetrics(),
         loadPeriodMetrics(),
         loadRecentSales(),
+        loadRecentTrades(),
         loadListings(),
         loadStorefronts(),
       ]);
@@ -255,6 +278,7 @@ function BusinessDashboardContent() {
     loadMetrics,
     loadPeriodMetrics,
     loadRecentSales,
+    loadRecentTrades,
     loadListings,
     loadStorefronts,
   ]);
@@ -382,6 +406,8 @@ function BusinessDashboardContent() {
           metrics={metrics}
           recentSales={recentSales}
           recentSalesLoading={recentSalesLoading}
+          recentTrades={recentTrades}
+          recentTradesLoading={recentTradesLoading}
           listings={listings}
           listingsLoading={listingsLoading}
           ebayStoreHref={ebayStoreHref}

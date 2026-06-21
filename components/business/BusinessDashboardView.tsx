@@ -12,6 +12,29 @@ import type {
   UserStorefront,
 } from "@/types";
 
+/* ── trade shape (from /api/business/trades) ────────────────────── */
+
+export type DashboardTradeItem = {
+  direction: "in" | "out";
+  collection_item_id: string;
+  fair_value_cents: number | null;
+  allocated_cost_basis_cents: number | null;
+  title: string | null;
+};
+
+export type DashboardTrade = {
+  id: string;
+  partner_name: string | null;
+  traded_at: string;
+  cash_paid_cents: number;
+  cash_received_cents: number;
+  outgoing_basis_cents: number;
+  incoming_basis_cents: number;
+  realized_gain_cents: number;
+  notes: string | null;
+  items: DashboardTradeItem[];
+};
+
 /* ── formatting helpers ─────────────────────────────────────────── */
 
 function fmt(cents: number): string {
@@ -96,6 +119,8 @@ interface Props {
   metrics: MetricsType | null;
   recentSales: BusinessSale[];
   recentSalesLoading: boolean;
+  recentTrades: DashboardTrade[];
+  recentTradesLoading: boolean;
   listings: MarketplaceListingPreview[];
   listingsLoading: boolean;
   ebayStoreHref: string | null;
@@ -113,6 +138,8 @@ export default function BusinessDashboardView({
   metrics,
   recentSales,
   recentSalesLoading,
+  recentTrades,
+  recentTradesLoading,
   listings,
   listingsLoading,
   ebayStoreHref,
@@ -151,6 +178,14 @@ export default function BusinessDashboardView({
         .sort((a, b) => new Date(b.sold_at).getTime() - new Date(a.sold_at).getTime())
         .slice(0, 6),
     [recentSales]
+  );
+
+  const recentTradesList = useMemo(
+    () =>
+      [...recentTrades]
+        .sort((a, b) => new Date(b.traded_at).getTime() - new Date(a.traded_at).getTime())
+        .slice(0, 6),
+    [recentTrades]
   );
 
   const sortedListings = useMemo(() => {
@@ -631,6 +666,82 @@ export default function BusinessDashboardView({
                   </Link>
                 </li>
               ))}
+            </ul>
+          )}
+        </div>
+      </section>
+
+      {/* ── Recent trades ────────────────────────────────────────── */}
+      <section className="desk-rise mt-6" style={{ animationDelay: "200ms" }}>
+        <div className="desk-panel p-6">
+          <div className="flex items-baseline justify-between">
+            <Eyebrow>Recent trades</Eyebrow>
+            {recentTrades.length > 0 && (
+              <Link href="/business/sales" className="text-[11px] font-medium text-[var(--biz-muted-strong)] transition-colors hover:text-[var(--biz-text)] hover:underline">
+                View all trades →
+              </Link>
+            )}
+          </div>
+          {recentTradesLoading ? (
+            <div className="mt-5 space-y-3.5">
+              {[...Array(3)].map((_, i) => (
+                <SkeletonLine key={i} w={i % 2 === 0 ? "w-full" : "w-2/3"} />
+              ))}
+            </div>
+          ) : recentTrades.length === 0 ? (
+            <div className="mt-5">
+              <p className="text-xs text-[var(--biz-muted)]">No trades recorded yet.</p>
+              <button
+                type="button"
+                onClick={onRecordTrade}
+                className="mt-2 text-xs font-medium text-[var(--biz-muted-strong)] transition-colors hover:text-[var(--biz-text)] hover:underline"
+              >
+                Record a trade →
+              </button>
+            </div>
+          ) : (
+            <ul className="mt-4 space-y-0.5">
+              {recentTradesList.map((trade) => {
+                const out = trade.items.filter((i) => i.direction === "out");
+                const inn = trade.items.filter((i) => i.direction === "in");
+                const cashNet =
+                  (trade.cash_received_cents ?? 0) - (trade.cash_paid_cents ?? 0);
+                // A card-for-card swap defers its gain into the received cards'
+                // basis — flag that so it doesn't look like missing P&L.
+                const deferred = inn.length > 0;
+                const headline =
+                  out[0]?.title?.trim() ||
+                  inn[0]?.title?.trim() ||
+                  "Trade";
+                return (
+                  <li key={trade.id} className="desk-row flex items-center justify-between gap-3 px-2 py-2.5">
+                    <div className="min-w-0">
+                      <p className="truncate text-[13px] text-[var(--biz-text)]" title={headline}>
+                        {clipTitle(headline, 42)}
+                      </p>
+                      <p className="mt-0.5 text-[10.5px] text-[var(--biz-faint)]">
+                        {out.length} out · {inn.length} in
+                        {trade.partner_name ? ` · ${trade.partner_name}` : ""} · {fmtDate(trade.traded_at)}
+                      </p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p
+                        className="desk-figure text-[15px]"
+                        style={{ color: trade.realized_gain_cents >= 0 ? "var(--biz-text-strong)" : "var(--desk-red)" }}
+                      >
+                        {trade.realized_gain_cents >= 0 ? "+" : "−"}
+                        {fmt(Math.abs(trade.realized_gain_cents))}
+                      </p>
+                      <p className="text-[10.5px] tabular-nums text-[var(--biz-faint)]">
+                        {deferred ? "gain deferred" : "gain realized"}
+                        {cashNet !== 0
+                          ? ` · ${cashNet >= 0 ? "+" : "−"}${fmt(Math.abs(cashNet))} cash`
+                          : ""}
+                      </p>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>
