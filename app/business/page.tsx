@@ -4,17 +4,12 @@ import { Suspense, useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import BusinessPaywall from "@/components/business/BusinessPaywall";
 import BusinessDashboardView, {
-  type DashboardTrade,
+  type DashboardSnapshot,
 } from "@/components/business/BusinessDashboardView";
 import SaleFormModal from "@/components/business/SaleFormModal";
 import { createClient } from "@/lib/supabase/client";
-import type {
-  BusinessMetrics as MetricsType,
-  BusinessPeriodMetrics,
-  BusinessSale,
-  MarketplaceListingPreview,
-  UserStorefront,
-} from "@/types";
+import type { UserStorefront } from "@/types";
+import type { FinancialsSummary } from "@/lib/business/financials";
 import { normalizeEbayStoreUrl, buildEbayStoreHref } from "@/lib/ebay-store-url";
 import { parseInventoryVoiceCommand } from "@/lib/voice-commands";
 
@@ -45,15 +40,8 @@ function BusinessDashboardContent() {
   const [ebayStoreUrl, setEbayStoreUrl] = useState<string | null>(() =>
     readStoredEbayStoreUrl()
   );
-  const [metrics, setMetrics] = useState<MetricsType | null>(null);
-  const [periodMetrics, setPeriodMetrics] = useState<BusinessPeriodMetrics | null>(null);
-  const [periodMetricsLoading, setPeriodMetricsLoading] = useState(true);
-  const [recentSales, setRecentSales] = useState<BusinessSale[]>([]);
-  const [recentSalesLoading, setRecentSalesLoading] = useState(false);
-  const [recentTrades, setRecentTrades] = useState<DashboardTrade[]>([]);
-  const [recentTradesLoading, setRecentTradesLoading] = useState(false);
-  const [listings, setListings] = useState<MarketplaceListingPreview[]>([]);
-  const [listingsLoading, setListingsLoading] = useState(true);
+  const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null);
+  const [snapshotLoading, setSnapshotLoading] = useState(true);
   const [needsMigration, setNeedsMigration] = useState(false);
   const [storefronts, setStorefronts] = useState<UserStorefront[]>([]);
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
@@ -87,53 +75,32 @@ function BusinessDashboardContent() {
     }
   }, []);
 
-  const loadMetrics = useCallback(async () => {
+  // Single source of truth: the dashboard headline figures come from the same
+  // Financials summary endpoint the Financials page uses, so they always match.
+  const loadSnapshot = useCallback(async () => {
+    setSnapshotLoading(true);
     try {
-      const res = await fetch("/api/business/kpis?range=mtd", { cache: "no-store" });
+      const res = await fetch("/api/business/financials/summary", { cache: "no-store" });
       if (res.ok) {
-        const data = await res.json();
-        setMetrics({
-          revenueMtd: data.revenue_mtd_cents ?? 0,
-          revenueYtd: data.revenue_ytd_cents ?? 0,
-          profitMtd: data.profit_mtd_cents ?? 0,
-          profitYtd: data.profit_ytd_cents ?? 0,
-          salesCountMtd: data.sales_count_mtd ?? 0,
-          salesCountYtd: data.sales_count_ytd ?? 0,
-          activeInventoryCount: data.active_inventory_count ?? 0,
+        const data = (await res.json()) as FinancialsSummary;
+        const mtd = data.totals?.mtd;
+        setSnapshot({
+          cashOnHandCents: data.snapshot?.cash_on_hand_cents ?? 0,
+          inventoryValueCents: data.snapshot?.inventory_value_cents ?? 0,
+          totalValueCents: data.snapshot?.total_business_value_cents ?? 0,
+          unrealizedPnlCents: data.snapshot?.unrealized_pnl_cents ?? 0,
+          unrealizedPnlPct: data.snapshot?.unrealized_pnl_pct ?? null,
+          activeCount: data.snapshot?.active_count ?? 0,
+          revenueMtdCents: mtd?.revenue_cents ?? 0,
+          profitMtdCents: mtd?.profit_cents ?? 0,
+          salesCountMtd: mtd?.sales_count ?? 0,
+          marginMtdPct: mtd?.margin_pct ?? null,
         });
       }
     } catch {
-      // ignore
-    }
-  }, []);
-
-  const loadPeriodMetrics = useCallback(async () => {
-    setPeriodMetricsLoading(true);
-    try {
-      const res = await fetch("/api/business/kpis/periods", { cache: "no-store" });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.periods) setPeriodMetrics(data.periods as BusinessPeriodMetrics);
-      }
-    } catch {
-      // ignore — snapshot degrades to zeros
+      // snapshot degrades to zeros
     } finally {
-      setPeriodMetricsLoading(false);
-    }
-  }, []);
-
-  const loadListings = useCallback(async () => {
-    setListingsLoading(true);
-    try {
-      const res = await fetch("/api/marketplace/listings/mine", { cache: "no-store" });
-      if (res.ok) {
-        const data = await res.json();
-        setListings((data.listings ?? []) as MarketplaceListingPreview[]);
-      }
-    } catch {
-      // marketplace preview is non-critical
-    } finally {
-      setListingsLoading(false);
+      setSnapshotLoading(false);
     }
   }, []);
 
@@ -146,49 +113,6 @@ function BusinessDashboardContent() {
       }
     } catch {
       // storefronts are non-critical, fail silently
-    }
-  }, []);
-
-  const loadRecentSales = useCallback(async () => {
-    setRecentSalesLoading(true);
-    try {
-      const now = new Date();
-      const from = new Date(now.getTime() - 29 * 24 * 60 * 60 * 1000);
-      const params = new URLSearchParams({
-        from: from.toISOString().slice(0, 10),
-        to: now.toISOString().slice(0, 10),
-        page: "1",
-        page_size: "8",
-      });
-      const res = await fetch(`/api/business/sales?${params.toString()}`, {
-        cache: "no-store",
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setRecentSales(data.sales ?? []);
-      }
-    } catch {
-      // ignore
-    } finally {
-      setRecentSalesLoading(false);
-    }
-  }, []);
-
-  const loadRecentTrades = useCallback(async () => {
-    setRecentTradesLoading(true);
-    try {
-      const res = await fetch("/api/business/trades", { cache: "no-store" });
-      if (res.ok) {
-        const data = await res.json();
-        setRecentTrades(Array.isArray(data.trades) ? data.trades.slice(0, 8) : []);
-      } else {
-        // Trade ledger may not be migrated; surface nothing rather than erroring.
-        setRecentTrades([]);
-      }
-    } catch {
-      setRecentTrades([]);
-    } finally {
-      setRecentTradesLoading(false);
     }
   }, []);
 
@@ -262,11 +186,7 @@ function BusinessDashboardContent() {
       }
       await Promise.all([
         loadInventory(),
-        loadMetrics(),
-        loadPeriodMetrics(),
-        loadRecentSales(),
-        loadRecentTrades(),
-        loadListings(),
+        loadSnapshot(),
         loadStorefronts(),
       ]);
     }
@@ -275,11 +195,7 @@ function BusinessDashboardContent() {
     router,
     loadUserProfile,
     loadInventory,
-    loadMetrics,
-    loadPeriodMetrics,
-    loadRecentSales,
-    loadRecentTrades,
-    loadListings,
+    loadSnapshot,
     loadStorefronts,
   ]);
 
@@ -330,7 +246,7 @@ function BusinessDashboardContent() {
           throw new Error(data.error || "Failed to record sale");
         }
         setToast({ type: "success", message: "Sale recorded" });
-        await Promise.all([loadMetrics(), loadPeriodMetrics(), loadRecentSales()]);
+        await loadSnapshot();
       } catch (error) {
         setToast({
           type: "error",
@@ -338,7 +254,7 @@ function BusinessDashboardContent() {
         });
       }
     },
-    [loadMetrics, loadPeriodMetrics, loadRecentSales]
+    [loadSnapshot]
   );
 
   const handleDashboardVoiceCommand = useCallback(
@@ -401,15 +317,8 @@ function BusinessDashboardContent() {
       <main className="mx-auto max-w-7xl px-4 py-2">
         <BusinessDashboardView
           businessName={businessName}
-          periodMetrics={periodMetrics}
-          periodMetricsLoading={periodMetricsLoading}
-          metrics={metrics}
-          recentSales={recentSales}
-          recentSalesLoading={recentSalesLoading}
-          recentTrades={recentTrades}
-          recentTradesLoading={recentTradesLoading}
-          listings={listings}
-          listingsLoading={listingsLoading}
+          snapshot={snapshot}
+          snapshotLoading={snapshotLoading}
           ebayStoreHref={ebayStoreHref}
           needsMigration={needsMigration}
           storefronts={storefronts}

@@ -1,38 +1,28 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { MicButton } from "@/components/ui/MicButton";
-import type {
-  BusinessMetrics as MetricsType,
-  BusinessPeriodKey,
-  BusinessPeriodMetrics,
-  BusinessSale,
-  MarketplaceListingPreview,
-  UserStorefront,
-} from "@/types";
+import type { UserStorefront } from "@/types";
 
-/* ── trade shape (from /api/business/trades) ────────────────────── */
+/* ── snapshot shape ─────────────────────────────────────────────── */
 
-export type DashboardTradeItem = {
-  direction: "in" | "out";
-  collection_item_id: string;
-  fair_value_cents: number | null;
-  allocated_cost_basis_cents: number | null;
-  title: string | null;
-};
-
-export type DashboardTrade = {
-  id: string;
-  partner_name: string | null;
-  traded_at: string;
-  cash_paid_cents: number;
-  cash_received_cents: number;
-  outgoing_basis_cents: number;
-  incoming_basis_cents: number;
-  realized_gain_cents: number;
-  notes: string | null;
-  items: DashboardTradeItem[];
+/**
+ * Headline figures shown on the dashboard. Every field is sourced from the
+ * Financials summary endpoint (`/api/business/financials/summary`), so the
+ * dashboard can never drift from the Financials page or the ledger.
+ */
+export type DashboardSnapshot = {
+  cashOnHandCents: number;
+  inventoryValueCents: number;
+  totalValueCents: number;
+  unrealizedPnlCents: number;
+  unrealizedPnlPct: number | null;
+  activeCount: number;
+  revenueMtdCents: number;
+  profitMtdCents: number;
+  salesCountMtd: number;
+  marginMtdPct: number | null;
 };
 
 /* ── formatting helpers ─────────────────────────────────────────── */
@@ -59,73 +49,77 @@ function fmtCompact(cents: number): string {
   return fmt(cents);
 }
 
-function fmtDate(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  const date = new Date(iso);
-  if (!Number.isFinite(date.getTime())) return "—";
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-
-function clipTitle(title: string | null | undefined, max = 52): string {
-  const trimmed = (title ?? "").trim();
-  if (!trimmed) return "Untitled card";
-  if (trimmed.length <= max) return trimmed;
-  return `${trimmed.slice(0, max - 1).trimEnd()}…`;
-}
-
-const CHANNEL_LABELS: Record<string, string> = {
-  ebay: "eBay",
-  whatnot: "Whatnot",
-  instagram: "Instagram",
-  show: "Show",
-  local: "Local",
-  other: "Other",
-  veriswap: "Veriswap",
-};
-
 /* ── small presentational atoms ─────────────────────────────────── */
 
 function Eyebrow({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return <span className={`desk-eyebrow ${className}`}>{children}</span>;
 }
 
-function SkeletonLine({ w = "w-full" }: { w?: string }) {
-  return <div className={`h-3.5 ${w} rounded-md animate-pulse`} style={{ background: "var(--biz-skeleton)" }} />;
+function Metric({
+  label,
+  value,
+  sub,
+  subTone = "muted",
+  loading,
+  big = false,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  subTone?: "muted" | "up" | "down";
+  loading: boolean;
+  big?: boolean;
+}) {
+  const subColor =
+    subTone === "up"
+      ? "var(--biz-profit)"
+      : subTone === "down"
+        ? "var(--desk-red)"
+        : "var(--biz-faint)";
+  return (
+    <div className="min-w-0">
+      <Eyebrow>{label}</Eyebrow>
+      {loading ? (
+        <div
+          className={`mt-2 ${big ? "h-9 w-28" : "h-6 w-20"} animate-pulse rounded-md`}
+          style={{ background: "var(--biz-skeleton)" }}
+        />
+      ) : (
+        <p
+          className={`desk-figure mt-1.5 leading-none text-[var(--biz-text-strong)] ${
+            big ? "text-[30px] sm:text-[34px]" : "text-[21px]"
+          }`}
+        >
+          {value}
+        </p>
+      )}
+      {sub && !loading ? (
+        <p className="mt-1.5 text-[11px]" style={{ color: subColor }}>
+          {sub}
+        </p>
+      ) : null}
+    </div>
+  );
 }
 
-/* ── period model ───────────────────────────────────────────────── */
+/* ── feature shortcuts ──────────────────────────────────────────── */
 
-const PERIODS: { key: BusinessPeriodKey; label: string; caption: string }[] = [
-  { key: "daily", label: "Today", caption: "since midnight" },
-  { key: "weekly", label: "This week", caption: "week to date" },
-  { key: "monthly", label: "This month", caption: "month to date" },
-  { key: "yearly", label: "This year", caption: "year to date" },
-];
-
-type ListingSort = "newest" | "value_high" | "value_low" | "updated" | "margin";
-
-const LISTING_SORTS: { key: ListingSort; label: string }[] = [
-  { key: "newest", label: "Newest" },
-  { key: "value_high", label: "Highest value" },
-  { key: "value_low", label: "Lowest value" },
-  { key: "updated", label: "Recently updated" },
-  { key: "margin", label: "Best margin" },
-];
+type Shortcut = {
+  label: string;
+  detail: string;
+  href?: string;
+  onClick?: () => void;
+  icon: React.ReactNode;
+  primary?: boolean;
+};
 
 interface Props {
   businessName: string | null;
-  periodMetrics: BusinessPeriodMetrics | null;
-  periodMetricsLoading: boolean;
-  metrics: MetricsType | null;
-  recentSales: BusinessSale[];
-  recentSalesLoading: boolean;
-  recentTrades: DashboardTrade[];
-  recentTradesLoading: boolean;
-  listings: MarketplaceListingPreview[];
-  listingsLoading: boolean;
+  snapshot: DashboardSnapshot | null;
+  snapshotLoading: boolean;
+  storefronts?: UserStorefront[];
   ebayStoreHref: string | null;
   needsMigration: boolean;
-  storefronts?: UserStorefront[];
   onRecordSale?: () => void;
   onRecordTrade?: () => void;
   onDashboardVoiceCommand?: (transcript: string) => void;
@@ -133,120 +127,100 @@ interface Props {
 
 export default function BusinessDashboardView({
   businessName,
-  periodMetrics,
-  periodMetricsLoading,
-  metrics,
-  recentSales,
-  recentSalesLoading,
-  recentTrades,
-  recentTradesLoading,
-  listings,
-  listingsLoading,
+  snapshot,
+  snapshotLoading,
+  storefronts = [],
   ebayStoreHref,
   needsMigration,
-  storefronts = [],
   onRecordSale,
   onRecordTrade,
   onDashboardVoiceCommand,
 }: Props) {
   const [showStorefrontDropdown, setShowStorefrontDropdown] = useState(false);
-  const [period, setPeriod] = useState<BusinessPeriodKey>("monthly");
-  const [listingSort, setListingSort] = useState<ListingSort>("newest");
 
   const primaryStorefront = storefronts.find((store) => store.is_primary) ?? storefronts[0] ?? null;
   const hasStorefronts = storefronts.length > 0;
 
-  const activePeriod = PERIODS.find((p) => p.key === period)!;
-  const stat = periodMetrics?.[period] ?? null;
+  const pnl = snapshot?.unrealizedPnlCents ?? 0;
+  const margin = snapshot?.marginMtdPct;
 
-  /* ── snapshot figures ─────────────────────────────────────────── */
-  const snapshot = useMemo(() => {
-    const revenue = stat?.revenue_cents ?? 0;
-    const profit = stat?.profit_cents ?? 0;
-    const cogs = stat?.cogs_cents ?? 0;
-    const count = stat?.sales_count ?? 0;
-    const avgSale = count > 0 ? Math.round(revenue / count) : 0;
-    // Margin = profit ÷ revenue; ROI = profit ÷ cost of goods.
-    const margin = revenue > 0 ? (profit / revenue) * 100 : null;
-    const roi = cogs > 0 ? (profit / cogs) * 100 : null;
-    return { revenue, profit, cogs, count, avgSale, margin, roi };
-  }, [stat]);
-
-  const recentSalesList = useMemo(
-    () =>
-      [...recentSales]
-        .sort((a, b) => new Date(b.sold_at).getTime() - new Date(a.sold_at).getTime())
-        .slice(0, 6),
-    [recentSales]
-  );
-
-  const recentTradesList = useMemo(
-    () =>
-      [...recentTrades]
-        .sort((a, b) => new Date(b.traded_at).getTime() - new Date(a.traded_at).getTime())
-        .slice(0, 6),
-    [recentTrades]
-  );
-
-  const sortedListings = useMemo(() => {
-    const copy = [...listings];
-    switch (listingSort) {
-      case "value_high":
-        copy.sort((a, b) => b.list_price_cents - a.list_price_cents);
-        break;
-      case "value_low":
-        copy.sort((a, b) => a.list_price_cents - b.list_price_cents);
-        break;
-      case "updated":
-        copy.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
-        break;
-      case "margin":
-        copy.sort((a, b) => (b.spread_cents ?? -Infinity) - (a.spread_cents ?? -Infinity));
-        break;
-      case "newest":
-      default:
-        copy.sort((a, b) => new Date(b.listed_at).getTime() - new Date(a.listed_at).getTime());
-        break;
-    }
-    return copy.slice(0, 5);
-  }, [listings, listingSort]);
-
-  const hasMarginData = listings.some((l) => l.spread_cents != null);
-  const storefrontHref = "/marketplace/profile?tab=selling";
-
-  /* ── page shortcuts ───────────────────────────────────────────── */
-  const shortcuts: {
-    href: string;
-    eyebrow: string;
-    title: string;
-    detail: string;
-    icon: React.ReactNode;
-  }[] = [
+  /* ── shortcuts to key features ────────────────────────────────── */
+  const actions: Shortcut[] = [
     {
-      href: "/business/financials",
-      eyebrow: "Financials",
-      title: "Performance & margins",
-      detail: "Revenue trends, capital allocation, and profit over time.",
+      label: "Record sale",
+      detail: "Log a sale",
+      onClick: onRecordSale,
+      primary: true,
       icon: (
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 3v18h18M7 14l3-3 3 3 5-6" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.9} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
       ),
     },
     {
-      href: "/business/grade-hub",
-      eyebrow: "Grading",
-      title: "Grade ROI simulator",
-      detail: "Submission simulations and projected profit before you send.",
+      label: "Record trade",
+      detail: "Log a trade",
+      onClick: onRecordTrade,
+      primary: true,
       icon: (
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.9} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
       ),
     },
+  ];
+
+  const features: Shortcut[] = [
     {
+      label: "Ledger",
+      detail: "Inventory & records",
       href: "/business/ledger",
-      eyebrow: "Ledger",
-      title: "Inventory & records",
-      detail: "Purchases, trades, sales records, and full inventory management.",
       icon: (
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+      ),
+    },
+    {
+      label: "Analytics",
+      detail: "Financials & trends",
+      href: "/business/financials",
+      icon: (
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M3 3v18h18M7 14l3-3 3 3 5-6" />
+      ),
+    },
+    {
+      label: "Sales & trades",
+      detail: "Full history",
+      href: "/business/sales",
+      icon: (
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M3 6h18M3 12h18M3 18h18" />
+      ),
+    },
+    {
+      label: "Trade Center",
+      detail: "Swap cards P2P",
+      href: "/trade",
+      icon: (
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+      ),
+    },
+    {
+      label: "Marketplace",
+      detail: "Your storefront",
+      href: "/marketplace",
+      icon: (
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M3 9l1-5h16l1 5M5 9v10a1 1 0 001 1h12a1 1 0 001-1V9M3 9h18" />
+      ),
+    },
+    {
+      label: "Grading",
+      detail: "Grade ROI simulator",
+      href: "/business/grade-hub",
+      icon: (
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M9 12l2 2 4-4m-6.165-7.303a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+      ),
+    },
+    {
+      label: "Business Advisor",
+      detail: "Ask the advisor",
+      href: "/assistants/advisor",
+      icon: (
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M8 12h8M8 8h8m-8 8h5m4 3l-2-2H6a2 2 0 01-2-2V6a2 2 0 012-2h12a2 2 0 012 2v9a2 2 0 01-1 1.732" />
       ),
     },
   ];
@@ -262,7 +236,7 @@ export default function BusinessDashboardView({
               {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
             </Eyebrow>
           </div>
-          <h1 className="desk-display mt-2 truncate text-[34px] font-medium leading-[1.05] text-[var(--biz-text-strong)] sm:text-[42px]">
+          <h1 className="desk-display mt-2 truncate text-[30px] font-medium leading-[1.05] text-[var(--biz-text-strong)] sm:text-[38px]">
             {businessName ?? "CardzCheck"}
           </h1>
           <p className="mt-1.5 text-[13px] text-[var(--biz-muted)]">Business dashboard</p>
@@ -365,419 +339,124 @@ export default function BusinessDashboardView({
         </div>
       )}
 
-      {/* ── Financial snapshot hero ──────────────────────────────── */}
+      {/* ── Business position ────────────────────────────────────── */}
       <section className="desk-rise mt-7" style={{ animationDelay: "60ms" }}>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <Eyebrow>Financial snapshot</Eyebrow>
-            <span className="text-[11px] text-[var(--biz-faint)]">· {activePeriod.caption}</span>
-          </div>
-
-          {/* Period selector */}
-          <div
-            className="inline-flex items-center gap-0.5 rounded-full p-1"
-            style={{ background: "rgba(255,255,255,0.025)", border: "1px solid var(--biz-border-subtle)" }}
-            role="tablist"
-            aria-label="Financial period"
+        <div className="flex items-center gap-2.5">
+          <Eyebrow>Business position</Eyebrow>
+          <Link
+            href="/business/financials"
+            className="text-[11px] font-medium text-[var(--biz-muted-strong)] transition-colors hover:text-[var(--biz-text)] hover:underline"
           >
-            {PERIODS.map((p) => {
-              const active = p.key === period;
-              return (
-                <button
-                  key={p.key}
-                  type="button"
-                  role="tab"
-                  aria-selected={active}
-                  onClick={() => setPeriod(p.key)}
-                  className="rounded-full px-3.5 py-1.5 text-[11.5px] font-medium transition-colors"
-                  style={{
-                    color: active ? "var(--biz-primary-foreground)" : "var(--biz-muted)",
-                    background: active ? "var(--biz-primary)" : "transparent",
-                    boxShadow: active ? "0 6px 16px rgba(0,0,0,0.35)" : undefined,
-                  }}
-                >
-                  {p.label}
-                </button>
-              );
-            })}
-          </div>
+            Open financials →
+          </Link>
         </div>
-
         <div className="desk-rule mt-3" />
 
-        {/* Hero figures: revenue + profit dominate, secondaries underneath */}
-        <div className="mt-7 grid grid-cols-1 gap-x-10 gap-y-9 lg:grid-cols-[1.15fr_1px_1fr]">
-          {/* Revenue + profit */}
-          <div className="grid grid-cols-2 gap-x-8">
-            <div>
-              <Eyebrow>Revenue</Eyebrow>
-              {periodMetricsLoading ? (
-                <div className="mt-3 h-12 w-32 animate-pulse rounded-lg" style={{ background: "var(--biz-skeleton)" }} />
-              ) : (
-                <p className="desk-figure mt-2.5 text-[46px] leading-none text-[var(--biz-text-strong)] sm:text-[52px]">
-                  {fmtCompact(snapshot.revenue)}
-                </p>
-              )}
-              <p className="mt-2.5 text-[11px] text-[var(--biz-faint)]">
-                {metrics ? `${fmt(metrics.revenueYtd)} year to date` : activePeriod.caption}
-              </p>
-            </div>
-            <div>
-              <Eyebrow>Profit</Eyebrow>
-              {periodMetricsLoading ? (
-                <div className="mt-3 h-12 w-32 animate-pulse rounded-lg" style={{ background: "var(--biz-skeleton)" }} />
-              ) : (
-                <p
-                  className="desk-figure mt-2.5 text-[46px] leading-none sm:text-[52px]"
-                  style={{ color: snapshot.profit >= 0 ? "var(--biz-profit)" : "var(--desk-red)" }}
-                >
-                  {snapshot.profit >= 0 ? "" : "−"}
-                  {fmtCompact(Math.abs(snapshot.profit))}
-                </p>
-              )}
-              <p className="mt-2.5 text-[11px] text-[var(--biz-faint)]">
-                {snapshot.margin != null ? `${snapshot.margin.toFixed(1)}% margin` : "No sales this period"}
-              </p>
-            </div>
-          </div>
-
-          <div className="hidden lg:block" style={{ background: "var(--biz-border-subtle)" }} aria-hidden />
-
-          {/* Secondary metrics */}
-          <div className="grid grid-cols-2 gap-x-8 gap-y-6 sm:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4">
-            {[
-              { label: "Sales", value: periodMetricsLoading ? "—" : String(snapshot.count) },
-              { label: "Avg sale", value: periodMetricsLoading ? "—" : snapshot.count > 0 ? fmt(snapshot.avgSale) : "—" },
-              {
-                label: "ROI",
-                value: periodMetricsLoading ? "—" : snapshot.roi != null ? `${snapshot.roi.toFixed(0)}%` : "—",
-              },
-              { label: "Cost of goods", value: periodMetricsLoading ? "—" : fmtCompact(snapshot.cogs) },
-            ].map((cell) => (
-              <div key={cell.label}>
-                <Eyebrow>{cell.label}</Eyebrow>
-                <p className="desk-figure mt-2 text-[26px] leading-none text-[var(--biz-text)]">{cell.value}</p>
-              </div>
-            ))}
-          </div>
+        <div className="mt-6 grid grid-cols-2 gap-x-8 gap-y-7 sm:grid-cols-4">
+          <Metric
+            label="Total value"
+            value={fmtCompact(snapshot?.totalValueCents ?? 0)}
+            sub="inventory + cash"
+            loading={snapshotLoading}
+            big
+          />
+          <Metric
+            label="Cash on hand"
+            value={fmtCompact(snapshot?.cashOnHandCents ?? 0)}
+            sub="manage in ledger"
+            loading={snapshotLoading}
+            big
+          />
+          <Metric
+            label="Inventory value"
+            value={fmtCompact(snapshot?.inventoryValueCents ?? 0)}
+            sub={snapshot ? `${snapshot.activeCount} active card${snapshot.activeCount === 1 ? "" : "s"}` : undefined}
+            loading={snapshotLoading}
+            big
+          />
+          <Metric
+            label="Unrealized P&L"
+            value={`${pnl >= 0 ? "" : "−"}${fmtCompact(Math.abs(pnl))}`}
+            sub={
+              snapshot?.unrealizedPnlPct != null
+                ? `${snapshot.unrealizedPnlPct >= 0 ? "+" : "−"}${Math.abs(snapshot.unrealizedPnlPct).toFixed(1)}% vs cost`
+                : "vs cost basis"
+            }
+            subTone={pnl > 0 ? "up" : pnl < 0 ? "down" : "muted"}
+            loading={snapshotLoading}
+            big
+          />
         </div>
       </section>
 
-      {/* ── Quick actions ────────────────────────────────────────── */}
-      <section className="desk-rise mt-9" style={{ animationDelay: "120ms" }}>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          {/* Record Sale — prominent */}
-          <button
-            type="button"
-            onClick={onRecordSale}
-            className="desk-action desk-action--primary group col-span-1 sm:col-span-1"
-          >
-            <span className="desk-action-icon" style={{ background: "rgba(20,16,7,0.16)" }}>
-              <svg className="h-[18px] w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
-              </svg>
-            </span>
-            <span className="desk-action-label">Record sale</span>
-          </button>
+      {/* ── This month ───────────────────────────────────────────── */}
+      <section className="desk-rise mt-8" style={{ animationDelay: "120ms" }}>
+        <div className="flex items-center gap-2.5">
+          <Eyebrow>This month</Eyebrow>
+          <span className="text-[11px] text-[var(--biz-faint)]">· month to date</span>
+        </div>
+        <div className="desk-rule mt-3" />
 
-          {/* Record Trade — prominent */}
-          <button
-            type="button"
-            onClick={onRecordTrade}
-            className="desk-action desk-action--primary group col-span-1 sm:col-span-1"
-          >
-            <span className="desk-action-icon" style={{ background: "rgba(20,16,7,0.16)" }}>
-              <svg className="h-[18px] w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
-              </svg>
-            </span>
-            <span className="desk-action-label">Record trade</span>
-          </button>
-
-          {/* Secondary nav actions */}
-          {[
-            {
-              href: "/business/ledger",
-              label: "Open ledger",
-              icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.9} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />,
-            },
-            {
-              href: "/business/financials",
-              label: "Financials",
-              icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.9} d="M3 3v18h18M7 14l3-3 3 3 5-6" />,
-            },
-            {
-              href: "/business/grade-hub",
-              label: "Grading",
-              icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.9} d="M9 12l2 2 4-4m-6.165-7.303a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />,
-            },
-          ].map((action) => (
-            <Link key={action.href} href={action.href} className="desk-action group">
-              <span className="desk-action-icon">
-                <svg className="h-[18px] w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  {action.icon}
-                </svg>
-              </span>
-              <span className="desk-action-label">{action.label}</span>
-            </Link>
-          ))}
+        <div className="mt-6 grid grid-cols-3 gap-x-8 gap-y-7">
+          <Metric
+            label="Revenue"
+            value={fmtCompact(snapshot?.revenueMtdCents ?? 0)}
+            loading={snapshotLoading}
+          />
+          <Metric
+            label="Profit"
+            value={`${(snapshot?.profitMtdCents ?? 0) >= 0 ? "" : "−"}${fmtCompact(Math.abs(snapshot?.profitMtdCents ?? 0))}`}
+            sub={margin != null ? `${margin.toFixed(1)}% margin` : "no sales yet"}
+            subTone={(snapshot?.profitMtdCents ?? 0) > 0 ? "up" : (snapshot?.profitMtdCents ?? 0) < 0 ? "down" : "muted"}
+            loading={snapshotLoading}
+          />
+          <Metric
+            label="Sales"
+            value={snapshotLoading ? "—" : String(snapshot?.salesCountMtd ?? 0)}
+            loading={snapshotLoading}
+          />
         </div>
       </section>
 
-      {/* ── Recent sales + Marketplace preview ───────────────────── */}
-      <section className="desk-rise mt-6 grid grid-cols-1 gap-5 lg:grid-cols-2" style={{ animationDelay: "180ms" }}>
-        {/* Recent sales */}
-        <div className="desk-panel p-6">
-          <div className="flex items-baseline justify-between">
-            <Eyebrow>Recent sales</Eyebrow>
-            {recentSales.length > 0 && (
-              <Link href="/business/sales" className="text-[11px] font-medium text-[var(--biz-muted-strong)] transition-colors hover:text-[var(--biz-text)] hover:underline">
-                View all sales →
-              </Link>
-            )}
-          </div>
-          {recentSalesLoading ? (
-            <div className="mt-5 space-y-3.5">
-              {[...Array(4)].map((_, i) => (
-                <SkeletonLine key={i} w={i % 2 === 0 ? "w-full" : "w-3/4"} />
-              ))}
-            </div>
-          ) : recentSales.length === 0 ? (
-            <div className="mt-5">
-              <p className="text-xs text-[var(--biz-muted)]">No sales recorded yet.</p>
-              <button
-                type="button"
-                onClick={onRecordSale}
-                className="mt-2 text-xs font-medium text-[var(--biz-muted-strong)] transition-colors hover:text-[var(--biz-text)] hover:underline"
-              >
-                Record your first sale →
-              </button>
-            </div>
-          ) : (
-            <ul className="mt-4 space-y-0.5">
-              {recentSalesList.map((sale) => (
-                <li key={sale.id} className="desk-row flex items-center justify-between gap-3 px-2 py-2.5">
-                  <div className="min-w-0">
-                    <p className="truncate text-[13px] text-[var(--biz-text)]" title={sale.inventory_item?.title ?? "Sale"}>
-                      {clipTitle(sale.inventory_item?.title, 42)}
-                    </p>
-                    <p className="mt-0.5 text-[10.5px] text-[var(--biz-faint)]">
-                      {CHANNEL_LABELS[sale.channel] ?? sale.channel} · {fmtDate(sale.sold_at)}
-                    </p>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <p className="desk-figure text-[15px] text-[var(--biz-text-strong)]">
-                      {fmt(sale.gross_revenue_cents)}
-                    </p>
-                    <p
-                      className="text-[10.5px] tabular-nums"
-                      style={{ color: sale.profit_cents >= 0 ? "var(--biz-profit)" : "var(--desk-red)" }}
-                    >
-                      {sale.profit_cents >= 0 ? "+" : "−"}
-                      {fmt(Math.abs(sale.profit_cents))} profit
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        {/* Marketplace listings preview */}
-        <div className="desk-panel p-6">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <Eyebrow>Marketplace listings</Eyebrow>
-            <Link href={storefrontHref} className="text-[11px] font-medium text-[var(--biz-muted-strong)] transition-colors hover:text-[var(--biz-text)] hover:underline">
-              Open storefront →
-            </Link>
-          </div>
-
-          {/* Sort control */}
-          {listings.length > 0 && (
-            <div className="mt-3 flex flex-wrap items-center gap-1.5">
-              {LISTING_SORTS.filter((s) => s.key !== "margin" || hasMarginData).map((s) => {
-                const active = s.key === listingSort;
-                return (
-                  <button
-                    key={s.key}
-                    type="button"
-                    onClick={() => setListingSort(s.key)}
-                    className="rounded-full px-2.5 py-1 text-[10.5px] font-medium transition-colors"
-                    style={{
-                      color: active ? "var(--biz-text)" : "var(--biz-faint)",
-                      background: active ? "rgba(255,255,255,0.06)" : "transparent",
-                      border: active ? "1px solid var(--biz-border-strong)" : "1px solid transparent",
-                    }}
-                  >
+      {/* ── Shortcuts ────────────────────────────────────────────── */}
+      <section className="desk-rise mt-9" style={{ animationDelay: "180ms" }}>
+        <Eyebrow>Shortcuts</Eyebrow>
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          {[...actions, ...features].map((s) => {
+            const inner = (
+              <>
+                <span className={`desk-action-icon ${s.primary ? "" : ""}`}>
+                  <svg className="h-[18px] w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    {s.icon}
+                  </svg>
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-[13.5px] font-medium text-[var(--biz-text-strong)]">
                     {s.label}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
-          {listingsLoading ? (
-            <div className="mt-5 space-y-3.5">
-              {[...Array(4)].map((_, i) => (
-                <SkeletonLine key={i} w={i % 2 === 0 ? "w-full" : "w-2/3"} />
-              ))}
-            </div>
-          ) : listings.length === 0 ? (
-            <div className="mt-5">
-              <p className="text-xs text-[var(--biz-muted)]">No active marketplace listings.</p>
-              <Link href="/business/ledger" className="mt-2 inline-block text-xs font-medium text-[var(--biz-muted-strong)] transition-colors hover:text-[var(--biz-text)] hover:underline">
-                List a card from the ledger →
+                  </span>
+                  <span className="block truncate text-[11px] text-[var(--biz-muted)]">{s.detail}</span>
+                </span>
+              </>
+            );
+            const className = `desk-panel group flex items-center gap-3 p-4 text-left transition-transform hover:-translate-y-0.5 ${
+              s.primary ? "ring-1 ring-[var(--biz-border-strong)]" : ""
+            }`;
+            return s.href ? (
+              <Link key={s.label} href={s.href} className={className}>
+                {inner}
               </Link>
-            </div>
-          ) : (
-            <ul className="mt-4 space-y-0.5">
-              {sortedListings.map((listing) => (
-                <li key={listing.id}>
-                  <Link
-                    href={`/marketplace/listing/${listing.id}`}
-                    className="desk-row flex items-center justify-between gap-3 px-2 py-2.5"
-                  >
-                    <div className="flex min-w-0 items-center gap-2.5">
-                      <span
-                        className="h-1.5 w-1.5 shrink-0 rounded-full"
-                        style={{ background: listing.status === "price_reduced" ? "var(--biz-warning)" : "var(--biz-profit)" }}
-                      />
-                      <div className="min-w-0">
-                        <p className="truncate text-[13px] text-[var(--biz-text)]" title={listing.title}>
-                          {clipTitle(listing.title, 40)}
-                        </p>
-                        <p className="mt-0.5 text-[10.5px] text-[var(--biz-faint)]">
-                          {listing.status === "price_reduced" ? "Price reduced" : "Active"}
-                          {listing.spread_cents != null && (
-                            <>
-                              {" · "}
-                              <span style={{ color: listing.spread_cents >= 0 ? "var(--biz-profit)" : "var(--desk-red)" }}>
-                                {listing.spread_cents >= 0 ? "+" : "−"}
-                                {fmt(Math.abs(listing.spread_cents))} vs CMV
-                              </span>
-                            </>
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                    <span className="desk-figure shrink-0 text-[15px] text-[var(--biz-text-strong)]">
-                      {fmt(listing.list_price_cents)}
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </section>
-
-      {/* ── Recent trades ────────────────────────────────────────── */}
-      <section className="desk-rise mt-6" style={{ animationDelay: "200ms" }}>
-        <div className="desk-panel p-6">
-          <div className="flex items-baseline justify-between">
-            <Eyebrow>Recent trades</Eyebrow>
-            {recentTrades.length > 0 && (
-              <Link href="/business/sales" className="text-[11px] font-medium text-[var(--biz-muted-strong)] transition-colors hover:text-[var(--biz-text)] hover:underline">
-                View all trades →
-              </Link>
-            )}
-          </div>
-          {recentTradesLoading ? (
-            <div className="mt-5 space-y-3.5">
-              {[...Array(3)].map((_, i) => (
-                <SkeletonLine key={i} w={i % 2 === 0 ? "w-full" : "w-2/3"} />
-              ))}
-            </div>
-          ) : recentTrades.length === 0 ? (
-            <div className="mt-5">
-              <p className="text-xs text-[var(--biz-muted)]">No trades recorded yet.</p>
-              <button
-                type="button"
-                onClick={onRecordTrade}
-                className="mt-2 text-xs font-medium text-[var(--biz-muted-strong)] transition-colors hover:text-[var(--biz-text)] hover:underline"
-              >
-                Record a trade →
+            ) : (
+              <button key={s.label} type="button" onClick={s.onClick} className={className}>
+                {inner}
               </button>
-            </div>
-          ) : (
-            <ul className="mt-4 space-y-0.5">
-              {recentTradesList.map((trade) => {
-                const out = trade.items.filter((i) => i.direction === "out");
-                const inn = trade.items.filter((i) => i.direction === "in");
-                const cashNet =
-                  (trade.cash_received_cents ?? 0) - (trade.cash_paid_cents ?? 0);
-                // A card-for-card swap defers its gain into the received cards'
-                // basis — flag that so it doesn't look like missing P&L.
-                const deferred = inn.length > 0;
-                const headline =
-                  out[0]?.title?.trim() ||
-                  inn[0]?.title?.trim() ||
-                  "Trade";
-                return (
-                  <li key={trade.id} className="desk-row flex items-center justify-between gap-3 px-2 py-2.5">
-                    <div className="min-w-0">
-                      <p className="truncate text-[13px] text-[var(--biz-text)]" title={headline}>
-                        {clipTitle(headline, 42)}
-                      </p>
-                      <p className="mt-0.5 text-[10.5px] text-[var(--biz-faint)]">
-                        {out.length} out · {inn.length} in
-                        {trade.partner_name ? ` · ${trade.partner_name}` : ""} · {fmtDate(trade.traded_at)}
-                      </p>
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <p
-                        className="desk-figure text-[15px]"
-                        style={{ color: trade.realized_gain_cents >= 0 ? "var(--biz-text-strong)" : "var(--desk-red)" }}
-                      >
-                        {trade.realized_gain_cents >= 0 ? "+" : "−"}
-                        {fmt(Math.abs(trade.realized_gain_cents))}
-                      </p>
-                      <p className="text-[10.5px] tabular-nums text-[var(--biz-faint)]">
-                        {deferred ? "gain deferred" : "gain realized"}
-                        {cashNet !== 0
-                          ? ` · ${cashNet >= 0 ? "+" : "−"}${fmt(Math.abs(cashNet))} cash`
-                          : ""}
-                      </p>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+            );
+          })}
         </div>
       </section>
 
-      {/* ── Page shortcuts ───────────────────────────────────────── */}
-      <section className="desk-rise mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3" style={{ animationDelay: "240ms" }}>
-        {shortcuts.map((s) => (
-          <Link
-            key={s.href}
-            href={s.href}
-            className="desk-panel group flex flex-col gap-3 p-5 transition-transform hover:-translate-y-0.5"
-          >
-            <div className="flex items-center justify-between">
-              <span
-                className="flex h-9 w-9 items-center justify-center rounded-xl"
-                style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--biz-border)" }}
-              >
-                <svg className="h-[18px] w-[18px]" style={{ color: "var(--biz-muted-strong)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  {s.icon}
-                </svg>
-              </span>
-              <span className="text-[var(--biz-faint)] transition-transform group-hover:translate-x-0.5">→</span>
-            </div>
-            <div>
-              <Eyebrow>{s.eyebrow}</Eyebrow>
-              <p className="desk-display mt-1 text-[16px] leading-tight text-[var(--biz-text-strong)]">{s.title}</p>
-              <p className="mt-1.5 text-[11.5px] leading-snug text-[var(--biz-muted)]">{s.detail}</p>
-            </div>
-          </Link>
-        ))}
-      </section>
-
-      {/* eBay — de-emphasized, treated as one external channel */}
+      {/* eBay — de-emphasized external channel */}
       {ebayStoreHref && (
-        <div className="desk-rise mt-6 flex justify-center" style={{ animationDelay: "300ms" }}>
+        <div className="desk-rise mt-7 flex justify-center" style={{ animationDelay: "240ms" }}>
           <a
             href={ebayStoreHref}
             target="_blank"
