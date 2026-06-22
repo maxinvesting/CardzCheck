@@ -2,9 +2,8 @@
 
 import { useState } from "react";
 import {
-  BUSINESS_MONTHLY_PRICE,
-  BUSINESS_ADDITIONAL_SEAT_MONTHLY_PRICE,
-  BUSINESS_INCLUDED_SEATS,
+  SUBSCRIPTION_MONTHLY_PRICE,
+  TRIAL_DAYS,
   formatPrice,
 } from "@/lib/pricing";
 
@@ -20,11 +19,6 @@ export default function BusinessPaywall() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({
-          billing: "monthly",
-          tier: "business",
-          seat_quantity: 1,
-        }),
       });
       const data = await response.json();
 
@@ -45,11 +39,11 @@ export default function BusinessPaywall() {
   }
 
   const features = [
-    `Base includes ${BUSINESS_INCLUDED_SEATS} owner seat`,
-    `Add teammates for ${formatPrice(BUSINESS_ADDITIONAL_SEAT_MONTHLY_PRICE)}/month each`,
-    "Shared inventory and sales dashboards",
-    "Role-based access for owner, manager, and employee",
-    "All Pro features included",
+    "Unlimited collection & inventory tracking",
+    "Marketplace listing and selling tools",
+    "Inventory and sales dashboards",
+    "Profit, fees, and payout reporting",
+    "CardzCheck Analyst AI + Grade Probability Engine",
   ];
 
   return (
@@ -76,13 +70,12 @@ export default function BusinessPaywall() {
           <div className="text-center mb-5">
             <div className="flex items-end justify-center gap-1">
               <span className="text-4xl font-bold text-white">
-                {formatPrice(BUSINESS_MONTHLY_PRICE)}
+                {formatPrice(SUBSCRIPTION_MONTHLY_PRICE)}
               </span>
               <span className="text-gray-400 mb-1">/mo</span>
             </div>
             <p className="text-sm text-gray-400 mt-1">
-              {formatPrice(BUSINESS_MONTHLY_PRICE)} base +{" "}
-              {formatPrice(BUSINESS_ADDITIONAL_SEAT_MONTHLY_PRICE)} per additional seat
+              Free for {TRIAL_DAYS} days, then {formatPrice(SUBSCRIPTION_MONTHLY_PRICE)}/month. Cancel anytime.
             </p>
           </div>
 
@@ -111,7 +104,7 @@ export default function BusinessPaywall() {
           >
             {loading
               ? "Redirecting to checkout..."
-              : `Get Business — ${formatPrice(BUSINESS_MONTHLY_PRICE)}/mo`}
+              : `Start ${TRIAL_DAYS}-day free trial`}
           </button>
           <p className="text-center text-xs text-gray-500 mt-3">
             Secure checkout powered by Stripe. Cancel anytime.

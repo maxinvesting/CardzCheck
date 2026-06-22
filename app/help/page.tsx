@@ -173,7 +173,7 @@ const FAQ_SECTIONS = [
       },
       {
         q: "How many users are included with Business?",
-        a: "Business is $29/month and includes 1 owner seat. You can add additional team members for $12/month per seat.",
+        a: "Your subscription includes 1 owner seat. You can add additional team members for $5/month per seat.",
       },
       {
         q: "How do I switch between the personal and business workspaces?",
@@ -208,7 +208,7 @@ const FAQ_SECTIONS = [
       },
       {
         q: "How does Business billing work for teams?",
-        a: "Business billing is monthly. The base plan is $29/month (1 included seat), and each additional team seat is $12/month.",
+        a: "Billing is monthly. The plan is $19.99/month with a 7-day free trial (1 included seat), and each additional team seat is $5/month.",
       },
       {
         q: "How do I change my email address?",

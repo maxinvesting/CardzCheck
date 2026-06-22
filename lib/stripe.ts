@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import { TRIAL_DAYS } from "@/lib/pricing";
 
 function getStripeClient() {
   return new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -39,14 +40,16 @@ export async function createCheckoutSession(
 }
 
 /**
- * Create Pro subscription checkout. Supports monthly and annual billing.
+ * Create the subscription checkout — the single $19.99/mo plan with a
+ * {@link TRIAL_DAYS}-day free trial. No activation fee, no annual option.
+ * A card is collected up front; billing begins automatically when the
+ * trial ends.
  */
 export async function createProSubscriptionCheckout(
   userId: string,
   userEmail: string,
   successUrl: string,
-  cancelUrl: string,
-  billing: "monthly" | "annual" = "monthly"
+  cancelUrl: string
 ) {
   const stripe = getStripeClient();
 
@@ -67,41 +70,25 @@ export async function createProSubscriptionCheckout(
     customerId = customer.id;
   }
 
-  // Build line items for activation fee + subscription
-  const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
+  const subscriptionPriceId = process.env.STRIPE_SUBSCRIPTION_PRICE_ID;
 
-  // $20 one-time activation fee (if price ID is set, monthly only)
-  if (billing === "monthly") {
-    const activationPriceId = process.env.STRIPE_ACTIVATION_PRICE_ID;
-    if (activationPriceId) {
-      lineItems.push({ price: activationPriceId, quantity: 1 });
-    }
-  }
-
-  // Pick recurring price based on billing interval
-  const subscriptionPriceId =
-    billing === "annual"
-      ? (process.env.STRIPE_ANNUAL_PRICE_ID || process.env.STRIPE_SUBSCRIPTION_PRICE_ID)
-      : process.env.STRIPE_SUBSCRIPTION_PRICE_ID;
-
-  if (subscriptionPriceId) {
-    lineItems.push({ price: subscriptionPriceId, quantity: 1 });
-  }
-
-  // Fallback to legacy one-time payment if subscription prices not configured
-  if (lineItems.length === 0) {
+  // Fallback to legacy one-time payment if the subscription price isn't configured
+  if (!subscriptionPriceId) {
     return createCheckoutSession(userId, userEmail, successUrl, cancelUrl);
   }
 
   const session = await stripe.checkout.sessions.create({
     customer: customerId,
     payment_method_types: ["card"],
-    line_items: lineItems,
+    line_items: [{ price: subscriptionPriceId, quantity: 1 }],
     mode: "subscription",
     success_url: successUrl,
     cancel_url: cancelUrl,
     metadata: { userId },
-    subscription_data: { metadata: { userId } },
+    subscription_data: {
+      metadata: { userId },
+      trial_period_days: TRIAL_DAYS,
+    },
   });
 
   return session;

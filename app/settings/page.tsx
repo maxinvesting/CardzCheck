@@ -463,7 +463,7 @@ function SettingsContent() {
   const paidPlanFeatures = isBusinessMember
     ? [
         "Business base includes 1 user",
-        "Add extra team seats for $12/month each",
+        "Add extra team seats for $5/month each",
         "Shared inventory and sales workflows",
         "Revenue & profit dashboards",
         "Owner-managed billing and seat controls",
@@ -908,7 +908,7 @@ function SettingsContent() {
                     <li>• Unlimited searches</li>
                     <li>• Unlimited collection tracking</li>
                     <li>• Collection value tracking</li>
-                    <li>• Business workspace from $29/month (1 user included, +$12/seat)</li>
+                    <li>• Business workspace included (1 user, +$5/seat)</li>
                   </ul>
                 </div>
               </div>

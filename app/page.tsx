@@ -6,12 +6,8 @@ import { useRouter } from "next/navigation";
 import { hasBusinessWorkspaceAccess } from "@/lib/business/workspace-access";
 import { createClient } from "@/lib/supabase/client";
 import {
-  ANNUAL_SAVINGS,
-  BUSINESS_ADDITIONAL_SEAT_MONTHLY_PRICE,
-  BUSINESS_INCLUDED_SEATS,
-  BUSINESS_MONTHLY_PRICE,
-  PRO_ANNUAL_PRICE,
-  PRO_MONTHLY_PRICE,
+  SUBSCRIPTION_MONTHLY_PRICE,
+  TRIAL_DAYS,
   formatPrice,
 } from "@/lib/pricing";
 import { LIMITS } from "@/types";
@@ -134,29 +130,17 @@ const plans: Plan[] = [
   },
   {
     name: "Pro",
-    price: formatPrice(PRO_MONTHLY_PRICE),
+    price: formatPrice(SUBSCRIPTION_MONTHLY_PRICE),
     cadence: "per month",
-    description: "For sellers who want one place for their whole collection.",
+    description: "Everything you need to run your collection and sales in one place.",
     features: [
       "Unlimited collection and inventory",
       "Marketplace listing and selling tools",
       "Profit, fees, and payout reporting",
-      "Annual billing available",
+      "CardzCheck Analyst AI + Grade Probability Engine",
     ],
     emphasized: true,
-    note: `${formatPrice(PRO_ANNUAL_PRICE)}/yr saves ${formatPrice(ANNUAL_SAVINGS)}`,
-  },
-  {
-    name: "Business",
-    price: formatPrice(BUSINESS_MONTHLY_PRICE),
-    cadence: "per month",
-    description: "For teams and higher-volume operations.",
-    features: [
-      "Everything in Pro",
-      "Bulk cert import and larger workflows",
-      `${BUSINESS_INCLUDED_SEATS} seat included, extra seats ${formatPrice(BUSINESS_ADDITIONAL_SEAT_MONTHLY_PRICE)}/mo`,
-      "Role-based team access",
-    ],
+    note: `${TRIAL_DAYS}-day free trial · cancel anytime`,
   },
 ];
 
@@ -257,7 +241,7 @@ function OperationsPreview() {
               Built into the marketplace
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
-              {["Secure checkout", "Stripe payouts", "Shipping labels", "Buyer messaging", "Low fees"].map((feature) => (
+              {["Secure checkout", "Stripe payouts", "Free shipping", "Buyer messaging", "No commission"].map((feature) => (
                 <span
                   key={feature}
                   className="rounded border border-[color:var(--biz-border)] px-2.5 py-1 text-[11px] text-[color:var(--biz-muted-strong)]"
@@ -545,15 +529,16 @@ export default function Home() {
               </h2>
               <p className="mt-4 text-sm leading-7 text-[color:var(--biz-muted)]">
                 List straight from your collection and the platform handles the rest — checkout, payouts,
-                and shipping — then writes every sale back to your books automatically.
+                and shipping — then writes every sale back to your books automatically. No platform
+                commission: your only cost is half the card processing fee.
               </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               {[
                 ["List from your collection", "Turn a card you already own into a live listing in one click — no re-entering details."],
                 ["Get paid securely", "Buyers check out on-platform and you're paid through built-in Stripe payouts."],
-                ["Shipping built in", "Buy a prepaid label and hand off tracking the moment an order comes in."],
-                ["Low seller fees", "Keep more of every sale, with seller fees as low as 1% — a fraction of the big marketplaces."],
+                ["Free shipping, always", "Bake shipping into your price and every buyer sees free shipping — no separate shipping line to scare them off."],
+                ["No seller commission", "We don't take a cut of your sale. You and the buyer simply split the card processing fee 50/50."],
               ].map(([title, body]) => (
                 <article key={title} className="rounded-lg border border-[color:var(--biz-border)] bg-[color:var(--biz-surface)] p-5">
                   <h3 className="text-base font-semibold text-[color:var(--biz-text-strong)]">{title}</h3>
@@ -572,7 +557,7 @@ export default function Home() {
                 Start small. Upgrade when the operation needs it.
               </h2>
             </div>
-            <div className="mt-10 grid gap-4 md:grid-cols-3">
+            <div className="mt-10 grid gap-4 md:grid-cols-2">
               {plans.map((plan) => (
                 <PlanCard key={plan.name} plan={plan} />
               ))}

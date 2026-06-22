@@ -1,6 +1,11 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  SUBSCRIPTION_MONTHLY_PRICE,
+  BUSINESS_ADDITIONAL_SEAT_MONTHLY_PRICE,
+  formatPrice,
+} from "@/lib/pricing";
 
 type TeamContext = {
   role: "owner" | "manager" | "employee";
@@ -50,8 +55,8 @@ type TeamPayload = {
   invites: TeamInvite[];
 };
 
-const BUSINESS_BASE_PRICE = 29;
-const EXTRA_SEAT_PRICE = 12;
+const BUSINESS_BASE_PRICE = SUBSCRIPTION_MONTHLY_PRICE;
+const EXTRA_SEAT_PRICE = BUSINESS_ADDITIONAL_SEAT_MONTHLY_PRICE;
 
 function formatDate(value: string): string {
   const date = new Date(value);
@@ -231,12 +236,12 @@ export default function TeamManagementSection() {
               CardzCheck Business
             </p>
             <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-              ${BUSINESS_BASE_PRICE}/month includes {team.context.seats.seatsIncluded} user.
-              Extra seats are ${EXTRA_SEAT_PRICE}/month each.
+              {formatPrice(BUSINESS_BASE_PRICE)}/month includes {team.context.seats.seatsIncluded} user.
+              Extra seats are {formatPrice(EXTRA_SEAT_PRICE)}/month each.
             </p>
           </div>
           <p className="text-lg font-semibold text-gray-900 dark:text-white">
-            ${monthlyTotal}/month
+            {formatPrice(monthlyTotal)}/month
           </p>
         </div>
 

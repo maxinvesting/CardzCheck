@@ -117,8 +117,8 @@ export function tierGates(tier: EffectiveTier): TierGates {
     // Free hits the paywall on first analyst message.
     analystWeeklyLimit: 0,
     inventoryItemCap: 10,
-    // Free can list but at top-tier fees.
-    canSellOnMarketplace: true,
+    // Selling requires a subscription — free users must upgrade to list.
+    canSellOnMarketplace: false,
     marketplaceFees: { one_pct: 0.08, two_pct: 0.12, five_pct: 0.15 },
   };
 }
@@ -489,7 +489,7 @@ export async function canAccessFeature(
         return {
           allowed: false,
           reason:
-            "Business tools require a Business subscription ($15/mo or $150/yr).",
+            "Business tools require a subscription. Start your 7-day free trial.",
           upgradeRequired: true,
         };
       }
