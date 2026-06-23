@@ -25,16 +25,28 @@ const connectSrcDomains = [
   // Sentry is tunnelled through /monitoring (Next.js rewrite) → covered by 'self'
 ].join(" ");
 
+// script-src:
+//   - Production enforces a tightened policy: 'self' + 'unsafe-inline' (Next.js
+//     App Router injects inline bootstrap scripts and there is no nonce pipeline
+//     wired up yet) + js.stripe.com for Stripe.js. 'unsafe-eval' and the bare
+//     `https:` wildcard are intentionally dropped to shrink the XSS surface.
+//   - Development keeps 'unsafe-eval' because the webpack dev server / HMR
+//     evaluates code at runtime; without it the dev server fails to boot.
+const scriptSrc = isProduction
+  ? "script-src 'self' 'unsafe-inline' https://js.stripe.com"
+  : "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:";
+
 const cspDirectives = [
   "default-src 'self'",
   "base-uri 'self'",
   "form-action 'self'",
   "frame-ancestors 'none'",
   "object-src 'none'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:",
+  scriptSrc,
   "style-src 'self' 'unsafe-inline' https:",
   "img-src 'self' data: https:",
   "font-src 'self' data: https:",
+  "frame-src 'self' https://js.stripe.com https://hooks.stripe.com",
   `connect-src ${connectSrcDomains}`,
 ].join("; ");
 
@@ -86,8 +98,12 @@ const nextConfig = {
           "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(self), payment=(), usb=()",
       },
       {
-        // TODO: Enforce CSP after validating reports in production.
-        key: "Content-Security-Policy-Report-Only",
+        // Enforced in production; Report-Only in development so the webpack
+        // dev server / HMR (which needs 'unsafe-eval') is not blocked while
+        // still surfacing any violations during local work.
+        key: isProduction
+          ? "Content-Security-Policy"
+          : "Content-Security-Policy-Report-Only",
         value: cspDirectives,
       },
     ];
