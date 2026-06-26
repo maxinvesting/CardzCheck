@@ -7,7 +7,10 @@ import {
   isPsaNotFoundPayload,
   mapPsaCert,
   parsePsaCertHtml,
+  readCachedPsaMetadata,
   readPsaToken,
+  writeCachedPsaMetadata,
+  type PsaMappedResult,
 } from "@/lib/psa/lookup";
 import { fetchPsaCertLookup } from "@/lib/images/psa-cert";
 import { uniqueTrustedImageUrls } from "@/lib/images/shared";
@@ -67,6 +70,20 @@ async function withPsaImages<T extends Record<string, unknown>>(
   };
 }
 
+// Cache the metadata (so this cert never costs another PSA call) and respond.
+// All "found" paths — live API, public-page fallback, and cache hits — funnel
+// through here so every success is persisted.
+async function respondFound(
+  certDigits: string,
+  mapped: PsaMappedResult,
+  payload?: unknown
+) {
+  await writeCachedPsaMetadata(certDigits, mapped, payload);
+  return NextResponse.json(
+    await withPsaImages(certDigits, { found: true, ...mapped })
+  );
+}
+
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
   const {
@@ -95,11 +112,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "certNumber is too short" }, { status: 400 });
   }
 
+  // Cache-first: a cert's metadata is immutable, so a stored result serves
+  // forever with zero PSA calls. This is what keeps repeat lookups (and other
+  // users hitting already-seen certs) from draining the daily PSA quota — and
+  // means a cert you've looked up once keeps working even when PSA is throttled.
+  const cachedMetadata = await readCachedPsaMetadata(certDigits);
+  if (cachedMetadata) {
+    return NextResponse.json(
+      await withPsaImages(certDigits, { found: true, ...cachedMetadata })
+    );
+  }
+
   const token = readPsaToken();
   if (!token) {
     const fallback = await lookupPsaViaPublicCertPage(certDigits);
     if (fallback) {
-      return NextResponse.json(await withPsaImages(certDigits, { found: true, ...fallback }));
+      return respondFound(certDigits, fallback);
     }
 
     console.error("[psa/lookup] No PSA token in env (checked PSA_ACCESS_TOKEN / PSA_API_TOKEN, any casing)");
@@ -132,10 +160,21 @@ export async function POST(request: NextRequest) {
     if (!res.ok) {
       const fallback = await lookupPsaViaPublicCertPage(certDigits);
       if (fallback) {
-        return NextResponse.json(await withPsaImages(certDigits, { found: true, ...fallback }));
+        return respondFound(certDigits, fallback);
       }
 
       console.error("[psa/lookup] PSA API error", res.status, getPsaServerMessage(psaData));
+      if (res.status === 429) {
+        return NextResponse.json(
+          {
+            error:
+              "PSA lookups are rate-limited right now. Cards looked up before still work — for a new cert, try again later or enter details manually.",
+            found: false,
+            rateLimited: true,
+          },
+          { status: 429 }
+        );
+      }
       return NextResponse.json(
         { error: "PSA lookup unavailable right now", found: false },
         { status: res.status >= 500 ? 503 : 502 }
@@ -144,7 +183,7 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     const fallback = await lookupPsaViaPublicCertPage(certDigits);
     if (fallback) {
-      return NextResponse.json(await withPsaImages(certDigits, { found: true, ...fallback }));
+      return respondFound(certDigits, fallback);
     }
 
     console.error("[psa/lookup] PSA fetch failed", err);
@@ -162,7 +201,7 @@ export async function POST(request: NextRequest) {
   if (!cert) {
     const fallback = await lookupPsaViaPublicCertPage(certDigits);
     if (fallback) {
-      return NextResponse.json(await withPsaImages(certDigits, { found: true, ...fallback }));
+      return respondFound(certDigits, fallback);
     }
 
     console.error("[psa/lookup] PSA response missing cert payload", getPsaServerMessage(psaData));
@@ -177,5 +216,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Cert not found", found: false });
   }
 
-  return NextResponse.json(await withPsaImages(certDigits, { found: true, ...mapped }));
+  return respondFound(certDigits, mapped, psaData);
 }

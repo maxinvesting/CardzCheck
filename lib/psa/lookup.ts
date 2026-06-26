@@ -1,4 +1,5 @@
 import { load } from "cheerio";
+import { createServiceClient } from "@/lib/supabase/server";
 
 export interface PsaCertObject {
   CertNumber?: string;
@@ -147,6 +148,74 @@ export function mapPsaCert(cert: PsaCertObject): PsaMappedResult {
     grading_company: "PSA",
     parallel_type: readFirstString(cert, ["SpecLevel", "Variety"]),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Metadata cache (public.psa_cert_metadata_cache).
+//
+// A PSA cert's metadata is immutable, so we cache it permanently: each unique
+// cert costs exactly one GetByCertNumber call ever, then is served locally.
+// This is what keeps the (tiny) daily PSA quota from being drained by repeat
+// lookups and other users hitting already-seen certs. Service-role only.
+// ---------------------------------------------------------------------------
+
+const PSA_METADATA_CACHE_TABLE = "psa_cert_metadata_cache";
+
+export async function readCachedPsaMetadata(
+  certDigits: string
+): Promise<PsaMappedResult | null> {
+  try {
+    const supabase = await createServiceClient();
+    const { data, error } = await supabase
+      .from(PSA_METADATA_CACHE_TABLE)
+      .select("player_name,year,set_name,card_number,grade,parallel_type")
+      .eq("cert_number", certDigits)
+      .maybeSingle();
+
+    if (error || !data) return null;
+
+    const row = data as Record<string, string | null>;
+    const mapped: PsaMappedResult = {
+      player_name: row.player_name ?? null,
+      year: row.year ?? null,
+      set_name: row.set_name ?? null,
+      card_number: row.card_number ?? null,
+      grade: row.grade ?? null,
+      grading_company: "PSA",
+      parallel_type: row.parallel_type ?? null,
+    };
+
+    if (!mapped.player_name && !mapped.set_name && !mapped.card_number) {
+      return null;
+    }
+    return mapped;
+  } catch {
+    return null;
+  }
+}
+
+export async function writeCachedPsaMetadata(
+  certDigits: string,
+  mapped: PsaMappedResult,
+  payload?: unknown
+): Promise<void> {
+  try {
+    const supabase = await createServiceClient();
+    await supabase.from(PSA_METADATA_CACHE_TABLE).upsert({
+      cert_number: certDigits,
+      player_name: mapped.player_name,
+      year: mapped.year,
+      set_name: mapped.set_name,
+      card_number: mapped.card_number,
+      grade: mapped.grade,
+      grading_company: mapped.grading_company,
+      parallel_type: mapped.parallel_type,
+      payload: payload ?? null,
+      fetched_at: new Date().toISOString(),
+    });
+  } catch {
+    // Best-effort cache; a write failure must never break the lookup.
+  }
 }
 
 function normalizeHtmlLines(html: string): string[] {
