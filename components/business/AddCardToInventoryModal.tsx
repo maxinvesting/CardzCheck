@@ -144,7 +144,7 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
       const res = await fetch("/api/psa/lookup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ certNumber: digits }),
+        body: JSON.stringify({ certNumber: digits, includeImages: true }),
       });
       const data = await res.json().catch(() => null);
       const urls: string[] = Array.isArray(data?.image_urls)

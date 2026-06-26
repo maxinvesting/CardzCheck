@@ -218,6 +218,7 @@ export default function AddCardModalNew({
   const {
     lookup: lookupPsaCert,
     lookupImmediate: lookupPsaCertImmediate,
+    fetchImages: fetchPsaImages,
     isLoading: psaLoading,
     result: psaResult,
     error: psaError,
@@ -305,14 +306,15 @@ export default function AddCardModalNew({
     onClose();
   };
 
-  const handleGradedInventoryConfirm = () => {
+  const handleGradedInventoryConfirm = async () => {
     if (!onCardSelected || !psaResult?.player_name) {
       setError("Card details are missing. Check the cert number and try again.");
       return;
     }
     const parsedQuantity = Math.max(1, Number.parseInt(quantity, 10) || 1);
     const certDigits = gradedCertInput.replace(/\D/g, "");
-    const psaImageUrls = psaResult.image_urls ?? [];
+    // Fetch slab scans only now, at commit — the live preview was metadata-only.
+    const psaImageUrls = certDigits ? await fetchPsaImages(certDigits) : [];
     onCardSelected({
       player_name: psaResult.player_name,
       year: psaResult.year ?? undefined,
@@ -344,7 +346,7 @@ export default function AddCardModalNew({
     setMode("graded_manual");
   };
 
-  const handleGradedManualSubmit = () => {
+  const handleGradedManualSubmit = async () => {
     const playerName = gradedManualForm.player_name.trim();
     const year = gradedManualForm.year.trim();
 
@@ -366,8 +368,9 @@ export default function AddCardModalNew({
     const parallelType = gradedManualForm.parallel_type.trim();
 
     if ((addMode === "watchlist" || addMode === "business") && onCardSelected) {
+      // Fetch slab scans only now, at commit — the live preview was metadata-only.
       const psaImageUrls =
-        gradedCompany === "PSA" && psaResult?.image_urls ? psaResult.image_urls : [];
+        gradedCompany === "PSA" && certDigits ? await fetchPsaImages(certDigits) : [];
       onCardSelected({
         player_name: playerName,
         year: year || undefined,

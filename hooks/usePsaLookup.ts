@@ -16,6 +16,13 @@ export interface PsaLookupResult {
 export interface UsePsaLookupReturn {
   lookup: (certNumber: string) => void;
   lookupImmediate: (certNumber: string) => void;
+  /**
+   * Fetch the PSA slab scans for a cert on demand. The live preview is
+   * metadata-only (cheap), so callers that actually persist a card request the
+   * images here — at commit time — to avoid spending a PSA image call on every
+   * cert the user merely glances at.
+   */
+  fetchImages: (certNumber: string) => Promise<string[]>;
   isLoading: boolean;
   result: PsaLookupResult | null;
   error: string | null;
@@ -98,6 +105,27 @@ export function usePsaLookup(): UsePsaLookupReturn {
     [performLookup]
   );
 
+  const fetchImages = useCallback(async (certNumber: string): Promise<string[]> => {
+    const trimmed = certNumber.trim();
+    if (trimmed.length < MIN_CERT_LENGTH) return [];
+    try {
+      const res = await fetch("/api/psa/lookup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ certNumber: trimmed, includeImages: true }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data || data.found === false) return [];
+      return Array.isArray(data.image_urls)
+        ? data.image_urls.filter(
+            (u: unknown): u is string => typeof u === "string" && u.length > 0
+          )
+        : [];
+    } catch {
+      return [];
+    }
+  }, []);
+
   const clearResult = useCallback(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     requestIdRef.current++;
@@ -106,5 +134,5 @@ export function usePsaLookup(): UsePsaLookupReturn {
     setIsLoading(false);
   }, []);
 
-  return { lookup, lookupImmediate, isLoading, result, error, clearResult };
+  return { lookup, lookupImmediate, fetchImages, isLoading, result, error, clearResult };
 }

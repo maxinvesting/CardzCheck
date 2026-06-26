@@ -60,14 +60,18 @@ async function lookupPsaImageUrls(certDigits: string): Promise<string[]> {
   }
 }
 
-async function withPsaImages<T extends Record<string, unknown>>(
+// Build the "found" response, optionally attaching PSA slab scans. Images are
+// a SECOND PSA call (GetImagesByCertNumber), so we only fetch them when the
+// caller asks (includeImages) — the debounced live preview is metadata-only,
+// which halves the quota cost of just glancing at a cert. image_urls is always
+// present (possibly empty) so clients can read it unconditionally.
+async function buildFoundResponse(
   certDigits: string,
-  payload: T
-): Promise<T & { image_urls: string[] }> {
-  return {
-    ...payload,
-    image_urls: await lookupPsaImageUrls(certDigits),
-  };
+  mapped: PsaMappedResult,
+  includeImages: boolean
+) {
+  const image_urls = includeImages ? await lookupPsaImageUrls(certDigits) : [];
+  return NextResponse.json({ found: true, ...mapped, image_urls });
 }
 
 // Cache the metadata (so this cert never costs another PSA call) and respond.
@@ -76,12 +80,11 @@ async function withPsaImages<T extends Record<string, unknown>>(
 async function respondFound(
   certDigits: string,
   mapped: PsaMappedResult,
+  includeImages: boolean,
   payload?: unknown
 ) {
   await writeCachedPsaMetadata(certDigits, mapped, payload);
-  return NextResponse.json(
-    await withPsaImages(certDigits, { found: true, ...mapped })
-  );
+  return buildFoundResponse(certDigits, mapped, includeImages);
 }
 
 export async function POST(request: NextRequest) {
@@ -95,7 +98,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: { certNumber?: unknown };
+  let body: { certNumber?: unknown; includeImages?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -106,6 +109,10 @@ export async function POST(request: NextRequest) {
   if (!rawCert || typeof rawCert !== "string") {
     return NextResponse.json({ error: "certNumber is required" }, { status: 400 });
   }
+
+  // Slab scans cost a second PSA call, so they're opt-in. The live preview omits
+  // them; callers that persist a card (or want the scan) pass includeImages.
+  const includeImages = body?.includeImages === true;
 
   const certDigits = rawCert.trim().replace(/\D/g, "");
   if (certDigits.length < 5) {
@@ -118,16 +125,14 @@ export async function POST(request: NextRequest) {
   // means a cert you've looked up once keeps working even when PSA is throttled.
   const cachedMetadata = await readCachedPsaMetadata(certDigits);
   if (cachedMetadata) {
-    return NextResponse.json(
-      await withPsaImages(certDigits, { found: true, ...cachedMetadata })
-    );
+    return buildFoundResponse(certDigits, cachedMetadata, includeImages);
   }
 
   const token = readPsaToken();
   if (!token) {
     const fallback = await lookupPsaViaPublicCertPage(certDigits);
     if (fallback) {
-      return respondFound(certDigits, fallback);
+      return respondFound(certDigits, fallback, includeImages);
     }
 
     console.error("[psa/lookup] No PSA token in env (checked PSA_ACCESS_TOKEN / PSA_API_TOKEN, any casing)");
@@ -160,7 +165,7 @@ export async function POST(request: NextRequest) {
     if (!res.ok) {
       const fallback = await lookupPsaViaPublicCertPage(certDigits);
       if (fallback) {
-        return respondFound(certDigits, fallback);
+        return respondFound(certDigits, fallback, includeImages);
       }
 
       console.error("[psa/lookup] PSA API error", res.status, getPsaServerMessage(psaData));
@@ -183,7 +188,7 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     const fallback = await lookupPsaViaPublicCertPage(certDigits);
     if (fallback) {
-      return respondFound(certDigits, fallback);
+      return respondFound(certDigits, fallback, includeImages);
     }
 
     console.error("[psa/lookup] PSA fetch failed", err);
@@ -201,7 +206,7 @@ export async function POST(request: NextRequest) {
   if (!cert) {
     const fallback = await lookupPsaViaPublicCertPage(certDigits);
     if (fallback) {
-      return respondFound(certDigits, fallback);
+      return respondFound(certDigits, fallback, includeImages);
     }
 
     console.error("[psa/lookup] PSA response missing cert payload", getPsaServerMessage(psaData));
@@ -216,5 +221,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Cert not found", found: false });
   }
 
-  return respondFound(certDigits, mapped, psaData);
+  return respondFound(certDigits, mapped, includeImages, psaData);
 }

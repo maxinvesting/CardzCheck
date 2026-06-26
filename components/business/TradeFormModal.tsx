@@ -284,7 +284,7 @@ export default function TradeFormModal({
       const res = await fetch("/api/psa/lookup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ certNumber: cert }),
+        body: JSON.stringify({ certNumber: cert, includeImages: true }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.found) {
