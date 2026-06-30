@@ -25,7 +25,11 @@ type PsaCertCacheRow = {
   last_error: string | null;
 };
 
-const PSA_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+// Slab scans are immutable, so a "found" result can serve forever — fetching a
+// cert's images more than once only burns PSA's tiny daily image quota.
+const PSA_FOUND_CACHE_TTL_MS = 365 * 24 * 60 * 60 * 1000;
+// "No image on file" / "invalid" are stable enough to hold for a day.
+const PSA_NEGATIVE_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const PSA_ERROR_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 /**
  * The PSA Public API endpoint that returns the actual scans PSA captured at
@@ -232,8 +236,10 @@ async function writeCachedLookup(result: PsaCertLookupResult): Promise<void> {
   try {
     const supabase = await createServiceClient();
     const expiresAt =
-      result.status === "found" || result.status === "no_image"
-        ? nowIso(PSA_CACHE_TTL_MS)
+      result.status === "found"
+        ? nowIso(PSA_FOUND_CACHE_TTL_MS)
+        : result.status === "no_image" || result.status === "invalid"
+        ? nowIso(PSA_NEGATIVE_CACHE_TTL_MS)
         : nowIso(PSA_ERROR_CACHE_TTL_MS);
 
     await supabase.from("psa_cert_cache").upsert({
@@ -319,7 +325,12 @@ export async function fetchPsaCertLookup(
         payload,
         lastError: `PSA images request failed with status ${response.status}`,
       };
-      await writeCachedLookup(result);
+      // A 429 (daily quota exhausted) is transient — caching it would freeze the
+      // cert as "no scan" for 6h, so the scans never appear even once PSA's quota
+      // resets. Return it uncached so the next attempt can succeed.
+      if (response.status !== 429) {
+        await writeCachedLookup(result);
+      }
       return result;
     }
 
