@@ -793,6 +793,7 @@ export default function LedgerPage() {
                   onToggleAll={handleToggleAll}
                   onInlineEdit={handleInlineEdit}
                   onOpenProfile={(row) => setProfileItemId(row.id)}
+                  onQuickSale={(row) => setMarkSoldItem(row.item)}
                   sort={sort}
                   onSort={(column) => setSort((current) => nextLedgerSort(current, column))}
                 />

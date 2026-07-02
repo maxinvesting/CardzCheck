@@ -31,6 +31,8 @@ interface LedgerTableProps {
   onInlineEdit?: (payload: LedgerInlineEditPayload) => Promise<void> | void;
   /** When provided, "Profile" opens a drawer instead of routing. */
   onOpenProfile?: (row: LedgerTableRow) => void;
+  /** When provided, renders a per-row "Sell" button that opens the sale flow. */
+  onQuickSale?: (row: LedgerTableRow) => void;
   /** Current sort state; when provided headers become clickable sort controls. */
   sort?: LedgerSortState;
   /** Called with the clicked column; parent computes the next sort state. */
@@ -351,6 +353,7 @@ export default function LedgerTable({
   onToggleAll,
   onInlineEdit,
   onOpenProfile,
+  onQuickSale,
   sort,
   onSort,
 }: LedgerTableProps) {
@@ -473,6 +476,11 @@ export default function LedgerTable({
               <HeaderCell align="center" className="w-[92px]">
                 Channel
               </HeaderCell>
+              {onQuickSale ? (
+                <HeaderCell align="center" className="w-[72px]">
+                  <span className="sr-only">Actions</span>
+                </HeaderCell>
+              ) : null}
             </tr>
           </thead>
           <tbody>
@@ -644,6 +652,23 @@ export default function LedgerTable({
                       </span>
                     </Cell>
                   )}
+                  {onQuickSale ? (
+                    <Cell align="center">
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onQuickSale(row);
+                        }}
+                        onKeyDown={(e) => e.stopPropagation()}
+                        className="inline-flex items-center justify-center border border-[#1F5F45] bg-[#0E251B] px-2.5 py-1 text-[11px] font-semibold text-[#20B26B] transition-colors hover:bg-[#123526] hover:text-[#33C47C] focus:outline-none focus:ring-1 focus:ring-[color:var(--biz-focus)]"
+                        aria-label={`Record a sale for ${row.cardLabel}`}
+                        title="Record a sale"
+                      >
+                        Sell
+                      </button>
+                    </Cell>
+                  ) : null}
                 </tr>
               );
             })}
