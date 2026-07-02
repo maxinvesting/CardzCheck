@@ -5,6 +5,7 @@ import {
   TRADE_RECOGNITION_SELECT,
   normalizeTradeRow,
   tradeRecognition,
+  sumDeferredTradeGains,
   type RawTradeRow,
   type RecognizableTrade,
 } from "@/lib/business/trade-recognition";
@@ -134,6 +135,12 @@ export type Snapshot = {
   cash_on_hand_cents: number;
   /** Total business value = estimated inventory value + cash on hand. */
   total_business_value_cents: number;
+  /**
+   * Mark-to-market gain from trades that is deferred into received cards' basis
+   * and not yet booked into P&L (recognized later when those cards sell). Shown
+   * separately so trade value gains are visible without being counted twice.
+   */
+  unrealized_trade_gain_cents: number;
 };
 
 export type Velocity = {
@@ -550,6 +557,8 @@ function buildInventory(rows: InventoryRow[], now: Date): {
     // Cash is layered in by getFinancialsSummary, which has the account context.
     cash_on_hand_cents: 0,
     total_business_value_cents: totalValue,
+    // Layered in by getFinancialsSummary, which has the trade ledger loaded.
+    unrealized_trade_gain_cents: 0,
   };
 
   const stale: StaleAlert = {
@@ -759,6 +768,14 @@ export async function getFinancialsSummary(
   inv.snapshot.cash_on_hand_cents = cashBalanceCents;
   inv.snapshot.total_business_value_cents =
     inv.snapshot.inventory_value_cents + cashBalanceCents;
+  // Deferred (not-yet-booked) trade gains across the loaded trade window — the
+  // mark-to-market value gained through trades that profit will recognize as the
+  // received cards sell. Shown separately so it never double-counts P&L.
+  inv.snapshot.unrealized_trade_gain_cents = sumDeferredTradeGains(
+    tradeRows,
+    salesFrom.getTime(),
+    now.getTime()
+  );
 
   const velocity = buildVelocity(
     saleRows,

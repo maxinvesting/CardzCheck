@@ -159,7 +159,7 @@ function SnapshotAndVelocity({
 
   return (
     <section>
-      <div className="grid grid-cols-2 divide-x divide-y divide-[#24282D] border border-[#24282D] bg-[#0B0D0F] sm:grid-cols-3 sm:divide-y-0 xl:grid-cols-11">
+      <div className="grid grid-cols-2 divide-x divide-y divide-[#24282D] border border-[#24282D] bg-[#0B0D0F] sm:grid-cols-3 sm:divide-y-0 xl:grid-cols-12">
         <MetricCell
           label="Cash on hand"
           value={fmtMoney(snapshot.cash_on_hand_cents)}
@@ -184,6 +184,12 @@ function SnapshotAndVelocity({
           value={fmtMoney(snapshot.unrealized_pnl_cents)}
           valueClass={pnlClass(snapshot.unrealized_pnl_cents)}
           sub={pnlSub}
+        />
+        <MetricCell
+          label="Trade gains (unrlzd)"
+          value={fmtMoney(snapshot.unrealized_trade_gain_cents)}
+          valueClass={pnlClass(snapshot.unrealized_trade_gain_cents)}
+          sub={{ text: "books as cards sell", tone: null }}
         />
         <MetricCell
           label="Cash flow (mo)"

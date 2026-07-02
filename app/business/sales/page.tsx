@@ -8,6 +8,11 @@ import TradesTable, { type BusinessTrade } from "@/components/business/TradesTab
 import { createClient } from "@/lib/supabase/client";
 import type { BusinessSale } from "@/types";
 import { formatMoney } from "@/lib/business/sales-utils";
+import {
+  recognizableFromBusinessTrade,
+  tradeRecognition,
+  tradeDeferredGain,
+} from "@/lib/business/trade-recognition";
 
 const PAGE_SIZE = 25;
 
@@ -205,10 +210,22 @@ export default function BusinessSalesHistoryPage() {
     });
   }, [trades, filters]);
 
-  const tradesRealized = useMemo(
-    () => filteredTrades.reduce((acc, t) => acc + t.realized_gain_cents, 0),
-    [filteredTrades]
-  );
+  // Split the trade gains the same way the Financials P&L does: `recognized`
+  // is what hits P&L now (cash that can't be deferred); `deferred` rolls into
+  // received-card basis and realizes when those cards sell. Summing the raw
+  // `realized_gain_cents` here previously double-counted deferred appreciation
+  // and disagreed with the P&L — every dollar was labeled "realized" when the
+  // app actually defers card-for-card gains.
+  const { tradesRecognized, tradesDeferred } = useMemo(() => {
+    let recognized = 0;
+    let deferred = 0;
+    for (const t of filteredTrades) {
+      const rec = recognizableFromBusinessTrade(t);
+      recognized += tradeRecognition(rec)?.profit_cents ?? 0;
+      deferred += tradeDeferredGain(rec);
+    }
+    return { tradesRecognized: recognized, tradesDeferred: deferred };
+  }, [filteredTrades]);
 
   const summary = useMemo(() => {
     let gross = 0;
@@ -288,14 +305,30 @@ export default function BusinessSalesHistoryPage() {
                     Trades{!tradesLoading ? ` (${filteredTrades.length})` : ""}
                   </h2>
                   {!tradesLoading && filteredTrades.length > 0 && (
-                    <span className="text-[11px] text-[#77808C]">
-                      Realized gain{" "}
-                      <span
-                        className={
-                          tradesRealized >= 0 ? "ledger-pnl-pos" : "ledger-pnl-neg"
-                        }
-                      >
-                        {formatMoney(tradesRealized)}
+                    <span className="flex items-baseline gap-3 text-[11px] text-[#77808C]">
+                      <span>
+                        Realized{" "}
+                        <span
+                          className={
+                            tradesRecognized >= 0
+                              ? "ledger-pnl-pos"
+                              : "ledger-pnl-neg"
+                          }
+                        >
+                          {formatMoney(tradesRecognized)}
+                        </span>
+                      </span>
+                      <span title="Trade gains rolled into received-card basis — realizes as profit when those cards sell.">
+                        Deferred{" "}
+                        <span
+                          className={
+                            tradesDeferred >= 0
+                              ? "ledger-pnl-pos"
+                              : "ledger-pnl-neg"
+                          }
+                        >
+                          {formatMoney(tradesDeferred)}
+                        </span>
                       </span>
                     </span>
                   )}

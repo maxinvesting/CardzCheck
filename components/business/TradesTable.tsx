@@ -2,6 +2,11 @@
 
 import { useMemo, useState } from "react";
 import { formatMoney } from "@/lib/business/sales-utils";
+import {
+  recognizableFromBusinessTrade,
+  tradeRecognition,
+  tradeDeferredGain,
+} from "@/lib/business/trade-recognition";
 
 export interface TradeItem {
   direction: "in" | "out";
@@ -60,6 +65,14 @@ export default function TradesTable({ trades, loading, onDeleteTrade }: Props) {
     () =>
       trades.map((trade) => {
         const netCash = trade.cash_received_cents - trade.cash_paid_cents;
+        // Recognize each trade the same way the Financials P&L does: a
+        // card-for-card swap defers its gain into the received card's basis
+        // (realized only when that card sells), so only cash that can't be
+        // absorbed hits P&L now. This keeps the trades table reconciled with
+        // the P&L instead of showing the raw mark-to-market gain.
+        const rec = recognizableFromBusinessTrade(trade);
+        const recognized = tradeRecognition(rec)?.profit_cents ?? 0;
+        const deferred = tradeDeferredGain(rec);
         return {
           ...trade,
           partnerLabel: trade.partner_name?.trim() || "Trade",
@@ -68,6 +81,8 @@ export default function TradesTable({ trades, loading, onDeleteTrade }: Props) {
           outValue: sumFairValue(trade.items, "out"),
           inValue: sumFairValue(trade.items, "in"),
           netCash,
+          recognized,
+          deferred,
         };
       }),
     [trades]
@@ -85,7 +100,18 @@ export default function TradesTable({ trades, loading, onDeleteTrade }: Props) {
             <th className={`${thClass} text-right`}>Out value</th>
             <th className={`${thClass} text-right`}>In value</th>
             <th className={`${thClass} text-right`}>Net cash</th>
-            <th className={`${thClass} text-right`}>Realized</th>
+            <th
+              className={`${thClass} text-right`}
+              title="Gain hitting P&L now — cash that can't be deferred into a received card's basis. Card-for-card swaps realize $0 here."
+            >
+              Realized (P&L)
+            </th>
+            <th
+              className={`${thClass} text-right`}
+              title="Gain rolled into the received card's cost basis. Realizes as profit when that card sells."
+            >
+              Deferred (basis)
+            </th>
             <th className={thClass}>Actions</th>
           </tr>
         </thead>
@@ -93,7 +119,7 @@ export default function TradesTable({ trades, loading, onDeleteTrade }: Props) {
           {loading && (
             <tr>
               <td
-                colSpan={9}
+                colSpan={10}
                 className="px-3 py-6 text-center text-[color:var(--biz-muted)]"
               >
                 Loading trades...
@@ -103,7 +129,7 @@ export default function TradesTable({ trades, loading, onDeleteTrade }: Props) {
           {!loading && rows.length === 0 && (
             <tr>
               <td
-                colSpan={9}
+                colSpan={10}
                 className="px-3 py-6 text-center text-[color:var(--biz-muted)]"
               >
                 No trades found for this range.
@@ -143,10 +169,21 @@ export default function TradesTable({ trades, loading, onDeleteTrade }: Props) {
                 </td>
                 <td
                   className={`${tdClass} text-right tabular-nums font-medium ${
-                    trade.realized_gain_cents >= 0 ? "ledger-pnl-pos" : "ledger-pnl-neg"
+                    trade.recognized > 0
+                      ? "ledger-pnl-pos"
+                      : trade.recognized < 0
+                        ? "ledger-pnl-neg"
+                        : "text-[color:var(--biz-muted)]"
                   }`}
                 >
-                  {formatMoney(trade.realized_gain_cents)}
+                  {trade.recognized === 0 ? "—" : formatMoney(trade.recognized)}
+                </td>
+                <td
+                  className={`${tdClass} text-right tabular-nums ${
+                    trade.deferred >= 0 ? "ledger-pnl-pos" : "ledger-pnl-neg"
+                  }`}
+                >
+                  {formatMoney(trade.deferred)}
                 </td>
                 <td className={tdClass}>
                   <button

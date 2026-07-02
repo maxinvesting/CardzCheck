@@ -14,7 +14,7 @@
 
 /** Columns to select from `business_trades` (with item directions) for recognition. */
 export const TRADE_RECOGNITION_SELECT =
-  "traded_at,cash_paid_cents,cash_received_cents,outgoing_basis_cents,incoming_basis_cents,trade_items:business_trade_items(direction)" as const;
+  "traded_at,cash_paid_cents,cash_received_cents,outgoing_basis_cents,incoming_basis_cents,realized_gain_cents,trade_items:business_trade_items(direction)" as const;
 
 /** Raw `business_trades` row joined with its `business_trade_items` directions. */
 export type RawTradeRow = {
@@ -23,6 +23,7 @@ export type RawTradeRow = {
   cash_received_cents: number | null;
   outgoing_basis_cents: number | null;
   incoming_basis_cents: number | null;
+  realized_gain_cents: number | null;
   trade_items?: Array<{ direction: string | null }> | null;
 };
 
@@ -38,6 +39,14 @@ export type RecognizableTrade = {
   cash_out_cents: number; // cash paid out in the trade
   outgoing_basis_cents: number; // cost basis of cards given away
   has_incoming: boolean; // true if any card came back in the trade
+  /**
+   * Mark-to-market gain stored on the trade at record time
+   * (outgoing fair value + cash received − cash paid − outgoing basis).
+   * This is the figure the Sales & Trades page surfaces as "Realized gain".
+   * It is NOT booked into P&L directly — `tradeRecognition` decides how much
+   * is recognized now vs deferred into received cards' basis.
+   */
+  mark_to_market_gain_cents: number;
 };
 
 function toInt(value: number | null | undefined): number {
@@ -68,6 +77,38 @@ export function normalizeTradeRow(row: RawTradeRow): RecognizableTrade {
     has_incoming:
       (row.trade_items ?? []).some((it) => it.direction === "in") ||
       toInt(row.incoming_basis_cents) > 0,
+    mark_to_market_gain_cents: toInt(row.realized_gain_cents),
+  };
+}
+
+/**
+ * Client-facing trade shape used by the Sales & Trades page (`/api/business/trades`
+ * returns `items`, not the joined `trade_items` of a raw select). Maps into the
+ * recognition input so the trades table can show the SAME recognized/deferred
+ * split the Financials P&L uses, instead of the raw mark-to-market gain.
+ */
+export type BusinessTradeLike = {
+  traded_at: string;
+  cash_paid_cents: number | null;
+  cash_received_cents: number | null;
+  outgoing_basis_cents: number | null;
+  incoming_basis_cents: number | null;
+  realized_gain_cents: number | null;
+  items?: Array<{ direction: string | null }> | null;
+};
+
+export function recognizableFromBusinessTrade(
+  t: BusinessTradeLike
+): RecognizableTrade {
+  return {
+    traded_at: t.traded_at,
+    cash_in_cents: toInt(t.cash_received_cents),
+    cash_out_cents: toInt(t.cash_paid_cents),
+    outgoing_basis_cents: toInt(t.outgoing_basis_cents),
+    has_incoming:
+      (t.items ?? []).some((it) => it.direction === "in") ||
+      toInt(t.incoming_basis_cents) > 0,
+    mark_to_market_gain_cents: toInt(t.realized_gain_cents),
   };
 }
 
@@ -91,6 +132,36 @@ export function tradeRecognition(
     cogs_cents: t.cash_out_cents + t.outgoing_basis_cents,
     profit_cents: net,
   };
+}
+
+/**
+ * The portion of a trade's mark-to-market gain that is NOT yet booked into P&L
+ * — i.e. deferred into the received cards' cost basis and recognized later when
+ * those cards sell. For a card-for-card swap this is the appreciation on the
+ * cards given up (plus any deferred cash gain); for a pure cards-for-cash
+ * disposal nothing is deferred (the whole gain is recognized at trade time), so
+ * this is 0. By construction, `recognizedNow + deferred === mark_to_market`, so
+ * showing booked profit alongside this figure double-counts nothing.
+ */
+export function tradeDeferredGain(t: RecognizableTrade): number {
+  if (!t.has_incoming) return 0;
+  const recognizedNow = tradeRecognition(t)?.profit_cents ?? 0;
+  return t.mark_to_market_gain_cents - recognizedNow;
+}
+
+/** Sum of deferred (unrecognized) trade gains within [fromMs, toMs). */
+export function sumDeferredTradeGains(
+  trades: RecognizableTrade[],
+  fromMs: number,
+  toMs: number
+): number {
+  let deferred = 0;
+  for (const trade of trades) {
+    const t = new Date(trade.traded_at).getTime();
+    if (Number.isNaN(t) || t < fromMs || t >= toMs) continue;
+    deferred += tradeDeferredGain(trade);
+  }
+  return deferred;
 }
 
 /** Recognized trade totals within the half-open window [fromMs, toMs). */
