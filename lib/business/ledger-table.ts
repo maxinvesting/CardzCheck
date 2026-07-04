@@ -1,6 +1,6 @@
 import type { BusinessInventoryItem } from "@/types";
 
-export type LedgerValueSource = "cmv" | "fallback";
+export type LedgerValueSource = "cmv" | "fallback" | "cost";
 export type LedgerListingStatus = "Listed" | "Unlisted";
 
 export interface LedgerTableRow {
@@ -98,11 +98,13 @@ const NUMERIC_COLUMN_SELECTORS: Record<
   (row: LedgerTableRow) => number | null
 > = {
   cost: (r) => r.costBasisCents,
-  cmv: (r) => r.estimatedValueCents,
+  // Carried-at-cost rows have no real market read, so keep them sorted last
+  // (like nulls) rather than letting their cost stand in for a CMV/P&L.
+  cmv: (r) => (r.estimatedValueSource === "cost" ? null : r.estimatedValueCents),
   price: (r) => r.yourPriceCents,
   lowest: (r) => r.lowestListingCents,
   spread: (r) => r.spreadPct,
-  pnl: (r) => r.pnlCents,
+  pnl: (r) => (r.estimatedValueSource === "cost" ? null : r.pnlCents),
   days: (r) => r.daysHeld,
 };
 
@@ -270,9 +272,17 @@ export function mapInventoryItemToLedgerRow(
 ): LedgerTableRow {
   const quantity = normalizeQuantity(item.quantity);
   const estimatedUnitValue = getEstimatedUnitValue(item);
-  const estimatedValueCents =
+  const marketValueCents =
     estimatedUnitValue.cents != null ? estimatedUnitValue.cents * quantity : null;
   const costBasisCents = item.cost_basis_total_cents ?? 0;
+  // Carry not-yet-priced cards at cost (P&L 0) until a market value exists, so a
+  // freshly bought card doesn't read as a full write-off. Keeps the summary tiles
+  // internally consistent (value − cost = P&L) and matches lib/business/financials.ts.
+  const hasMarketValue = marketValueCents != null;
+  const estimatedValueCents = hasMarketValue ? marketValueCents : costBasisCents;
+  const estimatedValueSource: LedgerValueSource = hasMarketValue
+    ? estimatedUnitValue.source ?? "cmv"
+    : "cost";
   const yourPriceCents = positiveCents(item.list_price_cents);
   const lowestListingCents = readOptionalCents(
     item,
@@ -283,8 +293,7 @@ export function mapInventoryItemToLedgerRow(
     yourPriceCents != null && lowestListingCents != null && lowestListingCents > 0
       ? ((yourPriceCents - lowestListingCents) / lowestListingCents) * 100
       : null;
-  const pnlCents =
-    estimatedValueCents != null ? estimatedValueCents - costBasisCents : null;
+  const pnlCents = estimatedValueCents - costBasisCents;
 
   return {
     id: item.id,
@@ -295,7 +304,7 @@ export function mapInventoryItemToLedgerRow(
     quantity,
     costBasisCents,
     estimatedValueCents,
-    estimatedValueSource: estimatedUnitValue.source,
+    estimatedValueSource,
     yourPriceCents,
     lowestListingCents,
     spreadPct,
@@ -316,24 +325,20 @@ export function computeLedgerSummary(rows: LedgerTableRow[]): LedgerSummary {
   let totalCostBasisCents = 0;
   let totalEstimatedValueCents = 0;
   let estimatedPnlCents = 0;
-  let rowsWithEstimatedValue = 0;
 
   for (const row of rows) {
     inventoryCount += row.quantity;
     totalCostBasisCents += row.costBasisCents;
-
-    if (row.estimatedValueCents != null && row.pnlCents != null) {
-      totalEstimatedValueCents += row.estimatedValueCents;
-      estimatedPnlCents += row.pnlCents;
-      rowsWithEstimatedValue += 1;
-    }
+    // Rows are always valued (priced cards at CMV, unpriced carried at cost), so
+    // every card contributes to both totals and value − cost === P&L holds.
+    totalEstimatedValueCents += row.estimatedValueCents ?? row.costBasisCents;
+    estimatedPnlCents += row.pnlCents ?? 0;
   }
 
   return {
     inventoryCount,
     totalCostBasisCents,
-    totalEstimatedValueCents:
-      rowsWithEstimatedValue > 0 ? totalEstimatedValueCents : null,
-    estimatedPnlCents: rowsWithEstimatedValue > 0 ? estimatedPnlCents : null,
+    totalEstimatedValueCents: rows.length > 0 ? totalEstimatedValueCents : null,
+    estimatedPnlCents: rows.length > 0 ? estimatedPnlCents : null,
   };
 }

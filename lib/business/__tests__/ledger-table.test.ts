@@ -78,6 +78,20 @@ describe("ledger table mapping", () => {
     expect(row.pnlCents).toBe(-800);
   });
 
+  it("carries unpriced cards at cost with zero P&L", () => {
+    const row = mapInventoryItemToLedgerRow(
+      makeItem({
+        quantity: 1,
+        cost_basis_total_cents: 6000,
+        current_market_value_cents: null,
+      })
+    );
+
+    expect(row.estimatedValueSource).toBe("cost");
+    expect(row.estimatedValueCents).toBe(6000);
+    expect(row.pnlCents).toBe(0);
+  });
+
   it("computes spread only when own price and market floor are both available", () => {
     const withMarket = mapInventoryItemToLedgerRow(
       makeItem({
@@ -98,7 +112,7 @@ describe("ledger table mapping", () => {
     expect(withoutMarket.spreadPct).toBeNull();
   });
 
-  it("summarizes quantity, cost, value, and covered P&L", () => {
+  it("summarizes quantity, cost, value, and P&L (unpriced cards carried at cost)", () => {
     const rows = mapInventoryToLedgerRows([
       makeItem({
         id: "item-1",
@@ -114,10 +128,12 @@ describe("ledger table mapping", () => {
       }),
     ]);
 
+    // item-2 has no market value, so it is carried at its $2000 cost (P&L 0).
+    // value − cost === P&L must hold across the summary tiles.
     expect(computeLedgerSummary(rows)).toEqual({
       inventoryCount: 3,
       totalCostBasisCents: 7000,
-      totalEstimatedValueCents: 6000,
+      totalEstimatedValueCents: 8000,
       estimatedPnlCents: 1000,
     });
   });

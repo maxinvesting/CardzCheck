@@ -486,7 +486,10 @@ function pickEstimatedValueCents(row: InventoryRow): number {
     toInt(row.current_market_value_cents) ||
     toInt(row.est_cmv) ||
     toInt(row.estimated_cmv) ||
-    0
+    // Carry not-yet-priced cards at cost (net 0 unrealized P&L) instead of $0, so a
+    // freshly bought card isn't booked as a full write-off. Matches the ledger's
+    // carry-at-cost treatment (see lib/business/ledger-table.ts) so both agree.
+    toInt(row.cost_basis_total_cents)
   );
 }
 

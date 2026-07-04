@@ -573,7 +573,13 @@ export default function LedgerTable({
                       }
                       ariaLabel={`CMV for ${row.cardLabel}`}
                       className={neutralMoneyClassName(row.estimatedValueCents)}
-                      detail={row.estimatedValueSource === "fallback" ? "Fallback" : undefined}
+                      detail={
+                        row.estimatedValueSource === "fallback"
+                          ? "Fallback"
+                          : row.estimatedValueSource === "cost"
+                            ? "At cost"
+                            : undefined
+                      }
                     />
                   ) : (
                     <Cell
@@ -581,9 +587,10 @@ export default function LedgerTable({
                       className={`tabular-nums ${neutralMoneyClassName(row.estimatedValueCents)}`}
                     >
                       <div>{formatMoney(row.estimatedValueCents)}</div>
-                      {row.estimatedValueSource === "fallback" && (
+                      {(row.estimatedValueSource === "fallback" ||
+                        row.estimatedValueSource === "cost") && (
                         <div className="text-[9px] uppercase tracking-[0.08em] text-[color:var(--biz-muted)]">
-                          Fallback
+                          {row.estimatedValueSource === "cost" ? "At cost" : "Fallback"}
                         </div>
                       )}
                     </Cell>
