@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import BusinessPaywall from "@/components/business/BusinessPaywall";
 import SalesTable, { type SalesFilters } from "@/components/business/SalesTable";
 import TradesTable, { type BusinessTrade } from "@/components/business/TradesTable";
 import { createClient } from "@/lib/supabase/client";
@@ -243,7 +242,6 @@ export default function BusinessSalesHistoryPage() {
     return (
       <>
         <main className="min-h-screen bg-[#090B0D] px-4 py-4">
-          <BusinessPaywall />
         </main>
       </>
     );

@@ -9,7 +9,6 @@ import { LIMITS } from "@/types";
 import { isTestMode, getTestUser } from "@/lib/test-mode";
 import { clearCurrentUserCache, getCurrentUserCached } from "@/lib/current-user-client";
 import CardPickerModal from "@/components/CardPickerModal";
-import PricingModal from "@/components/PricingModal";
 import type { CardPickerSelection } from "@/components/CardPicker";
 import { formatGraderGrade } from "@/lib/cards/format";
 
@@ -277,7 +276,6 @@ export default function Header() {
         mode="comps"
         onSelect={handleCardPickerSelect}
       />
-      <PricingModal isOpen={pricingOpen} onClose={() => setPricingOpen(false)} />
     </header>
   );
 }

@@ -1,5 +1,4 @@
 export * from "./types";
-export { extractCardIdentity, extractCardIdentityDetailed } from "./extract";
 export { buildCardIdentityFromSignals } from "./normalize";
 export {
   formatCardSubtitle,

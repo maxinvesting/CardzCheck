@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import BusinessPaywall from "@/components/business/BusinessPaywall";
 import BusinessMigrationBanner from "@/components/business/BusinessMigrationBanner";
 import CardzCheckListingModal from "@/components/business/CardzCheckListingModal";
 import LedgerTable, { type LedgerInlineEditPayload } from "@/components/business/LedgerTable";
@@ -665,7 +664,6 @@ export default function LedgerPage() {
     return (
       <>
         <main className="min-h-screen bg-[#090B0D] px-4 py-4">
-          <BusinessPaywall />
         </main>
       </>
     );

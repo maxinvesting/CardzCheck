@@ -2,9 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import BusinessAnalystPanel from "@/components/business/BusinessAnalystPanel";
 import BusinessMigrationBanner from "@/components/business/BusinessMigrationBanner";
-import BusinessPaywall from "@/components/business/BusinessPaywall";
 import { createClient } from "@/lib/supabase/client";
 import type { BusinessInventoryItem } from "@/types";
 
@@ -74,7 +72,6 @@ export default function BusinessInsightsPage() {
     return (
       <>
         <main className="mx-auto max-w-4xl px-4 py-6">
-          <BusinessPaywall />
         </main>
       </>
     );
@@ -90,9 +87,7 @@ export default function BusinessInsightsPage() {
               loadInventory();
             }}
           />
-        ) : (
-          <BusinessAnalystPanel items={items} />
-        )}
+        ) : null}
       </main>
     </>
   );

@@ -19,7 +19,7 @@
 
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { isTestMode } from "@/lib/test-mode";
-import { getScanCreditStatus } from "@/lib/grading/scanCredits";
+import { isUnlimitedAccess } from "@/lib/local-mode";
 import { hasBusinessWorkspaceAccess } from "@/lib/business/workspace-access";
 import type {
   EffectiveTier,
@@ -43,6 +43,8 @@ import type {
  * in PR C1).
  */
 export function effectiveTier(raw: SubscriptionTier | null | undefined): EffectiveTier {
+  // Personal build: everyone is top tier regardless of what the DB says.
+  if (isUnlimitedAccess()) return "business_pro";
   if (raw === "business_pro") return "business_pro";
   if (raw === "business" || raw === "pro") return "business";
   return "free";
@@ -129,6 +131,7 @@ export function tierGates(tier: EffectiveTier): TierGates {
  * row exists yet — safer than assuming Pro.
  */
 export async function getTierGates(userId: string): Promise<TierGates> {
+  if (isUnlimitedAccess()) return tierGates("business_pro");
   if (isTestMode()) return tierGates("business_pro");
   const supabase = await createClient();
   const { data } = await supabase
@@ -154,6 +157,7 @@ export async function consumeWeeklyAnalystMessage(
   userId: string,
   weeklyLimit: number | null
 ): Promise<boolean> {
+  if (isUnlimitedAccess()) return true;
   if (isTestMode()) return true;
   if (weeklyLimit === null) return true;
   if (weeklyLimit <= 0) return false;
@@ -213,6 +217,18 @@ export interface UsageCheck {
  * Business tier includes all Pro features.
  */
 export async function checkProAccess(userId: string): Promise<AccessCheck> {
+  if (isUnlimitedAccess()) {
+    return {
+      hasAccess: true,
+      isPro: true,
+      isBusiness: true,
+      isActivated: true,
+      subscriptionStatus: "active",
+      periodEnd: null,
+      tier: "business",
+    };
+  }
+
   if (isTestMode()) {
     return {
       hasAccess: true,
@@ -286,6 +302,7 @@ export async function checkProAccess(userId: string): Promise<AccessCheck> {
  * Check if user has Business tier access.
  */
 export async function hasBusinessAccess(userId: string): Promise<boolean> {
+  if (isUnlimitedAccess()) return true;
   if (isTestMode()) return true;
 
   const access = await checkProAccess(userId);
@@ -297,6 +314,8 @@ export async function hasBusinessAccess(userId: string): Promise<boolean> {
  * falls back to legacy is_paid flag
  */
 export async function checkLegacyProAccess(userId: string): Promise<boolean> {
+  if (isUnlimitedAccess()) return true;
+
   // In test mode, return Pro access
   if (isTestMode()) {
     return true;
@@ -328,6 +347,15 @@ export async function getUsage(
   userId: string,
   isPro?: boolean
 ): Promise<UsageCheck> {
+  if (isUnlimitedAccess()) {
+    return {
+      searchesUsed: 0,
+      aiMessagesUsed: 0,
+      canSearch: true,
+      canUseAI: true,
+    };
+  }
+
   // In test mode, return unlimited access
   if (isTestMode()) {
     return {
@@ -427,6 +455,9 @@ export async function canAccessFeature(
   userId: string,
   feature: Feature
 ): Promise<FeatureAccessResult> {
+  // Personal build: no feature is paywalled.
+  if (isUnlimitedAccess()) return { allowed: true };
+
   const isPro = await checkLegacyProAccess(userId);
 
   // Pro users have access to everything
@@ -469,19 +500,9 @@ export async function canAccessFeature(
       }
       return { allowed: true };
 
-    case "grade_estimator": {
-      // Pro and Business subscribers have full access
-      if (isPro) return { allowed: true };
-      // Free users get 2 lifetime credits + 1/week — check remaining
-      const credits = await getScanCreditStatus(userId);
-      if (credits.remaining > 0) return { allowed: true };
-      return {
-        allowed: false,
-        reason:
-          "You've used all your free scans. Upgrade to Pro for unlimited grade analysis.",
-        upgradeRequired: true,
-      };
-    }
+    case "grade_estimator":
+      // AI grade estimation was removed in the personal build.
+      return { allowed: true };
 
     case "business": {
       const businessAccess = await hasBusinessAccess(userId);

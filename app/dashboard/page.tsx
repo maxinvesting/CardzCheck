@@ -15,7 +15,6 @@ const AddCardModalNew = dynamic(() => import("@/components/AddCardModalNew"), {
 });
 import BulkCertImportModal from "@/components/business/BulkCertImportModal";
 import { useTierGates } from "@/hooks/useTierGates";
-import PaywallModal from "@/components/PaywallModal";
 import { createClient } from "@/lib/supabase/client";
 import type { User, CollectionItem } from "@/types";
 import { isTestMode, getTestUser } from "@/lib/test-mode";
@@ -240,12 +239,6 @@ export default function DashboardPage() {
           }}
         />
 
-        {/* Paywall Modal */}
-        <PaywallModal
-          isOpen={showPaywall}
-          onClose={() => setShowPaywall(false)}
-          type="collection"
-        />
 
         {/* Toast Notification */}
         {toast && (

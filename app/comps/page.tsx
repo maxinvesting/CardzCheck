@@ -2,17 +2,13 @@
 
 import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import CardUploader from "@/components/CardUploader";
 import CardPicker, { type CardPickerSelection } from "@/components/CardPicker";
 import CompsStats from "@/components/CompsStats";
 import CompsTable from "@/components/CompsTable";
 import FeaturedSearchCard from "@/components/FeaturedSearchCard";
 import ValuationCautions from "@/components/ValuationCautions";
-import PaywallModal from "@/components/PaywallModal";
-import PlanSelectionModal from "@/components/PlanSelectionModal";
 import WelcomeToast from "@/components/WelcomeToast";
 import ConfirmAddCardModal from "@/components/ConfirmAddCardModal";
-import GradeProbabilityPanel from "@/components/grading/GradeProbabilityPanel";
 import { CardIdentitySubtitle } from "@/components/ui";
 import { gradingCopy } from "@/copy/grading";
 import { createClient } from "@/lib/supabase/client";
@@ -633,32 +629,6 @@ function CompsPageContent() {
             </svg>
           </button>
 
-          {showUploader && (
-            <div className="p-4 bg-gray-800/50 rounded-xl border border-gray-700">
-              <p className="text-sm text-gray-400 mb-4">
-                Upload a photo of your card to identify it
-              </p>
-              <CardUploader
-                onIdentified={(data: CardIdentificationResult) => {
-                  setIdentifiedCard(data);
-                  setFormData(data);
-                  // Auto-search after identification
-                  handleSearch(data);
-                }}
-                onStart={() => {
-                  setIdentifiedCard(null);
-                  setGradeEstimate(null);
-                  setEstimatingGrade(false);
-                  setFormData(undefined);
-                }}
-                onReset={() => {
-                  setIdentifiedCard(null);
-                  setFormData(undefined);
-                }}
-                disabled={loading}
-              />
-            </div>
-          )}
         </div>
 
         {/* Grade Estimate & Add to Collection (after card identification) */}
@@ -756,16 +726,6 @@ function CompsPageContent() {
               </div>
             </div>
 
-            {/* Grade Estimate */}
-            {gradeEstimate && (
-              <GradeProbabilityPanel
-                estimate={gradeEstimate}
-                primaryImageUrl={
-                  identifiedCard?.imageUrl || identifiedCard?.imageUrls?.[0] || null
-                }
-                imageUrls={identifiedCard?.imageUrls ?? null}
-              />
-            )}
           </div>
         )}
 
@@ -998,19 +958,6 @@ function CompsPageContent() {
         )}
       </main>
 
-      {/* Plan Selection Modal */}
-      <PlanSelectionModal
-        isOpen={showPlanModal}
-        onClose={() => setShowPlanModal(false)}
-        onPlanSelected={handlePlanSelected}
-      />
-
-      {/* Paywall Modal */}
-      <PaywallModal
-        isOpen={showPaywall}
-        onClose={() => setShowPaywall(false)}
-        type={paywallType}
-      />
 
       {/* Confirm Add Card Modal */}
       <ConfirmAddCardModal

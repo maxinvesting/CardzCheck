@@ -1,9 +1,8 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { createContext, useContext } from "react";
 import type { User as AuthUser, Session } from "@supabase/supabase-js";
-import { isTestMode, getTestAuthUser } from "@/lib/test-mode";
+import { getLocalAuthUser } from "@/lib/single-user";
 
 interface AuthContextType {
   session: Session | null;
@@ -11,67 +10,38 @@ interface AuthContextType {
   loading: boolean;
 }
 
+/**
+ * Personal build: there is no login. The single local user is resolved
+ * synchronously, so `loading` is never true and consumers that wait on it
+ * render immediately.
+ */
+const localUser = getLocalAuthUser() as unknown as AuthUser;
+
+const localSession = {
+  user: localUser,
+  access_token: "local",
+  refresh_token: "local",
+  expires_in: 3600,
+  expires_at: Number.MAX_SAFE_INTEGER,
+  token_type: "bearer",
+} as unknown as Session;
+
 const AuthContext = createContext<AuthContextType>({
-  session: null,
-  authUser: null,
-  loading: true,
+  session: localSession,
+  authUser: localUser,
+  loading: false,
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
-  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    // In test mode, set mock user immediately
-    if (isTestMode()) {
-      const testUser = getTestAuthUser();
-      setAuthUser(testUser as AuthUser);
-      setSession({
-        user: testUser as AuthUser,
-        access_token: "test-token",
-        refresh_token: "test-refresh",
-        expires_in: 3600,
-        expires_at: Date.now() / 1000 + 3600,
-        token_type: "bearer",
-      } as Session);
-      setLoading(false);
-      console.log("🧪 TEST MODE: Using mock auth user");
-      return;
-    }
-
-    const supabase = createClient();
-
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setAuthUser(session?.user ?? null);
-      setLoading(false);
-    });
-
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setAuthUser(session?.user ?? null);
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
   return (
-    <AuthContext.Provider value={{ session, authUser, loading }}>
+    <AuthContext.Provider
+      value={{ session: localSession, authUser: localUser, loading: false }}
+    >
       {children}
     </AuthContext.Provider>
   );
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
-  return context;
+  return useContext(AuthContext);
 }

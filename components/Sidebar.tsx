@@ -5,11 +5,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { User } from "@/types";
-import PricingModal from "@/components/PricingModal";
 import { clearCurrentUserCache, getCurrentUserCached } from "@/lib/current-user-client";
 import { createClient } from "@/lib/supabase/client";
-import AssistantIcon from "@/components/assistants/AssistantIcon";
-import { NAV_ASSISTANTS } from "@/lib/assistants/registry";
 
 type NavItem = {
   name: string;
@@ -239,8 +236,6 @@ function BUSINESS_NAV_ITEMS(): NavItem[] {
       ],
     },
     { name: "Analytics", href: "/business/financials", icon: <BadgeIcon /> },
-    { name: "Trade Center", href: "/trade", icon: <SwapIcon /> },
-    { name: "Marketplace", href: "/marketplace", icon: <ShopIcon /> },
   ];
 }
 
@@ -263,11 +258,6 @@ export default function Sidebar() {
   const isBusinessWorkspace = true;
   const hasPaidWorkspace = true;
   const navItems: NavItem[] = BUSINESS_NAV_ITEMS();
-  const assistantNavItems: NavItem[] = NAV_ASSISTANTS.map((a) => ({
-    name: a.name,
-    href: a.href,
-    icon: <AssistantIcon icon={a.icon} />,
-  }));
   const businessSurfaceClass = "bg-[var(--biz-near-black)] border-[color:var(--biz-border)]";
 
   useEffect(() => {
@@ -496,58 +486,7 @@ export default function Sidebar() {
         <nav className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
           {navItems.map((item) => renderNavLink(item))}
 
-          {assistantNavItems.length > 0 && (
-            <>
-              <div className={`mt-3 pb-1 px-3 text-[9px] font-semibold uppercase tracking-[0.16em] font-mono-num ${
-                isBusinessWorkspace ? "text-[var(--biz-muted)]" : "text-[color:var(--biz-faint)]"
-              }`}>
-                Assistants
-              </div>
-              {assistantNavItems.map((item) => renderNavLink(item))}
-            </>
-          )}
 
-          {user && (user.app_role === "admin" || user.app_role === "owner") && (
-            <>
-              <div className={`mt-3 pb-1 px-3 text-[9px] font-semibold uppercase tracking-[0.16em] font-mono-num ${
-                isBusinessWorkspace ? "text-[var(--biz-muted)]" : "text-[color:var(--biz-faint)]"
-              }`}>
-                Admin
-              </div>
-              {[
-                { name: "Overview", href: "/admin", icon: <AdminIcon />, exact: true },
-                { name: "Marketplace", href: "/admin/marketplace", icon: <ShopIcon /> },
-                { name: "News", href: "/admin/news", icon: <NewsIcon /> },
-              ].map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setIsOpen(false)}
-                  className={`flex items-center gap-3 px-3 py-2 rounded transition-colors ${
-                    item.exact
-                      ? pathname === item.href
-                      : pathname === item.href || pathname.startsWith(`${item.href}/`)
-                      ? isBusinessWorkspace
-                        ? "border-l-2 border-l-orange-500 bg-orange-500/10 text-orange-300"
-                        : "bg-orange-600 text-white"
-                      : isBusinessWorkspace
-                        ? "text-[var(--biz-muted-strong)] hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]"
-                        : "text-[color:var(--biz-muted)] hover:text-[color:var(--biz-text)] hover:bg-[color:var(--biz-hover)]"
-                  }`}
-                >
-                  <span className="shrink-0 opacity-90">{item.icon}</span>
-                  <span className="truncate text-[13px] font-medium tracking-tight">{item.name}</span>
-                  <span className={`ml-auto px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] rounded-sm ${
-                    isBusinessWorkspace
-                      ? "bg-orange-500/15 border border-orange-500/30 text-orange-300"
-                      : "bg-orange-500/20 text-orange-400"
-                  }`}>
-                    Admin
-                  </span>
-                </Link>
-              ))}
-            </>
-          )}
         </nav>
 
         {user && (
@@ -668,7 +607,6 @@ export default function Sidebar() {
         )}
       </div>
 
-      <PricingModal isOpen={pricingOpen} onClose={() => setPricingOpen(false)} />
     </>
   );
 }

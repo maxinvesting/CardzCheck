@@ -2,7 +2,6 @@
 
 import { Suspense, useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import BusinessPaywall from "@/components/business/BusinessPaywall";
 import BusinessDashboardView, {
   type DashboardSnapshot,
 } from "@/components/business/BusinessDashboardView";
@@ -306,7 +305,6 @@ function BusinessDashboardContent() {
     return (
       <>
         <main className="mx-auto max-w-7xl px-4 py-2">
-          <BusinessPaywall />
         </main>
       </>
     );

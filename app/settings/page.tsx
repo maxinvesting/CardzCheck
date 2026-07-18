@@ -3,7 +3,6 @@
 import { Suspense } from "react";
 import { useState, useEffect } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import PricingModal from "@/components/PricingModal";
 import AppearanceSettingsCard from "@/components/business/settings/AppearanceSettingsCard";
 import EbayConnectSection from "@/components/business/settings/EbayConnectSection";
 import StorefrontsSection from "@/components/business/settings/StorefrontsSection";
@@ -988,7 +987,6 @@ function SettingsContent() {
         )}
         </main>
       </div>
-      <PricingModal isOpen={pricingOpen} onClose={() => setPricingOpen(false)} />
     </>
   );
 }

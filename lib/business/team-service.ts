@@ -6,7 +6,6 @@ import {
   type BusinessContext,
   type BusinessRole,
 } from "@/lib/business/context";
-import { createCustomerPortalSession, stripe } from "@/lib/stripe";
 
 type MemberRow = {
   id: string;
@@ -607,64 +606,14 @@ export async function updateBusinessSeats(args: {
     400
   );
 
-  const { data: accountBilling } = await service
-    .from("business_accounts")
-    .select(
-      "id, stripe_subscription_id, stripe_subscription_item_id, stripe_customer_id"
-    )
-    .eq("id", context.businessAccountId)
-    .single();
-
-  let warning: string | null = null;
-  let nextSubscriptionItemId =
-    (accountBilling as { stripe_subscription_item_id?: string | null } | null)
-      ?.stripe_subscription_item_id ?? null;
-
-  const subscriptionId =
-    (accountBilling as { stripe_subscription_id?: string | null } | null)
-      ?.stripe_subscription_id ?? null;
-
-  if (subscriptionId) {
-    try {
-      const stripeClient = stripe();
-      let itemId = nextSubscriptionItemId;
-
-      if (!itemId) {
-        const subscription = await stripeClient.subscriptions.retrieve(
-          subscriptionId
-        );
-        const configuredBusinessPriceId =
-          process.env.STRIPE_BUSINESS_MONTHLY_PRICE_ID || "";
-        const matched =
-          subscription.items.data.find((item) =>
-            configuredBusinessPriceId
-              ? item.price.id === configuredBusinessPriceId
-              : true
-          ) ?? subscription.items.data[0];
-        itemId = matched?.id ?? null;
-      }
-
-      if (itemId) {
-        await stripeClient.subscriptionItems.update(itemId, {
-          quantity: nextSeatQuantity,
-          proration_behavior: "create_prorations",
-        });
-        nextSubscriptionItemId = itemId;
-      } else {
-        warning = "Stripe subscription item was not found; seat change saved in app only.";
-      }
-    } catch {
-      warning = "Seat change saved in app, but Stripe sync failed. Review billing.";
-    }
-  } else {
-    warning = "Billing subscription not linked yet; seat change saved in app only.";
-  }
+  // Personal build: billing was removed, so seat counts are app-only state
+  // with no Stripe subscription to keep in sync.
+  const warning: string | null = null;
 
   const { error: updateError } = await service
     .from("business_accounts")
     .update({
       seat_quantity: nextSeatQuantity,
-      stripe_subscription_item_id: nextSubscriptionItemId,
     })
     .eq("id", context.businessAccountId);
   if (updateError) throw updateError;
@@ -675,17 +624,4 @@ export async function updateBusinessSeats(args: {
   };
 }
 
-export async function createBusinessBillingPortal(args: { actorUserId: string }) {
-  const context = await requireBusinessOwnerContext(args.actorUserId);
-  requirePermission(Boolean(context.stripeCustomerId), "No Stripe customer found", 400);
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-  const session = await createCustomerPortalSession(
-    context.stripeCustomerId as string,
-    `${appUrl}/business/settings?billing=updated`
-  );
-
-  return {
-    url: session.url,
-  };
-}

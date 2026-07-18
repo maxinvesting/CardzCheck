@@ -29,7 +29,6 @@ const AgingPieChart = dynamic(
   () => import("./FinancialsCharts").then((m) => m.AgingPieChart),
   { ssr: false }
 );
-import BusinessPaywall from "@/components/business/BusinessPaywall";
 import { createClient } from "@/lib/supabase/client";
 import type {
   CardPerformance,
@@ -1074,7 +1073,6 @@ export default function FinancialsPage() {
     return (
       <>
         <main className="min-h-screen bg-[#090B0D] px-4 py-4">
-          <BusinessPaywall />
         </main>
       </>
     );

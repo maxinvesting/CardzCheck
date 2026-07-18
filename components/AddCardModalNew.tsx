@@ -58,7 +58,7 @@ type ModalMode =
 type GradingCompany = "PSA" | "BGS" | "SGC" | "CGC";
 
 const GRADING_COMPANIES: { value: GradingCompany; label: string; description: string }[] = [
-  { value: "PSA", label: "PSA", description: "Auto-lookup by certification number" },
+  { value: "PSA", label: "PSA", description: "Manual entry — optional cert lookup" },
   { value: "BGS", label: "BGS", description: "Beckett — manual entry" },
   { value: "SGC", label: "SGC", description: "Sportscard Guaranty — manual entry" },
   { value: "CGC", label: "CGC", description: "Certified Guaranty Company — manual entry" },
@@ -836,7 +836,6 @@ export default function AddCardModalNew({
       Boolean(identifiedCard.imageUrl) &&
       !isDataUrl(identifiedCard.imageUrl || "")
     : false;
-  const currentGradedCertDigits = gradedCertInput.replace(/\D/g, "");
 
   // Shared dark-theme classes
   const inputCls = "w-full border border-[#343941] bg-[#090B0D] px-3 py-2.5 text-sm text-[#E6E8EB] placeholder:text-[#4F5863] outline-none focus:border-[#20B26B]";
@@ -952,19 +951,15 @@ export default function AddCardModalNew({
                     setGradedCompany(company.value);
                     setGradedCertInput("");
                     clearPsa();
-                    if (company.value === "PSA") {
-                      setMode("graded_cert");
-                    } else {
-                      setGradedManualForm({
-                        player_name: "",
-                        year: "",
-                        set_name: "",
-                        card_number: "",
-                        parallel_type: "",
-                        grade: "",
-                      });
-                      setMode("graded_manual");
-                    }
+                    setGradedManualForm({
+                      player_name: "",
+                      year: "",
+                      set_name: "",
+                      card_number: "",
+                      parallel_type: "",
+                      grade: "",
+                    });
+                    setMode("graded_manual");
                   }}
                   className={optionCardCls}
                 >
@@ -973,11 +968,6 @@ export default function AddCardModalNew({
                       <p className="text-sm font-medium text-[#E6E8EB]">{company.label}</p>
                       <p className="text-xs text-[#77808C] mt-0.5">{company.description}</p>
                     </div>
-                    {company.value === "PSA" && (
-                      <span className="text-[10px] font-semibold uppercase tracking-wide px-2 py-1 border border-[#1F5F45] bg-[#0E251B] text-[#20B26B]">
-                        Auto
-                      </span>
-                    )}
                   </div>
                 </button>
               ))}
@@ -1038,7 +1028,7 @@ export default function AddCardModalNew({
           {/* Graded: PSA cert entry */}
           {mode === "graded_cert" && (
             <div className="space-y-4">
-              <button type="button" onClick={() => { setError(null); setMode("graded_company"); }} className={btnBack}>← Back</button>
+              <button type="button" onClick={() => { setError(null); setMode("graded_manual"); }} className={btnBack}>← Back</button>
               <div>
                 <label className={labelCls}>PSA certification number</label>
                 <input
@@ -1068,44 +1058,50 @@ export default function AddCardModalNew({
               >
                 Continue to confirm
               </button>
-              {currentGradedCertDigits.length >= 5 && !psaLoading && (
-                <button type="button" onClick={openGradedManualEntry} className={`w-full ${btnSecondary}`}>
-                  Enter details manually
-                </button>
-              )}
+              <button type="button" onClick={openGradedManualEntry} className={`w-full ${btnSecondary}`}>
+                Back to manual entry
+              </button>
+              <p className="text-xs text-[#77808C]">
+                If the lookup succeeds, its details carry over to the manual form. PSA&apos;s service is
+                rate-limited, so it may fail — manual entry always works.
+              </p>
             </div>
           )}
 
-          {/* Graded: manual entry (BGS/SGC/CGC always; PSA fallback when lookup unavailable) */}
+          {/* Graded: manual entry — the default path for every grading company */}
           {mode === "graded_manual" && (
             <div className="space-y-4">
               <button
                 type="button"
-                onClick={() => { setError(null); setMode(gradedCompany === "PSA" ? "graded_cert" : "graded_company"); }}
+                onClick={() => { setError(null); setMode("graded_company"); }}
                 className={btnBack}
               >
                 ← Back
               </button>
               <div className="border border-[#5A4A1F] bg-[#251E0E] px-3 py-2 text-xs text-[#F0B429]">
                 {gradedCompany === "PSA"
-                  ? "PSA lookup can enrich the card, but it is not required. Enter the slab details here and continue."
+                  ? "Enter the slab details from the label below. Cert lookup is optional — PSA's service is rate-limited and often unavailable."
                   : `${gradedCompany} cert lookup isn't supported yet — enter the slab details from the label below.`}
               </div>
+              {gradedCompany === "PSA" && (
+                <button
+                  type="button"
+                  onClick={() => { setError(null); setMode("graded_cert"); }}
+                  className={`w-full ${btnSecondary}`}
+                >
+                  Try PSA cert lookup instead
+                </button>
+              )}
               <div>
                 <label className={labelCls}>
-                  {gradedCompany} certification number {gradedCompany === "PSA" ? "" : "(optional)"}
+                  {gradedCompany} certification number (optional)
                 </label>
                 <input
                   type="text"
-                  value={gradedCompany === "PSA" ? currentGradedCertDigits : gradedCertInput}
-                  readOnly={gradedCompany === "PSA"}
-                  onChange={
-                    gradedCompany === "PSA"
-                      ? undefined
-                      : (e) => setGradedCertInput(e.target.value)
-                  }
-                  placeholder={gradedCompany === "PSA" ? undefined : "e.g., 1234567890"}
-                  className={gradedCompany === "PSA" ? `${inputCls} opacity-50` : inputCls}
+                  value={gradedCertInput}
+                  onChange={(e) => setGradedCertInput(e.target.value)}
+                  placeholder="e.g., 1234567890"
+                  className={inputCls}
                 />
               </div>
               <div>

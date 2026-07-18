@@ -1,20 +1,5 @@
-import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { isTestMode } from "@/lib/test-mode";
-import {
-  getMissingSupabasePublicEnvMessage,
-  getSupabasePublicEnv,
-} from "@/lib/supabase/env";
-
-const PROTECTED_PATHS = [
-  "/dashboard",
-  "/collection",
-  "/watchlist",
-  "/business",
-  "/account",
-  "/settings",
-  "/analyst",
-];
+import { LOCAL_USER_ID } from "@/lib/single-user";
 
 type RedirectRule = {
   from: string;
@@ -27,9 +12,6 @@ type RedirectRule = {
 const LEGACY_TO_BUSINESS_REDIRECTS: RedirectRule[] = [
   { from: "/comps", to: "/business/comps" },
   { from: "/grade-hub", to: "/business/grade-hub" },
-  { from: "/grade-probability", to: "/business/grade-hub" },
-  { from: "/grade-estimator", to: "/business/grade-hub" },
-  { from: "/analyst", to: "/assistants/advisor" },
   { from: "/dashboard", to: "/business" },
   { from: "/collection", to: "/business/ledger" },
   { from: "/watchlist", to: "/business/ledger" },
@@ -52,69 +34,13 @@ function findRedirect(pathname: string, rules: RedirectRule[]): string | null {
 }
 
 export async function updateSession(request: NextRequest) {
-  if (isTestMode()) {
-    return { response: NextResponse.next({ request }), userId: null };
-  }
-
   const pathname = request.nextUrl.pathname;
-  let supabaseResponse = NextResponse.next({ request });
+  const supabaseResponse = NextResponse.next({ request });
 
-  const supabasePublicEnv = getSupabasePublicEnv();
-  if (!supabasePublicEnv) {
-    if (process.env.NODE_ENV === "development") {
-      console.warn(`[middleware] ${getMissingSupabasePublicEnvMessage()}`);
-    }
-    return { response: supabaseResponse, userId: null };
-  }
-
-  const supabase = createServerClient(
-    supabasePublicEnv.url,
-    supabasePublicEnv.anonKey,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-          supabaseResponse = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          );
-        },
-      },
-    }
-  );
-
-  // Use getClaims() instead of getUser() for auth in middleware.
-  //
-  // getUser() makes a network round-trip to the Supabase Auth server on EVERY
-  // request to validate the token — adding latency to every navigation.
-  //
-  // getClaims() verifies the JWT *locally* (signature + expiry) when the project
-  // uses asymmetric JWT signing keys, eliminating that round-trip. If the token
-  // is symmetric (legacy HS256) or WebCrypto is unavailable, it transparently
-  // falls back to getUser(), so this is never less safe. It also still calls
-  // getSession() internally, preserving auth-cookie refresh (token rotation).
-  const {
-    data: claimsData,
-  } = await supabase.auth.getClaims();
-
-  // `sub` is the authenticated user id. Absent claims == unauthenticated.
-  const userId = claimsData?.claims?.sub ?? null;
-
-  const isProtected = PROTECTED_PATHS.some((path) => matchesPrefix(pathname, path));
-
-  if (isProtected && !userId) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    url.searchParams.set("redirect", pathname);
-    return { response: NextResponse.redirect(url), userId: null };
-  }
-
-  if (!userId) {
-    return { response: supabaseResponse, userId: null };
-  }
+  // Personal build: no login, no session cookie, no auth enforcement. Every
+  // request is the single local user, so there is nothing to verify or refresh
+  // and no unauthenticated case to redirect.
+  const userId = LOCAL_USER_ID;
 
   // Allow invite acceptance flow before the user is a business member.
   if (matchesPrefix(pathname, "/business/invite")) {

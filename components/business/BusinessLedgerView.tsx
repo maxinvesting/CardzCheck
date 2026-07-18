@@ -3,7 +3,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import BusinessMetrics from "@/components/business/BusinessMetrics";
-import BusinessAnalystPreviewCard from "@/components/business/BusinessAnalystPreviewCard";
 import type { BusinessMetrics as MetricsType, BusinessInventoryItem } from "@/types";
 import type { InventoryValueSummary } from "@/lib/business/inventory-value";
 import { Surface } from "@/components/ui/Surface";
@@ -269,11 +268,6 @@ export default function BusinessLedgerView({
           />
         </div>
       </Surface>
-
-      {/* AI insights preview — only on inventory tab */}
-      {!needsMigration && activeTab === "inventory" && (
-        <BusinessAnalystPreviewCard items={items} metrics={metrics} />
-      )}
 
       {/* Tab switcher */}
       {!needsMigration && (

@@ -15,65 +15,40 @@
  *                         Do NOT expose service client results directly to user input.
  */
 
-import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
-import { cookies } from "next/headers";
-import { isTestMode } from "@/lib/test-mode";
+import { getLocalAuthUser } from "@/lib/single-user";
 import {
   getSupabaseServiceRoleKey,
   requireSupabasePublicEnv,
 } from "@/lib/supabase/env";
 
-type CookieToSet = { name: string; value: string; options: CookieOptions };
-
+/**
+ * Personal build: there is no login, so there is no session cookie and no user
+ * JWT for RLS to key off. `createClient()` therefore returns a service-role
+ * client (RLS bypassed) whose `auth` reports the fixed local user.
+ *
+ * This is what lets all ~140 API routes keep their existing
+ * `const { data: { user } } = await supabase.auth.getUser()` preamble without
+ * being rewritten one by one.
+ *
+ * This is only safe because the app is single-user and local. Do not host this
+ * build publicly — every request would be treated as the owner.
+ */
 export async function createClient() {
-  // In test mode, return a mock client that always returns test user
-  if (isTestMode()) {
-    return {
-      auth: {
-        getUser: async () => ({
-          data: { user: null },
-          error: null,
-        }),
-        getSession: async () => ({
-          data: { session: null },
-          error: null,
-        }),
-      },
-      from: () => ({
-        select: () => ({
-          eq: () => ({
-            single: async () => ({ data: null, error: null }),
-          }),
-        }),
-      }),
-    } as any;
-  }
+  const client = await createServiceClient();
+  const localUser = getLocalAuthUser();
 
-  const cookieStore = await cookies();
-  const { url, anonKey } = requireSupabasePublicEnv();
+  client.auth.getUser = (async () => ({
+    data: { user: localUser },
+    error: null,
+  })) as unknown as typeof client.auth.getUser;
 
-  return createServerClient(
-    url,
-    anonKey,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        setAll(cookiesToSet: CookieToSet[]) {
-          try {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            );
-          } catch {
-            // The `setAll` method was called from a Server Component.
-            // This can be ignored if you have middleware refreshing user sessions.
-          }
-        },
-      },
-    }
-  );
+  client.auth.getSession = (async () => ({
+    data: { session: { user: localUser } },
+    error: null,
+  })) as unknown as typeof client.auth.getSession;
+
+  return client;
 }
 
 export async function createServiceClient() {

@@ -6,11 +6,8 @@ import Link from "next/link";
 import { CollectionItem, CardImage } from "@/types";
 import CardImageGallery from "@/components/CardImageGallery";
 import CardDetailsForm from "@/components/CardDetailsForm";
-import GradeProbabilityPanel from "@/components/grading/GradeProbabilityPanel";
-import GradeEstimateProgressPanel from "@/components/grading/GradeEstimateProgressPanel";
 import { createClient } from "@/lib/supabase/client";
 import { hasBusinessWorkspaceAccess } from "@/lib/business/workspace-access";
-import { useGradeEstimateFromImages } from "@/lib/grading/useGradeEstimateFromImages";
 import { gradingCopy } from "@/copy/grading";
 import CompsAndCmvSection from "@/components/comps/CompsAndCmvSection";
 import CompsMarketplaces from "@/components/comps/CompsMarketplaces";
@@ -225,7 +222,6 @@ export default function CardProfilePage() {
     };
   }, [card]);
 
-  const gradeEstimate = useGradeEstimateFromImages({ imageUrls, card: cardIdentity });
 
   // ── Loading ────────────────────────────────────────────────────────────────
   if (loading) {
@@ -769,63 +765,6 @@ export default function CardProfilePage() {
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "0 24px 48px" }}>
         <CompsAndCmvSection card={card} />
 
-        <section className="mt-10 pt-8 border-t border-gray-200 dark:border-gray-800">
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-              {gradingCopy.panel.title}
-            </h2>
-            <Link href="/grade-estimator" className="text-sm text-blue-600 dark:text-blue-400 hover:underline">
-              Full grade estimator
-            </Link>
-          </div>
-          {imageUrls.length === 0 ? (
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              Add at least one photo to run a grade probability analysis.
-            </p>
-          ) : (
-            <>
-              {!gradeEstimate.estimate && !gradeEstimate.isRunning && !gradeEstimate.error && (
-                <button
-                  type="button"
-                  onClick={() => void gradeEstimate.run()}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
-                >
-                  Run grade estimate
-                </button>
-              )}
-              {gradeEstimate.isRunning && gradeEstimate.job && (
-                <GradeEstimateProgressPanel
-                  status={gradeEstimate.job.status}
-                  steps={gradeEstimate.job.steps}
-                  identityLabel={gradeEstimate.job.partial?.identity ? undefined : null}
-                  errorMessage={gradeEstimate.job.error ?? null}
-                />
-              )}
-              {gradeEstimate.error && (
-                <div className="flex flex-wrap items-center gap-3">
-                  <p className="text-sm text-amber-600 dark:text-amber-400">{gradeEstimate.error}</p>
-                  <button
-                    type="button"
-                    onClick={() => { gradeEstimate.reset(); void gradeEstimate.run(); }}
-                    className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
-                  >
-                    Retry
-                  </button>
-                </div>
-              )}
-              {gradeEstimate.estimate && (
-                <div className="mt-4">
-                  <GradeProbabilityPanel
-                    estimate={gradeEstimate.estimate}
-                    cardIdentity={cardIdentity}
-                    primaryImageUrl={imageUrls[0] ?? null}
-                    imageUrls={imageUrls}
-                  />
-                </div>
-              )}
-            </>
-          )}
-        </section>
       </div>
     </div>
   );

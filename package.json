@@ -19,7 +19,6 @@
     "test:smart-search": "SMART_SEARCH_HARNESS=1 vitest run lib/smartSearch/__tests__/smart-search-harness.test.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.32.1",
     "@sentry/nextjs": "^10.38.0",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.47.10",
@@ -36,7 +35,6 @@
     "react-virtuoso": "^4.18.1",
     "recharts": "^3.7.0",
     "sharp": "^0.33.3",
-    "stripe": "^17.5.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {
