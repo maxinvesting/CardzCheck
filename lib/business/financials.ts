@@ -70,6 +70,7 @@ export type MonthBucket = {
   revenue_cents: number;
   cogs_cents: number;
   fees_cents: number;
+  shipping_cost_cents: number;
   profit_cents: number;
   sales_count: number;
 };
@@ -265,6 +266,7 @@ function buildMonthBuckets(
       revenue_cents: 0,
       cogs_cents: 0,
       fees_cents: 0,
+      shipping_cost_cents: 0,
       profit_cents: 0,
       sales_count: 0,
     });
@@ -278,6 +280,7 @@ function buildMonthBuckets(
       toInt(row.sold_price_cents) + toInt(row.shipping_charged_cents);
     bucket.cogs_cents += toInt(row.cogs_cents);
     bucket.fees_cents += toInt(row.platform_fees_cents);
+    bucket.shipping_cost_cents += toInt(row.shipping_cost_cents);
     bucket.profit_cents += toInt(row.profit_cents);
     bucket.sales_count += 1;
   }

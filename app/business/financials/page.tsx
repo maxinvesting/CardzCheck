@@ -6,6 +6,7 @@ import Link from "next/link";
 import {
   fmtMoney,
   fmtPct,
+  formatMonth,
   fmtSigned,
   pnlClass,
   type PeriodKey,
@@ -13,10 +14,13 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import type {
   CardPerformance,
+  CashFlow,
   ChannelBreakdown,
+  MonthBucket,
   FinancialsSummary,
   Snapshot,
   StaleAlert,
+  Velocity,
 } from "@/lib/business/financials";
 
 function SectionHeading({
@@ -97,12 +101,6 @@ function StaleAlertBlock({ stale }: { stale: StaleAlert }) {
           className="border border-[#E05C5C] bg-[#E05C5C] px-3 py-1.5 text-[11px] font-semibold text-[#1A0E0E] hover:bg-[#F26D6D]"
         >
           View inventory →
-        </Link>
-        <Link
-          href="/marketplace/sell/messages?intent=reprice_stale"
-          className="border border-[#343941] bg-[#0B0D0F] px-3 py-1.5 text-[11px] font-semibold text-[#B8C0CC] hover:border-[#5A626E] hover:text-[#E6E8EB]"
-        >
-          Bulk reprice →
         </Link>
       </div>
     </div>
@@ -592,6 +590,270 @@ function PnlStatement({
   );
 }
 
+/* ── Monthly P&L history ──────────────────────────────────────────────────── */
+
+function MonthlyPnlTable({ monthly }: { monthly: MonthBucket[] }) {
+  const rows = [...monthly].reverse().filter((m) => m.sales_count > 0);
+  if (rows.length === 0) return null;
+
+  const totals = rows.reduce(
+    (acc, m) => ({
+      sales: acc.sales + m.sales_count,
+      revenue: acc.revenue + m.revenue_cents,
+      cogs: acc.cogs + m.cogs_cents,
+      fees: acc.fees + m.fees_cents,
+      shipping: acc.shipping + m.shipping_cost_cents,
+      profit: acc.profit + m.profit_cents,
+    }),
+    { sales: 0, revenue: 0, cogs: 0, fees: 0, shipping: 0, profit: 0 }
+  );
+
+  const cell = "px-3 py-[6px] text-right font-mono-num tabular-nums text-[12px]";
+  const head =
+    "px-3 py-[6px] text-right text-[9px] font-semibold uppercase tracking-[0.1em] text-[#5A626D]";
+
+  return (
+    <StatementCard title="Monthly P&L" subtitle="trailing 12 months">
+      <div className="-mx-4 overflow-x-auto">
+        <table className="w-full min-w-[680px] border-collapse">
+          <thead>
+            <tr className="border-b border-[#24282D]">
+              <th className={`${head} text-left`}>Month</th>
+              <th className={head}>Sales</th>
+              <th className={head}>Revenue</th>
+              <th className={head}>COGS</th>
+              <th className={head}>Gross</th>
+              <th className={head}>Fees</th>
+              <th className={head}>Ship</th>
+              <th className={head}>Adj</th>
+              <th className={head}>Net</th>
+              <th className={head}>Margin</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((m) => {
+              const gross = m.revenue_cents - m.cogs_cents;
+              const adj =
+                m.profit_cents -
+                (gross - m.fees_cents - m.shipping_cost_cents);
+              const margin =
+                m.revenue_cents > 0
+                  ? (m.profit_cents / m.revenue_cents) * 100
+                  : null;
+              return (
+                <tr
+                  key={m.month}
+                  className="border-b border-[#191D21] last:border-0"
+                >
+                  <td className="px-3 py-[6px] text-left text-[12px] text-[#B8C0CC]">
+                    {formatMonth(m.month)}
+                  </td>
+                  <td className={`${cell} text-[#77808C]`}>{m.sales_count}</td>
+                  <td className={`${cell} text-[#E6E8EB]`}>
+                    {fmtMoney(m.revenue_cents)}
+                  </td>
+                  <td className={`${cell} text-[#77808C]`}>
+                    {fmtMoney(m.cogs_cents)}
+                  </td>
+                  <td className={`${cell} text-[#B8C0CC]`}>
+                    {fmtMoney(gross)}
+                  </td>
+                  <td className={`${cell} text-[#77808C]`}>
+                    {fmtMoney(m.fees_cents)}
+                  </td>
+                  <td className={`${cell} text-[#77808C]`}>
+                    {fmtMoney(m.shipping_cost_cents)}
+                  </td>
+                  <td className={`${cell} text-[#77808C]`}>
+                    {adj === 0 ? "—" : fmtMoney(adj)}
+                  </td>
+                  <td className={`${cell} ${pnlClass(m.profit_cents)}`}>
+                    {fmtMoney(m.profit_cents)}
+                  </td>
+                  <td className={`${cell} text-[#77808C]`}>{fmtPct(margin, 0)}</td>
+                </tr>
+              );
+            })}
+            <tr className="border-t border-[#343941]">
+              <td className="px-3 py-[6px] text-left text-[12px] font-semibold text-[#E6E8EB]">
+                Total
+              </td>
+              <td className={`${cell} font-semibold text-[#B8C0CC]`}>
+                {totals.sales}
+              </td>
+              <td className={`${cell} font-semibold text-[#E6E8EB]`}>
+                {fmtMoney(totals.revenue)}
+              </td>
+              <td className={`${cell} text-[#77808C]`}>
+                {fmtMoney(totals.cogs)}
+              </td>
+              <td className={`${cell} font-semibold text-[#B8C0CC]`}>
+                {fmtMoney(totals.revenue - totals.cogs)}
+              </td>
+              <td className={`${cell} text-[#77808C]`}>
+                {fmtMoney(totals.fees)}
+              </td>
+              <td className={`${cell} text-[#77808C]`}>
+                {fmtMoney(totals.shipping)}
+              </td>
+              <td className={`${cell} text-[#77808C]`}>
+                {fmtMoney(
+                  totals.profit -
+                    (totals.revenue - totals.cogs - totals.fees - totals.shipping)
+                )}
+              </td>
+              <td className={`${cell} font-semibold ${pnlClass(totals.profit)}`}>
+                {fmtMoney(totals.profit)}
+              </td>
+              <td className={`${cell} text-[#77808C]`}>
+                {fmtPct(
+                  totals.revenue > 0
+                    ? (totals.profit / totals.revenue) * 100
+                    : null,
+                  0
+                )}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </StatementCard>
+  );
+}
+
+/* ── Inventory detail: aging + velocity ───────────────────────────────────── */
+
+function InventoryDetail({
+  inventory,
+  velocity,
+}: {
+  inventory: FinancialsSummary["inventory"];
+  velocity: Velocity;
+}) {
+  return (
+    <StatementCard title="Inventory" subtitle="aging & velocity">
+      {inventory.aging.map((b) => {
+        const unrealized = b.estimated_value_cents - b.cost_basis_cents;
+        return (
+          <StatementRow
+            key={b.label}
+            label={`${b.label} days`}
+            value={fmtMoney(b.cost_basis_cents)}
+            note={
+              b.count > 0
+                ? `${b.count} ${b.count === 1 ? "card" : "cards"} · ${fmtMoney(
+                    unrealized
+                  )} unrlzd`
+                : "—"
+            }
+            tone={b.count === 0 ? "muted" : "normal"}
+          />
+        );
+      })}
+      <StatementRow
+        label="Total at cost"
+        value={fmtMoney(inventory.total_cost_basis_cents)}
+        tone="total"
+      />
+      <StatementRow
+        label="Avg hold"
+        value={
+          velocity.avg_hold_days != null
+            ? `${Math.round(velocity.avg_hold_days)}d`
+            : "—"
+        }
+        tone="muted"
+      />
+      <StatementRow
+        label="Avg days to sell"
+        value={
+          velocity.avg_days_to_sell != null
+            ? `${Math.round(velocity.avg_days_to_sell)}d`
+            : "—"
+        }
+        note="last 180d"
+        tone="muted"
+      />
+      <StatementRow
+        label="Sell-through"
+        value={fmtPct(velocity.sell_through_pct, 0)}
+        note={`${velocity.sold_last_90d} sold · 90d`}
+        tone="muted"
+      />
+      <StatementRow
+        label="Turn rate"
+        value={
+          velocity.turn_rate_annualized != null
+            ? `${velocity.turn_rate_annualized.toFixed(1)}×`
+            : "—"
+        }
+        note="annualized"
+        tone="muted"
+      />
+    </StatementCard>
+  );
+}
+
+/* ── Cash flow ────────────────────────────────────────────────────────────── */
+
+function CashFlowStatement({ cashflow }: { cashflow: CashFlow }) {
+  const recent = [...cashflow.monthly]
+    .reverse()
+    .filter((m) => m.cash_in_cents !== 0 || m.cash_out_cents !== 0)
+    .slice(0, 6);
+
+  return (
+    <StatementCard title="Cash flow" subtitle="this month">
+      <StatementRow
+        label="Cash in"
+        value={fmtMoney(cashflow.current_month_in_cents)}
+        note="sale payouts"
+      />
+      <StatementRow
+        label="Cash out"
+        value={`(${fmtMoney(cashflow.current_month_out_cents)})`}
+        note="inventory bought"
+        tone="muted"
+      />
+      <StatementRow
+        label="Net this month"
+        value={fmtMoney(cashflow.current_month_net_cents)}
+        tone="total"
+      />
+      <StatementRow
+        label="Prior month"
+        value={fmtMoney(cashflow.prev_month_net_cents)}
+        tone="muted"
+      />
+      {recent.length > 0 ? (
+        <div className="mt-1 border-t border-[#24282D] pt-1">
+          {recent.map((m) => (
+            <div
+              key={m.month}
+              className="flex items-baseline justify-between gap-4 py-[5px]"
+            >
+              <span className="text-[11px] text-[#77808C]">
+                {formatMonth(m.month)}
+              </span>
+              <span className="flex items-baseline gap-3 font-mono-num tabular-nums text-[11px]">
+                <span className="text-[#5A626D]">
+                  +{fmtMoney(m.cash_in_cents)}
+                </span>
+                <span className="text-[#5A626D]">
+                  -{fmtMoney(m.cash_out_cents)}
+                </span>
+                <span className={`w-16 text-right ${pnlClass(m.net_cents)}`}>
+                  {fmtMoney(m.net_cents)}
+                </span>
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </StatementCard>
+  );
+}
+
 export default function FinancialsPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -678,6 +940,14 @@ export default function FinancialsPage() {
             {summary.inventory.stale.count > 0 ? (
               <StaleAlertBlock stale={summary.inventory.stale} />
             ) : null}
+            <MonthlyPnlTable monthly={summary.monthly} />
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+              <InventoryDetail
+                inventory={summary.inventory}
+                velocity={summary.velocity}
+              />
+              <CashFlowStatement cashflow={summary.cashflow} />
+            </div>
             <ChannelPerformancePanel rows={summary.channels_90d} />
             <PerformersAccordion
               winners={summary.winners}

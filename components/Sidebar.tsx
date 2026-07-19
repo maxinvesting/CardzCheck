@@ -235,7 +235,7 @@ function BUSINESS_NAV_ITEMS(): NavItem[] {
         { name: "Sales & Trades", href: "/business/sales", icon: <SalesIcon /> },
       ],
     },
-    { name: "Analytics", href: "/business/financials", icon: <BadgeIcon /> },
+    { name: "Financials", href: "/business/financials", icon: <BadgeIcon /> },
   ];
 }
 
