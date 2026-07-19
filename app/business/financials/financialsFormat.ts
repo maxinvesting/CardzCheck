@@ -1,9 +1,6 @@
 /**
- * Pure formatting helpers and constants shared between the financials page and
- * its (lazily-loaded) chart module. Kept free of React/recharts so the page can
- * import these statically without pulling the heavy charting library into its
- * initial bundle — recharts lives only in ./FinancialsCharts.tsx, which is
- * dynamically imported.
+ * Pure formatting + color helpers for the financials page. No React, no
+ * charting deps — safe to import from anywhere.
  */
 import type { AgingBucket } from "@/lib/business/financials";
 
