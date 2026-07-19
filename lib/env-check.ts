@@ -16,13 +16,10 @@ const REQUIRED: EnvVar[] = [
   { name: "NEXT_PUBLIC_SUPABASE_URL",    description: "Supabase project URL" },
   { name: "NEXT_PUBLIC_SUPABASE_ANON_KEY", description: "Supabase anon/public key" },
   { name: "SUPABASE_SERVICE_ROLE_KEY",   description: "Supabase service role key (bypasses RLS — keep secret)" },
-  { name: "STRIPE_SECRET_KEY",           description: "Stripe secret key for checkout and billing" },
-  { name: "ANTHROPIC_API_KEY",           description: "Anthropic API key for AI grading and analyst features" },
 ];
 
 const RECOMMENDED: EnvVar[] = [
   { name: "OWNER_EMAIL",              description: "Bootstrap owner email for admin access before DB roles are set" },
-  { name: "STRIPE_WEBHOOK_SECRET",    description: "Stripe webhook signing secret (required for billing events)" },
   { name: "EBAY_CLIENT_ID",           description: "eBay OAuth app client ID (required for seller features)" },
   { name: "EBAY_CLIENT_SECRET",       description: "eBay OAuth app client secret (required for seller features)" },
   { name: "EBAY_VERIFICATION_TOKEN",  description: "eBay webhook verification token" },

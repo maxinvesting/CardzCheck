@@ -12,14 +12,13 @@
     "grading:export-training": "node scripts/export_training_data.mjs",
     "grading:train-calibrator": "python3 scripts/train_psa_calibrator.py",
     "grading:upload-model": "node scripts/upload_model_version.mjs",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint .",
     "test": "vitest",
     "test:smart-search": "SMART_SEARCH_HARNESS=1 vitest run lib/smartSearch/__tests__/smart-search-harness.test.ts"
   },
   "dependencies": {
-    "@sentry/nextjs": "^10.38.0",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.47.10",
     "@upstash/ratelimit": "^2.0.8",

@@ -6,7 +6,6 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import AppearanceSettingsCard from "@/components/business/settings/AppearanceSettingsCard";
 import EbayConnectSection from "@/components/business/settings/EbayConnectSection";
 import StorefrontsSection from "@/components/business/settings/StorefrontsSection";
-import TeamManagementSection from "@/components/business/settings/TeamManagementSection";
 import { createClient } from "@/lib/supabase/client";
 import { hasActiveBusinessTier } from "@/lib/subscription-tier";
 import type { User } from "@/types";

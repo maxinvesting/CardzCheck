@@ -42,11 +42,6 @@ export async function updateSession(request: NextRequest) {
   // and no unauthenticated case to redirect.
   const userId = LOCAL_USER_ID;
 
-  // Allow invite acceptance flow before the user is a business member.
-  if (matchesPrefix(pathname, "/business/invite")) {
-    return { response: supabaseResponse, userId };
-  }
-
   // Single nav post PR C2b: rewrite any legacy personal-mode path to its
   // business equivalent regardless of subscription tier. The receiving
   // /business/* route still gates features per tier via lib/access.ts.
