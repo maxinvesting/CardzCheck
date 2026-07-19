@@ -95,7 +95,6 @@ export default function CardPhotoUploader({
         </span>
         <span className="text-[10px] text-[#5A626E]">
           {images.length}/{max}
-          {images.length === 0 ? " · needed to list" : ""}
         </span>
       </div>
 

@@ -246,10 +246,6 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (images.length === 0) {
-      setError("Add at least one photo of the card before saving.");
-      return;
-    }
     setLoading(true);
     setError(null);
 
@@ -427,7 +423,7 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
                   {gradeFields.conditionStatus === "graded"
                     ? "Up to 3 photos for graded cards."
                     : "Up to 10 photos for raw cards."}{" "}
-                  At least one is required.
+                  Optional.
                 </p>
 
                 <div className="mt-3 border-t border-[#24282D] pt-2">
@@ -561,8 +557,7 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
             </button>
             <button
               type="submit"
-              disabled={loading || uploading || images.length === 0}
-              title={images.length === 0 ? "Add at least one photo first" : undefined}
+              disabled={loading || uploading}
               className="border border-[#20B26B] bg-[#20B26B] px-4 py-2 text-xs font-semibold text-[#07100B] transition-colors hover:bg-[#33C47C] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading ? "Adding…" : "Add to Inventory"}
