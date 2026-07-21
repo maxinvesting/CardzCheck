@@ -94,6 +94,7 @@ const createTradeSchema = z
     partner_name: z.string().trim().max(160).optional().nullable(),
     cash_paid_cents: z.number().int().min(0).optional().default(0),
     cash_received_cents: z.number().int().min(0).optional().default(0),
+    fees_cents: z.number().int().min(0).optional().default(0),
     notes: z.string().trim().max(2000).optional().nullable(),
   })
   .refine(
@@ -136,7 +137,7 @@ export async function GET(): Promise<NextResponse> {
     const { data: trades, error } = await supabase
       .from("business_trades")
       .select(
-        "id, partner_name, traded_at, cash_paid_cents, cash_received_cents, outgoing_basis_cents, incoming_basis_cents, realized_gain_cents, notes, created_at"
+        "id, partner_name, traded_at, cash_paid_cents, cash_received_cents, fees_cents, outgoing_basis_cents, incoming_basis_cents, realized_gain_cents, notes, created_at"
       )
       .eq("business_account_id", context.businessAccountId)
       .eq("is_deleted", false)
@@ -156,6 +157,7 @@ export async function GET(): Promise<NextResponse> {
       traded_at: string;
       cash_paid_cents: number;
       cash_received_cents: number;
+      fees_cents: number;
       outgoing_basis_cents: number;
       incoming_basis_cents: number;
       realized_gain_cents: number;
@@ -336,8 +338,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     const cashPaid = parsed.cash_paid_cents ?? 0;
     const cashReceived = parsed.cash_received_cents ?? 0;
+    const fees = parsed.fees_cents ?? 0;
+    // The trade fee is expensed now (netted into realized P&L), not capitalized
+    // into the received cards' basis — so it reduces the mark-to-market gain and
+    // is NOT part of incomingBasisCents (the client excludes it from the pool).
     const realizedGainCents =
-      outgoingFairCents + cashReceived - cashPaid - outgoingBasisCents;
+      outgoingFairCents + cashReceived - cashPaid - fees - outgoingBasisCents;
     const tradedAtIso = normalizeTradeDate(parsed.traded_at);
     const tradedAtDate = tradedAtIso.slice(0, 10);
 
@@ -350,6 +356,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         traded_at: tradedAtIso,
         cash_paid_cents: cashPaid,
         cash_received_cents: cashReceived,
+        fees_cents: fees,
         outgoing_basis_cents: outgoingBasisCents,
         incoming_basis_cents: incomingBasisCents,
         realized_gain_cents: realizedGainCents,

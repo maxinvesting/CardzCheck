@@ -14,13 +14,14 @@
 
 /** Columns to select from `business_trades` (with item directions) for recognition. */
 export const TRADE_RECOGNITION_SELECT =
-  "traded_at,cash_paid_cents,cash_received_cents,outgoing_basis_cents,incoming_basis_cents,realized_gain_cents,trade_items:business_trade_items(direction)" as const;
+  "traded_at,cash_paid_cents,cash_received_cents,fees_cents,outgoing_basis_cents,incoming_basis_cents,realized_gain_cents,trade_items:business_trade_items(direction)" as const;
 
 /** Raw `business_trades` row joined with its `business_trade_items` directions. */
 export type RawTradeRow = {
   traded_at: string;
   cash_paid_cents: number | null;
   cash_received_cents: number | null;
+  fees_cents?: number | null;
   outgoing_basis_cents: number | null;
   incoming_basis_cents: number | null;
   realized_gain_cents: number | null;
@@ -37,6 +38,7 @@ export type RecognizableTrade = {
   traded_at: string;
   cash_in_cents: number; // cash received in the trade
   cash_out_cents: number; // cash paid out in the trade
+  fees_cents: number; // trade fee paid — expensed into realized P&L at trade time
   outgoing_basis_cents: number; // cost basis of cards given away
   has_incoming: boolean; // true if any card came back in the trade
   /**
@@ -73,6 +75,7 @@ export function normalizeTradeRow(row: RawTradeRow): RecognizableTrade {
     traded_at: row.traded_at,
     cash_in_cents: toInt(row.cash_received_cents),
     cash_out_cents: toInt(row.cash_paid_cents),
+    fees_cents: toInt(row.fees_cents),
     outgoing_basis_cents: toInt(row.outgoing_basis_cents),
     has_incoming:
       (row.trade_items ?? []).some((it) => it.direction === "in") ||
@@ -91,6 +94,7 @@ export type BusinessTradeLike = {
   traded_at: string;
   cash_paid_cents: number | null;
   cash_received_cents: number | null;
+  fees_cents?: number | null;
   outgoing_basis_cents: number | null;
   incoming_basis_cents: number | null;
   realized_gain_cents: number | null;
@@ -104,6 +108,7 @@ export function recognizableFromBusinessTrade(
     traded_at: t.traded_at,
     cash_in_cents: toInt(t.cash_received_cents),
     cash_out_cents: toInt(t.cash_paid_cents),
+    fees_cents: toInt(t.fees_cents),
     outgoing_basis_cents: toInt(t.outgoing_basis_cents),
     has_incoming:
       (t.items ?? []).some((it) => it.direction === "in") ||
@@ -115,38 +120,41 @@ export function recognizableFromBusinessTrade(
 /**
  * How much of a trade should be recognized in P&L *now*.
  *
- * Card-for-card swap: the net cash that changed hands (cash received − cash
- * paid) is realized immediately — it is real money in or out of the business.
- * The appreciation on the cards given up (outgoing fair value − outgoing basis)
- * is what defers into the received cards' basis and realizes when they sell. A
- * swap with no cash on either side recognizes nothing now (fully deferred).
+ * Card-for-card swap: the net cash that changed hands minus any trade fee
+ * (cash received − cash paid − fees) is realized immediately — it is real money
+ * in or out of the business. The appreciation on the cards given up (outgoing
+ * fair value − outgoing basis) is what defers into the received cards' basis
+ * and realizes when they sell. A pure card swap with no cash and no fee
+ * recognizes nothing now (fully deferred).
  *
  * Pure cards-for-cash disposal (no card received): there's nothing to defer the
- * basis into, so the full gain or loss (cash received − cash paid − basis given
- * up) realizes immediately.
+ * basis into, so the full gain or loss (cash received − cash paid − fees −
+ * basis given up) realizes immediately.
  *
- * Returns null when nothing is recognized (a swap with zero net cash).
+ * Returns null when nothing is recognized (a swap with zero net cash and no fee).
  *
  * The identity `recognizedNow + deferred === mark_to_market` is preserved in
- * every case, so booking net cash here never double-counts against the deferred
- * basis gain — see `tradeDeferredGain`.
+ * every case — `realized_gain_cents` (the stored mark-to-market) nets out the
+ * fee too — so booking cash and fees here never double-counts against the
+ * deferred basis gain; see `tradeDeferredGain`.
  */
 export function tradeRecognition(
   t: RecognizableTrade
 ): { revenue_cents: number; cogs_cents: number; profit_cents: number } | null {
   if (t.has_incoming) {
-    const netCash = t.cash_in_cents - t.cash_out_cents;
+    const netCash = t.cash_in_cents - t.cash_out_cents - t.fees_cents;
     if (netCash === 0) return null;
     return {
       revenue_cents: t.cash_in_cents,
-      cogs_cents: t.cash_out_cents,
+      cogs_cents: t.cash_out_cents + t.fees_cents,
       profit_cents: netCash,
     };
   }
-  const net = t.cash_in_cents - t.cash_out_cents - t.outgoing_basis_cents;
+  const net =
+    t.cash_in_cents - t.cash_out_cents - t.fees_cents - t.outgoing_basis_cents;
   return {
     revenue_cents: t.cash_in_cents,
-    cogs_cents: t.cash_out_cents + t.outgoing_basis_cents,
+    cogs_cents: t.cash_out_cents + t.fees_cents + t.outgoing_basis_cents,
     profit_cents: net,
   };
 }

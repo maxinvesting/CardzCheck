@@ -36,6 +36,7 @@ export type TradeFormPayload = {
   partner_name: string | null;
   cash_paid_cents: number;
   cash_received_cents: number;
+  fees_cents: number;
   notes: string | null;
 };
 
@@ -187,11 +188,12 @@ export default function TradeFormModal({
   const tradeFeeCents = inputToCents(tradeFee);
 
   // Total cost basis that rolls into the cards received: the basis of what we
-  // gave away, plus net cash out, plus any (online) trade fee. We never type a
-  // basis for an incoming card — it's derived from the economics of the trade.
+  // gave away, plus net cash out. The trade fee is NOT capitalized here — it is
+  // expensed into realized P&L at trade time (received − paid − fees). We never
+  // type a basis for an incoming card — it's derived from the trade economics.
   const incomingBasisPoolCents = Math.max(
     0,
-    outgoingBasisCents + cashPaidCents - cashReceivedCents + tradeFeeCents
+    outgoingBasisCents + cashPaidCents - cashReceivedCents
   );
 
   // Spread the basis pool across incoming cards in proportion to their
@@ -399,6 +401,7 @@ export default function TradeFormModal({
         partner_name: partnerName.trim() ? partnerName.trim() : null,
         cash_paid_cents: cashPaidCents,
         cash_received_cents: cashReceivedCents,
+        fees_cents: tradeFeeCents,
         notes: notes.trim() ? notes.trim() : null,
       });
       onClose();
@@ -768,10 +771,6 @@ export default function TradeFormModal({
                 <span>− Cash received</span>
                 <span className="font-data tabular-nums">{formatMoney(cashReceivedCents)}</span>
               </div>
-              <div className="mt-1.5 flex justify-between text-[#77808C]">
-                <span>+ Trade fee</span>
-                <span className="font-data tabular-nums">{formatMoney(tradeFeeCents)}</span>
-              </div>
               <div className="mt-2 flex justify-between border-t border-[#24282D] pt-2 text-[#E6E8EB]">
                 <span className="font-semibold">Total basis to allocate</span>
                 <span className="font-data font-semibold tabular-nums text-[#20B26B]">
@@ -779,8 +778,10 @@ export default function TradeFormModal({
                 </span>
               </div>
               <p className="mt-2 text-[11px] leading-snug text-[#5A626E]">
-                Split across received cards by estimated value. No gain is realized at
-                trade time — it&apos;s recognized when these cards later sell.
+                Split across received cards by estimated value. Card appreciation
+                is recognized when these cards later sell. Net cash and the trade
+                fee ({formatMoney(cashReceivedCents - cashPaidCents - tradeFeeCents)}{" "}
+                realized) hit P&amp;L now.
               </p>
             </div>
 

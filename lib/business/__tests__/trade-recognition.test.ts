@@ -14,6 +14,7 @@ const trade = (over: Partial<RecognizableTrade> = {}): RecognizableTrade => ({
   traded_at: "2026-06-10T00:00:00.000Z",
   cash_in_cents: 0,
   cash_out_cents: 0,
+  fees_cents: 0,
   outgoing_basis_cents: 0,
   has_incoming: false,
   mark_to_market_gain_cents: 0,
@@ -40,6 +41,32 @@ describe("tradeRecognition", () => {
       cogs_cents: 0,
       profit_cents: 20000,
     });
+  });
+
+  it("subtracts the trade fee from the swap's realized cash", () => {
+    // Received 250 cash, paid 0, fee 20 → realized 230 now; fee is expensed,
+    // not deferred into the received card's basis.
+    const rec = tradeRecognition(
+      trade({
+        has_incoming: true,
+        cash_in_cents: 25000,
+        fees_cents: 2000,
+        outgoing_basis_cents: 60000,
+      })
+    );
+    expect(rec).toEqual({
+      revenue_cents: 25000,
+      cogs_cents: 2000,
+      profit_cents: 23000,
+    });
+  });
+
+  it("realizes a fee-only card swap as an immediate loss", () => {
+    // Pure card-for-card swap, no cash, but a 15 fee → realized -15.
+    const rec = tradeRecognition(
+      trade({ has_incoming: true, fees_cents: 1500, outgoing_basis_cents: 90000 })
+    );
+    expect(rec?.profit_cents).toBe(-1500);
   });
 
   it("realizes the full loss of a pure cards-for-cash disposal immediately", () => {
@@ -70,6 +97,7 @@ describe("normalizeTradeRow", () => {
       traded_at: "2026-06-03T00:00:00.000Z",
       cash_in_cents: 7500,
       cash_out_cents: 4200,
+      fees_cents: 0,
       outgoing_basis_cents: 83000,
       has_incoming: true,
       mark_to_market_gain_cents: 25300,

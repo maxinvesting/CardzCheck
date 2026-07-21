@@ -22,6 +22,7 @@ export interface BusinessTrade {
   traded_at: string;
   cash_paid_cents: number;
   cash_received_cents: number;
+  fees_cents: number;
   outgoing_basis_cents: number;
   incoming_basis_cents: number;
   realized_gain_cents: number;
