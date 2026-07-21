@@ -274,8 +274,13 @@ export default function BusinessSalesHistoryPage() {
             <SummaryCell label="Net payout" value={formatMoney(summary.net)} />
             <SummaryCell
               label="Profit"
-              value={formatMoney(summary.profit)}
-              tone={summary.profit >= 0 ? "positive" : "negative"}
+              value={formatMoney(summary.profit + tradesRecognized)}
+              tone={summary.profit + tradesRecognized >= 0 ? "positive" : "negative"}
+              note={
+                tradesRecognized !== 0
+                  ? `incl. ${formatMoney(tradesRecognized)} trade cash`
+                  : undefined
+              }
             />
           </div>
 
@@ -360,10 +365,12 @@ function SummaryCell({
   label,
   value,
   tone,
+  note,
 }: {
   label: string;
   value: string;
   tone?: "positive" | "negative";
+  note?: string;
 }) {
   const valueClass =
     tone === "positive"
@@ -379,6 +386,9 @@ function SummaryCell({
       <div className={`mt-0.5 text-[18px] font-semibold tracking-normal ${valueClass}`}>
         {value}
       </div>
+      {note ? (
+        <div className="mt-0.5 text-[10px] text-[#77808C]">{note}</div>
+      ) : null}
     </div>
   );
 }
