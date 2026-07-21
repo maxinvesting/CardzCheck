@@ -157,6 +157,8 @@ function normalizeChannel(
   if (
     normalized === "ebay" ||
     normalized === "whatnot" ||
+    normalized === "alt" ||
+    normalized === "fanatics" ||
     normalized === "instagram" ||
     normalized === "show" ||
     normalized === "local"

@@ -3,6 +3,8 @@ import { z } from "zod";
 export const SALES_CHANNELS = [
   "ebay",
   "whatnot",
+  "alt",
+  "fanatics",
   "instagram",
   "show",
   "local",

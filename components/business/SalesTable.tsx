@@ -27,7 +27,7 @@ interface Props {
   storeTier?: StoreTier;
 }
 
-const CHANNEL_OPTIONS = ["", "ebay", "whatnot", "instagram", "show", "local", "other", "veriswap"] as const;
+const CHANNEL_OPTIONS = ["", "ebay", "whatnot", "alt", "fanatics", "instagram", "show", "local", "other", "veriswap"] as const;
 
 const inputClass =
   "mt-1 w-full border border-[color:var(--biz-border)] bg-[color:var(--biz-near-black)] px-3 py-2 text-xs text-[color:var(--biz-text)] placeholder:text-[color:var(--biz-muted)] focus:outline-none focus:ring-1 focus:ring-[color:var(--biz-focus)]";
