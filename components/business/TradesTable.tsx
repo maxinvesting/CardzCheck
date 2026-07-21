@@ -65,11 +65,11 @@ export default function TradesTable({ trades, loading, onDeleteTrade }: Props) {
     () =>
       trades.map((trade) => {
         const netCash = trade.cash_received_cents - trade.cash_paid_cents;
-        // Recognize each trade the same way the Financials P&L does: a
-        // card-for-card swap defers its gain into the received card's basis
-        // (realized only when that card sells), so only cash that can't be
-        // absorbed hits P&L now. This keeps the trades table reconciled with
-        // the P&L instead of showing the raw mark-to-market gain.
+        // Recognize each trade the same way the Financials P&L does: the net
+        // cash that changed hands is realized now, while the card appreciation
+        // defers into the received card's basis (realized when that card
+        // sells). This keeps the trades table reconciled with the P&L instead
+        // of showing the raw mark-to-market gain.
         const rec = recognizableFromBusinessTrade(trade);
         const recognized = tradeRecognition(rec)?.profit_cents ?? 0;
         const deferred = tradeDeferredGain(rec);
@@ -102,7 +102,7 @@ export default function TradesTable({ trades, loading, onDeleteTrade }: Props) {
             <th className={`${thClass} text-right`}>Net cash</th>
             <th
               className={`${thClass} text-right`}
-              title="Gain hitting P&L now — cash that can't be deferred into a received card's basis. Card-for-card swaps realize $0 here."
+              title="Net cash from the trade (cash received − cash paid), realized into P&L now. Card appreciation defers into the received card's basis."
             >
               Realized (P&L)
             </th>

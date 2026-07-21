@@ -113,20 +113,37 @@ export function recognizableFromBusinessTrade(
 }
 
 /**
- * How much of a trade should be recognized in P&L *now*, consistent with the
- * app's deferral model. Card-for-card swaps defer their gain into the received
- * cards' basis, so only the cash that can't be absorbed (cash received beyond
- * the basis given up) is recognized at trade time. A pure cards-for-cash
- * disposal (no card received) realizes the full gain or loss immediately, since
- * there's nothing to defer the basis into. Returns null when nothing is
- * recognized yet (the normal deferred case).
+ * How much of a trade should be recognized in P&L *now*.
+ *
+ * Card-for-card swap: the net cash that changed hands (cash received − cash
+ * paid) is realized immediately — it is real money in or out of the business.
+ * The appreciation on the cards given up (outgoing fair value − outgoing basis)
+ * is what defers into the received cards' basis and realizes when they sell. A
+ * swap with no cash on either side recognizes nothing now (fully deferred).
+ *
+ * Pure cards-for-cash disposal (no card received): there's nothing to defer the
+ * basis into, so the full gain or loss (cash received − cash paid − basis given
+ * up) realizes immediately.
+ *
+ * Returns null when nothing is recognized (a swap with zero net cash).
+ *
+ * The identity `recognizedNow + deferred === mark_to_market` is preserved in
+ * every case, so booking net cash here never double-counts against the deferred
+ * basis gain — see `tradeDeferredGain`.
  */
 export function tradeRecognition(
   t: RecognizableTrade
 ): { revenue_cents: number; cogs_cents: number; profit_cents: number } | null {
+  if (t.has_incoming) {
+    const netCash = t.cash_in_cents - t.cash_out_cents;
+    if (netCash === 0) return null;
+    return {
+      revenue_cents: t.cash_in_cents,
+      cogs_cents: t.cash_out_cents,
+      profit_cents: netCash,
+    };
+  }
   const net = t.cash_in_cents - t.cash_out_cents - t.outgoing_basis_cents;
-  const recognize = t.has_incoming ? net > 0 : true;
-  if (!recognize) return null;
   return {
     revenue_cents: t.cash_in_cents,
     cogs_cents: t.cash_out_cents + t.outgoing_basis_cents,

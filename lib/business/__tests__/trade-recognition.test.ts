@@ -29,14 +29,16 @@ describe("tradeRecognition", () => {
     expect(rec).toBeNull();
   });
 
-  it("recognizes a card-for-card swap only for cash beyond the basis given up", () => {
+  it("recognizes a card-for-card swap's net cash immediately", () => {
+    // Net cash that changed hands (20000 in, 0 out) is realized now; the card
+    // appreciation defers into the received card's basis.
     const rec = tradeRecognition(
       trade({ has_incoming: true, cash_in_cents: 20000, outgoing_basis_cents: 5000 })
     );
     expect(rec).toEqual({
       revenue_cents: 20000,
-      cogs_cents: 5000,
-      profit_cents: 15000,
+      cogs_cents: 0,
+      profit_cents: 20000,
     });
   });
 
@@ -150,17 +152,18 @@ describe("tradeDeferredGain", () => {
     expect(tradeDeferredGain(t)).toBe(7000);
   });
 
-  it("defers only the part of the gain not recognized as excess cash", () => {
-    // mark-to-market 35000; excess cash recognized now = 20000 - 5000 = 15000.
+  it("recognizes net cash now and defers the card appreciation", () => {
+    // mark-to-market 35000; net cash recognized now = 20000. The remaining
+    // 15000 is card appreciation deferred into the received card's basis.
     const t = trade({
       has_incoming: true,
       cash_in_cents: 20000,
       outgoing_basis_cents: 5000,
       mark_to_market_gain_cents: 35000,
     });
-    expect(tradeRecognition(t)?.profit_cents).toBe(15000);
+    expect(tradeRecognition(t)?.profit_cents).toBe(20000);
     // Booked now + deferred reconstructs the full mark-to-market gain.
-    expect(tradeDeferredGain(t)).toBe(20000);
+    expect(tradeDeferredGain(t)).toBe(15000);
   });
 
   it("defers nothing for a pure cards-for-cash disposal", () => {
@@ -220,10 +223,14 @@ describe("recognizableFromBusinessTrade", () => {
       realized_gain_cents: 50625,
       items: [{ direction: "in" }, { direction: "out" }],
     });
-    // Card-for-card swap with net cash < basis given up → nothing recognized;
-    // the whole mark-to-market gain defers into the received card's basis.
-    expect(tradeRecognition(rec)).toBeNull();
-    expect(tradeDeferredGain(rec)).toBe(50625);
+    // Card-for-card swap with 25000 net cash in → that cash is recognized now;
+    // the remaining card appreciation (50625 - 25000) defers into basis.
+    expect(tradeRecognition(rec)).toEqual({
+      revenue_cents: 25000,
+      cogs_cents: 0,
+      profit_cents: 25000,
+    });
+    expect(tradeDeferredGain(rec)).toBe(25625);
   });
 
   it("treats a stale incoming_basis as deferred even without in items", () => {
