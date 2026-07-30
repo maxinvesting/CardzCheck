@@ -600,7 +600,7 @@ export default function LedgerPage() {
   const handleListSuccess = useCallback(
     async (_listingId: string) => {
       setListItem(null);
-      setToast({ type: "success", message: "Listed on CardzCheck marketplace" });
+      setToast({ type: "success", message: "Listed on MH_Cardz Business Hub" });
       await loadInventory();
     },
     [loadInventory]

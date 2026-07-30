@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { BRAND_NAME } from "@/lib/brand";
 import type { User } from "@/types";
 import { LIMITS } from "@/types";
 import { isTestMode, getTestUser } from "@/lib/test-mode";
@@ -100,7 +101,7 @@ export default function Header() {
         {/* Logo */}
         <Link href={user ? "/dashboard" : "/"} className="flex-shrink-0">
           <span className="text-xl md:text-2xl font-bold text-white tracking-tight">
-            CardzCheck
+            {BRAND_NAME}
           </span>
         </Link>
 

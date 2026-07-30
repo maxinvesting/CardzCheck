@@ -2,11 +2,12 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import "../styles/businessTheme.css";
 import { AppProviders } from "@/components/AppProviders";
+import { BRAND_NAME, BRAND_TAGLINE } from "@/lib/brand";
 
 export const metadata: Metadata = {
-  title: "CardzCheck - Inventory and Sales Software for Card Businesses",
+  title: `${BRAND_NAME} — ${BRAND_TAGLINE}`,
   description:
-    "Manage sports card inventory, listings, sales, teams, and ledger workflows in one business workspace.",
+    "Manage card inventory, sales, trades, and ledger workflows in one business workspace.",
 };
 
 export const viewport: Viewport = {

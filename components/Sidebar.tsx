@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import Image from "next/image";
+import { BRAND_NAME, BRAND_MONOGRAM } from "@/lib/brand";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { User } from "@/types";
@@ -457,20 +457,18 @@ export default function Sidebar() {
           onClick={() => setIsOpen(false)}
         >
           <div className="flex items-center gap-2.5 min-w-0">
-            <Image
-              src="/cardzcheck-logo-main.png"
-              alt="CardzCheck"
-              width={132}
-              height={28}
-              className="h-7 w-auto max-w-[9.5rem] shrink-0 object-contain object-left"
-              priority
-            />
+            <span
+              aria-hidden
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-[var(--biz-text-strong)] text-[11px] font-bold tracking-tight text-[var(--biz-near-black)]"
+            >
+              {BRAND_MONOGRAM}
+            </span>
             <span
               className={`truncate text-base font-semibold tracking-tight ${
                 isBusinessWorkspace ? "text-[var(--biz-text-strong)]" : "text-[color:var(--biz-text-strong)]"
               }`}
             >
-              CardzCheck
+              {BRAND_NAME}
             </span>
           </div>
         </Link>

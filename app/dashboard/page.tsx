@@ -165,7 +165,7 @@ export default function DashboardPage() {
           </div>
           <MicButton
             label="Ask by Voice"
-            title="Ask CardzCheck Analyst by voice"
+            title="Ask the Analyst by voice"
             size="sm"
             onResult={(text) => {
               router.push(`/analyst?prompt=${encodeURIComponent(text)}`);

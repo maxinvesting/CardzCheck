@@ -512,7 +512,7 @@ function SettingsContent() {
                   Payment successful!
                 </p>
                 <p className={`text-sm ${isBusinessSettings ? "text-[var(--biz-muted)]" : "text-emerald-100/90"}`}>
-                  You now have unlimited access to CardzCheck.
+                  You now have unlimited access to MH_Cardz Business Hub.
                 </p>
               </div>
             </div>

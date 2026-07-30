@@ -607,7 +607,7 @@ export default function StorefrontsSection() {
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            Connect your storefronts so CardzCheck can integrate with your selling platforms. Add your eBay store, Whatnot profile, personal website, or any marketplace where you sell.
+            Connect your storefronts so MH_Cardz Business Hub can integrate with your selling platforms. Add your eBay store, Whatnot profile, personal website, or any marketplace where you sell.
           </p>
         </div>
       </div>
@@ -635,7 +635,7 @@ export default function StorefrontsSection() {
                 No storefronts connected yet
               </p>
               <p className="text-xs text-gray-400 dark:text-gray-500 mb-4">
-                Add your selling platforms to integrate them with your CardzCheck business tools.
+                Add your selling platforms to integrate them with your MH_Cardz Business Hub business tools.
               </p>
               <button
                 onClick={() => setShowAdd(true)}

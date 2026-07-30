@@ -275,7 +275,7 @@ export default function EbayConnectSection() {
             Connect eBay Account
           </a>
           <p className="text-xs text-white/40">
-            You&apos;ll be redirected to eBay to authorize CardzCheck. No
+            You&apos;ll be redirected to eBay to authorize this app. No
             listings will be created or changed during connection.
           </p>
         </div>

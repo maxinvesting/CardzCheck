@@ -46,7 +46,7 @@ export default function AnalystWidget({ isPaid }: AnalystWidgetProps) {
             />
           </svg>
         </div>
-        <span className="text-sm font-medium text-white">CardzCheck Analyst</span>
+        <span className="text-sm font-medium text-white">Analyst</span>
         <span className="ml-auto px-1.5 py-0.5 bg-blue-500/20 text-blue-400 text-[10px] font-medium rounded">
           Pro
         </span>

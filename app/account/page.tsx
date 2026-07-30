@@ -149,7 +149,7 @@ function AccountContent() {
                   Payment successful!
                 </p>
                 <p className="text-sm text-green-600 dark:text-green-400">
-                  You now have unlimited access to CardzCheck.
+                  You now have unlimited access to MH_Cardz Business Hub.
                 </p>
               </div>
             </div>

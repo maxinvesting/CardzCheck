@@ -28,7 +28,7 @@ const CATEGORY_LABELS: Record<Category, string> = {
   industry: "Industry",
   grading: "Grading",
   market: "Market",
-  platform: "CardzCheck",
+  platform: "MH_Cardz Business Hub",
   business: "Business",
 };
 
@@ -241,7 +241,7 @@ export default function NewsPage() {
             <div className="flex items-end justify-between gap-4">
               <div>
                 <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-[var(--biz-muted)]">
-                  CardzCheck
+                  MH_Cardz Business Hub
                 </p>
                 <h1 className="text-2xl font-extrabold tracking-tight text-[var(--biz-text)]">
                   News & Updates
@@ -344,7 +344,7 @@ export default function NewsPage() {
           {!loading && (
             <div className="border-t border-[color:var(--biz-border)] py-8 mt-4 space-y-1.5">
               <p className="text-[11px] text-[var(--biz-muted)]">
-                News sourced from third-party RSS feeds. CardzCheck is not responsible for external content.
+                News sourced from third-party RSS feeds. MH_Cardz Business Hub is not responsible for external content.
                 {data?.fetchedAt && (
                   <span className="ml-2">
                     Updated {timeAgo(data.fetchedAt)}.
@@ -388,7 +388,7 @@ export default function NewsPage() {
                 >
                   PSA
                 </a>
-                , plus CardzCheck platform announcements.
+                , plus MH_Cardz Business Hub announcements.
               </p>
             </div>
           )}

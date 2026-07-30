@@ -384,7 +384,7 @@ export default function CardProfileDrawer({
                 ) : null}
                 {onList ? (
                   <ActionButton onClick={() => onList(item as BusinessInventoryItem)} accent>
-                    List on CardzCheck
+                    List on MH_Cardz Business Hub
                   </ActionButton>
                 ) : null}
                 {onDelete ? (

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { BRAND_NAME } from "@/lib/brand";
 import type { User } from "@/types";
 import { LIMITS } from "@/types";
 
@@ -55,9 +56,7 @@ export default function WelcomeToast({ user, onDismiss }: WelcomeToastProps) {
             <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-1">
               {user.name
                 ? `Welcome, ${user.name}!`
-                : user.is_paid
-                ? "Welcome to CardzCheck Pro!"
-                : "Welcome to CardzCheck!"}
+                : `Welcome to ${BRAND_NAME}!`}
             </h3>
             <p className="text-sm text-blue-800 dark:text-blue-200">
               {user.is_paid ? (

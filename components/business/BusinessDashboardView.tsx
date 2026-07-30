@@ -237,7 +237,7 @@ export default function BusinessDashboardView({
             </Eyebrow>
           </div>
           <h1 className="desk-display mt-2 truncate text-[30px] font-medium leading-[1.05] text-[var(--biz-text-strong)] sm:text-[38px]">
-            {businessName ?? "CardzCheck"}
+            {businessName ?? "MH_Cardz Business Hub"}
           </h1>
           <p className="mt-1.5 text-[13px] text-[var(--biz-muted)]">Business dashboard</p>
         </div>
