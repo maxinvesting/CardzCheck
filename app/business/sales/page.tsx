@@ -15,6 +15,14 @@ import {
 
 const PAGE_SIZE = 25;
 
+type MiscProfitEntry = {
+  id: string;
+  occurred_at: string;
+  amount_cents: number;
+  label: string | null;
+  created_at: string;
+};
+
 function defaultFilters(): SalesFilters {
   const now = new Date();
   const from = new Date(now.getTime() - 89 * 24 * 60 * 60 * 1000);
@@ -36,6 +44,7 @@ export default function BusinessSalesHistoryPage() {
   const [trades, setTrades] = useState<BusinessTrade[]>([]);
   const [tradesLoading, setTradesLoading] = useState(true);
   const [filters, setFilters] = useState<SalesFilters>(defaultFilters);
+  const [miscEntries, setMiscEntries] = useState<MiscProfitEntry[]>([]);
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   const loadSales = useCallback(async () => {
@@ -93,6 +102,70 @@ export default function BusinessSalesHistoryPage() {
     }
   }, []);
 
+  const loadMisc = useCallback(async () => {
+    try {
+      const res = await fetch("/api/business/misc-profit", { cache: "no-store" });
+      if (!res.ok) {
+        setMiscEntries([]);
+        return;
+      }
+      const data = await res.json();
+      setMiscEntries((data.entries ?? []) as MiscProfitEntry[]);
+    } catch {
+      setMiscEntries([]);
+    }
+  }, []);
+
+  const handleAddMisc = useCallback(
+    async (input: { amount: number; occurred_at: string; label: string }) => {
+      try {
+        const res = await fetch("/api/business/misc-profit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            amount: input.amount,
+            occurred_at: input.occurred_at,
+            label: input.label.trim() || null,
+          }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || "Failed to add entry");
+        }
+        setToast({ type: "success", message: "Added to profit" });
+        await loadMisc();
+      } catch (err) {
+        setToast({
+          type: "error",
+          message: err instanceof Error ? err.message : "Failed to add entry",
+        });
+      }
+    },
+    [loadMisc]
+  );
+
+  const handleDeleteMisc = useCallback(
+    async (id: string) => {
+      try {
+        const res = await fetch(`/api/business/misc-profit?id=${id}`, {
+          method: "DELETE",
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || "Failed to remove entry");
+        }
+        setToast({ type: "success", message: "Entry removed" });
+        await loadMisc();
+      } catch (err) {
+        setToast({
+          type: "error",
+          message: err instanceof Error ? err.message : "Failed to remove entry",
+        });
+      }
+    },
+    [loadMisc]
+  );
+
   useEffect(() => {
     async function init() {
       const supabase = createClient();
@@ -105,9 +178,10 @@ export default function BusinessSalesHistoryPage() {
       }
       void loadSales();
       void loadTrades();
+      void loadMisc();
     }
     void init();
-  }, [router, loadSales, loadTrades]);
+  }, [router, loadSales, loadTrades, loadMisc]);
 
   useEffect(() => {
     if (!toast) return;
@@ -238,6 +312,30 @@ export default function BusinessSalesHistoryPage() {
     return { gross, net, profit };
   }, [sales]);
 
+  // Consignment / misc. profit that falls in the active date range. Like trades,
+  // it has no channel, so a specific channel filter excludes it from the total.
+  const { filteredMisc, miscTotal } = useMemo(() => {
+    if (filters.channel) return { filteredMisc: [], miscTotal: 0 };
+    const from = filters.from || null;
+    const to = filters.to || null;
+    const inRange = miscEntries.filter((m) => {
+      const d = m.occurred_at.slice(0, 10);
+      if (from && d < from) return false;
+      if (to && d > to) return false;
+      return true;
+    });
+    return {
+      filteredMisc: inRange,
+      miscTotal: inRange.reduce((acc, m) => acc + m.amount_cents, 0),
+    };
+  }, [miscEntries, filters]);
+
+  const totalProfit = summary.profit + tradesRecognized + miscTotal;
+  const profitNoteParts = [
+    tradesRecognized !== 0 ? `${formatMoney(tradesRecognized)} trade cash` : null,
+    miscTotal !== 0 ? `${formatMoney(miscTotal)} misc` : null,
+  ].filter(Boolean);
+
   if (hasAccess === false) {
     return (
       <>
@@ -274,11 +372,11 @@ export default function BusinessSalesHistoryPage() {
             <SummaryCell label="Net payout" value={formatMoney(summary.net)} />
             <SummaryCell
               label="Profit"
-              value={formatMoney(summary.profit + tradesRecognized)}
-              tone={summary.profit + tradesRecognized >= 0 ? "positive" : "negative"}
+              value={formatMoney(totalProfit)}
+              tone={totalProfit >= 0 ? "positive" : "negative"}
               note={
-                tradesRecognized !== 0
-                  ? `incl. ${formatMoney(tradesRecognized)} trade cash`
+                profitNoteParts.length > 0
+                  ? `incl. ${profitNoteParts.join(" + ")}`
                   : undefined
               }
             />
@@ -343,6 +441,14 @@ export default function BusinessSalesHistoryPage() {
                 />
               </div>
             )}
+
+            <MiscProfitSection
+              entries={filteredMisc}
+              total={miscTotal}
+              disabledReason={filters.channel ? "Clear the channel filter to add" : null}
+              onAdd={handleAddMisc}
+              onDelete={handleDeleteMisc}
+            />
           </section>
         </div>
         {toast && (
@@ -374,9 +480,9 @@ function SummaryCell({
 }) {
   const valueClass =
     tone === "positive"
-      ? "text-emerald-400"
+      ? "ledger-pnl-pos"
       : tone === "negative"
-      ? "text-red-400"
+      ? "ledger-pnl-neg"
       : "text-[#E6E8EB]";
   return (
     <div className="bg-[#090B0D] px-4 py-3">
@@ -389,6 +495,164 @@ function SummaryCell({
       {note ? (
         <div className="mt-0.5 text-[10px] text-[#77808C]">{note}</div>
       ) : null}
+    </div>
+  );
+}
+
+function MiscProfitSection({
+  entries,
+  total,
+  disabledReason,
+  onAdd,
+  onDelete,
+}: {
+  entries: MiscProfitEntry[];
+  total: number;
+  disabledReason: string | null;
+  onAdd: (input: { amount: number; occurred_at: string; label: string }) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
+}) {
+  const [amount, setAmount] = useState("");
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [label, setLabel] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const inputCls =
+    "border border-[#24282D] bg-[#090B0D] px-2.5 py-1.5 text-[13px] text-[#E6E8EB] placeholder:text-[#5A626E] focus:border-[#20B26B] focus:outline-none";
+
+  const submit = async () => {
+    const parsed = Number.parseFloat(amount);
+    if (!Number.isFinite(parsed) || parsed === 0) return;
+    setSaving(true);
+    try {
+      await onAdd({ amount: parsed, occurred_at: date, label });
+      setAmount("");
+      setLabel("");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="mt-6 border border-[#24282D] bg-[color:var(--biz-surface)]">
+      <div className="flex items-baseline justify-between gap-3 border-b border-[#24282D] px-4 py-2.5">
+        <div>
+          <h2 className="text-[13px] font-semibold text-[#E6E8EB]">
+            Consignment / Misc. Profit
+          </h2>
+          <p className="text-[11px] text-[#77808C]">
+            Profit outside of sales &amp; trades — adds to your total.
+          </p>
+        </div>
+        <div className="text-right">
+          <div className="text-[9px] font-medium uppercase tracking-[0.12em] text-[#77808C]">
+            In range
+          </div>
+          <div
+            className={`font-data text-[16px] font-semibold tabular-nums ${
+              total >= 0 ? "ledger-pnl-pos" : "ledger-pnl-neg"
+            }`}
+          >
+            {formatMoney(total)}
+          </div>
+        </div>
+      </div>
+
+      <div className="px-4 py-3">
+        {disabledReason ? (
+          <p className="mb-3 text-[12px] text-[#77808C]">{disabledReason}.</p>
+        ) : (
+          <div className="mb-3 flex flex-wrap items-end gap-2">
+            <label className="flex flex-col text-[10px] uppercase tracking-[0.08em] text-[#77808C]">
+              Amount ($)
+              <input
+                type="number"
+                step="0.01"
+                inputMode="decimal"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void submit();
+                }}
+                placeholder="0.00"
+                className={`${inputCls} mt-1 w-28`}
+              />
+            </label>
+            <label className="flex flex-col text-[10px] uppercase tracking-[0.08em] text-[#77808C]">
+              Date
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className={`${inputCls} mt-1`}
+              />
+            </label>
+            <label className="flex flex-1 flex-col text-[10px] uppercase tracking-[0.08em] text-[#77808C]">
+              Note
+              <input
+                type="text"
+                value={label}
+                onChange={(e) => setLabel(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void submit();
+                }}
+                placeholder="e.g. consignment payout, show cash, refund"
+                className={`${inputCls} mt-1 w-full min-w-40`}
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => void submit()}
+              disabled={saving || !amount.trim()}
+              className="border border-[#20B26B] bg-[#20B26B] px-4 py-1.5 text-[12px] font-semibold text-[#07100B] transition-colors hover:bg-[#33C47C] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {saving ? "Adding…" : "Add"}
+            </button>
+          </div>
+        )}
+
+        {entries.length === 0 ? (
+          <p className="text-[12px] text-[#5A626E]">
+            No entries in this range yet.
+          </p>
+        ) : (
+          <div className="divide-y divide-[#191D21]">
+            {entries.map((e) => (
+              <div
+                key={e.id}
+                className="flex items-center justify-between gap-3 py-2 text-[13px]"
+              >
+                <div className="flex items-baseline gap-3 min-w-0">
+                  <span className="font-data tabular-nums text-[#77808C]">
+                    {e.occurred_at.slice(0, 10)}
+                  </span>
+                  <span className="truncate text-[#B8C0CC]">
+                    {e.label || "Misc. profit"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <span
+                    className={`font-data tabular-nums font-semibold ${
+                      e.amount_cents >= 0 ? "ledger-pnl-pos" : "ledger-pnl-neg"
+                    }`}
+                  >
+                    {formatMoney(e.amount_cents)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (confirm("Remove this entry?")) void onDelete(e.id);
+                    }}
+                    className="text-[11px] font-semibold uppercase tracking-[0.04em] text-[#77808C] transition-colors hover:text-[#E05C5C]"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -41,7 +41,7 @@ const thClass =
   "px-3 py-2 text-[10px] font-medium uppercase tracking-[0.1em] text-[color:var(--biz-muted)] border-b border-[color:var(--biz-border)]";
 
 const tdClass =
-  "px-3 py-2 align-middle text-[13px] leading-snug text-[color:var(--biz-text)] border-b border-[color:var(--biz-border-subtle)]";
+  "px-3 py-2.5 align-middle text-[13px] leading-snug text-[color:var(--biz-text)] border-b border-[color:var(--biz-border-subtle)]";
 
 function summarizeItems(items: TradeItem[], direction: "in" | "out"): string {
   const titles = items
@@ -141,7 +141,7 @@ export default function TradesTable({ trades, loading, onDeleteTrade }: Props) {
             rows.map((trade) => (
               <tr
                 key={trade.id}
-                className="transition-colors hover:bg-[color:var(--biz-hover)]"
+                className="transition-colors even:bg-[color:var(--biz-surface-soft)] hover:bg-[color:var(--biz-hover)]"
               >
                 <td className={`${tdClass} tabular-nums text-[color:var(--biz-muted)]`}>
                   {new Date(trade.traded_at).toISOString().slice(0, 10)}

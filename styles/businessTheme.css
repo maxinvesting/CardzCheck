@@ -48,9 +48,9 @@
   --biz-tertiary-border: rgba(255, 255, 255, 0.1);
   --biz-tertiary-foreground: #f3f3f3;
 
-  /* Fixed signals (do not read as “brand green”) */
-  --biz-profit: #9baca3;
-  --biz-profit-soft: rgba(155, 172, 163, 0.14);
+  /* Fixed signals — positive P&L reads as real green (matches Financials). */
+  --biz-profit: #20b26b;
+  --biz-profit-soft: rgba(32, 178, 107, 0.14);
   --biz-success-soft: rgba(155, 172, 163, 0.1);
   --biz-warning: #c9a227;
   --biz-warning-soft: rgba(201, 162, 39, 0.12);

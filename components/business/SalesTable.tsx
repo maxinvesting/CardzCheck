@@ -36,7 +36,7 @@ const thClass =
   "px-3 py-2 text-[10px] font-medium uppercase tracking-[0.1em] text-[color:var(--biz-muted)] border-b border-[color:var(--biz-border)]";
 
 const tdClass =
-  "px-3 py-2 align-middle text-[13px] leading-snug text-[color:var(--biz-text)] border-b border-[color:var(--biz-border-subtle)]";
+  "px-3 py-2.5 align-middle text-[13px] leading-snug text-[color:var(--biz-text)] border-b border-[color:var(--biz-border-subtle)]";
 
 export default function SalesTable({
   sales,
@@ -167,7 +167,7 @@ export default function SalesTable({
               rows.map((sale) => (
                 <tr
                   key={sale.id}
-                  className="transition-colors hover:bg-[color:var(--biz-hover)]"
+                  className="transition-colors even:bg-[color:var(--biz-surface-soft)] hover:bg-[color:var(--biz-hover)]"
                 >
                   <td className={`${tdClass} tabular-nums text-[color:var(--biz-muted)]`}>
                     {new Date(sale.sold_at).toISOString().slice(0, 10)}
@@ -191,7 +191,7 @@ export default function SalesTable({
                     {formatMoney(sale.cogs_cents)}
                   </td>
                   <td
-                    className={`${tdClass} text-right tabular-nums font-medium ${
+                    className={`${tdClass} text-right tabular-nums font-semibold ${
                       sale.profit_cents >= 0 ? "ledger-pnl-pos" : "ledger-pnl-neg"
                     }`}
                   >

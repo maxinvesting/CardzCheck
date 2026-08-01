@@ -178,14 +178,15 @@ export function getBusinessAppearanceCssVariables(
     "--biz-tertiary-soft-strong": toAlpha(normalized.tertiaryColor, 0.15),
     "--biz-tertiary-border": toAlpha(normalized.tertiaryColor, 0.25),
     "--biz-tertiary-foreground": getReadableTextColor(normalized.tertiaryColor),
-    /* Monochrome operator shell — links / profit / focus stay restrained */
+    /* Monochrome operator shell — links / focus stay restrained; positive P&L
+       reads as real green so profit stands out. */
     "--biz-link": "#C8C8C8",
     "--biz-focus": "rgba(255, 255, 255, 0.18)",
     "--biz-nav-active-bg": "rgba(255, 255, 255, 0.05)",
     "--biz-nav-active-border": "rgba(243, 243, 243, 0.32)",
-    "--biz-profit": "#9BACA3",
-    "--biz-profit-soft": "rgba(155, 172, 163, 0.14)",
-    "--biz-success-soft": "rgba(155, 172, 163, 0.1)",
+    "--biz-profit": "#20B26B",
+    "--biz-profit-soft": "rgba(32, 178, 107, 0.14)",
+    "--biz-success-soft": "rgba(32, 178, 107, 0.1)",
   };
 }
 
