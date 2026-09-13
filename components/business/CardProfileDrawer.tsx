@@ -1,15 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { CardImage } from "@/components/CardImage";
 import CardPhotoUploader from "@/components/business/CardPhotoUploader";
-import TargetsSection from "@/components/business/TargetsSection";
-import {
-  buildMarketplaceLinks,
-  MARKETPLACE_TYPE_LABELS,
-  type MarketplaceLink,
-} from "@/lib/comps/marketplace-urls";
 import type { BusinessInventoryItem, TrustedCardImage } from "@/types";
 
 interface ProfileLikeItem {
@@ -71,7 +64,6 @@ interface Props {
   /** Optional callbacks — when omitted, the matching action button is hidden. */
   onMarkSold?: (item: BusinessInventoryItem) => void;
   onTrade?: (item: BusinessInventoryItem) => void;
-  onList?: (item: BusinessInventoryItem) => void;
   onDelete?: (item: BusinessInventoryItem) => void;
   /** Called after an inline edit is saved, so parents can sync their state. */
   onSaved?: (item: BusinessInventoryItem) => void;
@@ -111,21 +103,6 @@ function metaLine(item: ProfileLikeItem): string {
     .join(" · ");
 }
 
-function buildCompareListingsUrl(item: ProfileLikeItem): string {
-  const params = new URLSearchParams();
-  if (item.player_name) params.set("player", item.player_name);
-  if (item.year != null) params.set("year", String(item.year));
-  if (item.set_name) params.set("set", item.set_name);
-  if (item.parallel_type) params.set("parallel_type", item.parallel_type);
-  if (item.card_number) params.set("card_number", String(item.card_number));
-  const grader = item.grading_company?.trim();
-  const grade = item.grade != null ? String(item.grade).trim() : "";
-  if (grader && grade) params.set("grade", `${grader} ${grade}`);
-  else if (grade) params.set("grade", grade);
-  const qs = params.toString();
-  return qs ? `/business/comps?${qs}` : "/business/comps";
-}
-
 function pickEstimatedCents(item: ProfileLikeItem): number | null {
   if (typeof item.last_known_price_cents === "number") return item.last_known_price_cents;
   if (typeof item.estimated_cmv === "number") return Math.round(item.estimated_cmv * 100);
@@ -141,7 +118,6 @@ export default function CardProfileDrawer({
   onClose,
   onMarkSold,
   onTrade,
-  onList,
   onDelete,
   onSaved,
 }: Props) {
@@ -188,18 +164,6 @@ export default function CardProfileDrawer({
       cancelled = true;
     };
   }, [isOpen, itemId, initialItem, mode]);
-
-  const marketplaceLinks = useMemo<MarketplaceLink[]>(() => {
-    if (!item?.player_name) return [];
-    return buildMarketplaceLinks({
-      playerName: item.player_name,
-      year: item.year != null ? String(item.year) : null,
-      setName: item.set_name ?? null,
-      grade: item.grade != null ? String(item.grade) : null,
-      gradingCompany: item.grading_company ?? null,
-      parallelType: item.parallel_type ?? null,
-    });
-  }, [item]);
 
   const pnlCents = useMemo(() => {
     if (!item) return null;
@@ -365,13 +329,6 @@ export default function CardProfileDrawer({
                     Edit
                   </ActionButton>
                 ) : null}
-                <Link
-                  href={buildCompareListingsUrl(item)}
-                  onClick={onClose}
-                  className="inline-flex items-center justify-center border border-[#343941] bg-[#0F1317] px-3 py-1.5 text-xs font-medium text-[#B8C0CC] transition hover:border-[#5A626E] hover:text-[#E6E8EB]"
-                >
-                  Compare
-                </Link>
                 {onMarkSold && item.status !== "sold" ? (
                   <ActionButton onClick={() => onMarkSold(item as BusinessInventoryItem)}>
                     Mark sold
@@ -380,11 +337,6 @@ export default function CardProfileDrawer({
                 {onTrade && item.status !== "sold" ? (
                   <ActionButton onClick={() => onTrade(item as BusinessInventoryItem)}>
                     Trade
-                  </ActionButton>
-                ) : null}
-                {onList ? (
-                  <ActionButton onClick={() => onList(item as BusinessInventoryItem)} accent>
-                    List on MH_Cardz Business Hub
                   </ActionButton>
                 ) : null}
                 {onDelete ? (
@@ -404,47 +356,8 @@ export default function CardProfileDrawer({
               </div>
             </div>
 
-            {/* Right column: targets, comps, notes, sales */}
+            {/* Right column: notes, sales */}
             <div className="min-h-0 overflow-y-auto">
-              {mode === "business" ? (
-                <TargetsSection
-                  inventoryItemId={item.id}
-                  cmvCents={pickEstimatedCents(item)}
-                  listPriceCents={item.list_price_cents ?? null}
-                />
-              ) : null}
-
-              {marketplaceLinks.length > 0 ? (
-                <section className="border-b border-[#24282D] px-4 py-3">
-                  <div className="flex items-baseline justify-between">
-                    <div className="text-[10px] font-semibold uppercase tracking-wide text-[#77808C]">
-                      Comps across platforms
-                    </div>
-                    <div className="text-[10px] text-[#5A626E]">Opens in new tab</div>
-                  </div>
-                  <div className="mt-2 grid grid-cols-2 gap-1.5 lg:grid-cols-3">
-                    {marketplaceLinks.map((link) => (
-                      <a
-                        key={link.id}
-                        href={link.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="group flex items-center justify-between gap-1 border border-[#24282D] bg-[#0F1317] px-2 py-1.5 transition-colors hover:border-[#5A626E]"
-                        style={{ borderLeft: `2px solid ${link.accentColor}` }}
-                        title={link.tagline}
-                      >
-                        <span className="truncate text-[11px] font-medium text-[#E6E8EB]">
-                          {link.name}
-                        </span>
-                        <span className="shrink-0 text-[8px] font-semibold uppercase tracking-wide text-[#5A626E] group-hover:text-[#B8C0CC]">
-                          {MARKETPLACE_TYPE_LABELS[link.type]}
-                        </span>
-                      </a>
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-
               {item.notes ? (
                 <section className="border-b border-[#24282D] px-4 py-3">
                   <div className="text-[10px] font-semibold uppercase tracking-wide text-[#77808C]">
@@ -617,20 +530,16 @@ function ActionButton({
   children,
   onClick,
   primary = false,
-  accent = false,
   tone,
 }: {
   children: React.ReactNode;
   onClick: () => void;
   primary?: boolean;
-  accent?: boolean;
   tone?: "danger";
 }) {
   let className =
     "inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium transition-colors ";
-  if (accent) {
-    className += "border border-[#20B26B] bg-[#20B26B] font-semibold text-[#07100B] hover:bg-[#33C47C]";
-  } else if (primary) {
+  if (primary) {
     className += "border border-[#1F5F45] bg-[#0E251B] font-semibold text-[#20B26B] hover:bg-[#143624]";
   } else if (tone === "danger") {
     className += "border border-[#5C2228] bg-[#2A1111] text-[#E05C5C] hover:bg-[#3A1717]";

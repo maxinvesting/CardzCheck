@@ -832,10 +832,6 @@ export default function LedgerPage() {
             setProfileItemId(null);
             setTradeItem(it);
           }}
-          onList={(it) => {
-            setProfileItemId(null);
-            setListItem(it);
-          }}
         />
 
         <CashManagerModal

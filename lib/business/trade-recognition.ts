@@ -38,12 +38,11 @@ export type RecognizableTrade = {
   traded_at: string;
   cash_in_cents: number; // cash received in the trade
   cash_out_cents: number; // cash paid out in the trade
-  fees_cents: number; // trade fee paid — expensed into realized P&L at trade time
+  fees_cents: number; // trade fee paid; capitalized when received cards exist
   outgoing_basis_cents: number; // cost basis of cards given away
   has_incoming: boolean; // true if any card came back in the trade
   /**
-   * Mark-to-market gain stored on the trade at record time
-   * (outgoing fair value + cash received − cash paid − outgoing basis).
+   * Mark-to-market gain stored on the trade at record time.
    * This is the figure the Sales & Trades page surfaces as "Realized gain".
    * It is NOT booked into P&L directly — `tradeRecognition` decides how much
    * is recognized now vs deferred into received cards' basis.
@@ -120,34 +119,30 @@ export function recognizableFromBusinessTrade(
 /**
  * How much of a trade should be recognized in P&L *now*.
  *
- * Card-for-card swap: the net cash that changed hands minus any trade fee
- * (cash received − cash paid − fees) is realized immediately — it is real money
- * in or out of the business. The appreciation on the cards given up (outgoing
- * fair value − outgoing basis) is what defers into the received cards' basis
- * and realizes when they sell. A pure card swap with no cash and no fee
- * recognizes nothing now (fully deferred).
+ * Card-for-card swap: cash paid and trade fees are capitalized into the
+ * received cards' basis, so they are not expensed now. Cash received is
+ * recognized immediately because it was subtracted from the basis carried into
+ * those cards. A pure card swap with no cash received recognizes nothing now
+ * (fully deferred).
  *
  * Pure cards-for-cash disposal (no card received): there's nothing to defer the
  * basis into, so the full gain or loss (cash received − cash paid − fees −
  * basis given up) realizes immediately.
  *
- * Returns null when nothing is recognized (a swap with zero net cash and no fee).
+ * Returns null when nothing is recognized (a swap with zero cash received).
  *
  * The identity `recognizedNow + deferred === mark_to_market` is preserved in
- * every case — `realized_gain_cents` (the stored mark-to-market) nets out the
- * fee too — so booking cash and fees here never double-counts against the
- * deferred basis gain; see `tradeDeferredGain`.
+ * every case; see `tradeDeferredGain`.
  */
 export function tradeRecognition(
   t: RecognizableTrade
 ): { revenue_cents: number; cogs_cents: number; profit_cents: number } | null {
   if (t.has_incoming) {
-    const netCash = t.cash_in_cents - t.cash_out_cents - t.fees_cents;
-    if (netCash === 0) return null;
+    if (t.cash_in_cents === 0) return null;
     return {
       revenue_cents: t.cash_in_cents,
-      cogs_cents: t.cash_out_cents + t.fees_cents,
-      profit_cents: netCash,
+      cogs_cents: 0,
+      profit_cents: t.cash_in_cents,
     };
   }
   const net =

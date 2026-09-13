@@ -188,12 +188,11 @@ export default function TradeFormModal({
   const tradeFeeCents = inputToCents(tradeFee);
 
   // Total cost basis that rolls into the cards received: the basis of what we
-  // gave away, plus net cash out. The trade fee is NOT capitalized here — it is
-  // expensed into realized P&L at trade time (received − paid − fees). We never
-  // type a basis for an incoming card — it's derived from the trade economics.
+  // gave away, plus cash and fees paid, less any cash received. We never type a
+  // basis for an incoming card; it's derived from the trade economics.
   const incomingBasisPoolCents = Math.max(
     0,
-    outgoingBasisCents + cashPaidCents - cashReceivedCents
+    outgoingBasisCents + cashPaidCents + tradeFeeCents - cashReceivedCents
   );
 
   // Spread the basis pool across incoming cards in proportion to their
@@ -768,6 +767,10 @@ export default function TradeFormModal({
                 <span className="font-data tabular-nums">{formatMoney(cashPaidCents)}</span>
               </div>
               <div className="mt-1.5 flex justify-between text-[#77808C]">
+                <span>+ Trade fee</span>
+                <span className="font-data tabular-nums">{formatMoney(tradeFeeCents)}</span>
+              </div>
+              <div className="mt-1.5 flex justify-between text-[#77808C]">
                 <span>− Cash received</span>
                 <span className="font-data tabular-nums">{formatMoney(cashReceivedCents)}</span>
               </div>
@@ -779,9 +782,8 @@ export default function TradeFormModal({
               </div>
               <p className="mt-2 text-[11px] leading-snug text-[#5A626E]">
                 Split across received cards by estimated value. Card appreciation
-                is recognized when these cards later sell. Net cash and the trade
-                fee ({formatMoney(cashReceivedCents - cashPaidCents - tradeFeeCents)}{" "}
-                realized) hit P&amp;L now.
+                is recognized when these cards later sell. Cash paid and trade
+                fees become part of what you are into the received cards for.
               </p>
             </div>
 

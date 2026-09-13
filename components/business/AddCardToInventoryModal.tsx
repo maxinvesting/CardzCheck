@@ -258,47 +258,66 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
       const resolvedImageUrl = images[0] ?? card.user_image_url ?? card.imageUrl ?? null;
       const resolvedImageSource = resolvedImageUrl ? "user" : "none";
 
-      const res = await fetch("/api/business/inventory", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          card_id: card.card_id ?? null,
-          title,
-          player_name: card.player_name,
-          year: card.year ?? null,
-          set_name: card.set_name ?? null,
-          parallel_type: card.parallel_type ?? null,
-          card_number: card.card_number ?? null,
-          quantity: parsedQuantity,
-          acquisition_type: form.acquisition_type,
-          acquisition_date: form.acquisition_date || null,
-          cost_basis_total_cents: toCents(form.cost_basis),
-          tax_cents: toCents(form.tax),
-          shipping_cents: toCents(form.shipping),
-          fees_paid_cents: toCents(form.fees_paid),
-          condition_status: gradeFields.conditionStatus,
-          grading_company: gradeFields.gradingCompany,
-          grade: gradeFields.gradeValue,
-          cert_number: normalizedCert.cert_number ?? null,
-          psa_cert_number: normalizedCert.psa_cert_number ?? null,
-          channel: form.channel,
-          status: form.status,
-          list_price_cents: form.list_price ? toCents(form.list_price) : null,
-          current_market_value_cents: form.current_market_value
-            ? toCents(form.current_market_value)
-            : null,
-          image_url: resolvedImageUrl,
-          image_source: resolvedImageSource,
-          image_urls: images,
-          user_image_url: resolvedImageUrl,
-          location: form.location || null,
-          notes: form.notes || null,
-        }),
-      });
+      // Cost basis is entered per-card. When quantity > 1 we create that many
+      // separate single-card rows so each carries its own cost basis (matching how
+      // Market Value / Card is already per-card). Order-level tax/shipping/fees are
+      // split evenly across the rows so the totals entered aren't multiplied; any
+      // rounding remainder lands on the first row.
+      const perCardCostCents = toCents(form.cost_basis);
+      const splitEvenly = (totalCents: number, index: number) => {
+        const base = Math.floor(totalCents / parsedQuantity);
+        const remainder = totalCents - base * parsedQuantity;
+        return base + (index === 0 ? remainder : 0);
+      };
+      const totalTaxCents = toCents(form.tax);
+      const totalShippingCents = toCents(form.shipping);
+      const totalFeesCents = toCents(form.fees_paid);
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Failed to add card");
+      for (let index = 0; index < parsedQuantity; index += 1) {
+        const res = await fetch("/api/business/inventory", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            card_id: card.card_id ?? null,
+            title,
+            player_name: card.player_name,
+            year: card.year ?? null,
+            set_name: card.set_name ?? null,
+            parallel_type: card.parallel_type ?? null,
+            card_number: card.card_number ?? null,
+            quantity: 1,
+            acquisition_type: form.acquisition_type,
+            acquisition_date: form.acquisition_date || null,
+            cost_basis_total_cents: perCardCostCents,
+            tax_cents: splitEvenly(totalTaxCents, index),
+            shipping_cents: splitEvenly(totalShippingCents, index),
+            fees_paid_cents: splitEvenly(totalFeesCents, index),
+            condition_status: gradeFields.conditionStatus,
+            grading_company: gradeFields.gradingCompany,
+            grade: gradeFields.gradeValue,
+            cert_number: normalizedCert.cert_number ?? null,
+            psa_cert_number: normalizedCert.psa_cert_number ?? null,
+            channel: form.channel,
+            status: form.status,
+            list_price_cents: form.list_price ? toCents(form.list_price) : null,
+            current_market_value_cents: form.current_market_value
+              ? toCents(form.current_market_value)
+              : null,
+            image_url: resolvedImageUrl,
+            image_source: resolvedImageSource,
+            image_urls: images,
+            user_image_url: resolvedImageUrl,
+            location: form.location || null,
+            notes: form.notes || null,
+          }),
+        });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          const suffix =
+            parsedQuantity > 1 ? ` (card ${index + 1} of ${parsedQuantity})` : "";
+          throw new Error((data.error || "Failed to add card") + suffix);
+        }
       }
 
       // Reset form
@@ -500,7 +519,7 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
                 {inp("Acquisition Date", "acquisition_date", "date")}
               </div>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                {inp("Cost Basis ($)", "cost_basis", "number")}
+                {inp("Cost Basis / Card ($)", "cost_basis", "number")}
                 {inp("Tax ($)", "tax", "number")}
                 {inp("Shipping ($)", "shipping", "number")}
                 {inp("Fees ($)", "fees_paid", "number")}

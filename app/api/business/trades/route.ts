@@ -339,11 +339,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const cashPaid = parsed.cash_paid_cents ?? 0;
     const cashReceived = parsed.cash_received_cents ?? 0;
     const fees = parsed.fees_cents ?? 0;
-    // The trade fee is expensed now (netted into realized P&L), not capitalized
-    // into the received cards' basis — so it reduces the mark-to-market gain and
-    // is NOT part of incomingBasisCents (the client excludes it from the pool).
-    const realizedGainCents =
-      outgoingFairCents + cashReceived - cashPaid - fees - outgoingBasisCents;
+    const hasIncomingCards = incomingItems.length > 0;
+    // When cards come back, cash paid and trade fees are capitalized into those
+    // received cards' basis by the client allocation. Cash-only disposals have
+    // nowhere to defer those costs, so they reduce the gain immediately.
+    const realizedGainCents = hasIncomingCards
+      ? outgoingFairCents + cashReceived - outgoingBasisCents
+      : outgoingFairCents + cashReceived - cashPaid - fees - outgoingBasisCents;
     const tradedAtIso = normalizeTradeDate(parsed.traded_at);
     const tradedAtDate = tradedAtIso.slice(0, 10);
 
@@ -487,13 +489,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       },
     });
 
-    // Cash on hand: a trade moves real money — cash received in, cash paid out.
+    // Cash on hand: a trade moves real money — cash received in, cash paid and
+    // fees out.
     // Linked to the trade so it reverses if the trade is undone or deleted.
     await recordCashTransaction({
       supabase,
       userId: user.id,
       businessAccountId: context.businessAccountId,
-      amountCents: netCashForTrade(cashReceived, cashPaid),
+      amountCents: netCashForTrade(cashReceived, cashPaid, fees),
       kind: "trade",
       sourceType: "trade",
       sourceId: trade.id,

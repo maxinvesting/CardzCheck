@@ -1,55 +1,24 @@
 "use client";
 
-import { Suspense, useState, useEffect, useCallback, useMemo } from "react";
+import { Suspense, useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import BusinessDashboardView, {
   type DashboardSnapshot,
 } from "@/components/business/BusinessDashboardView";
 import SaleFormModal from "@/components/business/SaleFormModal";
 import { createClient } from "@/lib/supabase/client";
-import type { UserStorefront } from "@/types";
 import type { FinancialsSummary } from "@/lib/business/financials";
-import { normalizeEbayStoreUrl, buildEbayStoreHref } from "@/lib/ebay-store-url";
-import { parseInventoryVoiceCommand } from "@/lib/voice-commands";
-
-const EBAY_STORE_URL_STORAGE_KEY = "cardzcheck_ebay_store_url";
-const EBAY_STORE_URL_UPDATED_EVENT = "cardzcheck:ebay-store-url-updated";
-
-function readStoredEbayStoreUrl(): string | null {
-  if (typeof window === "undefined") return null;
-  return normalizeEbayStoreUrl(
-    window.sessionStorage.getItem(EBAY_STORE_URL_STORAGE_KEY)
-  );
-}
-
-function persistEbayStoreUrl(value: string | null) {
-  if (typeof window === "undefined") return;
-  if (value) {
-    window.sessionStorage.setItem(EBAY_STORE_URL_STORAGE_KEY, value);
-  } else {
-    window.sessionStorage.removeItem(EBAY_STORE_URL_STORAGE_KEY);
-  }
-}
 
 function BusinessDashboardContent() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [hasAccess, setHasAccess] = useState<boolean | null>(null);
   const [businessName, setBusinessName] = useState<string | null>(null);
-  const [ebayStoreUrl, setEbayStoreUrl] = useState<string | null>(() =>
-    readStoredEbayStoreUrl()
-  );
   const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null);
   const [snapshotLoading, setSnapshotLoading] = useState(true);
   const [needsMigration, setNeedsMigration] = useState(false);
-  const [storefronts, setStorefronts] = useState<UserStorefront[]>([]);
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [recordSaleOpen, setRecordSaleOpen] = useState(false);
-
-  const ebayStoreHref = useMemo(
-    () => buildEbayStoreHref(ebayStoreUrl),
-    [ebayStoreUrl]
-  );
 
   const loadInventory = useCallback(async () => {
     try {
@@ -103,18 +72,6 @@ function BusinessDashboardContent() {
     }
   }, []);
 
-  const loadStorefronts = useCallback(async () => {
-    try {
-      const res = await fetch("/api/business/storefronts", { cache: "no-store" });
-      if (res.ok) {
-        const data = await res.json();
-        setStorefronts(data.storefronts ?? []);
-      }
-    } catch {
-      // storefronts are non-critical, fail silently
-    }
-  }, []);
-
   const loadUserProfile = useCallback(async () => {
     const supabase = createClient();
     const {
@@ -128,51 +85,20 @@ function BusinessDashboardContent() {
         const data = await res.json();
         const apiBusinessName =
           typeof data.business_name === "string" ? data.business_name.trim() || null : null;
-        const apiEbayStoreUrl = normalizeEbayStoreUrl(data.ebay_store_url);
         setBusinessName(apiBusinessName ?? null);
-        setEbayStoreUrl(apiEbayStoreUrl);
-        persistEbayStoreUrl(apiEbayStoreUrl);
         return user;
       }
     } catch {
       // fall through to client-side resolution
     }
 
-    const metadataEbayStoreUrl = normalizeEbayStoreUrl(
-      typeof user.user_metadata?.ebay_store_url === "string"
-        ? user.user_metadata.ebay_store_url
-        : null
-    );
-    const storedEbayStoreUrl = readStoredEbayStoreUrl();
-
-    const { data: userData, error: userDataError } = await supabase
+    const { data: userData } = await supabase
       .from("users")
-      .select("business_name, ebay_store_url")
+      .select("business_name")
       .eq("id", user.id)
       .maybeSingle();
 
-    if (
-      userDataError &&
-      String(userDataError.message || "").toLowerCase().includes("ebay_store_url")
-    ) {
-      const { data: fallbackUserData } = await supabase
-        .from("users")
-        .select("business_name")
-        .eq("id", user.id)
-        .maybeSingle();
-      setBusinessName(fallbackUserData?.business_name || null);
-      const resolvedEbayStoreUrl = metadataEbayStoreUrl || storedEbayStoreUrl;
-      setEbayStoreUrl(resolvedEbayStoreUrl);
-      persistEbayStoreUrl(resolvedEbayStoreUrl);
-    } else {
-      setBusinessName(userData?.business_name || null);
-      const resolvedEbayStoreUrl =
-        normalizeEbayStoreUrl(userData?.ebay_store_url) ||
-        metadataEbayStoreUrl ||
-        storedEbayStoreUrl;
-      setEbayStoreUrl(resolvedEbayStoreUrl);
-      persistEbayStoreUrl(resolvedEbayStoreUrl);
-    }
+    setBusinessName(userData?.business_name || null);
     return user;
   }, []);
 
@@ -186,7 +112,6 @@ function BusinessDashboardContent() {
       await Promise.all([
         loadInventory(),
         loadSnapshot(),
-        loadStorefronts(),
       ]);
     }
     init();
@@ -195,7 +120,6 @@ function BusinessDashboardContent() {
     loadUserProfile,
     loadInventory,
     loadSnapshot,
-    loadStorefronts,
   ]);
 
   // Refresh profile when returning to tab (e.g. after settings update)
@@ -208,23 +132,6 @@ function BusinessDashboardContent() {
     document.addEventListener("visibilitychange", handler);
     return () => document.removeEventListener("visibilitychange", handler);
   }, [loadUserProfile]);
-
-  useEffect(() => {
-    const handleEbayStoreUrlUpdated = (event: Event) => {
-      const customEvent = event as CustomEvent<{ value?: string | null }>;
-      setEbayStoreUrl(normalizeEbayStoreUrl(customEvent.detail?.value ?? null));
-    };
-    window.addEventListener(
-      EBAY_STORE_URL_UPDATED_EVENT,
-      handleEbayStoreUrlUpdated as EventListener
-    );
-    return () => {
-      window.removeEventListener(
-        EBAY_STORE_URL_UPDATED_EVENT,
-        handleEbayStoreUrlUpdated as EventListener
-      );
-    };
-  }, []);
 
   useEffect(() => {
     if (!toast) return;
@@ -254,26 +161,6 @@ function BusinessDashboardContent() {
       }
     },
     [loadSnapshot]
-  );
-
-  const handleDashboardVoiceCommand = useCallback(
-    (transcript: string) => {
-      const command = parseInventoryVoiceCommand(transcript);
-      if (command.type === "cancel") {
-        setToast({ type: "success", message: "Voice action canceled" });
-        return;
-      }
-      if (
-        command.type === "confirm" ||
-        command.type === "delete_card" ||
-        command.type === "mark_sold"
-      ) {
-        setToast({ type: "error", message: "Manage individual cards from the Ledger" });
-        return;
-      }
-      router.push(`/assistants/advisor?prompt=${encodeURIComponent(command.transcript)}`);
-    },
-    [router]
   );
 
   const handleRecordTrade = useCallback(() => {
@@ -317,12 +204,9 @@ function BusinessDashboardContent() {
           businessName={businessName}
           snapshot={snapshot}
           snapshotLoading={snapshotLoading}
-          ebayStoreHref={ebayStoreHref}
           needsMigration={needsMigration}
-          storefronts={storefronts}
           onRecordSale={() => setRecordSaleOpen(true)}
           onRecordTrade={handleRecordTrade}
-          onDashboardVoiceCommand={handleDashboardVoiceCommand}
         />
         <SaleFormModal
           isOpen={recordSaleOpen}

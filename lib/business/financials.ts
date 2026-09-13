@@ -405,12 +405,13 @@ function buildCashFlow(
   }
 
   // Trades move real cash regardless of how the gain is recognized: cash
-  // received is money in, cash paid is money out, bucketed by trade date.
+  // received is money in, cash paid and trade fees are money out, bucketed by
+  // trade date.
   for (const trade of trades) {
     const bucket = buckets.get(monthKey(new Date(trade.traded_at)));
     if (!bucket) continue;
     bucket.cash_in_cents += trade.cash_in_cents;
-    bucket.cash_out_cents += trade.cash_out_cents;
+    bucket.cash_out_cents += trade.cash_out_cents + trade.fees_cents;
   }
 
   for (const bucket of buckets.values()) {
@@ -590,7 +591,6 @@ function buildVelocity(
   const startMs = ttmStart.getTime();
 
   let cogsTtm = 0;
-  let salesCountTtm = 0;
   let daysToSellSum = 0;
   let daysToSellCount = 0;
   let soldLast90 = 0;
@@ -600,7 +600,6 @@ function buildVelocity(
     const t = new Date(row.sold_at).getTime();
     if (t < startMs) continue;
     cogsTtm += toInt(row.cogs_cents);
-    salesCountTtm += 1;
     if (t >= last90Start) soldLast90 += 1;
   }
 

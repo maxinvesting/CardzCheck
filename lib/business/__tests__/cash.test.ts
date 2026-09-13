@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   cashDeltaForSetBalance,
   cashInForSale,
+  cashOutForPurchase,
   computeCashBalance,
   netCashForTrade,
 } from "@/lib/business/cash";
@@ -35,9 +36,10 @@ describe("cash money math", () => {
     expect(cashDeltaForSetBalance(5_000, 5_000)).toBe(0); // no change
   });
 
-  it("nets trade cash as received minus paid", () => {
+  it("nets trade cash as received minus paid and fees", () => {
     expect(netCashForTrade(5_000, 2_000)).toBe(3_000); // received more
     expect(netCashForTrade(0, 4_000)).toBe(-4_000); // paid cash, got none
+    expect(netCashForTrade(0, 4_000, 2_300)).toBe(-6_300); // paid cash + fee
     expect(netCashForTrade(1_000, 1_000)).toBe(0); // even cash
   });
 
@@ -45,5 +47,17 @@ describe("cash money math", () => {
     expect(cashInForSale(8_650)).toBe(8_650);
     expect(cashInForSale(null)).toBe(0);
     expect(cashInForSale(undefined)).toBe(0);
+  });
+
+  it("computes a purchase's cash out as the negated total outlay", () => {
+    // cost only
+    expect(cashOutForPurchase(5_000)).toBe(-5_000);
+    // cost + tax + shipping + fees
+    expect(cashOutForPurchase(5_000, 400, 350, 250)).toBe(-6_000);
+    // nothing paid → no cash movement
+    expect(cashOutForPurchase(0)).toBe(0);
+    expect(cashOutForPurchase(null, null, null, null)).toBe(0);
+    // defensive: non-finite fields are ignored, not NaN-propagated
+    expect(cashOutForPurchase(1_000, Number.NaN as unknown as number)).toBe(-1_000);
   });
 });

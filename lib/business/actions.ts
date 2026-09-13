@@ -11,6 +11,7 @@ import type { BusinessInventoryItem, BusinessSale, BusinessMetrics } from "@/typ
 import { computeNetPayout, computeProfit } from "@/lib/business/sales-utils";
 import {
   cashInForSale,
+  cashOutForPurchase,
   recordCashTransaction,
   reverseCashBySource,
 } from "@/lib/business/cash";
@@ -481,6 +482,55 @@ export async function getInventoryItem(
   return hydrated ?? item;
 }
 
+/**
+ * Keep an inventory item's "cash on hand" impact in sync. Buying a card spends
+ * cash, so we mirror the outlay (cost basis + tax + shipping + fees) as a
+ * negative, source-linked cash row that reverses when the item is edited or
+ * deleted — mirroring how sales/trades manage their own cash rows. Trades move
+ * cash through the trade ledger instead, so a trade acquisition records nothing
+ * here. Best-effort: a cash write must never block the inventory operation.
+ */
+async function syncPurchaseCashForItem(args: {
+  supabase: Awaited<ReturnType<typeof createClient>>;
+  userId: string;
+  businessAccountId: string;
+  item: BusinessInventoryItem;
+}): Promise<void> {
+  const { supabase, userId, businessAccountId, item } = args;
+  // Clear any prior purchase row first so an edit re-syncs from a clean slate.
+  await reverseCashBySource({
+    supabase,
+    businessAccountId,
+    sourceType: "purchase",
+    sourceId: item.id,
+  });
+
+  if (item.acquisition_type === "trade") return;
+
+  const amountCents = cashOutForPurchase(
+    item.cost_basis_total_cents,
+    item.tax_cents,
+    item.shipping_cents,
+    item.fees_paid_cents
+  );
+  if (amountCents === 0) return; // nothing paid → no cash movement
+
+  await recordCashTransaction({
+    supabase,
+    userId,
+    businessAccountId,
+    amountCents,
+    kind: "purchase",
+    sourceType: "purchase",
+    sourceId: item.id,
+    note: item.title ? `Purchase: ${item.title}` : "Card purchase",
+    occurredAt:
+      typeof item.acquisition_date === "string" && item.acquisition_date
+        ? item.acquisition_date
+        : null,
+  });
+}
+
 export async function createInventoryItem(
   userId: string,
   item: Omit<
@@ -521,6 +571,14 @@ export async function createInventoryItem(
   if (error) throw error;
   const itemRecord = toBusinessInventoryItem(data as BusinessInventoryRow);
   await enqueueCertImageResolution({ itemId: itemRecord.id });
+  // Cash on hand: buying a card spends cash. Linked to the item so it reverses
+  // if the cost is edited or the item is deleted.
+  await syncPurchaseCashForItem({
+    supabase,
+    userId,
+    businessAccountId: context.businessAccountId,
+    item: itemRecord,
+  });
   const [hydrated] = await hydrateTrustedImagesForItems({
     supabase,
     items: [itemRecord],
@@ -554,6 +612,22 @@ export async function updateInventoryItem(
   if (error) throw error;
   const itemRecord = toBusinessInventoryItem(data as BusinessInventoryRow);
   await enqueueCertImageResolution({ itemId: itemRecord.id });
+  // Re-sync cash on hand only when a field that changes the outlay was touched.
+  const affectsPurchaseCash =
+    updates.cost_basis_total_cents !== undefined ||
+    updates.tax_cents !== undefined ||
+    updates.shipping_cents !== undefined ||
+    updates.fees_paid_cents !== undefined ||
+    updates.acquisition_type !== undefined ||
+    updates.acquisition_date !== undefined;
+  if (affectsPurchaseCash) {
+    await syncPurchaseCashForItem({
+      supabase,
+      userId,
+      businessAccountId: context.businessAccountId,
+      item: itemRecord,
+    });
+  }
   const [hydrated] = await hydrateTrustedImagesForItems({
     supabase,
     items: [itemRecord],
@@ -582,6 +656,17 @@ export async function deleteInventoryItems(
     .eq("item_kind", BUSINESS_ITEM_KIND);
 
   if (error) throw error;
+
+  // Unwind each item's cash-on-hand purchase impact (no-op for items that
+  // never recorded one). Best-effort — the delete itself already succeeded.
+  for (const itemId of itemIds) {
+    await reverseCashBySource({
+      supabase,
+      businessAccountId: context.businessAccountId,
+      sourceType: "purchase",
+      sourceId: itemId,
+    });
+  }
 }
 
 /**

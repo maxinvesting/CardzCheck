@@ -30,9 +30,9 @@ describe("tradeRecognition", () => {
     expect(rec).toBeNull();
   });
 
-  it("recognizes a card-for-card swap's net cash immediately", () => {
-    // Net cash that changed hands (20000 in, 0 out) is realized now; the card
-    // appreciation defers into the received card's basis.
+  it("recognizes a card-for-card swap's cash received immediately", () => {
+    // Cash received (20000 in) is realized now because it is subtracted from the
+    // received card's basis; card appreciation defers into basis.
     const rec = tradeRecognition(
       trade({ has_incoming: true, cash_in_cents: 20000, outgoing_basis_cents: 5000 })
     );
@@ -43,9 +43,9 @@ describe("tradeRecognition", () => {
     });
   });
 
-  it("subtracts the trade fee from the swap's realized cash", () => {
-    // Received 250 cash, paid 0, fee 20 → realized 230 now; fee is expensed,
-    // not deferred into the received card's basis.
+  it("capitalizes the trade fee into received-card basis", () => {
+    // Received 250 cash and paid a 20 fee. The 250 is realized now; the fee is
+    // part of the received card's basis and is not expensed immediately.
     const rec = tradeRecognition(
       trade({
         has_incoming: true,
@@ -56,17 +56,24 @@ describe("tradeRecognition", () => {
     );
     expect(rec).toEqual({
       revenue_cents: 25000,
-      cogs_cents: 2000,
-      profit_cents: 23000,
+      cogs_cents: 0,
+      profit_cents: 25000,
     });
   });
 
-  it("realizes a fee-only card swap as an immediate loss", () => {
-    // Pure card-for-card swap, no cash, but a 15 fee → realized -15.
+  it("defers a fee-only card swap into received-card basis", () => {
+    // Pure card-for-card swap, no cash, but a 15 fee → nothing hits P&L now.
     const rec = tradeRecognition(
       trade({ has_incoming: true, fees_cents: 1500, outgoing_basis_cents: 90000 })
     );
-    expect(rec?.profit_cents).toBe(-1500);
+    expect(rec).toBeNull();
+  });
+
+  it("defers cash paid into received-card basis", () => {
+    const rec = tradeRecognition(
+      trade({ has_incoming: true, cash_out_cents: 4200, outgoing_basis_cents: 83000 })
+    );
+    expect(rec).toBeNull();
   });
 
   it("realizes the full loss of a pure cards-for-cash disposal immediately", () => {
@@ -170,7 +177,7 @@ describe("sumRecognizedTrades", () => {
 
 describe("tradeDeferredGain", () => {
   it("defers the full mark-to-market gain of a no-cash card-for-card swap", () => {
-    // Swap with no net cash → nothing recognized now, whole gain deferred.
+    // Swap with no cash received → nothing recognized now, whole gain deferred.
     const t = trade({
       has_incoming: true,
       outgoing_basis_cents: 88000,
@@ -180,8 +187,8 @@ describe("tradeDeferredGain", () => {
     expect(tradeDeferredGain(t)).toBe(7000);
   });
 
-  it("recognizes net cash now and defers the card appreciation", () => {
-    // mark-to-market 35000; net cash recognized now = 20000. The remaining
+  it("recognizes cash received now and defers the card appreciation", () => {
+    // mark-to-market 35000; cash received recognized now = 20000. The remaining
     // 15000 is card appreciation deferred into the received card's basis.
     const t = trade({
       has_incoming: true,
@@ -251,7 +258,7 @@ describe("recognizableFromBusinessTrade", () => {
       realized_gain_cents: 50625,
       items: [{ direction: "in" }, { direction: "out" }],
     });
-    // Card-for-card swap with 25000 net cash in → that cash is recognized now;
+    // Card-for-card swap with 25000 cash received → that cash is recognized now;
     // the remaining card appreciation (50625 - 25000) defers into basis.
     expect(tradeRecognition(rec)).toEqual({
       revenue_cents: 25000,

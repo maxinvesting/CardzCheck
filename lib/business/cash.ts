@@ -17,7 +17,7 @@ export type CashTransactionKind =
   | "trade"
   | "purchase";
 
-export type CashSourceType = "sale" | "trade";
+export type CashSourceType = "sale" | "trade" | "purchase";
 
 export interface CashTransaction {
   id: string;
@@ -90,17 +90,34 @@ export function cashDeltaForSetBalance(currentCents: number, targetCents: number
   return toInt(targetCents) - toInt(currentCents);
 }
 
-/** Net cash impact of a trade: cash received in, cash paid out. */
+/** Net cash impact of a trade: cash received in, cash paid and fees out. */
 export function netCashForTrade(
   cashReceivedCents: number,
-  cashPaidCents: number
+  cashPaidCents: number,
+  feesCents = 0
 ): number {
-  return toInt(cashReceivedCents) - toInt(cashPaidCents);
+  return toInt(cashReceivedCents) - toInt(cashPaidCents) - toInt(feesCents);
 }
 
 /** Cash a sale puts in the bank — the net payout actually received. */
 export function cashInForSale(netPayoutCents: number | null | undefined): number {
   return toInt(netPayoutCents);
+}
+
+/**
+ * Cash a purchase takes out of the bank — the full outlay (cost basis + tax +
+ * shipping + fees), returned as a negative number. Zero (or a negative total,
+ * which shouldn't happen) yields 0 so no ledger row is written.
+ */
+export function cashOutForPurchase(
+  costBasisCents: number | null | undefined,
+  taxCents: number | null | undefined = 0,
+  shippingCents: number | null | undefined = 0,
+  feesCents: number | null | undefined = 0
+): number {
+  const total =
+    toInt(costBasisCents) + toInt(taxCents) + toInt(shippingCents) + toInt(feesCents);
+  return total > 0 ? -total : 0;
 }
 
 // ── DB helpers (server-side, RLS-scoped client) ────────────────────────────

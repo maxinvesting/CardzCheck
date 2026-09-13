@@ -1,9 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { MicButton } from "@/components/ui/MicButton";
-import type { UserStorefront } from "@/types";
 
 /* ── snapshot shape ─────────────────────────────────────────────── */
 
@@ -117,30 +114,19 @@ interface Props {
   businessName: string | null;
   snapshot: DashboardSnapshot | null;
   snapshotLoading: boolean;
-  storefronts?: UserStorefront[];
-  ebayStoreHref: string | null;
   needsMigration: boolean;
   onRecordSale?: () => void;
   onRecordTrade?: () => void;
-  onDashboardVoiceCommand?: (transcript: string) => void;
 }
 
 export default function BusinessDashboardView({
   businessName,
   snapshot,
   snapshotLoading,
-  storefronts = [],
-  ebayStoreHref,
   needsMigration,
   onRecordSale,
   onRecordTrade,
-  onDashboardVoiceCommand,
 }: Props) {
-  const [showStorefrontDropdown, setShowStorefrontDropdown] = useState(false);
-
-  const primaryStorefront = storefronts.find((store) => store.is_primary) ?? storefronts[0] ?? null;
-  const hasStorefronts = storefronts.length > 0;
-
   const pnl = snapshot?.unrealizedPnlCents ?? 0;
   const margin = snapshot?.marginMtdPct;
 
@@ -176,7 +162,7 @@ export default function BusinessDashboardView({
       ),
     },
     {
-      label: "Analytics",
+      label: "Financials",
       detail: "Financials & trends",
       href: "/business/financials",
       icon: (
@@ -189,38 +175,6 @@ export default function BusinessDashboardView({
       href: "/business/sales",
       icon: (
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M3 6h18M3 12h18M3 18h18" />
-      ),
-    },
-    {
-      label: "Trade Center",
-      detail: "Swap cards P2P",
-      href: "/trade",
-      icon: (
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
-      ),
-    },
-    {
-      label: "Marketplace",
-      detail: "Your storefront",
-      href: "/marketplace",
-      icon: (
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M3 9l1-5h16l1 5M5 9v10a1 1 0 001 1h12a1 1 0 001-1V9M3 9h18" />
-      ),
-    },
-    {
-      label: "Grading",
-      detail: "Grade ROI simulator",
-      href: "/business/grade-hub",
-      icon: (
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M9 12l2 2 4-4m-6.165-7.303a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
-      ),
-    },
-    {
-      label: "Business Advisor",
-      detail: "Ask the advisor",
-      href: "/assistants/advisor",
-      icon: (
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M8 12h8M8 8h8m-8 8h5m4 3l-2-2H6a2 2 0 01-2-2V6a2 2 0 012-2h12a2 2 0 012 2v9a2 2 0 01-1 1.732" />
       ),
     },
   ];
@@ -243,80 +197,6 @@ export default function BusinessDashboardView({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {onDashboardVoiceCommand && (
-            <MicButton
-              label="Ask by voice"
-              title="Ask the Business Advisor by voice"
-              size="sm"
-              onResult={onDashboardVoiceCommand}
-              className="desk-btn"
-            />
-          )}
-
-          {hasStorefronts ? (
-            storefronts.length > 1 ? (
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setShowStorefrontDropdown((current) => !current)}
-                  className="desk-btn"
-                >
-                  Storefronts
-                  <svg className="h-3.5 w-3.5 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-                {showStorefrontDropdown && (
-                  <>
-                    <div className="fixed inset-0 z-30" onClick={() => setShowStorefrontDropdown(false)} />
-                    <div
-                      className="absolute right-0 top-full z-40 mt-2 w-60 overflow-hidden rounded-xl py-1"
-                      style={{ background: "var(--biz-surface-raised)", border: "1px solid var(--biz-border)", boxShadow: "var(--biz-shadow-md)" }}
-                    >
-                      {storefronts.map((sf) => (
-                        <a
-                          key={sf.id}
-                          href={sf.store_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-2 px-3 py-2 text-xs text-[var(--biz-muted-strong)] transition-colors hover:bg-[var(--biz-hover)] hover:text-[var(--biz-text)]"
-                          onClick={() => setShowStorefrontDropdown(false)}
-                        >
-                          <span className="truncate font-medium">{sf.display_name}</span>
-                          {sf.is_primary && (
-                            <span className="shrink-0 text-[9px] font-semibold tracking-wide text-[var(--biz-muted-strong)]">PRIMARY</span>
-                          )}
-                          <svg className="ml-auto h-3 w-3 shrink-0 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                          </svg>
-                        </a>
-                      ))}
-                      <Link
-                        href="/business/settings?section=storefronts"
-                        onClick={() => setShowStorefrontDropdown(false)}
-                        className="mt-1 block border-t border-[var(--biz-border)] px-3 py-2 text-xs font-medium text-[var(--biz-text)] transition-colors hover:bg-[var(--biz-hover)]"
-                      >
-                        Manage storefronts
-                      </Link>
-                    </div>
-                  </>
-                )}
-              </div>
-            ) : (
-              <a
-                href={primaryStorefront!.store_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="desk-btn"
-              >
-                {primaryStorefront!.display_name}
-                <svg className="h-3.5 w-3.5 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 4h6m0 0v6m0-6L10 14" />
-                </svg>
-              </a>
-            )
-          ) : null}
-
           <a href="/api/business/export?type=inventory" className="desk-btn">
             <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -453,23 +333,6 @@ export default function BusinessDashboardView({
           })}
         </div>
       </section>
-
-      {/* eBay — de-emphasized external channel */}
-      {ebayStoreHref && (
-        <div className="desk-rise mt-7 flex justify-center" style={{ animationDelay: "240ms" }}>
-          <a
-            href={ebayStoreHref}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-[11px] text-[var(--biz-faint)] transition-colors hover:text-[var(--biz-muted)]"
-          >
-            View eBay storefront
-            <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 4h6m0 0v6m0-6L10 14" />
-            </svg>
-          </a>
-        </div>
-      )}
     </div>
   );
 }
