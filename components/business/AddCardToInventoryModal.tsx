@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { normalizeCertWriteFields } from "@/lib/images/cert-image";
+import { resolveGradeFields, buildInventoryTitle } from "@/lib/business/grade";
 import CardPhotoUploader from "@/components/business/CardPhotoUploader";
 
 export interface PendingInventoryCard {
@@ -32,78 +33,6 @@ interface Props {
 const CHANNEL_OPTIONS = ["ebay", "whatnot", "alt", "fanatics", "instagram", "show", "local", "other", "veriswap"] as const;
 const STATUS_OPTIONS = ["unlisted", "listed", "pending_sale", "sold", "returned"] as const;
 const ACQ_OPTIONS = ["buy", "trade", "rip", "consignment", "other"] as const;
-const GRADER_GRADE_PATTERN = /^(PSA|BGS|SGC|CGC)\s*(\d+(?:\.\d+)?)$/i;
-const WHOLE_GRADE_PATTERN = /^\d+(?:\.0)?$/;
-const HALF_GRADE_PATTERN = /^\d+\.5$/;
-
-function inferGradingCompany(gradeValue: string): string | null {
-  if (HALF_GRADE_PATTERN.test(gradeValue)) return "BGS";
-  if (WHOLE_GRADE_PATTERN.test(gradeValue)) return "PSA";
-  return null;
-}
-
-function resolveGradeFields(card: PendingInventoryCard): {
-  conditionStatus: "raw" | "graded";
-  gradingCompany: string | null;
-  gradeValue: string | null;
-  gradeLabel: string | null;
-} {
-  const rawGrader = card.grader?.trim() || "";
-  const rawGrade = card.grade?.trim() || "";
-  const graderUpper = rawGrader ? rawGrader.toUpperCase() : "";
-
-  if (graderUpper === "RAW" || rawGrade.toLowerCase() === "raw") {
-    return {
-      conditionStatus: "raw",
-      gradingCompany: null,
-      gradeValue: null,
-      gradeLabel: null,
-    };
-  }
-
-  const parsed = rawGrade.match(GRADER_GRADE_PATTERN);
-  const parsedGrader = parsed?.[1]?.toUpperCase();
-  const parsedGradeValue = parsed?.[2];
-  const normalizedGradeValue = parsedGradeValue || rawGrade || "";
-
-  const gradingCompany =
-    graderUpper && graderUpper !== "RAW"
-      ? graderUpper
-      : parsedGrader || inferGradingCompany(normalizedGradeValue) || null;
-  const gradeValue = normalizedGradeValue || null;
-
-  if (!gradingCompany && !gradeValue) {
-    return {
-      conditionStatus: "raw",
-      gradingCompany: null,
-      gradeValue: null,
-      gradeLabel: null,
-    };
-  }
-
-  const gradeLabel = [gradingCompany, gradeValue]
-    .filter(Boolean)
-    .join(" ")
-    .trim();
-
-  return {
-    conditionStatus: "graded",
-    gradingCompany,
-    gradeValue,
-    gradeLabel: gradeLabel || null,
-  };
-}
-
-function buildTitle(card: PendingInventoryCard): string {
-  const grade = resolveGradeFields(card);
-  return (
-    [card.year, card.player_name, card.set_name, card.parallel_type, grade.gradeLabel]
-      .filter(Boolean)
-      .join(" ")
-      .trim() || card.player_name
-  );
-}
-
 export default function AddCardToInventoryModal({ isOpen, card, onClose, onSuccess }: Props) {
   const [form, setForm] = useState({
     quantity: String(Math.max(1, card?.quantity ?? 1)),
@@ -240,7 +169,7 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
     return Number.isNaN(n) ? 0 : Math.round(n * 100);
   };
 
-  const title = buildTitle(card);
+  const title = buildInventoryTitle(card);
   const gradeFields = resolveGradeFields(card);
   const maxPhotos = gradeFields.conditionStatus === "graded" ? 3 : 10;
 

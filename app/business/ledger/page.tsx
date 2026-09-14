@@ -14,10 +14,9 @@ import SaleFormModal from "@/components/business/SaleFormModal";
 import TradeFormModal, { type TradeFormPayload } from "@/components/business/TradeFormModal";
 import AddCardToInventoryModal from "@/components/business/AddCardToInventoryModal";
 import type { PendingInventoryCard } from "@/components/business/AddCardToInventoryModal";
-import BulkCertImportModal from "@/components/business/BulkCertImportModal";
+import BulkAddInventoryModal from "@/components/business/BulkAddInventoryModal";
 import CashManagerModal from "@/components/business/CashManagerModal";
 import CardProfileDrawer from "@/components/business/CardProfileDrawer";
-import { useTierGates } from "@/hooks/useTierGates";
 // Heavy modal (~1.3k lines) — load its chunk only when the modal is opened.
 const AddCardModalNew = dynamic(() => import("@/components/AddCardModalNew"), {
   ssr: false,
@@ -227,9 +226,8 @@ export default function LedgerPage() {
   const [showStandaloneTrade, setShowStandaloneTrade] = useState(false);
   const [listItem, setListItem] = useState<BusinessInventoryItem | null>(null);
   const [showAddCardModal, setShowAddCardModal] = useState(false);
-  const [showBulkCertModal, setShowBulkCertModal] = useState(false);
+  const [showBulkAddModal, setShowBulkAddModal] = useState(false);
   const [profileItemId, setProfileItemId] = useState<string | null>(null);
-  const { gates } = useTierGates();
   const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(() => new Set());
   const [isBulkWorking, setIsBulkWorking] = useState(false);
   const [showCardPicker, setShowCardPicker] = useState(false);
@@ -703,15 +701,13 @@ export default function LedgerPage() {
               >
                 Trade
               </button>
-              {gates?.canBulkAddByCert ? (
-                <button
-                  type="button"
-                  onClick={() => setShowBulkCertModal(true)}
-                  className="border border-[#343941] px-3 py-1.5 text-[12px] font-medium text-[#B8C0CC] transition-colors hover:border-[#5A626E] hover:text-[#E6E8EB]"
-                >
-                  Bulk add by cert
-                </button>
-              ) : null}
+              <button
+                type="button"
+                onClick={() => setShowBulkAddModal(true)}
+                className="border border-[#343941] px-3 py-1.5 text-[12px] font-medium text-[#B8C0CC] transition-colors hover:border-[#5A626E] hover:text-[#E6E8EB]"
+              >
+                Bulk add
+              </button>
               <button
                 type="button"
                 onClick={() => setShowAddCardModal(true)}
@@ -840,9 +836,9 @@ export default function LedgerPage() {
           onChanged={() => void loadCashBalance()}
         />
 
-        <BulkCertImportModal
-          isOpen={showBulkCertModal}
-          onClose={() => setShowBulkCertModal(false)}
+        <BulkAddInventoryModal
+          isOpen={showBulkAddModal}
+          onClose={() => setShowBulkAddModal(false)}
           onSuccess={(count) => {
             if (count > 0) {
               setToast({
