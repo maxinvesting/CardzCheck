@@ -1,239 +1,371 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { fmtMoney, fmtPct, fmtSigned, type PeriodKey } from "./financialsFormat";
+import { fmtMoney, fmtPct } from "./financialsFormat";
 import { createClient } from "@/lib/supabase/client";
-import type { FinancialsSummary, Snapshot } from "@/lib/business/financials";
+import type {
+  DayBucket,
+  MonthBucket,
+  FinancialsSummary,
+  PeriodTotals,
+  Snapshot,
+} from "@/lib/business/financials";
 
-/* ── Statement primitives ─────────────────────────────────────────────────── */
+/* ── Time helpers ─────────────────────────────────────────────────────────── */
 
-function StatementRow({
+type Grain = "weekly" | "monthly";
+
+type TimeRow = {
+  key: string;
+  label: string;
+  revenue_cents: number;
+  profit_cents: number;
+  sales_count: number;
+};
+
+function isoKey(d: Date): string {
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function fmtDayShort(key: string): string {
+  const [y, m, d] = key.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+function fmtMonthYear(key: string): string {
+  const [y, m] = key.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+function marginPct(revenue: number, profit: number): number | null {
+  return revenue > 0 ? (profit / revenue) * 100 : null;
+}
+
+/** Roll the trailing daily buckets up into Monday-anchored weeks, newest first. */
+function buildWeekly(daily: DayBucket[]): TimeRow[] {
+  const map = new Map<string, TimeRow>();
+  for (const d of daily) {
+    const [y, m, day] = d.day.split("-").map(Number);
+    const date = new Date(Date.UTC(y, m - 1, day));
+    const dow = date.getUTCDay(); // 0 = Sun … 6 = Sat
+    const shift = dow === 0 ? -6 : 1 - dow; // back to Monday
+    const start = new Date(date);
+    start.setUTCDate(date.getUTCDate() + shift);
+    const key = isoKey(start);
+    let row = map.get(key);
+    if (!row) {
+      const end = new Date(start);
+      end.setUTCDate(start.getUTCDate() + 6);
+      row = {
+        key,
+        label: `${fmtDayShort(key)} – ${fmtDayShort(isoKey(end))}`,
+        revenue_cents: 0,
+        profit_cents: 0,
+        sales_count: 0,
+      };
+      map.set(key, row);
+    }
+    row.revenue_cents += d.revenue_cents;
+    row.profit_cents += d.profit_cents;
+    row.sales_count += d.sales_count;
+  }
+  return [...map.values()].sort((a, b) => (a.key < b.key ? 1 : -1));
+}
+
+function buildMonthly(monthly: MonthBucket[]): TimeRow[] {
+  return [...monthly]
+    .reverse()
+    .map((m) => ({
+      key: m.month,
+      label: fmtMonthYear(m.month),
+      revenue_cents: m.revenue_cents,
+      profit_cents: m.profit_cents,
+      sales_count: m.sales_count,
+    }));
+}
+
+/* ── Small presentational pieces ──────────────────────────────────────────── */
+
+function pnlColor(cents: number): string {
+  if (cents > 0) return "text-[#20B26B]";
+  if (cents < 0) return "text-[#E05C5C]";
+  return "text-[#B8C0CC]";
+}
+
+/** One of the three headline timeframes (this week / month / year). */
+function Headline({
   label,
-  value,
-  note,
-  tone = "normal",
-  indent = false,
+  totals,
 }: {
   label: string;
-  value: string;
-  note?: string;
-  tone?: "normal" | "muted" | "total" | "pnl-pos" | "pnl-neg";
-  indent?: boolean;
+  totals: { revenue_cents: number; profit_cents: number; sales_count: number };
 }) {
-  const labelCls =
-    tone === "total"
-      ? "text-[13px] font-semibold text-[#E6E8EB]"
-      : tone === "muted"
-        ? "text-[12px] text-[#77808C]"
-        : "text-[12px] text-[#B8C0CC]";
-
-  const valueCls =
-    tone === "total"
-      ? "text-[15px] font-semibold text-[#E6E8EB]"
-      : tone === "pnl-pos"
-        ? "text-[13px] font-medium text-[#20B26B]"
-        : tone === "pnl-neg"
-          ? "text-[13px] font-medium text-[#E05C5C]"
-          : "text-[13px] text-[#E6E8EB]";
-
+  const margin = marginPct(totals.revenue_cents, totals.profit_cents);
   return (
-    <div
-      className={`flex items-baseline justify-between gap-4 py-[9px] ${
-        tone === "total" ? "mt-1 border-t border-[#343941] pt-3" : ""
-      }`}
-    >
-      <div className={`flex items-baseline gap-2 ${indent ? "pl-3" : ""}`}>
-        <span className={labelCls}>{label}</span>
-        {note ? <span className="text-[10px] text-[#5A626D]">{note}</span> : null}
+    <div className="px-1 py-3 sm:px-6 sm:py-1">
+      <div className="text-[10px] font-medium uppercase tracking-[0.14em] text-[#77808C]">
+        {label}
       </div>
-      <span className={`font-data tabular-nums ${valueCls}`}>{value}</span>
+      <div className="mt-2 font-data text-[28px] font-semibold leading-none tabular-nums text-[#E6E8EB]">
+        {fmtMoney(totals.revenue_cents)}
+      </div>
+      <div className="mt-1 text-[11px] text-[#5A626D]">
+        revenue · {totals.sales_count}{" "}
+        {totals.sales_count === 1 ? "sale" : "sales"}
+      </div>
+      <div
+        className={`mt-3 font-data text-[16px] font-semibold tabular-nums ${pnlColor(
+          totals.profit_cents
+        )}`}
+      >
+        {fmtMoney(totals.profit_cents)}
+      </div>
+      <div className="mt-0.5 text-[11px] text-[#5A626D]">
+        net profit{margin != null ? ` · ${fmtPct(margin, 1)} margin` : ""}
+      </div>
     </div>
   );
 }
 
-function StatementCard({
-  title,
-  subtitle,
-  children,
-}: {
-  title: string;
-  subtitle?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="border border-[#24282D] bg-[#0F1317]">
-      <div className="flex items-baseline gap-2 border-b border-[#24282D] px-4 py-2.5">
-        <h2 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#E6E8EB]">
-          {title}
-        </h2>
-        {subtitle ? (
-          <span className="text-[10px] text-[#77808C]">{subtitle}</span>
-        ) : null}
-      </div>
-      <div className="px-4 py-1.5">{children}</div>
-    </section>
-  );
-}
-
-/* ── Hero: the two numbers you came here for ──────────────────────────────── */
-
-function HeroFigure({
+/** A single figure in the Position footer strip. */
+function PositionStat({
   label,
   value,
   note,
   tone = "neutral",
+  strong = false,
 }: {
   label: string;
   value: string;
   note?: string;
   tone?: "neutral" | "pos" | "neg";
+  strong?: boolean;
 }) {
   const valueCls =
     tone === "pos"
       ? "text-[#20B26B]"
       : tone === "neg"
         ? "text-[#E05C5C]"
-        : "text-[#E6E8EB]";
+        : strong
+          ? "text-[#E6E8EB]"
+          : "text-[#B8C0CC]";
   return (
-    <div className="border border-[#24282D] bg-[#0F1317] px-5 py-4">
+    <div className="px-1 py-2 sm:px-5">
       <div className="text-[10px] font-medium uppercase tracking-[0.12em] text-[#77808C]">
         {label}
       </div>
       <div
-        className={`mt-1.5 font-data text-[30px] font-semibold leading-none tabular-nums ${valueCls}`}
+        className={`mt-1.5 font-data text-[17px] tabular-nums ${
+          strong ? "font-semibold" : "font-medium"
+        } ${valueCls}`}
       >
         {value}
       </div>
       {note ? (
-        <div className="mt-1.5 text-[11px] text-[#77808C]">{note}</div>
+        <div className="mt-0.5 text-[10px] text-[#5A626D]">{note}</div>
       ) : null}
     </div>
   );
 }
 
-/* ── Income statement: what the business earned this period ────────────────── */
+/* ── Breakdown table ──────────────────────────────────────────────────────── */
 
-const PERIOD_LABELS: { key: PeriodKey; label: string }[] = [
-  { key: "last_30d", label: "Last 30d" },
-  { key: "mtd", label: "This month" },
-  { key: "ytd", label: "This year" },
-];
-
-function IncomeStatement({
-  totals,
-  period,
+function Breakdown({
+  weekly,
+  monthly,
+  grain,
+  setGrain,
 }: {
-  totals: FinancialsSummary["totals"];
-  period: PeriodKey;
+  weekly: TimeRow[];
+  monthly: TimeRow[];
+  grain: Grain;
+  setGrain: (g: Grain) => void;
 }) {
-  const t = totals[period];
-  const grossProfit = t.revenue_cents - t.cogs_cents;
-  // `profit_cents` is stored per sale (it's what the ledger reports), so it can
-  // drift from revenue − cogs − fees − shipping if a row was edited without
-  // recomputing. Surface any gap as its own line so the statement always foots
-  // to the same net profit the ledger shows instead of silently disagreeing.
-  const adjustments =
-    t.profit_cents - (grossProfit - t.fees_cents - t.shipping_cost_cents);
+  const rows = (grain === "weekly" ? weekly : monthly).filter(
+    (r) => r.sales_count > 0
+  );
+
+  const total = rows.reduce(
+    (acc, r) => ({
+      revenue_cents: acc.revenue_cents + r.revenue_cents,
+      profit_cents: acc.profit_cents + r.profit_cents,
+      sales_count: acc.sales_count + r.sales_count,
+    }),
+    { revenue_cents: 0, profit_cents: 0, sales_count: 0 }
+  );
 
   return (
-    <StatementCard title="Income" subtitle="realized — sold cards only">
-      <StatementRow
-        label="Revenue"
-        value={fmtMoney(t.revenue_cents)}
-        note={`${t.sales_count} ${t.sales_count === 1 ? "sale" : "sales"}`}
-      />
-      <StatementRow
-        label="Cost of goods sold"
-        value={`(${fmtMoney(t.cogs_cents)})`}
-        tone="muted"
-        indent
-      />
-      <StatementRow
-        label="Gross profit"
-        value={fmtMoney(grossProfit)}
-        tone="total"
-      />
-      <StatementRow
-        label="Platform fees"
-        value={`(${fmtMoney(t.fees_cents)})`}
-        tone="muted"
-        indent
-      />
-      <StatementRow
-        label="Shipping"
-        value={`(${fmtMoney(t.shipping_cost_cents)})`}
-        tone="muted"
-        indent
-      />
-      {adjustments !== 0 ? (
-        <StatementRow
-          label="Adjustments"
-          value={fmtMoney(adjustments)}
-          tone="muted"
-          indent
-        />
-      ) : null}
-      <StatementRow
-        label="Net profit"
-        value={fmtMoney(t.profit_cents)}
-        note={t.margin_pct != null ? `${fmtPct(t.margin_pct)} margin` : undefined}
-        tone="total"
-      />
-    </StatementCard>
+    <section>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#B8C0CC]">
+          Revenue &amp; profit over time
+        </h2>
+        <div className="flex items-center gap-1">
+          {(["weekly", "monthly"] as Grain[]).map((g) => (
+            <button
+              key={g}
+              type="button"
+              onClick={() => setGrain(g)}
+              className={`px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.08em] capitalize transition-colors ${
+                grain === g
+                  ? "bg-[#1B2A22] text-[#20B26B]"
+                  : "text-[#77808C] hover:text-[#B8C0CC]"
+              }`}
+            >
+              {g}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="border-t border-[#1E2227] py-10 text-center text-[12px] text-[#5A626D]">
+          No sales in this window yet.
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[440px] border-collapse text-[12px]">
+            <thead>
+              <tr className="border-b border-[#24282D] text-[9px] font-semibold uppercase tracking-[0.1em] text-[#5A626D]">
+                <th className="py-2 pr-3 text-left font-semibold">
+                  {grain === "weekly" ? "Week" : "Month"}
+                </th>
+                <th className="py-2 pr-3 text-right font-semibold">Sales</th>
+                <th className="py-2 pr-3 text-right font-semibold">Revenue</th>
+                <th className="py-2 pr-3 text-right font-semibold">Profit</th>
+                <th className="py-2 text-right font-semibold">Margin</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => {
+                const m = marginPct(r.revenue_cents, r.profit_cents);
+                return (
+                  <tr
+                    key={r.key}
+                    className="border-b border-[#16191D] transition-colors hover:bg-[#0E1114]"
+                  >
+                    <td className="py-2.5 pr-3 text-left text-[#E6E8EB]">
+                      {r.label}
+                    </td>
+                    <td className="py-2.5 pr-3 text-right font-data tabular-nums text-[#77808C]">
+                      {r.sales_count}
+                    </td>
+                    <td className="py-2.5 pr-3 text-right font-data tabular-nums text-[#E6E8EB]">
+                      {fmtMoney(r.revenue_cents)}
+                    </td>
+                    <td
+                      className={`py-2.5 pr-3 text-right font-data tabular-nums ${pnlColor(
+                        r.profit_cents
+                      )}`}
+                    >
+                      {fmtMoney(r.profit_cents)}
+                    </td>
+                    <td className="py-2.5 text-right font-data tabular-nums text-[#77808C]">
+                      {fmtPct(m, 0)}
+                    </td>
+                  </tr>
+                );
+              })}
+              <tr className="border-t border-[#343941] font-semibold">
+                <td className="py-2.5 pr-3 text-left text-[#E6E8EB]">Total</td>
+                <td className="py-2.5 pr-3 text-right font-data tabular-nums text-[#B8C0CC]">
+                  {total.sales_count}
+                </td>
+                <td className="py-2.5 pr-3 text-right font-data tabular-nums text-[#E6E8EB]">
+                  {fmtMoney(total.revenue_cents)}
+                </td>
+                <td
+                  className={`py-2.5 pr-3 text-right font-data tabular-nums ${pnlColor(
+                    total.profit_cents
+                  )}`}
+                >
+                  {fmtMoney(total.profit_cents)}
+                </td>
+                <td className="py-2.5 text-right font-data tabular-nums text-[#77808C]">
+                  {fmtPct(
+                    marginPct(total.revenue_cents, total.profit_cents),
+                    0
+                  )}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }
 
-/* ── Position: what the business is worth today ───────────────────────────── */
+/* ── Position footer ──────────────────────────────────────────────────────── */
 
-function PositionStatement({ snapshot }: { snapshot: Snapshot }) {
+function Position({ snapshot }: { snapshot: Snapshot }) {
   const unrealized = snapshot.unrealized_pnl_cents;
   return (
-    <StatementCard title="Position" subtitle="what you hold today">
-      <StatementRow
-        label="Cash on hand"
-        value={fmtMoney(snapshot.cash_on_hand_cents)}
-      />
-      <StatementRow
-        label="Inventory at cost"
-        value={fmtMoney(snapshot.cost_basis_cents)}
-        note={`${snapshot.active_count} ${
-          snapshot.active_count === 1 ? "card" : "cards"
-        }`}
-      />
-      <StatementRow
-        label="Inventory at market"
-        value={fmtMoney(snapshot.inventory_value_cents)}
-        tone="muted"
-        indent
-      />
-      <StatementRow
-        label="Unrealized gain"
-        value={fmtMoney(unrealized)}
-        note={
-          snapshot.unrealized_pnl_pct != null
-            ? fmtSigned(snapshot.unrealized_pnl_pct)
-            : undefined
-        }
-        tone={unrealized >= 0 ? "pnl-pos" : "pnl-neg"}
-        indent
-      />
-      {snapshot.unrealized_trade_gain_cents !== 0 ? (
-        <StatementRow
-          label="Unrealized trade gain"
-          value={fmtMoney(snapshot.unrealized_trade_gain_cents)}
-          note="books as cards sell"
-          tone="muted"
-          indent
+    <section>
+      <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#B8C0CC]">
+        Position
+        <span className="ml-2 font-normal normal-case tracking-normal text-[#5A626D]">
+          what you hold today
+        </span>
+      </h2>
+      <div className="grid grid-cols-2 gap-y-1 border-t border-[#24282D] pt-1 sm:flex sm:flex-wrap sm:items-start sm:gap-y-0 sm:divide-x sm:divide-[#1E2227]">
+        <PositionStat
+          label="Cash on hand"
+          value={fmtMoney(snapshot.cash_on_hand_cents)}
+          strong
         />
-      ) : null}
-      <StatementRow
-        label="Total value"
-        value={fmtMoney(snapshot.total_business_value_cents)}
-        note="cash + inventory at market"
-        tone="total"
-      />
-    </StatementCard>
+        <PositionStat
+          label="Inventory at cost"
+          value={fmtMoney(snapshot.cost_basis_cents)}
+          note={`${snapshot.active_count} ${
+            snapshot.active_count === 1 ? "card" : "cards"
+          }`}
+          strong
+        />
+        <PositionStat
+          label="At market"
+          value={fmtMoney(snapshot.inventory_value_cents)}
+        />
+        <PositionStat
+          label="Unrealized gain"
+          value={fmtMoney(unrealized)}
+          note={
+            snapshot.unrealized_pnl_pct != null
+              ? `${snapshot.unrealized_pnl_pct >= 0 ? "+" : ""}${fmtPct(
+                  snapshot.unrealized_pnl_pct,
+                  1
+                )}`
+              : undefined
+          }
+          tone={unrealized >= 0 ? "pos" : "neg"}
+        />
+        {snapshot.unrealized_trade_gain_cents !== 0 ? (
+          <PositionStat
+            label="Trade gain"
+            value={fmtMoney(snapshot.unrealized_trade_gain_cents)}
+            note="books as cards sell"
+          />
+        ) : null}
+        <PositionStat
+          label="Total value"
+          value={fmtMoney(snapshot.total_business_value_cents)}
+          note="cash + inventory"
+          strong
+        />
+      </div>
+    </section>
   );
 }
 
@@ -242,20 +374,29 @@ function PositionStatement({ snapshot }: { snapshot: Snapshot }) {
 function LoadingFinancials() {
   return (
     <main className="min-h-screen bg-[#090B0D] text-[#E6E8EB]">
-      <div className="animate-pulse space-y-3 p-4">
+      <div className="animate-pulse space-y-6 p-6">
         <div className="h-7 w-40 bg-[#1E2227]" />
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div className="h-24 bg-[#1E2227]" />
-          <div className="h-24 bg-[#1E2227]" />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="h-28 bg-[#1E2227]" />
+          <div className="h-28 bg-[#1E2227]" />
+          <div className="h-28 bg-[#1E2227]" />
         </div>
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          <div className="h-64 bg-[#1E2227]" />
-          <div className="h-64 bg-[#1E2227]" />
-        </div>
+        <div className="h-64 bg-[#1E2227]" />
       </div>
     </main>
   );
 }
+
+const ZERO: PeriodTotals = {
+  revenue_cents: 0,
+  cogs_cents: 0,
+  fees_cents: 0,
+  shipping_cost_cents: 0,
+  profit_cents: 0,
+  sales_count: 0,
+  margin_pct: null,
+  avg_order_value_cents: null,
+};
 
 export default function FinancialsPage() {
   const router = useRouter();
@@ -263,9 +404,7 @@ export default function FinancialsPage() {
   const [hasAccess, setHasAccess] = useState<boolean | null>(null);
   const [summary, setSummary] = useState<FinancialsSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // Default to MTD so the headline Revenue/Net profit match the ledger's KPI
-  // strip (which leads with month-to-date) the moment the page loads.
-  const [period, setPeriod] = useState<PeriodKey>("mtd");
+  const [grain, setGrain] = useState<Grain>("monthly");
 
   useEffect(() => {
     async function init() {
@@ -301,75 +440,64 @@ export default function FinancialsPage() {
     init();
   }, [router]);
 
+  const weekly = useMemo(
+    () => (summary ? buildWeekly(summary.daily) : []),
+    [summary]
+  );
+  const monthly = useMemo(
+    () => (summary ? buildMonthly(summary.monthly) : []),
+    [summary]
+  );
+
   if (loading) return <LoadingFinancials />;
 
   if (hasAccess === false) {
     return <main className="min-h-screen bg-[#090B0D] px-4 py-4" />;
   }
 
-  const t = summary?.totals[period];
+  // "This week" = the current Monday-anchored week (includes today).
+  const thisWeek = weekly[0] ?? {
+    revenue_cents: 0,
+    profit_cents: 0,
+    sales_count: 0,
+  };
+  const mtd = summary?.totals.mtd ?? ZERO;
+  const ytd = summary?.totals.ytd ?? ZERO;
 
   return (
     <main className="min-h-screen bg-[#090B0D] text-[#E6E8EB]">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#24282D] px-4 py-3 sm:px-6">
-        <div className="flex items-baseline gap-3">
-          <h1 className="text-[15px] font-semibold tracking-normal text-[#E6E8EB]">
-            Financials
-          </h1>
-          <span className="text-[10px] uppercase tracking-[0.12em] text-[#77808C]">
-            Synced with ledger
-          </span>
-        </div>
-        <div className="flex items-center gap-1">
-          {PERIOD_LABELS.map((p) => (
-            <button
-              key={p.key}
-              type="button"
-              onClick={() => setPeriod(p.key)}
-              className={`px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.08em] transition-colors ${
-                period === p.key
-                  ? "bg-[#1B2A22] text-[#20B26B]"
-                  : "text-[#77808C] hover:text-[#B8C0CC]"
-              }`}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
+      <header className="flex items-baseline gap-3 border-b border-[#24282D] px-6 py-3">
+        <h1 className="text-[15px] font-semibold tracking-normal text-[#E6E8EB]">
+          Financials
+        </h1>
+        <span className="text-[10px] uppercase tracking-[0.12em] text-[#77808C]">
+          Synced with ledger
+        </span>
       </header>
 
       {error ? (
-        <div className="m-3 border border-[#723030] bg-[#2A1111] p-2 text-[12px] text-[#E05C5C]">
+        <div className="m-6 border border-[#723030] bg-[#2A1111] p-2 text-[12px] text-[#E05C5C]">
           {error}
         </div>
       ) : null}
 
-      {summary && t ? (
-        <div className="space-y-3 px-4 py-4 sm:px-6">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <HeroFigure
-              label="Revenue"
-              value={fmtMoney(t.revenue_cents)}
-              note={`${t.sales_count} ${
-                t.sales_count === 1 ? "sale" : "sales"
-              } · ${PERIOD_LABELS.find((p) => p.key === period)?.label}`}
-            />
-            <HeroFigure
-              label="Net profit"
-              value={fmtMoney(t.profit_cents)}
-              note={
-                t.margin_pct != null
-                  ? `${fmtPct(t.margin_pct)} margin`
-                  : undefined
-              }
-              tone={t.profit_cents >= 0 ? "pos" : "neg"}
-            />
-          </div>
+      {summary ? (
+        <div className="mx-auto max-w-5xl space-y-10 px-6 py-8">
+          {/* Headline: revenue + profit across the three timeframes */}
+          <section className="grid grid-cols-1 divide-y divide-[#1E2227] sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+            <Headline label="This week" totals={thisWeek} />
+            <Headline label="This month" totals={mtd} />
+            <Headline label="This year" totals={ytd} />
+          </section>
 
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-            <IncomeStatement totals={summary.totals} period={period} />
-            <PositionStatement snapshot={summary.snapshot} />
-          </div>
+          <Breakdown
+            weekly={weekly}
+            monthly={monthly}
+            grain={grain}
+            setGrain={setGrain}
+          />
+
+          <Position snapshot={summary.snapshot} />
         </div>
       ) : null}
     </main>
