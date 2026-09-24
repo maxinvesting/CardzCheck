@@ -283,12 +283,11 @@ export default function BusinessSalesHistoryPage() {
     });
   }, [trades, filters]);
 
-  // Split the trade gains the same way the Financials P&L does: `recognized`
-  // is what hits P&L now (cash that can't be deferred); `deferred` rolls into
-  // received-card basis and realizes when those cards sell. Summing the raw
-  // `realized_gain_cents` here previously double-counted deferred appreciation
-  // and disagreed with the P&L — every dollar was labeled "realized" when the
-  // app actually defers card-for-card gains.
+  // Recognize trades the same way the Financials P&L does. Under the
+  // mark-to-market model a trade books its full gain now (received cards enter
+  // inventory at their trade value), so `recognized` is the whole gain and
+  // `deferred` is always 0. The deferred line stays wired up so it reads $0.00
+  // cleanly and reconciles with the P&L.
   const { tradesRecognized, tradesDeferred } = useMemo(() => {
     let recognized = 0;
     let deferred = 0;
@@ -332,7 +331,7 @@ export default function BusinessSalesHistoryPage() {
 
   const totalProfit = summary.profit + tradesRecognized + miscTotal;
   const profitNoteParts = [
-    tradesRecognized !== 0 ? `${formatMoney(tradesRecognized)} trade cash` : null,
+    tradesRecognized !== 0 ? `${formatMoney(tradesRecognized)} trade gains` : null,
     miscTotal !== 0 ? `${formatMoney(miscTotal)} misc` : null,
   ].filter(Boolean);
 
@@ -419,7 +418,7 @@ export default function BusinessSalesHistoryPage() {
                           {formatMoney(tradesRecognized)}
                         </span>
                       </span>
-                      <span title="Trade gains rolled into received-card basis — realizes as profit when those cards sell.">
+                      <span title="Gain deferred into received-card basis. Trades book their full gain at trade time now, so this is always $0.00.">
                         Deferred{" "}
                         <span
                           className={

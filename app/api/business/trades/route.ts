@@ -281,7 +281,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     };
     const loadedOutgoing: Loaded[] = [];
     let outgoingBasisCents = 0;
-    let outgoingFairCents = 0;
 
     for (const o of outgoingInputs) {
       const { data: scoped, error: scopedErr } = await supabase
@@ -321,7 +320,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
       const basis = Math.max(0, Number(item.cost_basis_total_cents ?? 0));
       outgoingBasisCents += basis;
-      outgoingFairCents += o.fair_value_cents;
       loadedOutgoing.push({
         id: item.id as string,
         cost_basis_total_cents: basis,
@@ -331,21 +329,25 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     const incomingItems = parsed.incoming ?? [];
-    const incomingBasisCents = incomingItems.reduce(
-      (acc, it) => acc + (it.allocated_cost_basis_cents ?? 0),
+    // Mark-to-market: received cards enter inventory at their fair (market)
+    // value, so that value becomes their cost basis. incoming_basis therefore
+    // equals the incoming fair value (not a carryover of the outgoing basis).
+    const incomingFairCents = incomingItems.reduce(
+      (acc, it) => acc + (it.fair_value_cents ?? 0),
       0
     );
+    const incomingBasisCents = incomingFairCents;
 
     const cashPaid = parsed.cash_paid_cents ?? 0;
     const cashReceived = parsed.cash_received_cents ?? 0;
     const fees = parsed.fees_cents ?? 0;
-    const hasIncomingCards = incomingItems.length > 0;
-    // When cards come back, cash paid and trade fees are capitalized into those
-    // received cards' basis by the client allocation. Cash-only disposals have
-    // nowhere to defer those costs, so they reduce the gain immediately.
-    const realizedGainCents = hasIncomingCards
-      ? outgoingFairCents + cashReceived - outgoingBasisCents
-      : outgoingFairCents + cashReceived - cashPaid - fees - outgoingBasisCents;
+    // The trade books its full gain now: value received (incoming cards at fair
+    // value + cash received) minus cost given up (outgoing basis + cash paid +
+    // fees). No gain is deferred into the received cards. For a pure
+    // cards-for-cash disposal, incomingFairCents is 0 and this is the same
+    // net-cash-minus-basis gain as before.
+    const realizedGainCents =
+      incomingFairCents + cashReceived - cashPaid - fees - outgoingBasisCents;
     const tradedAtIso = normalizeTradeDate(parsed.traded_at);
     const tradedAtDate = tradedAtIso.slice(0, 10);
 
@@ -438,7 +440,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         channel: "other",
         acquisition_type: "trade",
         acquisition_date: tradedAtDate,
-        cost_basis_total_cents: inc.allocated_cost_basis_cents,
+        // Mark-to-market: the received card's cost basis is its trade value, so
+        // a later sale books only price movement above it (never the trade gain
+        // again).
+        cost_basis_total_cents: inc.fair_value_cents,
         tax_cents: 0,
         shipping_cents: 0,
         fees_paid_cents: 0,
@@ -462,7 +467,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         collection_item_id: created.id,
         direction: "in",
         fair_value_cents: inc.fair_value_cents,
-        allocated_cost_basis_cents: inc.allocated_cost_basis_cents,
+        allocated_cost_basis_cents: inc.fair_value_cents,
       });
       if (tiErr) {
         if (isMissingTradeSchema(tiErr)) {

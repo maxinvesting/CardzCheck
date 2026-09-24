@@ -181,10 +181,14 @@ export default function TradesTable({ trades, loading, onDeleteTrade }: Props) {
                 </td>
                 <td
                   className={`${tdClass} text-right tabular-nums ${
-                    trade.deferred >= 0 ? "ledger-pnl-pos" : "ledger-pnl-neg"
+                    trade.deferred > 0
+                      ? "ledger-pnl-pos"
+                      : trade.deferred < 0
+                        ? "ledger-pnl-neg"
+                        : "text-[color:var(--biz-muted)]"
                   }`}
                 >
-                  {formatMoney(trade.deferred)}
+                  {trade.deferred === 0 ? "—" : formatMoney(trade.deferred)}
                 </td>
                 <td className={tdClass}>
                   <button

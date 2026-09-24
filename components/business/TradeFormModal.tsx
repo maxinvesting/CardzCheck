@@ -187,38 +187,31 @@ export default function TradeFormModal({
   const cashReceivedCents = inputToCents(cashReceived);
   const tradeFeeCents = inputToCents(tradeFee);
 
-  // Total cost basis that rolls into the cards received: the basis of what we
-  // gave away, plus cash and fees paid, less any cash received. We never type a
-  // basis for an incoming card; it's derived from the trade economics.
-  const incomingBasisPoolCents = Math.max(
-    0,
-    outgoingBasisCents + cashPaidCents + tradeFeeCents - cashReceivedCents
-  );
-
-  // Spread the basis pool across incoming cards in proportion to their
-  // estimated value (even split if no estimates yet). Rounding remainder lands
-  // on the last row so the allocation always sums back to the pool exactly.
+  // Mark-to-market: a received card enters inventory at its own fair (market)
+  // value, so that value IS its cost basis. No carryover pool to allocate.
   const allocatedBasisById = useMemo(() => {
     const map = new Map<string, number>();
-    if (incoming.length === 0) return map;
-    const estimates = incoming.map((r) => Math.max(0, inputToCents(r.fairValue)));
-    const totalEst = estimates.reduce((a, c) => a + c, 0);
-    let allocated = 0;
-    incoming.forEach((row, i) => {
-      let cents: number;
-      if (i === incoming.length - 1) {
-        cents = incomingBasisPoolCents - allocated;
-      } else if (totalEst > 0) {
-        cents = Math.round((incomingBasisPoolCents * estimates[i]) / totalEst);
-      } else {
-        cents = Math.round(incomingBasisPoolCents / incoming.length);
-      }
-      cents = Math.max(0, cents);
-      map.set(row.id, cents);
-      allocated += cents;
-    });
+    for (const row of incoming) {
+      map.set(row.id, Math.max(0, inputToCents(row.fairValue)));
+    }
     return map;
-  }, [incoming, incomingBasisPoolCents]);
+  }, [incoming]);
+
+  // Total market value of the cards being received.
+  const incomingFairTotalCents = useMemo(
+    () =>
+      incoming.reduce((acc, r) => acc + Math.max(0, inputToCents(r.fairValue)), 0),
+    [incoming]
+  );
+
+  // Gain booked at trade time: value received (cards at market + cash) minus
+  // cost given up (basis of cards traded away + cash paid + trade fee).
+  const realizedGainCents =
+    incomingFairTotalCents +
+    cashReceivedCents -
+    cashPaidCents -
+    tradeFeeCents -
+    outgoingBasisCents;
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -705,7 +698,7 @@ export default function TradeFormModal({
                           />
                         </label>
                         <div>
-                          <span className={labelClass}>Cost basis (auto)</span>
+                          <span className={labelClass}>Cost basis = value</span>
                           <div className="mt-1 flex h-[38px] items-center border border-[#24282D] bg-[#0B0D0F] px-3 text-sm tabular-nums text-[#B8C0CC]">
                             {formatMoney(allocatedBasisById.get(row.id) ?? 0)}
                           </div>
@@ -756,34 +749,40 @@ export default function TradeFormModal({
 
             <div className="border border-[#24282D] bg-[#090B0D] p-3 text-xs">
               <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-[#77808C]">
-                Cost basis carried into received cards
+                Realized gain on this trade
               </div>
               <div className="flex justify-between text-[#77808C]">
-                <span>Basis of cards given away</span>
+                <span>Value received (cards + cash)</span>
+                <span className="font-data tabular-nums">
+                  {formatMoney(incomingFairTotalCents + cashReceivedCents)}
+                </span>
+              </div>
+              <div className="mt-1.5 flex justify-between text-[#77808C]">
+                <span>− Basis of cards given away</span>
                 <span className="font-data tabular-nums">{formatMoney(outgoingBasisCents)}</span>
               </div>
               <div className="mt-1.5 flex justify-between text-[#77808C]">
-                <span>+ Cash paid</span>
+                <span>− Cash paid</span>
                 <span className="font-data tabular-nums">{formatMoney(cashPaidCents)}</span>
               </div>
               <div className="mt-1.5 flex justify-between text-[#77808C]">
-                <span>+ Trade fee</span>
+                <span>− Trade fee</span>
                 <span className="font-data tabular-nums">{formatMoney(tradeFeeCents)}</span>
               </div>
-              <div className="mt-1.5 flex justify-between text-[#77808C]">
-                <span>− Cash received</span>
-                <span className="font-data tabular-nums">{formatMoney(cashReceivedCents)}</span>
-              </div>
               <div className="mt-2 flex justify-between border-t border-[#24282D] pt-2 text-[#E6E8EB]">
-                <span className="font-semibold">Total basis to allocate</span>
-                <span className="font-data font-semibold tabular-nums text-[#20B26B]">
-                  {formatMoney(incomingBasisPoolCents)}
+                <span className="font-semibold">Realized gain (books now)</span>
+                <span
+                  className={`font-data font-semibold tabular-nums ${
+                    realizedGainCents >= 0 ? "text-[#20B26B]" : "text-[#E05C5C]"
+                  }`}
+                >
+                  {formatMoney(realizedGainCents)}
                 </span>
               </div>
               <p className="mt-2 text-[11px] leading-snug text-[#5A626E]">
-                Split across received cards by estimated value. Card appreciation
-                is recognized when these cards later sell. Cash paid and trade
-                fees become part of what you are into the received cards for.
+                The trade books its full gain now. Received cards enter inventory
+                at their trade value, so selling them later books only price
+                movement above that — the trade gain is never counted twice.
               </p>
             </div>
 

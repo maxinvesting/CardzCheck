@@ -16,68 +16,67 @@ const trade = (over: Partial<RecognizableTrade> = {}): RecognizableTrade => ({
   cash_out_cents: 0,
   fees_cents: 0,
   outgoing_basis_cents: 0,
+  incoming_fair_cents: 0,
   has_incoming: false,
   mark_to_market_gain_cents: 0,
   ...over,
 });
 
+// Mark-to-market model: a trade books its full gain now.
+//   profit = (cash received + fair value of cards received)
+//            − (basis of cards given up + cash paid + fees)
 describe("tradeRecognition", () => {
-  it("defers a card-for-card swap whose gain isn't realized in cash", () => {
-    // Cards out (basis 140500) for cards in, no net cash → nothing recognized yet.
+  it("books the full gain of a card-for-card + cash trade at trade time", () => {
+    // The real-world case: gave a card (basis $1,749.56) worth $2,100 for a
+    // $1,300 card + $800 cash − $115 fee. True gain = $235.44.
     const rec = tradeRecognition(
-      trade({ has_incoming: true, outgoing_basis_cents: 140500 })
-    );
-    expect(rec).toBeNull();
-  });
-
-  it("recognizes a card-for-card swap's cash received immediately", () => {
-    // Cash received (20000 in) is realized now because it is subtracted from the
-    // received card's basis; card appreciation defers into basis.
-    const rec = tradeRecognition(
-      trade({ has_incoming: true, cash_in_cents: 20000, outgoing_basis_cents: 5000 })
+      trade({
+        has_incoming: true,
+        cash_in_cents: 80000,
+        fees_cents: 11500,
+        outgoing_basis_cents: 174956,
+        incoming_fair_cents: 130000,
+      })
     );
     expect(rec).toEqual({
-      revenue_cents: 20000,
-      cogs_cents: 0,
-      profit_cents: 20000,
+      revenue_cents: 210000, // 130000 card + 80000 cash received
+      cogs_cents: 186456, // 174956 basis + 11500 fee
+      profit_cents: 23544, // $235.44
     });
   });
 
-  it("capitalizes the trade fee into received-card basis", () => {
-    // Received 250 cash and paid a 20 fee. The 250 is realized now; the fee is
-    // part of the received card's basis and is not expensed immediately.
+  it("recognizes the appreciation on a no-cash even swap now", () => {
+    // Gave a $140,500-basis card for a card worth $200,000, no cash → book the
+    // $59,500 appreciation now (nothing is deferred).
+    const rec = tradeRecognition(
+      trade({ has_incoming: true, outgoing_basis_cents: 140500, incoming_fair_cents: 200000 })
+    );
+    expect(rec).toEqual({
+      revenue_cents: 200000,
+      cogs_cents: 140500,
+      profit_cents: 59500,
+    });
+  });
+
+  it("expenses the trade fee against the gain", () => {
     const rec = tradeRecognition(
       trade({
         has_incoming: true,
         cash_in_cents: 25000,
         fees_cents: 2000,
         outgoing_basis_cents: 60000,
+        incoming_fair_cents: 40000,
       })
     );
     expect(rec).toEqual({
-      revenue_cents: 25000,
-      cogs_cents: 0,
-      profit_cents: 25000,
+      revenue_cents: 65000, // 40000 card + 25000 cash
+      cogs_cents: 62000, // 60000 basis + 2000 fee
+      profit_cents: 3000,
     });
   });
 
-  it("defers a fee-only card swap into received-card basis", () => {
-    // Pure card-for-card swap, no cash, but a 15 fee → nothing hits P&L now.
-    const rec = tradeRecognition(
-      trade({ has_incoming: true, fees_cents: 1500, outgoing_basis_cents: 90000 })
-    );
-    expect(rec).toBeNull();
-  });
-
-  it("defers cash paid into received-card basis", () => {
-    const rec = tradeRecognition(
-      trade({ has_incoming: true, cash_out_cents: 4200, outgoing_basis_cents: 83000 })
-    );
-    expect(rec).toBeNull();
-  });
-
   it("realizes the full loss of a pure cards-for-cash disposal immediately", () => {
-    // No card came back (has_incoming false) → recognized even at a loss.
+    // No card came back → recognized even at a loss.
     const rec = tradeRecognition(
       trade({ has_incoming: false, cash_out_cents: 11000, outgoing_basis_cents: 11000 })
     );
@@ -87,18 +86,36 @@ describe("tradeRecognition", () => {
       profit_cents: -22000,
     });
   });
+
+  it("realizes the gain of a cards-for-cash disposal", () => {
+    const rec = tradeRecognition(
+      trade({ has_incoming: false, cash_in_cents: 9000, outgoing_basis_cents: 5000 })
+    );
+    expect(rec).toEqual({
+      revenue_cents: 9000,
+      cogs_cents: 5000,
+      profit_cents: 4000,
+    });
+  });
+
+  it("returns null for a degenerate empty trade (no value either way)", () => {
+    expect(tradeRecognition(trade())).toBeNull();
+  });
 });
 
 describe("normalizeTradeRow", () => {
-  it("maps raw columns and derives has_incoming from trade_items directions", () => {
+  it("maps raw columns and sums incoming fair value from 'in' items", () => {
     const raw: RawTradeRow = {
       traded_at: "2026-06-03T00:00:00.000Z",
       cash_paid_cents: 4200,
       cash_received_cents: 7500,
       outgoing_basis_cents: 83000,
-      incoming_basis_cents: 93000,
-      realized_gain_cents: 25300,
-      trade_items: [{ direction: "in" }, { direction: "out" }],
+      incoming_basis_cents: 90000,
+      realized_gain_cents: 14500,
+      trade_items: [
+        { direction: "in", fair_value_cents: 90000 },
+        { direction: "out", fair_value_cents: 100000 },
+      ],
     };
     expect(normalizeTradeRow(raw)).toEqual({
       traded_at: "2026-06-03T00:00:00.000Z",
@@ -106,16 +123,13 @@ describe("normalizeTradeRow", () => {
       cash_out_cents: 4200,
       fees_cents: 0,
       outgoing_basis_cents: 83000,
+      incoming_fair_cents: 90000,
       has_incoming: true,
-      mark_to_market_gain_cents: 25300,
+      mark_to_market_gain_cents: 14500,
     });
   });
 
-  it("falls back to incoming_basis_cents when a swap has no 'in' item rows", () => {
-    // Legacy single-card trades and partially-failed multi-card trades carry
-    // incoming basis on the header without 'in' item rows. They are still swaps
-    // (basis deferred into received cards), not disposals — booking the full
-    // loss would be a phantom. has_incoming must fall back to the basis signal.
+  it("derives has_incoming from a stale incoming_basis even without 'in' item rows", () => {
     const raw: RawTradeRow = {
       traded_at: "2026-06-03T00:00:00.000Z",
       cash_paid_cents: 0,
@@ -126,8 +140,9 @@ describe("normalizeTradeRow", () => {
       trade_items: [{ direction: "out" }, { direction: "out" }],
     };
     expect(normalizeTradeRow(raw).has_incoming).toBe(true);
-    // And the would-be phantom disposal loss is deferred, not recognized.
-    expect(tradeRecognition(normalizeTradeRow(raw))).toBeNull();
+    // No 'in' item rows → incoming fair is 0, so the recognized figure falls back
+    // to the outgoing basis as a loss (legacy rows carry no fair value to book).
+    expect(normalizeTradeRow(raw).incoming_fair_cents).toBe(0);
   });
 
   it("treats a row with no incoming items and no incoming basis as a disposal", () => {
@@ -148,24 +163,25 @@ describe("sumRecognizedTrades", () => {
   const from = Date.parse("2026-06-01T00:00:00.000Z");
   const to = Date.parse("2026-07-01T00:00:00.000Z");
 
-  it("sums only recognized trades inside the half-open window", () => {
+  it("sums recognized trades inside the half-open window (swaps included)", () => {
     const trades: RecognizableTrade[] = [
-      // Recognized disposal inside window: profit -15000.
+      // Disposal inside window: profit -15000.
       trade({ traded_at: "2026-06-03T00:00:00.000Z", outgoing_basis_cents: 15000 }),
-      // Deferred swap inside window: contributes nothing.
+      // Swap inside window now books its gain: 100000 card − 88000 basis = 12000.
       trade({
         traded_at: "2026-06-19T00:00:00.000Z",
         has_incoming: true,
         outgoing_basis_cents: 88000,
+        incoming_fair_cents: 100000,
       }),
       // Recognized but BEFORE the window: excluded.
       trade({ traded_at: "2026-05-03T00:00:00.000Z", outgoing_basis_cents: 11000 }),
     ];
     expect(sumRecognizedTrades(trades, from, to)).toEqual({
-      revenue_cents: 0,
-      cogs_cents: 15000,
-      profit_cents: -15000,
-      sales_count: 1,
+      revenue_cents: 100000,
+      cogs_cents: 103000, // 15000 + 88000
+      profit_cents: -3000, // -15000 + 12000
+      sales_count: 2,
     });
   });
 
@@ -176,39 +192,13 @@ describe("sumRecognizedTrades", () => {
 });
 
 describe("tradeDeferredGain", () => {
-  it("defers the full mark-to-market gain of a no-cash card-for-card swap", () => {
-    // Swap with no cash received → nothing recognized now, whole gain deferred.
-    const t = trade({
-      has_incoming: true,
-      outgoing_basis_cents: 88000,
-      mark_to_market_gain_cents: 7000,
-    });
-    expect(tradeRecognition(t)).toBeNull();
-    expect(tradeDeferredGain(t)).toBe(7000);
-  });
-
-  it("recognizes cash received now and defers the card appreciation", () => {
-    // mark-to-market 35000; cash received recognized now = 20000. The remaining
-    // 15000 is card appreciation deferred into the received card's basis.
-    const t = trade({
-      has_incoming: true,
-      cash_in_cents: 20000,
-      outgoing_basis_cents: 5000,
-      mark_to_market_gain_cents: 35000,
-    });
-    expect(tradeRecognition(t)?.profit_cents).toBe(20000);
-    // Booked now + deferred reconstructs the full mark-to-market gain.
-    expect(tradeDeferredGain(t)).toBe(15000);
-  });
-
-  it("defers nothing for a pure cards-for-cash disposal", () => {
-    const t = trade({
-      has_incoming: false,
-      cash_in_cents: 9000,
-      outgoing_basis_cents: 5000,
-      mark_to_market_gain_cents: 4000,
-    });
-    expect(tradeDeferredGain(t)).toBe(0);
+  it("is always 0 — the mark-to-market model defers nothing", () => {
+    expect(
+      tradeDeferredGain(
+        trade({ has_incoming: true, incoming_fair_cents: 200000, outgoing_basis_cents: 88000 })
+      )
+    ).toBe(0);
+    expect(tradeDeferredGain(trade({ has_incoming: false, cash_in_cents: 9000 }))).toBe(0);
   });
 });
 
@@ -216,85 +206,63 @@ describe("sumDeferredTradeGains", () => {
   const from = Date.parse("2026-06-01T00:00:00.000Z");
   const to = Date.parse("2026-07-01T00:00:00.000Z");
 
-  it("sums deferred gains for in-window swaps only", () => {
+  it("is 0 for any set of trades (nothing is deferred)", () => {
     const trades: RecognizableTrade[] = [
       trade({
         traded_at: "2026-06-05T00:00:00.000Z",
         has_incoming: true,
         outgoing_basis_cents: 50000,
-        mark_to_market_gain_cents: 7000,
+        incoming_fair_cents: 57000,
       }),
       trade({
         traded_at: "2026-06-20T00:00:00.000Z",
         has_incoming: true,
         outgoing_basis_cents: 30000,
-        mark_to_market_gain_cents: -3000,
-      }),
-      // Disposal contributes nothing (fully realized, not deferred).
-      trade({
-        traded_at: "2026-06-21T00:00:00.000Z",
-        has_incoming: false,
-        mark_to_market_gain_cents: 9999,
-      }),
-      // Out of window: excluded.
-      trade({
-        traded_at: "2026-05-21T00:00:00.000Z",
-        has_incoming: true,
-        mark_to_market_gain_cents: 5000,
+        incoming_fair_cents: 27000,
       }),
     ];
-    expect(sumDeferredTradeGains(trades, from, to)).toBe(4000);
+    expect(sumDeferredTradeGains(trades, from, to)).toBe(0);
   });
 });
 
 describe("recognizableFromBusinessTrade", () => {
-  it("maps the client trade shape and detects incoming via items", () => {
+  it("maps the client trade shape and sums incoming fair value from items", () => {
     const rec = recognizableFromBusinessTrade({
       traded_at: "2026-07-02T00:00:00.000Z",
       cash_paid_cents: 0,
       cash_received_cents: 25000,
       outgoing_basis_cents: 69375,
-      incoming_basis_cents: 44475,
-      realized_gain_cents: 50625,
-      items: [{ direction: "in" }, { direction: "out" }],
+      incoming_basis_cents: 65000,
+      realized_gain_cents: 20625,
+      items: [
+        { direction: "in", fair_value_cents: 65000 },
+        { direction: "out", fair_value_cents: 90000 },
+      ],
     });
-    // Card-for-card swap with 25000 cash received → that cash is recognized now;
-    // the remaining card appreciation (50625 - 25000) defers into basis.
+    // Books now: (65000 card + 25000 cash) − 69375 basis = 20625.
     expect(tradeRecognition(rec)).toEqual({
-      revenue_cents: 25000,
-      cogs_cents: 0,
-      profit_cents: 25000,
+      revenue_cents: 90000,
+      cogs_cents: 69375,
+      profit_cents: 20625,
     });
-    expect(tradeDeferredGain(rec)).toBe(25625);
+    expect(tradeDeferredGain(rec)).toBe(0);
   });
 
-  it("treats a stale incoming_basis as deferred even without in items", () => {
-    // Legacy/failed-incoming rows carry basis forward on the header only.
+  it("mirrors the real Veriswap trade: $235.44 booked now, nothing deferred", () => {
     const rec = recognizableFromBusinessTrade({
-      traded_at: "2026-06-03T00:00:00.000Z",
+      traded_at: "2026-09-24T00:00:00.000Z",
       cash_paid_cents: 0,
-      cash_received_cents: 0,
-      outgoing_basis_cents: 15000,
-      incoming_basis_cents: 33100,
-      realized_gain_cents: 26000,
-      items: [{ direction: "out" }],
+      cash_received_cents: 80000,
+      fees_cents: 11500,
+      outgoing_basis_cents: 174956,
+      incoming_basis_cents: 130000,
+      realized_gain_cents: 23544,
+      items: [
+        { direction: "in", fair_value_cents: 130000 },
+        { direction: "out", fair_value_cents: 210000 },
+      ],
     });
-    expect(rec.has_incoming).toBe(true);
-    expect(tradeRecognition(rec)).toBeNull();
-    expect(tradeDeferredGain(rec)).toBe(26000);
-  });
-
-  it("recognized + deferred reconstructs the mark-to-market gain for a swap", () => {
-    const rec = recognizableFromBusinessTrade({
-      traded_at: "2026-06-09T00:00:00.000Z",
-      cash_paid_cents: 4200,
-      cash_received_cents: 7500,
-      outgoing_basis_cents: 83000,
-      incoming_basis_cents: 93000,
-      realized_gain_cents: 10300,
-      items: [{ direction: "in" }, { direction: "out" }],
-    });
-    const recognized = tradeRecognition(rec)?.profit_cents ?? 0;
-    expect(recognized + tradeDeferredGain(rec)).toBe(10300);
+    expect(tradeRecognition(rec)?.profit_cents).toBe(23544);
+    expect(tradeDeferredGain(rec)).toBe(0);
   });
 });

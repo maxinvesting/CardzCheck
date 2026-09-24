@@ -12,11 +12,11 @@
  * be imported from both `actions.ts` and `financials.ts` without a cycle.
  */
 
-/** Columns to select from `business_trades` (with item directions) for recognition. */
+/** Columns to select from `business_trades` (with item directions + fair values) for recognition. */
 export const TRADE_RECOGNITION_SELECT =
-  "traded_at,cash_paid_cents,cash_received_cents,fees_cents,outgoing_basis_cents,incoming_basis_cents,realized_gain_cents,trade_items:business_trade_items(direction)" as const;
+  "traded_at,cash_paid_cents,cash_received_cents,fees_cents,outgoing_basis_cents,incoming_basis_cents,realized_gain_cents,trade_items:business_trade_items(direction,fair_value_cents)" as const;
 
-/** Raw `business_trades` row joined with its `business_trade_items` directions. */
+/** Raw `business_trades` row joined with its `business_trade_items` directions + fair values. */
 export type RawTradeRow = {
   traded_at: string;
   cash_paid_cents: number | null;
@@ -25,8 +25,19 @@ export type RawTradeRow = {
   outgoing_basis_cents: number | null;
   incoming_basis_cents: number | null;
   realized_gain_cents: number | null;
-  trade_items?: Array<{ direction: string | null }> | null;
+  trade_items?: Array<{ direction: string | null; fair_value_cents?: number | null }> | null;
 };
+
+/** Sum the market (fair) value of the cards received in a trade. */
+function sumIncomingFair(
+  items: Array<{ direction: string | null; fair_value_cents?: number | null }> | null | undefined
+): number {
+  let total = 0;
+  for (const it of items ?? []) {
+    if (it.direction === "in") total += toInt(it.fair_value_cents);
+  }
+  return total;
+}
 
 /**
  * Normalized view of a recorded trade for the recognition math.
@@ -38,14 +49,13 @@ export type RecognizableTrade = {
   traded_at: string;
   cash_in_cents: number; // cash received in the trade
   cash_out_cents: number; // cash paid out in the trade
-  fees_cents: number; // trade fee paid; capitalized when received cards exist
+  fees_cents: number; // trade fee paid
   outgoing_basis_cents: number; // cost basis of cards given away
+  incoming_fair_cents: number; // market value of cards received (their new basis)
   has_incoming: boolean; // true if any card came back in the trade
   /**
-   * Mark-to-market gain stored on the trade at record time.
-   * This is the figure the Sales & Trades page surfaces as "Realized gain".
-   * It is NOT booked into P&L directly — `tradeRecognition` decides how much
-   * is recognized now vs deferred into received cards' basis.
+   * Mark-to-market gain stored on the trade at record time. Kept for reference/
+   * legacy display; recognition is computed from the fields above, not this.
    */
   mark_to_market_gain_cents: number;
 };
@@ -76,6 +86,7 @@ export function normalizeTradeRow(row: RawTradeRow): RecognizableTrade {
     cash_out_cents: toInt(row.cash_paid_cents),
     fees_cents: toInt(row.fees_cents),
     outgoing_basis_cents: toInt(row.outgoing_basis_cents),
+    incoming_fair_cents: sumIncomingFair(row.trade_items),
     has_incoming:
       (row.trade_items ?? []).some((it) => it.direction === "in") ||
       toInt(row.incoming_basis_cents) > 0,
@@ -97,7 +108,7 @@ export type BusinessTradeLike = {
   outgoing_basis_cents: number | null;
   incoming_basis_cents: number | null;
   realized_gain_cents: number | null;
-  items?: Array<{ direction: string | null }> | null;
+  items?: Array<{ direction: string | null; fair_value_cents?: number | null }> | null;
 };
 
 export function recognizableFromBusinessTrade(
@@ -109,6 +120,7 @@ export function recognizableFromBusinessTrade(
     cash_out_cents: toInt(t.cash_paid_cents),
     fees_cents: toInt(t.fees_cents),
     outgoing_basis_cents: toInt(t.outgoing_basis_cents),
+    incoming_fair_cents: sumIncomingFair(t.items),
     has_incoming:
       (t.items ?? []).some((it) => it.direction === "in") ||
       toInt(t.incoming_basis_cents) > 0,
@@ -117,56 +129,45 @@ export function recognizableFromBusinessTrade(
 }
 
 /**
- * How much of a trade should be recognized in P&L *now*.
+ * How much of a trade is recognized in P&L *now* (mark-to-market model).
  *
- * Card-for-card swap: cash paid and trade fees are capitalized into the
- * received cards' basis, so they are not expensed now. Cash received is
- * recognized immediately because it was subtracted from the basis carried into
- * those cards. A pure card swap with no cash received recognizes nothing now
- * (fully deferred).
+ * A trade is treated as disposing of the outgoing card(s) at their market value
+ * — the whole gain books at trade time. The received card(s) enter inventory at
+ * their fair (market) value, so a later sale only books price movement above
+ * that, never the trade gain again. Nothing is deferred.
  *
- * Pure cards-for-cash disposal (no card received): there's nothing to defer the
- * basis into, so the full gain or loss (cash received − cash paid − fees −
- * basis given up) realizes immediately.
+ *   profit = value received − cost given up
+ *          = (cash received + fair value of cards received)
+ *            − (basis of cards given up + cash paid + trade fees)
  *
- * Returns null when nothing is recognized (a swap with zero cash received).
+ * Revenue is the consideration received (cash + cards at market); COGS is the
+ * basis given up plus cash/fees paid, so `revenue − cogs === profit`. For a pure
+ * cards-for-cash disposal there are no incoming cards, so this reduces to
+ * `cash received − cash paid − fees − basis`, unchanged from before.
  *
- * The identity `recognizedNow + deferred === mark_to_market` is preserved in
- * every case; see `tradeDeferredGain`.
+ * Returns null only for a degenerate empty trade (no value moved either way).
  */
 export function tradeRecognition(
   t: RecognizableTrade
 ): { revenue_cents: number; cogs_cents: number; profit_cents: number } | null {
-  if (t.has_incoming) {
-    if (t.cash_in_cents === 0) return null;
-    return {
-      revenue_cents: t.cash_in_cents,
-      cogs_cents: 0,
-      profit_cents: t.cash_in_cents,
-    };
-  }
-  const net =
-    t.cash_in_cents - t.cash_out_cents - t.fees_cents - t.outgoing_basis_cents;
+  const revenue = t.cash_in_cents + t.incoming_fair_cents;
+  const cogs = t.outgoing_basis_cents + t.cash_out_cents + t.fees_cents;
+  if (revenue === 0 && cogs === 0) return null;
   return {
-    revenue_cents: t.cash_in_cents,
-    cogs_cents: t.cash_out_cents + t.fees_cents + t.outgoing_basis_cents,
-    profit_cents: net,
+    revenue_cents: revenue,
+    cogs_cents: cogs,
+    profit_cents: revenue - cogs,
   };
 }
 
 /**
- * The portion of a trade's mark-to-market gain that is NOT yet booked into P&L
- * — i.e. deferred into the received cards' cost basis and recognized later when
- * those cards sell. For a card-for-card swap this is the appreciation on the
- * cards given up (plus any deferred cash gain); for a pure cards-for-cash
- * disposal nothing is deferred (the whole gain is recognized at trade time), so
- * this is 0. By construction, `recognizedNow + deferred === mark_to_market`, so
- * showing booked profit alongside this figure double-counts nothing.
+ * Deferred (unrecognized) trade gain. Under the mark-to-market model the entire
+ * gain is booked at trade time and received cards carry their fair value as
+ * basis, so nothing is deferred — always 0. Kept so callers/tiles that report a
+ * "deferred" figure resolve to zero cleanly.
  */
-export function tradeDeferredGain(t: RecognizableTrade): number {
-  if (!t.has_incoming) return 0;
-  const recognizedNow = tradeRecognition(t)?.profit_cents ?? 0;
-  return t.mark_to_market_gain_cents - recognizedNow;
+export function tradeDeferredGain(_t: RecognizableTrade): number {
+  return 0;
 }
 
 /** Sum of deferred (unrecognized) trade gains within [fromMs, toMs). */
