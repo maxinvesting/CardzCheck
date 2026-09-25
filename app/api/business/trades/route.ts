@@ -329,23 +329,25 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     const incomingItems = parsed.incoming ?? [];
-    // Mark-to-market: received cards enter inventory at their fair (market)
-    // value, so that value becomes their cost basis. incoming_basis therefore
-    // equals the incoming fair value (not a carryover of the outgoing basis).
+    // Deferral: received cards carry a cost basis rolled over from what was
+    // given up (outgoing basis + cash/fees paid − cash received), allocated per
+    // card by the client. The trade's gain stays unrealized in that basis and
+    // is booked once, when the received card later sells.
+    const incomingBasisCents = incomingItems.reduce(
+      (acc, it) => acc + (it.allocated_cost_basis_cents ?? 0),
+      0
+    );
     const incomingFairCents = incomingItems.reduce(
       (acc, it) => acc + (it.fair_value_cents ?? 0),
       0
     );
-    const incomingBasisCents = incomingFairCents;
 
     const cashPaid = parsed.cash_paid_cents ?? 0;
     const cashReceived = parsed.cash_received_cents ?? 0;
     const fees = parsed.fees_cents ?? 0;
-    // The trade books its full gain now: value received (incoming cards at fair
-    // value + cash received) minus cost given up (outgoing basis + cash paid +
-    // fees). No gain is deferred into the received cards. For a pure
-    // cards-for-cash disposal, incomingFairCents is 0 and this is the same
-    // net-cash-minus-basis gain as before.
+    // Total economic gain of the trade — (cards received at market + cash) minus
+    // (basis given up + cash paid + fees). Stored for reference; the
+    // trade-recognition engine decides how much realizes now vs defers to sale.
     const realizedGainCents =
       incomingFairCents + cashReceived - cashPaid - fees - outgoingBasisCents;
     const tradedAtIso = normalizeTradeDate(parsed.traded_at);
@@ -440,10 +442,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         channel: "other",
         acquisition_type: "trade",
         acquisition_date: tradedAtDate,
-        // Mark-to-market: the received card's cost basis is its trade value, so
-        // a later sale books only price movement above it (never the trade gain
-        // again).
-        cost_basis_total_cents: inc.fair_value_cents,
+        // Deferral: the received card carries the rolled-over basis, so its full
+        // trade gain realizes when it sells (not at trade time).
+        cost_basis_total_cents: inc.allocated_cost_basis_cents,
         tax_cents: 0,
         shipping_cents: 0,
         fees_paid_cents: 0,
@@ -467,7 +468,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         collection_item_id: created.id,
         direction: "in",
         fair_value_cents: inc.fair_value_cents,
-        allocated_cost_basis_cents: inc.fair_value_cents,
+        allocated_cost_basis_cents: inc.allocated_cost_basis_cents,
       });
       if (tiErr) {
         if (isMissingTradeSchema(tiErr)) {

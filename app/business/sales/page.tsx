@@ -283,11 +283,12 @@ export default function BusinessSalesHistoryPage() {
     });
   }, [trades, filters]);
 
-  // Recognize trades the same way the Financials P&L does. Under the
-  // mark-to-market model a trade books its full gain now (received cards enter
-  // inventory at their trade value), so `recognized` is the whole gain and
-  // `deferred` is always 0. The deferred line stays wired up so it reads $0.00
-  // cleanly and reconciles with the P&L.
+  // Recognize trades the same way the Financials P&L does. Under the deferral
+  // model a card-for-card trade books no profit now — the gain rolls into the
+  // received cards' basis and realizes when those cards sell — so `recognized`
+  // is ~0 for swaps (only excess cash / pure cash disposals hit P&L now) and
+  // `deferred` holds the gain that will book at sale. This keeps trade gains
+  // from being counted twice (once here and again in the eventual sale).
   const { tradesRecognized, tradesDeferred } = useMemo(() => {
     let recognized = 0;
     let deferred = 0;
@@ -418,7 +419,7 @@ export default function BusinessSalesHistoryPage() {
                           {formatMoney(tradesRecognized)}
                         </span>
                       </span>
-                      <span title="Gain deferred into received-card basis. Trades book their full gain at trade time now, so this is always $0.00.">
+                      <span title="Gain deferred into received-card basis — realizes as profit when those cards sell (so it isn't double-counted here).">
                         Deferred{" "}
                         <span
                           className={

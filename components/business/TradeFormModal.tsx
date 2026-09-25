@@ -187,15 +187,38 @@ export default function TradeFormModal({
   const cashReceivedCents = inputToCents(cashReceived);
   const tradeFeeCents = inputToCents(tradeFee);
 
-  // Mark-to-market: a received card enters inventory at its own fair (market)
-  // value, so that value IS its cost basis. No carryover pool to allocate.
+  // Deferral: the basis of what we gave away, plus cash and fees paid, less any
+  // cash received, rolls into the cards we receive. We never type a basis for an
+  // incoming card; it's derived from the trade economics.
+  const incomingBasisPoolCents = Math.max(
+    0,
+    outgoingBasisCents + cashPaidCents + tradeFeeCents - cashReceivedCents
+  );
+
+  // Spread the basis pool across incoming cards in proportion to their estimated
+  // value (even split if no estimates yet). Rounding remainder lands on the last
+  // row so the allocation always sums back to the pool exactly.
   const allocatedBasisById = useMemo(() => {
     const map = new Map<string, number>();
-    for (const row of incoming) {
-      map.set(row.id, Math.max(0, inputToCents(row.fairValue)));
-    }
+    if (incoming.length === 0) return map;
+    const estimates = incoming.map((r) => Math.max(0, inputToCents(r.fairValue)));
+    const totalEst = estimates.reduce((a, c) => a + c, 0);
+    let allocated = 0;
+    incoming.forEach((row, i) => {
+      let cents: number;
+      if (i === incoming.length - 1) {
+        cents = incomingBasisPoolCents - allocated;
+      } else if (totalEst > 0) {
+        cents = Math.round((incomingBasisPoolCents * estimates[i]) / totalEst);
+      } else {
+        cents = Math.round(incomingBasisPoolCents / incoming.length);
+      }
+      cents = Math.max(0, cents);
+      map.set(row.id, cents);
+      allocated += cents;
+    });
     return map;
-  }, [incoming]);
+  }, [incoming, incomingBasisPoolCents]);
 
   // Total market value of the cards being received.
   const incomingFairTotalCents = useMemo(
@@ -204,14 +227,9 @@ export default function TradeFormModal({
     [incoming]
   );
 
-  // Gain booked at trade time: value received (cards at market + cash) minus
-  // cost given up (basis of cards traded away + cash paid + trade fee).
-  const realizedGainCents =
-    incomingFairTotalCents +
-    cashReceivedCents -
-    cashPaidCents -
-    tradeFeeCents -
-    outgoingBasisCents;
+  // Gain that will realize when the received cards sell: their value minus the
+  // basis carried into them. Deferred now, booked as profit at sale.
+  const deferredGainCents = incomingFairTotalCents - incomingBasisPoolCents;
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -698,7 +716,7 @@ export default function TradeFormModal({
                           />
                         </label>
                         <div>
-                          <span className={labelClass}>Cost basis = value</span>
+                          <span className={labelClass}>Cost basis (auto)</span>
                           <div className="mt-1 flex h-[38px] items-center border border-[#24282D] bg-[#0B0D0F] px-3 text-sm tabular-nums text-[#B8C0CC]">
                             {formatMoney(allocatedBasisById.get(row.id) ?? 0)}
                           </div>
@@ -749,40 +767,44 @@ export default function TradeFormModal({
 
             <div className="border border-[#24282D] bg-[#090B0D] p-3 text-xs">
               <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-[#77808C]">
-                Realized gain on this trade
+                Cost basis carried into received cards
               </div>
               <div className="flex justify-between text-[#77808C]">
-                <span>Value received (cards + cash)</span>
-                <span className="font-data tabular-nums">
-                  {formatMoney(incomingFairTotalCents + cashReceivedCents)}
-                </span>
-              </div>
-              <div className="mt-1.5 flex justify-between text-[#77808C]">
-                <span>− Basis of cards given away</span>
+                <span>Basis of cards given away</span>
                 <span className="font-data tabular-nums">{formatMoney(outgoingBasisCents)}</span>
               </div>
               <div className="mt-1.5 flex justify-between text-[#77808C]">
-                <span>− Cash paid</span>
+                <span>+ Cash paid</span>
                 <span className="font-data tabular-nums">{formatMoney(cashPaidCents)}</span>
               </div>
               <div className="mt-1.5 flex justify-between text-[#77808C]">
-                <span>− Trade fee</span>
+                <span>+ Trade fee</span>
                 <span className="font-data tabular-nums">{formatMoney(tradeFeeCents)}</span>
               </div>
+              <div className="mt-1.5 flex justify-between text-[#77808C]">
+                <span>− Cash received</span>
+                <span className="font-data tabular-nums">{formatMoney(cashReceivedCents)}</span>
+              </div>
               <div className="mt-2 flex justify-between border-t border-[#24282D] pt-2 text-[#E6E8EB]">
-                <span className="font-semibold">Realized gain (books now)</span>
+                <span className="font-semibold">Total basis to allocate</span>
+                <span className="font-data font-semibold tabular-nums text-[#20B26B]">
+                  {formatMoney(incomingBasisPoolCents)}
+                </span>
+              </div>
+              <div className="mt-1.5 flex justify-between text-[#77808C]">
+                <span>Gain deferred to sale</span>
                 <span
-                  className={`font-data font-semibold tabular-nums ${
-                    realizedGainCents >= 0 ? "text-[#20B26B]" : "text-[#E05C5C]"
+                  className={`font-data tabular-nums ${
+                    deferredGainCents >= 0 ? "text-[#20B26B]" : "text-[#E05C5C]"
                   }`}
                 >
-                  {formatMoney(realizedGainCents)}
+                  {formatMoney(deferredGainCents)}
                 </span>
               </div>
               <p className="mt-2 text-[11px] leading-snug text-[#5A626E]">
-                The trade books its full gain now. Received cards enter inventory
-                at their trade value, so selling them later books only price
-                movement above that — the trade gain is never counted twice.
+                The trade books no profit now. Card appreciation is deferred into
+                the received cards&apos; basis and realizes as profit when those
+                cards sell — counted once, at sale.
               </p>
             </div>
 

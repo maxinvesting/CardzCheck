@@ -129,45 +129,61 @@ export function recognizableFromBusinessTrade(
 }
 
 /**
- * How much of a trade is recognized in P&L *now* (mark-to-market model).
+ * How much of a trade is recognized in P&L *now* (deferral model).
  *
- * A trade is treated as disposing of the outgoing card(s) at their market value
- * — the whole gain books at trade time. The received card(s) enter inventory at
- * their fair (market) value, so a later sale only books price movement above
- * that, never the trade gain again. Nothing is deferred.
+ * Card-for-card swap (any cards received): the gain is DEFERRED, not booked now.
+ * The received card(s) carry a cost basis rolled over from what was given up
+ * (basis + cash/fees paid − cash received), so the whole gain lands in P&L when
+ * those cards later sell — counted exactly once, at sale. Nothing is recognized
+ * at trade time, EXCEPT cash received in excess of the total cost given up (that
+ * excess can't be deferred into a basis, so it realizes now).
  *
- *   profit = value received − cost given up
- *          = (cash received + fair value of cards received)
- *            − (basis of cards given up + cash paid + trade fees)
+ * Pure cards-for-cash disposal (no card received): there's nothing to defer the
+ * basis into, so the full gain or loss realizes immediately —
+ * `cash received − cash paid − fees − basis given up`.
  *
- * Revenue is the consideration received (cash + cards at market); COGS is the
- * basis given up plus cash/fees paid, so `revenue − cogs === profit`. For a pure
- * cards-for-cash disposal there are no incoming cards, so this reduces to
- * `cash received − cash paid − fees − basis`, unchanged from before.
- *
- * Returns null only for a degenerate empty trade (no value moved either way).
+ * Returns null when nothing is recognized now (the common card-for-card case).
  */
 export function tradeRecognition(
   t: RecognizableTrade
 ): { revenue_cents: number; cogs_cents: number; profit_cents: number } | null {
-  const revenue = t.cash_in_cents + t.incoming_fair_cents;
+  if (t.has_incoming) {
+    // Cash received beyond the cost given up can't roll into a card basis.
+    const excessCash =
+      t.cash_in_cents - t.cash_out_cents - t.fees_cents - t.outgoing_basis_cents;
+    if (excessCash <= 0) return null; // fully deferred into received-card basis
+    return { revenue_cents: excessCash, cogs_cents: 0, profit_cents: excessCash };
+  }
+  const revenue = t.cash_in_cents;
   const cogs = t.outgoing_basis_cents + t.cash_out_cents + t.fees_cents;
-  if (revenue === 0 && cogs === 0) return null;
-  return {
-    revenue_cents: revenue,
-    cogs_cents: cogs,
-    profit_cents: revenue - cogs,
-  };
+  return { revenue_cents: revenue, cogs_cents: cogs, profit_cents: revenue - cogs };
 }
 
 /**
- * Deferred (unrecognized) trade gain. Under the mark-to-market model the entire
- * gain is booked at trade time and received cards carry their fair value as
- * basis, so nothing is deferred — always 0. Kept so callers/tiles that report a
- * "deferred" figure resolve to zero cleanly.
+ * The portion of a trade's gain that is deferred into the received cards' cost
+ * basis and recognized later, when those cards sell. It's the total economic
+ * gain of the trade minus whatever was recognized now:
+ *
+ *   total gain = (cash received + fair value of cards received)
+ *                − (basis given up + cash paid + fees)
+ *
+ * For a pure cards-for-cash disposal nothing is deferred (0). By construction,
+ * `recognizedNow + deferred === total gain`, so a card-for-card trade's gain is
+ * counted once — here as deferred now, then as sale profit when the card sells.
  */
-export function tradeDeferredGain(_t: RecognizableTrade): number {
-  return 0;
+export function tradeDeferredGain(t: RecognizableTrade): number {
+  if (!t.has_incoming) return 0;
+  const totalGain =
+    t.incoming_fair_cents +
+    t.cash_in_cents -
+    t.outgoing_basis_cents -
+    t.cash_out_cents -
+    t.fees_cents;
+  const recognizedNow = Math.max(
+    0,
+    t.cash_in_cents - t.cash_out_cents - t.fees_cents - t.outgoing_basis_cents
+  );
+  return totalGain - recognizedNow;
 }
 
 /** Sum of deferred (unrecognized) trade gains within [fromMs, toMs). */
