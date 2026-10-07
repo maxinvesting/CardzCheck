@@ -5,6 +5,12 @@ import { CardImage } from "@/components/CardImage";
 import CardPhotoUploader from "@/components/business/CardPhotoUploader";
 import type { BusinessInventoryItem, TrustedCardImage } from "@/types";
 import { formatGradingCountdown, getGradingCountdown } from "@/lib/business/grading-turnaround";
+import {
+  allInCostCents,
+  breakEvenGrade,
+  buildGradingForecast,
+  gradeTiersFor,
+} from "@/lib/business/grading-forecast";
 
 interface ProfileLikeItem {
   id: string;
@@ -45,6 +51,7 @@ interface ProfileLikeItem {
   grading_fee_cents?: number | null;
   grading_sent_date?: string | null;
   grading_turnaround_days?: number | null;
+  grading_value_estimates?: Record<string, number> | null;
 }
 
 interface SaleSummary {
@@ -365,8 +372,9 @@ export default function CardProfileDrawer({
               </div>
             </div>
 
-            {/* Right column: notes, sales */}
+            {/* Right column: grading forecast, notes, sales */}
             <div className="min-h-0 overflow-y-auto">
+              {item.status === "at_grading" ? <GradingForecast item={item} /> : null}
               {item.notes ? (
                 <section className="border-b border-[#24282D] px-4 py-3">
                   <div className="text-[10px] font-semibold uppercase tracking-wide text-[#77808C]">
@@ -420,6 +428,71 @@ export default function CardProfileDrawer({
         ) : null}
       </div>
     </div>
+  );
+}
+
+function GradingForecast({ item }: { item: ProfileLikeItem }) {
+  const cost = allInCostCents(item);
+  const rows = buildGradingForecast(item.grading_value_estimates, cost);
+  const company = item.grading_submitted_company || "";
+  const breakEven = breakEvenGrade(rows);
+  return (
+    <section className="border-b border-[#24282D] px-4 py-3">
+      <div className="flex items-baseline justify-between">
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-[#5FA8FF]">
+          Grading forecast
+        </div>
+        <div className="text-[10px] text-[#5A626E]">
+          All-in cost <span className="tabular-nums text-[#B8C0CC]">{fmtCents(cost)}</span>
+        </div>
+      </div>
+      {rows.length === 0 ? (
+        <p className="mt-1 text-[11px] text-[#5A626E]">
+          No grade estimates yet — click Edit and fill in &ldquo;Est. value if it grades&rdquo;.
+        </p>
+      ) : (
+        <>
+          <table className="mt-1.5 w-full text-[11px] tabular-nums">
+            <thead>
+              <tr className="text-[10px] uppercase tracking-wide text-[#5A626E]">
+                <th className="py-1 text-left font-medium">Grade</th>
+                <th className="py-1 text-right font-medium">Est. value</th>
+                <th className="py-1 text-right font-medium">Profit</th>
+                <th className="py-1 text-right font-medium">ROI</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#1E2227]">
+              {rows.map((r) => {
+                const tone =
+                  r.profitCents > 0 ? "text-[#20B26B]" : r.profitCents < 0 ? "text-[#E05C5C]" : "text-[#77808C]";
+                return (
+                  <tr key={r.grade}>
+                    <td className="py-1.5 text-[#E6E8EB]">
+                      {company ? `${company} ` : ""}
+                      {r.grade}
+                    </td>
+                    <td className="py-1.5 text-right text-[#E6E8EB]">{fmtCents(r.valueCents)}</td>
+                    <td className={`py-1.5 text-right ${tone}`}>
+                      {r.profitCents > 0 ? "+" : ""}
+                      {fmtCents(r.profitCents)}
+                    </td>
+                    <td className={`py-1.5 text-right ${tone}`}>
+                      {r.roi == null ? "—" : `${r.roi > 0 ? "+" : ""}${Math.round(r.roi * 100)}%`}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <p className="mt-1.5 text-[10px] text-[#5A626E]">
+            {breakEven
+              ? `Breaks even at ${company ? `${company} ` : ""}${breakEven} or better.`
+              : "No estimated grade covers the all-in cost."}{" "}
+            Before selling fees.
+          </p>
+        </>
+      )}
+    </section>
   );
 }
 
@@ -644,6 +717,15 @@ function InventoryEditForm({
     grading_turnaround_days:
       item.grading_turnaround_days != null ? String(item.grading_turnaround_days) : "",
   });
+  const [valueEstimates, setValueEstimates] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      Object.entries(item.grading_value_estimates ?? {}).map(([g, cents]) => [g, centsToInput(cents)])
+    )
+  );
+  // Company tiers plus any grade already estimated under a different company.
+  const estimateGrades = Array.from(
+    new Set([...gradeTiersFor(form.grading_submitted_company), ...Object.keys(valueEstimates)])
+  ).sort((a, b) => (Number(b) || 0) - (Number(a) || 0));
   const [images, setImages] = useState<string[]>(() =>
     [item.user_image_url, item.image_url].filter(
       (u): u is string => typeof u === "string" && u.startsWith("http")
@@ -696,6 +778,11 @@ function InventoryEditForm({
         grading_fee_cents: gradingFeeCents,
         grading_sent_date: form.grading_sent_date || null,
         grading_turnaround_days: Number.isFinite(turnaround) && turnaround >= 0 ? turnaround : null,
+        grading_value_estimates: Object.fromEntries(
+          Object.entries(valueEstimates)
+            .filter(([, v]) => v.trim() !== "")
+            .map(([g, v]) => [g, inputToCents(v)])
+        ),
         list_price_cents: form.list_price.trim() === "" ? null : inputToCents(form.list_price),
         current_market_value_cents:
           form.market_value.trim() === "" ? null : inputToCents(form.market_value),
@@ -816,6 +903,23 @@ function InventoryEditForm({
               <EditField label="Date Sent">
                 <input type="date" value={form.grading_sent_date} onChange={(e) => set("grading_sent_date", e.target.value)} className={INPUT_CLASS} />
               </EditField>
+            </div>
+            <div className="mt-3 mb-1.5 text-[10px] font-medium uppercase tracking-[0.08em] text-[#5FA8FF]">
+              Est. value if it grades ($)
+            </div>
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+              {estimateGrades.map((g) => (
+                <EditField key={g} label={`${form.grading_submitted_company || "Grade"} ${g}`}>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={valueEstimates[g] ?? ""}
+                    onChange={(e) => setValueEstimates((prev) => ({ ...prev, [g]: e.target.value }))}
+                    className={INPUT_CLASS}
+                  />
+                </EditField>
+              ))}
             </div>
             <p className="mt-2 text-[10px] text-[#5A626E]">
               Changing the grading fee adjusts Fees Paid by the same amount on save.

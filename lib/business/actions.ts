@@ -25,6 +25,7 @@ import {
   type RawTradeRow,
   type RecognizableTrade,
 } from "@/lib/business/trade-recognition";
+import { normalizeValueEstimates } from "@/lib/business/grading-forecast";
 
 // Uses unified collection_items table with item_kind = 'inventory'
 const BUSINESS_TABLE = "collection_items" as const;
@@ -88,6 +89,7 @@ type BusinessInventoryRow = {
   grading_fee_cents?: number | null;
   grading_sent_date?: string | null;
   grading_turnaround_days?: number | null;
+  grading_value_estimates?: unknown;
   created_at: string;
   updated_at: string | null;
 };
@@ -303,6 +305,7 @@ function toBusinessInventoryItem(row: BusinessInventoryRow): BusinessInventoryIt
     grading_fee_cents: row.grading_fee_cents ?? null,
     grading_sent_date: row.grading_sent_date ?? null,
     grading_turnaround_days: row.grading_turnaround_days ?? null,
+    grading_value_estimates: normalizeValueEstimates(row.grading_value_estimates),
     ebay_item_id: (row as any).ebay_item_id ?? null,
     ebay_listing_url: (row as any).ebay_listing_url ?? null,
     item_kind: (row.item_kind as "owned" | "inventory" | null) ?? null,
@@ -369,6 +372,7 @@ function buildInventoryInsertPayload(
     grading_fee_cents: item.grading_fee_cents ?? null,
     grading_sent_date: normalizeAcquisitionDate(item.grading_sent_date ?? null),
     grading_turnaround_days: normalizeTurnaroundDays(item.grading_turnaround_days),
+    grading_value_estimates: normalizeValueEstimates(item.grading_value_estimates),
   };
 }
 
@@ -432,6 +436,8 @@ function buildInventoryUpdatePayload(
     payload.grading_sent_date = normalizeAcquisitionDate(updates.grading_sent_date ?? null);
   if (updates.grading_turnaround_days !== undefined)
     payload.grading_turnaround_days = normalizeTurnaroundDays(updates.grading_turnaround_days);
+  if (updates.grading_value_estimates !== undefined)
+    payload.grading_value_estimates = normalizeValueEstimates(updates.grading_value_estimates);
   return payload;
 }
 

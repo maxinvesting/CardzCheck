@@ -199,6 +199,8 @@ export interface BusinessInventoryItem {
   grading_sent_date?: string | null;
   /** Estimated turnaround in business days, counted from grading_sent_date. */
   grading_turnaround_days?: number | null;
+  /** Estimated sale value (cents) at each grade, e.g. { "10": 120000, "9": 40000 }. */
+  grading_value_estimates?: Record<string, number> | null;
   ebay_item_id?: string | null; // eBay listing item ID for synced items
   ebay_listing_url?: string | null; // Direct eBay listing URL
   item_kind?: "owned" | "inventory" | null; // Ownership type

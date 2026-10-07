@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { normalizeCertWriteFields } from "@/lib/images/cert-image";
 import { resolveGradeFields, buildInventoryTitle } from "@/lib/business/grade";
 import CardPhotoUploader from "@/components/business/CardPhotoUploader";
+import { gradeTiersFor } from "@/lib/business/grading-forecast";
 
 export interface PendingInventoryCard {
   card_id?: string;
@@ -42,6 +43,8 @@ const emptyGradingForm = () => ({
   sent_date: new Date().toISOString().slice(0, 10),
   service: "",
   turnaround_days: "",
+  /** grade label → estimated value in dollars (as typed) */
+  value_estimates: {} as Record<string, string>,
 });
 export default function AddCardToInventoryModal({ isOpen, card, onClose, onSuccess }: Props) {
   const [form, setForm] = useState({
@@ -226,6 +229,11 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
             grading_sent_date: grading.sent_date || null,
             grading_turnaround_days:
               Number.isFinite(turnaroundDays) && turnaroundDays >= 0 ? turnaroundDays : null,
+            grading_value_estimates: Object.fromEntries(
+              gradeTiersFor(grading.company)
+                .filter((g) => (grading.value_estimates[g] ?? "").trim() !== "")
+                .map((g) => [g, toCents(grading.value_estimates[g])])
+            ),
           }
         : {};
 
@@ -600,6 +608,35 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
                         className="w-full border border-[#343941] bg-[#0F1317] px-3 py-2 text-sm text-[#E6E8EB] focus:border-[#5FA8FF] focus:outline-none"
                       />
                     </label>
+                  </div>
+                )}
+                {grading.enabled && (
+                  <div className="mt-3 border-t border-[#1F3F5A] pt-3">
+                    <div className="mb-1.5 text-[10px] font-medium uppercase tracking-[0.08em] text-[#5FA8FF]">
+                      Est. value if it grades ($) — forecasts your return
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      {gradeTiersFor(grading.company).map((g) => (
+                        <label key={g} className="block">
+                          <span className="mb-1 block text-[10px] font-medium uppercase tracking-[0.08em] text-[#77808C]">
+                            {grading.company === "Other" ? "Grade" : grading.company} {g}
+                          </span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={grading.value_estimates[g] ?? ""}
+                            onChange={(e) =>
+                              setGrading({
+                                ...grading,
+                                value_estimates: { ...grading.value_estimates, [g]: e.target.value },
+                              })
+                            }
+                            className="w-full border border-[#343941] bg-[#0F1317] px-3 py-2 text-sm text-[#E6E8EB] placeholder-[#5A626E] focus:border-[#5FA8FF] focus:outline-none"
+                          />
+                        </label>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
