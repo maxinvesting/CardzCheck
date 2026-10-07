@@ -33,7 +33,7 @@ import { buildEbayListUrl, buildEbaySoldUrl } from "@/lib/ebay/comps-url";
 
 const VIRTUALIZE_THRESHOLD = 200;
 
-const STATUS_OPTIONS = ["unlisted", "listed", "pending_sale", "sold", "returned"] as const;
+const STATUS_OPTIONS = ["unlisted", "listed", "pending_sale", "at_grading", "sold", "returned"] as const;
 
 type ConsultantAction = {
   label: string;

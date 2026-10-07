@@ -31,8 +31,17 @@ interface Props {
 }
 
 const CHANNEL_OPTIONS = ["ebay", "whatnot", "alt", "fanatics", "instagram", "show", "local", "other", "veriswap"] as const;
-const STATUS_OPTIONS = ["unlisted", "listed", "pending_sale", "sold", "returned"] as const;
+const STATUS_OPTIONS = ["unlisted", "listed", "pending_sale", "at_grading", "sold", "returned"] as const;
 const ACQ_OPTIONS = ["buy", "trade", "rip", "consignment", "other"] as const;
+const GRADING_COMPANY_OPTIONS = ["PSA", "BGS", "SGC", "CGC", "TAG", "Other"] as const;
+
+const emptyGradingForm = () => ({
+  enabled: false,
+  company: "PSA",
+  fee: "",
+  sent_date: new Date().toISOString().slice(0, 10),
+  service: "",
+});
 export default function AddCardToInventoryModal({ isOpen, card, onClose, onSuccess }: Props) {
   const [form, setForm] = useState({
     quantity: String(Math.max(1, card?.quantity ?? 1)),
@@ -49,6 +58,7 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
     location: "",
     notes: "",
   });
+  const [grading, setGrading] = useState(emptyGradingForm);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cmvLoading, setCmvLoading] = useState(false);
@@ -104,6 +114,7 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
     );
     const uniqueSeeded = Array.from(new Set(seeded));
     setImages(uniqueSeeded);
+    setGrading(emptyGradingForm());
 
     const initialCert = card?.psa_cert_number ?? "";
     setCertInput(initialCert);
@@ -200,7 +211,21 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
       };
       const totalTaxCents = toCents(form.tax);
       const totalShippingCents = toCents(form.shipping);
-      const totalFeesCents = toCents(form.fees_paid);
+      // Grading fees are part of what the card cost, so they ride in fees_paid
+      // (which feeds cost basis, P&L, and the cash-on-hand purchase deduction).
+      const totalGradingFeeCents = grading.enabled ? toCents(grading.fee) * parsedQuantity : 0;
+      const totalFeesCents = toCents(form.fees_paid) + totalGradingFeeCents;
+      const status = grading.enabled ? "at_grading" : form.status;
+      const gradingNote = grading.enabled
+        ? [
+            `Sent to ${grading.company} for grading${grading.sent_date ? ` on ${grading.sent_date}` : ""}`,
+            grading.service.trim() ? `service: ${grading.service.trim()}` : null,
+            grading.fee ? `fee $${(toCents(grading.fee) / 100).toFixed(2)}/card` : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")
+        : null;
+      const notes = [gradingNote, form.notes.trim() || null].filter(Boolean).join("\n") || null;
 
       for (let index = 0; index < parsedQuantity; index += 1) {
         const res = await fetch("/api/business/inventory", {
@@ -227,7 +252,7 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
             cert_number: normalizedCert.cert_number ?? null,
             psa_cert_number: normalizedCert.psa_cert_number ?? null,
             channel: form.channel,
-            status: form.status,
+            status,
             list_price_cents: form.list_price ? toCents(form.list_price) : null,
             current_market_value_cents: form.current_market_value
               ? toCents(form.current_market_value)
@@ -237,7 +262,7 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
             image_urls: images,
             user_image_url: resolvedImageUrl,
             location: form.location || null,
-            notes: form.notes || null,
+            notes,
           }),
         });
 
@@ -266,6 +291,7 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
         notes: "",
       });
       setImages([]);
+      setGrading(emptyGradingForm());
       setCertInput("");
       setCertNote(null);
 
@@ -455,7 +481,18 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
               </div>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {inp("Channel", "channel", "select", CHANNEL_OPTIONS)}
-                {inp("Status", "status", "select", STATUS_OPTIONS)}
+                {grading.enabled ? (
+                  <label className="block">
+                    <span className="mb-1 block text-[10px] font-medium uppercase tracking-[0.08em] text-[#77808C]">
+                      Status
+                    </span>
+                    <div className="w-full border border-[#1F3F5A] bg-[#0E1A25] px-3 py-2 text-sm text-[#5FA8FF]">
+                      at_grading
+                    </div>
+                  </label>
+                ) : (
+                  inp("Status", "status", "select", STATUS_OPTIONS)
+                )}
                 {inp("List Price ($)", "list_price", "number")}
                 <label className="block">
                   <span className="mb-1 block text-[10px] font-medium uppercase tracking-[0.08em] text-[#77808C]">
@@ -475,6 +512,79 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
                     className="w-full border border-[#343941] bg-[#0F1317] px-3 py-2 text-sm text-[#E6E8EB] placeholder-[#5A626E] focus:border-[#20B26B] focus:outline-none"
                   />
                 </label>
+              </div>
+              <div
+                className={`border px-3 py-3 ${
+                  grading.enabled ? "border-[#1F3F5A] bg-[#0B141C]" : "border-[#24282D] bg-[#0F1317]"
+                }`}
+              >
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={grading.enabled}
+                    onChange={(e) => setGrading({ ...grading, enabled: e.target.checked })}
+                    className="h-4 w-4 accent-[#5FA8FF]"
+                  />
+                  <span className="text-sm font-medium text-[#E6E8EB]">Send to grading</span>
+                  <span className="text-[11px] text-[#5A626E]">
+                    Card goes in as &ldquo;At Grading&rdquo;; the fee is added to its cost.
+                  </span>
+                </label>
+                {grading.enabled && (
+                  <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    <label className="block">
+                      <span className="mb-1 block text-[10px] font-medium uppercase tracking-[0.08em] text-[#77808C]">
+                        Grading Co.
+                      </span>
+                      <select
+                        value={grading.company}
+                        onChange={(e) => setGrading({ ...grading, company: e.target.value })}
+                        className="w-full border border-[#343941] bg-[#0F1317] px-3 py-2 text-sm text-[#E6E8EB] focus:border-[#5FA8FF] focus:outline-none"
+                      >
+                        {GRADING_COMPANY_OPTIONS.map((o) => (
+                          <option key={o} value={o}>
+                            {o}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-[10px] font-medium uppercase tracking-[0.08em] text-[#77808C]">
+                        Service Level
+                      </span>
+                      <input
+                        value={grading.service}
+                        onChange={(e) => setGrading({ ...grading, service: e.target.value })}
+                        placeholder="e.g. Value Bulk"
+                        className="w-full border border-[#343941] bg-[#0F1317] px-3 py-2 text-sm text-[#E6E8EB] placeholder-[#5A626E] focus:border-[#5FA8FF] focus:outline-none"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-[10px] font-medium uppercase tracking-[0.08em] text-[#77808C]">
+                        Grading Fee / Card ($)
+                      </span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={grading.fee}
+                        onChange={(e) => setGrading({ ...grading, fee: e.target.value })}
+                        className="w-full border border-[#343941] bg-[#0F1317] px-3 py-2 text-sm text-[#E6E8EB] placeholder-[#5A626E] focus:border-[#5FA8FF] focus:outline-none"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-[10px] font-medium uppercase tracking-[0.08em] text-[#77808C]">
+                        Date Sent
+                      </span>
+                      <input
+                        type="date"
+                        value={grading.sent_date}
+                        onChange={(e) => setGrading({ ...grading, sent_date: e.target.value })}
+                        className="w-full border border-[#343941] bg-[#0F1317] px-3 py-2 text-sm text-[#E6E8EB] focus:border-[#5FA8FF] focus:outline-none"
+                      />
+                    </label>
+                  </div>
+                )}
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {inp("Storage", "location", "text", undefined, "Storage unit, binder, etc.")}

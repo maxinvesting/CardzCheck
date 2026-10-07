@@ -42,6 +42,8 @@ function statusClassName(status: LedgerTableRow["item"]["status"]): string {
       return "border-[#3F4650] bg-[#1B2026] text-[#E6E8EB]";
     case "pending_sale":
       return "border-[#5A4A1F] bg-[#251E0E] text-[#F0B429]";
+    case "at_grading":
+      return "border-[#1F3F5A] bg-[#0E1A25] text-[#5FA8FF]";
     case "sold":
     case "returned":
     case "traded":
@@ -53,6 +55,7 @@ function statusClassName(status: LedgerTableRow["item"]["status"]): string {
 
 function formatStatus(status: LedgerTableRow["item"]["status"]): string {
   if (status === "pending_sale") return "Pending";
+  if (status === "at_grading") return "At Grading";
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
 

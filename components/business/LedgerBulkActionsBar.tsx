@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-const STATUS_OPTIONS = ["unlisted", "listed", "pending_sale", "sold", "returned", "traded"];
+const STATUS_OPTIONS = ["unlisted", "listed", "pending_sale", "at_grading", "sold", "returned", "traded"];
 const CHANNEL_OPTIONS = ["", "ebay", "whatnot", "alt", "fanatics", "instagram", "show", "local", "other", "veriswap"];
 
 export type LedgerBulkAction =

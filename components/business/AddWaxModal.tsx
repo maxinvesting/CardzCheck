@@ -37,7 +37,7 @@ const CATEGORIES = [
   "Other",
 ] as const;
 
-const STATUS_OPTIONS = ["unlisted", "listed", "pending_sale", "sold", "returned"] as const;
+const STATUS_OPTIONS = ["unlisted", "listed", "pending_sale", "at_grading", "sold", "returned"] as const;
 const CHANNEL_OPTIONS = ["ebay", "whatnot", "alt", "fanatics", "instagram", "show", "local", "other", "veriswap"] as const;
 const ACQ_OPTIONS = ["buy", "trade", "rip", "consignment", "other"] as const;
 

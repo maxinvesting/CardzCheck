@@ -177,6 +177,7 @@ function normalizeStatus(
     normalized === "unlisted" ||
     normalized === "listed" ||
     normalized === "pending_sale" ||
+    normalized === "at_grading" ||
     normalized === "sold" ||
     normalized === "returned" ||
     normalized === "traded"

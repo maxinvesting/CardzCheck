@@ -36,7 +36,7 @@ interface BulkCertImportModalProps {
 }
 
 const CHANNEL_OPTIONS = ["", "ebay", "whatnot", "alt", "fanatics", "instagram", "show", "local", "other", "veriswap"];
-const STATUS_OPTIONS = ["unlisted", "listed", "pending_sale", "sold"];
+const STATUS_OPTIONS = ["unlisted", "listed", "pending_sale", "at_grading", "sold"];
 
 function parseCerts(input: string): string[] {
   const seen = new Set<string>();

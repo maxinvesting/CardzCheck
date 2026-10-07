@@ -1,7 +1,7 @@
 import type { BusinessInventoryItem } from "@/types";
 
 export type LedgerValueSource = "cmv" | "fallback" | "cost";
-export type LedgerListingStatus = "Listed" | "Unlisted";
+export type LedgerListingStatus = "Listed" | "Unlisted" | "At Grading";
 
 export interface LedgerTableRow {
   id: string;
@@ -255,6 +255,7 @@ function getEstimatedUnitValue(item: BusinessInventoryItem): {
 }
 
 function getSimpleListingStatus(item: BusinessInventoryItem): LedgerListingStatus {
+  if (item.status === "at_grading") return "At Grading";
   if (
     item.status === "listed" ||
     item.status === "pending_sale" ||

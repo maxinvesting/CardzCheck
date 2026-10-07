@@ -56,7 +56,7 @@ export interface InventoryProvider {
   updateStatus(
     userId: string,
     itemId: string,
-    status: "unlisted" | "listed" | "pending_sale" | "sold" | "returned"
+    status: "unlisted" | "listed" | "pending_sale" | "at_grading" | "sold" | "returned"
   ): Promise<void>;
 
   /**

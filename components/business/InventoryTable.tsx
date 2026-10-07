@@ -109,8 +109,8 @@ interface Props {
   listView?: boolean;
 }
 
-const STATUS_OPTIONS = ["unlisted", "listed", "pending_sale", "sold", "returned"] as const;
-const ACTIVE_STATUS_OPTIONS = ["unlisted", "listed", "pending_sale"] as const;
+const STATUS_OPTIONS = ["unlisted", "listed", "pending_sale", "at_grading", "sold", "returned"] as const;
+const ACTIVE_STATUS_OPTIONS = ["unlisted", "listed", "pending_sale", "at_grading"] as const;
 const CHANNEL_OPTIONS = ["ebay", "whatnot", "alt", "fanatics", "instagram", "show", "local", "other", "veriswap"] as const;
 const CONDITION_OPTIONS = ["raw", "graded"] as const;
 const VIRTUALIZE_THRESHOLD = 200;

@@ -90,6 +90,7 @@ export function statusColor(status: string): string {
     case "listed":
       return "border border-[var(--biz-border-strong)] bg-[var(--biz-surface-raised)] text-[var(--biz-text-strong)]";
     case "pending_sale": return "border border-amber-200 bg-amber-50 text-amber-700";
+    case "at_grading": return "border border-sky-200 bg-sky-50 text-sky-700";
     case "returned": return "border border-red-200 bg-red-50 text-red-700";
     case "traded": return "border border-amber-200 bg-amber-50 text-amber-700";
     default:
@@ -100,6 +101,7 @@ export function statusColor(status: string): string {
 export function statusLabel(status: string): string {
   switch (status) {
     case "pending_sale": return "Pending";
+    case "at_grading": return "At Grading";
     case "traded": return "Traded";
     default: return status.charAt(0).toUpperCase() + status.slice(1);
   }
