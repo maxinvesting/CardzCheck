@@ -117,6 +117,9 @@ function metaLine(item: ProfileLikeItem): string {
 }
 
 function pickEstimatedCents(item: ProfileLikeItem): number | null {
+  // Same primary source as the ledger's CMV column.
+  if (typeof item.current_market_value_cents === "number" && item.current_market_value_cents > 0)
+    return item.current_market_value_cents;
   if (typeof item.last_known_price_cents === "number") return item.last_known_price_cents;
   if (typeof item.estimated_cmv === "number") return Math.round(item.estimated_cmv * 100);
   if (typeof item.est_cmv === "number") return Math.round(item.est_cmv * 100);
@@ -140,6 +143,13 @@ export default function CardProfileDrawer({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
+  const [completingGrading, setCompletingGrading] = useState(false);
+  const [gradingResult, setGradingResult] = useState<string | null>(null);
+
+  useEffect(() => {
+    setCompletingGrading(false);
+    setGradingResult(null);
+  }, [isOpen, itemId]);
 
   useEffect(() => {
     if (initialItem) {
@@ -257,7 +267,32 @@ export default function CardProfileDrawer({
           </div>
         ) : null}
 
-        {item && editing && mode === "business" ? (
+        {gradingResult ? (
+          <div className="mx-4 mt-4 flex items-start justify-between gap-3 border border-[#1F5F45] bg-[#0E251B] px-3 py-2.5 text-sm text-[#20B26B]">
+            <span>{gradingResult}</span>
+            <button
+              type="button"
+              onClick={() => setGradingResult(null)}
+              className="text-xs text-[#77808C] hover:text-[#E6E8EB]"
+              aria-label="Dismiss"
+            >
+              ✕
+            </button>
+          </div>
+        ) : null}
+
+        {item && completingGrading && mode === "business" ? (
+          <GradingCompleteForm
+            item={item}
+            onCancel={() => setCompletingGrading(false)}
+            onSaved={(updated, summary) => {
+              setItem((prev) => ({ ...(prev ?? {}), ...updated }) as ProfileLikeItem);
+              setCompletingGrading(false);
+              setGradingResult(summary);
+              onSaved?.(updated);
+            }}
+          />
+        ) : item && editing && mode === "business" ? (
           <InventoryEditForm
             item={item}
             onCancel={() => setEditing(false)}
@@ -339,6 +374,15 @@ export default function CardProfileDrawer({
               </dl>
 
               {/* Actions */}
+              {mode === "business" && item.status === "at_grading" ? (
+                <button
+                  type="button"
+                  onClick={() => setCompletingGrading(true)}
+                  className="mt-4 w-full border border-[#1F3F5A] bg-[#0E1A25] px-3 py-2 text-xs font-semibold text-[#5FA8FF] transition-colors hover:bg-[#13263A]"
+                >
+                  Grading complete — enter grade
+                </button>
+              ) : null}
               <div className="mt-4 grid grid-cols-2 gap-2">
                 {mode === "business" ? (
                   <ActionButton onClick={() => setEditing(true)} primary>
@@ -374,7 +418,10 @@ export default function CardProfileDrawer({
 
             {/* Right column: grading forecast, notes, sales */}
             <div className="min-h-0 overflow-y-auto">
-              {item.status === "at_grading" ? <GradingForecast item={item} /> : null}
+              {item.status === "at_grading" ||
+              (item.grading_value_estimates && item.grading_sent_date) ? (
+                <GradingForecast item={item} />
+              ) : null}
               {item.notes ? (
                 <section className="border-b border-[#24282D] px-4 py-3">
                   <div className="text-[10px] font-semibold uppercase tracking-wide text-[#77808C]">
@@ -436,11 +483,15 @@ function GradingForecast({ item }: { item: ProfileLikeItem }) {
   const rows = buildGradingForecast(item.grading_value_estimates, cost);
   const company = item.grading_submitted_company || "";
   const breakEven = breakEvenGrade(rows);
+  const achieved =
+    item.status !== "at_grading" && item.condition_status === "graded" && item.grade != null
+      ? String(item.grade).trim()
+      : null;
   return (
     <section className="border-b border-[#24282D] px-4 py-3">
       <div className="flex items-baseline justify-between">
         <div className="text-[10px] font-semibold uppercase tracking-wide text-[#5FA8FF]">
-          Grading forecast
+          {achieved ? "Grading result" : "Grading forecast"}
         </div>
         <div className="text-[10px] text-[#5A626E]">
           All-in cost <span className="tabular-nums text-[#B8C0CC]">{fmtCents(cost)}</span>
@@ -466,10 +517,13 @@ function GradingForecast({ item }: { item: ProfileLikeItem }) {
                 const tone =
                   r.profitCents > 0 ? "text-[#20B26B]" : r.profitCents < 0 ? "text-[#E05C5C]" : "text-[#77808C]";
                 return (
-                  <tr key={r.grade}>
+                  <tr key={r.grade} className={achieved === r.grade ? "bg-[#0E1A25]" : undefined}>
                     <td className="py-1.5 text-[#E6E8EB]">
                       {company ? `${company} ` : ""}
                       {r.grade}
+                      {achieved === r.grade ? (
+                        <span className="ml-1.5 text-[10px] font-semibold uppercase text-[#5FA8FF]">Got it</span>
+                      ) : null}
                     </td>
                     <td className="py-1.5 text-right text-[#E6E8EB]">{fmtCents(r.valueCents)}</td>
                     <td className={`py-1.5 text-right ${tone}`}>
@@ -493,6 +547,191 @@ function GradingForecast({ item }: { item: ProfileLikeItem }) {
         </>
       )}
     </section>
+  );
+}
+
+/**
+ * "Grading complete" — record the grade a card came back with. Marks it graded,
+ * moves it out of at_grading, and (optionally) sets its market value to the
+ * estimate entered for that grade.
+ */
+function GradingCompleteForm({
+  item,
+  onCancel,
+  onSaved,
+}: {
+  item: ProfileLikeItem;
+  onCancel: () => void;
+  onSaved: (updated: BusinessInventoryItem, summary: string) => void;
+}) {
+  const estimates = item.grading_value_estimates ?? {};
+  const [company, setCompany] = useState(item.grading_submitted_company || "PSA");
+  const grades = Array.from(new Set([...gradeTiersFor(company), ...Object.keys(estimates)])).sort(
+    (a, b) => (Number(b) || 0) - (Number(a) || 0)
+  );
+  const [grade, setGrade] = useState(grades[0] ?? "10");
+  const [cert, setCert] = useState(item.cert_number ?? item.psa_cert_number ?? "");
+  const [nextStatus, setNextStatus] = useState("unlisted");
+  const [applyValue, setApplyValue] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const cost = allInCostCents(item);
+  const estimateCents = estimates[grade.trim()] ?? null;
+  const profitCents = estimateCents != null ? estimateCents - cost : null;
+
+  async function save() {
+    if (!grade.trim()) {
+      setError("Enter the grade it came back with.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      const updates: Record<string, unknown> = {
+        id: item.id,
+        condition_status: "graded",
+        grading_company: company.trim() || null,
+        grade: grade.trim(),
+        cert_number: cert.trim() || null,
+        status: nextStatus,
+      };
+      if (applyValue && estimateCents != null) updates.current_market_value_cents = estimateCents;
+      const res = await fetch("/api/business/inventory", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || "Failed to save");
+      const label = `${company.trim()} ${grade.trim()}`.trim();
+      const summary =
+        estimateCents != null && profitCents != null
+          ? `Came back ${label} — est. value ${fmtCents(estimateCents)} on ${fmtCents(cost)} all-in (${
+              profitCents >= 0 ? "+" : ""
+            }${fmtCents(profitCents)}).`
+          : `Came back ${label}.`;
+      onSaved(data as BusinessInventoryItem, summary);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="flex-1 overflow-y-auto px-5 py-4">
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-[#5FA8FF]">
+          Grading complete
+        </div>
+        <p className="mt-1 text-xs text-[#77808C]">
+          What did {item.player_name ?? "this card"} come back as?
+        </p>
+        {error ? (
+          <div className="mt-3 border border-[#723030] bg-[#2A1111] px-3 py-2 text-xs text-[#E05C5C]">
+            {error}
+          </div>
+        ) : null}
+
+        <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
+          <EditField label="Grading Co.">
+            <input value={company} onChange={(e) => setCompany(e.target.value)} className={INPUT_CLASS} />
+          </EditField>
+          <EditField label="Grade">
+            <input
+              value={grade}
+              onChange={(e) => setGrade(e.target.value)}
+              list="grading-complete-grades"
+              className={INPUT_CLASS}
+            />
+            <datalist id="grading-complete-grades">
+              {grades.map((g) => (
+                <option key={g} value={g} />
+              ))}
+            </datalist>
+          </EditField>
+          <EditField label="Cert #">
+            <input value={cert} onChange={(e) => setCert(e.target.value)} className={INPUT_CLASS} />
+          </EditField>
+          <EditSelect
+            label="New Status"
+            value={nextStatus}
+            options={["unlisted", "listed"]}
+            onChange={setNextStatus}
+          />
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {grades.map((g) => (
+            <button
+              key={g}
+              type="button"
+              onClick={() => setGrade(g)}
+              className={`border px-2.5 py-1 text-xs tabular-nums transition-colors ${
+                grade.trim() === g
+                  ? "border-[#5FA8FF] bg-[#0E1A25] text-[#5FA8FF]"
+                  : "border-[#343941] text-[#B8C0CC] hover:border-[#5A626E]"
+              }`}
+            >
+              {company} {g}
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-4 border border-[#24282D] bg-[#0F1317] px-3 py-2.5 text-xs">
+          <div className="flex justify-between text-[#77808C]">
+            <span>All-in cost</span>
+            <span className="tabular-nums text-[#E6E8EB]">{fmtCents(cost)}</span>
+          </div>
+          <div className="mt-1 flex justify-between text-[#77808C]">
+            <span>Your estimate at {company} {grade || "—"}</span>
+            <span className="tabular-nums text-[#E6E8EB]">{fmtCents(estimateCents)}</span>
+          </div>
+          {profitCents != null ? (
+            <div className="mt-1 flex justify-between text-[#77808C]">
+              <span>Projected profit</span>
+              <span
+                className={`tabular-nums ${profitCents >= 0 ? "text-[#20B26B]" : "text-[#E05C5C]"}`}
+              >
+                {profitCents >= 0 ? "+" : ""}
+                {fmtCents(profitCents)}
+              </span>
+            </div>
+          ) : null}
+          {estimateCents != null ? (
+            <label className="mt-2 flex cursor-pointer items-center gap-2 text-[#B8C0CC]">
+              <input
+                type="checkbox"
+                checked={applyValue}
+                onChange={(e) => setApplyValue(e.target.checked)}
+                className="h-3.5 w-3.5 accent-[#20B26B]"
+              />
+              Set market value to {fmtCents(estimateCents)}
+            </label>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="flex items-center justify-end gap-2 border-t border-[#24282D] px-5 py-3">
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={saving}
+          className="border border-[#343941] px-4 py-2 text-xs font-medium text-[#B8C0CC] transition-colors hover:border-[#5A626E] hover:text-[#E6E8EB] disabled:opacity-50"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={() => void save()}
+          disabled={saving}
+          className="border border-[#20B26B] bg-[#20B26B] px-4 py-2 text-xs font-semibold text-[#07100B] transition-colors hover:bg-[#33C47C] disabled:opacity-50"
+        >
+          {saving ? "Saving…" : "Mark graded"}
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -746,7 +985,7 @@ function InventoryEditForm({
     setError(null);
     try {
       const primaryImage = images[0] ?? null;
-      // The grading fee is part of fees_paid; keep fees_paid in step when the
+      // The grading fee is part of cost basis; keep cost basis in step when the
       // grading fee is edited here.
       const gradingFeeCents =
         form.grading_fee.trim() === "" ? null : inputToCents(form.grading_fee);
@@ -769,10 +1008,10 @@ function InventoryEditForm({
         user_image_url: primaryImage,
         image_url: primaryImage,
         image_source: primaryImage ? "user" : "none",
-        cost_basis_total_cents: inputToCents(form.cost_basis),
+        cost_basis_total_cents: Math.max(0, inputToCents(form.cost_basis) + gradingFeeDelta),
         tax_cents: inputToCents(form.tax),
         shipping_cents: inputToCents(form.shipping),
-        fees_paid_cents: Math.max(0, inputToCents(form.fees_paid) + gradingFeeDelta),
+        fees_paid_cents: inputToCents(form.fees_paid),
         grading_submitted_company: form.grading_submitted_company || null,
         grading_service: form.grading_service || null,
         grading_fee_cents: gradingFeeCents,
@@ -922,7 +1161,7 @@ function InventoryEditForm({
               ))}
             </div>
             <p className="mt-2 text-[10px] text-[#5A626E]">
-              Changing the grading fee adjusts Fees Paid by the same amount on save.
+              Cost basis includes the grading fee; changing the fee here adjusts cost basis by the same amount on save.
             </p>
           </div>
         ) : null}

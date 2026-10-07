@@ -207,7 +207,10 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
       // Market Value / Card is already per-card). Order-level tax/shipping/fees are
       // split evenly across the rows so the totals entered aren't multiplied; any
       // rounding remainder lands on the first row.
-      const perCardCostCents = toCents(form.cost_basis);
+      // The grading fee is part of what the card cost, so it goes into cost basis
+      // (ledger cost, sale COGS, P&L and the cash-on-hand purchase deduction).
+      const gradingFeePerCardCents = grading.enabled ? toCents(grading.fee) : 0;
+      const perCardCostCents = toCents(form.cost_basis) + gradingFeePerCardCents;
       const splitEvenly = (totalCents: number, index: number) => {
         const base = Math.floor(totalCents / parsedQuantity);
         const remainder = totalCents - base * parsedQuantity;
@@ -215,10 +218,7 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
       };
       const totalTaxCents = toCents(form.tax);
       const totalShippingCents = toCents(form.shipping);
-      // Grading fees are part of what the card cost, so they ride in fees_paid
-      // (which feeds cost basis, P&L, and the cash-on-hand purchase deduction).
-      const totalGradingFeeCents = grading.enabled ? toCents(grading.fee) * parsedQuantity : 0;
-      const totalFeesCents = toCents(form.fees_paid) + totalGradingFeeCents;
+      const totalFeesCents = toCents(form.fees_paid);
       const status = grading.enabled ? "at_grading" : form.status;
       const turnaroundDays = Number.parseInt(grading.turnaround_days, 10);
       const gradingFields = grading.enabled
@@ -538,7 +538,7 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
                   />
                   <span className="text-sm font-medium text-[#E6E8EB]">Send to grading</span>
                   <span className="text-[11px] text-[#5A626E]">
-                    Card goes in as &ldquo;At Grading&rdquo;; the fee is added to its cost.
+                    Card goes in as &ldquo;At Grading&rdquo;; the fee is added to its cost basis.
                   </span>
                 </label>
                 {grading.enabled && (
