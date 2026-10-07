@@ -83,6 +83,11 @@ type BusinessInventoryRow = {
   cert_image_status?: "queued" | "running" | "resolved" | "no_image" | "failed" | null;
   cert_image_last_error?: string | null;
   notes: string | null;
+  grading_submitted_company?: string | null;
+  grading_service?: string | null;
+  grading_fee_cents?: number | null;
+  grading_sent_date?: string | null;
+  grading_turnaround_days?: number | null;
   created_at: string;
   updated_at: string | null;
 };
@@ -293,12 +298,22 @@ function toBusinessInventoryItem(row: BusinessInventoryRow): BusinessInventoryIt
     image_source: row.image_source ?? "none",
     user_image_url: row.user_image_url ?? null,
     notes: row.notes,
+    grading_submitted_company: row.grading_submitted_company ?? null,
+    grading_service: row.grading_service ?? null,
+    grading_fee_cents: row.grading_fee_cents ?? null,
+    grading_sent_date: row.grading_sent_date ?? null,
+    grading_turnaround_days: row.grading_turnaround_days ?? null,
     ebay_item_id: (row as any).ebay_item_id ?? null,
     ebay_listing_url: (row as any).ebay_listing_url ?? null,
     item_kind: (row.item_kind as "owned" | "inventory" | null) ?? null,
     created_at: row.created_at,
     updated_at: row.updated_at || row.created_at,
   };
+}
+
+function normalizeTurnaroundDays(value: unknown): number | null {
+  const n = typeof value === "string" ? Number.parseInt(value, 10) : value;
+  return typeof n === "number" && Number.isFinite(n) && n >= 0 ? Math.round(n) : null;
 }
 
 function buildInventoryInsertPayload(
@@ -349,6 +364,11 @@ function buildInventoryInsertPayload(
       (item as any).image_source || ((item as any).user_image_url ? "user" : "none"),
     user_image_url: (item as any).user_image_url || null,
     notes: item.notes || null,
+    grading_submitted_company: item.grading_submitted_company || null,
+    grading_service: item.grading_service || null,
+    grading_fee_cents: item.grading_fee_cents ?? null,
+    grading_sent_date: normalizeAcquisitionDate(item.grading_sent_date ?? null),
+    grading_turnaround_days: normalizeTurnaroundDays(item.grading_turnaround_days),
   };
 }
 
@@ -402,6 +422,16 @@ function buildInventoryUpdatePayload(
   if (updates.notes !== undefined) payload.notes = updates.notes;
   if (updates.user_image_url !== undefined)
     payload.user_image_url = updates.user_image_url;
+  if (updates.grading_submitted_company !== undefined)
+    payload.grading_submitted_company = updates.grading_submitted_company || null;
+  if (updates.grading_service !== undefined)
+    payload.grading_service = updates.grading_service || null;
+  if (updates.grading_fee_cents !== undefined)
+    payload.grading_fee_cents = updates.grading_fee_cents;
+  if (updates.grading_sent_date !== undefined)
+    payload.grading_sent_date = normalizeAcquisitionDate(updates.grading_sent_date ?? null);
+  if (updates.grading_turnaround_days !== undefined)
+    payload.grading_turnaround_days = normalizeTurnaroundDays(updates.grading_turnaround_days);
   return payload;
 }
 

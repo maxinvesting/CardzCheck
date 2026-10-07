@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import Image from "next/image";
 import type { LedgerTableRow } from "@/lib/business/ledger-table";
+import { getGradingCountdown } from "@/lib/business/grading-turnaround";
 import {
   getInventoryImageCandidates,
   isResolvingInventoryCertImage,
@@ -51,6 +52,13 @@ function statusClassName(status: LedgerTableRow["item"]["status"]): string {
     default:
       return "border-[#343941] bg-[#0F1216] text-[#77808C]";
   }
+}
+
+function gradingCountdownSuffix(item: LedgerTableRow["item"]): string {
+  if (item.status !== "at_grading") return "";
+  const countdown = getGradingCountdown(item.grading_sent_date, item.grading_turnaround_days);
+  if (!countdown) return "";
+  return countdown.overdue ? ` · ${-countdown.daysRemaining}d late` : ` · ${countdown.daysRemaining}d`;
 }
 
 function formatStatus(status: LedgerTableRow["item"]["status"]): string {
@@ -195,6 +203,7 @@ function LedgerPhotoCard({
             )}`}
           >
             {formatStatus(row.item.status)}
+            {gradingCountdownSuffix(row.item)}
           </span>
         </div>
       </div>

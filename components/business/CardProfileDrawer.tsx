@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { CardImage } from "@/components/CardImage";
 import CardPhotoUploader from "@/components/business/CardPhotoUploader";
 import type { BusinessInventoryItem, TrustedCardImage } from "@/types";
+import { formatGradingCountdown, getGradingCountdown } from "@/lib/business/grading-turnaround";
 
 interface ProfileLikeItem {
   id: string;
@@ -39,6 +40,11 @@ interface ProfileLikeItem {
   primary_image?: { image_url?: string | null } | null;
   acquisition_date?: string | null;
   created_at?: string | null;
+  grading_submitted_company?: string | null;
+  grading_service?: string | null;
+  grading_fee_cents?: number | null;
+  grading_sent_date?: string | null;
+  grading_turnaround_days?: number | null;
 }
 
 interface SaleSummary {
@@ -320,6 +326,9 @@ export default function CardProfileDrawer({
                 />
                 <Stat label="Channel" value={item.channel ?? "—"} />
                 <Stat label="Status" value={item.status ?? "—"} />
+                {item.status === "at_grading" ? (
+                  <GradingStats item={item} />
+                ) : null}
               </dl>
 
               {/* Actions */}
@@ -411,6 +420,33 @@ export default function CardProfileDrawer({
         ) : null}
       </div>
     </div>
+  );
+}
+
+function GradingStats({ item }: { item: ProfileLikeItem }) {
+  const countdown = getGradingCountdown(item.grading_sent_date, item.grading_turnaround_days);
+  const company = [item.grading_submitted_company, item.grading_service].filter(Boolean).join(" · ");
+  return (
+    <>
+      <Stat label="At Grading" value={company || "—"} />
+      <Stat label="Grading Fee" value={fmtCents(item.grading_fee_cents ?? null)} />
+      <Stat label="Sent" value={item.grading_sent_date ?? "—"} />
+      <Stat
+        label="Turnaround"
+        value={countdown ? formatGradingCountdown(countdown) : "—"}
+        tone={countdown?.overdue ? "negative" : "neutral"}
+      />
+      {countdown ? (
+        <Stat
+          label="Est. Back"
+          value={countdown.estimatedReturnDate.toLocaleDateString(undefined, {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+          })}
+        />
+      ) : null}
+    </>
   );
 }
 
@@ -601,6 +637,12 @@ function InventoryEditForm({
     fees_paid: centsToInput(item.fees_paid_cents),
     list_price: centsToInput(item.list_price_cents),
     market_value: centsToInput(item.current_market_value_cents),
+    grading_submitted_company: item.grading_submitted_company ?? "",
+    grading_service: item.grading_service ?? "",
+    grading_fee: centsToInput(item.grading_fee_cents),
+    grading_sent_date: item.grading_sent_date ? item.grading_sent_date.slice(0, 10) : "",
+    grading_turnaround_days:
+      item.grading_turnaround_days != null ? String(item.grading_turnaround_days) : "",
   });
   const [images, setImages] = useState<string[]>(() =>
     [item.user_image_url, item.image_url].filter(
@@ -622,6 +664,12 @@ function InventoryEditForm({
     setError(null);
     try {
       const primaryImage = images[0] ?? null;
+      // The grading fee is part of fees_paid; keep fees_paid in step when the
+      // grading fee is edited here.
+      const gradingFeeCents =
+        form.grading_fee.trim() === "" ? null : inputToCents(form.grading_fee);
+      const gradingFeeDelta = (gradingFeeCents ?? 0) - (item.grading_fee_cents ?? 0);
+      const turnaround = Number.parseInt(form.grading_turnaround_days, 10);
       const updates: Record<string, unknown> = {
         id: item.id,
         title: form.title,
@@ -642,7 +690,12 @@ function InventoryEditForm({
         cost_basis_total_cents: inputToCents(form.cost_basis),
         tax_cents: inputToCents(form.tax),
         shipping_cents: inputToCents(form.shipping),
-        fees_paid_cents: inputToCents(form.fees_paid),
+        fees_paid_cents: Math.max(0, inputToCents(form.fees_paid) + gradingFeeDelta),
+        grading_submitted_company: form.grading_submitted_company || null,
+        grading_service: form.grading_service || null,
+        grading_fee_cents: gradingFeeCents,
+        grading_sent_date: form.grading_sent_date || null,
+        grading_turnaround_days: Number.isFinite(turnaround) && turnaround >= 0 ? turnaround : null,
         list_price_cents: form.list_price.trim() === "" ? null : inputToCents(form.list_price),
         current_market_value_cents:
           form.market_value.trim() === "" ? null : inputToCents(form.market_value),
@@ -741,6 +794,34 @@ function InventoryEditForm({
             <input type="number" step="0.01" value={form.market_value} onChange={(e) => set("market_value", e.target.value)} className={INPUT_CLASS} />
           </EditField>
         </div>
+
+        {form.status === "at_grading" ? (
+          <div className="mt-3 border border-[#1F3F5A] bg-[#0B141C] p-3">
+            <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.08em] text-[#5FA8FF]">
+              Grading submission
+            </div>
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+              <EditField label="Sent To">
+                <input value={form.grading_submitted_company} onChange={(e) => set("grading_submitted_company", e.target.value)} placeholder="PSA" className={INPUT_CLASS} />
+              </EditField>
+              <EditField label="Service">
+                <input value={form.grading_service} onChange={(e) => set("grading_service", e.target.value)} className={INPUT_CLASS} />
+              </EditField>
+              <EditField label="Grading Fee ($)">
+                <input type="number" step="0.01" min="0" value={form.grading_fee} onChange={(e) => set("grading_fee", e.target.value)} className={INPUT_CLASS} />
+              </EditField>
+              <EditField label="Turnaround (Bus. Days)">
+                <input type="number" step="1" min="0" value={form.grading_turnaround_days} onChange={(e) => set("grading_turnaround_days", e.target.value)} className={INPUT_CLASS} />
+              </EditField>
+              <EditField label="Date Sent">
+                <input type="date" value={form.grading_sent_date} onChange={(e) => set("grading_sent_date", e.target.value)} className={INPUT_CLASS} />
+              </EditField>
+            </div>
+            <p className="mt-2 text-[10px] text-[#5A626E]">
+              Changing the grading fee adjusts Fees Paid by the same amount on save.
+            </p>
+          </div>
+        ) : null}
 
         <EditField label="Notes" full className="mt-3">
           <textarea

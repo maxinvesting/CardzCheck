@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { formatGradingCountdown, getGradingCountdown } from "@/lib/business/grading-turnaround";
 import type {
   LedgerTableRow,
   LedgerSortColumn,
@@ -309,18 +310,36 @@ function InlineMoneyCell({
   );
 }
 
+function GradingCountdownNote({ item }: { item: LedgerTableRow["item"] }) {
+  if (item.status !== "at_grading") return null;
+  const countdown = getGradingCountdown(item.grading_sent_date, item.grading_turnaround_days);
+  if (!countdown) return null;
+  return (
+    <div
+      className={`mt-0.5 whitespace-nowrap text-[10px] tabular-nums ${
+        countdown.overdue ? "text-[#E05C5C]" : "text-[#5FA8FF]"
+      }`}
+      title={`Est. back ${countdown.estimatedReturnDate.toLocaleDateString()}`}
+    >
+      {formatGradingCountdown(countdown)}
+    </div>
+  );
+}
+
 function InlineSelectCell({
   value,
   options,
   onSave,
   ariaLabel,
   formatOption,
+  footer,
 }: {
   value: string | null;
   options: ReadonlyArray<string>;
   onSave: (next: string) => Promise<void> | void;
   ariaLabel: string;
   formatOption?: (v: string) => string;
+  footer?: React.ReactNode;
 }) {
   return (
     <Cell align="center">
@@ -340,6 +359,7 @@ function InlineSelectCell({
           </option>
         ))}
       </select>
+      {footer}
     </Cell>
   );
 }
@@ -631,6 +651,7 @@ export default function LedgerTable({
                       options={STATUS_OPTIONS as unknown as string[]}
                       onSave={(next) => handleEdit(row.id, "status", next)}
                       ariaLabel={`status for ${row.cardLabel}`}
+                      footer={<GradingCountdownNote item={row.item} />}
                     />
                   ) : (
                     <Cell align="center">
@@ -643,6 +664,7 @@ export default function LedgerTable({
                       >
                         {row.status}
                       </span>
+                      <GradingCountdownNote item={row.item} />
                     </Cell>
                   )}
                   {onInlineEdit ? (

@@ -41,6 +41,7 @@ const emptyGradingForm = () => ({
   fee: "",
   sent_date: new Date().toISOString().slice(0, 10),
   service: "",
+  turnaround_days: "",
 });
 export default function AddCardToInventoryModal({ isOpen, card, onClose, onSuccess }: Props) {
   const [form, setForm] = useState({
@@ -216,16 +217,17 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
       const totalGradingFeeCents = grading.enabled ? toCents(grading.fee) * parsedQuantity : 0;
       const totalFeesCents = toCents(form.fees_paid) + totalGradingFeeCents;
       const status = grading.enabled ? "at_grading" : form.status;
-      const gradingNote = grading.enabled
-        ? [
-            `Sent to ${grading.company} for grading${grading.sent_date ? ` on ${grading.sent_date}` : ""}`,
-            grading.service.trim() ? `service: ${grading.service.trim()}` : null,
-            grading.fee ? `fee $${(toCents(grading.fee) / 100).toFixed(2)}/card` : null,
-          ]
-            .filter(Boolean)
-            .join(" · ")
-        : null;
-      const notes = [gradingNote, form.notes.trim() || null].filter(Boolean).join("\n") || null;
+      const turnaroundDays = Number.parseInt(grading.turnaround_days, 10);
+      const gradingFields = grading.enabled
+        ? {
+            grading_submitted_company: grading.company,
+            grading_service: grading.service.trim() || null,
+            grading_fee_cents: toCents(grading.fee),
+            grading_sent_date: grading.sent_date || null,
+            grading_turnaround_days:
+              Number.isFinite(turnaroundDays) && turnaroundDays >= 0 ? turnaroundDays : null,
+          }
+        : {};
 
       for (let index = 0; index < parsedQuantity; index += 1) {
         const res = await fetch("/api/business/inventory", {
@@ -262,7 +264,8 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
             image_urls: images,
             user_image_url: resolvedImageUrl,
             location: form.location || null,
-            notes,
+            notes: form.notes || null,
+            ...gradingFields,
           }),
         });
 
@@ -531,7 +534,7 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
                   </span>
                 </label>
                 {grading.enabled && (
-                  <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
                     <label className="block">
                       <span className="mb-1 block text-[10px] font-medium uppercase tracking-[0.08em] text-[#77808C]">
                         Grading Co.
@@ -561,7 +564,7 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
                     </label>
                     <label className="block">
                       <span className="mb-1 block text-[10px] font-medium uppercase tracking-[0.08em] text-[#77808C]">
-                        Grading Fee / Card ($)
+                        Fee / Card ($)
                       </span>
                       <input
                         type="number"
@@ -569,6 +572,20 @@ export default function AddCardToInventoryModal({ isOpen, card, onClose, onSucce
                         min="0"
                         value={grading.fee}
                         onChange={(e) => setGrading({ ...grading, fee: e.target.value })}
+                        className="w-full border border-[#343941] bg-[#0F1317] px-3 py-2 text-sm text-[#E6E8EB] placeholder-[#5A626E] focus:border-[#5FA8FF] focus:outline-none"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-[10px] font-medium uppercase tracking-[0.08em] text-[#77808C]">
+                        Turnaround (Bus. Days)
+                      </span>
+                      <input
+                        type="number"
+                        step="1"
+                        min="0"
+                        value={grading.turnaround_days}
+                        onChange={(e) => setGrading({ ...grading, turnaround_days: e.target.value })}
+                        placeholder="e.g. 100"
                         className="w-full border border-[#343941] bg-[#0F1317] px-3 py-2 text-sm text-[#E6E8EB] placeholder-[#5A626E] focus:border-[#5FA8FF] focus:outline-none"
                       />
                     </label>

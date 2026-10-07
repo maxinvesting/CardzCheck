@@ -193,6 +193,12 @@ export interface BusinessInventoryItem {
   stock_image_url?: string | null;
   ebay_image_url?: string | null;
   notes: string | null;
+  grading_submitted_company?: string | null;
+  grading_service?: string | null;
+  grading_fee_cents?: number | null;
+  grading_sent_date?: string | null;
+  /** Estimated turnaround in business days, counted from grading_sent_date. */
+  grading_turnaround_days?: number | null;
   ebay_item_id?: string | null; // eBay listing item ID for synced items
   ebay_listing_url?: string | null; // Direct eBay listing URL
   item_kind?: "owned" | "inventory" | null; // Ownership type
