@@ -70,7 +70,34 @@ const CHANNEL_LABELS: Record<string, string> = {
   veriswap: "Veriswap",
 };
 
-const EBAY_FEE_RATE = 0.135; // 13.5% assumed eBay transaction fee
+const EBAY_DEFAULT_FEE_PCT = 13.5; // assumed eBay transaction fee
+const FEE_PCT_STORAGE_KEY = "cardzcheck:feePctByChannel";
+
+/** Last-used platform fee % per channel, so repeat sales prefill. */
+function readStoredFeePcts(): Record<string, string> {
+  try {
+    const raw = window.localStorage.getItem(FEE_PCT_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function storeFeePct(channel: string, pct: string) {
+  try {
+    const next = { ...readStoredFeePcts(), [channel]: pct };
+    window.localStorage.setItem(FEE_PCT_STORAGE_KEY, JSON.stringify(next));
+  } catch {
+    // ignore — prefill is a convenience only
+  }
+}
+
+/** Format a percentage for the input: up to 3 decimals, trailing zeros trimmed. */
+function pctToInput(pct: number): string {
+  if (!Number.isFinite(pct)) return "";
+  return String(Number(pct.toFixed(3)));
+}
 
 function centsToInput(cents: number | null | undefined): string {
   if (cents == null || !Number.isFinite(cents)) return "";
@@ -115,7 +142,8 @@ export default function SaleFormModal({
   const [soldPrice, setSoldPrice] = useState("");
   // Single shipping field — treated as both charged to buyer and cost to seller (pass-through)
   const [shipping, setShipping] = useState("");
-  const [platformFees, setPlatformFees] = useState("");
+  /** Platform fee as a percentage of (sale + shipping). */
+  const [platformFeePct, setPlatformFeePct] = useState("");
   const [cogs, setCogs] = useState("");
   const [externalOrderId, setExternalOrderId] = useState("");
   const [notes, setNotes] = useState("");
@@ -144,7 +172,16 @@ export default function SaleFormModal({
         ? centsToInput(defaults.shipping_charged_cents)
         : centsToInput(defaults?.shipping_cost_cents);
     setShipping(shippingInit);
-    setPlatformFees(centsToInput(defaults?.platform_fees_cents));
+    // Existing sale → back out the % from stored fee cents; new sale → last-used % for the channel
+    const feeBaseCents =
+      (defaults?.sold_price_cents ?? 0) + (defaults?.shipping_charged_cents ?? 0);
+    if (defaults?.platform_fees_cents != null && feeBaseCents > 0) {
+      setPlatformFeePct(pctToInput((defaults.platform_fees_cents / feeBaseCents) * 100));
+    } else if (defaults?.platform_fees_cents != null && defaults.platform_fees_cents > 0) {
+      setPlatformFeePct("");
+    } else {
+      setPlatformFeePct(readStoredFeePcts()[channelValue] ?? "");
+    }
     setCogs(centsToInput(defaults?.cogs_cents));
     setExternalOrderId(defaults?.external_order_id || "");
     setNotes(defaults?.notes || "");
@@ -161,19 +198,28 @@ export default function SaleFormModal({
     setAutoCogsByQuantity(true);
   }, [defaults, isOpen]);
 
-  // ── eBay: auto-estimate 13.5% platform fee ─────────────────────────────
-  const ebayAutoFeesCents = useMemo(() => {
-    if (channel !== "ebay") return 0;
-    const priceCents = inputToCents(soldPrice);
-    const shippingCents = inputToCents(shipping);
-    return Math.round((priceCents + shippingCents) * EBAY_FEE_RATE);
-  }, [channel, soldPrice, shipping]);
+  // ── Platform fee % → cents. Blank on eBay falls back to the 13.5% estimate ──
+  const usingEbayDefaultFee = channel === "ebay" && !platformFeePct.trim();
+  const effectiveFeePct = useMemo(() => {
+    if (platformFeePct.trim()) {
+      const parsed = Number.parseFloat(platformFeePct);
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+    }
+    return channel === "ebay" ? EBAY_DEFAULT_FEE_PCT : 0;
+  }, [platformFeePct, channel]);
 
-  // Use user-entered platform fees if provided; otherwise fall back to eBay auto-estimate
   const effectivePlatformFeesCents = useMemo(() => {
-    if (platformFees.trim()) return inputToCents(platformFees);
-    return ebayAutoFeesCents;
-  }, [platformFees, ebayAutoFeesCents]);
+    const baseCents = inputToCents(soldPrice) + inputToCents(shipping);
+    return Math.round((baseCents * effectiveFeePct) / 100);
+  }, [soldPrice, shipping, effectiveFeePct]);
+
+  const changeChannel = (next: typeof channel) => {
+    setChannel(next);
+    // Swap in the last-used % for the new channel unless the user typed one for this sale
+    const stored = readStoredFeePcts()[next];
+    if (stored != null) setPlatformFeePct(stored);
+    else if (platformFeePct === (readStoredFeePcts()[channel] ?? "")) setPlatformFeePct("");
+  };
 
   const computedNetPayoutCents = useMemo(
     () =>
@@ -257,6 +303,7 @@ export default function SaleFormModal({
     setSubmitting(true);
     try {
       await onSubmit(payload);
+      if (platformFeePct.trim()) storeFeePct(channel, platformFeePct.trim());
       onClose();
     } finally {
       setSubmitting(false);
@@ -345,7 +392,7 @@ export default function SaleFormModal({
               <span className={labelCls}>Channel</span>
               <select
                 value={channel}
-                onChange={(e) => setChannel(e.target.value as typeof channel)}
+                onChange={(e) => changeChannel(e.target.value as typeof channel)}
                 className={fieldCls}
               >
                 {CHANNEL_OPTIONS.map((opt) => (
@@ -380,35 +427,35 @@ export default function SaleFormModal({
                 placeholder="0.00"
               />
             </label>
-            <div>
+            <label>
               <span className={labelCls}>
-                Platform Fees ($)
-                {channel === "ebay" && !platformFees.trim() && (
-                  <span className="ml-1 text-emerald-600 font-semibold">13.5% est.</span>
+                Platform Fees (%)
+                {effectivePlatformFeesCents > 0 && (
+                  <span className="ml-1 font-semibold text-[#20B26B]">
+                    = {formatMoney(effectivePlatformFeesCents)}
+                    {usingEbayDefaultFee && " est."}
+                  </span>
                 )}
               </span>
               <input
                 type="number"
                 step="0.01"
                 min="0"
-                value={platformFees}
-                onChange={(e) => setPlatformFees(e.target.value)}
+                max="100"
+                value={platformFeePct}
+                onChange={(e) => setPlatformFeePct(e.target.value)}
                 className={fieldCls}
-                placeholder={
-                  channel === "ebay"
-                    ? centsToInput(ebayAutoFeesCents) || "0.00"
-                    : "0.00"
-                }
+                placeholder={channel === "ebay" ? String(EBAY_DEFAULT_FEE_PCT) : "0"}
               />
-            </div>
+            </label>
           </div>
 
           {/* ── eBay info strip ────────────────────────────────────────── */}
-          {channel === "ebay" && (
+          {usingEbayDefaultFee && (
             <div className="border border-[#1D3A60] bg-[#0A1929] px-3 py-2 text-xs text-[#60A0DC]">
               <p>
                 <span className="font-semibold">Platform fees</span> estimated at{" "}
-                <span className="font-bold">13.5%</span> of sale + shipping. Override the field above if you know the exact amount.
+                <span className="font-bold">13.5%</span> of sale + shipping. Enter a different % above to override.
               </p>
             </div>
           )}
@@ -429,8 +476,8 @@ export default function SaleFormModal({
               <div>
                 <p className="text-xs font-medium text-[#20B26B]">Estimated net payout</p>
                 <p className="text-[11px] text-[#20B26B]/60 mt-0.5">
-                  Sale + shipping − fees − shipping cost
-                  {channel === "ebay" && !platformFees.trim() && " (13.5% eBay fee assumed)"}
+                  Sale + shipping − {effectiveFeePct ? `${pctToInput(effectiveFeePct)}% fees` : "fees"} − shipping cost
+                  {usingEbayDefaultFee && " (13.5% eBay fee assumed)"}
                 </p>
               </div>
               <p className="text-xl font-bold text-[#20B26B]">
@@ -512,7 +559,7 @@ export default function SaleFormModal({
               <ol className="list-decimal list-inside space-y-1 text-[#77808C]">
                 <li>Find the order in <span className="font-medium text-[#B8C0CC]">Whatnot Seller Dashboard → Orders</span></li>
                 <li><span className="font-medium text-[#B8C0CC]">Sold Price</span> — the hammer price the buyer paid</li>
-                <li><span className="font-medium text-[#B8C0CC]">Platform Fees</span> — Whatnot seller fee (~9.5%) + 2.9% payment processing; see "Fee Breakdown"</li>
+                <li><span className="font-medium text-[#B8C0CC]">Platform Fees</span> — enter the combined % (seller fee ~9.5% + 2.9% processing ≈ 12.4%); remembered for next time</li>
                 <li><span className="font-medium text-[#B8C0CC]">External Order ID</span> — paste the Whatnot order number to prevent duplicates</li>
               </ol>
             </div>
