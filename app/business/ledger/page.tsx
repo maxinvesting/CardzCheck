@@ -16,6 +16,7 @@ import AddCardToInventoryModal from "@/components/business/AddCardToInventoryMod
 import type { PendingInventoryCard } from "@/components/business/AddCardToInventoryModal";
 import BulkAddInventoryModal from "@/components/business/BulkAddInventoryModal";
 import CashManagerModal from "@/components/business/CashManagerModal";
+import DebtManagerModal from "@/components/business/DebtManagerModal";
 import CardProfileDrawer from "@/components/business/CardProfileDrawer";
 // Heavy modal (~1.3k lines) — load its chunk only when the modal is opened.
 const AddCardModalNew = dynamic(() => import("@/components/AddCardModalNew"), {
@@ -63,10 +64,14 @@ function LedgerSummaryStrip({
   summary,
   cashBalanceCents,
   onManageCash,
+  debtBalanceCents,
+  onManageDebt,
 }: {
   summary: LedgerSummary;
   cashBalanceCents: number | null;
   onManageCash: () => void;
+  debtBalanceCents: number | null;
+  onManageDebt: () => void;
 }) {
   const cells = [
     {
@@ -93,7 +98,7 @@ function LedgerSummaryStrip({
 
   return (
     <div className="overflow-x-auto border-y border-[#24282D] bg-[#0B0D0F]">
-      <div className="grid min-w-[920px] grid-cols-5 divide-x divide-[#24282D]">
+      <div className="grid min-w-[1080px] grid-cols-6 divide-x divide-[#24282D]">
         {cells.map((cell) => (
           <div key={cell.label} className="px-3 py-2">
             <div className="text-[10px] font-medium uppercase tracking-[0.08em] text-[#77808C]">
@@ -120,6 +125,28 @@ function LedgerSummaryStrip({
           </div>
           <div className="mt-0.5 font-data text-[13px] font-semibold tabular-nums text-[#20B26B]">
             {cashBalanceCents == null ? "—" : formatSummaryMoney(cashBalanceCents)}
+          </div>
+        </button>
+        <button
+          type="button"
+          onClick={onManageDebt}
+          title="Manage debt"
+          className="group px-3 py-2 text-left transition-colors hover:bg-[#111315]"
+        >
+          <div className="flex items-center justify-between">
+            <div className="text-[10px] font-medium uppercase tracking-[0.08em] text-[#77808C]">
+              Debt
+            </div>
+            <span className="text-[10px] font-medium text-[#3B82F6] opacity-0 transition-opacity group-hover:opacity-100">
+              Manage
+            </span>
+          </div>
+          <div
+            className={`mt-0.5 font-data text-[13px] font-semibold tabular-nums ${
+              debtBalanceCents ? "text-[#E05C5C]" : "text-[#E6E8EB]"
+            }`}
+          >
+            {debtBalanceCents == null ? "—" : formatSummaryMoney(debtBalanceCents)}
           </div>
         </button>
       </div>
@@ -244,6 +271,8 @@ export default function LedgerPage() {
   const [sort, setSort] = useState<LedgerSortState>(DEFAULT_LEDGER_SORT);
   const [cashBalanceCents, setCashBalanceCents] = useState<number | null>(null);
   const [showCashModal, setShowCashModal] = useState(false);
+  const [debtBalanceCents, setDebtBalanceCents] = useState<number | null>(null);
+  const [showDebtModal, setShowDebtModal] = useState(false);
 
   const activeInventoryItems = useMemo(
     () =>
@@ -372,12 +401,26 @@ export default function LedgerPage() {
     }
   }, []);
 
+  const loadDebtBalance = useCallback(async () => {
+    try {
+      const res = await fetch("/api/business/debt", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (typeof data?.balance_cents === "number") {
+        setDebtBalanceCents(data.balance_cents);
+      }
+    } catch {
+      // non-fatal
+    }
+  }, []);
+
   useEffect(() => {
     if (hasAccess) {
       void loadLatestUndoAction();
       void loadCashBalance();
+      void loadDebtBalance();
     }
-  }, [hasAccess, loadLatestUndoAction, loadCashBalance]);
+  }, [hasAccess, loadLatestUndoAction, loadCashBalance, loadDebtBalance]);
 
   const handleUndoLedgerAction = useCallback(async () => {
     if (!latestUndoAction || undoingLedgerAction) return;
@@ -722,6 +765,8 @@ export default function LedgerPage() {
             summary={ledgerSummary}
             cashBalanceCents={cashBalanceCents}
             onManageCash={() => setShowCashModal(true)}
+            debtBalanceCents={debtBalanceCents}
+            onManageDebt={() => setShowDebtModal(true)}
           />
 
           {needsMigration ? (
@@ -834,6 +879,12 @@ export default function LedgerPage() {
           isOpen={showCashModal}
           onClose={() => setShowCashModal(false)}
           onChanged={() => void loadCashBalance()}
+        />
+
+        <DebtManagerModal
+          isOpen={showDebtModal}
+          onClose={() => setShowDebtModal(false)}
+          onChanged={() => void loadDebtBalance()}
         />
 
         <BulkAddInventoryModal
