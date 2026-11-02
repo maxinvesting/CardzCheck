@@ -19,6 +19,10 @@ const CardProfileDrawer = dynamic(
   () => import("@/components/business/CardProfileDrawer"),
   { ssr: false }
 );
+const CreateSubmissionModal = dynamic(
+  () => import("@/components/business/CreateSubmissionModal"),
+  { ssr: false }
+);
 
 const MONEY = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -79,6 +83,8 @@ export default function AtGradingPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [profileItemId, setProfileItemId] = useState<string | null>(null);
+  const [showSubmission, setShowSubmission] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const loadInventory = useCallback(async () => {
     try {
@@ -148,10 +154,28 @@ export default function AtGradingPage() {
           </div>
           <h1 className="text-lg font-semibold">At Grading</h1>
         </div>
-        <div className="text-[11px] text-[#77808C]">
-          Values are your per-grade estimates, before selling fees.
+        <div className="flex items-center gap-4">
+          <div className="hidden text-[11px] text-[#77808C] md:block">
+            Values are your per-grade estimates, before selling fees.
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowSubmission(true)}
+            className="border border-[#20B26B] bg-[#20B26B] px-3 py-1.5 text-[13px] font-semibold text-[#07100B] hover:bg-[#33C47C]"
+          >
+            Create submission
+          </button>
         </div>
       </header>
+
+      {notice ? (
+        <div className="mx-4 mb-3 flex items-center justify-between border border-[#1F5F45] bg-[#0E251B] px-3 py-2 text-xs text-[#20B26B]">
+          <span>{notice}</span>
+          <button type="button" onClick={() => setNotice(null)} aria-label="Dismiss" className="px-1">
+            x
+          </button>
+        </div>
+      ) : null}
 
       <div className="overflow-x-auto border-y border-[#24282D] bg-[#0B0D0F]">
         <div
@@ -199,7 +223,7 @@ export default function AtGradingPage() {
           <div className="h-[240px] animate-pulse border border-[#24282D] bg-[#0B0D0F]" />
         ) : rows.length === 0 ? (
           <div className="border border-[#24282D] bg-[#0B0D0F] px-4 py-10 text-center text-sm text-[#77808C]">
-            No cards at grading. Send a card from the add-card form or the card&apos;s profile.
+            No cards at grading. Use Create submission to add a batch.
           </div>
         ) : (
           <div className="overflow-x-auto border border-[#24282D] bg-[#0B0D0F]">
@@ -308,6 +332,17 @@ export default function AtGradingPage() {
         onClose={() => setProfileItemId(null)}
         onSaved={(updated) => {
           setItems((prev) => prev.map((it) => (it.id === updated.id ? updated : it)));
+        }}
+      />
+
+      <CreateSubmissionModal
+        isOpen={showSubmission}
+        onClose={() => setShowSubmission(false)}
+        onCreated={(count) => {
+          setNotice(
+            `Added ${count} card${count === 1 ? "" : "s"} to inventory and At Grading.`
+          );
+          void loadInventory();
         }}
       />
     </main>
