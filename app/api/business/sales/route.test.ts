@@ -1,20 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const createClientMock = vi.fn();
-const requireBusinessContextMock = vi.fn();
+const getBusinessContextForUserMock = vi.fn();
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: createClientMock,
 }));
 
-vi.mock("@/lib/business/context", () => ({
-  requireBusinessContext: requireBusinessContextMock,
-  hasRole: (context: { role?: string }, roles: string[]) =>
-    roles.includes(context.role || ""),
+// requireBusinessAccess looks up the business account and falls back to the
+// user's personal workspace; stub only the lookup and keep the real helpers.
+vi.mock("@/lib/business/context", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/business/context")>()),
+  getBusinessContextForUser: getBusinessContextForUserMock,
 }));
 
 function buildSupabaseMock() {
+  /** business_sales inserts only; other tables' inserts land in `inserts`. */
   const insertedPayloads: Record<string, unknown>[] = [];
+  const inserts: Array<{ table: string; payload: Record<string, unknown> }> = [];
   const updates: Array<{ table: string; payload: Record<string, unknown> }> = [];
   /** Set to a Supabase-style error to simulate insert failure (used by tests). */
   const nextInsertError = { current: null as { code: string; message: string; details?: string } | null };
@@ -64,7 +67,8 @@ function buildSupabaseMock() {
       }),
       insert: vi.fn((payload: Record<string, unknown>) => {
         state.insertedPayload = payload;
-        insertedPayloads.push(payload);
+        inserts.push({ table, payload });
+        if (table === "business_sales") insertedPayloads.push(payload);
         return builder;
       }),
       update: vi.fn((payload: Record<string, unknown>) => {
@@ -118,6 +122,7 @@ function buildSupabaseMock() {
   return {
     client,
     insertedPayloads,
+    inserts,
     updates,
   };
 }
@@ -131,7 +136,7 @@ describe("POST /api/business/sales", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.resetModules();
-    requireBusinessContextMock.mockResolvedValue({
+    getBusinessContextForUserMock.mockResolvedValue({
       businessAccountId: "acct-1",
       ownerUserId: "user-1",
       role: "owner",
@@ -178,7 +183,7 @@ describe("POST /api/business/sales", () => {
   });
 
   it("computes net payout/profit and defaults cogs from inventory item", async () => {
-    const { client, insertedPayloads, updates } = buildSupabaseMock();
+    const { client, insertedPayloads, inserts, updates } = buildSupabaseMock();
     createClientMock.mockResolvedValue(client);
 
     const response = await callPost(
@@ -216,6 +221,19 @@ describe("POST /api/business/sales", () => {
         table: "collection_items",
         payload: expect.objectContaining({
           status: "sold",
+        }),
+      })
+    );
+
+    // The net payout lands in cash on hand as a sale-linked cash row.
+    expect(inserts).toContainEqual(
+      expect.objectContaining({
+        table: "business_cash_transactions",
+        payload: expect.objectContaining({
+          amount_cents: 17000,
+          kind: "sale",
+          source_type: "sale",
+          source_id: "sale-1",
         }),
       })
     );
@@ -295,11 +313,9 @@ describe("POST /api/business/sales", () => {
     expect(insertedPayloads[1]).not.toHaveProperty("business_id");
   });
 
-  it("returns 403 when user has no business subscription", async () => {
-    const error = new Error("Business subscription required");
-    (error as { status?: number }).status = 403;
-    requireBusinessContextMock.mockRejectedValue(error);
-    const { client } = buildSupabaseMock();
+  it("falls back to the personal workspace when there is no business account", async () => {
+    getBusinessContextForUserMock.mockResolvedValue(null);
+    const { client, insertedPayloads } = buildSupabaseMock();
     createClientMock.mockResolvedValue(client);
 
     const response = await callPost(
@@ -313,9 +329,12 @@ describe("POST /api/business/sales", () => {
       }) as any
     );
 
-    expect(response.status).toBe(403);
-    const body = await response.json();
-    expect(body.error).toBe("Business subscription required");
+    expect(response.status).toBe(201);
+    expect(insertedPayloads[0]).toMatchObject({
+      user_id: "user-1",
+      business_account_id: "user-1",
+      sold_price_cents: 15000,
+    });
   });
 
   it("returns 400 when inventory item is not found for this business", async () => {
