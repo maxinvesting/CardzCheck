@@ -9,6 +9,7 @@ export const SALES_CHANNELS = [
   "show",
   "local",
   "other",
+  "veriswap",
 ] as const;
 
 const centsSchema = z.number().int();
