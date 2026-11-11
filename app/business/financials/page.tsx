@@ -110,8 +110,20 @@ function Headline({
   totals,
 }: {
   label: string;
-  totals: { revenue_cents: number; profit_cents: number; sales_count: number };
+  totals: {
+    revenue_cents: number;
+    profit_cents: number;
+    sales_count: number;
+    traded_in_profit_cents?: number;
+    misc_profit_cents?: number;
+  };
 }) {
+  const parts = [
+    totals.traded_in_profit_cents
+      ? `${fmtMoney(totals.traded_in_profit_cents)} from traded-in cards`
+      : null,
+    totals.misc_profit_cents ? `${fmtMoney(totals.misc_profit_cents)} misc` : null,
+  ].filter(Boolean);
   const margin = marginPct(totals.revenue_cents, totals.profit_cents);
   return (
     <div className="px-1 py-3 sm:px-6 sm:py-1">
@@ -135,6 +147,9 @@ function Headline({
       <div className="mt-0.5 text-[11px] text-[#5A626D]">
         net profit{margin != null ? ` · ${fmtPct(margin, 1)} margin` : ""}
       </div>
+      {parts.length > 0 ? (
+        <div className="mt-0.5 text-[11px] text-[#5A626D]">incl. {parts.join(" · ")}</div>
+      ) : null}
     </div>
   );
 }
@@ -351,11 +366,14 @@ function Position({ snapshot }: { snapshot: Snapshot }) {
           }
           tone={unrealized >= 0 ? "pos" : "neg"}
         />
-        {snapshot.unrealized_trade_gain_cents !== 0 ? (
+        {snapshot.trade_pending_count > 0 ? (
           <PositionStat
-            label="Trade gain"
-            value={fmtMoney(snapshot.unrealized_trade_gain_cents)}
-            note="books as cards sell"
+            label="Pending from trades"
+            value={fmtMoney(snapshot.trade_pending_cents)}
+            note={`${snapshot.trade_pending_count} traded-in ${
+              snapshot.trade_pending_count === 1 ? "card" : "cards"
+            } held · in unrealized`}
+            tone={snapshot.trade_pending_cents >= 0 ? "pos" : "neg"}
           />
         ) : null}
         <PositionStat
@@ -393,6 +411,8 @@ const ZERO: PeriodTotals = {
   fees_cents: 0,
   shipping_cost_cents: 0,
   profit_cents: 0,
+  misc_profit_cents: 0,
+  traded_in_profit_cents: 0,
   sales_count: 0,
   margin_pct: null,
   avg_order_value_cents: null,

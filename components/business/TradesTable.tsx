@@ -109,9 +109,9 @@ export default function TradesTable({ trades, loading, onDeleteTrade }: Props) {
             </th>
             <th
               className={`${thClass} text-right`}
-              title="Gain rolled into the received card's cost basis. Realizes as profit when that card sells."
+              title="Estimated gain on trade day, using the values you entered for the cards. Not profit: the received cards carry the old cost basis, and profit books at their real sale price when they sell."
             >
-              Deferred (basis)
+              Est. gain at trade
             </th>
             <th className={thClass}>Actions</th>
           </tr>

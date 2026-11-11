@@ -26,6 +26,7 @@ import {
   type RecognizableTrade,
 } from "@/lib/business/trade-recognition";
 import { normalizeValueEstimates } from "@/lib/business/grading-forecast";
+import { fetchMiscProfit, sumMiscProfit } from "@/lib/business/misc-profit";
 
 // Uses unified collection_items table with item_kind = 'inventory'
 const BUSINESS_TABLE = "collection_items" as const;
@@ -1395,6 +1396,7 @@ export async function listSales(
   page: number;
   pageSize: number;
   total: number;
+  totals: SalesRangeTotals | null;
 }> {
   const context = await requireBusinessAccess(userId);
   const supabase = await createClient();
@@ -1403,14 +1405,6 @@ export async function listSales(
   const pageSize = Math.min(Math.max(filters?.pageSize ?? 50, 1), 200);
   const from = filters?.from ?? filters?.startDate;
   const to = filters?.to ?? filters?.endDate;
-
-  let query = supabase
-    .from("business_sales")
-    .select("*", { count: "exact" })
-    .eq("business_account_id", context.businessAccountId)
-    .eq("is_deleted", false)
-    .order("sold_at", { ascending: false })
-    .range((page - 1) * pageSize, page * pageSize - 1);
 
   if (filters?.inventoryItemId) {
     const { data: ownerCheck } = await supabase
@@ -1422,16 +1416,11 @@ export async function listSales(
     if (!ownerCheck) {
       throw new Error("Unauthorized: inventoryItemId does not belong to user");
     }
-    query = query.eq("inventory_item_id", filters.inventoryItemId);
   }
-  if (from) query = query.gte("sold_at", normalizeSaleDateTime(from));
-  if (to) {
-    const toDate = /^\d{4}-\d{2}-\d{2}$/.test(to)
-      ? `${to}T23:59:59.999Z`
-      : normalizeSaleDateTime(to);
-    query = query.lte("sold_at", toDate);
-  }
-  if (filters?.channel) query = query.eq("channel", normalizeChannel(filters.channel));
+
+  // Resolve the search's inventory matches once so the page query and the
+  // range-totals query filter identically.
+  let searchOr: string | null = null;
   if (filters?.search) {
     const q = filters.search.replace(/,/g, " ").trim();
     if (q.length > 0) {
@@ -1448,16 +1437,35 @@ export async function listSales(
 
       if (inventoryIds.length > 0) {
         assertUUIDs(inventoryIds);
-        query = query.or(
-          `notes.ilike.%${escapedQ}%,external_order_id.ilike.%${escapedQ}%,inventory_item_id.in.(${inventoryIds.join(",")})`
-        );
+        searchOr = `notes.ilike.%${escapedQ}%,external_order_id.ilike.%${escapedQ}%,inventory_item_id.in.(${inventoryIds.join(",")})`;
       } else {
-        query = query.or(
-          `notes.ilike.%${escapedQ}%,external_order_id.ilike.%${escapedQ}%`
-        );
+        searchOr = `notes.ilike.%${escapedQ}%,external_order_id.ilike.%${escapedQ}%`;
       }
     }
   }
+
+  const applyFilters = (q: any) => {
+    let next = q
+      .eq("business_account_id", context.businessAccountId)
+      .eq("is_deleted", false);
+    if (filters?.inventoryItemId) next = next.eq("inventory_item_id", filters.inventoryItemId);
+    if (from) next = next.gte("sold_at", normalizeSaleDateTime(from));
+    if (to) {
+      const toDate = /^\d{4}-\d{2}-\d{2}$/.test(to)
+        ? `${to}T23:59:59.999Z`
+        : normalizeSaleDateTime(to);
+      next = next.lte("sold_at", toDate);
+    }
+    if (filters?.channel) next = next.eq("channel", normalizeChannel(filters.channel));
+    if (searchOr) next = next.or(searchOr);
+    return next;
+  };
+
+  const query = applyFilters(
+    supabase.from("business_sales").select("*", { count: "exact" })
+  )
+    .order("sold_at", { ascending: false })
+    .range((page - 1) * pageSize, page * pageSize - 1);
 
   const { data, error, count } = await query;
 
@@ -1485,13 +1493,81 @@ export async function listSales(
     salesRows.map(toBusinessSale)
   );
 
+  // Totals across the whole filtered range (not just this page), so the Sales
+  // page's revenue/profit tiles match Financials for the same dates.
+  let totals: SalesRangeTotals | null = null;
+  if (!error) {
+    const { data: allRows, error: totalsError } = await applyFilters(
+      supabase.from("business_sales").select("*")
+    ).limit(10000);
+    if (!totalsError) {
+      totals = await summarizeSalesRange(
+        supabase,
+        ((allRows ?? []) as BusinessSaleRow[]).map(toBusinessSale)
+      );
+    }
+  }
+
   return {
     sales: mappedSales,
     page,
     pageSize,
     total,
+    totals,
   };
 }
+
+export type SalesRangeTotals = {
+  sales_count: number;
+  gross_revenue_cents: number;
+  net_payout_cents: number;
+  profit_cents: number;
+  /** Profit from sales of cards that came in through a trade (the deferred trade gain, realized). */
+  traded_in_profit_cents: number;
+  traded_in_sales_count: number;
+};
+
+async function summarizeSalesRange(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  sales: BusinessSale[]
+): Promise<SalesRangeTotals> {
+  const totals: SalesRangeTotals = {
+    sales_count: sales.length,
+    gross_revenue_cents: 0,
+    net_payout_cents: 0,
+    profit_cents: 0,
+    traded_in_profit_cents: 0,
+    traded_in_sales_count: 0,
+  };
+  for (const sale of sales) {
+    totals.gross_revenue_cents += sale.gross_revenue_cents;
+    totals.net_payout_cents += sale.net_payout_cents;
+    totals.profit_cents += sale.profit_cents;
+  }
+
+  const itemIds = Array.from(
+    new Set(sales.map((s) => s.inventory_item_id).filter((v): v is string => Boolean(v)))
+  ).filter(isUUID);
+  if (itemIds.length > 0) {
+    const { data } = await supabase
+      .from(BUSINESS_TABLE)
+      .select("id, acquisition_type")
+      .in("id", itemIds);
+    const tradedIn = new Set(
+      ((data ?? []) as Array<{ id: string; acquisition_type: string | null }>)
+        .filter((row) => row.acquisition_type === "trade")
+        .map((row) => row.id)
+    );
+    for (const sale of sales) {
+      if (sale.inventory_item_id && tradedIn.has(sale.inventory_item_id)) {
+        totals.traded_in_profit_cents += sale.profit_cents;
+        totals.traded_in_sales_count += 1;
+      }
+    }
+  }
+  return totals;
+}
+
 
 export async function createSale(
   userId: string,
@@ -1940,6 +2016,10 @@ export async function getBusinessMetrics(userId: string): Promise<BusinessMetric
   const endMs = rangeEnd.getTime();
   const mtdTrades = sumRecognizedTrades(trades, monthStart.getTime(), endMs);
   const ytdTrades = sumRecognizedTrades(trades, yearStart.getTime(), endMs);
+  // Misc profit (consignment payouts) counts toward profit like on Financials.
+  const misc = await fetchMiscProfit(supabase, context.businessAccountId, yearStart.toISOString());
+  const mtdMisc = sumMiscProfit(misc, monthStart.getTime(), endMs);
+  const ytdMisc = sumMiscProfit(misc, yearStart.getTime(), endMs);
 
   // Active inventory count
   const { count: activeCount } = await supabase
@@ -1954,8 +2034,8 @@ export async function getBusinessMetrics(userId: string): Promise<BusinessMetric
   return {
     revenueMtd: toInt(mtd.revenue_cents) + mtdTrades.revenue_cents,
     revenueYtd: toInt(ytd.revenue_cents) + ytdTrades.revenue_cents,
-    profitMtd: toInt(mtd.profit_cents) + mtdTrades.profit_cents,
-    profitYtd: toInt(ytd.profit_cents) + ytdTrades.profit_cents,
+    profitMtd: toInt(mtd.profit_cents) + mtdTrades.profit_cents + mtdMisc,
+    profitYtd: toInt(ytd.profit_cents) + ytdTrades.profit_cents + ytdMisc,
     salesCountMtd: toInt(mtd.sales_count) + mtdTrades.sales_count,
     salesCountYtd: toInt(ytd.sales_count) + ytdTrades.sales_count,
     activeInventoryCount: activeCount ?? 0,
@@ -2115,6 +2195,14 @@ export async function getBusinessPeriodMetrics(
       result[key].profit_cents += t.profit_cents;
       result[key].cogs_cents += t.cogs_cents;
       result[key].sales_count += t.sales_count;
+    });
+  }
+
+  const misc = await fetchMiscProfit(supabase, context.businessAccountId, yearStart.toISOString());
+  if (misc.length > 0) {
+    const endMs = Date.parse(rangeEnd);
+    ranges.forEach(([key, from]) => {
+      result[key].profit_cents += sumMiscProfit(misc, Date.parse(from), endMs);
     });
   }
 

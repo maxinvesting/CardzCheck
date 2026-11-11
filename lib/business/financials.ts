@@ -5,10 +5,15 @@ import {
   TRADE_RECOGNITION_SELECT,
   normalizeTradeRow,
   tradeRecognition,
-  sumDeferredTradeGains,
   type RawTradeRow,
   type RecognizableTrade,
 } from "@/lib/business/trade-recognition";
+import {
+  fetchMiscProfit,
+  miscProfitTime,
+  sumMiscProfit,
+  type MiscProfitEntry,
+} from "@/lib/business/misc-profit";
 
 const BUSINESS_TABLE = "collection_items" as const;
 const BUSINESS_ITEM_KIND = "inventory" as const;
@@ -25,6 +30,8 @@ type SaleRow = {
   profit_cents: number | null;
   channel: string | null;
   inventory_item_id: string | null;
+  /** The sold card came in through a trade (its profit is the realized trade gain). */
+  traded_in?: boolean;
 };
 
 type SaleRowWithCard = SaleRow & {
@@ -59,7 +66,12 @@ export type PeriodTotals = {
   cogs_cents: number;
   fees_cents: number;
   shipping_cost_cents: number;
+  /** Sales + recognized trades + misc profit. */
   profit_cents: number;
+  /** Misc profit (consignment payouts etc.) included in profit_cents. */
+  misc_profit_cents: number;
+  /** Profit from selling cards that came in through trades, included in profit_cents. */
+  traded_in_profit_cents: number;
   sales_count: number;
   margin_pct: number | null;
   avg_order_value_cents: number | null;
@@ -137,11 +149,12 @@ export type Snapshot = {
   /** Total business value = estimated inventory value + cash on hand. */
   total_business_value_cents: number;
   /**
-   * Mark-to-market gain from trades that is deferred into received cards' basis
-   * and not yet booked into P&L (recognized later when those cards sell). Shown
-   * separately so trade value gains are visible without being counted twice.
+   * Gain still pending on traded-in cards you hold: market value minus the
+   * basis carried over from the trade. Part of unrealized_pnl_cents; it becomes
+   * profit when those cards sell (at their real sale price).
    */
-  unrealized_trade_gain_cents: number;
+  trade_pending_cents: number;
+  trade_pending_count: number;
 };
 
 export type Velocity = {
@@ -197,6 +210,8 @@ function emptyPeriod(): PeriodTotals {
     fees_cents: 0,
     shipping_cost_cents: 0,
     profit_cents: 0,
+    misc_profit_cents: 0,
+    traded_in_profit_cents: 0,
     sales_count: 0,
     margin_pct: null,
     avg_order_value_cents: null,
@@ -207,7 +222,8 @@ function aggregatePeriod(
   rows: SaleRow[],
   from: Date,
   to: Date,
-  trades: TradeRow[] = []
+  trades: TradeRow[] = [],
+  misc: MiscProfitEntry[] = []
 ): PeriodTotals {
   const fromMs = from.getTime();
   const toMs = to.getTime();
@@ -222,6 +238,7 @@ function aggregatePeriod(
     totals.fees_cents += toInt(row.platform_fees_cents);
     totals.shipping_cost_cents += toInt(row.shipping_cost_cents);
     totals.profit_cents += toInt(row.profit_cents);
+    if (row.traded_in) totals.traded_in_profit_cents += toInt(row.profit_cents);
     totals.sales_count += 1;
   }
   // Trades recognized in P&L: only the non-deferrable cash gain/loss.
@@ -235,6 +252,9 @@ function aggregatePeriod(
     totals.profit_cents += rec.profit_cents;
     totals.sales_count += 1;
   }
+  // Misc profit (consignment payouts) adds to profit only — it isn't revenue.
+  totals.misc_profit_cents = sumMiscProfit(misc, fromMs, toMs);
+  totals.profit_cents += totals.misc_profit_cents;
   if (totals.revenue_cents > 0) {
     totals.margin_pct = (totals.profit_cents / totals.revenue_cents) * 100;
   }
@@ -255,7 +275,8 @@ function monthKey(d: Date): string {
 function buildMonthBuckets(
   rows: SaleRow[],
   now: Date,
-  trades: TradeRow[] = []
+  trades: TradeRow[] = [],
+  misc: MiscProfitEntry[] = []
 ): MonthBucket[] {
   const buckets = new Map<string, MonthBucket>();
   for (let i = 11; i >= 0; i--) {
@@ -294,6 +315,10 @@ function buildMonthBuckets(
     bucket.profit_cents += rec.profit_cents;
     bucket.sales_count += 1;
   }
+  for (const entry of misc) {
+    const bucket = buckets.get(monthKey(new Date(miscProfitTime(entry))));
+    if (bucket) bucket.profit_cents += toInt(entry.amount_cents);
+  }
   return Array.from(buckets.values());
 }
 
@@ -313,6 +338,7 @@ function buildDayBuckets(
   rows: SaleRow[],
   now: Date,
   trades: TradeRow[] = [],
+  misc: MiscProfitEntry[] = [],
   days = 35
 ): DayBucket[] {
   const buckets = new Map<string, DayBucket>();
@@ -349,6 +375,10 @@ function buildDayBuckets(
     bucket.cogs_cents += rec.cogs_cents;
     bucket.profit_cents += rec.profit_cents;
     bucket.sales_count += 1;
+  }
+  for (const entry of misc) {
+    const bucket = buckets.get(dayKey(new Date(miscProfitTime(entry))));
+    if (bucket) bucket.profit_cents += toInt(entry.amount_cents);
   }
   return Array.from(buckets.values());
 }
@@ -525,6 +555,8 @@ function buildInventory(rows: InventoryRow[], now: Date): {
   let totalValue = 0;
   let totalHoldDays = 0;
   let staleAgeSum = 0;
+  let tradePending = 0;
+  let tradePendingCount = 0;
 
   for (const row of rows) {
     if (!isActive(row.status)) continue;
@@ -533,6 +565,10 @@ function buildInventory(rows: InventoryRow[], now: Date): {
     const value = pickEstimatedValueCents(row);
     totalCost += cost;
     totalValue += value;
+    if (row.acquisition_type === "trade") {
+      tradePending += value - cost;
+      tradePendingCount += 1;
+    }
 
     const acquired = row.acquisition_date
       ? new Date(row.acquisition_date)
@@ -564,8 +600,8 @@ function buildInventory(rows: InventoryRow[], now: Date): {
     // Cash is layered in by getFinancialsSummary, which has the account context.
     cash_on_hand_cents: 0,
     total_business_value_cents: totalValue,
-    // Layered in by getFinancialsSummary, which has the trade ledger loaded.
-    unrealized_trade_gain_cents: 0,
+    trade_pending_cents: tradePending,
+    trade_pending_count: tradePendingCount,
   };
 
   const stale: StaleAlert = {
@@ -688,11 +724,11 @@ export async function getFinancialsSummary(
       (a, b) => a.getTime() - b.getTime()
     )[0];
 
-  const [salesRes, inventoryRes, tradesRes, cashBalanceCents] = await Promise.all([
+  const [salesRes, inventoryRes, tradesRes, cashBalanceCents, miscEntries] = await Promise.all([
     supabase
       .from("business_sales")
       .select(
-        "sold_at,sold_price_cents,shipping_charged_cents,shipping_cost_cents,platform_fees_cents,tax_cents,net_payout_cents,cogs_cents,profit_cents,channel,inventory_item_id,inventory_item:collection_items(title,player_name,year)"
+        "sold_at,sold_price_cents,shipping_charged_cents,shipping_cost_cents,platform_fees_cents,tax_cents,net_payout_cents,cogs_cents,profit_cents,channel,inventory_item_id,inventory_item:collection_items(title,player_name,year,acquisition_type)"
       )
       .eq("business_account_id", context.businessAccountId)
       .eq("is_deleted", false)
@@ -712,6 +748,7 @@ export async function getFinancialsSummary(
       .eq("is_deleted", false)
       .gte("traded_at", salesFrom.toISOString()),
     getCashBalanceCents(supabase, context.businessAccountId),
+    fetchMiscProfit(supabase, context.businessAccountId, salesFrom.toISOString()),
   ]);
 
   type RawSale = SaleRow & {
@@ -719,6 +756,7 @@ export async function getFinancialsSummary(
       title?: string | null;
       player_name?: string | null;
       year?: string | null;
+      acquisition_type?: string | null;
     } | null;
   };
   const saleRowsRaw: RawSale[] = (salesRes.data ?? []) as unknown as RawSale[];
@@ -734,6 +772,7 @@ export async function getFinancialsSummary(
     profit_cents: r.profit_cents,
     channel: r.channel,
     inventory_item_id: r.inventory_item_id,
+    traded_in: r.inventory_item?.acquisition_type === "trade",
   }));
   const saleRowsWithCard: SaleRowWithCard[] = saleRowsRaw.map((r) => ({
     sold_at: r.sold_at,
@@ -759,13 +798,13 @@ export async function getFinancialsSummary(
     : ((tradesRes.data ?? []) as unknown as RawTradeRow[]);
   const tradeRows: TradeRow[] = rawTrades.map(normalizeTradeRow);
 
-  const last30 = aggregatePeriod(saleRows, last30Start, now, tradeRows);
-  const prev30 = aggregatePeriod(saleRows, prev30Start, last30Start, tradeRows);
-  const mtd = aggregatePeriod(saleRows, monthStart, now, tradeRows);
-  const ytd = aggregatePeriod(saleRows, yearStart, now, tradeRows);
+  const last30 = aggregatePeriod(saleRows, last30Start, now, tradeRows, miscEntries);
+  const prev30 = aggregatePeriod(saleRows, prev30Start, last30Start, tradeRows, miscEntries);
+  const mtd = aggregatePeriod(saleRows, monthStart, now, tradeRows, miscEntries);
+  const ytd = aggregatePeriod(saleRows, yearStart, now, tradeRows, miscEntries);
 
-  const monthly = buildMonthBuckets(saleRows, now, tradeRows);
-  const daily = buildDayBuckets(saleRows, now, tradeRows);
+  const monthly = buildMonthBuckets(saleRows, now, tradeRows, miscEntries);
+  const daily = buildDayBuckets(saleRows, now, tradeRows, miscEntries);
   const cashflow = buildCashFlow(saleRows, inventoryRows, now, tradeRows);
   const channels_90d = buildChannelBreakdown(saleRows, last90Start, tradeRows);
   const inv = buildInventory(inventoryRows, now);
@@ -773,14 +812,6 @@ export async function getFinancialsSummary(
   inv.snapshot.cash_on_hand_cents = cashBalanceCents;
   inv.snapshot.total_business_value_cents =
     inv.snapshot.inventory_value_cents + cashBalanceCents;
-  // Deferred (not-yet-booked) trade gains across the loaded trade window — the
-  // mark-to-market value gained through trades that profit will recognize as the
-  // received cards sell. Shown separately so it never double-counts P&L.
-  inv.snapshot.unrealized_trade_gain_cents = sumDeferredTradeGains(
-    tradeRows,
-    salesFrom.getTime(),
-    now.getTime()
-  );
 
   const velocity = buildVelocity(
     saleRows,

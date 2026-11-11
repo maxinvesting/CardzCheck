@@ -6,11 +6,11 @@ import SalesTable, { type SalesFilters } from "@/components/business/SalesTable"
 import TradesTable, { type BusinessTrade } from "@/components/business/TradesTable";
 import { createClient } from "@/lib/supabase/client";
 import type { BusinessSale } from "@/types";
+import type { SalesRangeTotals } from "@/lib/business/actions";
 import { formatMoney } from "@/lib/business/sales-utils";
 import {
   recognizableFromBusinessTrade,
   tradeRecognition,
-  tradeDeferredGain,
 } from "@/lib/business/trade-recognition";
 
 const PAGE_SIZE = 25;
@@ -23,11 +23,11 @@ type MiscProfitEntry = {
   created_at: string;
 };
 
+// Defaults to this year so the profit tile matches Financials' "This year".
 function defaultFilters(): SalesFilters {
   const now = new Date();
-  const from = new Date(now.getTime() - 89 * 24 * 60 * 60 * 1000);
   return {
-    from: from.toISOString().slice(0, 10),
+    from: `${now.getFullYear()}-01-01`,
     to: now.toISOString().slice(0, 10),
     channel: "",
     search: "",
@@ -40,6 +40,7 @@ export default function BusinessSalesHistoryPage() {
   const [loading, setLoading] = useState(true);
   const [sales, setSales] = useState<BusinessSale[]>([]);
   const [total, setTotal] = useState(0);
+  const [rangeTotals, setRangeTotals] = useState<SalesRangeTotals | null>(null);
   const [page, setPage] = useState(1);
   const [trades, setTrades] = useState<BusinessTrade[]>([]);
   const [tradesLoading, setTradesLoading] = useState(true);
@@ -74,6 +75,7 @@ export default function BusinessSalesHistoryPage() {
       setHasAccess(true);
       setSales(data.sales ?? []);
       setTotal(data.total ?? 0);
+      setRangeTotals(data.totals ?? null);
     } catch (err) {
       setToast({
         type: "error",
@@ -289,18 +291,26 @@ export default function BusinessSalesHistoryPage() {
   // is ~0 for swaps (only excess cash / pure cash disposals hit P&L now) and
   // `deferred` holds the gain that will book at sale. This keeps trade gains
   // from being counted twice (once here and again in the eventual sale).
-  const { tradesRecognized, tradesDeferred } = useMemo(() => {
+  const tradesRecognized = useMemo(() => {
     let recognized = 0;
-    let deferred = 0;
     for (const t of filteredTrades) {
-      const rec = recognizableFromBusinessTrade(t);
-      recognized += tradeRecognition(rec)?.profit_cents ?? 0;
-      deferred += tradeDeferredGain(rec);
+      recognized += tradeRecognition(recognizableFromBusinessTrade(t))?.profit_cents ?? 0;
     }
-    return { tradesRecognized: recognized, tradesDeferred: deferred };
+    return recognized;
   }, [filteredTrades]);
 
+  // Totals for the whole date range come from the API (the table is paged);
+  // fall back to the visible page only if the API didn't send them.
   const summary = useMemo(() => {
+    if (rangeTotals) {
+      return {
+        gross: rangeTotals.gross_revenue_cents,
+        net: rangeTotals.net_payout_cents,
+        profit: rangeTotals.profit_cents,
+        tradedInProfit: rangeTotals.traded_in_profit_cents,
+        tradedInCount: rangeTotals.traded_in_sales_count,
+      };
+    }
     let gross = 0;
     let net = 0;
     let profit = 0;
@@ -309,8 +319,8 @@ export default function BusinessSalesHistoryPage() {
       net += s.net_payout_cents;
       profit += s.profit_cents;
     }
-    return { gross, net, profit };
-  }, [sales]);
+    return { gross, net, profit, tradedInProfit: 0, tradedInCount: 0 };
+  }, [rangeTotals, sales]);
 
   // Consignment / misc. profit that falls in the active date range. Like trades,
   // it has no channel, so a specific channel filter excludes it from the total.
@@ -407,30 +417,35 @@ export default function BusinessSalesHistoryPage() {
                   </h2>
                   {!tradesLoading && filteredTrades.length > 0 && (
                     <span className="flex items-baseline gap-3 text-[11px] text-[#77808C]">
-                      <span>
-                        Realized{" "}
+                      <span title="Profit booked when cards that came in through trades sold in this date range. It's already in the Profit total above.">
+                        Earned from traded-in cards{" "}
                         <span
                           className={
-                            tradesRecognized >= 0
+                            summary.tradedInProfit >= 0
                               ? "ledger-pnl-pos"
                               : "ledger-pnl-neg"
                           }
                         >
-                          {formatMoney(tradesRecognized)}
+                          {formatMoney(summary.tradedInProfit)}
                         </span>
+                        {summary.tradedInCount > 0
+                          ? ` (${summary.tradedInCount} sold)`
+                          : ""}
                       </span>
-                      <span title="Gain deferred into received-card basis — realizes as profit when those cards sell (so it isn't double-counted here).">
-                        Deferred{" "}
-                        <span
-                          className={
-                            tradesDeferred >= 0
-                              ? "ledger-pnl-pos"
-                              : "ledger-pnl-neg"
-                          }
-                        >
-                          {formatMoney(tradesDeferred)}
+                      {tradesRecognized !== 0 ? (
+                        <span title="Cash gain or loss booked at trade time (cash beyond the cost given up, or cards traded for cash only).">
+                          At trade{" "}
+                          <span
+                            className={
+                              tradesRecognized >= 0
+                                ? "ledger-pnl-pos"
+                                : "ledger-pnl-neg"
+                            }
+                          >
+                            {formatMoney(tradesRecognized)}
+                          </span>
                         </span>
-                      </span>
+                      ) : null}
                     </span>
                   )}
                 </div>
