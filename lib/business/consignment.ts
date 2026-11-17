@@ -279,7 +279,14 @@ export async function createConsignmentOrder(
 /** Delete an order and everything it booked. */
 export async function deleteConsignmentOrder(userId: string, orderId: string): Promise<void> {
   const { supabase, accountId } = await context(userId);
-  const order = await getOrder(supabase, accountId, orderId);
+  let order: ConsignmentOrder;
+  try {
+    order = await getOrder(supabase, accountId, orderId);
+  } catch (err) {
+    // Already gone (e.g. deleted in another tab) — nothing left to undo.
+    if (err instanceof ConsignmentError && err.status === 404) return;
+    throw err;
+  }
   await unbookItems(userId, supabase, accountId, order.items);
   const { error } = await supabase.from("consignment_orders").delete().eq("id", orderId);
   if (error) throw error;

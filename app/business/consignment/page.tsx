@@ -135,6 +135,9 @@ export default function ConsignmentPage() {
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to delete");
+      // Re-sync so the list never shows an order the server no longer has.
+      await load();
+      return;
     }
   };
 
