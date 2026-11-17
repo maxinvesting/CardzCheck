@@ -9,10 +9,11 @@ type Section = { paths: string[]; tabs: SubTab[] };
 const SECTIONS: Section[] = [
   // ── Ledger ──
   {
-    paths: ["/business/ledger", "/business/grading", "/business/sales", "/business/inventory"],
+    paths: ["/business/ledger", "/business/grading", "/business/consignment", "/business/sales", "/business/inventory"],
     tabs: [
       { name: "Inventory", href: "/business/ledger" },
       { name: "At Grading", href: "/business/grading" },
+      { name: "Consignment", href: "/business/consignment" },
       { name: "Sales & Trades", href: "/business/sales" },
     ],
   },
