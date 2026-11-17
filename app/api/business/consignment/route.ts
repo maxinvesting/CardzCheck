@@ -1,16 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createConsignmentOrder, listConsignmentOrders } from "@/lib/business/consignment";
-import { errorResponse, getUserId, manualItemSchema } from "./_shared";
+import { cardSchema, errorResponse, getUserId } from "./_shared";
 
+const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 const createSchema = z.object({
   consignor: z.string().trim().min(1).max(120),
   reference: z.string().trim().max(120).optional().nullable(),
-  sent_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+  sent_date: dateSchema.optional().nullable(),
+  sold_date: dateSchema.optional().nullable(),
   notes: z.string().trim().max(2000).optional().nullable(),
-  inventory_item_ids: z.array(z.string().uuid()).max(500).optional(),
-  manual_items: z.array(manualItemSchema).max(500).optional(),
+  fees_total_cents: z.number().int().min(0).optional().nullable(),
+  cards: z.array(cardSchema).min(1).max(500),
 });
 
 export async function GET() {

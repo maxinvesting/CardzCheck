@@ -170,7 +170,9 @@ function normalizeChannel(
     normalized === "fanatics" ||
     normalized === "instagram" ||
     normalized === "show" ||
-    normalized === "local"
+    normalized === "local" ||
+    normalized === "veriswap" ||
+    normalized === "consignment"
   ) {
     return normalized;
   }

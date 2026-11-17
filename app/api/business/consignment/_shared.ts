@@ -25,8 +25,10 @@ export function errorResponse(err: unknown, fallback: string): NextResponse {
   return NextResponse.json({ error: fallback }, { status: 500 });
 }
 
-export const manualItemSchema = z.object({
-  title: z.string().trim().min(1).max(300),
+export const cardSchema = z.object({
+  inventory_item_id: z.string().uuid().optional().nullable(),
+  title: z.string().trim().max(300).optional().nullable(),
   card_number: z.string().trim().max(40).optional().nullable(),
   cost_cents: z.number().int().min(0),
+  sold_price_cents: z.number().int().min(0),
 });

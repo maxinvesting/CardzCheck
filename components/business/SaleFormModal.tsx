@@ -12,7 +12,7 @@ import {
 
 type SaleFormPayload = {
   inventory_item_id?: string | null;
-  channel: "ebay" | "whatnot" | "alt" | "fanatics" | "instagram" | "show" | "local" | "other" | "veriswap";
+  channel: "ebay" | "whatnot" | "alt" | "fanatics" | "instagram" | "show" | "local" | "other" | "veriswap" | "consignment";
   sold_at: string;
   sold_price_cents: number;
   shipping_charged_cents: number;
@@ -56,6 +56,7 @@ const CHANNEL_OPTIONS = [
   "local",
   "other",
   "veriswap",
+  "consignment",
 ] as const;
 
 const CHANNEL_LABELS: Record<string, string> = {
@@ -68,6 +69,7 @@ const CHANNEL_LABELS: Record<string, string> = {
   local: "Local",
   other: "Other",
   veriswap: "Veriswap",
+  consignment: "Consignment",
 };
 
 const EBAY_DEFAULT_FEE_PCT = 13.5; // assumed eBay transaction fee
@@ -136,7 +138,7 @@ export default function SaleFormModal({
   inventoryCostBasisCents = null,
 }: Props) {
   const [channel, setChannel] = useState<
-    "ebay" | "whatnot" | "alt" | "fanatics" | "instagram" | "show" | "local" | "other" | "veriswap"
+    "ebay" | "whatnot" | "alt" | "fanatics" | "instagram" | "show" | "local" | "other" | "veriswap" | "consignment"
   >("other");
   const [soldAt, setSoldAt] = useState(new Date().toISOString().slice(0, 10));
   const [soldPrice, setSoldPrice] = useState("");
